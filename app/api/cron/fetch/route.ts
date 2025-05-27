@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
+import { mockRankingData } from '@/lib/mock-data'
 
 export const runtime = 'nodejs'
 
@@ -13,7 +14,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const items = await fetchNicoRanking()
+    let items
+    
+    // 実際のRSS取得を試みる（403エラーの可能性あり）
+    try {
+      items = await fetchNicoRanking()
+    } catch (error) {
+      // ジオブロックされた場合はモックデータを使用
+      console.warn('Using mock data due to fetch error:', error)
+      items = mockRankingData
+    }
     
     await kv.set('nico:24h', JSON.stringify(items), {
       ex: 3900, // 65 minutes TTL
@@ -23,6 +33,7 @@ export async function POST(request: NextRequest) {
       success: true,
       itemsCount: items.length,
       timestamp: new Date().toISOString(),
+      isMock: items === mockRankingData,
     })
   } catch (error) {
     console.error('Failed to fetch ranking:', error)

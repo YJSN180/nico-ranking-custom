@@ -8,6 +8,10 @@ export async function fetchNicoRanking(): Promise<RankingItem[]> {
   const response = await fetch(RSS_URL, {
     headers: {
       'User-Agent': USER_AGENT,
+      'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+      'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
     },
   })
 
