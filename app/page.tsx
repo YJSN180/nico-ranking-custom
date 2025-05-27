@@ -1,35 +1,62 @@
 import type { RankingData } from '@/types/ranking'
 import Image from 'next/image'
+import { kv } from '@vercel/kv'
 
 export const revalidate = 30
 
 async function fetchRankingData(): Promise<RankingData> {
-  // Use absolute URL for server-side fetch in production
-  const baseUrl = process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
-  
-  console.log('Homepage fetch - VERCEL_URL:', process.env.VERCEL_URL)
-  console.log('Homepage fetch - baseUrl:', baseUrl)
-  
-  const url = `${baseUrl}/api/ranking`
-  console.log('Homepage fetch - Full URL:', url)
+  try {
+    // Try direct KV access first
+    console.log('Homepage - Attempting direct KV access')
+    const data = await kv.get<RankingData>('ranking-data')
     
-  const response = await fetch(url, {
-    next: { revalidate: 30 },
-  })
-
-  console.log('Homepage fetch - Response status:', response.status)
-  
-  if (!response.ok) {
-    console.error('Failed to fetch ranking data:', response.status)
+    if (!data) {
+      console.log('Homepage - No data found in KV store')
+      return []
+    }
+    
+    // Handle both string and object responses from KV
+    if (typeof data === 'object' && Array.isArray(data)) {
+      console.log('Homepage - KV returned array, length:', data.length)
+      return data as RankingData
+    } else if (typeof data === 'string') {
+      const parsed = JSON.parse(data)
+      console.log('Homepage - KV returned string, parsed length:', parsed.length)
+      return parsed
+    }
+    
+    console.log('Homepage - Unexpected data type from KV:', typeof data)
     return []
-  }
+  } catch (kvError) {
+    console.error('Homepage - KV access failed:', kvError)
+    
+    // Fallback to API fetch
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}`
+      : 'http://localhost:3000'
+    
+    console.log('Homepage fetch - VERCEL_URL:', process.env.VERCEL_URL)
+    console.log('Homepage fetch - baseUrl:', baseUrl)
+    
+    const url = `${baseUrl}/api/ranking`
+    console.log('Homepage fetch - Full URL:', url)
+      
+    const response = await fetch(url, {
+      next: { revalidate: 30 },
+    })
 
-  const data = await response.json()
-  console.log('Homepage fetch - Data length:', data.length)
-  
-  return data
+    console.log('Homepage fetch - Response status:', response.status)
+    
+    if (!response.ok) {
+      console.error('Failed to fetch ranking data:', response.status)
+      return []
+    }
+
+    const data = await response.json()
+    console.log('Homepage fetch - Data length:', data.length)
+    
+    return data
+  }
 }
 
 function RankingItem({ item }: { item: RankingData[number] }) {
@@ -121,6 +148,8 @@ export default async function Home() {
             <pre>{JSON.stringify({
               error: error instanceof Error ? error.message : String(error),
               VERCEL_URL: process.env.VERCEL_URL || 'not set',
+              KV_REST_API_URL: process.env.KV_REST_API_URL ? 'configured' : 'not configured',
+              KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN ? 'configured' : 'not configured',
             }, null, 2)}</pre>
           </details>
         </div>
