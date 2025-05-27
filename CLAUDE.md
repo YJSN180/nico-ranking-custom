@@ -31,10 +31,11 @@ npx vitest run path/to/test.ts
 ## Architecture
 
 ### Data Flow
-1. **Cron Job** (`/api/cron/fetch`) runs daily at 12:00 JST
-   - Fetches RSS from `https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp`
-   - Falls back to mock data on geo-blocking (403 errors)
-   - Stores in Vercel KV with key `ranking-data` (24h TTL)
+1. **Cron Job** (`/api/cron/fetch`) runs hourly
+   - Fetches RSS from `https://www.nicovideo.jp/ranking/genre/all?term=24h&rss=2.0&lang=ja-jp`
+   - Uses Googlebot User-Agent to bypass geo-blocking
+   - Falls back to mock data on errors
+   - Stores in Vercel KV with key `ranking-data` (1h TTL)
 
 2. **API Route** (`/api/ranking`) serves data from KV
    - Handles both string and object responses from KV

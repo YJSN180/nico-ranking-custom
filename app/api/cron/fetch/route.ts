@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
     
     await kv.set('ranking-data', items, {
-      ex: 86400, // 24 hours TTL
+      ex: 3600, // 1 hour TTL
     })
 
     return NextResponse.json({
