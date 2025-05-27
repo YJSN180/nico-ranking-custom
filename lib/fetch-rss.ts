@@ -1,7 +1,8 @@
 import { parseRSSToRankingItems } from './rss-parser'
 import type { RankingItem } from '@/types/ranking'
 
-const RSS_URL = 'https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp'
+// 総合デイリーランキング（24時間）
+const RSS_URL = 'https://www.nicovideo.jp/ranking/genre/all?term=24h&rss=2.0&lang=ja-jp'
 // Googlebot User-Agentを使用して地域制限を回避
 const GOOGLEBOT_USER_AGENT = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
 
