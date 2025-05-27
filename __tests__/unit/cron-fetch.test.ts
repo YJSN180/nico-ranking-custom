@@ -1,0 +1,99 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { POST } from '@/app/api/cron/fetch/route'
+import { kv } from '@vercel/kv'
+import * as fetchRss from '@/lib/fetch-rss'
+
+vi.mock('@vercel/kv', () => ({
+  kv: {
+    set: vi.fn(),
+  },
+}))
+
+vi.mock('@/lib/fetch-rss', () => ({
+  fetchNicoRanking: vi.fn(),
+}))
+
+describe('Cron Fetch API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubEnv('CRON_SECRET', 'test-secret')
+  })
+
+  it('should reject requests without authorization', async () => {
+    const request = new Request('http://localhost:3000/api/cron/fetch', {
+      method: 'POST',
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(401)
+    
+    const data = await response.json()
+    expect(data.error).toBe('Unauthorized')
+  })
+
+  it('should reject requests with invalid authorization', async () => {
+    const request = new Request('http://localhost:3000/api/cron/fetch', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer wrong-secret',
+      },
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(401)
+  })
+
+  it('should fetch RSS and store in KV with correct TTL', async () => {
+    const mockItems = [
+      {
+        rank: 1,
+        id: 'sm123',
+        title: 'Test Video',
+        thumbURL: 'https://example.com/thumb.jpg',
+        views: 1000,
+      },
+    ]
+
+    vi.mocked(fetchRss.fetchNicoRanking).mockResolvedValueOnce(mockItems)
+    vi.mocked(kv.set).mockResolvedValueOnce('OK')
+
+    const request = new Request('http://localhost:3000/api/cron/fetch', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer test-secret',
+      },
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(200)
+
+    const data = await response.json()
+    expect(data.success).toBe(true)
+    expect(data.itemsCount).toBe(1)
+
+    expect(kv.set).toHaveBeenCalledWith(
+      'nico:24h',
+      JSON.stringify(mockItems),
+      { ex: 3900 }
+    )
+  })
+
+  it('should handle fetch errors gracefully', async () => {
+    vi.mocked(fetchRss.fetchNicoRanking).mockRejectedValueOnce(
+      new Error('Network error')
+    )
+
+    const request = new Request('http://localhost:3000/api/cron/fetch', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer test-secret',
+      },
+    })
+
+    const response = await POST(request)
+    expect(response.status).toBe(500)
+
+    const data = await response.json()
+    expect(data.error).toBe('Failed to fetch ranking')
+  })
+})
