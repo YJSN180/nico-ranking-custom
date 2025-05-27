@@ -26,6 +26,16 @@ export async function GET(request: NextRequest) {
       }
     }
     
+    // fetchRankingDataを実行してみる
+    let fetchError = null
+    let fetchedData = null
+    try {
+      const { fetchRankingData } = await import('@/lib/data-fetcher')
+      fetchedData = await fetchRankingData()
+    } catch (e) {
+      fetchError = e instanceof Error ? e.message : 'Unknown fetch error'
+    }
+    
     return NextResponse.json({
       kvData: {
         exists: !!kvData,
@@ -35,6 +45,14 @@ export async function GET(request: NextRequest) {
         parseError,
         parsedDataLength: parsedData ? parsedData.length : 0,
         sampleParsedData: parsedData ? parsedData.slice(0, 2) : null,
+      },
+      fetchTest: {
+        error: fetchError,
+        dataLength: fetchedData ? fetchedData.length : 0,
+        sampleData: fetchedData ? fetchedData.slice(0, 2) : null,
+      },
+      env: {
+        baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'not set',
       },
       timestamp: new Date().toISOString(),
     })

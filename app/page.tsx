@@ -1,4 +1,4 @@
-import { fetchRankingData } from '@/lib/data-fetcher'
+import { fetchRankingDataServer } from '@/lib/server-data-fetcher'
 import type { RankingData } from '@/types/ranking'
 import Image from 'next/image'
 
@@ -40,7 +40,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
 
 export default async function Home() {
   try {
-    const rankingData = await fetchRankingData()
+    const rankingData = await fetchRankingDataServer()
 
     if (rankingData.length === 0) {
       return (
