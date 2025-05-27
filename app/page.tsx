@@ -1,5 +1,6 @@
 import { fetchRankingData } from '@/lib/data-fetcher'
 import type { RankingData } from '@/types/ranking'
+import Image from 'next/image'
 
 export const revalidate = 30
 
@@ -11,7 +12,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
           {item.rank}位
         </div>
         {item.thumbURL && (
-          <img
+          <Image
             src={item.thumbURL}
             alt={item.title}
             width={100}

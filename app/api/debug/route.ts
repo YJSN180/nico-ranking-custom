@@ -11,9 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log('Starting RSS fetch...')
     const items = await fetchNicoRanking()
-    console.log(`Fetched ${items.length} items`)
     
     return NextResponse.json({
       success: true,
@@ -22,7 +20,6 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
-    console.error('Debug fetch error:', error)
     return NextResponse.json(
       { 
         error: 'Failed to fetch', 
