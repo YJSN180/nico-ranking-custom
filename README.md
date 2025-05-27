@@ -2,6 +2,8 @@
 
 ニコニコ動画の24時間総合ランキングを1時間ごとに取得し、トップ100を表示するサイトです。
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YJSN180/nico-ranking-custom)
+
 ## 技術スタック
 
 - **Framework**: Next.js 14 (App Router)
