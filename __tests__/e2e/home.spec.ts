@@ -36,7 +36,12 @@ test.describe('Home Page E2E', () => {
   test('should display view counts', async ({ page }) => {
     await page.goto('/')
     
+    // View counts should be present (even if 0)
     const viewCountElements = await page.locator('text=/\\d+[,\\d]* 回再生/').all()
     expect(viewCountElements.length).toBeGreaterThan(0)
+    
+    // Check that at least one element has the expected format
+    const firstViewCount = await viewCountElements[0]?.textContent()
+    expect(firstViewCount).toMatch(/^\d{1,3}(,\d{3})* 回再生$/)
   })
 })
