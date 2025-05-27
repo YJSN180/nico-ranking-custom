@@ -74,7 +74,7 @@ describe('Cron Fetch API', () => {
     expect(kv.set).toHaveBeenCalledWith(
       'ranking-data',
       mockItems,
-      { ex: 86400 }
+      { ex: 3600 }
     )
   })
 

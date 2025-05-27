@@ -7,7 +7,7 @@ export const runtime = 'edge'
 export async function GET(request: Request) {
   try {
     // KVは自動的にJSONをパース/ストリングファイすることがある
-    const data = await kv.get('nico:24h')
+    const data = await kv.get('ranking-data')
     
     if (!data) {
       return NextResponse.json(

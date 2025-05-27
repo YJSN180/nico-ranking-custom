@@ -26,7 +26,7 @@ describe('Fetch RSS', () => {
     const result = await fetchNicoRanking()
 
     expect(fetch).toHaveBeenCalledWith(
-      'https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp',
+      'https://www.nicovideo.jp/ranking/genre/all?term=24h&rss=2.0&lang=ja-jp',
       {
         headers: {
           'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)',

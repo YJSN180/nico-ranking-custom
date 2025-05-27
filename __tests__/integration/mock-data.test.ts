@@ -43,7 +43,7 @@ describe('Mock Data Integration', () => {
     expect(kv.set).toHaveBeenCalledWith(
       'ranking-data',
       mockRankingData,
-      { ex: 86400 }
+      { ex: 3600 }
     )
   })
 
