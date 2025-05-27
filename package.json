@@ -12,26 +12,27 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@vercel/kv": "^1.0.1",
+    "fast-xml-parser": "^4.5.1",
     "next": "14.2.21",
     "react": "^18",
-    "react-dom": "^18",
-    "@vercel/kv": "^1.0.1",
-    "fast-xml-parser": "^4.5.1"
+    "react-dom": "^18"
   },
   "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "typescript": "^5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^8",
     "eslint-config-next": "14.2.21",
-    "vitest": "^2.1.8",
-    "@vitest/coverage-v8": "^2.1.8",
-    "@testing-library/react": "^16.1.0",
-    "@testing-library/dom": "^10.4.0",
-    "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
-    "@playwright/test": "^1.49.1",
-    "prettier": "^3.4.2"
+    "prettier": "^3.4.2",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
   }
 }

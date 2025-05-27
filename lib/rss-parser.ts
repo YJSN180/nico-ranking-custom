@@ -1,5 +1,6 @@
 import { XMLParser } from 'fast-xml-parser'
 import type { RankingItem } from '@/types/ranking'
+import type { RSSDocument, RSSItem } from '@/types/rss'
 
 export function parseRSSToRankingItems(xml: string): RankingItem[] {
   const parser = new XMLParser({
@@ -7,15 +8,15 @@ export function parseRSSToRankingItems(xml: string): RankingItem[] {
     removeNSPrefix: false,
   })
 
-  const parsed = parser.parse(xml)
+  const parsed = parser.parse(xml) as RSSDocument
   const channel = parsed?.rss?.channel
   if (!channel) return []
 
-  const items = Array.isArray(channel.item) ? channel.item : [channel.item].filter(Boolean)
+  const items = Array.isArray(channel.item) ? channel.item : [channel.item].filter(Boolean) as RSSItem[]
 
   return items
     .slice(0, 100)
-    .map((item, index) => {
+    .map((item: RSSItem, index) => {
       const title = item.title || ''
       const cleanTitle = title.replace(/^【第\d+位】/, '').trim()
       
