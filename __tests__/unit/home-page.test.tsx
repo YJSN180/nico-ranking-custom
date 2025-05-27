@@ -2,11 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import Home from '@/app/page'
 
-vi.mock('@/lib/data-fetcher', () => ({
-  fetchRankingData: vi.fn(),
+vi.mock('@vercel/kv', () => ({
+  kv: {
+    get: vi.fn(),
+  },
 }))
 
-import { fetchRankingData } from '@/lib/data-fetcher'
+// Mock global fetch
+global.fetch = vi.fn()
+
+import { kv } from '@vercel/kv'
 
 describe('Home Page', () => {
   it('should render ranking items correctly', async () => {
@@ -27,7 +32,7 @@ describe('Home Page', () => {
       },
     ]
 
-    vi.mocked(fetchRankingData).mockResolvedValueOnce(mockData)
+    vi.mocked(kv.get).mockResolvedValueOnce(mockData)
 
     const Component = await Home()
     render(Component)
@@ -47,7 +52,8 @@ describe('Home Page', () => {
   })
 
   it('should render error message when data fetch fails', async () => {
-    vi.mocked(fetchRankingData).mockRejectedValueOnce(new Error('Failed'))
+    vi.mocked(kv.get).mockRejectedValueOnce(new Error('Failed'))
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('fetch failed'))
 
     const Component = await Home()
     render(Component)
@@ -57,7 +63,11 @@ describe('Home Page', () => {
   })
 
   it('should render empty state when no data', async () => {
-    vi.mocked(fetchRankingData).mockResolvedValueOnce([])
+    vi.mocked(kv.get).mockResolvedValueOnce(null)
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => [],
+    } as Response)
 
     const Component = await Home()
     render(Component)
