@@ -33,11 +33,12 @@ jobs:
       - name: Check coverage thresholds
         run: npx vitest --coverage --run
 
-      - name: Upload coverage reports
-        uses: codecov/codecov-action@v5
-        with:
-          file: ./coverage/coverage-final.json
-          fail_ci_if_error: true
+      # Codecov upload disabled - requires token configuration
+      # - name: Upload coverage reports
+      #   uses: codecov/codecov-action@v5
+      #   with:
+      #     file: ./coverage/coverage-final.json
+      #     fail_ci_if_error: true
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
