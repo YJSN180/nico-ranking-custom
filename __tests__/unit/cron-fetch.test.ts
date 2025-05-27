@@ -78,10 +78,11 @@ describe('Cron Fetch API', () => {
     )
   })
 
-  it('should handle fetch errors gracefully', async () => {
+  it('should handle fetch errors gracefully and fallback to mock data', async () => {
     vi.mocked(fetchRss.fetchNicoRanking).mockRejectedValueOnce(
       new Error('Network error')
     )
+    vi.mocked(kv.set).mockResolvedValueOnce('OK')
 
     const request = new Request('http://localhost:3000/api/cron/fetch', {
       method: 'POST',
@@ -91,9 +92,11 @@ describe('Cron Fetch API', () => {
     })
 
     const response = await POST(request)
-    expect(response.status).toBe(500)
+    expect(response.status).toBe(200) // モックデータで成功するように変更
 
     const data = await response.json()
-    expect(data.error).toBe('Failed to fetch ranking')
+    expect(data.success).toBe(true)
+    expect(data.isMock).toBe(true)
+    expect(data.itemsCount).toBe(100) // モックデータは100件
   })
 })

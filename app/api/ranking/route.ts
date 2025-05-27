@@ -6,7 +6,8 @@ export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
   try {
-    const data = await kv.get<string>('nico:24h')
+    // KVは自動的にJSONをパース/ストリングファイすることがある
+    const data = await kv.get('nico:24h')
     
     if (!data) {
       return NextResponse.json(
@@ -24,11 +25,23 @@ export async function GET(request: NextRequest) {
     }
 
     let rankingData: RankingData
-    try {
-      rankingData = JSON.parse(data)
-    } catch {
+    
+    // dataが既にオブジェクトの場合はそのまま使用
+    if (typeof data === 'object' && Array.isArray(data)) {
+      rankingData = data as RankingData
+    } else if (typeof data === 'string') {
+      // 文字列の場合はJSONパース
+      try {
+        rankingData = JSON.parse(data)
+      } catch {
+        return NextResponse.json(
+          { error: 'Invalid ranking data' },
+          { status: 502 }
+        )
+      }
+    } else {
       return NextResponse.json(
-        { error: 'Invalid ranking data' },
+        { error: 'Unexpected data format' },
         { status: 502 }
       )
     }

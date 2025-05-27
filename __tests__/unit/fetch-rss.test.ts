@@ -26,10 +26,14 @@ describe('Fetch RSS', () => {
     const result = await fetchNicoRanking()
 
     expect(fetch).toHaveBeenCalledWith(
-      'https://www.nicovideo.jp/ranking/fav/daily?rss=1&term=24h',
+      'https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp',
       {
         headers: {
-          'User-Agent': 'Googlebot/2.1 (+https://www.google.com/bot.html)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+          'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         },
       }
     )

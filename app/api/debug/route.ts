@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { kv } from '@vercel/kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
 
 export const runtime = 'nodejs'
@@ -11,20 +12,37 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const items = await fetchNicoRanking()
+    // KVから直接データを取得
+    const kvData = await kv.get<string>('nico:24h')
+    
+    let parsedData = null
+    let parseError = null
+    
+    if (kvData) {
+      try {
+        parsedData = JSON.parse(kvData)
+      } catch (e) {
+        parseError = e instanceof Error ? e.message : 'Unknown parse error'
+      }
+    }
     
     return NextResponse.json({
-      success: true,
-      itemsCount: items.length,
-      sampleItems: items.slice(0, 3),
+      kvData: {
+        exists: !!kvData,
+        type: typeof kvData,
+        length: kvData ? kvData.length : 0,
+        firstChars: kvData ? kvData.substring(0, 100) : null,
+        parseError,
+        parsedDataLength: parsedData ? parsedData.length : 0,
+        sampleParsedData: parsedData ? parsedData.slice(0, 2) : null,
+      },
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
     return NextResponse.json(
       { 
-        error: 'Failed to fetch', 
+        error: 'Failed to debug', 
         details: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
     )
