@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
 import { mockRankingData } from '@/lib/mock-data'
 
 export const runtime = 'nodejs'
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
 

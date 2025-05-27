@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import type { RankingData } from '@/types/ranking'
 
 export const runtime = 'edge'
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
     // KVは自動的にJSONをパース/ストリングファイすることがある
     const data = await kv.get('nico:24h')
