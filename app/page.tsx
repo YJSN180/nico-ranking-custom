@@ -1,8 +1,25 @@
-import { fetchRankingDataServer } from '@/lib/server-data-fetcher'
 import type { RankingData } from '@/types/ranking'
 import Image from 'next/image'
 
 export const revalidate = 30
+
+async function fetchRankingData(): Promise<RankingData> {
+  // Use absolute URL for server-side fetch in production
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000'
+    
+  const response = await fetch(`${baseUrl}/api/ranking`, {
+    next: { revalidate: 30 },
+  })
+
+  if (!response.ok) {
+    console.error('Failed to fetch ranking data:', response.status)
+    return []
+  }
+
+  return response.json()
+}
 
 function RankingItem({ item }: { item: RankingData[number] }) {
   return (
@@ -40,7 +57,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
 
 export default async function Home() {
   try {
-    const rankingData = await fetchRankingDataServer()
+    const rankingData = await fetchRankingData()
 
     if (rankingData.length === 0) {
       return (
