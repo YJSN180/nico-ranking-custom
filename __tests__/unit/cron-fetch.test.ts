@@ -72,9 +72,9 @@ describe('Cron Fetch API', () => {
     expect(data.itemsCount).toBe(1)
 
     expect(kv.set).toHaveBeenCalledWith(
-      'nico:24h',
-      JSON.stringify(mockItems),
-      { ex: 3900 }
+      'ranking-data',
+      mockItems,
+      { ex: 86400 }
     )
   })
 

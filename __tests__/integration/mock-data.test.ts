@@ -41,9 +41,9 @@ describe('Mock Data Integration', () => {
 
     // KVに正しく保存されたか確認
     expect(kv.set).toHaveBeenCalledWith(
-      'nico:24h',
-      JSON.stringify(mockRankingData),
-      { ex: 3900 }
+      'ranking-data',
+      mockRankingData,
+      { ex: 86400 }
     )
   })
 

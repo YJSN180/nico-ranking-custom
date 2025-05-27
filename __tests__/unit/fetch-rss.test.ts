@@ -29,7 +29,7 @@ describe('Fetch RSS', () => {
       'https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp',
       {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)',
           'Accept': 'application/rss+xml, application/xml, text/xml, */*',
           'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8',
           'Cache-Control': 'no-cache',

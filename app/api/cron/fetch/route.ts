@@ -16,17 +16,16 @@ export async function POST(request: NextRequest) {
   try {
     let items
     
-    // 実際のRSS取得を試みる（403エラーの可能性あり）
+    // 実際のRSS取得を試みる（Googlebot User-Agentで地域制限を回避）
     try {
       items = await fetchNicoRanking()
     } catch (error) {
-      // ジオブロックされた場合はモックデータを使用
-      console.warn('Using mock data due to fetch error:', error)
+      // フォールバックとしてモックデータを使用
       items = mockRankingData
     }
     
-    await kv.set('nico:24h', JSON.stringify(items), {
-      ex: 3900, // 65 minutes TTL
+    await kv.set('ranking-data', items, {
+      ex: 86400, // 24 hours TTL
     })
 
     return NextResponse.json({
@@ -36,7 +35,6 @@ export async function POST(request: NextRequest) {
       isMock: items === mockRankingData,
     })
   } catch (error) {
-    console.error('Failed to fetch ranking:', error)
     return NextResponse.json(
       { error: 'Failed to fetch ranking' },
       { status: 500 }

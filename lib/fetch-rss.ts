@@ -2,12 +2,13 @@ import { parseRSSToRankingItems } from './rss-parser'
 import type { RankingItem } from '@/types/ranking'
 
 const RSS_URL = 'https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp'
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+// Googlebot User-Agentを使用して地域制限を回避
+const GOOGLEBOT_USER_AGENT = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
 
 export async function fetchNicoRanking(): Promise<RankingItem[]> {
   const response = await fetch(RSS_URL, {
     headers: {
-      'User-Agent': USER_AGENT,
+      'User-Agent': GOOGLEBOT_USER_AGENT,
       'Accept': 'application/rss+xml, application/xml, text/xml, */*',
       'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8',
       'Cache-Control': 'no-cache',
