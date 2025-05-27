@@ -1,8 +1,8 @@
 import { parseRSSToRankingItems } from './rss-parser'
 import type { RankingItem } from '@/types/ranking'
 
-const RSS_URL = 'https://www.nicovideo.jp/ranking/fav/daily?rss=1&term=24h'
-const USER_AGENT = 'Googlebot/2.1 (+https://www.google.com/bot.html)'
+const RSS_URL = 'https://www.nicovideo.jp/ranking/fav/daily/all?rss=2.0&lang=ja-jp'
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 export async function fetchNicoRanking(): Promise<RankingItem[]> {
   const response = await fetch(RSS_URL, {
