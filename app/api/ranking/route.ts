@@ -10,8 +10,16 @@ export async function GET(request: NextRequest) {
     
     if (!data) {
       return NextResponse.json(
-        { error: 'No ranking data available' },
-        { status: 502 }
+        { 
+          error: 'No ranking data available',
+          message: 'データが準備されるまでお待ちください。通常、毎日12時に更新されます。'
+        },
+        { 
+          status: 502,
+          headers: {
+            'Retry-After': '300', // 5 minutes
+          }
+        }
       )
     }
 

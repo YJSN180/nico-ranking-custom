@@ -52,7 +52,8 @@ describe('Home Page', () => {
     const Component = await Home()
     render(Component)
 
-    expect(screen.getByText('ランキングデータの取得に失敗しました')).toBeInTheDocument()
+    expect(screen.getByText('データを準備しています')).toBeInTheDocument()
+    expect(screen.getByText('ランキングデータは毎日12時に更新されます。')).toBeInTheDocument()
   })
 
   it('should render empty state when no data', async () => {

@@ -64,7 +64,23 @@ export default async function Home() {
     return (
       <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
         <h1>ニコニコ24時間総合ランキング</h1>
-        <p style={{ color: 'red' }}>ランキングデータの取得に失敗しました</p>
+        <div style={{ 
+          backgroundColor: '#f8f9fa', 
+          border: '1px solid #dee2e6', 
+          borderRadius: '4px', 
+          padding: '20px',
+          marginTop: '20px'
+        }}>
+          <h2 style={{ color: '#495057', fontSize: '18px', marginTop: 0 }}>
+            データを準備しています
+          </h2>
+          <p style={{ color: '#6c757d', marginBottom: '10px' }}>
+            ランキングデータは毎日12時に更新されます。
+          </p>
+          <p style={{ color: '#6c757d', marginBottom: 0 }}>
+            初回アクセスの場合、しばらくお待ちください。
+          </p>
+        </div>
       </main>
     )
   }

@@ -17,10 +17,10 @@ export function parseRSSToRankingItems(xml: string): RankingItem[] {
   return items
     .slice(0, 100)
     .map((item: RSSItem, index) => {
-      const title = item.title || ''
+      const title = String(item.title || '')
       const cleanTitle = title.replace(/^【第\d+位】/, '').trim()
       
-      const link = item.link || ''
+      const link = String(item.link || '')
       const idMatch = link.match(/watch\/(sm\d+)/)
       const id = idMatch?.[1] || ''
 
@@ -30,7 +30,8 @@ export function parseRSSToRankingItems(xml: string): RankingItem[] {
         thumbURL = imgMatch?.[1] || ''
       }
 
-      const views = parseInt(item['nico:views'] || '0', 10)
+      const viewsStr = String(item['nico:views'] || '0')
+      const views = parseInt(viewsStr, 10) || 0
 
       return {
         rank: index + 1,
