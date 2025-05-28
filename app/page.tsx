@@ -5,34 +5,7 @@ import { kv } from '@vercel/kv'
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
 
-async function checkAndUpdateIfStale(): Promise<void> {
-  try {
-    // Check if data needs update
-    const lastUpdateInfo = await kv.get('last-update-info') as {
-      timestamp: string
-      itemCount: number
-      source: string
-    } | null
-    
-    if (lastUpdateInfo) {
-      const lastUpdate = new Date(lastUpdateInfo.timestamp)
-      const ageInMinutes = (Date.now() - lastUpdate.getTime()) / (1000 * 60)
-      
-      // If data is older than 30 minutes, trigger update
-      if (ageInMinutes >= 30) {
-        // Fire and forget - don't wait for update to complete
-        fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/update-if-stale`)
-          .catch(() => {}) // Ignore errors
-      }
-    }
-  } catch (error) {
-    // Ignore errors in background update check
-  }
-}
-
 async function fetchRankingData(): Promise<RankingData> {
-  // Check if update is needed (non-blocking)
-  checkAndUpdateIfStale()
   
   // 1. Primary: Direct KV access (as per CLAUDE.md architecture)
   try {
