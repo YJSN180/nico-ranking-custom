@@ -16,6 +16,11 @@ global.fetch = vi.fn()
 describe('Homepage with direct KV access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Mock fetch for background update check
+    vi.mocked(global.fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ updated: false }),
+    } as Response)
   })
 
   it('should display real ranking data from direct KV access', async () => {
@@ -30,7 +35,15 @@ describe('Homepage with direct KV access', () => {
     ]
 
     // Mock KV to return real data
-    vi.mocked(kv.get).mockResolvedValueOnce(mockRealData)
+    vi.mocked(kv.get).mockImplementation(async (key) => {
+      if (key === 'ranking-data') return mockRealData
+      if (key === 'last-update-info') return {
+        timestamp: new Date().toISOString(),
+        itemCount: 1,
+        source: 'test'
+      }
+      return null
+    })
     
     const { findByText } = render(await Home())
     
@@ -55,7 +68,10 @@ describe('Homepage with direct KV access', () => {
     ]
 
     // Mock KV to fail
-    vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV Error'))
+    vi.mocked(kv.get).mockImplementation(async (key) => {
+      if (key === 'last-update-info') return null
+      throw new Error('KV Error')
+    })
     
     // Mock API fallback
     vi.mocked(global.fetch).mockResolvedValueOnce({
@@ -82,7 +98,15 @@ describe('Homepage with direct KV access', () => {
     ]
 
     // Mock KV to return string
-    vi.mocked(kv.get).mockResolvedValueOnce(JSON.stringify(mockRealData))
+    vi.mocked(kv.get).mockImplementation(async (key) => {
+      if (key === 'ranking-data') return JSON.stringify(mockRealData)
+      if (key === 'last-update-info') return {
+        timestamp: new Date().toISOString(),
+        itemCount: 1,
+        source: 'test'
+      }
+      return null
+    })
     
     const { findByText } = render(await Home())
     

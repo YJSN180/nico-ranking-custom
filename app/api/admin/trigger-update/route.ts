@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       ex: 3600, // 1 hour TTL
     })
     
-    // Also store update info
+    // Store update info
     await kv.set('last-update-info', {
       timestamp: new Date().toISOString(),
       itemCount: items.length,

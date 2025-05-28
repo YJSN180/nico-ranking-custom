@@ -27,6 +27,13 @@ export async function POST(request: Request) {
     await kv.set('ranking-data', items, {
       ex: 3600, // 1 hour TTL
     })
+    
+    // Store update info
+    await kv.set('last-update-info', {
+      timestamp: new Date().toISOString(),
+      itemCount: items.length,
+      source: 'scheduled-cron'
+    })
 
     return NextResponse.json({
       success: true,
