@@ -111,13 +111,21 @@ async function fetchAndCacheRanking(
       })
     }
   } catch (error) {
-    console.error('Error fetching ranking:', error)
+    console.error('Error fetching ranking:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      period,
+      genre,
+      tag,
+      cacheKey
+    })
     // エラー時はモックデータを返す
     const mockData = getMockRankingData()
     return NextResponse.json(mockData, {
       headers: {
         'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
-        'X-Data-Source': 'mock'
+        'X-Data-Source': 'mock',
+        'X-Error': error instanceof Error ? error.message : 'Unknown error'
       },
     })
   }
