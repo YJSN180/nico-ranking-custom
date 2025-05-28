@@ -2,16 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import Home from '@/app/page'
 
-vi.mock('@vercel/kv', () => ({
-  kv: {
-    get: vi.fn(),
-  },
-}))
-
 // Mock global fetch
 global.fetch = vi.fn()
-
-import { kv } from '@vercel/kv'
 
 describe('Home Page', () => {
   it('should render ranking items correctly', async () => {
@@ -32,7 +24,10 @@ describe('Home Page', () => {
       },
     ]
 
-    vi.mocked(kv.get).mockResolvedValueOnce(mockData)
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockData,
+    } as Response)
 
     const Component = await Home()
     render(Component)
@@ -51,19 +46,18 @@ describe('Home Page', () => {
     expect(firstLink).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('should render error message when data fetch fails', async () => {
-    vi.mocked(kv.get).mockRejectedValueOnce(new Error('Failed'))
-    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('fetch failed'))
+  it('should render empty state when API returns error', async () => {
+    vi.mocked(global.fetch).mockResolvedValueOnce({
+      ok: false,
+    } as Response)
 
     const Component = await Home()
     render(Component)
 
-    expect(screen.getByText('データを準備しています')).toBeInTheDocument()
-    expect(screen.getByText('ランキングデータは毎日12時に更新されます。')).toBeInTheDocument()
+    expect(screen.getByText('ランキングデータがありません')).toBeInTheDocument()
   })
 
   it('should render empty state when no data', async () => {
-    vi.mocked(kv.get).mockResolvedValueOnce(null)
     vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => [],
