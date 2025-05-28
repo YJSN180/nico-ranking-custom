@@ -1,6 +1,7 @@
 import type { RankingData } from '@/types/ranking'
 import Image from 'next/image'
 import { kv } from '@vercel/kv'
+import { ViewIcon, CommentIcon, MylistIcon, LikeIcon } from '@/components/icons'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
@@ -47,153 +48,51 @@ async function fetchRankingData(): Promise<RankingData> {
 }
 
 function RankingItem({ item }: { item: RankingData[number] }) {
-  const isTop3 = item.rank <= 3
-  const rankGradients = {
-    1: 'linear-gradient(135deg, #FFD700 0%, #FFED4E 100%)',
-    2: 'linear-gradient(135deg, #C0C0C0 0%, #E5E5E5 100%)',
-    3: 'linear-gradient(135deg, #CD7F32 0%, #E3A857 100%)'
+  // すべてのアイテムを統一されたコンパクトなスタイルで表示
+  const rankColors: Record<number, string> = {
+    1: '#FFD700',
+    2: '#C0C0C0', 
+    3: '#CD7F32'
   }
   
-  // TOP3は特別なカードスタイル
-  if (isTop3) {
-    return (
-      <li style={{ 
-        marginBottom: '24px',
-        background: 'white',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-        border: `3px solid ${item.rank === 1 ? '#FFD700' : item.rank === 2 ? '#C0C0C0' : '#CD7F32'}`,
-        position: 'relative'
-      }}>
-        <div style={{ padding: '24px', background: 'white' }}>
-          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
-            <div style={{ 
-              fontSize: '48px', 
-              fontWeight: '900',
-              minWidth: '80px',
-              height: '80px',
-              background: rankGradients[item.rank as 1 | 2 | 3],
-              borderRadius: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
-            }}>
-              {item.rank}
-            </div>
-            {item.thumbURL && (
-              <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
-                <Image
-                  src={item.thumbURL}
-                  alt={item.title}
-                  width={180}
-                  height={101}
-                  style={{ 
-                    objectFit: 'cover',
-                    display: 'block'
-                  }}
-                />
-              </div>
-            )}
-            <div style={{ flex: 1 }}>
-              <a
-                href={`https://www.nicovideo.jp/watch/${item.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ 
-                  color: '#0066cc', 
-                  textDecoration: 'none',
-                  fontSize: '20px',
-                  fontWeight: '700',
-                  lineHeight: '1.4',
-                  display: 'block',
-                  marginBottom: '8px'
-                }}
-              >
-                {item.title}
-              </a>
-              <div style={{ display: 'flex', gap: '20px', fontSize: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
-                  <span style={{ fontSize: '18px' }}>👁</span>
-                  <span style={{ fontWeight: '600' }}>{item.views.toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
-                  <span style={{ fontSize: '18px' }}>💬</span>
-                  <span style={{ fontWeight: '600' }}>{Math.floor(item.views * 0.15).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
-                  <span style={{ fontSize: '18px' }}>⭐</span>
-                  <span style={{ fontWeight: '600' }}>{Math.floor(item.views * 0.03).toLocaleString()}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
-                  <span style={{ fontSize: '18px' }}>❤️</span>
-                  <span style={{ fontWeight: '600' }}>{Math.floor(item.views * 0.08).toLocaleString()}</span>
-                </div>
-              </div>
-              <div style={{ 
-                marginTop: '16px', 
-                paddingTop: '16px', 
-                borderTop: '1px solid #e5e5e5',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: '#667eea',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontSize: '14px',
-                    fontWeight: '700'
-                  }}>
-                    {(item.id.charAt(2) || 'U').toUpperCase()}
-                  </div>
-                  <span style={{ color: '#666', fontSize: '14px' }}>
-                    投稿者{item.id.slice(-3)}
-                  </span>
-                </div>
-                <span style={{ color: '#999', fontSize: '13px' }}>
-                  {item.rank}時間前
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </li>
-    )
+  const getRankStyle = (rank: number) => {
+    if (rank <= 3) {
+      return {
+        background: rankColors[rank] || '#f5f5f5',
+        color: 'white',
+        fontSize: '20px',
+        fontWeight: '900' as const,
+        minWidth: '44px',
+        height: '44px'
+      }
+    }
+    return {
+      background: '#f5f5f5',
+      color: '#333',
+      fontSize: '16px', 
+      fontWeight: '700' as const,
+      minWidth: '36px',
+      height: '36px'
+    }
   }
-  
-  // 4位以降は通常のカードスタイル
+
   return (
     <li style={{ 
-      marginBottom: '16px',
+      marginBottom: '12px',
       background: 'white',
-      borderRadius: '12px',
+      borderRadius: '8px',
       overflow: 'hidden',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-    }}
-    >
-      <div style={{ padding: '16px' }}>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5'
+    }}>
+      <div style={{ padding: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ 
-            fontSize: '24px', 
-            fontWeight: '800', 
-            minWidth: '50px',
-            height: '50px',
-            background: '#f5f5f5',
-            borderRadius: '12px',
+            ...getRankStyle(item.rank),
+            borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            color: '#333'
+            justifyContent: 'center'
           }}>
             {item.rank}
           </div>
@@ -205,7 +104,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
               height={67}
               style={{ 
                 objectFit: 'cover',
-                borderRadius: '8px'
+                borderRadius: '6px'
               }}
             />
           )}
@@ -217,26 +116,31 @@ function RankingItem({ item }: { item: RankingData[number] }) {
               style={{ 
                 color: '#0066cc', 
                 textDecoration: 'none',
-                fontSize: '16px',
+                fontSize: '14px',
                 fontWeight: '600',
-                lineHeight: '1.3',
-                display: 'block'
+                lineHeight: '1.4',
+                display: 'block',
+                marginBottom: '4px'
               }}
             >
               {item.title}
             </a>
-            <div style={{ display: 'flex', gap: '16px', fontSize: '13px', marginTop: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '12px', fontSize: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <span>👁</span>
-                <span>{item.views.toLocaleString()}</span>
+                <ViewIcon style={{ width: '12px', height: '12px' }} />
+                <span>{item.views.toLocaleString()} 回再生</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <span>💬</span>
+                <CommentIcon style={{ width: '12px', height: '12px' }} />
                 <span>{Math.floor(item.views * 0.15).toLocaleString()}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <span>⭐</span>
+                <MylistIcon style={{ width: '12px', height: '12px' }} />
                 <span>{Math.floor(item.views * 0.03).toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
+                <LikeIcon style={{ width: '12px', height: '12px' }} />
+                <span>{Math.floor(item.views * 0.08).toLocaleString()}</span>
               </div>
             </div>
           </div>

@@ -32,11 +32,11 @@ describe('Home Page', () => {
     const Component = await Home()
     render(Component)
 
-    expect(screen.getByText('1位')).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText('First Video')).toBeInTheDocument()
     expect(screen.getByText('100,000 回再生')).toBeInTheDocument()
 
-    expect(screen.getByText('2位')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
     expect(screen.getByText('Second Video')).toBeInTheDocument()
     expect(screen.getByText('50,000 回再生')).toBeInTheDocument()
 
