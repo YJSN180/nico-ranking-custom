@@ -1,11 +1,28 @@
 import type { RankingData } from '@/types/ranking'
 import Image from 'next/image'
+import { kv } from '@vercel/kv'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
 
 async function fetchRankingData(): Promise<RankingData> {
-  // Always use API fetch to avoid build-time KV issues
+  // 1. Primary: Direct KV access (as per CLAUDE.md architecture)
+  try {
+    const data = await kv.get('ranking-data')
+    
+    if (data) {
+      // Handle both string and object responses from KV
+      if (typeof data === 'object' && Array.isArray(data)) {
+        return data as RankingData
+      } else if (typeof data === 'string') {
+        return JSON.parse(data) as RankingData
+      }
+    }
+  } catch (kvError) {
+    // KV failed, fall back to API
+  }
+
+  // 2. Fallback: API fetch
   const baseUrl = process.env.VERCEL_URL 
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000'
@@ -24,7 +41,6 @@ async function fetchRankingData(): Promise<RankingData> {
     const data = await response.json()
     return data
   } catch (error) {
-    console.error('Failed to fetch ranking data:', error)
     return []
   }
 }

@@ -25,15 +25,17 @@ describe('Error Handling', () => {
 
     it('should handle malformed item data', () => {
       const xml = `<?xml version="1.0"?>
-<rss version="2.0" xmlns:nico="http://www.nicovideo.jp/rss/2.0">
+<rss version="2.0">
   <channel>
     <item>
       <!-- Missing required fields -->
     </item>
     <item>
-      <title>【第2位】Valid Item</title>
+      <title>第2位：Valid Item</title>
       <link>https://www.nicovideo.jp/watch/sm123</link>
-      <nico:views>1000</nico:views>
+      <description><![CDATA[
+        <p class="nico-info"><small><strong class="nico-info-total-view">1,000</strong></small></p>
+      ]]></description>
     </item>
   </channel>
 </rss>`
