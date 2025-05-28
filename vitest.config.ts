@@ -14,15 +14,18 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: [
         'node_modules/**',
-        '**/*.config.*',
+        'coverage/**',
+        'dist/**',
         '**/*.d.ts',
+        '**/*.config.*',
         '__tests__/**',
         'app/admin/**',
         'app/api/admin/**',
         'app/api/debug/**',
         'app/layout.tsx',
         'lib/data-fetcher.ts',
-        'types/**'
+        'types/**',
+        'playwright.config.ts'
       ],
       thresholds: {
         lines: 90,
