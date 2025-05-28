@@ -12,7 +12,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('Fetching Nico Nico ranking data...')
     const items = await fetchNicoRanking()
     
     if (!items || items.length === 0) {
@@ -21,8 +20,6 @@ export async function POST(request: NextRequest) {
         message: 'RSS fetch returned no items' 
       }, { status: 500 })
     }
-
-    console.log(`Fetched ${items.length} items, storing in KV...`)
     
     // Store in KV with 1 hour TTL
     await kv.set('ranking-data', items, {
@@ -43,7 +40,6 @@ export async function POST(request: NextRequest) {
       message: 'Data updated successfully'
     })
   } catch (error) {
-    console.error('Manual update failed:', error)
     return NextResponse.json(
       { 
         error: 'Update failed', 
