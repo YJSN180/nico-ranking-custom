@@ -7,6 +7,12 @@ export interface RankingItem {
   comments?: number
   mylists?: number
   likes?: number
+  // 拡張フィールド（スクレイピング用）
+  tags?: string[]
+  authorId?: string
+  authorName?: string
+  authorIcon?: string
+  registeredAt?: string  // ISO 8601形式の投稿日時
 }
 
 export type RankingData = RankingItem[]

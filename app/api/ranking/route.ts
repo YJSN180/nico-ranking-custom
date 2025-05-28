@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import type { RankingData } from '@/types/ranking'
 import type { RankingPeriod, RankingGenre } from '@/types/ranking-config'
-import { fetchNicoRanking } from '@/lib/fetch-rss'
-import { fetchVideoInfoBatch, fetchTagRanking } from '@/lib/nico-api'
+import { fetchRankingData } from '@/lib/fetch-ranking'
 import { getMockRankingData } from '@/lib/mock-data'
 
 export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
@@ -70,57 +69,11 @@ async function fetchAndCacheRanking(
   tag?: string
 ): Promise<NextResponse> {
   try {
-    let rankingData: RankingData = []
-    
-    if (tag) {
-      // タグが指定されている場合は、Snapshot APIから直接タグランキングを取得
-      const tagRanking = await fetchTagRanking(tag, genre === 'all' ? undefined : genre, period)
-      
-      // TagRankingItem[]をRankingData形式に変換
-      rankingData = tagRanking.map(item => ({
-        rank: item.rank,
-        id: item.contentId,
-        title: item.title,
-        thumbURL: item.thumbnail.largeUrl || item.thumbnail.url,
-        views: item.viewCounter,
-        comments: item.commentCounter,
-        mylists: item.mylistCounter,
-        likes: item.likeCounter
-      }))
-    } else {
-      // タグが指定されていない場合は従来のRSSフィードからランキングを取得
-      const rankingItems = await fetchNicoRanking(period, genre)
-      
-      if (rankingItems.length > 0) {
-        // 動画IDのリストを作成
-        const contentIds = rankingItems.map(item => item.id)
-        
-        // Snapshot APIから詳細情報を取得
-        const videoInfoMap = await fetchVideoInfoBatch(contentIds)
-        
-        // ランキングデータに詳細情報を統合
-        rankingData = rankingItems.map(item => {
-          const videoInfo = videoInfoMap.get(item.id)
-          
-          if (videoInfo) {
-            return {
-              ...item,
-              views: videoInfo.viewCounter,
-              comments: videoInfo.commentCounter,
-              mylists: videoInfo.mylistCounter,
-              likes: videoInfo.likeCounter,
-              thumbURL: videoInfo.thumbnail.largeUrl || videoInfo.thumbnail.url || item.thumbURL
-            }
-          }
-          
-          // Snapshot APIから情報が取得できない場合はRSSの情報をそのまま使用
-          return item
-        })
-      }
-    }
+    // スクレイピングベースの統一されたランキング取得
+    const rankingData = await fetchRankingData(period, genre, tag)
     
     if (rankingData.length > 0) {
-      // KVにキャッシュ（TTLは期間によって調整、タグランキングは短めに）
+      // KVにキャッシュ（TTLは期間によって調整）
       const ttl = tag ? 900 : (period === 'hour' ? 3600 : 1800) // タグ: 15分、毎時: 1時間、24時間: 30分
       await kv.set(cacheKey, rankingData, { ex: ttl })
       
