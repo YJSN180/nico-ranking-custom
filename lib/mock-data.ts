@@ -1,5 +1,9 @@
 import type { RankingItem } from '@/types/ranking'
 
+export function getMockRankingData(): RankingItem[] {
+  return mockRankingData
+}
+
 export const mockRankingData: RankingItem[] = [
   {
     rank: 1,

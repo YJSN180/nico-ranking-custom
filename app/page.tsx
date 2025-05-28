@@ -1,7 +1,7 @@
 import type { RankingData } from '@/types/ranking'
-import Image from 'next/image'
 import { kv } from '@vercel/kv'
-import { ViewIcon, CommentIcon, MylistIcon, LikeIcon } from '@/components/icons'
+import ClientPage from './client-page'
+import { getMockRankingData } from '@/lib/mock-data'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
@@ -47,108 +47,6 @@ async function fetchRankingData(): Promise<RankingData> {
   }
 }
 
-function RankingItem({ item }: { item: RankingData[number] }) {
-  // すべてのランキングで統一されたコンパクトな表示
-  const rankColors: Record<number, string> = {
-    1: '#FFD700', // Gold
-    2: '#C0C0C0', // Silver
-    3: '#CD7F32'  // Bronze
-  }
-  
-  const getRankStyle = (rank: number) => {
-    if (rank <= 3) {
-      return {
-        background: rankColors[rank] || '#f5f5f5',
-        color: 'white',
-        fontSize: '18px',
-        fontWeight: '800' as const,
-        minWidth: '40px',
-        height: '40px'
-      }
-    }
-    return {
-      background: '#f5f5f5',
-      color: '#333',
-      fontSize: '14px',
-      fontWeight: '700' as const,
-      minWidth: '32px',
-      height: '32px'
-    }
-  }
-
-  return (
-    <li style={{ 
-      marginBottom: '8px',
-      background: 'white',
-      borderRadius: '8px',
-      overflow: 'hidden',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5'
-    }}>
-      <div style={{ padding: '12px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ 
-            ...getRankStyle(item.rank),
-            borderRadius: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            {item.rank}
-          </div>
-          {item.thumbURL && (
-            <Image
-              src={item.thumbURL}
-              alt={item.title}
-              width={120}
-              height={67}
-              style={{ 
-                objectFit: 'cover',
-                borderRadius: '6px'
-              }}
-            />
-          )}
-          <div style={{ flex: 1 }}>
-            <a
-              href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ 
-                color: '#0066cc', 
-                textDecoration: 'none',
-                fontSize: '14px',
-                fontWeight: '600',
-                lineHeight: '1.4',
-                display: 'block',
-                marginBottom: '4px'
-              }}
-            >
-              {item.title}
-            </a>
-            <div style={{ display: 'flex', gap: '16px', fontSize: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <ViewIcon style={{ width: '14px', height: '14px' }} />
-                <span>{item.views.toLocaleString()} 回再生</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <CommentIcon style={{ width: '14px', height: '14px' }} />
-                <span>{Math.floor(item.views * 0.15).toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <MylistIcon style={{ width: '14px', height: '14px' }} />
-                <span>{Math.floor(item.views * 0.03).toLocaleString()}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <LikeIcon style={{ width: '14px', height: '14px' }} />
-                <span>{Math.floor(item.views * 0.08).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </li>
-  )
-}
 
 export default async function Home() {
   try {
@@ -234,7 +132,7 @@ export default async function Home() {
               fontWeight: '800',
               textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
               letterSpacing: '-0.02em'
-            }}>ニコニコ24時間総合ランキング</h1>
+            }}>ニコニコランキング</h1>
             <p style={{
               color: 'rgba(255, 255, 255, 0.9)',
               textAlign: 'center',
@@ -251,11 +149,7 @@ export default async function Home() {
           margin: '0 auto',
           padding: '0 20px 40px'
         }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {rankingData.map((item) => (
-              <RankingItem key={item.id} item={item} />
-            ))}
-          </ul>
+          <ClientPage initialData={rankingData} />
         </div>
       </main>
     )
