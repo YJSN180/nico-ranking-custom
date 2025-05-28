@@ -32,9 +32,14 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
   }, [config.genre])
 
   const handleTagSelect = (tag: string) => {
-    // 同じタグを選択した場合は解除
-    const newTag = config.tag === tag ? undefined : tag
-    onConfigChange({ ...config, tag: newTag })
+    if (tag === 'すべて') {
+      // 「すべて」を選択した場合はタグをクリア
+      onConfigChange({ ...config, tag: undefined })
+    } else {
+      // 同じタグを選択した場合は解除
+      const newTag = config.tag === tag ? undefined : tag
+      onConfigChange({ ...config, tag: newTag })
+    }
   }
 
   const clearTag = () => {
@@ -60,10 +65,7 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
     )
   }
 
-  if (popularTags.length === 0) {
-    return null
-  }
-
+  // 常に表示（「すべて」タグを含める）
   return (
     <div style={{
       padding: '16px',
@@ -113,6 +115,27 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
         flexWrap: 'wrap', 
         gap: '8px'
       }}>
+        {/* 「すべて」タグを最初に表示 */}
+        <button
+          onClick={() => handleTagSelect('すべて')}
+          style={{
+            padding: '6px 12px',
+            fontSize: '13px',
+            fontWeight: '500',
+            border: '1px solid',
+            borderColor: !config.tag ? '#667eea' : '#e5e5e5',
+            background: !config.tag ? '#667eea' : 'white',
+            color: !config.tag ? 'white' : '#333',
+            borderRadius: '20px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          すべて
+        </button>
+        
+        {/* 人気タグを表示 */}
         {popularTags.map((tag) => (
           <button
             key={tag}
