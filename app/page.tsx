@@ -133,7 +133,13 @@ export default async function Home() {
 
     return (
       <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
+        <h1 style={{ 
+          color: '#333', 
+          marginBottom: '30px',
+          textAlign: 'center',
+          fontSize: '2rem',
+          fontWeight: '700'
+        }}>ニコニコ24時間総合ランキング</h1>
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {rankingData.map((item) => (
             <RankingItem key={item.id} item={item} />
