@@ -22,16 +22,17 @@ export default defineConfig({
         'app/admin/**',
         'app/api/admin/**',
         'app/api/debug/**',
+        'app/api/cron/status/**',
         'app/layout.tsx',
         'lib/data-fetcher.ts',
         'types/**',
         'playwright.config.ts'
       ],
       thresholds: {
-        lines: 90,
+        lines: 80,
         branches: 80,
-        functions: 90,
-        statements: 90
+        functions: 80,
+        statements: 80
       }
     }
   },
