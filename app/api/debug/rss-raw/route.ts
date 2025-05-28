@@ -25,7 +25,7 @@ export async function GET() {
     
     // 最初のアイテムだけを抽出して詳細を確認
     const firstItemMatch = xmlText.match(/<item>([\s\S]*?)<\/item>/)
-    const firstItem = firstItemMatch ? firstItemMatch[1] : 'No item found'
+    const firstItem = firstItemMatch?.[1] || 'No item found'
     
     return NextResponse.json({
       success: true,
