@@ -1,35 +1,18 @@
 import type { RankingData } from '@/types/ranking'
 import Image from 'next/image'
-import { kv } from '@vercel/kv'
 
+export const dynamic = 'force-dynamic'
 export const revalidate = 30
 
 async function fetchRankingData(): Promise<RankingData> {
+  // Always use API fetch to avoid build-time KV issues
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000'
+  
+  const url = `${baseUrl}/api/ranking`
+    
   try {
-    // Try direct KV access first
-    const data = await kv.get<RankingData>('ranking-data')
-    
-    if (!data) {
-      return []
-    }
-    
-    // Handle both string and object responses from KV
-    if (typeof data === 'object' && Array.isArray(data)) {
-      return data as RankingData
-    } else if (typeof data === 'string') {
-      const parsed = JSON.parse(data)
-      return parsed
-    }
-    
-    return []
-  } catch (kvError) {
-    // Fallback to API fetch
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000'
-    
-    const url = `${baseUrl}/api/ranking`
-      
     const response = await fetch(url, {
       next: { revalidate: 30 },
     })
@@ -40,6 +23,9 @@ async function fetchRankingData(): Promise<RankingData> {
 
     const data = await response.json()
     return data
+  } catch (error) {
+    console.error('Failed to fetch ranking data:', error)
+    return []
   }
 }
 
