@@ -1,0 +1,33 @@
+name: Update Nico Ranking Data
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Allow manual trigger
+  
+jobs:
+  update-ranking:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Trigger Vercel Cron Endpoint
+      run: |
+        response=$(curl -X POST \
+          "https://nico-ranking-custom.vercel.app/api/cron/fetch" \
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+          -H "Content-Type: application/json" \
+          -w "\n%{http_code}")
+        
+        http_code=$(echo "$response" | tail -n1)
+        body=$(echo "$response" | head -n-1)
+        
+        echo "Response body: $body"
+        echo "HTTP status: $http_code"
+        
+        if [ "$http_code" != "200" ]; then
+          echo "Failed to update ranking data"
+          exit 1
+        fi
+        
+        echo "Successfully updated ranking data"

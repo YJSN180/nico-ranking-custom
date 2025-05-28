@@ -35,6 +35,14 @@ cp .env.example .env.local
 - `NEXT_PUBLIC_BASE_URL`: サイトのベースURL（ローカルは `http://localhost:3000`）
 - `CRON_SECRET`: Cron Job実行時の認証用シークレット
 
+## GitHub Actionsの設定
+
+ランキングデータを自動的に更新するため、GitHub Actionsを使用します：
+
+1. GitHubリポジトリの Settings > Secrets and variables > Actions で `CRON_SECRET` を設定
+2. `.github/workflows/update-ranking.yml` が30分ごとに実行されます
+3. 手動実行も可能: Actions タブから "Update Nico Ranking Data" を選択して "Run workflow"
+
 ### 3. 開発サーバーの起動
 
 ```bash

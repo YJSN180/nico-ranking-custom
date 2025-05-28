@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
+import { mockRankingData } from '@/lib/mock-data'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 
 export async function GET() {
   try {
@@ -19,12 +20,12 @@ export async function GET() {
       return await updateData()
     }
     
-    // Check if data is older than 1 hour
+    // Check if data is older than 30 minutes
     const lastUpdate = new Date(lastUpdateInfo.timestamp)
     const now = new Date()
     const ageInMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60)
     
-    if (ageInMinutes >= 60) {
+    if (ageInMinutes >= 30) {
       // Data is stale, update it
       return await updateData()
     }
@@ -34,7 +35,7 @@ export async function GET() {
       updated: false,
       lastUpdate: lastUpdateInfo.timestamp,
       ageInMinutes: Math.round(ageInMinutes),
-      nextUpdateIn: Math.round(60 - ageInMinutes) + ' minutes'
+      nextUpdateIn: Math.round(30 - ageInMinutes) + ' minutes'
     })
   } catch (error) {
     return NextResponse.json({
@@ -46,7 +47,17 @@ export async function GET() {
 
 async function updateData() {
   try {
-    const items = await fetchNicoRanking()
+    let items
+    let isRealData = true
+    
+    try {
+      // Try to fetch real data first
+      items = await fetchNicoRanking()
+    } catch (error) {
+      // Fallback to mock data if real fetch fails
+      items = mockRankingData
+      isRealData = false
+    }
     
     if (!items || items.length === 0) {
       return NextResponse.json({ 
@@ -64,7 +75,8 @@ async function updateData() {
     const updateInfo = {
       timestamp: new Date().toISOString(),
       itemCount: items.length,
-      source: 'on-demand-update'
+      source: 'on-demand-update',
+      isRealData
     }
     await kv.set('last-update-info', updateInfo)
     
@@ -72,7 +84,8 @@ async function updateData() {
       updated: true,
       itemCount: items.length,
       timestamp: updateInfo.timestamp,
-      message: 'Data updated successfully'
+      message: 'Data updated successfully',
+      isRealData
     })
   } catch (error) {
     return NextResponse.json({

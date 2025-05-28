@@ -18,8 +18,8 @@ async function checkAndUpdateIfStale(): Promise<void> {
       const lastUpdate = new Date(lastUpdateInfo.timestamp)
       const ageInMinutes = (Date.now() - lastUpdate.getTime()) / (1000 * 60)
       
-      // If data is older than 60 minutes, trigger update
-      if (ageInMinutes >= 60) {
+      // If data is older than 30 minutes, trigger update
+      if (ageInMinutes >= 30) {
         // Fire and forget - don't wait for update to complete
         fetch(`${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/update-if-stale`)
           .catch(() => {}) // Ignore errors
