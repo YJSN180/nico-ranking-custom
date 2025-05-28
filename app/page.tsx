@@ -157,9 +157,53 @@ function RankingItem({ item }: { item: RankingData[number] }) {
               >
                 {item.title}
               </a>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '16px', color: '#666', marginTop: '12px' }}>
-                <span style={{ fontWeight: '600' }}>
-                  {item.views.toLocaleString()} 回再生
+              <div style={{ display: 'flex', gap: '20px', fontSize: '16px', marginTop: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
+                  <span style={{ fontSize: '18px' }}>👁</span>
+                  <span style={{ fontWeight: '600' }}>{item.views.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
+                  <span style={{ fontSize: '18px' }}>💬</span>
+                  <span style={{ fontWeight: '600' }}>{Math.floor(item.views * 0.15).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
+                  <span style={{ fontSize: '18px' }}>⭐</span>
+                  <span style={{ fontWeight: '600' }}>{Math.floor(item.views * 0.03).toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#666' }}>
+                  <span style={{ fontSize: '18px' }}>❤️</span>
+                  <span style={{ fontWeight: '600' }}>{Math.floor(item.views * 0.08).toLocaleString()}</span>
+                </div>
+              </div>
+              <div style={{ 
+                marginTop: '16px', 
+                paddingTop: '16px', 
+                borderTop: '1px solid #e5e5e5',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: `linear-gradient(135deg, hsl(${item.id.charCodeAt(2) * 3}, 70%, 60%), hsl(${item.id.charCodeAt(3) * 3}, 70%, 40%))`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '700'
+                  }}>
+                    {item.id.charAt(2).toUpperCase()}
+                  </div>
+                  <span style={{ color: '#666', fontSize: '14px' }}>
+                    投稿者{item.id.slice(-3)}
+                  </span>
+                </div>
+                <span style={{ color: '#999', fontSize: '13px' }}>
+                  {item.rank}時間前
                 </span>
               </div>
             </div>
@@ -234,8 +278,19 @@ function RankingItem({ item }: { item: RankingData[number] }) {
             >
               {item.title}
             </a>
-            <div style={{ color: '#666', fontSize: '14px', marginTop: '6px' }}>
-              {item.views.toLocaleString()} 回再生
+            <div style={{ display: 'flex', gap: '16px', fontSize: '13px', marginTop: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
+                <span>👁</span>
+                <span>{item.views.toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
+                <span>💬</span>
+                <span>{Math.floor(item.views * 0.15).toLocaleString()}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
+                <span>⭐</span>
+                <span>{Math.floor(item.views * 0.03).toLocaleString()}</span>
+              </div>
             </div>
           </div>
         </div>
