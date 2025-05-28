@@ -18,20 +18,27 @@ export function parseRSSToRankingItems(xml: string): RankingItem[] {
     .slice(0, 100)
     .map((item: RSSItem, index) => {
       const title = String(item.title || '')
-      const cleanTitle = title.replace(/^【第\d+位】/, '').trim()
+      // "第1位：" のような接頭辞を削除
+      const cleanTitle = title.replace(/^第\d+位[：:]/, '').trim()
       
       const link = String(item.link || '')
-      const idMatch = link.match(/watch\/(sm\d+)/)
+      // URLから動画IDを抽出（パラメータを除外）
+      const idMatch = link.match(/watch\/((?:sm|nm|so)\d+)/)
       const id = idMatch?.[1] || ''
 
       let thumbURL = ''
+      let views = 0
+      
       if (item.description && typeof item.description === 'string') {
         const imgMatch = item.description.match(/src="([^"]+)"/)
         thumbURL = imgMatch?.[1] || ''
+        
+        // descriptionから再生数を抽出
+        const viewsMatch = item.description.match(/<strong class="nico-info-total-view">([\d,]+)<\/strong>/)
+        if (viewsMatch?.[1]) {
+          views = parseInt(viewsMatch[1].replace(/,/g, ''), 10) || 0
+        }
       }
-
-      const viewsStr = String(item['nico:views'] || '0')
-      const views = parseInt(viewsStr, 10) || 0
 
       return {
         rank: index + 1,
