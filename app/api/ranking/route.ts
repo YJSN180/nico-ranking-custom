@@ -3,13 +3,16 @@ import { kv } from '@vercel/kv'
 import type { RankingData } from '@/types/ranking'
 import type { RankingPeriod, RankingGenre } from '@/types/ranking-config'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
-import { fetchVideoInfoBatch } from '@/lib/nico-api'
+import { fetchVideoInfoBatch, fetchTagRanking } from '@/lib/nico-api'
 import { getMockRankingData } from '@/lib/mock-data'
 
 export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
 
 // キャッシュキーを生成
-function getCacheKey(period: RankingPeriod, genre: RankingGenre): string {
+function getCacheKey(period: RankingPeriod, genre: RankingGenre, tag?: string): string {
+  if (tag) {
+    return `ranking-tag-${period}-${genre}-${tag}`
+  }
   return `ranking-${period}-${genre}`
 }
 
@@ -19,8 +22,9 @@ export async function GET(request: Request | NextRequest) {
     const { searchParams } = new URL(request.url)
     const period = (searchParams.get('period') || '24h') as RankingPeriod
     const genre = (searchParams.get('genre') || 'all') as RankingGenre
+    const tag = searchParams.get('tag') || undefined
     
-    const cacheKey = getCacheKey(period, genre)
+    const cacheKey = getCacheKey(period, genre, tag)
     
     // KVからキャッシュを確認
     const cachedData = await kv.get(cacheKey)
@@ -35,10 +39,10 @@ export async function GET(request: Request | NextRequest) {
           rankingData = JSON.parse(cachedData)
         } catch {
           // キャッシュが無効な場合は新しくフェッチ
-          return fetchAndCacheRanking(period, genre, cacheKey)
+          return fetchAndCacheRanking(period, genre, cacheKey, tag)
         }
       } else {
-        return fetchAndCacheRanking(period, genre, cacheKey)
+        return fetchAndCacheRanking(period, genre, cacheKey, tag)
       }
       
       return NextResponse.json(rankingData, {
@@ -49,7 +53,7 @@ export async function GET(request: Request | NextRequest) {
     }
     
     // キャッシュがない場合は新しくフェッチ
-    return fetchAndCacheRanking(period, genre, cacheKey)
+    return fetchAndCacheRanking(period, genre, cacheKey, tag)
     
   } catch (error) {
     console.error('Error in ranking API:', error)
@@ -63,43 +67,65 @@ export async function GET(request: Request | NextRequest) {
 async function fetchAndCacheRanking(
   period: RankingPeriod, 
   genre: RankingGenre, 
-  cacheKey: string
+  cacheKey: string,
+  tag?: string
 ): Promise<NextResponse> {
   try {
-    // RSSフィードから基本的なランキング情報を取得
-    const rankingItems = await fetchNicoRanking(period, genre)
+    let rankingData: RankingData = []
     
-    if (rankingItems.length > 0) {
-      // 動画IDのリストを作成
-      const contentIds = rankingItems.map(item => item.id)
+    if (tag) {
+      // タグが指定されている場合は、Snapshot APIから直接タグランキングを取得
+      const tagRanking = await fetchTagRanking(tag, genre === 'all' ? undefined : genre, period)
       
-      // Snapshot APIから詳細情報を取得
-      const videoInfoMap = await fetchVideoInfoBatch(contentIds)
+      // TagRankingItem[]をRankingData形式に変換
+      rankingData = tagRanking.map(item => ({
+        rank: item.rank,
+        id: item.contentId,
+        title: item.title,
+        thumbURL: item.thumbnail.largeUrl || item.thumbnail.url,
+        views: item.viewCounter,
+        comments: item.commentCounter,
+        mylists: item.mylistCounter,
+        likes: item.likeCounter
+      }))
+    } else {
+      // タグが指定されていない場合は従来のRSSフィードからランキングを取得
+      const rankingItems = await fetchNicoRanking(period, genre)
       
-      // ランキングデータに詳細情報を統合
-      const enrichedRanking: RankingData = rankingItems.map(item => {
-        const videoInfo = videoInfoMap.get(item.id)
+      if (rankingItems.length > 0) {
+        // 動画IDのリストを作成
+        const contentIds = rankingItems.map(item => item.id)
         
-        if (videoInfo) {
-          return {
-            ...item,
-            views: videoInfo.viewCounter,
-            comments: videoInfo.commentCounter,
-            mylists: videoInfo.mylistCounter,
-            likes: videoInfo.likeCounter,
-            thumbURL: videoInfo.thumbnail.largeUrl || videoInfo.thumbnail.url || item.thumbURL
+        // Snapshot APIから詳細情報を取得
+        const videoInfoMap = await fetchVideoInfoBatch(contentIds)
+        
+        // ランキングデータに詳細情報を統合
+        rankingData = rankingItems.map(item => {
+          const videoInfo = videoInfoMap.get(item.id)
+          
+          if (videoInfo) {
+            return {
+              ...item,
+              views: videoInfo.viewCounter,
+              comments: videoInfo.commentCounter,
+              mylists: videoInfo.mylistCounter,
+              likes: videoInfo.likeCounter,
+              thumbURL: videoInfo.thumbnail.largeUrl || videoInfo.thumbnail.url || item.thumbURL
+            }
           }
-        }
-        
-        // Snapshot APIから情報が取得できない場合はRSSの情報をそのまま使用
-        return item
-      })
+          
+          // Snapshot APIから情報が取得できない場合はRSSの情報をそのまま使用
+          return item
+        })
+      }
+    }
+    
+    if (rankingData.length > 0) {
+      // KVにキャッシュ（TTLは期間によって調整、タグランキングは短めに）
+      const ttl = tag ? 900 : (period === 'hour' ? 3600 : 1800) // タグ: 15分、毎時: 1時間、24時間: 30分
+      await kv.set(cacheKey, rankingData, { ex: ttl })
       
-      // KVにキャッシュ（TTLは期間によって調整）
-      const ttl = period === 'hour' ? 3600 : 1800 // 毎時: 1時間、24時間: 30分
-      await kv.set(cacheKey, enrichedRanking, { ex: ttl })
-      
-      return NextResponse.json(enrichedRanking, {
+      return NextResponse.json(rankingData, {
         headers: {
           'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
         },
