@@ -47,7 +47,12 @@ function RankingItem({ item }: { item: RankingData[number] }) {
   return (
     <li style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
       <div style={{ display: 'flex', gap: '15px' }}>
-        <div style={{ fontSize: '20px', fontWeight: 'bold', minWidth: '50px' }}>
+        <div style={{ 
+          fontSize: '20px', 
+          fontWeight: 'bold', 
+          minWidth: '50px',
+          color: item.rank <= 3 ? '#ff6b6b' : '#333'
+        }}>
           {item.rank}位
         </div>
         {item.thumbURL && (
@@ -56,7 +61,10 @@ function RankingItem({ item }: { item: RankingData[number] }) {
             alt={item.title}
             width={100}
             height={56}
-            style={{ objectFit: 'cover' }}
+            style={{ 
+              objectFit: 'cover',
+              borderRadius: '4px'
+            }}
           />
         )}
         <div style={{ flex: 1 }}>
@@ -64,7 +72,11 @@ function RankingItem({ item }: { item: RankingData[number] }) {
             href={`https://www.nicovideo.jp/watch/${item.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: '#0066cc', textDecoration: 'none' }}
+            style={{ 
+              color: '#0066cc', 
+              textDecoration: 'none',
+              ':hover': { textDecoration: 'underline' }
+            }}
           >
             {item.title}
           </a>
@@ -84,15 +96,15 @@ export default async function Home() {
     if (rankingData.length === 0) {
       return (
         <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-          <h1>ニコニコ24時間総合ランキング</h1>
-          <p>ランキングデータがありません</p>
+          <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
+          <p style={{ color: '#666' }}>ランキングデータがありません</p>
         </main>
       )
     }
 
     return (
       <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <h1>ニコニコ24時間総合ランキング</h1>
+        <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {rankingData.map((item) => (
             <RankingItem key={item.id} item={item} />
@@ -103,7 +115,7 @@ export default async function Home() {
   } catch (error) {
     return (
       <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <h1>ニコニコ24時間総合ランキング</h1>
+        <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
         <div style={{ 
           backgroundColor: '#f8f9fa', 
           border: '1px solid #dee2e6', 
