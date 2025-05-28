@@ -112,7 +112,7 @@ describe('Enhanced UI Components', () => {
     
     const EnhancedHome = (await import('@/app/enhanced/page')).default
     
-    const { container } = render(await EnhancedHome())
+    const { container } = render(await EnhancedHome({ searchParams: {} }))
     
     const grid = container.querySelector('.ranking-grid')
     expect(grid).toBeTruthy()
