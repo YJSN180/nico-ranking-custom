@@ -1,5 +1,8 @@
 // ニコニコ動画のSnapshot API v2を使用して動画情報を取得
 
+// Googlebot User-Agentを使用して地域制限を回避
+const GOOGLEBOT_USER_AGENT = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+
 export interface VideoInfo {
   contentId: string
   title: string
@@ -67,7 +70,13 @@ export async function fetchVideoInfoBatch(contentIds: string[]): Promise<Map<str
   
   try {
     // まずAPIのバージョンを確認
-    const versionResponse = await fetch(url)
+    const versionResponse = await fetch(url, {
+      headers: {
+        'User-Agent': GOOGLEBOT_USER_AGENT,
+        'Accept': 'application/json',
+        'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8'
+      }
+    })
     if (!versionResponse.ok) {
       throw new Error(`API version check failed: ${versionResponse.status}`)
     }
@@ -84,7 +93,13 @@ export async function fetchVideoInfoBatch(contentIds: string[]): Promise<Map<str
       }
 
       const searchUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?${new URLSearchParams(query)}`
-      const response = await fetch(searchUrl)
+      const response = await fetch(searchUrl, {
+        headers: {
+          'User-Agent': GOOGLEBOT_USER_AGENT,
+          'Accept': 'application/json',
+          'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8'
+        }
+      })
       
       if (!response.ok) {
         console.error(`Failed to fetch video info: ${response.status}`)
@@ -159,7 +174,13 @@ export async function fetchTagRanking(
 
     const searchUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?${new URLSearchParams(searchParams)}`
     
-    const response = await fetch(searchUrl)
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': GOOGLEBOT_USER_AGENT,
+        'Accept': 'application/json',
+        'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8'
+      }
+    })
     
     if (!response.ok) {
       throw new Error(`Tag ranking search failed: ${response.status}`)
@@ -217,7 +238,13 @@ export async function fetchPopularTags(genre: string = 'all', limit: number = 20
 
     const searchUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?${new URLSearchParams(searchParams)}`
     
-    const response = await fetch(searchUrl)
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': GOOGLEBOT_USER_AGENT,
+        'Accept': 'application/json',
+        'Accept-Language': 'ja-JP,ja;q=0.9,en;q=0.8'
+      }
+    })
     
     if (!response.ok) {
       throw new Error(`Popular tags search failed: ${response.status}`)
