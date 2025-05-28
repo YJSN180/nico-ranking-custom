@@ -60,8 +60,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
             rel="noopener noreferrer"
             style={{ 
               color: '#0066cc', 
-              textDecoration: 'none',
-              ':hover': { textDecoration: 'underline' }
+              textDecoration: 'none'
             }}
           >
             {item.title}
