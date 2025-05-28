@@ -1,6 +1,9 @@
 import type { RankingData } from '@/types/ranking'
-import Image from 'next/image'
 import { kv } from '@vercel/kv'
+import { EnhancedRankingCard } from '@/components/EnhancedRankingCard'
+import { RankingTypeSelector } from '@/components/RankingTypeSelector'
+import { enhanceRankingItemWithMockData } from '@/types/enhanced-ranking'
+import styles from './page.module.css'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
@@ -73,50 +76,6 @@ async function fetchRankingData(): Promise<RankingData> {
   }
 }
 
-function RankingItem({ item }: { item: RankingData[number] }) {
-  return (
-    <li style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
-      <div style={{ display: 'flex', gap: '15px' }}>
-        <div style={{ 
-          fontSize: '20px', 
-          fontWeight: 'bold', 
-          minWidth: '50px',
-          color: item.rank <= 3 ? '#ff6b6b' : '#333'
-        }}>
-          {item.rank}位
-        </div>
-        {item.thumbURL && (
-          <Image
-            src={item.thumbURL}
-            alt={item.title}
-            width={100}
-            height={56}
-            style={{ 
-              objectFit: 'cover',
-              borderRadius: '4px'
-            }}
-          />
-        )}
-        <div style={{ flex: 1 }}>
-          <a
-            href={`https://www.nicovideo.jp/watch/${item.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ 
-              color: '#0066cc', 
-              textDecoration: 'none'
-            }}
-          >
-            {item.title}
-          </a>
-          <div style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>
-            {item.views.toLocaleString()} 回再生
-          </div>
-        </div>
-      </div>
-    </li>
-  )
-}
 
 export default async function Home() {
   try {
@@ -124,45 +83,53 @@ export default async function Home() {
 
     if (rankingData.length === 0) {
       return (
-        <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-          <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
-          <p style={{ color: '#666' }}>ランキングデータがありません</p>
+        <main className={styles.mainContainer}>
+          <header className={styles.header}>
+            <h1 className={styles.title}>ニコニコ24時間総合ランキング</h1>
+            <p className={styles.subtitle}>最新のランキング情報をお届けします</p>
+          </header>
+          <div className={styles.noData}>
+            <h2 className={styles.noDataTitle}>ランキングデータがありません</h2>
+            <p className={styles.noDataMessage}>しばらく時間をおいて再度アクセスしてください</p>
+          </div>
         </main>
       )
     }
 
+    // Enhance ranking data with mock metadata
+    const enhancedData = rankingData.map(enhanceRankingItemWithMockData)
+
     return (
-      <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {rankingData.map((item) => (
-            <RankingItem key={item.id} item={item} />
+      <main className={styles.mainContainer}>
+        <header className={styles.header}>
+          <h1 className={styles.title}>ニコニコ24時間総合ランキング</h1>
+          <p className={styles.subtitle}>最新のランキング情報をお届けします</p>
+        </header>
+        
+        <RankingTypeSelector />
+        
+        <ul className={styles.rankingGrid}>
+          {enhancedData.map((item) => (
+            <EnhancedRankingCard key={item.id} item={item} className={styles.rankingCard} />
           ))}
         </ul>
       </main>
     )
   } catch (error) {
     return (
-      <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <h1 style={{ color: '#333', marginBottom: '30px' }}>ニコニコ24時間総合ランキング</h1>
-        <div style={{ 
-          backgroundColor: '#f8f9fa', 
-          border: '1px solid #dee2e6', 
-          borderRadius: '4px', 
-          padding: '20px',
-          marginTop: '20px'
-        }}>
-          <h2 style={{ color: '#495057', fontSize: '18px', marginTop: 0 }}>
-            データを準備しています
-          </h2>
-          <p style={{ color: '#6c757d', marginBottom: '10px' }}>
-            ランキングデータは毎日12時に更新されます。
-          </p>
-          <p style={{ color: '#6c757d', marginBottom: 0 }}>
+      <main className={styles.mainContainer}>
+        <header className={styles.header}>
+          <h1 className={styles.title}>ニコニコ24時間総合ランキング</h1>
+          <p className={styles.subtitle}>最新のランキング情報をお届けします</p>
+        </header>
+        <div className={styles.noData}>
+          <h2 className={styles.noDataTitle}>データを準備しています</h2>
+          <p className={styles.noDataMessage}>
+            ランキングデータは毎日12時に更新されます。<br />
             初回アクセスの場合、しばらくお待ちください。
           </p>
           {/* Debug info */}
-          <details style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
+          <details style={{ marginTop: '20px', fontSize: '12px', color: '#666' }}>
             <summary>Debug info</summary>
             <pre>{JSON.stringify({
               error: error instanceof Error ? error.message : String(error),
