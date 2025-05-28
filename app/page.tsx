@@ -63,22 +63,9 @@ function RankingItem({ item }: { item: RankingData[number] }) {
         borderRadius: '16px',
         overflow: 'hidden',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-        border: '3px solid transparent',
-        backgroundImage: rankGradients[item.rank as 1 | 2 | 3],
-        backgroundOrigin: 'border-box',
-        backgroundClip: 'padding-box, border-box',
-        position: 'relative',
-        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-8px)'
-        e.currentTarget.style.boxShadow = '0 12px 48px rgba(0, 0, 0, 0.18)'
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)'
-        e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.12)'
-      }}
-      >
+        border: `3px solid ${item.rank === 1 ? '#FFD700' : item.rank === 2 ? '#C0C0C0' : '#CD7F32'}`,
+        position: 'relative'
+      }}>
         <div style={{ padding: '24px', background: 'white' }}>
           <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
             <div style={{ 
@@ -125,8 +112,6 @@ function RankingItem({ item }: { item: RankingData[number] }) {
                   display: 'block',
                   marginBottom: '8px'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
               >
                 {item.title}
               </a>
@@ -161,7 +146,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
-                    background: `linear-gradient(135deg, hsl(${item.id.charCodeAt(2) * 3}, 70%, 60%), hsl(${item.id.charCodeAt(3) * 3}, 70%, 40%))`,
+                    background: '#667eea',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -169,7 +154,7 @@ function RankingItem({ item }: { item: RankingData[number] }) {
                     fontSize: '14px',
                     fontWeight: '700'
                   }}>
-                    {item.id.charAt(2).toUpperCase()}
+                    {(item.id.charAt(2) || 'U').toUpperCase()}
                   </div>
                   <span style={{ color: '#666', fontSize: '14px' }}>
                     投稿者{item.id.slice(-3)}
@@ -194,15 +179,6 @@ function RankingItem({ item }: { item: RankingData[number] }) {
       borderRadius: '12px',
       overflow: 'hidden',
       boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = 'translateY(-4px)'
-      e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.12)'
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = 'translateY(0)'
-      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)'
     }}
     >
       <div style={{ padding: '16px' }}>
@@ -246,8 +222,6 @@ function RankingItem({ item }: { item: RankingData[number] }) {
                 lineHeight: '1.3',
                 display: 'block'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
-              onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
             >
               {item.title}
             </a>
