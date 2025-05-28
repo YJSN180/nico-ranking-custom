@@ -30,7 +30,12 @@ async function fetchRankingWithScraping(
   tag?: string
 ): Promise<RankingData> {
   // HTMLからベースデータを取得
-  const scrapedItems = await scrapeRankingPage(genre, period, tag)
+  const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, period, tag)
+  
+  // 人気タグをグローバルストアに保存（後でタグセレクターから参照）
+  if (popularTags && genre !== 'all') {
+    storePopularTags(genre, popularTags)
+  }
   
   // 動画IDのリストを作成
   const videoIds = scrapedItems
@@ -61,4 +66,15 @@ async function fetchRankingWithScraping(
         registeredAt: details.registeredAt
       } as RankingItem
     })
+}
+
+// 人気タグを一時的に保存
+const popularTagsCache = new Map<string, string[]>()
+
+function storePopularTags(genre: string, tags: string[]) {
+  popularTagsCache.set(genre, tags)
+}
+
+export function getStoredPopularTags(genre: string): string[] {
+  return popularTagsCache.get(genre) || []
 }

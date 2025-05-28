@@ -3,8 +3,10 @@
 import type { RankingItem } from '@/types/ranking'
 import { parseHTML } from './html-parser'
 
-// User-Agentの設定（連絡先を含む）
-const USER_AGENT = 'NicoRankingScraper/1.0 (+https://github.com/YJSN180/nico-ranking-custom)'
+// User-Agentの設定（Googlebotで地域ブロック回避）
+const GOOGLEBOT_USER_AGENT = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
+// 通常のUser-Agent（API用）
+const NORMAL_USER_AGENT = 'NicoRankingScraper/1.0 (+https://github.com/YJSN180/nico-ranking-custom)'
 
 // レート制限の設定
 const RATE_LIMIT = {
@@ -59,7 +61,10 @@ export async function scrapeRankingPage(
   genre: string,
   term: '24h' | 'hour',
   tag?: string
-): Promise<Partial<RankingItem>[]> {
+): Promise<{
+  items: Partial<RankingItem>[]
+  popularTags?: string[]
+}> {
   await checkRateLimit()
   
   // URLの構築
@@ -73,7 +78,7 @@ export async function scrapeRankingPage(
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': USER_AGENT,
+        'User-Agent': GOOGLEBOT_USER_AGENT,  // Googlebotで地域ブロック回避
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'ja,en;q=0.9',
         'Accept-Encoding': 'gzip, deflate, br',
@@ -86,7 +91,10 @@ export async function scrapeRankingPage(
     }
     
     const html = await response.text()
-    return parseRankingHTML(html)
+    const items = parseRankingHTML(html)
+    const popularTags = genre !== 'all' ? parsePopularTags(html) : undefined
+    
+    return { items, popularTags }
     
   } catch (error) {
     throw new Error(`Scraping failed: ${error}`)
@@ -178,7 +186,7 @@ export async function fetchVideoDetails(videoId: string): Promise<{
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': USER_AGENT,
+        'User-Agent': NORMAL_USER_AGENT,  // APIには通常のUser-Agent
         'X-Frontend-Id': '70',
         'X-Frontend-Version': '0',
         'Accept': 'application/json',
@@ -232,4 +240,36 @@ export async function fetchVideoDetailsBatch(
   }
   
   return results
+}
+
+// ランキングページから人気タグを抽出
+function parsePopularTags(html: string): string[] {
+  const tags: string[] = []
+  
+  // 人気タグは通常、<a class="...TagLink..." href="/tag/...">タグ名</a> の形式
+  // または <button class="...tag...">タグ名</button> の形式
+  const tagRegex = /<a[^>]+(?:class="[^"]*(?:tag|Tag)[^"]*")[^>]*href="\/tag\/([^"]+)"[^>]*>([^<]+)<\/a>/gi
+  const buttonTagRegex = /<button[^>]+(?:class="[^"]*(?:tag|Tag)[^"]*")[^>]*>([^<]+)<\/button>/gi
+  
+  let match
+  
+  // リンク形式のタグを抽出
+  while ((match = tagRegex.exec(html)) !== null) {
+    const tagName = decodeURIComponent(match[1] || '')
+    const tagText = match[2]
+    if (tagName && tagText && !tags.includes(tagText)) {
+      tags.push(tagText)
+    }
+  }
+  
+  // ボタン形式のタグを抽出（重複を避ける）
+  while ((match = buttonTagRegex.exec(html)) !== null) {
+    const tagText = match[1]
+    if (tagText && !tags.includes(tagText)) {
+      tags.push(tagText)
+    }
+  }
+  
+  // 「すべて」というタグは除外
+  return tags.filter(tag => tag !== 'すべて').slice(0, 20)
 }

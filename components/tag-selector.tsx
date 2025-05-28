@@ -16,10 +16,26 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
   // ジャンルが変更されたときに人気タグを取得
   useEffect(() => {
     async function loadTags() {
+      // 総合ランキングの場合はタグを表示しない
+      if (config.genre === 'all') {
+        setPopularTags([])
+        setLoading(false)
+        return
+      }
+      
       setLoading(true)
       try {
-        const tags = await fetchPopularTags(config.genre, 15)
-        setPopularTags(tags)
+        // まずキャッシュされたタグを確認
+        const { getStoredPopularTags } = await import('@/lib/fetch-ranking')
+        const cachedTags = getStoredPopularTags(config.genre)
+        
+        if (cachedTags.length > 0) {
+          setPopularTags(cachedTags)
+        } else {
+          // キャッシュがない場合はAPIから取得
+          const tags = await fetchPopularTags(config.genre, 15)
+          setPopularTags(tags)
+        }
       } catch (error) {
         // フォールバックとして空配列を設定
         setPopularTags([])
@@ -65,6 +81,11 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
     )
   }
 
+  // 総合ランキングの場合は何も表示しない
+  if (config.genre === 'all') {
+    return null
+  }
+  
   // 常に表示（「すべて」タグを含める）
   return (
     <div style={{
