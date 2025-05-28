@@ -9,7 +9,10 @@ import { getMockRankingData } from '@/lib/mock-data'
 export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
 
 // キャッシュキーを生成
-function getCacheKey(period: RankingPeriod, genre: RankingGenre): string {
+function getCacheKey(period: RankingPeriod, genre: RankingGenre, tag?: string): string {
+  if (tag) {
+    return `ranking-tag-${period}-${genre}-${tag}`
+  }
   return `ranking-${period}-${genre}`
 }
 
@@ -19,8 +22,9 @@ export async function GET(request: Request | NextRequest) {
     const { searchParams } = new URL(request.url)
     const period = (searchParams.get('period') || '24h') as RankingPeriod
     const genre = (searchParams.get('genre') || 'all') as RankingGenre
+    const tag = searchParams.get('tag') || undefined
     
-    const cacheKey = getCacheKey(period, genre)
+    const cacheKey = getCacheKey(period, genre, tag)
     
     // KVからキャッシュを確認
     const cachedData = await kv.get(cacheKey)
@@ -35,10 +39,10 @@ export async function GET(request: Request | NextRequest) {
           rankingData = JSON.parse(cachedData)
         } catch {
           // キャッシュが無効な場合は新しくフェッチ
-          return fetchAndCacheRanking(period, genre, cacheKey)
+          return fetchAndCacheRanking(period, genre, cacheKey, tag)
         }
       } else {
-        return fetchAndCacheRanking(period, genre, cacheKey)
+        return fetchAndCacheRanking(period, genre, cacheKey, tag)
       }
       
       return NextResponse.json(rankingData, {
@@ -49,7 +53,7 @@ export async function GET(request: Request | NextRequest) {
     }
     
     // キャッシュがない場合は新しくフェッチ
-    return fetchAndCacheRanking(period, genre, cacheKey)
+    return fetchAndCacheRanking(period, genre, cacheKey, tag)
     
   } catch (error) {
     console.error('Error in ranking API:', error)
@@ -63,11 +67,12 @@ export async function GET(request: Request | NextRequest) {
 async function fetchAndCacheRanking(
   period: RankingPeriod, 
   genre: RankingGenre, 
-  cacheKey: string
+  cacheKey: string,
+  tag?: string
 ): Promise<NextResponse> {
   try {
     // RSSフィードから基本的なランキング情報を取得
-    const rankingItems = await fetchNicoRanking(period, genre)
+    const rankingItems = await fetchNicoRanking(period, genre, tag)
     
     if (rankingItems.length > 0) {
       // 動画IDのリストを作成
@@ -106,13 +111,21 @@ async function fetchAndCacheRanking(
       })
     }
   } catch (error) {
-    console.error('Error fetching ranking:', error)
+    console.error('Error fetching ranking:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      period,
+      genre,
+      tag,
+      cacheKey
+    })
     // エラー時はモックデータを返す
     const mockData = getMockRankingData()
     return NextResponse.json(mockData, {
       headers: {
         'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
-        'X-Data-Source': 'mock'
+        'X-Data-Source': 'mock',
+        'X-Error': error instanceof Error ? error.message : 'Unknown error'
       },
     })
   }

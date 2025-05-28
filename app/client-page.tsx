@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { ViewIcon, CommentIcon, MylistIcon, LikeIcon } from '@/components/icons'
 import { RankingSelector } from '@/components/ranking-selector'
+import { TagSelector } from '@/components/tag-selector'
 import type { RankingData } from '@/types/ranking'
 import type { RankingConfig } from '@/types/ranking-config'
 
@@ -140,6 +141,10 @@ export default function ClientPage({ initialData }: ClientPageProps) {
           genre: config.genre
         })
         
+        if (config.tag) {
+          params.append('tag', config.tag)
+        }
+        
         const response = await fetch(`/api/ranking?${params}`)
         
         if (!response.ok) {
@@ -156,7 +161,7 @@ export default function ClientPage({ initialData }: ClientPageProps) {
     }
 
     // 初回レンダリング時は実行しない（initialDataを使用）
-    if (config.period !== '24h' || config.genre !== 'all') {
+    if (config.period !== '24h' || config.genre !== 'all' || config.tag) {
       fetchRanking()
     }
   }, [config])
@@ -164,6 +169,7 @@ export default function ClientPage({ initialData }: ClientPageProps) {
   return (
     <>
       <RankingSelector config={config} onConfigChange={setConfig} />
+      <TagSelector config={config} onConfigChange={setConfig} />
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
