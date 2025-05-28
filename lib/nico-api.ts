@@ -136,29 +136,34 @@ export async function fetchTagRanking(
       startTime.setHours(now.getHours() - 1)
     }
 
-    // 検索クエリの構築
-    let query = `tags:"${tag}"`
+    // 基本のクエリパラメータ
+    const params: any = {
+      q: tag,
+      targets: 'tagsExact',  // 正確なタグ一致
+      fields: 'contentId,title,viewCounter,commentCounter,mylistCounter,likeCounter,thumbnail,tags,categoryTags,registeredAt',
+      _sort: '-viewCounter',  // 再生数の降順でソート
+      _limit: limit.toString()
+    }
+
+    // 期間フィルターを追加
+    params['filters[startTime][gte]'] = startTime.toISOString()
+    params['filters[startTime][lt]'] = now.toISOString()
     
     // ジャンルフィルターの追加
     if (genre && genre !== 'all') {
-      query += ` AND categoryTags:"${genre}"`
-    }
-    
-    // 期間フィルターの追加
-    query += ` AND registeredAt:[${startTime.toISOString()} TO ${now.toISOString()}]`
-
-    const searchParams = {
-      q: query,
-      targets: 'title,tags,categoryTags',
-      fields: 'contentId,title,viewCounter,commentCounter,mylistCounter,likeCounter,thumbnail,tags,registeredAt',
-      _sort: '-viewCounter', // 再生数の降順でソート
-      _limit: limit.toString(),
-      _context: 'niconico'
+      // categoryTagsでジャンルを絞り込む
+      params['filters[categoryTags][0]'] = genre
     }
 
-    const searchUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?${new URLSearchParams(searchParams)}`
+    const searchUrl = 'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
+    const queryString = new URLSearchParams(params).toString()
+    const fullUrl = `${searchUrl}?${queryString}`
     
-    const response = await fetch(searchUrl)
+    const response = await fetch(fullUrl, {
+      headers: {
+        'User-Agent': 'nico-ranking-app/1.0'  // 40文字以内の必須ヘッダー
+      }
+    })
     
     if (!response.ok) {
       throw new Error(`Tag ranking search failed: ${response.status}`)
@@ -193,29 +198,29 @@ export async function fetchTagRanking(
 // ジャンルの人気タグを取得
 export async function fetchPopularTags(genre: string = 'all', limit: number = 20): Promise<string[]> {
   try {
-    // 過去7日間の人気動画から頻出タグを取得
-    const now = new Date()
-    const weekAgo = new Date()
-    weekAgo.setDate(now.getDate() - 7)
-
-    let query = `registeredAt:[${weekAgo.toISOString()} TO ${now.toISOString()}]`
+    // 現在の動画から人気タグを取得（再生数が多い動画のタグを集計）
+    const params: any = {
+      q: '*',  // すべての動画
+      targets: 'title',  // titleフィールドで検索
+      fields: 'tags,viewCounter,categoryTags',
+      _sort: '-viewCounter',  // 再生数の多い順
+      _limit: '200'  // 上位200件から集計
+    }
     
+    // ジャンルフィルター
     if (genre !== 'all') {
-      query += ` AND categoryTags:"${genre}"`
+      params['filters[categoryTags][0]'] = genre
     }
 
-    const searchParams = {
-      q: query,
-      targets: 'tags',
-      fields: 'tags',
-      _sort: '-viewCounter',
-      _limit: '500', // 多めに取得してタグを集計
-      _context: 'niconico'
-    }
-
-    const searchUrl = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?${new URLSearchParams(searchParams)}`
+    const searchUrl = 'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
+    const queryString = new URLSearchParams(params).toString()
+    const fullUrl = `${searchUrl}?${queryString}`
     
-    const response = await fetch(searchUrl)
+    const response = await fetch(fullUrl, {
+      headers: {
+        'User-Agent': 'nico-ranking-app/1.0'
+      }
+    })
     
     if (!response.ok) {
       throw new Error(`Popular tags search failed: ${response.status}`)
@@ -223,26 +228,30 @@ export async function fetchPopularTags(genre: string = 'all', limit: number = 20
 
     const data: SnapshotResponse = await response.json()
     
-    // タグの出現回数を集計
-    const tagCounts = new Map<string, number>()
+    // タグの出現回数を集計（再生数で重み付け）
+    const tagScores = new Map<string, number>()
     
     data.data.forEach(video => {
-      if (video.tags) {
+      if (video.tags && Array.isArray(video.tags)) {
         video.tags.forEach(tag => {
-          const count = tagCounts.get(tag) || 0
-          tagCounts.set(tag, count + 1)
+          if (typeof tag === 'string' && tag.length > 0) {
+            const currentScore = tagScores.get(tag) || 0
+            // 再生数の対数で重み付け（人気動画のタグをより重視）
+            const weight = Math.log10(video.viewCounter + 1)
+            tagScores.set(tag, currentScore + weight)
+          }
         })
       }
     })
 
-    // 出現回数の多い順でソートして上位を返す
-    const sortedTags = Array.from(tagCounts.entries())
+    // スコアの高い順でソートして上位を返す
+    const sortedTags = Array.from(tagScores.entries())
       .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
       .map(([tag]) => tag)
-      .filter(tag => tag.length > 0 && !tag.includes('R-18')) // 空文字やR-18タグを除外
+      .filter(tag => !tag.includes('R-18') && !tag.includes('R18'))  // R-18タグを除外
+      .slice(0, limit)
 
-    return sortedTags
+    return sortedTags.length > 0 ? sortedTags : getDefaultPopularTags(genre)
     
   } catch (error) {
     // フォールバック: ジャンルごとの基本的な人気タグ
