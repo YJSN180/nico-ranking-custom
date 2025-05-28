@@ -3,6 +3,7 @@ import { RankingCard } from '@/components/RankingCard'
 import { RankingTypeSelector } from '@/components/RankingTypeSelector'
 import { fetchEnhancedRanking } from '@/lib/fetch-enhanced-rss'
 import { EnhancedRankingData, RANKING_TYPES } from '@/types/enhanced-ranking'
+import styles from './page.module.css'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
@@ -49,20 +50,20 @@ export default async function EnhancedHome({ searchParams }: PageProps) {
   const currentRanking = RANKING_TYPES.find(t => t.id === currentType)
 
   return (
-    <main className="main-container">
-      <header className="header">
-        <h1 className="title">
+    <main className={styles.mainContainer}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>
           ニコニコ動画{currentRanking?.label || ''}ランキング
         </h1>
         <RankingTypeSelector currentType={currentType} />
       </header>
 
       {rankingData.length === 0 ? (
-        <div className="no-data">
+        <div className={styles.noData}>
           <p>ランキングデータがありません</p>
         </div>
       ) : (
-        <div className="ranking-grid responsive-grid">
+        <div className={styles.rankingGrid}>
           {rankingData.map((item) => (
             <RankingCard 
               key={item.id} 
@@ -72,71 +73,6 @@ export default async function EnhancedHome({ searchParams }: PageProps) {
           ))}
         </div>
       )}
-
-      <style jsx>{`
-        .main-container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 20px;
-          background-color: #f5f5f5;
-          min-height: 100vh;
-        }
-
-        .header {
-          background: white;
-          padding: 24px;
-          border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-          margin-bottom: 24px;
-        }
-
-        .title {
-          font-size: 32px;
-          font-weight: bold;
-          color: #333;
-          margin: 0 0 16px 0;
-          text-align: center;
-        }
-
-        .no-data {
-          text-align: center;
-          padding: 60px 20px;
-          color: #666;
-          font-size: 18px;
-        }
-
-        .ranking-grid {
-          display: grid;
-          gap: 0;
-        }
-
-        .responsive-grid {
-          grid-template-columns: 1fr;
-        }
-
-        @media (min-width: 768px) {
-          .main-container {
-            padding: 40px;
-          }
-
-          .title {
-            font-size: 36px;
-          }
-        }
-
-        @media (min-width: 1024px) {
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-
-          .title {
-            text-align: left;
-            margin-bottom: 0;
-          }
-        }
-      `}</style>
     </main>
   )
 }
