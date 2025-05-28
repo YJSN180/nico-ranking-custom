@@ -87,7 +87,7 @@ export async function fetchVideoInfoBatch(contentIds: string[]): Promise<Map<str
       const response = await fetch(searchUrl)
       
       if (!response.ok) {
-        console.error(`Failed to fetch video info: ${response.status}`)
+        // Failed to fetch video info, skip this batch
         continue
       }
 
@@ -113,7 +113,6 @@ export async function fetchVideoInfoBatch(contentIds: string[]): Promise<Map<str
       })
     }
   } catch (error) {
-    console.error('Error fetching video info:', error)
     // エラーが発生しても空のMapを返す（フォールバック）
   }
 
@@ -187,7 +186,6 @@ export async function fetchTagRanking(
     return tagRanking
     
   } catch (error) {
-    console.error('Error fetching tag ranking:', error)
     return []
   }
 }
@@ -247,7 +245,6 @@ export async function fetchPopularTags(genre: string = 'all', limit: number = 20
     return sortedTags
     
   } catch (error) {
-    console.error('Error fetching popular tags:', error)
     // フォールバック: ジャンルごとの基本的な人気タグ
     return getDefaultPopularTags(genre)
   }

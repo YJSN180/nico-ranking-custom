@@ -15,20 +15,20 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
 
   // ジャンルが変更されたときに人気タグを取得
   useEffect(() => {
-    const loadPopularTags = async () => {
+    async function loadTags() {
       setLoading(true)
       try {
         const tags = await fetchPopularTags(config.genre, 15)
         setPopularTags(tags)
       } catch (error) {
-        console.error('Failed to load popular tags:', error)
+        // フォールバックとして空配列を設定
         setPopularTags([])
       } finally {
         setLoading(false)
       }
     }
 
-    loadPopularTags()
+    loadTags()
   }, [config.genre])
 
   const handleTagSelect = (tag: string) => {
