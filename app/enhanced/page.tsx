@@ -1,7 +1,6 @@
 import { kv } from '@vercel/kv'
 import { RankingCard } from '@/components/RankingCard'
 import { RankingTypeSelector } from '@/components/RankingTypeSelector'
-import { fetchEnhancedRanking } from '@/lib/fetch-enhanced-rss'
 import { EnhancedRankingData, RANKING_TYPES } from '@/types/enhanced-ranking'
 import styles from './page.module.css'
 
@@ -13,12 +12,11 @@ interface PageProps {
 }
 
 async function fetchRankingData(typeId: string): Promise<EnhancedRankingData> {
-  const rankingType = RANKING_TYPES.find(t => t.id === typeId) || RANKING_TYPES[1]!
-  const kvKey = `enhanced-ranking-${rankingType.id}`
-  
+  // For now, use the existing working ranking data from KV
+  // This ensures the enhanced page works while we develop the Snapshot API integration
   try {
-    // Try to get from KV first
-    const cached = await kv.get(kvKey)
+    // Get existing ranking data that we know works
+    const cached = await kv.get('ranking-data')
     if (cached) {
       if (typeof cached === 'string') {
         return JSON.parse(cached)
@@ -26,22 +24,27 @@ async function fetchRankingData(typeId: string): Promise<EnhancedRankingData> {
       return cached as EnhancedRankingData
     }
   } catch (error) {
-    // Fall through to fetch
+    // Fall through to API fallback
   }
 
-  // Fetch fresh data
+  // Fallback to API route which has the working logic
   try {
-    const data = await fetchEnhancedRanking(rankingType)
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'http://localhost:3000'
     
-    // Cache in KV
-    await kv.set(kvKey, data, {
-      ex: rankingType!.term === 'hour' ? 3600 : 86400
+    const response = await fetch(`${baseUrl}/api/ranking`, {
+      cache: 'no-cache'
     })
     
-    return data
+    if (response.ok) {
+      return await response.json()
+    }
   } catch (error) {
-    return []
+    // Fall through to empty array
   }
+
+  return []
 }
 
 export default async function EnhancedHome({ searchParams }: PageProps) {
