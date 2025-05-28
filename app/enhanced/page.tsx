@@ -12,10 +12,35 @@ interface PageProps {
 }
 
 async function fetchRankingData(typeId: string): Promise<EnhancedRankingData> {
-  // For now, use the existing working ranking data from KV
-  // This ensures the enhanced page works while we develop the Snapshot API integration
+  const baseUrl = process.env.VERCEL_URL 
+    ? `https://${process.env.VERCEL_URL}` 
+    : 'http://localhost:3000'
+
+  // First try to get existing ranking data from KV
   try {
-    // Get existing ranking data that we know works
+    const cached = await kv.get('ranking-data')
+    if (cached) {
+      if (typeof cached === 'string') {
+        return JSON.parse(cached)
+      }
+      return cached as EnhancedRankingData
+    }
+  } catch (error) {
+    // Fall through to API calls
+  }
+
+  // If no data in KV, trigger an immediate update and then fetch
+  try {
+    // Trigger update (non-blocking)
+    fetch(`${baseUrl}/api/admin/trigger-update`, {
+      method: 'POST',
+      cache: 'no-cache'
+    }).catch(() => {}) // Ignore errors
+
+    // Wait a short moment for the update to complete
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // Try KV again
     const cached = await kv.get('ranking-data')
     if (cached) {
       if (typeof cached === 'string') {
@@ -29,10 +54,6 @@ async function fetchRankingData(typeId: string): Promise<EnhancedRankingData> {
 
   // Fallback to API route which has the working logic
   try {
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'http://localhost:3000'
-    
     const response = await fetch(`${baseUrl}/api/ranking`, {
       cache: 'no-cache'
     })
