@@ -52,7 +52,6 @@ export async function GET(request: Request) {
       },
     })
   } catch (error) {
-    console.error('Failed to fetch ranking data:', error)
     return NextResponse.json(
       { error: 'Failed to fetch ranking data' },
       { status: 502 }

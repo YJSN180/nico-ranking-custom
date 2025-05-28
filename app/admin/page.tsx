@@ -24,7 +24,7 @@ export default function AdminPage() {
       const data = await response.json()
       setStatus(data)
     } catch (error) {
-      console.error('Failed to fetch status:', error)
+      // Failed to fetch status
     }
   }
 
