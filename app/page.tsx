@@ -47,7 +47,6 @@ async function fetchRankingData(): Promise<RankingData> {
   }
 }
 
-
 export default async function Home() {
   try {
     const rankingData = await fetchRankingData()
