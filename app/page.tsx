@@ -74,43 +74,169 @@ async function fetchRankingData(): Promise<RankingData> {
 }
 
 function RankingItem({ item }: { item: RankingData[number] }) {
-  return (
-    <li style={{ marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '15px' }}>
-      <div style={{ display: 'flex', gap: '15px' }}>
-        <div style={{ 
-          fontSize: '20px', 
-          fontWeight: 'bold', 
-          minWidth: '50px',
-          color: item.rank <= 3 ? '#ff6b6b' : '#333'
-        }}>
-          {item.rank}位
+  const isTop3 = item.rank <= 3
+  const rankGradients = {
+    1: 'linear-gradient(135deg, #FFD700 0%, #FFED4E 100%)',
+    2: 'linear-gradient(135deg, #C0C0C0 0%, #E5E5E5 100%)',
+    3: 'linear-gradient(135deg, #CD7F32 0%, #E3A857 100%)'
+  }
+  
+  // TOP3は特別なカードスタイル
+  if (isTop3) {
+    return (
+      <li style={{ 
+        marginBottom: '24px',
+        background: 'white',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+        border: '3px solid transparent',
+        backgroundImage: rankGradients[item.rank as 1 | 2 | 3],
+        backgroundOrigin: 'border-box',
+        backgroundClip: 'padding-box, border-box',
+        position: 'relative',
+        transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-8px)'
+        e.currentTarget.style.boxShadow = '0 12px 48px rgba(0, 0, 0, 0.18)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)'
+        e.currentTarget.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.12)'
+      }}
+      >
+        <div style={{ padding: '24px', background: 'white' }}>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
+            <div style={{ 
+              fontSize: '48px', 
+              fontWeight: '900',
+              minWidth: '80px',
+              height: '80px',
+              background: rankGradients[item.rank as 1 | 2 | 3],
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+            }}>
+              {item.rank}
+            </div>
+            {item.thumbURL && (
+              <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
+                <Image
+                  src={item.thumbURL}
+                  alt={item.title}
+                  width={180}
+                  height={101}
+                  style={{ 
+                    objectFit: 'cover',
+                    display: 'block'
+                  }}
+                />
+              </div>
+            )}
+            <div style={{ flex: 1 }}>
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ 
+                  color: '#0066cc', 
+                  textDecoration: 'none',
+                  fontSize: '20px',
+                  fontWeight: '700',
+                  lineHeight: '1.4',
+                  display: 'block',
+                  marginBottom: '8px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+              >
+                {item.title}
+              </a>
+              <div style={{ display: 'flex', gap: '16px', fontSize: '16px', color: '#666', marginTop: '12px' }}>
+                <span style={{ fontWeight: '600' }}>
+                  {item.views.toLocaleString()} 回再生
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-        {item.thumbURL && (
-          <Image
-            src={item.thumbURL}
-            alt={item.title}
-            width={100}
-            height={56}
-            style={{ 
-              objectFit: 'cover',
-              borderRadius: '4px'
-            }}
-          />
-        )}
-        <div style={{ flex: 1 }}>
-          <a
-            href={`https://www.nicovideo.jp/watch/${item.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ 
-              color: '#0066cc', 
-              textDecoration: 'none'
-            }}
-          >
-            {item.title}
-          </a>
-          <div style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>
-            {item.views.toLocaleString()} 回再生
+      </li>
+    )
+  }
+  
+  // 4位以降は通常のカードスタイル
+  return (
+    <li style={{ 
+      marginBottom: '16px',
+      background: 'white',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = 'translateY(-4px)'
+      e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.12)'
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = 'translateY(0)'
+      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)'
+    }}
+    >
+      <div style={{ padding: '16px' }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <div style={{ 
+            fontSize: '24px', 
+            fontWeight: '800', 
+            minWidth: '50px',
+            height: '50px',
+            background: '#f5f5f5',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#333'
+          }}>
+            {item.rank}
+          </div>
+          {item.thumbURL && (
+            <Image
+              src={item.thumbURL}
+              alt={item.title}
+              width={120}
+              height={67}
+              style={{ 
+                objectFit: 'cover',
+                borderRadius: '8px'
+              }}
+            />
+          )}
+          <div style={{ flex: 1 }}>
+            <a
+              href={`https://www.nicovideo.jp/watch/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ 
+                color: '#0066cc', 
+                textDecoration: 'none',
+                fontSize: '16px',
+                fontWeight: '600',
+                lineHeight: '1.3',
+                display: 'block'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+              onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+            >
+              {item.title}
+            </a>
+            <div style={{ color: '#666', fontSize: '14px', marginTop: '6px' }}>
+              {item.views.toLocaleString()} 回再生
+            </div>
           </div>
         </div>
       </div>
@@ -132,19 +258,49 @@ export default async function Home() {
     }
 
     return (
-      <main style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-        <h1 style={{ 
-          color: '#333', 
-          marginBottom: '30px',
-          textAlign: 'center',
-          fontSize: '2rem',
-          fontWeight: '700'
-        }}>ニコニコ24時間総合ランキング</h1>
-        <ul style={{ listStyle: 'none', padding: 0 }}>
-          {rankingData.map((item) => (
-            <RankingItem key={item.id} item={item} />
-          ))}
-        </ul>
+      <main style={{ 
+        padding: '0',
+        minHeight: '100vh',
+        background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
+      }}>
+        <header style={{
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          padding: '40px 20px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+          marginBottom: '40px'
+        }}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <h1 style={{ 
+              color: '#ffffff', 
+              marginBottom: '8px',
+              textAlign: 'center',
+              fontSize: '2.5rem',
+              fontWeight: '800',
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+              letterSpacing: '-0.02em'
+            }}>ニコニコ24時間総合ランキング</h1>
+            <p style={{
+              color: 'rgba(255, 255, 255, 0.9)',
+              textAlign: 'center',
+              fontSize: '1.1rem',
+              margin: 0
+            }}>
+              最新の人気動画をチェック
+            </p>
+          </div>
+        </header>
+        
+        <div style={{ 
+          maxWidth: '1200px', 
+          margin: '0 auto',
+          padding: '0 20px 40px'
+        }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {rankingData.map((item) => (
+              <RankingItem key={item.id} item={item} />
+            ))}
+          </ul>
+        </div>
       </main>
     )
   } catch (error) {
