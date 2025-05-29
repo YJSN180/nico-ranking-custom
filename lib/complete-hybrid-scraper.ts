@@ -493,9 +493,11 @@ function extractPopularTagsFromHTML(html: string): string[] {
   let match
   
   while ((match = tagPattern1.exec(html)) !== null) {
-    const tag = match[1].trim()
-    if (tag && !tags.includes(tag) && !tag.includes('すべて')) {
-      tags.push(tag)
+    if (match[1]) {
+      const tag = match[1].trim()
+      if (tag && !tags.includes(tag) && !tag.includes('すべて')) {
+        tags.push(tag)
+      }
     }
   }
   
@@ -509,9 +511,11 @@ function extractPopularTagsFromHTML(html: string): string[] {
         const linkPattern = /<a[^>]*>([^<]+)</g
         let linkMatch
         while ((linkMatch = linkPattern.exec(block)) !== null) {
-          const tag = linkMatch[1].trim()
-          if (tag && !tags.includes(tag) && !tag.includes('すべて')) {
-            tags.push(tag)
+          if (linkMatch[1]) {
+            const tag = linkMatch[1].trim()
+            if (tag && !tags.includes(tag) && !tag.includes('すべて')) {
+              tags.push(tag)
+            }
           }
         }
       })
