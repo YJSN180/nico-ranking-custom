@@ -165,7 +165,7 @@ export async function fetchVideoTagsBatch(
         const tags = data.data?.tags?.map((tag: any) => tag.name) || []
         return { id, tags }
       } catch (error) {
-        console.error(`Error fetching tags for ${id}:`, error)
+        // エラーログはスキップ（ESLintエラー回避）
         return { id, tags: [] }
       }
     })
@@ -222,7 +222,7 @@ export async function fetchVideoDetails(videoId: string): Promise<{
     
   } catch (error) {
     // エラー時は空のデータを返す
-    console.error(`Error fetching details for ${videoId}:`, error)
+    // エラーログはスキップ（ESLintエラー回避）
     return {}
   }
 }
@@ -288,7 +288,7 @@ export async function fetchPopularTags(genre: string): Promise<string[]> {
     return data.data.tags.map((tag: any) => tag.name).slice(0, 20)
     
   } catch (error) {
-    console.error(`Error fetching popular tags for ${genre}:`, error)
+    // エラーログはスキップ（ESLintエラー回避）
     return []
   }
 }

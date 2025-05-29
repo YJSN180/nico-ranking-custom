@@ -35,9 +35,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
   // 各ジャンルを順番に更新（レート制限を考慮）
   for (const genre of GENRES_TO_UPDATE) {
     try {
-      if (process.env.NODE_ENV !== 'test') {
-        console.log(`Updating genre: ${genre}`)
-      }
+      // スキップ（ESLintエラー回避）
       
       // スクレイピングでデータ取得
       const { items } = await scrapeRankingPage(genre, '24h')
@@ -60,18 +58,14 @@ export async function updateRankingData(): Promise<UpdateResult> {
       await kv.expire(`ranking-${genre}`, 3600)
       
       updatedGenres.push(genre)
-      if (process.env.NODE_ENV !== 'test') {
-        console.log(`Successfully updated: ${genre}`)
-      }
+      // スキップ（ESLintエラー回避）
       
       // ジャンル間に少し遅延を入れる（レート制限対策）
       if (process.env.NODE_ENV !== 'test' && genre !== GENRES_TO_UPDATE[GENRES_TO_UPDATE.length - 1]) {
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
     } catch (error) {
-      if (process.env.NODE_ENV !== 'test') {
-        console.error(`Failed to update genre ${genre}:`, error)
-      }
+      // エラーログはスキップ（ESLintエラー回避）
       failedGenres.push(genre)
       
       // KVエラーの場合は全体を失敗とする

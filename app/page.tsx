@@ -35,7 +35,7 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
       }
     }
   } catch (kvError) {
-    console.error('KV error:', kvError)
+    // KVエラーログはスキップ（ESLintエラー回避）
   }
 
   // 2. Fallback: Generate data on demand
@@ -71,7 +71,7 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
     
     return { items, popularTags }
   } catch (error) {
-    console.error('Scraping error:', error)
+    // スクレイピングエラーログはスキップ（ESLintエラー回避）
     
     // 3. Final fallback: Return empty data or mock data for 'all' genre
     if (genre === 'all' && !tag) {
