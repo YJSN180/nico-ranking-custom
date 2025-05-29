@@ -45,4 +45,5 @@ export const PERIOD_LABELS: Record<RankingPeriod, string> = {
 export interface RankingConfig {
   period: RankingPeriod
   genre: RankingGenre
+  tag?: string // 選択されたタグ（オプション）
 }

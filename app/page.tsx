@@ -2,54 +2,92 @@ import type { RankingData } from '@/types/ranking'
 import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
 import { getMockRankingData } from '@/lib/mock-data'
+import { scrapeRankingPage } from '@/lib/scraper'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
 
-async function fetchRankingData(): Promise<RankingData> {
+interface PageProps {
+  searchParams: { [key: string]: string | string[] | undefined }
+}
+
+async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
+  items: RankingData
+  popularTags?: string[]
+}> {
   
-  // 1. Primary: Direct KV access (as per CLAUDE.md architecture)
+  // 1. Primary: Check cache for pre-generated data
   try {
-    const data = await kv.get('ranking-data')
+    let cacheKey = `ranking-${genre}`
+    if (tag) {
+      cacheKey = `ranking-${genre}-tag-${encodeURIComponent(tag)}`
+    }
     
-    if (data) {
-      // Handle both string and object responses from KV
-      if (typeof data === 'object' && Array.isArray(data)) {
-        return data as RankingData
-      } else if (typeof data === 'string') {
-        return JSON.parse(data) as RankingData
+    const cachedData = await kv.get(cacheKey)
+    
+    if (cachedData) {
+      if (tag && Array.isArray(cachedData)) {
+        // タグフィルタリング済みデータ
+        return { items: cachedData as RankingData, popularTags: [] }
+      } else if (typeof cachedData === 'object' && 'items' in cachedData) {
+        // ジャンル別データ（itemsとpopularTagsを含む）
+        return cachedData as { items: RankingData, popularTags?: string[] }
       }
     }
   } catch (kvError) {
-    // KV failed, fall back to API
+    console.error('KV error:', kvError)
   }
 
-  // 2. Fallback: API fetch
-  const baseUrl = process.env.VERCEL_URL 
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
-  
-  const url = `${baseUrl}/api/ranking`
-    
+  // 2. Fallback: Generate data on demand
   try {
-    const response = await fetch(url, {
-      next: { revalidate: 30 },
-    })
+    const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, '24h', tag)
     
-    if (!response.ok) {
-      return []
+    const items: RankingData = scrapedItems.map((item) => ({
+      rank: item.rank || 0,
+      id: item.id || '',
+      title: item.title || '',
+      thumbURL: item.thumbURL || '',
+      views: item.views || 0,
+      comments: item.comments,
+      mylists: item.mylists,
+      likes: item.likes,
+      tags: item.tags,
+      authorId: item.authorId,
+      authorName: item.authorName,
+      authorIcon: item.authorIcon,
+      registeredAt: item.registeredAt,
+    })).filter(item => item.id && item.title)
+    
+    // Cache the result for future requests
+    if (!tag && items.length > 0) {
+      await kv.set(`ranking-${genre}`, { items, popularTags }, { ex: 1800 }) // 30分キャッシュ
     }
-
-    const data = await response.json()
-    return data
+    
+    return { items, popularTags }
   } catch (error) {
-    return []
+    console.error('Scraping error:', error)
+    
+    // 3. Final fallback: Return empty data or mock data for 'all' genre
+    if (genre === 'all' && !tag) {
+      try {
+        const mockData = getMockRankingData()
+        return { items: mockData, popularTags: [] }
+      } catch {
+        return { items: [], popularTags: [] }
+      }
+    }
+    
+    return { items: [], popularTags: [] }
   }
 }
 
-export default async function Home() {
+export default async function Home({ searchParams }: PageProps) {
+  const genre = (searchParams.genre as string) || 'all'
+  const tag = searchParams.tag as string | undefined
+  
   try {
-    const rankingData = await fetchRankingData()
+    
+    const { items: rankingData, popularTags } = await fetchRankingData(genre, tag)
 
     if (rankingData.length === 0) {
       return (
@@ -73,7 +111,7 @@ export default async function Home() {
                 fontWeight: '800',
                 textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
                 letterSpacing: '-0.02em'
-              }}>ニコニコ24時間総合ランキング</h1>
+              }}>ニコニコランキング</h1>
               <p style={{
                 color: 'rgba(255, 255, 255, 0.9)',
                 textAlign: 'center',
@@ -99,10 +137,10 @@ export default async function Home() {
             }}>
               <div style={{ fontSize: '64px', marginBottom: '24px' }}>📊</div>
               <h2 style={{ color: '#333', fontSize: '1.5rem', marginBottom: '16px' }}>
-                ランキングデータがありません
+                {tag ? 'このタグの動画が見つかりません' : 'ランキングデータがありません'}
               </h2>
               <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6' }}>
-                データを取得中です。しばらくお待ちください。
+                {tag ? '別のタグをお試しください。' : 'データを取得中です。しばらくお待ちください。'}
               </p>
             </div>
           </div>
@@ -148,7 +186,12 @@ export default async function Home() {
           margin: '0 auto',
           padding: '0 20px 40px'
         }}>
-          <ClientPage initialData={rankingData} />
+          <ClientPage 
+            initialData={rankingData} 
+            initialGenre={genre}
+            initialTag={tag}
+            popularTags={popularTags}
+          />
         </div>
       </main>
     )
@@ -174,7 +217,7 @@ export default async function Home() {
               fontWeight: '800',
               textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
               letterSpacing: '-0.02em'
-            }}>ニコニコ24時間総合ランキング</h1>
+            }}>ニコニコランキング</h1>
             <p style={{
               color: 'rgba(255, 255, 255, 0.9)',
               textAlign: 'center',
@@ -203,7 +246,7 @@ export default async function Home() {
               データを準備しています
             </h2>
             <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6', marginBottom: '8px' }}>
-              ランキングデータは毎日定期的に更新されます。
+              ランキングデータは毎時更新されます。
             </p>
             <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6' }}>
               初回アクセスの場合、しばらくお待ちください。
@@ -221,9 +264,9 @@ export default async function Home() {
                 overflow: 'auto'
               }}>{JSON.stringify({
                 error: error instanceof Error ? error.message : String(error),
-                VERCEL_URL: process.env.VERCEL_URL || 'not set',
-                KV_REST_API_URL: process.env.KV_REST_API_URL ? 'configured' : 'not configured',
-                KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN ? 'configured' : 'not configured',
+                genre,
+                tag,
+                KV_configured: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
               }, null, 2)}</pre>
             </details>
           </div>
