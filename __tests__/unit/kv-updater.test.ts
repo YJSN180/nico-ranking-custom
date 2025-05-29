@@ -12,6 +12,7 @@ vi.mock('@vercel/kv', () => ({
 
 vi.mock('@/lib/scraper', () => ({
   scrapeRankingPage: vi.fn(),
+  fetchPopularTags: vi.fn(),
 }))
 
 describe('KV Updater Script', () => {
@@ -37,11 +38,12 @@ describe('KV Updater Script', () => {
           authorIcon: 'https://example.com/icon.jpg',
           registeredAt: '2024-01-01T00:00:00Z'
         }
-      ],
-      popularTags: ['tag1', 'tag2', 'tag3']
+      ]
     }
+    const mockPopularTags = ['tag1', 'tag2', 'tag3']
 
     vi.mocked(scraper.scrapeRankingPage).mockResolvedValue(mockRankingData)
+    vi.mocked(scraper.fetchPopularTags).mockResolvedValue(mockPopularTags)
     vi.mocked(kv.set).mockResolvedValue('OK')
     vi.mocked(kv.expire).mockResolvedValue(1)
 
@@ -60,6 +62,13 @@ describe('KV Updater Script', () => {
       expect(scraper.scrapeRankingPage).toHaveBeenCalledWith(genre, '24h')
     })
 
+    // 人気タグの取得を確認（'all'以外のジャンル）
+    const genresWithTags = expectedGenres.filter(g => g !== 'all')
+    expect(scraper.fetchPopularTags).toHaveBeenCalledTimes(genresWithTags.length)
+    genresWithTags.forEach(genre => {
+      expect(scraper.fetchPopularTags).toHaveBeenCalledWith(genre)
+    })
+
 
     // KVへの保存を確認
     expectedGenres.forEach(genre => {
@@ -67,7 +76,7 @@ describe('KV Updater Script', () => {
         `ranking-${genre}`,
         expect.objectContaining({
           items: mockRankingData.items,
-          popularTags: mockRankingData.popularTags,
+          popularTags: genre === 'all' ? [] : mockPopularTags,
           updatedAt: expect.any(String)
         })
       )
@@ -82,9 +91,10 @@ describe('KV Updater Script', () => {
 
   it('should handle scraping failures gracefully', async () => {
     vi.mocked(scraper.scrapeRankingPage)
-      .mockResolvedValueOnce({ items: [], popularTags: [] }) // all
+      .mockResolvedValueOnce({ items: [] }) // all
       .mockRejectedValueOnce(new Error('Network error')) // entertainment
-      .mockResolvedValue({ items: [], popularTags: [] }) // others
+      .mockResolvedValue({ items: [] }) // others
+    vi.mocked(scraper.fetchPopularTags).mockResolvedValue([])
 
     vi.mocked(kv.set).mockResolvedValue('OK')
     vi.mocked(kv.expire).mockResolvedValue(1)
@@ -98,9 +108,9 @@ describe('KV Updater Script', () => {
 
   it('should handle KV storage failures', async () => {
     vi.mocked(scraper.scrapeRankingPage).mockResolvedValue({
-      items: [],
-      popularTags: []
+      items: []
     })
+    vi.mocked(scraper.fetchPopularTags).mockResolvedValue([])
     vi.mocked(kv.set).mockRejectedValue(new Error('KV error'))
 
     const result = await updateRankingData()
@@ -110,14 +120,14 @@ describe('KV Updater Script', () => {
   })
 
   it('should update popular tags for each genre', async () => {
-    const mockData = {
-      game: { items: [], popularTags: ['ゲーム実況', 'RTA', 'Minecraft'] },
-      anime: { items: [], popularTags: ['アニメ', '手描き', 'MAD'] },
-      default: { items: [], popularTags: [] }
+    const mockTags = {
+      game: ['ゲーム実況', 'RTA', 'Minecraft'],
+      anime: ['アニメ', '手描き', 'MAD']
     }
 
-    vi.mocked(scraper.scrapeRankingPage).mockImplementation(async (genre) => {
-      return mockData[genre as keyof typeof mockData] || mockData.default
+    vi.mocked(scraper.scrapeRankingPage).mockResolvedValue({ items: [] })
+    vi.mocked(scraper.fetchPopularTags).mockImplementation(async (genre) => {
+      return mockTags[genre as keyof typeof mockTags] || []
     })
     vi.mocked(kv.set).mockResolvedValue('OK')
     vi.mocked(kv.expire).mockResolvedValue(1)
@@ -141,9 +151,9 @@ describe('KV Updater Script', () => {
 
   it('should respect rate limits', async () => {
     vi.mocked(scraper.scrapeRankingPage).mockResolvedValue({
-      items: [],
-      popularTags: []
+      items: []
     })
+    vi.mocked(scraper.fetchPopularTags).mockResolvedValue([])
     vi.mocked(kv.set).mockResolvedValue('OK')
     vi.mocked(kv.expire).mockResolvedValue(1)
 

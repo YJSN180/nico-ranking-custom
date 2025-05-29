@@ -42,7 +42,7 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
   try {
     const { items: scrapedItems } = await scrapeRankingPage(genre, '24h', tag)
     
-    // 人気タグを取得（タグ指定なし、かつallジャンル以外の場合）
+    // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
     if (!tag && genre !== 'all') {
       popularTags = await fetchPopularTags(genre)

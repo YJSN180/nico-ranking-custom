@@ -75,11 +75,8 @@ describe('Scraper Tag Functionality', () => {
     const mockResponse = {
       meta: { status: 200 },
       data: {
-        tags: [
-          { name: 'ゲーム実況', count: 100 },
-          { name: 'RTA', count: 50 },
-          { name: 'Minecraft', count: 30 }
-        ]
+        startAt: '2025-05-20T00:00:00+09:00',
+        tags: ['ゲーム実況', 'RTA', 'Minecraft']
       }
     }
 
