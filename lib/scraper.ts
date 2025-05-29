@@ -284,8 +284,8 @@ export async function fetchPopularTags(genre: string): Promise<string[]> {
       return []
     }
     
-    // タグ名のリストを返す
-    return data.data.tags.map((tag: any) => tag.name).slice(0, 20)
+    // タグ名のリストを返す（tagsは文字列配列として返される）
+    return data.data.tags.slice(0, 20)
     
   } catch (error) {
     // エラーログはスキップ（ESLintエラー回避）
