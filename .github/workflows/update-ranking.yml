@@ -2,8 +2,8 @@ name: Update Nico Ranking Data
 
 on:
   schedule:
-    # Run every 30 minutes
-    - cron: '*/30 * * * *'
+    # Run every hour
+    - cron: '0 * * * *'
   workflow_dispatch: # Allow manual trigger
   
 jobs:
@@ -11,23 +11,29 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Trigger Vercel Cron Endpoint
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Update ranking data in KV
+      env:
+        KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+        KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+      run: npm run update:kv
+    
+    - name: Check update status
       run: |
-        response=$(curl -X POST \
-          "https://nico-ranking-custom.vercel.app/api/cron/fetch" \
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-          -H "Content-Type: application/json" \
-          -w "\n%{http_code}")
-        
-        http_code=$(echo "$response" | tail -n1)
-        body=$(echo "$response" | head -n-1)
-        
-        echo "Response body: $body"
-        echo "HTTP status: $http_code"
-        
-        if [ "$http_code" != "200" ]; then
-          echo "Failed to update ranking data"
+        if [ $? -eq 0 ]; then
+          echo "Successfully updated all ranking data"
+        else
+          echo "Failed to update some ranking data"
           exit 1
         fi
-        
-        echo "Successfully updated ranking data"

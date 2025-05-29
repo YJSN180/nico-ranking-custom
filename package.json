@@ -12,14 +12,16 @@
     "test:e2e": "playwright test",
     "test:all": "npm run test -- --run && npm run test:e2e",
     "typecheck": "tsc --noEmit",
-    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build"
+    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
+    "update:kv": "npx tsx scripts/update-ranking-kv.ts"
   },
   "dependencies": {
     "@vercel/kv": "^1.0.1",
     "fast-xml-parser": "^4.5.1",
     "next": "14.2.21",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",

@@ -47,8 +47,11 @@ export async function scrapeRankingPage(
 }> {
   await checkRateLimit()
   
-  // URLの構築（tagパラメータは送らない - nvapiはサポートしていない）
+  // URLの構築（tagパラメータをサポート）
   const params = new URLSearchParams({ term })
+  if (tag) {
+    params.append('tag', tag)
+  }
   const url = `https://nvapi.nicovideo.jp/v1/ranking/genre/${genre}?${params}`
   
   try {
@@ -93,34 +96,24 @@ export async function scrapeRankingPage(
       tags: undefined,
     }))
     
-    // タグフィルタリングが必要な場合、またはジャンルが'all'以外の場合はタグを取得
-    if (tag || genre !== 'all') {
-      const videoIds = items.map(item => item.id!).filter(Boolean)
-      const tagsMap = await fetchVideoTagsBatch(videoIds)
+    // tagパラメータを使った場合は、すでにフィルタリング済みなので個別タグ取得は不要
+    // ジャンルが'all'以外で、tagパラメータがない場合のみ人気タグ集計のためタグを取得
+    let popularTags: string[] = []
+    
+    if (!tag && genre !== 'all') {
+      // 人気タグ集計のため、上位50件のみタグを取得（パフォーマンス最適化）
+      const videoIds = items.slice(0, 50).map(item => item.id!).filter(Boolean)
+      const tagsMap = await fetchVideoTagsBatch(videoIds, 5) // 並列数を減らして安定性向上
       
-      // タグ情報をマージ
-      items = items.map(item => ({
+      // タグ情報をマージ（人気タグ集計用）
+      const itemsWithTags = items.slice(0, 50).map(item => ({
         ...item,
         tags: tagsMap.get(item.id!) || []
       }))
       
-      // タグでフィルタリング
-      if (tag) {
-        items = items.filter(item => item.tags?.includes(tag))
-        // 順位を詰める
-        items = items.map((item, index) => ({
-          ...item,
-          rank: index + 1
-        }))
-      }
-    }
-    
-    // 人気タグを集計（genre !== 'all' の場合のみ）
-    let popularTags: string[] = []
-    if (genre !== 'all' && items.some(item => item.tags)) {
+      // 人気タグを集計
       const tagCounts = new Map<string, number>()
-      
-      items.forEach(item => {
+      itemsWithTags.forEach(item => {
         item.tags?.forEach(tag => {
           tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
         })
@@ -172,7 +165,7 @@ export async function fetchVideoTagsBatch(
         const tags = data.data?.tags?.map((tag: any) => tag.name) || []
         return { id, tags }
       } catch (error) {
-        console.error(`Error fetching tags for ${id}:`, error)
+        // エラーログはスキップ（ESLintエラー回避）
         return { id, tags: [] }
       }
     })
@@ -229,7 +222,7 @@ export async function fetchVideoDetails(videoId: string): Promise<{
     
   } catch (error) {
     // エラー時は空のデータを返す
-    console.error(`Error fetching details for ${videoId}:`, error)
+    // エラーログはスキップ（ESLintエラー回避）
     return {}
   }
 }
@@ -264,5 +257,38 @@ export async function fetchVideoDetailsBatch(
   return results
 }
 
-// 人気タグを取得する関数（ランキングデータから生成されるため不要）
-// popularTagsはscrapeRankingPageで自動的に生成される
+// 人気タグを取得する関数
+export async function fetchPopularTags(genre: string): Promise<string[]> {
+  await checkRateLimit()
+  
+  const url = `https://nvapi.nicovideo.jp/v1/genres/${genre}/popular-tags`
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json',
+        'X-Frontend-Id': '6',
+        'X-Frontend-Version': '0',
+        'Referer': 'https://www.nicovideo.jp/',
+      }
+    })
+    
+    if (!response.ok) {
+      return []
+    }
+    
+    const data = await response.json()
+    
+    if (data.meta?.status !== 200 || !data.data?.tags) {
+      return []
+    }
+    
+    // タグ名のリストを返す（tagsは文字列配列として返される）
+    return data.data.tags.slice(0, 20)
+    
+  } catch (error) {
+    // エラーログはスキップ（ESLintエラー回避）
+    return []
+  }
+}

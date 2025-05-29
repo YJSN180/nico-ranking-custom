@@ -2,9 +2,10 @@ import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
 // Mock environment variables
-process.env.KV_REST_API_URL = 'http://localhost:8080'
-process.env.KV_REST_API_TOKEN = 'test-token'
-process.env.CRON_SECRET = 'test-cron-secret'
+vi.stubEnv('NODE_ENV', 'test')
+vi.stubEnv('KV_REST_API_URL', 'http://localhost:8080')
+vi.stubEnv('KV_REST_API_TOKEN', 'test-token')
+vi.stubEnv('CRON_SECRET', 'test-cron-secret')
 
 // Mock console methods to avoid test output
 global.console = {

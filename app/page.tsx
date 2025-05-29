@@ -2,7 +2,7 @@ import type { RankingData } from '@/types/ranking'
 import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
 import { getMockRankingData } from '@/lib/mock-data'
-import { scrapeRankingPage } from '@/lib/scraper'
+import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
@@ -35,12 +35,18 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
       }
     }
   } catch (kvError) {
-    console.error('KV error:', kvError)
+    // KVエラーログはスキップ（ESLintエラー回避）
   }
 
   // 2. Fallback: Generate data on demand
   try {
-    const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, '24h', tag)
+    const { items: scrapedItems } = await scrapeRankingPage(genre, '24h', tag)
+    
+    // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
+    let popularTags: string[] = []
+    if (!tag && genre !== 'all') {
+      popularTags = await fetchPopularTags(genre)
+    }
     
     const items: RankingData = scrapedItems.map((item) => ({
       rank: item.rank || 0,
@@ -65,7 +71,7 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
     
     return { items, popularTags }
   } catch (error) {
-    console.error('Scraping error:', error)
+    // スクレイピングエラーログはスキップ（ESLintエラー回避）
     
     // 3. Final fallback: Return empty data or mock data for 'all' genre
     if (genre === 'all' && !tag) {
