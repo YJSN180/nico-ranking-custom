@@ -1,5 +1,5 @@
 import { kv } from '@vercel/kv'
-import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
+import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre } from '@/types/ranking-config'
 
 // 更新するジャンルのリスト（R18を除く）
@@ -37,14 +37,8 @@ export async function updateRankingData(): Promise<UpdateResult> {
     try {
       // スキップ（ESLintエラー回避）
       
-      // スクレイピングでデータ取得
-      const { items } = await scrapeRankingPage(genre, '24h')
-      
-      // 人気タグを取得（allジャンル以外）
-      let popularTags: string[] = []
-      if (genre !== 'all') {
-        popularTags = await fetchPopularTags(genre)
-      }
+      // スクレイピングでデータ取得（人気タグも含む）
+      const { items, popularTags = [] } = await scrapeRankingPage(genre, '24h')
       
       // KVに保存するデータ
       const dataToStore = {
