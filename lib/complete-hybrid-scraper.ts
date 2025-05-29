@@ -3,7 +3,18 @@
 
 import type { RankingItem } from '@/types/ranking'
 
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+// Node.js環境でのfetchが利用できない場合があるため、条件付きでインポート
+const fetchImpl = typeof fetch !== 'undefined' 
+  ? fetch 
+  : (url: string, options?: any) => {
+      // フォールバック: エラーを投げる
+      throw new Error('fetch is not available in this environment')
+    }
+
+// Googlebot UAを使用してジオブロックを回避
+const USER_AGENT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+// 通常のUA（必要に応じて切り替え）
+const NORMAL_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 // レート制限管理
 const RATE_LIMIT = {
@@ -101,9 +112,9 @@ async function fetchFromNvapi(
     ? `${baseUrl}/${genre}?term=${term}&tag=${encodeURIComponent(tag)}`
     : `${baseUrl}/${genre}?term=${term}`
   
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     headers: {
-      'User-Agent': USER_AGENT,
+      'User-Agent': NORMAL_USER_AGENT, // nvAPIは通常のUAを使用
       'Accept': 'application/json',
       'X-Frontend-Id': '6',
       'X-Frontend-Version': '0',
@@ -177,11 +188,12 @@ async function scrapeFromHTML(
 }> {
   const url = `https://www.nicovideo.jp/ranking/genre/${genre}?term=${term}`
   
-  const response = await fetch(url, {
+  const response = await fetchImpl(url, {
     headers: {
-      'User-Agent': USER_AGENT,
+      'User-Agent': USER_AGENT, // Googlebot UAでジオブロック回避
       'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': 'ja,en;q=0.9'
+      'Accept-Language': 'ja,en;q=0.9',
+      'Cookie': 'sensitive_material_status=accept' // センシティブコンテンツ表示設定
     }
   })
   
@@ -367,7 +379,7 @@ async function fetchFromSnapshot(
     })
     
     try {
-      const response = await fetch(
+      const response = await fetchImpl(
         `https://api.nicovideo.jp/api/v2/snapshot/video/contents/search?${params}`,
         {
           headers: {
@@ -440,7 +452,7 @@ async function enrichAuthorInfo(
     
     try {
       await checkRateLimit()
-      const response = await fetch(
+      const response = await fetchImpl(
         `https://nvapi.nicovideo.jp/v1/video/${videoId}`,
         {
           headers: {
@@ -489,7 +501,7 @@ export async function fetchPopularTags(genre: string): Promise<string[]> {
   await checkRateLimit()
   
   try {
-    const response = await fetch(
+    const response = await fetchImpl(
       `https://nvapi.nicovideo.jp/v1/genres/${genre}/popular-tags`,
       {
         headers: {

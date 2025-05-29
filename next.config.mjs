@@ -10,6 +10,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'tn.smilevideo.jp',
       },
+      {
+        protocol: 'https',
+        hostname: 'secure-dcdn.cdn.nimg.jp',
+      },
     ],
   },
   experimental: {

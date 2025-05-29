@@ -2,6 +2,7 @@
 
 import type { RankingItem } from '@/types/ranking'
 import { completeHybridScrape } from './complete-hybrid-scraper'
+import { rssHybridScrape } from './rss-hybrid-scraper'
 
 // User-Agentの設定
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -46,9 +47,14 @@ export async function scrapeRankingPage(
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // 一時的に元の実装に戻す（GitHub Actionsの問題解決のため）
-  // TODO: Node.js環境でのcomplete-hybrid-scraperの動作を修正後、再度有効化
-  return await scrapeRankingPageNvApiOnly(genre, term, tag)
+  // センシティブ動画も取得するため、RSSハイブリッドスクレイパーを使用
+  try {
+    return await rssHybridScrape(genre, term, tag)
+  } catch (error) {
+    // エラー時はnvAPIのみにフォールバック
+    console.error('RSS hybrid scraping failed, falling back to nvAPI:', error)
+    return await scrapeRankingPageNvApiOnly(genre, term, tag)
+  }
 }
 
 // 既存のnvAPI専用実装（テスト用に保持）
