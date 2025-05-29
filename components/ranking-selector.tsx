@@ -14,7 +14,8 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
   }
 
   const handleGenreChange = (genre: RankingGenre) => {
-    onConfigChange({ ...config, genre })
+    // ジャンル変更時はタグをリセット
+    onConfigChange({ ...config, genre, tag: undefined })
   }
 
   return (
