@@ -23,7 +23,6 @@ export default defineConfig({
         'app/api/admin/**',
         'app/api/debug/**',
         'app/api/test-scraping/**',
-        'app/api/cron/status/**',
         'app/layout.tsx',
         'lib/data-fetcher.ts',
         'lib/popular-tags.ts',
@@ -31,6 +30,8 @@ export default defineConfig({
         'lib/fetch-ranking.ts',
         'lib/date-utils.ts',
         'lib/html-parser.ts',
+        'lib/update-ranking.ts',
+        'scripts/**',
         'types/**',
         'components/icons.tsx',
         'playwright.config.ts'
