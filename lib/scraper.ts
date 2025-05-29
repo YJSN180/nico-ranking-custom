@@ -46,8 +46,9 @@ export async function scrapeRankingPage(
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // センシティブ動画も取得するため、complete-hybrid-scraperを使用
-  return await completeHybridScrape(genre, term, tag)
+  // 一時的に元の実装に戻す（GitHub Actionsの問題解決のため）
+  // TODO: Node.js環境でのcomplete-hybrid-scraperの動作を修正後、再度有効化
+  return await scrapeRankingPageNvApiOnly(genre, term, tag)
 }
 
 // 既存のnvAPI専用実装（テスト用に保持）
