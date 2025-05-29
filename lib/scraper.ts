@@ -76,8 +76,10 @@ export async function scrapeRankingPage(
       throw new Error('Invalid nvapi response')
     }
     
-    // 最大200件まで取得
-    const rankingItems = data.data.items.slice(0, 200)
+    // 基本は200件取得するが、タグ取得は上位のみ
+    const MAX_ITEMS = 200
+    const MAX_TAG_FETCH = 50 // タグ取得は上位50件のみ
+    const rankingItems = data.data.items.slice(0, MAX_ITEMS)
     
     // nvapiレスポンスをパース
     let items: Partial<RankingItem>[] = rankingItems.map((item: any, index: number) => ({
