@@ -9,7 +9,7 @@ export async function GET() {
     }
     
     // Test 1: その他ジャンル（センシティブ動画が多い）
-    console.log('Testing "other" genre...')
+    // Testing "other" genre...
     const startOther = Date.now()
     const otherResult = await scrapeRankingPage('other', '24h')
     const timeOther = Date.now() - startOther
@@ -49,7 +49,7 @@ export async function GET() {
     }))
     
     // Test 2: タグフィルタリング（nvAPIのみ使用されるはず）
-    console.log('Testing tag filtering...')
+    // Testing tag filtering...
     const startTag = Date.now()
     const tagResult = await scrapeRankingPage('vocaloid', '24h', 'VOCALOID伝説入り')
     const timeTag = Date.now() - startTag
@@ -66,7 +66,7 @@ export async function GET() {
     }
     
     // Test 3: 全ジャンル
-    console.log('Testing "all" genre...')
+    // Testing "all" genre...
     const startAll = Date.now()
     const allResult = await scrapeRankingPage('all', '24h')
     const timeAll = Date.now() - startAll

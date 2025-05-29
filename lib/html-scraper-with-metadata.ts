@@ -105,8 +105,8 @@ async function scrapeRankingHTML(
         /data-title="([^"]+)"/,
         /title="([^"]+)"/,
         /alt="([^"]+)"/,
-        /<h3[^>]*>([^<]+)</h3>/,
-        /<h4[^>]*>([^<]+)</h4>/
+        /<h3[^>]*>([^<]+)<\/h3>/,
+        /<h4[^>]*>([^<]+)<\/h4>/
       ]
       
       for (const pattern of titlePatterns) {

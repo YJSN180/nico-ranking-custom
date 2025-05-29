@@ -130,7 +130,9 @@ async function fetchFromNvapi(
   }))
   
   // アイテムをMapに変換（高速検索用）
-  const itemsMap = new Map(items.map((item: any) => [item.id, item]))
+  const itemsMap = new Map<string, Partial<RankingItem>>(
+    items.map((item: any) => [item.id, item])
+  )
   
   // 人気タグを取得
   let popularTags: string[] = []
@@ -173,7 +175,7 @@ async function scrapeFromHTML(
   const dataIdPattern = /data-video-id="((?:sm|nm|so)\d+)"/g
   let match
   while ((match = dataIdPattern.exec(html)) !== null) {
-    if (!videoIds.includes(match[1])) {
+    if (match[1] && !videoIds.includes(match[1])) {
       videoIds.push(match[1])
     }
   }
@@ -182,7 +184,7 @@ async function scrapeFromHTML(
   if (videoIds.length === 0) {
     const linkPattern = /<a[^>]+href="\/watch\/((?:sm|nm|so)\d+)"[^>]*>/g
     while ((match = linkPattern.exec(html)) !== null) {
-      if (!videoIds.includes(match[1])) {
+      if (match[1] && !videoIds.includes(match[1])) {
         videoIds.push(match[1])
       }
     }
@@ -213,7 +215,7 @@ async function scrapeFromHTML(
       ]
       for (const pattern of titlePatterns) {
         const titleMatch = block.match(pattern)
-        if (titleMatch) {
+        if (titleMatch && titleMatch[1]) {
           item.title = decodeHTMLEntities(titleMatch[1])
             .replace(/^第\d+位[：:]/, '').trim()
           break
@@ -246,7 +248,7 @@ async function scrapeFromHTML(
       ]
       for (const pattern of viewPatterns) {
         const viewMatch = viewArea.match(pattern)
-        if (viewMatch) {
+        if (viewMatch && viewMatch[1]) {
           item.views = parseInt(viewMatch[1].replace(/,/g, ''), 10)
           break
         }
@@ -276,7 +278,7 @@ async function mergeAllData(
   
   // HTMLの順序でマージ
   for (const htmlItem of htmlItems) {
-    const nvapiItem = nvapiMap.get(htmlItem.id!)
+    const nvapiItem = htmlItem.id ? nvapiMap.get(htmlItem.id) : undefined
     
     if (nvapiItem) {
       // nvAPIのリッチなデータを使用、順位はHTMLから
@@ -287,7 +289,9 @@ async function mergeAllData(
     } else {
       // nvAPIにない動画（センシティブ）
       mergedItems.push(htmlItem)
-      missingVideoIds.push(htmlItem.id!)
+      if (htmlItem.id) {
+        missingVideoIds.push(htmlItem.id)
+      }
     }
   }
   
