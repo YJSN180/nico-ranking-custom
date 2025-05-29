@@ -29,16 +29,22 @@ export async function GET(request: Request | NextRequest) {
     const cachedData = await kv.get(cacheKey)
     
     if (cachedData) {
-      let rankingData: RankingData
-      
       // データ構造を確認: { items: RankingData, popularTags?: string[] } または RankingData
       if (typeof cachedData === 'object') {
         if ('items' in cachedData && Array.isArray(cachedData.items)) {
-          // cron jobが保存した形式
-          rankingData = cachedData.items as RankingData
+          // cron jobが保存した形式 - オブジェクト全体を返す（人気タグを含む）
+          return NextResponse.json(cachedData, {
+            headers: {
+              'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+            },
+          })
         } else if (Array.isArray(cachedData)) {
-          // 直接配列形式
-          rankingData = cachedData as RankingData
+          // 直接配列形式（後方互換性のため）
+          return NextResponse.json(cachedData, {
+            headers: {
+              'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+            },
+          })
         } else {
           return fetchAndCacheRanking(period, genre, cacheKey, tag)
         }
@@ -46,9 +52,19 @@ export async function GET(request: Request | NextRequest) {
         try {
           const parsed = JSON.parse(cachedData)
           if ('items' in parsed && Array.isArray(parsed.items)) {
-            rankingData = parsed.items as RankingData
+            // オブジェクト形式
+            return NextResponse.json(parsed, {
+              headers: {
+                'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+              },
+            })
           } else if (Array.isArray(parsed)) {
-            rankingData = parsed as RankingData
+            // 配列形式
+            return NextResponse.json(parsed, {
+              headers: {
+                'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+              },
+            })
           } else {
             return fetchAndCacheRanking(period, genre, cacheKey, tag)
           }
@@ -58,12 +74,6 @@ export async function GET(request: Request | NextRequest) {
       } else {
         return fetchAndCacheRanking(period, genre, cacheKey, tag)
       }
-      
-      return NextResponse.json(rankingData, {
-        headers: {
-          'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
-        },
-      })
     }
     
     // キャッシュがない場合は新しくフェッチ
@@ -86,7 +96,7 @@ async function fetchAndCacheRanking(
   try {
     // スクレイピングベースの統一されたランキング取得
     // periodは現在24hのみサポート
-    const { items: rankingData } = await scrapeRankingPage(genre, period, tag)
+    const { items: rankingData, popularTags } = await scrapeRankingPage(genre, period, tag)
     
     const items = rankingData.map((item) => ({
       rank: item.rank || 0,
@@ -107,9 +117,10 @@ async function fetchAndCacheRanking(
     if (items.length > 0) {
       // KVにキャッシュ（タグ付きは短めのTTL）
       const ttl = tag ? 900 : 3600 // タグ: 15分、通常: 1時間
-      await kv.set(cacheKey, items, { ex: ttl })
+      const responseData = tag ? items : { items, popularTags }
+      await kv.set(cacheKey, responseData, { ex: ttl })
       
-      return NextResponse.json(items, {
+      return NextResponse.json(responseData, {
         headers: {
           'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
         },

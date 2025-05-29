@@ -1,6 +1,7 @@
 // ニコニコ動画のランキングページをnvapiから取得するモジュール
 
 import type { RankingItem } from '@/types/ranking'
+import { completeHybridScrape } from './complete-hybrid-scraper'
 
 // User-Agentの設定
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -38,6 +39,19 @@ async function checkRateLimit(): Promise<void> {
 
 // nvapiからランキングデータを取得
 export async function scrapeRankingPage(
+  genre: string,
+  term: '24h' | 'hour',
+  tag?: string
+): Promise<{
+  items: Partial<RankingItem>[]
+  popularTags?: string[]
+}> {
+  // センシティブ動画も取得するため、complete-hybrid-scraperを使用
+  return await completeHybridScrape(genre, term, tag)
+}
+
+// 既存のnvAPI専用実装（テスト用に保持）
+export async function scrapeRankingPageNvApiOnly(
   genre: string,
   term: '24h' | 'hour',
   tag?: string

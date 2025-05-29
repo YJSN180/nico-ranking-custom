@@ -21,6 +21,7 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialT
     tag: initialTag
   })
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
+  const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -46,7 +47,18 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialT
         }
         
         const data = await response.json()
-        setRankingData(data)
+        
+        // APIがオブジェクト形式（{ items, popularTags }）または配列形式を返す可能性がある
+        if (Array.isArray(data)) {
+          setRankingData(data)
+          setCurrentPopularTags([])
+        } else if (data && typeof data === 'object' && 'items' in data) {
+          setRankingData(data.items)
+          setCurrentPopularTags(data.popularTags || [])
+        } else {
+          setRankingData([])
+          setCurrentPopularTags([])
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'エラーが発生しました')
       } finally {
@@ -64,7 +76,7 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialT
   return (
     <>
       <RankingSelector config={config} onConfigChange={setConfig} />
-      <TagSelector config={config} onConfigChange={setConfig} popularTags={popularTags} />
+      <TagSelector config={config} onConfigChange={setConfig} popularTags={currentPopularTags} />
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
