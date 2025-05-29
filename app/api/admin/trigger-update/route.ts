@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { updateRankingData } from '@/scripts/update-ranking-kv'
+import { updateRankingData } from '@/lib/update-ranking'
 
 export const runtime = 'nodejs'
 

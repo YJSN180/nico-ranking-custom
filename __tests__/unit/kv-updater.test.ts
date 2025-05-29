@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { updateRankingData } from '@/scripts/update-ranking-kv'
+import { updateRankingData } from '@/lib/update-ranking'
 import { kv } from '@vercel/kv'
 import * as scraper from '@/lib/scraper'
 
