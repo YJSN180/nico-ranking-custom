@@ -1,0 +1,440 @@
+// ニコニコ動画のランキングページをnvapiから取得するモジュール
+
+import type { RankingItem } from '@/types/ranking'
+
+// User-Agentの設定
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+
+// レート制限の設定
+const RATE_LIMIT = {
+  maxRequests: 60,  // 最大リクエスト数/分
+  windowMs: 60000   // 1分
+}
+
+// リクエスト履歴を管理
+const requestHistory: number[] = []
+
+// レート制限チェック
+async function checkRateLimit(): Promise<void> {
+  const now = Date.now()
+  const windowStart = now - RATE_LIMIT.windowMs
+  
+  // 古い履歴を削除
+  while (requestHistory.length > 0 && requestHistory[0]! < windowStart) {
+    requestHistory.shift()
+  }
+  
+  // 制限に達している場合は待機
+  if (requestHistory.length >= RATE_LIMIT.maxRequests) {
+    const oldestRequest = requestHistory[0]!
+    const waitTime = oldestRequest + RATE_LIMIT.windowMs - now
+    if (waitTime > 0) {
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+  
+  requestHistory.push(now)
+}
+
+// nvapiからランキングデータを取得
+export async function scrapeRankingPage(
+  genre: string,
+  term: '24h' | 'hour',
+  tag?: string
+): Promise<{
+  items: Partial<RankingItem>[]
+  popularTags?: string[]
+}> {
+  await checkRateLimit()
+  
+  // URLの構築（tagパラメータをサポート）
+  const params = new URLSearchParams({ term })
+  if (tag) {
+    params.append('tag', tag)
+  }
+  const url = `https://nvapi.nicovideo.jp/v1/ranking/genre/${genre}?${params}`
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'ja,en;q=0.9',
+        'X-Frontend-Id': '6',
+        'X-Frontend-Version': '0',
+        'Referer': 'https://www.nicovideo.jp/',
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ranking data: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    if (data.meta?.status !== 200 || !data.data?.items) {
+      throw new Error('Invalid nvapi response')
+    }
+    
+    // 最大200件まで取得
+    const rankingItems = data.data.items.slice(0, 200)
+    
+    // nvapiレスポンスをパース
+    let items: Partial<RankingItem>[] = rankingItems.map((item: any, index: number) => ({
+      rank: index + 1,
+      id: item.id,
+      title: item.title,
+      thumbURL: item.thumbnail?.largeUrl || item.thumbnail?.url || '',
+      views: item.count?.view || 0,
+      comments: item.count?.comment,
+      mylists: item.count?.mylist,
+      likes: item.count?.like,
+      authorId: item.owner?.id,
+      authorName: item.owner?.name,
+      authorIcon: item.owner?.iconUrl,
+      registeredAt: item.registeredAt,
+      tags: undefined,
+    }))
+    
+    // tagパラメータを使った場合は、すでにフィルタリング済みなので個別タグ取得は不要
+    // ジャンルが'all'以外で、tagパラメータがない場合のみ人気タグ集計のためタグを取得
+    let popularTags: string[] = []
+    
+    if (!tag && genre !== 'all') {
+      // 公式の人気タグAPIを使用
+      popularTags = await fetchPopularTags(genre)
+    }
+    
+    // センシティブ動画対応: タグフィルタなしの場合、Webスクレイピングで補完
+    // ジャンルがotherの場合は特にセンシティブ動画が多い可能性があるため必ずチェック
+    if (!tag && (items.length < 100 || genre === 'other')) { 
+      try {
+        const webItems = await scrapeWebRanking(genre, term)
+        if (webItems.length > items.length) {
+          // Webスクレイピングでより多くの動画が見つかった場合、データをマージ
+          const mergedItems = await mergeRankingData(webItems, items)
+          return { items: mergedItems, popularTags }
+        }
+      } catch (webError) {
+        // Webスクレイピングが失敗しても、nvAPIのデータを返す
+      }
+    }
+    
+    return { items, popularTags }
+    
+  } catch (error) {
+    throw new Error(`Scraping failed: ${error}`)
+  }
+}
+
+// バッチで複数の動画のタグを取得（最適化版）
+export async function fetchVideoTagsBatch(
+  videoIds: string[],
+  concurrency: number = 10
+): Promise<Map<string, string[]>> {
+  const results = new Map<string, string[]>()
+  
+  // 並列実行数を制限しながら処理
+  for (let i = 0; i < videoIds.length; i += concurrency) {
+    const batch = videoIds.slice(i, i + concurrency)
+    const batchPromises = batch.map(async (id) => {
+      try {
+        await checkRateLimit()
+        const url = `https://nvapi.nicovideo.jp/v1/videos/${id}/tags`
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Accept': 'application/json',
+            'X-Frontend-Id': '6',
+            'X-Frontend-Version': '0',
+            'Referer': 'https://www.nicovideo.jp/',
+          }
+        })
+        
+        if (!response.ok) {
+          return { id, tags: [] }
+        }
+        
+        const data = await response.json()
+        const tags = data.data?.tags?.map((tag: any) => tag.name) || []
+        return { id, tags }
+      } catch (error) {
+        // エラーログはスキップ（ESLintエラー回避）
+        return { id, tags: [] }
+      }
+    })
+    
+    const batchResults = await Promise.all(batchPromises)
+    batchResults.forEach(({ id, tags }) => {
+      results.set(id, tags)
+    })
+  }
+  
+  return results
+}
+
+// 動画詳細情報を取得（主にタグ用）
+export async function fetchVideoDetails(videoId: string): Promise<{
+  tags?: string[]
+  likes?: number
+  registeredAt?: string
+}> {
+  await checkRateLimit()
+  
+  const url = `https://nvapi.nicovideo.jp/v1/video/${videoId}`
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json',
+        'X-Frontend-Id': '6',
+        'X-Frontend-Version': '0',
+        'Referer': `https://www.nicovideo.jp/watch/${videoId}`
+      }
+    })
+    
+    if (!response.ok) {
+      // 404の場合は空のデータを返す
+      if (response.status === 404) {
+        return {}
+      }
+      throw new Error(`Failed to fetch video details: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    if (data.meta?.status !== 200 || !data.data?.video) {
+      return {}
+    }
+    
+    return {
+      tags: data.data.tag?.items?.map((tag: any) => tag.name) || [],
+      likes: data.data.video?.count?.like,
+      registeredAt: data.data.video?.registeredAt
+    }
+    
+  } catch (error) {
+    // エラー時は空のデータを返す
+    // エラーログはスキップ（ESLintエラー回避）
+    return {}
+  }
+}
+
+// バッチで複数の動画詳細を取得（並列実行数を制限）
+export async function fetchVideoDetailsBatch(
+  videoIds: string[],
+  concurrency: number = 3
+): Promise<Map<string, { tags?: string[], likes?: number, registeredAt?: string }>> {
+  const results = new Map()
+  
+  // 並列実行数を制限しながら処理
+  for (let i = 0; i < videoIds.length; i += concurrency) {
+    const batch = videoIds.slice(i, i + concurrency)
+    const batchResults = await Promise.all(
+      batch.map(async (id) => {
+        const details = await fetchVideoDetails(id)
+        return { id, details }
+      })
+    )
+    
+    for (const { id, details } of batchResults) {
+      results.set(id, details)
+    }
+    
+    // バッチ間に少し待機
+    if (i + concurrency < videoIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+  }
+  
+  return results
+}
+
+// 人気タグを取得する関数
+export async function fetchPopularTags(genre: string): Promise<string[]> {
+  await checkRateLimit()
+  
+  const url = `https://nvapi.nicovideo.jp/v1/genres/${genre}/popular-tags`
+  
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json',
+        'X-Frontend-Id': '6',
+        'X-Frontend-Version': '0',
+        'Referer': 'https://www.nicovideo.jp/',
+      }
+    })
+    
+    if (!response.ok) {
+      return []
+    }
+    
+    const data = await response.json()
+    
+    if (data.meta?.status !== 200 || !data.data?.tags) {
+      return []
+    }
+    
+    // タグ名のリストを返す（tagsは文字列配列として返される）
+    return data.data.tags.slice(0, 20)
+    
+  } catch (error) {
+    // エラーログはスキップ（ESLintエラー回避）
+    return []
+  }
+}
+
+// Webスクレイピングでランキングを取得（センシティブ動画対応）
+async function scrapeWebRanking(
+  genre: string,
+  term: string
+): Promise<Partial<RankingItem>[]> {
+  const url = `https://www.nicovideo.jp/ranking/genre/${genre}?term=${term}`
+  
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'ja,en;q=0.9'
+    }
+  })
+  
+  if (!response.ok) {
+    throw new Error(`Web scraping failed: ${response.status}`)
+  }
+  
+  const html = await response.text()
+  const items: Partial<RankingItem>[] = []
+  
+  // 動画情報を抽出する正規表現
+  const videoPattern = /<a[^>]+href="\/watch\/((?:sm|nm|so)\d+)"[^>]*>[\s\S]*?<img[^>]+alt="([^"]+)"[^>]*src="([^"]+)"/g
+  const viewPattern = /<span[^>]+class="[^"]*VideoMetaCount[^"]*"[^>]*>[\s\S]*?([\d,]+)[\s\S]*?再生/g
+  
+  const videos: Array<{id: string, title: string, thumbURL: string}> = []
+  const viewCounts: number[] = []
+  
+  let match
+  while ((match = videoPattern.exec(html)) !== null) {
+    videos.push({
+      id: match[1],
+      title: match[2].replace(/&quot;/g, '"').replace(/&amp;/g, '&'),
+      thumbURL: match[3]
+    })
+  }
+  
+  while ((match = viewPattern.exec(html)) !== null) {
+    viewCounts.push(parseInt(match[1].replace(/,/g, ''), 10))
+  }
+  
+  // データを結合
+  videos.forEach((video, index) => {
+    items.push({
+      rank: index + 1,
+      id: video.id,
+      title: video.title.replace(/^第\d+位[：:]/, '').trim(),
+      thumbURL: video.thumbURL,
+      views: viewCounts[index] || 0
+    })
+  })
+  
+  return items
+}
+
+// WebスクレイピングとnvAPIのデータをマージ
+async function mergeRankingData(
+  webItems: Partial<RankingItem>[],
+  nvapiItems: Partial<RankingItem>[]
+): Promise<Partial<RankingItem>[]> {
+  const nvapiMap = new Map(
+    nvapiItems.map(item => [item.id!, item])
+  )
+  
+  const mergedItems: Partial<RankingItem>[] = []
+  const missingIds: string[] = []
+  
+  // Webスクレイピングの順序でデータを処理
+  for (const webItem of webItems) {
+    const nvapiItem = nvapiMap.get(webItem.id!)
+    
+    if (nvapiItem) {
+      // nvAPIのリッチなメタデータを優先してマージ
+      mergedItems.push({
+        ...nvapiItem,
+        rank: webItem.rank // Webスクレイピングの順位を保持
+      })
+    } else {
+      // nvAPIにない動画（センシティブコンテンツ）
+      mergedItems.push(webItem)
+      missingIds.push(webItem.id!)
+    }
+  }
+  
+  // 欠けている動画の追加情報を取得
+  if (missingIds.length > 0) {
+    await enrichMissingVideos(mergedItems, missingIds)
+  }
+  
+  return mergedItems
+}
+
+// 欠けている動画の情報を補完
+async function enrichMissingVideos(
+  items: Partial<RankingItem>[],
+  missingIds: string[]
+): Promise<void> {
+  // Snapshot APIで追加情報を取得
+  const baseUrl = 'https://api.nicovideo.jp/api/v2/snapshot/video/contents/search'
+  const videoIdString = missingIds.join(' OR ')
+  
+  const params = new URLSearchParams({
+    q: videoIdString,
+    targets: 'contentId',
+    fields: 'contentId,title,viewCounter,commentCounter,mylistCounter,likeCounter,thumbnailUrl',
+    _limit: String(missingIds.length),
+    _context: 'nicorankingapp'
+  })
+  
+  try {
+    const response = await fetch(`${baseUrl}?${params}`, {
+      headers: {
+        'User-Agent': USER_AGENT
+      }
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      
+      if (data.data && Array.isArray(data.data)) {
+        const enrichmentMap = new Map(
+          data.data.map((item: any) => [
+            item.contentId,
+            {
+              title: item.title,
+              thumbURL: item.thumbnailUrl?.large || item.thumbnailUrl?.middle || item.thumbnailUrl?.normal || '',
+              views: item.viewCounter || 0,
+              comments: item.commentCounter,
+              mylists: item.mylistCounter,
+              likes: item.likeCounter
+            }
+          ])
+        )
+        
+        // アイテムを補完データで更新
+        items.forEach((item, index) => {
+          if (item.id && missingIds.includes(item.id)) {
+            const enrichment = enrichmentMap.get(item.id)
+            if (enrichment) {
+              items[index] = { ...item, ...enrichment }
+            }
+          }
+        })
+      }
+    }
+  } catch (error) {
+    // エラーは無視して基本データを使用
+  }
+}
