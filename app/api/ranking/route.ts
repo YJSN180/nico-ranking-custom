@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import type { RankingData } from '@/types/ranking'
 import type { RankingPeriod, RankingGenre } from '@/types/ranking-config'
-import { fetchRankingData } from '@/lib/fetch-ranking'
+import { scrapeRankingPage } from '@/lib/scraper'
 import { getMockRankingData } from '@/lib/mock-data'
 
 export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
 
 // キャッシュキーを生成
-function getCacheKey(period: RankingPeriod, genre: RankingGenre, tag?: string): string {
+function getCacheKey(genre: RankingGenre, tag?: string): string {
   if (tag) {
-    return `ranking-tag-${period}-${genre}-${tag}`
+    return `ranking-${genre}-tag-${encodeURIComponent(tag)}`
   }
-  return `ranking-${period}-${genre}`
+  return `ranking-${genre}`
 }
 
 export async function GET(request: Request | NextRequest) {
@@ -23,7 +23,7 @@ export async function GET(request: Request | NextRequest) {
     const genre = (searchParams.get('genre') || 'all') as RankingGenre
     const tag = searchParams.get('tag') || undefined
     
-    const cacheKey = getCacheKey(period, genre, tag)
+    const cacheKey = getCacheKey(genre, tag)
     
     // KVからキャッシュを確認
     const cachedData = await kv.get(cacheKey)
@@ -31,13 +31,28 @@ export async function GET(request: Request | NextRequest) {
     if (cachedData) {
       let rankingData: RankingData
       
-      if (typeof cachedData === 'object' && Array.isArray(cachedData)) {
-        rankingData = cachedData as RankingData
+      // データ構造を確認: { items: RankingData, popularTags?: string[] } または RankingData
+      if (typeof cachedData === 'object') {
+        if ('items' in cachedData && Array.isArray(cachedData.items)) {
+          // cron jobが保存した形式
+          rankingData = cachedData.items as RankingData
+        } else if (Array.isArray(cachedData)) {
+          // 直接配列形式
+          rankingData = cachedData as RankingData
+        } else {
+          return fetchAndCacheRanking(period, genre, cacheKey, tag)
+        }
       } else if (typeof cachedData === 'string') {
         try {
-          rankingData = JSON.parse(cachedData)
+          const parsed = JSON.parse(cachedData)
+          if ('items' in parsed && Array.isArray(parsed.items)) {
+            rankingData = parsed.items as RankingData
+          } else if (Array.isArray(parsed)) {
+            rankingData = parsed as RankingData
+          } else {
+            return fetchAndCacheRanking(period, genre, cacheKey, tag)
+          }
         } catch {
-          // キャッシュが無効な場合は新しくフェッチ
           return fetchAndCacheRanking(period, genre, cacheKey, tag)
         }
       } else {
@@ -70,14 +85,31 @@ async function fetchAndCacheRanking(
 ): Promise<NextResponse> {
   try {
     // スクレイピングベースの統一されたランキング取得
-    const rankingData = await fetchRankingData(period, genre, tag)
+    // periodは現在24hのみサポート
+    const { items: rankingData } = await scrapeRankingPage(genre, period, tag)
     
-    if (rankingData.length > 0) {
-      // KVにキャッシュ（TTLは期間によって調整）
-      const ttl = tag ? 900 : (period === 'hour' ? 3600 : 1800) // タグ: 15分、毎時: 1時間、24時間: 30分
-      await kv.set(cacheKey, rankingData, { ex: ttl })
+    const items = rankingData.map((item) => ({
+      rank: item.rank || 0,
+      id: item.id || '',
+      title: item.title || '',
+      thumbURL: item.thumbURL || '',
+      views: item.views || 0,
+      comments: item.comments,
+      mylists: item.mylists,
+      likes: item.likes,
+      tags: item.tags,
+      authorId: item.authorId,
+      authorName: item.authorName,
+      authorIcon: item.authorIcon,
+      registeredAt: item.registeredAt,
+    })).filter(item => item.id && item.title)
+    
+    if (items.length > 0) {
+      // KVにキャッシュ（タグ付きは短めのTTL）
+      const ttl = tag ? 900 : 3600 // タグ: 15分、通常: 1時間
+      await kv.set(cacheKey, items, { ex: ttl })
       
-      return NextResponse.json(rankingData, {
+      return NextResponse.json(items, {
         headers: {
           'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
         },
