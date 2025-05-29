@@ -2,6 +2,7 @@
 // HTML + nvAPI + Snapshot APIを組み合わせて全情報を取得
 
 import type { RankingItem } from '@/types/ranking'
+import { cookieScrapeRanking, scrapeReiSoreRanking } from './cookie-scraper'
 
 // Node.js環境でのfetchが利用できない場合があるため、条件付きでインポート
 const fetchImpl = typeof fetch !== 'undefined' 
@@ -53,6 +54,11 @@ export async function completeHybridScrape(
   popularTags?: string[]
 }> {
   try {
+    // 例のソレジャンルは専用処理
+    if (genre === 'd2um7mc4') {
+      return await scrapeReiSoreRanking()
+    }
+    
     // r18ジャンルは特殊な制限があるため、モックデータを返す
     if (genre === 'r18') {
       return {

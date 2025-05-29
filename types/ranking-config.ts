@@ -18,6 +18,7 @@ export type RankingGenre =
   | 'technology_craft'
   | 'other'
   | 'r18'
+  | 'd2um7mc4' // 例のソレ
 
 export const GENRE_LABELS: Record<RankingGenre, string> = {
   all: '総合',
@@ -34,7 +35,8 @@ export const GENRE_LABELS: Record<RankingGenre, string> = {
   society_politics_news: '社会・政治・時事',
   technology_craft: '技術・工作',
   other: 'その他',
-  r18: '例のソレ'
+  r18: 'R-18',
+  d2um7mc4: '例のソレ'
 }
 
 export const PERIOD_LABELS: Record<RankingPeriod, string> = {
