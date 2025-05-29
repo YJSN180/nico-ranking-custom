@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
+import { scrapeRankingPage } from '@/lib/scraper'
 
 vi.mock('@vercel/kv', () => ({
   kv: {
     get: vi.fn(),
+    set: vi.fn(),
   },
 }))
+
+vi.mock('@/lib/scraper')
 
 describe('Ranking API Integration', () => {
   beforeEach(() => {
@@ -46,28 +50,45 @@ describe('Ranking API Integration', () => {
     expect(data).toEqual(mockData)
   })
 
-  it('should return 502 when KV has no data', async () => {
+  it('should return mock data when KV has no data and scraping fails', async () => {
     vi.mocked(kv.get).mockResolvedValueOnce(null)
+    vi.mocked(scrapeRankingPage).mockRejectedValueOnce(new Error('Scraping failed'))
 
     const request = new Request('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(200)
+    expect(response.headers.get('X-Data-Source')).toBe('mock')
     
     const data = await response.json()
-    expect(data.error).toBe('No ranking data available')
+    expect(Array.isArray(data)).toBe(true)
+    expect(data[0]).toHaveProperty('title', '【初音ミク】テストソング【オリジナル】')
   })
 
-  it('should return 502 when KV returns invalid JSON', async () => {
+  it('should fetch from scraper when KV returns invalid data', async () => {
+    const mockScrapedData = [
+      {
+        rank: 1,
+        id: 'sm789',
+        title: 'Scraped Video',
+        thumbURL: 'https://example.com/scraped.jpg',
+        views: 15000,
+      },
+    ]
+    
     vi.mocked(kv.get).mockResolvedValueOnce('invalid json')
+    vi.mocked(scrapeRankingPage).mockResolvedValueOnce({
+      items: mockScrapedData,
+      popularTags: [],
+    })
 
     const request = new Request('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(200)
     
     const data = await response.json()
-    expect(data.error).toBe('Invalid ranking data')
+    expect(data[0]).toHaveProperty('title', 'Scraped Video')
   })
 
   it('should handle KV errors gracefully', async () => {

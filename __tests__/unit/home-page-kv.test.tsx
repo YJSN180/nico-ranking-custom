@@ -2,25 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render } from '@testing-library/react'
 import Home from '@/app/page'
 import { kv } from '@vercel/kv'
+import { scrapeRankingPage } from '@/lib/scraper'
 
 // Mock Vercel KV
 vi.mock('@vercel/kv', () => ({
   kv: {
     get: vi.fn(),
+    set: vi.fn(),
   },
 }))
 
-// Mock fetch
-global.fetch = vi.fn()
+// Mock scraper
+vi.mock('@/lib/scraper')
 
 describe('Homepage with direct KV access', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Mock fetch for background update check
-    vi.mocked(global.fetch).mockResolvedValue({
-      ok: true,
-      json: async () => ({ updated: false }),
-    } as Response)
   })
 
   it('should display real ranking data from direct KV access', async () => {
@@ -36,12 +33,7 @@ describe('Homepage with direct KV access', () => {
 
     // Mock KV to return real data
     vi.mocked(kv.get).mockImplementation(async (key) => {
-      if (key === 'ranking-data') return mockRealData
-      if (key === 'last-update-info') return {
-        timestamp: new Date().toISOString(),
-        itemCount: 1,
-        source: 'test'
-      }
+      if (key === 'ranking-all') return { items: mockRealData, popularTags: [] }
       return null
     })
     
@@ -56,62 +48,57 @@ describe('Homepage with direct KV access', () => {
     expect(views).toBeDefined()
   })
 
-  it('should fall back to API when KV fails', async () => {
-    const mockApiData = [
+  it('should fall back to scraping when KV fails', async () => {
+    const mockScrapedData = [
       {
         rank: 1,
         id: 'sm12345',
-        title: 'API Fallback Video',
+        title: 'Scraped Video',
         thumbURL: 'https://example.com/thumb.jpg',
         views: 1000
       }
     ]
 
     // Mock KV to fail
-    vi.mocked(kv.get).mockImplementation(async (key) => {
-      if (key === 'last-update-info') return null
-      throw new Error('KV Error')
-    })
+    vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV Error'))
     
-    // Mock API fallback
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockApiData,
-    } as Response)
+    // Mock scraper fallback
+    vi.mocked(scrapeRankingPage).mockResolvedValueOnce({
+      items: mockScrapedData,
+      popularTags: [],
+    })
     
     const { findByText } = render(await Home({ searchParams: {} }))
     
-    // Should display API data
-    const title = await findByText('API Fallback Video')
+    // Should display scraped data
+    const title = await findByText('Scraped Video')
     expect(title).toBeDefined()
   })
 
-  it('should handle KV returning string data', async () => {
-    const mockRealData = [
+  it('should fall back to scraping when KV returns string data', async () => {
+    const mockScrapedData = [
       {
         rank: 1,
         id: 'sm45026928',
-        title: 'Test Video from String',
+        title: 'Scraped Video from String Fallback',
         thumbURL: 'https://example.com/thumb.jpg',
         views: 5000
       }
     ]
 
-    // Mock KV to return string
-    vi.mocked(kv.get).mockImplementation(async (key) => {
-      if (key === 'ranking-data') return JSON.stringify(mockRealData)
-      if (key === 'last-update-info') return {
-        timestamp: new Date().toISOString(),
-        itemCount: 1,
-        source: 'test'
-      }
-      return null
+    // Mock KV to return string (which is not handled by the page)
+    vi.mocked(kv.get).mockResolvedValueOnce(JSON.stringify({ items: mockScrapedData, popularTags: [] }))
+    
+    // Mock scraper to return data when KV string is not handled
+    vi.mocked(scrapeRankingPage).mockResolvedValueOnce({
+      items: mockScrapedData,
+      popularTags: [],
     })
     
     const { findByText } = render(await Home({ searchParams: {} }))
     
-    // Should parse and display the data
-    const title = await findByText('Test Video from String')
+    // Should display scraped data
+    const title = await findByText('Scraped Video from String Fallback')
     expect(title).toBeDefined()
     
     const views = await findByText('5,000 回再生')

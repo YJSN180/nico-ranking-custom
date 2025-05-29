@@ -3,6 +3,7 @@ import { POST as cronFetch } from '@/app/api/cron/fetch/route'
 import { GET as getRanking } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
 import { mockRankingData } from '@/lib/mock-data'
+import { scrapeRankingPage } from '@/lib/scraper'
 
 vi.mock('@vercel/kv', () => ({
   kv: {
@@ -11,9 +12,7 @@ vi.mock('@vercel/kv', () => ({
   },
 }))
 
-vi.mock('@/lib/fetch-rss', () => ({
-  fetchNicoRanking: vi.fn().mockRejectedValue(new Error('Geo-blocked')),
-}))
+vi.mock('@/lib/scraper')
 
 describe('Mock Data Integration', () => {
   beforeEach(() => {
@@ -21,8 +20,10 @@ describe('Mock Data Integration', () => {
     vi.stubEnv('CRON_SECRET', 'test-secret')
   })
 
-  it('should save mock data when RSS fetch fails', async () => {
-    vi.mocked(kv.set).mockResolvedValueOnce('OK')
+  it('should save mock data when scraping fails', async () => {
+    // Mock scraper to fail for all genres
+    vi.mocked(scrapeRankingPage).mockRejectedValue(new Error('Scraping failed'))
+    vi.mocked(kv.set).mockResolvedValue('OK')
 
     const request = new Request('http://localhost:3000/api/cron/fetch', {
       method: 'POST',
@@ -48,8 +49,8 @@ describe('Mock Data Integration', () => {
   })
 
   it('should retrieve mock data from ranking API', async () => {
-    // KVからモックデータを返す（文字列として）
-    vi.mocked(kv.get).mockResolvedValueOnce(JSON.stringify(mockRankingData))
+    // KVからモックデータを返す（オブジェクト形式で）
+    vi.mocked(kv.get).mockResolvedValueOnce({ items: mockRankingData, popularTags: [] })
 
     const request = new Request('http://localhost:3000/api/ranking')
     const response = await getRanking(request)
