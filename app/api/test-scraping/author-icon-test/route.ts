@@ -126,15 +126,16 @@ export async function GET() {
     results.tests.individualVideoTests = individualTests
     
     // サマリー
+    const percentageWithIcon = Math.round((authorStats.withAuthorIcon / authorStats.total) * 100)
     results.summary = {
-      success: authorStats.percentageWithIcon > 80,
-      message: authorStats.percentageWithIcon > 80 
+      success: percentageWithIcon > 80,
+      message: percentageWithIcon > 80 
         ? '✅ 投稿者アイコンの取得は正常に動作しています' 
         : '⚠️ 投稿者アイコンの取得率が低い可能性があります',
       recommendations: []
     }
     
-    if (authorStats.percentageWithIcon < 80) {
+    if (percentageWithIcon < 80) {
       results.summary.recommendations.push(
         'レート制限に達している可能性があります',
         '一部の動画は投稿者情報を持たない可能性があります'
