@@ -47,14 +47,9 @@ export async function scrapeRankingPage(
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // センシティブ動画も取得するため、RSSハイブリッドスクレイパーを使用
-  try {
-    return await rssHybridScrape(genre, term, tag)
-  } catch (error) {
-    // エラー時はnvAPIのみにフォールバック
-    console.error('RSS hybrid scraping failed, falling back to nvAPI:', error)
-    return await scrapeRankingPageNvApiOnly(genre, term, tag)
-  }
+  // nvAPIのみを使用（RSSが406エラーを返すため一時的に無効化）
+  // TODO: RSSの406エラーを解決後、RSSハイブリッドを再有効化
+  return await scrapeRankingPageNvApiOnly(genre, term, tag)
 }
 
 // 既存のnvAPI専用実装（テスト用に保持）
