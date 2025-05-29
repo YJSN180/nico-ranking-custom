@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
-import { fetchNicoRanking } from '@/lib/fetch-rss'
+import { updateRankingData } from '@/scripts/update-ranking-kv'
 
 export const runtime = 'nodejs'
 
@@ -12,30 +11,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const items = await fetchNicoRanking()
+    // トリガーからの更新を実行
+    const result = await updateRankingData()
     
-    if (!items || items.length === 0) {
+    if (!result.success) {
       return NextResponse.json({ 
-        error: 'No data fetched',
-        message: 'RSS fetch returned no items' 
+        error: 'Update failed',
+        details: result.error,
+        failedGenres: result.failedGenres 
       }, { status: 500 })
     }
     
-    // Store in KV with 1 hour TTL
-    await kv.set('ranking-data', items, {
-      ex: 3600, // 1 hour TTL
-    })
-    
-    // Store update info
-    await kv.set('last-update-info', {
-      timestamp: new Date().toISOString(),
-      itemCount: items.length,
-      source: 'manual-admin-trigger'
-    })
-    
     return NextResponse.json({ 
       success: true,
-      itemCount: items.length,
+      updatedGenres: result.updatedGenres,
+      failedGenres: result.failedGenres || [],
       timestamp: new Date().toISOString(),
       message: 'Data updated successfully'
     })

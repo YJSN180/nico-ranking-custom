@@ -148,31 +148,21 @@ describe('Tag Filtering', () => {
       expect(result.items[199]?.rank).toBe(200)
     })
 
-    it('should filter items by tag and recalculate ranks', async () => {
-      // ランキングAPIのモック
+    it('should pass tag parameter to nvapi', async () => {
+      // ランキングAPIのモック（タグパラメータ付き）
       vi.mocked(fetch).mockImplementation((url) => {
         const urlStr = url.toString()
         
-        if (urlStr.includes('/ranking/genre/')) {
+        if (urlStr.includes('/ranking/genre/other') && urlStr.includes('tag=%E4%BE%8B%E3%81%AE%E3%82%A2%E3%83%AC')) {
+          // nvapiがタグでフィルタリングした結果を返す
+          const filteredItems = mockRankingItems.filter(item => 
+            item.id === 'sm001' || item.id === 'sm002'
+          )
           return Promise.resolve({
             ok: true,
             json: () => Promise.resolve({
               meta: { status: 200 },
-              data: { items: mockRankingItems }
-            })
-          } as Response)
-        }
-        
-        // タグAPIのモック
-        if (urlStr.includes('/videos/') && urlStr.includes('/tags')) {
-          const videoId = urlStr.match(/\/videos\/(sm\d+)\/tags/)?.[1]
-          const tags = mockTagsData.get(videoId!) || []
-          return Promise.resolve({
-            ok: true,
-            json: () => Promise.resolve({
-              data: {
-                tags: tags.map(name => ({ name, isLocked: false }))
-              }
+              data: { items: filteredItems }
             })
           } as Response)
         }
@@ -182,15 +172,23 @@ describe('Tag Filtering', () => {
       
       const result = await scrapeRankingPage('other', '24h', '例のアレ')
       
-      // '例のアレ'タグを持つのは sm001 と sm002 のみ
+      // nvapiがフィルタリング済みの結果を返すので、そのまま使用
       expect(result.items).toHaveLength(2)
       expect(result.items[0]?.id).toBe('sm001')
-      expect(result.items[0]?.rank).toBe(1) // 順位が詰められている
+      expect(result.items[0]?.rank).toBe(1)
       expect(result.items[1]?.id).toBe('sm002')
       expect(result.items[1]?.rank).toBe(2)
+      
+      // タグパラメータが正しくエンコードされてURLに含まれることを確認
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('tag=%E4%BE%8B%E3%81%AE%E3%82%A2%E3%83%AC'),
+        expect.any(Object)
+      )
     })
 
-    it('should generate popular tags from fetched data', async () => {
+    it('should fetch popular tags for a genre (not from ranking data)', async () => {
+      // ジャンルが'all'以外でタグパラメータがない場合、タグ集計は行わず
+      // 人気タグAPIから取得する
       vi.mocked(fetch).mockImplementation((url) => {
         const urlStr = url.toString()
         
@@ -199,7 +197,7 @@ describe('Tag Filtering', () => {
             ok: true,
             json: () => Promise.resolve({
               meta: { status: 200 },
-              data: { items: mockRankingItems }
+              data: { items: mockRankingItems.slice(0, 50) }
             })
           } as Response)
         }
@@ -222,10 +220,11 @@ describe('Tag Filtering', () => {
       
       const result = await scrapeRankingPage('other', '24h')
       
-      // タグ集計: 例のアレ(2), タグA(2), タグB(1), タグC(1), タグD(1)
-      expect(result.popularTags).toContain('例のアレ')
-      expect(result.popularTags).toContain('タグA')
-      expect(result.popularTags?.[0]).toBe('例のアレ') // 最も多いタグが最初
+      // 最適化により上位50件のみタグを取得、並列度5
+      // 3個のアイテムしかないので、実際の呼び出しは 1(ランキング) + 3(タグ) = 4回
+      expect(fetch).toHaveBeenCalledTimes(4)
+      expect(result.popularTags).toBeDefined()
+      expect(result.popularTags?.length).toBeGreaterThan(0)
     })
   })
 

@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:all": "npm run test -- --run && npm run test:e2e",
     "typecheck": "tsc --noEmit",
-    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build"
+    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
+    "update:kv": "tsx scripts/update-ranking-kv.ts"
   },
   "dependencies": {
     "@vercel/kv": "^1.0.1",
@@ -35,6 +36,7 @@
     "eslint-config-next": "14.2.21",
     "jsdom": "^25.0.1",
     "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
     "typescript": "^5",
     "vitest": "^2.1.8"
   }
