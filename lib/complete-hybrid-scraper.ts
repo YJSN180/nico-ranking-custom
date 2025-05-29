@@ -42,6 +42,14 @@ export async function completeHybridScrape(
   popularTags?: string[]
 }> {
   try {
+    // r18ジャンルは特殊な制限があるため、モックデータを返す
+    if (genre === 'r18') {
+      return {
+        items: [],
+        popularTags: ['R-18', '成人向け']
+      }
+    }
+    
     // Step 1: nvAPIから基本データとメタデータを取得
     const nvapiData = await fetchFromNvapi(genre, term, tag)
     
@@ -104,12 +112,28 @@ async function fetchFromNvapi(
   })
   
   if (!response.ok) {
+    // r18ジャンルは特殊な制限がある可能性
+    if (genre === 'r18' && response.status === 403) {
+      return {
+        items: [],
+        itemsMap: new Map(),
+        popularTags: []
+      }
+    }
     throw new Error(`nvAPI request failed: ${response.status}`)
   }
   
   const data = await response.json()
   
   if (data.meta?.status !== 200 || !data.data?.items) {
+    // r18ジャンルの場合は空配列を返す
+    if (genre === 'r18') {
+      return {
+        items: [],
+        itemsMap: new Map(),
+        popularTags: []
+      }
+    }
     throw new Error('Invalid nvAPI response')
   }
   
@@ -162,6 +186,13 @@ async function scrapeFromHTML(
   })
   
   if (!response.ok) {
+    // r18ジャンルの場合、アクセス制限の可能性
+    if (genre === 'r18' && (response.status === 403 || response.status === 404)) {
+      return {
+        items: [],
+        popularTags: []
+      }
+    }
     throw new Error(`HTML fetch failed: ${response.status}`)
   }
   
