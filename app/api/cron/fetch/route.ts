@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
-import { fetchNicoRanking } from '@/lib/fetch-rss'
+import { scrapeRankingPage } from '@/lib/scraper'
 import { mockRankingData } from '@/lib/mock-data'
+import type { RankingData, RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
@@ -14,32 +15,78 @@ export async function POST(request: Request) {
   }
 
   try {
-    let items
+    // 人気ジャンルのデータを取得してキャッシュ
+    const genres = ['all', 'game', 'entertainment', 'music', 'other', 'tech', 'anime', 'animal']
+    let allSuccess = true
+    let totalItems = 0
     
-    // 実際のRSS取得を試みる（Googlebot User-Agentで地域制限を回避）
-    try {
-      items = await fetchNicoRanking()
-    } catch (error) {
-      // フォールバックとしてモックデータを使用
-      items = mockRankingData
+    for (const genre of genres) {
+      try {
+        const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, '24h')
+        
+        // Partial<RankingItem>をRankingItemに変換
+        const items: RankingData = scrapedItems.map((item): RankingItem => ({
+          rank: item.rank || 0,
+          id: item.id || '',
+          title: item.title || '',
+          thumbURL: item.thumbURL || '',
+          views: item.views || 0,
+          comments: item.comments,
+          mylists: item.mylists,
+          likes: item.likes,
+          tags: item.tags,
+          authorId: item.authorId,
+          authorName: item.authorName,
+          authorIcon: item.authorIcon,
+          registeredAt: item.registeredAt,
+        })).filter(item => item.id && item.title)
+        
+        // ジャンル別にキャッシュ
+        await kv.set(`ranking-${genre}`, { items, popularTags }, { ex: 3600 })
+        
+        // 旧形式の互換性のため、'all'ジャンルは'ranking-data'にも保存
+        if (genre === 'all') {
+          await kv.set('ranking-data', items, { ex: 3600 })
+          totalItems = items.length
+        }
+        
+        // 人気タグ別のデータも事前生成（上位5タグのみ）
+        if (popularTags && popularTags.length > 0 && genre !== 'all') {
+          for (const tag of popularTags.slice(0, 5)) {
+            const taggedItems = items.filter(item => item.tags?.includes(tag))
+            if (taggedItems.length > 0) {
+              await kv.set(`ranking-${genre}-tag-${encodeURIComponent(tag)}`, taggedItems, { ex: 3600 })
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to fetch ${genre} ranking:`, error)
+        allSuccess = false
+        
+        // allジャンルが失敗した場合はモックデータを使用
+        if (genre === 'all') {
+          await kv.set('ranking-data', mockRankingData, { ex: 3600 })
+          await kv.set('ranking-all', { items: mockRankingData, popularTags: [] }, { ex: 3600 })
+          totalItems = mockRankingData.length
+        }
+      }
     }
-    
-    await kv.set('ranking-data', items, {
-      ex: 3600, // 1 hour TTL
-    })
     
     // Store update info
     await kv.set('last-update-info', {
       timestamp: new Date().toISOString(),
-      itemCount: items.length,
-      source: 'scheduled-cron'
+      genres: genres.length,
+      source: 'scheduled-cron',
+      allSuccess
     })
 
     return NextResponse.json({
       success: true,
-      itemsCount: items.length,
+      itemsCount: totalItems,
       timestamp: new Date().toISOString(),
-      isMock: items === mockRankingData,
+      allSuccess,
+      genresProcessed: genres.length,
+      isMock: !allSuccess && totalItems === 100 // モックデータを使用した場合
     })
   } catch (error) {
     return NextResponse.json(

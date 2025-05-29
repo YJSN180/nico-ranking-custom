@@ -29,7 +29,7 @@ describe('Home Page', () => {
       json: async () => mockData,
     } as Response)
 
-    const Component = await Home()
+    const Component = await Home({ searchParams: {} })
     render(Component)
 
     expect(screen.getByText('1')).toBeInTheDocument()
@@ -51,7 +51,7 @@ describe('Home Page', () => {
       ok: false,
     } as Response)
 
-    const Component = await Home()
+    const Component = await Home({ searchParams: {} })
     render(Component)
 
     expect(screen.getByText('ランキングデータがありません')).toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('Home Page', () => {
       json: async () => [],
     } as Response)
 
-    const Component = await Home()
+    const Component = await Home({ searchParams: {} })
     render(Component)
 
     expect(screen.getByText('ランキングデータがありません')).toBeInTheDocument()

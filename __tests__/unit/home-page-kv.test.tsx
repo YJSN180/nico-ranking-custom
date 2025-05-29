@@ -45,7 +45,7 @@ describe('Homepage with direct KV access', () => {
       return null
     })
     
-    const { findByText } = render(await Home())
+    const { findByText } = render(await Home({ searchParams: {} }))
     
     // Should display the real title
     const title = await findByText('【Farthest Frontier】領主のお姉さん実況 39【街づくり】')
@@ -79,7 +79,7 @@ describe('Homepage with direct KV access', () => {
       json: async () => mockApiData,
     } as Response)
     
-    const { findByText } = render(await Home())
+    const { findByText } = render(await Home({ searchParams: {} }))
     
     // Should display API data
     const title = await findByText('API Fallback Video')
@@ -108,7 +108,7 @@ describe('Homepage with direct KV access', () => {
       return null
     })
     
-    const { findByText } = render(await Home())
+    const { findByText } = render(await Home({ searchParams: {} }))
     
     // Should parse and display the data
     const title = await findByText('Test Video from String')

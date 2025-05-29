@@ -5,16 +5,20 @@ import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
 import type { RankingData } from '@/types/ranking'
-import type { RankingConfig } from '@/types/ranking-config'
+import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
 interface ClientPageProps {
   initialData: RankingData
+  initialGenre?: string
+  initialTag?: string
+  popularTags?: string[]
 }
 
-export default function ClientPage({ initialData }: ClientPageProps) {
+export default function ClientPage({ initialData, initialGenre = 'all', initialTag, popularTags = [] }: ClientPageProps) {
   const [config, setConfig] = useState<RankingConfig>({
     period: '24h',
-    genre: 'all'
+    genre: initialGenre as RankingGenre,
+    tag: initialTag
   })
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
   const [loading, setLoading] = useState(false)
@@ -50,16 +54,17 @@ export default function ClientPage({ initialData }: ClientPageProps) {
       }
     }
 
-    // 初回レンダリング時は実行しない（initialDataを使用）
-    if (config.period !== '24h' || config.genre !== 'all' || config.tag) {
+    // 初期値から変更があった場合のみ実行
+    const hasChanged = config.period !== '24h' || config.genre !== initialGenre || config.tag !== initialTag
+    if (hasChanged) {
       fetchRanking()
     }
-  }, [config])
+  }, [config, initialGenre, initialTag])
 
   return (
     <>
       <RankingSelector config={config} onConfigChange={setConfig} />
-      <TagSelector config={config} onConfigChange={setConfig} />
+      <TagSelector config={config} onConfigChange={setConfig} popularTags={popularTags} />
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>

@@ -1,12 +1,9 @@
-// ニコニコ動画のランキングページをスクレイピングするモジュール
+// ニコニコ動画のランキングページをnvapiから取得するモジュール
 
 import type { RankingItem } from '@/types/ranking'
-import { parseHTML } from './html-parser'
 
-// User-Agentの設定（Googlebotで地域ブロック回避）
-const GOOGLEBOT_USER_AGENT = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
-// 通常のUser-Agent（API用）
-const NORMAL_USER_AGENT = 'NicoRankingScraper/1.0 (+https://github.com/YJSN180/nico-ranking-custom)'
+// User-Agentの設定
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
 // レート制限の設定
 const RATE_LIMIT = {
@@ -39,24 +36,7 @@ async function checkRateLimit(): Promise<void> {
   requestHistory.push(now)
 }
 
-// HTMLエンティティをデコード
-function decodeHTMLEntities(text: string): string {
-  const entities: Record<string, string> = {
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&#39;': "'",
-    '&#x27;': "'",
-    '&#x2F;': '/',
-    '&#x60;': '`',
-    '&#x3D;': '='
-  }
-  
-  return text.replace(/&[#\w]+;/g, (entity) => entities[entity] || entity)
-}
-
-// ランキングページからHTMLデータを取得
+// nvapiからランキングデータを取得
 export async function scrapeRankingPage(
   genre: string,
   term: '24h' | 'hour',
@@ -67,32 +47,90 @@ export async function scrapeRankingPage(
 }> {
   await checkRateLimit()
   
-  // URLの構築
+  // URLの構築（tagパラメータは送らない - nvapiはサポートしていない）
   const params = new URLSearchParams({ term })
-  if (tag) {
-    params.append('tag', tag)
-  }
-  
-  const url = `https://www.nicovideo.jp/ranking/genre/${genre}?${params}`
+  const url = `https://nvapi.nicovideo.jp/v1/ranking/genre/${genre}?${params}`
   
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': GOOGLEBOT_USER_AGENT,  // Googlebotで地域ブロック回避
-        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'ja,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Cache-Control': 'no-cache'
+        'X-Frontend-Id': '6',
+        'X-Frontend-Version': '0',
+        'Referer': 'https://www.nicovideo.jp/',
       }
     })
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch ranking page: ${response.status}`)
+      throw new Error(`Failed to fetch ranking data: ${response.status}`)
     }
     
-    const html = await response.text()
-    const items = parseRankingHTML(html)
-    const popularTags = genre !== 'all' ? parsePopularTags(html) : undefined
+    const data = await response.json()
+    
+    if (data.meta?.status !== 200 || !data.data?.items) {
+      throw new Error('Invalid nvapi response')
+    }
+    
+    // 最大200件まで取得
+    const rankingItems = data.data.items.slice(0, 200)
+    
+    // nvapiレスポンスをパース
+    let items: Partial<RankingItem>[] = rankingItems.map((item: any, index: number) => ({
+      rank: index + 1,
+      id: item.id,
+      title: item.title,
+      thumbURL: item.thumbnail?.largeUrl || item.thumbnail?.url || '',
+      views: item.count?.view || 0,
+      comments: item.count?.comment,
+      mylists: item.count?.mylist,
+      likes: item.count?.like,
+      authorId: item.owner?.id,
+      authorName: item.owner?.name,
+      authorIcon: item.owner?.iconUrl,
+      registeredAt: item.registeredAt,
+      tags: undefined,
+    }))
+    
+    // タグフィルタリングが必要な場合、またはジャンルが'all'以外の場合はタグを取得
+    if (tag || genre !== 'all') {
+      const videoIds = items.map(item => item.id!).filter(Boolean)
+      const tagsMap = await fetchVideoTagsBatch(videoIds)
+      
+      // タグ情報をマージ
+      items = items.map(item => ({
+        ...item,
+        tags: tagsMap.get(item.id!) || []
+      }))
+      
+      // タグでフィルタリング
+      if (tag) {
+        items = items.filter(item => item.tags?.includes(tag))
+        // 順位を詰める
+        items = items.map((item, index) => ({
+          ...item,
+          rank: index + 1
+        }))
+      }
+    }
+    
+    // 人気タグを集計（genre !== 'all' の場合のみ）
+    let popularTags: string[] = []
+    if (genre !== 'all' && items.some(item => item.tags)) {
+      const tagCounts = new Map<string, number>()
+      
+      items.forEach(item => {
+        item.tags?.forEach(tag => {
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
+        })
+      })
+      
+      popularTags = Array.from(tagCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 20)
+        .map(([tag]) => tag)
+    }
     
     return { items, popularTags }
     
@@ -101,79 +139,54 @@ export async function scrapeRankingPage(
   }
 }
 
-// HTMLからランキングデータを抽出
-function parseRankingHTML(html: string): Partial<RankingItem>[] {
-  const items: Partial<RankingItem>[] = []
+// バッチで複数の動画のタグを取得（最適化版）
+export async function fetchVideoTagsBatch(
+  videoIds: string[],
+  concurrency: number = 10
+): Promise<Map<string, string[]>> {
+  const results = new Map<string, string[]>()
   
-  // シンプルな正規表現でランキングアイテムを抽出
-  const rankingItemRegex = /<li[^>]+class="[^"]*RankingVideo[^"]*"[^>]*>([\s\S]*?)<\/li>/g
-  
-  let match
-  let rank = 1
-  
-  while ((match = rankingItemRegex.exec(html)) !== null) {
-    const itemHTML = match[1]
-    if (!itemHTML) continue
-    
-    const item: Partial<RankingItem> = { rank: rank++ }
-    
-    // 動画ID
-    const idMatch = itemHTML.match(/href="\/watch\/([\w]+)"/)
-    if (idMatch) item.id = idMatch[1]
-    
-    // タイトル（data-title属性から）
-    const titleMatch = itemHTML.match(/data-title="([^"]+)"/)
-    if (titleMatch && titleMatch[1]) item.title = decodeHTMLEntities(titleMatch[1])
-    
-    // サムネイル
-    const thumbMatch = itemHTML.match(/<img[^>]+src="([^"]+)"[^>]*>/)
-    if (thumbMatch) item.thumbURL = thumbMatch[1]
-    
-    // 再生数
-    const viewMatch = itemHTML.match(/data-view-counter="(\d+)"/)
-    if (viewMatch && viewMatch[1]) item.views = parseInt(viewMatch[1], 10)
-    
-    // コメント数
-    const commentMatch = itemHTML.match(/data-comment-counter="(\d+)"/)
-    if (commentMatch && commentMatch[1]) item.comments = parseInt(commentMatch[1], 10)
-    
-    // マイリスト数
-    const mylistMatch = itemHTML.match(/data-mylist-counter="(\d+)"/)
-    if (mylistMatch && mylistMatch[1]) item.mylists = parseInt(mylistMatch[1], 10)
-    
-    // 投稿者ID
-    const authorIdMatch = itemHTML.match(/href="\/user\/(\d+)"/)
-    if (authorIdMatch) {
-      item.authorId = authorIdMatch[1]
-    } else {
-      // チャンネルやコミュニティの場合
-      const channelMatch = itemHTML.match(/href="\/(channel|community)\/([\w]+)"/)
-      if (channelMatch) {
-        item.authorId = `${channelMatch[1]}/${channelMatch[2]}`
+  // 並列実行数を制限しながら処理
+  for (let i = 0; i < videoIds.length; i += concurrency) {
+    const batch = videoIds.slice(i, i + concurrency)
+    const batchPromises = batch.map(async (id) => {
+      try {
+        await checkRateLimit()
+        const url = `https://nvapi.nicovideo.jp/v1/videos/${id}/tags`
+        
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': USER_AGENT,
+            'Accept': 'application/json',
+            'X-Frontend-Id': '6',
+            'X-Frontend-Version': '0',
+            'Referer': 'https://www.nicovideo.jp/',
+          }
+        })
+        
+        if (!response.ok) {
+          return { id, tags: [] }
+        }
+        
+        const data = await response.json()
+        const tags = data.data?.tags?.map((tag: any) => tag.name) || []
+        return { id, tags }
+      } catch (error) {
+        console.error(`Error fetching tags for ${id}:`, error)
+        return { id, tags: [] }
       }
-    }
+    })
     
-    // 投稿者名
-    const authorNameMatch = itemHTML.match(/<span[^>]+class="[^"]*userName[^"]*"[^>]*>([^<]+)<\/span>/)
-    if (authorNameMatch && authorNameMatch[1]) {
-      item.authorName = decodeHTMLEntities(authorNameMatch[1])
-    }
-    
-    // 投稿者アイコン
-    const authorIconMatch = itemHTML.match(/<img[^>]+class="[^"]*usericon[^"]*"[^>]+src="([^"]+)"/)
-    if (authorIconMatch) {
-      item.authorIcon = authorIconMatch[1]
-    }
-    
-    if (item.id) {
-      items.push(item)
-    }
+    const batchResults = await Promise.all(batchPromises)
+    batchResults.forEach(({ id, tags }) => {
+      results.set(id, tags)
+    })
   }
   
-  return items
+  return results
 }
 
-// 動画詳細情報を取得（タグ、いいね数、投稿日時）
+// 動画詳細情報を取得（主にタグ用）
 export async function fetchVideoDetails(videoId: string): Promise<{
   tags?: string[]
   likes?: number
@@ -181,33 +194,42 @@ export async function fetchVideoDetails(videoId: string): Promise<{
 }> {
   await checkRateLimit()
   
-  const url = `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?_frontendId=70&_frontendVersion=0&actionTrackId=${Date.now()}`
+  const url = `https://nvapi.nicovideo.jp/v1/video/${videoId}`
   
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': NORMAL_USER_AGENT,  // APIには通常のUser-Agent
-        'X-Frontend-Id': '70',
-        'X-Frontend-Version': '0',
+        'User-Agent': USER_AGENT,
         'Accept': 'application/json',
+        'X-Frontend-Id': '6',
+        'X-Frontend-Version': '0',
         'Referer': `https://www.nicovideo.jp/watch/${videoId}`
       }
     })
     
     if (!response.ok) {
+      // 404の場合は空のデータを返す
+      if (response.status === 404) {
+        return {}
+      }
       throw new Error(`Failed to fetch video details: ${response.status}`)
     }
     
     const data = await response.json()
     
+    if (data.meta?.status !== 200 || !data.data?.video) {
+      return {}
+    }
+    
     return {
-      tags: data.data?.tag?.items?.map((tag: any) => tag.name) || [],
-      likes: data.data?.video?.count?.like || 0,
-      registeredAt: data.data?.video?.registeredAt
+      tags: data.data.tag?.items?.map((tag: any) => tag.name) || [],
+      likes: data.data.video?.count?.like,
+      registeredAt: data.data.video?.registeredAt
     }
     
   } catch (error) {
     // エラー時は空のデータを返す
+    console.error(`Error fetching details for ${videoId}:`, error)
     return {}
   }
 }
@@ -242,34 +264,5 @@ export async function fetchVideoDetailsBatch(
   return results
 }
 
-// ランキングページから人気タグを抽出
-function parsePopularTags(html: string): string[] {
-  const tags: string[] = []
-  
-  // 人気タグは通常、<a class="...TagLink..." href="/tag/...">タグ名</a> の形式
-  // または <button class="...tag...">タグ名</button> の形式
-  const tagRegex = /<a[^>]+(?:class="[^"]*(?:tag|Tag)[^"]*")[^>]*href="\/tag\/([^"]+)"[^>]*>([^<]+)<\/a>/gi
-  const buttonTagRegex = /<button[^>]+(?:class="[^"]*(?:tag|Tag)[^"]*")[^>]*>([^<]+)<\/button>/gi
-  
-  let match
-  
-  // リンク形式のタグを抽出
-  while ((match = tagRegex.exec(html)) !== null) {
-    const tagName = decodeURIComponent(match[1] || '')
-    const tagText = match[2]
-    if (tagName && tagText && !tags.includes(tagText)) {
-      tags.push(tagText)
-    }
-  }
-  
-  // ボタン形式のタグを抽出（重複を避ける）
-  while ((match = buttonTagRegex.exec(html)) !== null) {
-    const tagText = match[1]
-    if (tagText && !tags.includes(tagText)) {
-      tags.push(tagText)
-    }
-  }
-  
-  // 「すべて」というタグは除外
-  return tags.filter(tag => tag !== 'すべて').slice(0, 20)
-}
+// 人気タグを取得する関数（ランキングデータから生成されるため不要）
+// popularTagsはscrapeRankingPageで自動的に生成される

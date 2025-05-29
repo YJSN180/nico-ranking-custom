@@ -7,14 +7,21 @@ import type { RankingConfig } from '@/types/ranking-config'
 interface TagSelectorProps {
   config: RankingConfig
   onConfigChange: (config: RankingConfig) => void
+  popularTags?: string[]
 }
 
-export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
-  const [popularTags, setPopularTags] = useState<string[]>([])
+export function TagSelector({ config, onConfigChange, popularTags: propsTags = [] }: TagSelectorProps) {
+  const [popularTags, setPopularTags] = useState<string[]>(propsTags)
   const [loading, setLoading] = useState(false)
 
-  // ジャンルが変更されたときに人気タグを取得
+  // propsから渡されたタグを使用、なければAPIから取得
   useEffect(() => {
+    if (propsTags.length > 0) {
+      setPopularTags(propsTags)
+      setLoading(false)
+      return
+    }
+
     async function loadTags() {
       // 総合ランキングの場合はタグを表示しない
       if (config.genre === 'all') {
@@ -45,7 +52,7 @@ export function TagSelector({ config, onConfigChange }: TagSelectorProps) {
     }
 
     loadTags()
-  }, [config.genre])
+  }, [config.genre, propsTags])
 
   const handleTagSelect = (tag: string) => {
     if (tag === 'すべて') {

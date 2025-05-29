@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { POST } from '@/app/api/cron/fetch/route'
 import { kv } from '@vercel/kv'
-import * as fetchRss from '@/lib/fetch-rss'
+import * as scraper from '@/lib/scraper'
 
 vi.mock('@vercel/kv', () => ({
   kv: {
@@ -9,8 +9,8 @@ vi.mock('@vercel/kv', () => ({
   },
 }))
 
-vi.mock('@/lib/fetch-rss', () => ({
-  fetchNicoRanking: vi.fn(),
+vi.mock('@/lib/scraper', () => ({
+  scrapeRankingPage: vi.fn(),
 }))
 
 describe('Cron Fetch API', () => {
@@ -43,19 +43,22 @@ describe('Cron Fetch API', () => {
     expect(response.status).toBe(401)
   })
 
-  it('should fetch RSS and store in KV with correct TTL', async () => {
-    const mockItems = [
-      {
-        rank: 1,
-        id: 'sm123',
-        title: 'Test Video',
-        thumbURL: 'https://example.com/thumb.jpg',
-        views: 1000,
-      },
-    ]
+  it('should fetch ranking data and store in KV with correct TTL', async () => {
+    const mockScraperResponse = {
+      items: [
+        {
+          rank: 1,
+          id: 'sm123',
+          title: 'Test Video',
+          thumbURL: 'https://example.com/thumb.jpg',
+          views: 1000,
+        },
+      ],
+      popularTags: [],
+    }
 
-    vi.mocked(fetchRss.fetchNicoRanking).mockResolvedValueOnce(mockItems)
-    vi.mocked(kv.set).mockResolvedValueOnce('OK')
+    vi.mocked(scraper.scrapeRankingPage).mockResolvedValue(mockScraperResponse)
+    vi.mocked(kv.set).mockResolvedValue('OK')
 
     const request = new Request('http://localhost:3000/api/cron/fetch', {
       method: 'POST',
@@ -73,13 +76,21 @@ describe('Cron Fetch API', () => {
 
     expect(kv.set).toHaveBeenCalledWith(
       'ranking-data',
-      mockItems,
+      expect.arrayContaining([
+        expect.objectContaining({
+          rank: 1,
+          id: 'sm123',
+          title: 'Test Video',
+          thumbURL: 'https://example.com/thumb.jpg',
+          views: 1000,
+        })
+      ]),
       { ex: 3600 }
     )
   })
 
   it('should handle fetch errors gracefully and fallback to mock data', async () => {
-    vi.mocked(fetchRss.fetchNicoRanking).mockRejectedValueOnce(
+    vi.mocked(scraper.scrapeRankingPage).mockRejectedValueOnce(
       new Error('Network error')
     )
     vi.mocked(kv.set).mockResolvedValueOnce('OK')
