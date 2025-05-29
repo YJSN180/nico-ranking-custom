@@ -13,7 +13,7 @@
     "test:all": "npm run test -- --run && npm run test:e2e",
     "typecheck": "tsc --noEmit",
     "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
-    "update:kv": "tsx scripts/update-ranking-kv.ts"
+    "update:kv": "npx tsx scripts/update-ranking-kv.ts"
   },
   "dependencies": {
     "@vercel/kv": "^1.0.1",
