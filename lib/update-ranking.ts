@@ -18,8 +18,7 @@ const GENRES_TO_UPDATE: RankingGenre[] = [
   'society_politics_news',
   'technology_craft',
   'other',
-  'r18',
-  'd2um7mc4' // 例のソレ
+  'r18' // 例のソレ
 ]
 
 interface UpdateResult {
