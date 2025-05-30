@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
-import { mockRankingData } from '@/lib/mock-data'
+// import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 
 // 管理者用：手動でランキングデータを更新
 export async function POST(request: Request) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    let items
+    let items: any[] = []
     let isRealData = true
     let fetchError = null
     
@@ -22,9 +22,9 @@ export async function POST(request: Request) {
     try {
       items = await fetchNicoRanking()
     } catch (error) {
-      // エラーの場合はモックデータを使用
+      // エラー時は空のデータを設定（モックデータは使用しない）
       fetchError = error instanceof Error ? error.message : 'Unknown error'
-      items = mockRankingData
+      items = []
       isRealData = false
     }
     

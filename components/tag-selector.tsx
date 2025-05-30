@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchPopularTags } from '@/lib/nico-api'
+import { fetchPopularTags } from '@/lib/complete-hybrid-scraper'
 import type { RankingConfig } from '@/types/ranking-config'
 
 interface TagSelectorProps {
@@ -40,7 +40,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           setPopularTags(cachedTags)
         } else {
           // キャッシュがない場合はAPIから取得
-          const tags = await fetchPopularTags(config.genre, 15)
+          const tags = await fetchPopularTags(config.genre)
           setPopularTags(tags)
         }
       } catch (error) {

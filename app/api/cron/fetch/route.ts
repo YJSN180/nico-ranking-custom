@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { mockRankingData } from '@/lib/mock-data'
+// import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
@@ -63,11 +63,11 @@ export async function POST(request: Request) {
         console.error(`Failed to fetch ${genre} ranking:`, error)
         allSuccess = false
         
-        // allジャンルが失敗した場合はモックデータを使用
+        // エラー時は空のデータを設定（モックデータは使用しない）
         if (genre === 'all') {
-          await kv.set('ranking-data', mockRankingData, { ex: 3600 })
-          await kv.set('ranking-all', { items: mockRankingData, popularTags: [] }, { ex: 3600 })
-          totalItems = mockRankingData.length
+          await kv.set('ranking-data', [], { ex: 3600 })
+          await kv.set('ranking-all', { items: [], popularTags: [] }, { ex: 3600 })
+          totalItems = 0
         }
       }
     }

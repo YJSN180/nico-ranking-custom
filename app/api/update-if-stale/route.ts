@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
-import { mockRankingData } from '@/lib/mock-data'
+// import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 
 export const runtime = 'nodejs'
 
@@ -47,15 +47,15 @@ export async function GET() {
 
 async function updateData() {
   try {
-    let items
+    let items: any[] = []
     let isRealData = true
     
     try {
-      // Try to fetch real data first
+      // Try to fetch real data
       items = await fetchNicoRanking()
     } catch (error) {
-      // Fallback to mock data if real fetch fails
-      items = mockRankingData
+      // エラー時は空のデータを設定（モックデータは使用しない）
+      items = []
       isRealData = false
     }
     

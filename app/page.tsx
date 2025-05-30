@@ -1,7 +1,7 @@
 import type { RankingData } from '@/types/ranking'
 import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
-import { getMockRankingData } from '@/lib/mock-data'
+// import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 
 export const dynamic = 'force-dynamic'
@@ -73,16 +73,7 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
   } catch (error) {
     // スクレイピングエラーログはスキップ（ESLintエラー回避）
     
-    // 3. Final fallback: Return empty data or mock data for 'all' genre
-    if (genre === 'all' && !tag) {
-      try {
-        const mockData = getMockRankingData()
-        return { items: mockData, popularTags: [] }
-      } catch {
-        return { items: [], popularTags: [] }
-      }
-    }
-    
+    // 3. エラー時は空のデータを返す（モックデータは使用しない）
     return { items: [], popularTags: [] }
   }
 }

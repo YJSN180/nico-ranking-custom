@@ -3,7 +3,7 @@ import { kv } from '@vercel/kv'
 import type { RankingData } from '@/types/ranking'
 import type { RankingPeriod, RankingGenre } from '@/types/ranking-config'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { getMockRankingData } from '@/lib/mock-data'
+// import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 
 export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
 
@@ -127,12 +127,11 @@ async function fetchAndCacheRanking(
       })
     }
   } catch (error) {
-    // エラー時はモックデータを返す
-    const mockData = getMockRankingData()
-    return NextResponse.json(mockData, {
+    // エラー時は空のデータを返す（モックデータは使用しない）
+    return NextResponse.json({ items: [], popularTags: [] }, {
       headers: {
         'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
-        'X-Data-Source': 'mock',
+        'X-Data-Source': 'error',
         'X-Error': error instanceof Error ? error.message : 'Unknown error'
       },
     })
