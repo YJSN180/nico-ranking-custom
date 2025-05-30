@@ -7,8 +7,6 @@ export async function GET(request: NextRequest) {
   const genre = request.nextUrl.searchParams.get('genre') || 'vocaloid'
   
   try {
-    console.log(`Testing genre: ${genre}`)
-    
     // Test direct scraping
     const result = await scrapeRankingPage(genre, '24h')
     
