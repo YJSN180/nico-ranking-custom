@@ -99,23 +99,33 @@ export async function completeHybridScrape(
     
     // Step 5: データをマージ（総合ランキングのみ）
     // 重要: nvAPIはセンシティブ動画を除外するため、HTMLのデータを基準にする
-    // HTMLにある動画はすべて保持し、nvAPIのリッチなデータで補完する
-    const mergedItems = await mergeAllData(
-      htmlData.items,
-      nvapiData.items,
-      nvapiData.itemsMap
-    )
-    
-    // Step 6: 不足している投稿者情報を個別に取得
-    const finalItems = await enrichAuthorInfo(mergedItems)
-    
-    return {
-      items: finalItems,
-      popularTags: nvapiData.popularTags || htmlData.popularTags
+    // ただし、Vercelサーバーではmetaタグからのデータのみ取得できる
+    if (htmlData.items.length > 0) {
+      // HTMLにある動画はすべて保持し、nvAPIのリッチなデータで補完する
+      const mergedItems = await mergeAllData(
+        htmlData.items,
+        nvapiData.items,
+        nvapiData.itemsMap
+      )
+      
+      // Step 6: 不足している投稿者情報を個別に取得
+      const finalItems = await enrichAuthorInfo(mergedItems)
+      
+      return {
+        items: finalItems,
+        popularTags: nvapiData.popularTags || htmlData.popularTags
+      }
+    } else {
+      // HTMLからデータが取得できない場合はnvAPIのデータを使用
+      // これはVercelサーバーでの動作に必要
+      return {
+        items: nvapiData.items,
+        popularTags: nvapiData.popularTags
+      }
     }
     
   } catch (error) {
-    throw new Error(`Complete hybrid scraping failed: ${error}`)
+    throw new Error(`Complete hybrid scraping failed for genre ${genre}: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -216,9 +226,9 @@ async function scrapeFromHTML(
   const html = await response.text()
   
   // Check for meta tag with server-response (new format used by all genres)
-  // Note: Meta tag data excludes sensitive videos, so we should not use it for 'all' genre
   const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/)
-  if (metaMatch && genre !== 'all') {
+  if (metaMatch) {
+    // Always use meta tag data when available, as Vercel servers don't get full HTML
     return await parseRankingFromMeta(html, genre)
   }
   
