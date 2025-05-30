@@ -95,9 +95,18 @@ export async function completeHybridScrape(
     }
     
     // Step 4: 総合ランキングの場合のみHTMLスクレイピングでセンシティブ動画を取得
+    // ただし、毎時ランキングの場合はnvAPIのデータのみを使用（meta tagが期間を区別しないため）
+    if (term === 'hour') {
+      // 毎時ランキングはnvAPIのデータを使用
+      return {
+        items: nvapiData.items,
+        popularTags: nvapiData.popularTags
+      }
+    }
+    
     const htmlData = await scrapeFromHTML(genre, term)
     
-    // Step 5: データをマージ（総合ランキングのみ）
+    // Step 5: データをマージ（24時間総合ランキングのみ）
     // 重要: nvAPIはセンシティブ動画を除外するため、HTMLのデータを基準にする
     // ただし、Vercelサーバーではmetaタグからのデータのみ取得できる
     if (htmlData.items.length > 0) {
