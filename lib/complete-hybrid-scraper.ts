@@ -59,14 +59,24 @@ export async function completeHybridScrape(
       return await scrapeReiSoreRankingWithSnapshotAPI(term)
     }
     
-    // r18ジャンルは通常通り処理（nvAPIが正常に動作するため）
-    // 以前の空配列の返却は不要
+    // r18ジャンルはnvAPIのみを使用（HTMLのmeta tagが間違ったデータを返すため）
+    if (genre === 'r18') {
+      const nvapiData = await fetchFromNvapi(genre, term, tag)
+      return {
+        items: nvapiData.items,
+        popularTags: nvapiData.popularTags
+      }
+    }
     
     // Step 1: nvAPIから基本データとメタデータを取得
     const nvapiData = await fetchFromNvapi(genre, term, tag)
     
-    // Step 2: タグ付きランキングの場合はnvAPIのみで完結
+    // Step 2: タグ付きランキングの場合
     if (tag) {
+      // nvAPIがタグ付きランキングをサポートしていない場合のエラーハンドリング
+      if (nvapiData.items.length === 0) {
+        throw new Error('タグ付きランキングは現在サポートされていません')
+      }
       return {
         items: nvapiData.items,
         popularTags: nvapiData.popularTags
@@ -76,7 +86,9 @@ export async function completeHybridScrape(
     // Step 3: HTMLスクレイピングで全動画リストを取得
     const htmlData = await scrapeFromHTML(genre, term)
     
-    // Step 4: データをマージ（HTMLの順序を基準に、nvAPIのリッチなデータを使用）
+    // Step 4: データをマージ
+    // 重要: nvAPIはセンシティブ動画を除外するため、HTMLのデータを基準にする
+    // HTMLにある動画はすべて保持し、nvAPIのリッチなデータで補完する
     const mergedItems = await mergeAllData(
       htmlData.items,
       nvapiData.items,
