@@ -13,12 +13,14 @@ export type RankingGenre =
   | 'animal'
   | 'cooking'
   | 'nature'
+  | 'traveling_outdoor'
+  | 'vehicle'
   | 'sports'
   | 'society_politics_news'
   | 'technology_craft'
+  | 'commentary_lecture'
   | 'other'
-  | 'r18'
-  | 'd2um7mc4' // 例のソレ
+  | 'r18' // 例のソレ
 
 export const GENRE_LABELS: Record<RankingGenre, string> = {
   all: '総合',
@@ -31,12 +33,14 @@ export const GENRE_LABELS: Record<RankingGenre, string> = {
   animal: '動物',
   cooking: '料理',
   nature: '自然',
+  traveling_outdoor: '旅行・アウトドア',
+  vehicle: '乗り物',
   sports: 'スポーツ',
   society_politics_news: '社会・政治・時事',
   technology_craft: '技術・工作',
+  commentary_lecture: '解説・講座',
   other: 'その他',
-  r18: 'R-18',
-  d2um7mc4: '例のソレ'
+  r18: '例のソレ'
 }
 
 export const PERIOD_LABELS: Record<RankingPeriod, string> = {

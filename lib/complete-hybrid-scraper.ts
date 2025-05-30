@@ -54,18 +54,13 @@ export async function completeHybridScrape(
   popularTags?: string[]
 }> {
   try {
-    // 例のソレジャンルは専用処理
+    // 例のソレジャンルは専用処理（d2um7mc4はnvAPIで404のため）
     if (genre === 'd2um7mc4') {
       return await scrapeReiSoreRankingWithSnapshotAPI(term)
     }
     
-    // r18ジャンルは特殊な制限があるため、モックデータを返す
-    if (genre === 'r18') {
-      return {
-        items: [],
-        popularTags: ['R-18', '成人向け']
-      }
-    }
+    // r18ジャンルは通常通り処理（nvAPIが正常に動作するため）
+    // 以前の空配列の返却は不要
     
     // Step 1: nvAPIから基本データとメタデータを取得
     const nvapiData = await fetchFromNvapi(genre, term, tag)
@@ -129,28 +124,12 @@ async function fetchFromNvapi(
   })
   
   if (!response.ok) {
-    // r18ジャンルは特殊な制限がある可能性
-    if (genre === 'r18' && response.status === 403) {
-      return {
-        items: [],
-        itemsMap: new Map(),
-        popularTags: []
-      }
-    }
     throw new Error(`nvAPI request failed: ${response.status}`)
   }
   
   const data = await response.json()
   
   if (data.meta?.status !== 200 || !data.data?.items) {
-    // r18ジャンルの場合は空配列を返す
-    if (genre === 'r18') {
-      return {
-        items: [],
-        itemsMap: new Map(),
-        popularTags: []
-      }
-    }
     throw new Error('Invalid nvAPI response')
   }
   
@@ -204,20 +183,19 @@ async function scrapeFromHTML(
   })
   
   if (!response.ok) {
-    // r18ジャンルの場合、アクセス制限の可能性
-    if (genre === 'r18' && (response.status === 403 || response.status === 404)) {
-      return {
-        items: [],
-        popularTags: []
-      }
-    }
     throw new Error(`HTML fetch failed: ${response.status}`)
   }
   
   const html = await response.text()
-  const items: Partial<RankingItem>[] = []
   
-  // 動画IDを順番に抽出
+  // Check for meta tag with server-response (new format used by all genres)
+  const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/)
+  if (metaMatch) {
+    return await parseRankingFromMeta(html, genre)
+  }
+  
+  // Fallback to traditional HTML parsing (kept for backward compatibility)
+  const items: Partial<RankingItem>[] = []
   const videoIds: string[] = []
   
   // data-video-id属性から抽出（最も確実）
@@ -585,6 +563,55 @@ function decodeHTMLEntities(text: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
     .replace(/&#x([0-9A-F]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+}
+
+// Parse ranking data from meta tag (new format used by all genres)
+async function parseRankingFromMeta(html: string, genre: string): Promise<{
+  items: Partial<RankingItem>[]
+  popularTags?: string[]
+}> {
+  // Extract data from meta tag
+  const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/)
+  if (!metaMatch) {
+    return { items: [], popularTags: [] }
+  }
+  
+  const encodedData = metaMatch[1]!
+  const decodedData = encodedData
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+  
+  try {
+    const jsonData = JSON.parse(decodedData)
+    const rankingData = jsonData?.data?.response?.$getTeibanRanking?.data?.items
+    
+    if (!rankingData || !Array.isArray(rankingData)) {
+      return { items: [], popularTags: [] }
+    }
+    
+    const items = rankingData.map((item: any, index: number) => ({
+      rank: index + 1,
+      id: item.id,
+      title: item.title,
+      thumbURL: item.thumbnail?.largeUrl || item.thumbnail?.url || '',
+      views: item.count?.view || 0,
+      comments: item.count?.comment,
+      mylists: item.count?.mylist,
+      likes: item.count?.like,
+      authorId: item.owner?.id,
+      authorName: item.owner?.name,
+      authorIcon: item.owner?.iconUrl,
+      registeredAt: item.registeredAt,
+      tags: [] // Tags not provided in this format
+    }))
+    
+    // Extract popular tags
+    const popularTags = extractPopularTagsFromHTML(html)
+    
+    return { items, popularTags }
+  } catch (error) {
+    throw new Error(`Failed to parse ranking meta data: ${error}`)
+  }
 }
 
 // 例のソレジャンル専用処理 - 実際のランキングデータを取得
