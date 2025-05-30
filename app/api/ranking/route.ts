@@ -8,11 +8,11 @@ import { scrapeRankingPage } from '@/lib/scraper'
 export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
 
 // キャッシュキーを生成
-function getCacheKey(genre: RankingGenre, tag?: string): string {
+function getCacheKey(genre: RankingGenre, period: RankingPeriod, tag?: string): string {
   if (tag) {
-    return `ranking-${genre}-tag-${encodeURIComponent(tag)}`
+    return `ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`
   }
-  return `ranking-${genre}`
+  return `ranking-${genre}-${period}`
 }
 
 export async function GET(request: Request | NextRequest) {
@@ -23,7 +23,7 @@ export async function GET(request: Request | NextRequest) {
     const genre = (searchParams.get('genre') || 'all') as RankingGenre
     const tag = searchParams.get('tag') || undefined
     
-    const cacheKey = getCacheKey(genre, tag)
+    const cacheKey = getCacheKey(genre, period, tag)
     
     // KVからキャッシュを確認
     const cachedData = await kv.get(cacheKey)

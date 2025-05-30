@@ -11,16 +11,16 @@ interface PageProps {
   searchParams: { [key: string]: string | string[] | undefined }
 }
 
-async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
+async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
   items: RankingData
   popularTags?: string[]
 }> {
   
   // 1. Primary: Check cache for pre-generated data
   try {
-    let cacheKey = `ranking-${genre}`
+    let cacheKey = `ranking-${genre}-${period}`
     if (tag) {
-      cacheKey = `ranking-${genre}-tag-${encodeURIComponent(tag)}`
+      cacheKey = `ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`
     }
     
     const cachedData = await kv.get(cacheKey)
@@ -40,7 +40,7 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
 
   // 2. Fallback: Generate data on demand
   try {
-    const { items: scrapedItems } = await scrapeRankingPage(genre, '24h', tag)
+    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
     
     // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
@@ -80,11 +80,12 @@ async function fetchRankingData(genre: string = 'all', tag?: string): Promise<{
 
 export default async function Home({ searchParams }: PageProps) {
   const genre = (searchParams.genre as string) || 'all'
+  const period = (searchParams.period as string) || '24h'
   const tag = searchParams.tag as string | undefined
   
   try {
     
-    const { items: rankingData, popularTags } = await fetchRankingData(genre, tag)
+    const { items: rankingData, popularTags } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
       return (
@@ -186,6 +187,7 @@ export default async function Home({ searchParams }: PageProps) {
           <ClientPage 
             initialData={rankingData} 
             initialGenre={genre}
+            initialPeriod={period}
             initialTag={tag}
             popularTags={popularTags}
           />

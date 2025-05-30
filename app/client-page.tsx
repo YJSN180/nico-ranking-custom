@@ -10,13 +10,14 @@ import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 interface ClientPageProps {
   initialData: RankingData
   initialGenre?: string
+  initialPeriod?: string
   initialTag?: string
   popularTags?: string[]
 }
 
-export default function ClientPage({ initialData, initialGenre = 'all', initialTag, popularTags = [] }: ClientPageProps) {
+export default function ClientPage({ initialData, initialGenre = 'all', initialPeriod = '24h', initialTag, popularTags = [] }: ClientPageProps) {
   const [config, setConfig] = useState<RankingConfig>({
-    period: '24h',
+    period: initialPeriod as '24h' | 'hour',
     genre: initialGenre as RankingGenre,
     tag: initialTag
   })
