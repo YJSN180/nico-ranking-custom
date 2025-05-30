@@ -43,21 +43,21 @@ export async function GET(request: NextRequest) {
     // 2. Test cookieScrapeRanking (if genre is 'all')
     if (genre === 'all') {
       try {
-        const cookieResult = await cookieScrapeRanking('24h')
-        const sensitiveItems = cookieResult.filter(item => 
+        const cookieResult = await cookieScrapeRanking(genre, '24h')
+        const sensitiveItems = cookieResult.items.filter(item => 
           item.title?.includes('静電気') || item.title?.includes('Gundam')
         )
         
         results.cookieScrape = {
-          success: true,
-          itemCount: cookieResult.length,
+          success: cookieResult.success,
+          itemCount: cookieResult.items.length,
           sensitiveCount: sensitiveItems.length,
           sensitiveItems: sensitiveItems.map(item => ({
             title: item.title,
             id: item.id,
             rank: item.rank
           })),
-          top5: cookieResult.slice(0, 5).map(item => ({
+          top5: cookieResult.items.slice(0, 5).map(item => ({
             rank: item.rank,
             title: item.title,
             id: item.id

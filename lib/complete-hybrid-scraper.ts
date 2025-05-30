@@ -196,12 +196,16 @@ async function scrapeFromHTML(
 }> {
   const url = `https://www.nicovideo.jp/ranking/genre/${genre}?term=${term}`
   
+  // Cookie設定（環境変数から取得可能）
+  const cookieString = process.env.NICO_COOKIES || 'sensitive_material_status=accept'
+  
   const response = await fetchImpl(url, {
     headers: {
       'User-Agent': USER_AGENT, // Googlebot UAでジオブロック回避
       'Accept': 'text/html,application/xhtml+xml',
       'Accept-Language': 'ja,en;q=0.9',
-      'Cookie': 'sensitive_material_status=accept' // センシティブコンテンツ表示設定
+      'Cookie': cookieString, // センシティブコンテンツ表示設定（セッション付きも可能）
+      'Referer': 'https://www.nicovideo.jp/'
     }
   })
   

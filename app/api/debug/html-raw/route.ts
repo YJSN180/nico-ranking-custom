@@ -13,20 +13,20 @@ export async function GET() {
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
           'Cookie': 'sensitive_material_status=accept'
-        }
+        } as Record<string, string>
       },
       {
         name: 'Normal UA + sensitive cookie',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Cookie': 'sensitive_material_status=accept'
-        }
+        } as Record<string, string>
       },
       {
         name: 'Googlebot + no cookie',
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
-        }
+        } as Record<string, string>
       }
     ]
     

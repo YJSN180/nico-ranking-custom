@@ -93,7 +93,9 @@ export async function GET(request: NextRequest) {
         let metaSensitiveCount = 0
         if (metaMatch) {
           try {
-            const decodedData = metaMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+            const encodedData = metaMatch[1]
+            if (!encodedData) throw new Error('Empty meta content')
+            const decodedData = encodedData.replace(/&quot;/g, '"').replace(/&amp;/g, '&')
             const jsonData = JSON.parse(decodedData)
             const items = jsonData?.data?.response?.$getTeibanRanking?.data?.items || []
             metaSensitiveCount = items.filter((item: any) => 

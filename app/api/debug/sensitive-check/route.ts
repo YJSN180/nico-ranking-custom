@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
 
   try {
     // 1. completeHybridScrapeで直接データを取得
-    console.log('=== Step 1: Fetching data with completeHybridScrape ===')
     const hybridData = await completeHybridScrape(genre, '24h', tag)
     
     // センシティブ動画を検索
@@ -26,11 +25,8 @@ export async function GET(request: NextRequest) {
       item.title?.includes('Gundam') ||
       item.title?.includes('ドッキリ')
     )
-    
-    console.log(`Found ${sensitiveVideos.length} sensitive videos in hybrid scrape`)
 
     // 2. KVからデータを取得
-    console.log('=== Step 2: Checking KV cache ===')
     const cacheKey = tag ? `ranking-${genre}-tag-${encodeURIComponent(tag)}` : `ranking-${genre}`
     const kvData = await kv.get(cacheKey)
     
@@ -43,21 +39,17 @@ export async function GET(request: NextRequest) {
         item.title?.includes('ドッキリ')
       )
       kvSensitiveCount = kvSensitiveVideos.length
-      console.log(`Found ${kvSensitiveCount} sensitive videos in KV`)
     }
 
     // 3. scrapeRankingPageで取得
-    console.log('=== Step 3: Fetching with scrapeRankingPage ===')
     const scraperData = await scrapeRankingPage(genre, '24h', tag)
     const scraperSensitiveVideos = scraperData.items.filter(item => 
       item.title?.includes('静電気') || 
       item.title?.includes('Gundam') ||
       item.title?.includes('ドッキリ')
     )
-    console.log(`Found ${scraperSensitiveVideos.length} sensitive videos in scraper`)
 
     // 4. APIルートから取得
-    console.log('=== Step 4: Fetching from API route ===')
     const apiUrl = new URL('/api/ranking', request.url)
     apiUrl.searchParams.set('genre', genre)
     if (tag) apiUrl.searchParams.set('tag', tag)
@@ -74,7 +66,6 @@ export async function GET(request: NextRequest) {
         item.title?.includes('ドッキリ')
       )
       apiSensitiveCount = apiSensitiveVideos.length
-      console.log(`Found ${apiSensitiveCount} sensitive videos in API response`)
     }
 
     // 結果をまとめる
@@ -111,7 +102,6 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     })
   } catch (error) {
-    console.error('Debug error:', error)
     return NextResponse.json(
       { 
         error: 'Failed to debug sensitive videos', 

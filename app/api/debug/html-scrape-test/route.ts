@@ -71,26 +71,30 @@ export async function GET(request: NextRequest) {
     let metaSensitiveCount = 0
     if (metaMatch) {
       const encodedData = metaMatch[1]
-      const decodedData = encodedData
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&')
-      
-      try {
-        const jsonData = JSON.parse(decodedData)
-        const items = jsonData?.data?.response?.$getTeibanRanking?.data?.items || []
-        metaData = {
-          totalItems: items.length,
-          sampleItems: items.slice(0, 3).map((item: any) => ({
-            title: item.title,
-            id: item.id
-          }))
-        }
+      if (!encodedData) {
+        metaData = { error: 'Empty meta content' }
+      } else {
+        const decodedData = encodedData
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&')
         
-        metaSensitiveCount = items.filter((item: any) => 
-          sensitiveKeywords.some(keyword => item.title?.includes(keyword))
-        ).length
-      } catch (e) {
-        metaData = { error: 'Failed to parse meta data' }
+        try {
+          const jsonData = JSON.parse(decodedData)
+          const items = jsonData?.data?.response?.$getTeibanRanking?.data?.items || []
+          metaData = {
+            totalItems: items.length,
+            sampleItems: items.slice(0, 3).map((item: any) => ({
+              title: item.title,
+              id: item.id
+            }))
+          }
+          
+          metaSensitiveCount = items.filter((item: any) => 
+            sensitiveKeywords.some(keyword => item.title?.includes(keyword))
+          ).length
+        } catch (e) {
+          metaData = { error: 'Failed to parse meta data' }
+        }
       }
     }
     
