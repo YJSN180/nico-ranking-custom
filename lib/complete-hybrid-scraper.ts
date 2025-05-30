@@ -83,10 +83,21 @@ export async function completeHybridScrape(
       }
     }
     
-    // Step 3: HTMLスクレイピングで全動画リストを取得
+    // Step 3: ジャンル別ランキングの場合
+    // HTMLのmeta tagは全ジャンルで総合ランキングを返すため、nvAPIのデータのみを使用
+    if (genre !== 'all') {
+      // 投稿者情報を補完
+      const finalItems = await enrichAuthorInfo(nvapiData.items)
+      return {
+        items: finalItems,
+        popularTags: nvapiData.popularTags
+      }
+    }
+    
+    // Step 4: 総合ランキングの場合のみHTMLスクレイピングでセンシティブ動画を取得
     const htmlData = await scrapeFromHTML(genre, term)
     
-    // Step 4: データをマージ
+    // Step 5: データをマージ（総合ランキングのみ）
     // 重要: nvAPIはセンシティブ動画を除外するため、HTMLのデータを基準にする
     // HTMLにある動画はすべて保持し、nvAPIのリッチなデータで補完する
     const mergedItems = await mergeAllData(
@@ -95,7 +106,7 @@ export async function completeHybridScrape(
       nvapiData.itemsMap
     )
     
-    // Step 5: 不足している投稿者情報を個別に取得
+    // Step 6: 不足している投稿者情報を個別に取得
     const finalItems = await enrichAuthorInfo(mergedItems)
     
     return {
