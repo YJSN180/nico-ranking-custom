@@ -25,6 +25,9 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialT
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // ジャンルが変更されたときのみ人気タグをリセット
+  const [previousGenre, setPreviousGenre] = useState(config.genre)
+  
   useEffect(() => {
     const fetchRanking = async () => {
       setLoading(true)
@@ -51,13 +54,26 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialT
         // APIがオブジェクト形式（{ items, popularTags }）または配列形式を返す可能性がある
         if (Array.isArray(data)) {
           setRankingData(data)
-          setCurrentPopularTags([])
+          // タグ選択時は人気タグを更新しない
+          if (previousGenre !== config.genre || !config.tag) {
+            setCurrentPopularTags([])
+          }
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
-          setCurrentPopularTags(data.popularTags || [])
+          // ジャンルが変更された場合、またはタグが選択されていない場合のみ人気タグを更新
+          if (previousGenre !== config.genre || !config.tag) {
+            setCurrentPopularTags(data.popularTags || [])
+          }
         } else {
           setRankingData([])
-          setCurrentPopularTags([])
+          if (previousGenre !== config.genre || !config.tag) {
+            setCurrentPopularTags([])
+          }
+        }
+        
+        // ジャンルを記録
+        if (previousGenre !== config.genre) {
+          setPreviousGenre(config.genre)
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'エラーが発生しました')
@@ -71,7 +87,7 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialT
     if (hasChanged) {
       fetchRanking()
     }
-  }, [config, initialGenre, initialTag])
+  }, [config, initialGenre, initialTag, previousGenre])
 
   return (
     <>
