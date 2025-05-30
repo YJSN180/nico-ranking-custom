@@ -212,8 +212,9 @@ async function scrapeFromHTML(
   const html = await response.text()
   
   // Check for meta tag with server-response (new format used by all genres)
+  // Note: Meta tag data excludes sensitive videos, so we should not use it for 'all' genre
   const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/)
-  if (metaMatch) {
+  if (metaMatch && genre !== 'all') {
     return await parseRankingFromMeta(html, genre)
   }
   
