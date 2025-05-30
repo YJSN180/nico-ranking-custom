@@ -2,7 +2,7 @@ import { kv } from '@vercel/kv'
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 import type { RankingGenre } from '@/types/ranking-config'
 
-// 更新するジャンルのリスト（R18を除く）
+// 更新するジャンルのリスト
 const GENRES_TO_UPDATE: RankingGenre[] = [
   'all',
   'entertainment',
@@ -17,7 +17,9 @@ const GENRES_TO_UPDATE: RankingGenre[] = [
   'sports',
   'society_politics_news',
   'technology_craft',
-  'other'
+  'other',
+  'r18',
+  'd2um7mc4' // 例のソレ
 ]
 
 interface UpdateResult {

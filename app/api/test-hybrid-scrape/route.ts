@@ -1,12 +1,15 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { completeHybridScrape } from '@/lib/complete-hybrid-scraper'
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const genre = request.nextUrl.searchParams.get('genre') || 'all'
+    const tag = request.nextUrl.searchParams.get('tag') || undefined
+    
     // Test completeHybridScrape directly
-    const result = await completeHybridScrape('all', '24h')
+    const result = await completeHybridScrape(genre, '24h', tag)
     
     // Check for sensitive videos
     const sensitiveVideos = result.items.filter(item => 
