@@ -88,7 +88,10 @@ describe('Ranking API Integration', () => {
     expect(response.status).toBe(200)
     
     const data = await response.json()
-    expect(data[0]).toHaveProperty('title', 'Scraped Video')
+    expect(data).toEqual({
+      items: mockScrapedData,
+      popularTags: []
+    })
   })
 
   it('should handle KV errors gracefully', async () => {

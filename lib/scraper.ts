@@ -47,6 +47,12 @@ export async function scrapeRankingPage(
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
+  // 例のソレジャンルは特別な処理が必要
+  if (genre === 'd2um7mc4') {
+    // completeHybridScrapeを使用して例のソレのデータを取得
+    return await completeHybridScrape(genre, term, tag)
+  }
+  
   // nvAPIのみを使用（RSSが406エラーを返すため一時的に無効化）
   // TODO: RSSの406エラーを解決後、RSSハイブリッドを再有効化
   return await scrapeRankingPageNvApiOnly(genre, term, tag)

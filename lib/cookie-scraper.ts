@@ -1,6 +1,7 @@
 // Cookieベースのスクレイピング実装
 import type { RankingItem } from '@/types/ranking'
 import { fetchFromRSSFallback, decodeHTMLEntities } from './rss-fallback'
+import { fetchReiSoreRanking } from './rei-sore-api'
 
 interface CookieConfig {
   nicosid?: string
@@ -63,7 +64,6 @@ export async function cookieScrapeRanking(
     
     // 動画IDが見つからない場合はRSSにフォールバック
     if (!html.includes('data-video-id')) {
-      console.log('No video IDs found in HTML, trying RSS fallback')
       return await fetchFromRSSFallback(genre, term)
     }
     
@@ -118,17 +118,31 @@ export async function scrapeReiSoreRanking(): Promise<{
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // まずCookieベースでアクセス
+  try {
+    // Snapshot API v2を使用してデータを取得
+    const result = await fetchReiSoreRanking({ term: 'day', limit: 200 })
+    
+    if (result.data && result.data.length > 0) {
+      return {
+        items: result.data,
+        popularTags: ['例のソレ', 'その他', 'エンターテイメント']
+      }
+    }
+  } catch (error) {
+    console.error('例のソレ ranking fetch failed:', error)
+  }
+  
+  // フォールバック：Cookieベースでアクセス
   const cookieResult = await cookieScrapeRanking('d2um7mc4', '24h')
   
   if (cookieResult.success && cookieResult.items.length > 0) {
     return {
       items: cookieResult.items,
-      popularTags: ['例のソレ', 'その他'] // デフォルトタグ
+      popularTags: ['例のソレ', 'その他']
     }
   }
   
-  // Cookieが失敗した場合は空を返す
+  // すべて失敗した場合は空を返す
   return {
     items: [],
     popularTags: ['例のソレ', 'その他']

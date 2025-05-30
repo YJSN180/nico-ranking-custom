@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   try {
     // 人気ジャンルのデータを取得してキャッシュ
-    const genres = ['all', 'game', 'entertainment', 'music', 'other', 'tech', 'anime', 'animal']
+    const genres = ['all', 'game', 'entertainment', 'music', 'other', 'tech', 'anime', 'animal', 'd2um7mc4']
     let allSuccess = true
     let totalItems = 0
     

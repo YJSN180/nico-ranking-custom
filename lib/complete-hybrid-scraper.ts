@@ -2,7 +2,7 @@
 // HTML + nvAPI + Snapshot APIを組み合わせて全情報を取得
 
 import type { RankingItem } from '@/types/ranking'
-import { cookieScrapeRanking, scrapeReiSoreRanking } from './cookie-scraper'
+import { cookieScrapeRanking } from './cookie-scraper'
 
 // Node.js環境でのfetchが利用できない場合があるため、条件付きでインポート
 const fetchImpl = typeof fetch !== 'undefined' 
@@ -56,7 +56,7 @@ export async function completeHybridScrape(
   try {
     // 例のソレジャンルは専用処理
     if (genre === 'd2um7mc4') {
-      return await scrapeReiSoreRanking()
+      return await scrapeReiSoreRankingWithSnapshotAPI(term)
     }
     
     // r18ジャンルは特殊な制限があるため、モックデータを返す
@@ -585,4 +585,42 @@ function decodeHTMLEntities(text: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
     .replace(/&#x([0-9A-F]+);/gi, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+}
+
+// 例のソレジャンル専用処理 - 実際のランキングデータを取得
+async function scrapeReiSoreRankingWithSnapshotAPI(term: '24h' | 'hour'): Promise<{
+  items: Partial<RankingItem>[]
+  popularTags?: string[]
+}> {
+  try {
+    // Import the rei-sore-api function
+    const { fetchReiSoreRanking } = await import('./rei-sore-api')
+    
+    // Map term to the rei-sore-api format
+    const apiTerm = term === '24h' ? 'day' : 'hour'
+    
+    const result = await fetchReiSoreRanking({
+      term: apiTerm,
+      limit: 200
+    })
+    
+    if (result.data && result.data.length > 0) {
+      return {
+        items: result.data,
+        popularTags: ['例のソレ', 'その他', 'エンターテイメント', 'R-18', '真夏の夜の淫夢']
+      }
+    }
+    
+    // Fallback to empty data if all approaches fail
+    return {
+      items: [],
+      popularTags: ['例のソレ', 'その他']
+    }
+  } catch (error) {
+    // Return empty data instead of throwing
+    return {
+      items: [],
+      popularTags: ['例のソレ', 'その他']
+    }
+  }
 }

@@ -48,6 +48,9 @@ describe('Initial Setup Experience', () => {
     const response = await GET(request)
 
     expect(response.status).toBe(200)
-    expect(vi.mocked(kv.set)).toHaveBeenCalledWith('ranking-all', mockData, { ex: 3600 })
+    expect(vi.mocked(kv.set)).toHaveBeenCalledWith('ranking-all', {
+      items: mockData,
+      popularTags: []
+    }, { ex: 3600 })
   })
 })
