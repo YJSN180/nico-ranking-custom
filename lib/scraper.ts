@@ -47,9 +47,9 @@ export async function scrapeRankingPage(
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // 全てのジャンルでcompleteHybridScrapeを使用
-  // これによりmeta tagベースの新形式に対応し、センシティブ動画も取得できる
-  return await completeHybridScrape(genre, term, tag)
+  // 新しいv2実装を使用（センシティブ動画を確実に取得）
+  const { completeHybridScrapeV2 } = await import('./complete-hybrid-scraper-v2')
+  return await completeHybridScrapeV2(genre, term, tag)
 }
 
 // 既存のnvAPI専用実装（テスト用に保持）
