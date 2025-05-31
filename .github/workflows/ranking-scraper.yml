@@ -1,0 +1,141 @@
+name: Ranking Scraper
+
+on:
+  schedule:
+    # 毎時5分に実行（ランキング更新遅延を考慮）
+    - cron: '5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Record Start Time
+        id: start_time
+        run: echo "start=$(date +%s)" >> $GITHUB_OUTPUT
+      
+      - name: Scrape Rankings
+        id: scrape
+        run: |
+          START_TIME=$(date +%s)
+          node scripts/github-action-scraper.js
+          END_TIME=$(date +%s)
+          DURATION=$((END_TIME - START_TIME))
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+      
+      - name: Update Execution Stats
+        if: always()
+        run: |
+          # 実行統計をJSONファイルに記録
+          STATS_FILE="execution-stats.json"
+          DURATION=${{ steps.scrape.outputs.duration || 0 }}
+          DATE=$(date -u +"%Y-%m-%d")
+          HOUR=$(date -u +"%H")
+          
+          # 既存の統計を読み込むか新規作成
+          if [ -f "$STATS_FILE" ]; then
+            cp $STATS_FILE $STATS_FILE.tmp
+          else
+            echo '{"daily": {}, "hourly": {}, "total": {"count": 0, "totalSeconds": 0}}' > $STATS_FILE.tmp
+          fi
+          
+          # Node.jsで統計を更新
+          node -e "
+          const fs = require('fs');
+          const stats = JSON.parse(fs.readFileSync('$STATS_FILE.tmp'));
+          
+          // 日別統計
+          if (!stats.daily['$DATE']) {
+            stats.daily['$DATE'] = { count: 0, totalSeconds: 0, runs: [] };
+          }
+          stats.daily['$DATE'].count++;
+          stats.daily['$DATE'].totalSeconds += $DURATION;
+          stats.daily['$DATE'].runs.push({
+            time: new Date().toISOString(),
+            duration: $DURATION
+          });
+          
+          // 時間帯別統計
+          if (!stats.hourly['$HOUR']) {
+            stats.hourly['$HOUR'] = { count: 0, totalSeconds: 0, avgSeconds: 0 };
+          }
+          stats.hourly['$HOUR'].count++;
+          stats.hourly['$HOUR'].totalSeconds += $DURATION;
+          stats.hourly['$HOUR'].avgSeconds = stats.hourly['$HOUR'].totalSeconds / stats.hourly['$HOUR'].count;
+          
+          // 総合統計
+          stats.total.count++;
+          stats.total.totalSeconds += $DURATION;
+          stats.total.avgSeconds = stats.total.totalSeconds / stats.total.count;
+          
+          // 古いデータを削除（30日以上前）
+          const cutoffDate = new Date();
+          cutoffDate.setDate(cutoffDate.getDate() - 30);
+          const cutoffStr = cutoffDate.toISOString().split('T')[0];
+          
+          Object.keys(stats.daily).forEach(date => {
+            if (date < cutoffStr) delete stats.daily[date];
+          });
+          
+          fs.writeFileSync('$STATS_FILE', JSON.stringify(stats, null, 2));
+          
+          // サマリーを出力
+          console.log('📊 実行統計更新完了');
+          console.log('今回の実行時間:', $DURATION, '秒');
+          console.log('本日の平均:', Math.round(stats.daily['$DATE'].totalSeconds / stats.daily['$DATE'].count), '秒');
+          console.log('全体の平均:', Math.round(stats.total.avgSeconds), '秒');
+          "
+          
+      - name: Generate Stats Report
+        if: always()
+        run: |
+          # 統計レポートを生成
+          node -e "
+          const fs = require('fs');
+          const stats = JSON.parse(fs.readFileSync('execution-stats.json'));
+          
+          // 月間使用時間を計算
+          let monthlySeconds = 0;
+          const thisMonth = new Date().toISOString().substring(0, 7);
+          Object.entries(stats.daily).forEach(([date, data]) => {
+            if (date.startsWith(thisMonth)) {
+              monthlySeconds += data.totalSeconds;
+            }
+          });
+          
+          const monthlyMinutes = Math.round(monthlySeconds / 60);
+          const projectedMinutes = Math.round((monthlyMinutes / new Date().getDate()) * 30);
+          
+          console.log('\\n📈 GitHub Actions使用状況レポート');
+          console.log('================================');
+          console.log('今月の使用時間:', monthlyMinutes, '分');
+          console.log('予測月間使用時間:', projectedMinutes, '分 / 2000分');
+          console.log('使用率:', Math.round(projectedMinutes / 2000 * 100) + '%');
+          
+          if (projectedMinutes < 1000) {
+            console.log('\\n✅ 余裕があります。毎時2回実行への移行を検討できます。');
+          } else if (projectedMinutes < 1500) {
+            console.log('\\n⚠️ 現状維持を推奨します。');
+          } else {
+            console.log('\\n🚨 使用量が多いです。最適化が必要かもしれません。');
+          }
+          "
+      
+      - name: Commit Stats
+        if: always()
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add execution-stats.json || true
+          git commit -m "Update execution stats [skip ci]" || true
+          git push || true

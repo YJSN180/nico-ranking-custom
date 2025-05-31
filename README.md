@@ -8,7 +8,7 @@
 
 - **Framework**: Next.js 14 (App Router)
 - **Language**: TypeScript
-- **Storage**: Vercel KV
+- **Storage**: Vercel KV, Supabase (例のソレジャンル用)
 - **Deployment**: Vercel
 - **Testing**: Vitest, Playwright
 - **Package Manager**: npm
@@ -34,6 +34,8 @@ cp .env.example .env.local
 - `KV_REST_API_TOKEN`: Vercel KVのアクセストークン
 - `NEXT_PUBLIC_BASE_URL`: サイトのベースURL（ローカルは `http://localhost:3000`）
 - `CRON_SECRET`: Cron Job実行時の認証用シークレット
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase プロジェクトのURL（例のソレジャンル用）
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anon key（例のソレジャンル用）
 
 ## GitHub Actionsの設定
 
@@ -134,3 +136,31 @@ vercel --prod
 ### ランキングが表示されない
 - `/api/ranking`のレスポンスを確認
 - KVにデータが保存されているか確認
+
+## Supabase セットアップ（例のソレジャンル用）
+
+### 1. Supabaseプロジェクトの作成
+1. [Supabase](https://supabase.com)でアカウント作成
+2. 新しいプロジェクトを作成
+3. Project Settings > API から URL と anon key を取得
+
+### 2. データベースの初期化
+SQL Editorで以下のマイグレーションを実行：
+
+```sql
+-- /supabase/migrations/001_create_rei_sore_tables.sql の内容を実行
+```
+
+### 3. 例のソレランキングの更新
+```bash
+# 手動でランキングを更新
+npx tsx scripts/update-rei-sore-ranking.ts
+```
+
+### 機能説明
+- **通常ジャンル**: Niconico公式APIから直接取得（JSON形式）
+- **例のソレジャンル**: Snapshot APIで収集し、Supabaseでランキング計算
+- ランキングアルゴリズムは実際のニコニコランキングを分析して再現
+  - いいね数を最重視（40倍の重み）
+  - エンゲージメント率によるボーナス
+  - 時間経過による減衰
