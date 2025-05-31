@@ -1,0 +1,48 @@
+{
+  "name": "nico-ranking-new",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:e2e": "playwright test",
+    "test:all": "npm run test -- --run && npm run test:e2e",
+    "typecheck": "tsc --noEmit",
+    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
+    "update:kv": "npx tsx scripts/update-ranking-kv.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "@vercel/kv": "^1.0.1",
+    "cheerio": "^1.0.0",
+    "fast-xml-parser": "^4.5.3",
+    "next": "14.2.21",
+    "node-fetch": "^2.7.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "tsx": "^4.19.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@stagewise/toolbar-next": "^0.1.2",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.21",
+    "jsdom": "^25.0.1",
+    "prettier": "^3.4.2",
+    "puppeteer": "^24.9.0",
+    "typescript": "^5",
+    "vitest": "^2.1.8"
+  }
+}
