@@ -160,32 +160,22 @@ export async function scrapeRankingViaProxy(
 
 // テスト用関数
 export async function testProxyAccess() {
-  console.log('=== プロキシ経由で例のソレジャンルアクセステスト ===')
   
   // プロキシなしでテスト
-  console.log('\n1. プロキシなしでアクセス')
   try {
     const result = await fetchRankingViaProxy('d2um7mc4', 'hour')
-    console.log(`結果: ${result.genre} (${result.genreId})`)
-    console.log(`アイテム数: ${result.items.length}`)
   } catch (error) {
-    console.error('エラー:', error)
   }
   
   // 各プロキシでテスト
   for (const proxy of japaneseProxies) {
-    console.log(`\n2. プロキシ経由: ${proxy.host}:${proxy.port}`)
     try {
       const result = await fetchRankingViaProxy('d2um7mc4', 'hour', proxy)
-      console.log(`結果: ${result.genre} (${result.genreId})`)
-      console.log(`アイテム数: ${result.items.length}`)
       
       if (result.genreId === 'd2um7mc4') {
-        console.log('🎯 例のソレジャンルのデータ取得成功！')
         return result
       }
     } catch (error) {
-      console.error('エラー:', error)
-    }
+      }
   }
 }

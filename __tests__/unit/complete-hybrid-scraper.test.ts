@@ -126,7 +126,7 @@ describe('complete-hybrid-scraper', () => {
       const result = await fetchRanking('ramuboyn', '料理', '24h')
 
       expect(result.tag).toBe('料理')
-      expect(result.items[0].title).toBe('料理動画')
+      expect(result.items[0]?.title).toBe('料理動画')
     })
 
     it('should use correct Googlebot User-Agent', async () => {
@@ -182,10 +182,10 @@ describe('complete-hybrid-scraper', () => {
       const results = await fetchMultipleRankings(combinations)
 
       expect(results).toHaveLength(3)
-      expect(results[0].genre).toBe('all')
-      expect(results[1].genre).toBe('4eet3ca4')
-      expect(results[2].genre).toBe('ramuboyn')
-      expect(results[2].tag).toBe('料理')
+      expect(results[0]?.genre).toBe('all')
+      expect(results[1]?.genre).toBe('4eet3ca4')
+      expect(results[2]?.genre).toBe('ramuboyn')
+      expect(results[2]?.tag).toBe('料理')
     })
 
     it('should filter out failed requests', async () => {
@@ -203,7 +203,7 @@ describe('complete-hybrid-scraper', () => {
       const results = await fetchMultipleRankings(combinations)
 
       expect(results).toHaveLength(1)
-      expect(results[0].genre).toBe('all')
+      expect(results[0]?.genre).toBe('all')
     })
   })
 

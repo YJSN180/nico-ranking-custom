@@ -93,7 +93,6 @@ export async function POST(request: Request) {
   for (const config of RANKINGS_TO_UPDATE) {
     try {
       const tag = 'tag' in config ? config.tag : undefined
-      console.log(`Updating ${config.genre} ${config.term}${tag ? ` tag:${tag}` : ''} via proxy...`)
       
       // プロキシ経由でスクレイピング
       const { items: scrapedItems, popularTags } = await scrapeRankingViaProxy(
@@ -132,7 +131,6 @@ export async function POST(request: Request) {
           { ex: 3600 } // 1時間のTTL
         )
         
-        console.log(`Successfully updated ${cacheKey}: ${items.length} items`)
         results.success++
       } else {
         throw new Error('No items found')
@@ -143,7 +141,6 @@ export async function POST(request: Request) {
       
     } catch (error) {
       const errorMessage = `Failed to update ${config.genre} ${config.term}: ${error}`
-      console.error(errorMessage)
       results.errors.push(errorMessage)
       results.failed++
     }

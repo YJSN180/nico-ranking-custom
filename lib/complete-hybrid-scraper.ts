@@ -19,16 +19,6 @@ export interface RankingData {
   popularTags?: string[]
 }
 
-// Node.js環境でのfetchが利用できない場合があるため、条件付きでインポート
-const fetchImpl = typeof fetch !== 'undefined' 
-  ? fetch 
-  : typeof global !== 'undefined' && typeof require !== 'undefined'
-  ? require('node-fetch')
-  : (url: string, options?: any) => {
-      // フォールバック: エラーを投げる
-      throw new Error('fetch is not available in this environment')
-    }
-
 // Googlebot UAを使用してジオブロックを回避
 const USER_AGENT = 'Googlebot/2.1 (+http://www.google.com/bot.html)'
 
@@ -56,18 +46,18 @@ export const GENRES = {
   // 例のソレ（d2um7mc4）は除外
 }
 
-// 人気タグの定義
-export const POPULAR_TAGS: Record<string, string[]> = {
-  '4eet3ca4': ['ゆっくり実況', 'VOICEROID実況', '東方', 'ゲーム実況', 'RTA'],
-  'zc49b03a': ['アニメ', 'MAD', 'アニソン', '音MAD'],
-  'dshv5do5': ['初音ミク', 'GUMI', '重音テト', 'KAITO', 'MEIKO'],
-  'ramuboyn': ['ChatGPT', '大規模言語モデル', 'AIのべりすと', 'VOICEVOX', '拓也さん'],
-  // 他のジャンルも必要に応じて追加
-}
-
 // Googlebot User-Agentでフェッチ
 async function fetchWithGooglebot(url: string): Promise<string> {
-  const response = await fetchImpl(url, {
+  // 実行時にfetchImplを解決
+  const fetchFn = typeof global !== 'undefined' && (global as any).fetch
+    ? (global as any).fetch
+    : typeof fetch !== 'undefined' 
+    ? fetch 
+    : typeof require !== 'undefined'
+    ? require('node-fetch')
+    : (() => { throw new Error('fetch is not available in this environment') })()
+    
+  const response = await fetchFn(url, {
     headers: {
       'User-Agent': USER_AGENT,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -179,7 +169,6 @@ export async function fetchRanking(
     ? `https://www.nicovideo.jp/ranking/genre/${genreId}?tag=${encodeURIComponent(tag)}&term=${term}`
     : `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${term}`
   
-  console.log(`📡 Fetching: ${url}`)
   
   try {
     const html = await fetchWithGooglebot(url)
@@ -187,7 +176,6 @@ export async function fetchRanking(
     
     return data
   } catch (error) {
-    console.error(`❌ Failed to fetch ranking: ${error}`)
     throw error
   }
 }
@@ -199,7 +187,6 @@ export async function fetchMultipleRankings(
   const promises = combinations.map(combo =>
     fetchRanking(combo.genre, combo.tag, combo.term)
       .catch(error => {
-        console.error(`Failed to fetch ${combo.genre}/${combo.tag}/${combo.term}:`, error)
         return null
       })
   )

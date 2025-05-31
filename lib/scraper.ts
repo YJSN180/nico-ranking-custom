@@ -1,7 +1,7 @@
 // ニコニコ動画のランキングページをnvapiから取得するモジュール
 
 import type { RankingItem } from '@/types/ranking'
-import { completeHybridScrape } from './complete-hybrid-scraper'
+import { fetchRanking } from './complete-hybrid-scraper'
 import { rssHybridScrape } from './rss-hybrid-scraper'
 
 // User-Agentの設定

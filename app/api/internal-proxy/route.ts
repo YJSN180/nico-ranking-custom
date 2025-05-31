@@ -17,7 +17,6 @@ export async function GET(request: NextRequest) {
       targetUrl += `&tag=${encodeURIComponent(tag)}`
     }
     
-    console.log(`[Proxy] Fetching: ${targetUrl}`)
     
     // ニコニコ動画にリクエスト
     const response = await fetch(targetUrl, {
@@ -91,13 +90,11 @@ export async function GET(request: NextRequest) {
     
     // 例のソレジャンルへのアクセスがリダイレクトされたかチェック
     if (genre === 'd2um7mc4' && rankingData.featuredKey !== 'd2um7mc4') {
-      console.log(`[Proxy] 警告: 例のソレジャンルが${rankingData.label}にリダイレクトされました`)
     }
     
     return NextResponse.json(result)
     
   } catch (error) {
-    console.error('[Proxy] Error:', error)
     return NextResponse.json(
       { error: 'プロキシエラー', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -107,7 +104,6 @@ export async function GET(request: NextRequest) {
 
 // 代替アプローチ: タグベースでの取得
 async function tryAlternativeApproach(genre: string, term: string, tag?: string) {
-  console.log('[Proxy] 代替アプローチ: タグベースRSSを試行')
   
   // 例のソレジャンルの人気タグ
   const reiSoreTags = ['R-18', '紳士向け', 'MMD', 'ボイロAV']
@@ -161,7 +157,6 @@ async function tryAlternativeApproach(genre: string, term: string, tag?: string)
       })
     }
   } catch (error) {
-    console.error('[Proxy] 代替アプローチエラー:', error)
   }
   
   // 最終的なフォールバック

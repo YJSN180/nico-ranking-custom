@@ -111,7 +111,6 @@ export async function fetchReiSoreVideos(): Promise<VideoData[]> {
         allVideos.push(...reisoreVideos)
       }
     } catch (error) {
-      console.error(`Error fetching ${tag}:`, error)
     }
   }
   
@@ -126,20 +125,16 @@ export async function fetchReiSoreVideos(): Promise<VideoData[]> {
 // Supabaseへのデータ保存と更新
 export async function updateReiSoreRanking() {
   if (!isSupabaseConfigured()) {
-    console.error('Supabase環境変数が設定されていません')
     return
   }
   
   const supabase = createClient(supabaseUrl!, supabaseAnonKey!)
   
-  console.log('例のソレジャンルのランキング更新を開始...')
   
   // 1. 最新の動画データを取得
   const videos = await fetchReiSoreVideos()
-  console.log(`${videos.length}件の例のソレ動画を取得`)
   
   if (videos.length === 0) {
-    console.error('動画が取得できませんでした')
     return
   }
   
@@ -152,7 +147,6 @@ export async function updateReiSoreRanking() {
     })
   
   if (videoError) {
-    console.error('動画データの保存エラー:', videoError)
     return
   }
   
@@ -184,11 +178,9 @@ export async function updateReiSoreRanking() {
     })
   
   if (scoreError) {
-    console.error('スコアの保存エラー:', scoreError)
     return
   }
   
-  console.log('ランキング更新完了')
 }
 
 // ランキングの取得
@@ -197,7 +189,6 @@ export async function getReiSoreRanking(
   limit: number = 100
 ) {
   if (!isSupabaseConfigured()) {
-    console.warn('Supabase環境変数が設定されていません。フォールバックデータを返します。')
     // フォールバック: Snapshot APIから直接取得
     const videos = await fetchReiSoreVideos()
     const rankedVideos = videos
@@ -248,7 +239,6 @@ export async function getReiSoreRanking(
     .limit(limit)
   
   if (error) {
-    console.error('ランキング取得エラー:', error)
     // エラー時はフォールバック
     const videos = await fetchReiSoreVideos()
     const rankedVideos = videos
@@ -296,7 +286,6 @@ export async function cronUpdateReiSoreRanking() {
     await updateReiSoreRanking()
     return { success: true }
   } catch (error) {
-    console.error('Cron更新エラー:', error)
     return { success: false, error }
   }
 }

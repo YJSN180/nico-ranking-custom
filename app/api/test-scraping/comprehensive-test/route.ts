@@ -30,13 +30,10 @@ export async function GET() {
   const results: any[] = []
   const errors: any[] = []
   
-  console.log('=== ランキング取得テスト開始 ===')
-  console.log(`テストパターン数: ${TEST_PATTERNS.length}`)
   
   // 順番にテスト（レート制限対策）
   for (const pattern of TEST_PATTERNS) {
     try {
-      console.log(`\nテスト中: ${pattern.name}`)
       
       const startTime = Date.now()
       const result = await completeHybridScrape(
@@ -68,7 +65,6 @@ export async function GET() {
       }
       
       results.push(summary)
-      console.log(`✓ 成功: ${result.items.length}件取得 (${endTime - startTime}ms)`)
       
       // レート制限対策で少し待機
       await new Promise(resolve => setTimeout(resolve, 1000))
@@ -83,13 +79,9 @@ export async function GET() {
       }
       
       errors.push(errorInfo)
-      console.error(`✗ エラー: ${pattern.name}`, error)
     }
   }
   
-  console.log('\n=== テスト完了 ===')
-  console.log(`成功: ${results.length}件`)
-  console.log(`失敗: ${errors.length}件`)
   
   return NextResponse.json({
     summary: {
