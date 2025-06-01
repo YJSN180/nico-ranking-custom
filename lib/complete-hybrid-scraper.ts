@@ -5,7 +5,6 @@ import type { RankingItem } from '@/types/ranking'
 import type { RankingGenre } from '@/types/ranking-config'
 import { GENRE_ID_MAP } from './genre-mapping'
 import { enrichRankingItemsWithTags } from './html-tag-extractor'
-import { fetchMultipleVideoComments } from './nvcomment-api'
 
 // Googlebot UAを使用してジオブロックを回避
 async function fetchWithGooglebot(url: string): Promise<string> {
@@ -97,8 +96,7 @@ export function extractTrendTagsFromServerResponse(serverData: any): string[] {
 export async function fetchRanking(
   genre: RankingGenre | string,
   tag: string | null = null,
-  term: '24h' | 'hour' = '24h',
-  fetchComments: boolean = false // コメント取得フラグ
+  term: '24h' | 'hour' = '24h'
 ): Promise<{
   items: RankingItem[]
   popularTags: string[]
@@ -145,18 +143,6 @@ export async function fetchRanking(
     
     // HTMLからタグ情報を抽出して追加
     items = enrichRankingItemsWithTags(items, html)
-    
-    // 最新コメントを取得（オプション）
-    if (fetchComments && items.length > 0) {
-      const videoIds = items.map(item => item.id)
-      const comments = await fetchMultipleVideoComments(videoIds)
-      
-      // コメントをアイテムに追加
-      items = items.map(item => ({
-        ...item,
-        latestComments: comments[item.id] || []
-      }))
-    }
     
     // 人気タグを取得（2つの方法を試す）
     let popularTags: string[] = []

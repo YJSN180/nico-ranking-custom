@@ -95,7 +95,7 @@ async function fetchAndCacheRanking(
 ): Promise<NextResponse> {
   try {
     // スクレイピングベースの統一されたランキング取得
-    const { items: rankingData, popularTags } = await scrapeRankingPage(genre, period, tag, true) // コメント取得を有効化
+    const { items: rankingData, popularTags } = await scrapeRankingPage(genre, period, tag)
     
     const items = rankingData.map((item: any) => ({
       rank: item.rank || 0,
@@ -111,7 +111,6 @@ async function fetchAndCacheRanking(
       authorName: item.authorName,
       authorIcon: item.authorIcon,
       registeredAt: item.registeredAt,
-      latestComments: item.latestComments,
     })).filter((item: any) => item.id && item.title)
     
     if (items.length > 0) {

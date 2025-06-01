@@ -1,6 +1,5 @@
 'use client'
 
-import React from 'react'
 import Image from 'next/image'
 import { ViewIcon, CommentIcon, MylistIcon, LikeIcon } from '@/components/icons'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
@@ -8,14 +7,6 @@ import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
   item: RankingItem
-}
-
-// コメントを短縮
-function truncateComment(comment: string, maxLength: number = 10): string {
-  if (comment.length <= maxLength) {
-    return comment
-  }
-  return comment.substring(0, maxLength) + '...'
 }
 
 export default function RankingItemComponent({ item }: RankingItemProps) {
@@ -193,43 +184,6 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
               )}
             </div>
             
-            {/* 最新コメント */}
-            {item.latestComments && item.latestComments.length > 0 && (
-              <div style={{ 
-                marginTop: '8px',
-                padding: '8px 12px',
-                background: '#f5f5f5',
-                borderRadius: '6px',
-                fontSize: '13px',
-                color: '#555',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                overflow: 'hidden'
-              }}>
-                <span style={{ flexShrink: 0 }}>💬</span>
-                <div style={{ 
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  overflow: 'hidden'
-                }}>
-                  {item.latestComments.map((comment, index) => (
-                    <React.Fragment key={index}>
-                      {index > 0 && <span style={{ color: '#ccc' }}>|</span>}
-                      <span style={{ 
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {truncateComment(comment)}
-                      </span>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
