@@ -98,7 +98,7 @@ export async function fetchRanking(
   genre: RankingGenre | string,
   tag: string | null = null,
   term: '24h' | 'hour' = '24h',
-  limit: number = 100 // デフォルト100件、最大300件
+  limit: number = 100 // ニコニコ動画の仕様上、最大100件
 ): Promise<{
   items: RankingItem[]
   popularTags: string[]
@@ -126,8 +126,8 @@ export async function fetchRanking(
       throw new Error('ランキングデータが見つかりません')
     }
     
-    // アイテムを整形（詳細情報を含む）- 指定された件数まで取得
-    const maxItems = Math.min(limit, 300) // 最大300件に制限
+    // アイテムを整形（詳細情報を含む）- ニコニコ動画の仕様上、最大100件
+    const maxItems = Math.min(limit, 100) // ニコニコAPIの制限により最大100件
     let items: RankingItem[] = (rankingData.items || []).slice(0, maxItems).map((item: any, index: number) => ({
       rank: index + 1,
       id: item.id,

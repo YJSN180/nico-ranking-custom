@@ -1,6 +1,6 @@
 # ニコニコ24h総合ランキング表示サイト
 
-ニコニコ動画の24時間総合ランキングを1時間ごとに取得し、トップ100を表示するサイトです。
+ニコニコ動画の24時間総合ランキングを1時間ごとに取得し、最大100件を表示するサイトです。
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/YJSN180/nico-ranking-custom)
 
@@ -114,7 +114,7 @@ vercel --prod
 3. **ホームページ** (`/`)
    - React Server Component
    - 30秒のISR（Incremental Static Regeneration）
-   - 100件のランキングを表示
+   - 最大100件のランキングを表示（ニコニコ動画API仕様による制限）
 
 ## 開発ガイドライン
 

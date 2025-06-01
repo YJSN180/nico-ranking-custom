@@ -13,9 +13,6 @@ interface PageProps {
   searchParams: { [key: string]: string | string[] | undefined }
 }
 
-const ITEMS_PER_PAGE = 100 // 1ページあたりの表示件数
-const MAX_ITEMS = 300 // 最大取得件数
-
 async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
   items: RankingData
   popularTags?: string[]
@@ -53,7 +50,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
   // 2. Fallback: Generate data on demand
   try {
-    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag, MAX_ITEMS)
+    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
     
     // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
@@ -97,17 +94,10 @@ export default async function Home({ searchParams }: PageProps) {
   const genre = (searchParams.genre as string) || 'all'
   const period = (searchParams.period as string) || '24h'
   const tag = searchParams.tag as string | undefined
-  const currentPage = Number(searchParams.page) || 1
   
   try {
     
-    const { items: allRankingData, popularTags } = await fetchRankingData(genre, period, tag)
-    
-    // ページネーション処理
-    const totalItems = allRankingData.length
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    const rankingData = allRankingData.slice(startIndex, endIndex)
+    const { items: rankingData, popularTags } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
       return (
@@ -212,8 +202,6 @@ export default async function Home({ searchParams }: PageProps) {
             initialPeriod={period}
             initialTag={tag}
             popularTags={popularTags}
-            currentPage={currentPage}
-            totalItems={totalItems}
           />
         </div>
       </main>

@@ -43,7 +43,7 @@ export async function scrapeRankingPage(
   genre: string,
   term: '24h' | 'hour',
   tag?: string,
-  limit: number = 100 // デフォルト100件
+  limit: number = 100 // ニコニコ動画の仕様上、最大100件
 ): Promise<{
   items: Partial<RankingItem>[]
   popularTags?: string[]
