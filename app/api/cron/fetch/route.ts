@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     for (const genre of genres) {
       for (const period of periods) {
         try {
-          const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, period, undefined) // ニコニコ動画の仕様上、最大100件
+          const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, period, undefined) // server-responseデータは最大100件
         
         // Partial<RankingItem>をRankingItemに変換
         const items: RankingData = scrapedItems.map((item): RankingItem => ({

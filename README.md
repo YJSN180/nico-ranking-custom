@@ -114,7 +114,7 @@ vercel --prod
 3. **ホームページ** (`/`)
    - React Server Component
    - 30秒のISR（Incremental Static Regeneration）
-   - 最大100件のランキングを表示（ニコニコ動画API仕様による制限）
+   - 最大100件のランキングを表示（ニコニコ動画のserver-responseデータによる制限）
 
 ## 開発ガイドライン
 
