@@ -154,12 +154,12 @@ export async function scrapeRankingData(
 export async function scrapeAllGenres(
   genres?: RankingGenre[]
 ): Promise<ScrapedData[]> {
-  // デフォルトは全ジャンル（R-18を除く）
+  // デフォルトは全ジャンル
   const targetGenres = genres || [
-    'all', 'entertainment', 'radio', 'music', 'sing', 'play', 'dance',
-    'vocaloid', 'nicoindies', 'animal', 'cooking', 'nature', 'travel',
-    'sports', 'society', 'technology', 'handcraft', 'commentary',
-    'anime', 'game', 'other', 'original'
+    'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment',
+    'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel',
+    'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber',
+    'radio', 'sports', 'animal', 'other'
   ]
   
   const results: ScrapedData[] = []

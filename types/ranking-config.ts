@@ -4,53 +4,53 @@ export type RankingPeriod = 'hour' | '24h'
 
 export type RankingGenre = 
   | 'all'
+  | 'game'
+  | 'anime'
+  | 'vocaloid'
+  | 'voicesynthesis'
   | 'entertainment'
-  | 'radio'
   | 'music'
   | 'sing'
-  | 'play'
   | 'dance'
-  | 'vocaloid'
-  | 'nicoindies'
-  | 'animal'
-  | 'cooking'
-  | 'nature'
-  | 'travel'
-  | 'sports'
-  | 'society'
-  | 'technology'
-  | 'handcraft'
+  | 'play'
   | 'commentary'
-  | 'anime'
-  | 'game'
+  | 'cooking'
+  | 'travel'
+  | 'nature'
+  | 'vehicle'
+  | 'technology'
+  | 'society'
+  | 'mmd'
+  | 'vtuber'
+  | 'radio'
+  | 'sports'
+  | 'animal'
   | 'other'
-  | 'r18'
-  | 'original'
 
 export const GENRE_LABELS: Record<RankingGenre, string> = {
   all: '総合',
-  entertainment: 'エンタメ',
-  radio: 'ラジオ',
-  music: '音楽・サウンド',
-  sing: '歌ってみた',
-  play: '演奏してみた',
-  dance: '踊ってみた',
-  vocaloid: 'VOCALOID',
-  nicoindies: 'ニコニコインディーズ',
-  animal: '動物',
-  cooking: '料理',
-  nature: '自然',
-  travel: '旅行・アウトドア',
-  sports: 'スポーツ',
-  society: '社会・政治・時事',
-  technology: '科学・技術',
-  handcraft: 'ニコニコ手芸部',
-  commentary: '解説・講座',
-  anime: 'アニメ',
   game: 'ゲーム',
-  other: 'その他',
-  r18: 'R-18',
-  original: 'オリジナル'
+  anime: 'アニメ',
+  vocaloid: 'ボカロ',
+  voicesynthesis: '音声合成実況・解説・劇場',
+  entertainment: 'エンタメ',
+  music: '音楽',
+  sing: '歌ってみた',
+  dance: '踊ってみた',
+  play: '演奏してみた',
+  commentary: '解説・講座',
+  cooking: '料理',
+  travel: '旅行・アウトドア',
+  nature: '自然',
+  vehicle: '乗り物',
+  technology: '技術・工作',
+  society: '社会・政治・時事',
+  mmd: 'MMD',
+  vtuber: 'VTuber',
+  radio: 'ラジオ',
+  sports: 'スポーツ',
+  animal: '動物',
+  other: 'その他'
 }
 
 export const PERIOD_LABELS: Record<RankingPeriod, string> = {

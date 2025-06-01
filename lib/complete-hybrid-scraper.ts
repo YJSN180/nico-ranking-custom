@@ -41,32 +41,8 @@ export function extractServerResponseData(html: string): any {
   return JSON.parse(decodedData)
 }
 
-// 23ジャンルの定義（例のソレを除く）
-export const GENRES = {
-  all: 'all',
-  entertainment: 'n8vfxdbi',
-  radio: 'oxzi6bje',
-  music: 'rr5ucexc',
-  sing: 'f37eq4d3',
-  play: 'hvcrnqpj',
-  dance: 'z4h8e9mj',
-  vocaloid: 'zc49b03a',
-  nicoindies: 'o8s2vc0m',
-  animal: 'ne72lua2',
-  cooking: '9gkuqw8q',
-  nature: 'l4wy3zaw',
-  travel: 'h67gzba0',
-  sports: '4w3p65pf',
-  society: 'yspx0gpo',
-  technology: 'x0nfxivd',
-  handcraft: 'x3nkg5o7',
-  commentary: 'mfg9v9pa',
-  anime: '4eet3ca4',
-  game: 'ojnwtgrg',
-  other: 'ramuboyn',
-  r18: 'r18',
-  original: 'v5h6eeiw' // オリジナル
-} as const
+// GENREマッピングは外部ファイルで管理
+// GENRE_ID_MAPを使用してください
 
 // HTMLから人気タグを抽出（タグ別ランキング用のリンクから）
 export function extractPopularTagsFromHTML(html: string, genreId: string): string[] {

@@ -75,6 +75,23 @@ async function fetchRankingWithServerResponse(genre = 'all', tag = null, term = 
   }
 }
 
+// server-responseのtrendTagsから人気タグを抽出
+function extractTrendTagsFromServerResponse(serverData) {
+  try {
+    const trendTags = serverData.data?.response?.$getTeibanRankingFeaturedKeyAndTrendTags?.data?.trendTags
+    
+    if (!Array.isArray(trendTags)) {
+      return []
+    }
+    
+    return trendTags.filter((tag) => {
+      return typeof tag === 'string' && tag.trim().length > 0
+    })
+  } catch (error) {
+    return []
+  }
+}
+
 // HTMLから人気タグを抽出
 function extractPopularTagsFromHTML(html) {
   const tags = []
@@ -113,12 +130,11 @@ function extractPopularTagsFromHTML(html) {
   return tags.slice(0, 20) // 最大20個まで
 }
 
-// 人気の組み合わせを定義
+// 人気の組み合わせを定義（正しいジャンルIDを使用）
 const POPULAR_COMBINATIONS = [
   // 総合
-  { genre: 'all', tag: null, term: '24h' },
-  { genre: 'all', tag: null, term: 'hour' },
-  { genre: 'all', tag: null, term: 'week' },
+  { genre: 'e9uj2uks', tag: null, term: '24h' },
+  { genre: 'e9uj2uks', tag: null, term: 'hour' },
   
   // ゲーム
   { genre: '4eet3ca4', tag: null, term: '24h' },
@@ -174,11 +190,21 @@ const POPULAR_COMBINATIONS = [
   // MMD
   { genre: 'p1acxuoz', tag: null, term: '24h' },
   
+  // VTuber
+  { genre: '6mkdo4xd', tag: null, term: '24h' },
+  
+  // ラジオ
+  { genre: 'oxzi6bje', tag: null, term: '24h' },
+  
+  // スポーツ
+  { genre: '4w3p65pf', tag: null, term: '24h' },
+  
+  // 動物
+  { genre: 'ne72lua2', tag: null, term: '24h' },
+  
   // その他
   { genre: 'ramuboyn', tag: null, term: '24h' },
-  { genre: 'ramuboyn', tag: null, term: 'hour' },
-  
-  // 例のソレ（d2um7mc4）は除外
+  { genre: 'ramuboyn', tag: null, term: 'hour' }
 ]
 
 // メイン処理
