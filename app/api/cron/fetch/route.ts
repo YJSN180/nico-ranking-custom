@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     
     for (const genre of genres) {
       try {
-        const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, '24h')
+        const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, '24h', undefined, true) // コメント取得を有効化
         
         // Partial<RankingItem>をRankingItemに変換
         const items: RankingData = scrapedItems.map((item): RankingItem => ({
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
           authorName: item.authorName,
           authorIcon: item.authorIcon,
           registeredAt: item.registeredAt,
+          latestComment: item.latestComment,
         })).filter((item: any) => item.id && item.title)
         
         // ジャンル別にキャッシュ

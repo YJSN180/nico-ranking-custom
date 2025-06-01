@@ -9,6 +9,26 @@ interface RankingItemProps {
   item: RankingItem
 }
 
+// コメント時刻をフォーマット
+function formatCommentTime(postedAt: string): string {
+  const now = new Date()
+  const commentTime = new Date(postedAt)
+  const diffMs = now.getTime() - commentTime.getTime()
+  const diffMinutes = Math.floor(diffMs / (1000 * 60))
+  
+  if (diffMinutes < 60) {
+    return `${diffMinutes}分前`
+  }
+  
+  const diffHours = Math.floor(diffMinutes / 60)
+  if (diffHours < 24) {
+    return `${diffHours}時間前`
+  }
+  
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays}日前`
+}
+
 export default function RankingItemComponent({ item }: RankingItemProps) {
   const rankColors: Record<number, string> = {
     1: '#FFD700', // Gold
@@ -21,19 +41,19 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
       return {
         background: rankColors[rank] || '#f5f5f5',
         color: 'white',
-        fontSize: '18px',
+        fontSize: '32px', // 18px → 32px
         fontWeight: '800' as const,
-        minWidth: '40px',
-        height: '40px'
+        minWidth: '56px', // 40px → 56px
+        height: '56px' // 40px → 56px
       }
     }
     return {
       background: '#f5f5f5',
       color: '#333',
-      fontSize: '14px',
+      fontSize: '24px', // 14px → 24px
       fontWeight: '700' as const,
-      minWidth: '32px',
-      height: '32px'
+      minWidth: '44px', // 32px → 44px
+      height: '44px' // 32px → 44px
     }
   }
 
@@ -184,50 +204,35 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
               )}
             </div>
             
-            {/* タグ */}
-            {item.tags && item.tags.length > 0 && (
+            {/* 最新コメント */}
+            {item.latestComment && (
               <div style={{ 
-                display: 'flex', 
-                flexWrap: 'wrap', 
-                gap: '4px',
-                marginTop: '8px'
+                marginTop: '8px',
+                padding: '8px 12px',
+                background: '#f5f5f5',
+                borderRadius: '6px',
+                fontSize: '13px',
+                color: '#555',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
               }}>
-                {item.tags.slice(0, 5).map((tag, index) => (
-                  <a
-                    key={index}
-                    href={`https://www.nicovideo.jp/tag/${encodeURIComponent(tag)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      padding: '2px 8px',
-                      fontSize: '11px',
-                      background: '#f0f0f0',
-                      color: '#666',
-                      borderRadius: '12px',
-                      textDecoration: 'none',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#e0e0e0'
-                      e.currentTarget.style.color = '#333'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = '#f0f0f0'
-                      e.currentTarget.style.color = '#666'
-                    }}
-                  >
-                    {tag}
-                  </a>
-                ))}
-                {item.tags.length > 5 && (
-                  <span style={{
-                    padding: '2px 8px',
-                    fontSize: '11px',
-                    color: '#999'
-                  }}>
-                    +{item.tags.length - 5}
-                  </span>
-                )}
+                <span style={{ flexShrink: 0 }}>💬</span>
+                <span style={{ 
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {item.latestComment.body}
+                </span>
+                <span style={{ 
+                  flexShrink: 0,
+                  fontSize: '11px',
+                  color: '#999'
+                }}>
+                  {formatCommentTime(item.latestComment.postedAt)}
+                </span>
               </div>
             )}
           </div>
