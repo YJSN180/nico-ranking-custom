@@ -33,6 +33,47 @@ const mockTagsData = new Map([
 // fetchをモック
 global.fetch = vi.fn()
 
+// Helper function to generate HTML response with meta tag
+function generateHTMLResponse(genreId: string, label: string, items: any[], popularTags: string[] = []): string {
+  const serverData = {
+    data: {
+      response: {
+        $getTeibanRanking: {
+          data: {
+            featuredKey: genreId,
+            label: label,
+            items: items
+          }
+        },
+        $getTeibanRankingFeaturedKeyAndTrendTags: {
+          data: {
+            trendTags: popularTags
+          }
+        }
+      }
+    }
+  }
+  
+  const metaContent = JSON.stringify(serverData).replace(/"/g, '&quot;')
+  
+  const popularTagsHTML = popularTags.map(tag => 
+    `<a class="PopularTag" href="/ranking/genre/${genreId}?tag=${encodeURIComponent(tag)}">${tag}</a>`
+  ).join('\n')
+  
+  return `
+    <html>
+      <head>
+        <meta name="server-response" content="${metaContent}">
+      </head>
+      <body>
+        <div class="RankingMainContainer">
+          ${popularTagsHTML}
+        </div>
+      </body>
+    </html>
+  `
+}
+
 describe('Tag Filtering', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -133,12 +174,11 @@ describe('Tag Filtering', () => {
         count: { view: (i + 1) * 1000, comment: (i + 1) * 10, mylist: i + 1, like: (i + 1) * 5 }
       }))
       
+      const mockHTML = generateHTMLResponse('all', '総合', mockItems)
+      
       vi.mocked(fetch).mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({
-          meta: { status: 200 },
-          data: { items: mockItems }
-        })
+        text: () => Promise.resolve(mockHTML)
       } as Response)
       
       const result = await scrapeRankingPage('all', '24h')
@@ -153,24 +193,22 @@ describe('Tag Filtering', () => {
       vi.mocked(fetch).mockImplementation((url) => {
         const urlStr = url.toString()
         
-        if (urlStr.includes('/ranking/genre/other') && urlStr.includes('tag=%E4%BE%8B%E3%81%AE%E3%82%A2%E3%83%AC')) {
-          // nvapiがタグでフィルタリングした結果を返す
+        if (urlStr.includes('/ranking/genre/ramuboyn') && urlStr.includes('tag=%E4%BE%8B%E3%81%AE%E3%82%A2%E3%83%AC')) {
+          // タグでフィルタリングした結果を返す
           const filteredItems = mockRankingItems.filter(item => 
             item.id === 'sm001' || item.id === 'sm002'
           )
+          const mockHTML = generateHTMLResponse('ramuboyn', 'その他', filteredItems, ['料理', '動物'])
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              meta: { status: 200 },
-              data: { items: filteredItems }
-            })
+            text: () => Promise.resolve(mockHTML)
           } as Response)
         }
         
         return Promise.reject(new Error('Unknown URL'))
       })
       
-      const result = await scrapeRankingPage('other', '24h', '例のアレ')
+      const result = await scrapeRankingPage('ramuboyn', '24h', '例のアレ')
       
       // nvapiがフィルタリング済みの結果を返すので、そのまま使用
       expect(result.items).toHaveLength(2)
@@ -193,12 +231,11 @@ describe('Tag Filtering', () => {
         const urlStr = url.toString()
         
         if (urlStr.includes('/ranking/genre/')) {
+          const popularTags = ['料理', '動物', '自然', '科学', '歴史']
+          const mockHTML = generateHTMLResponse('ramuboyn', 'その他', mockRankingItems.slice(0, 50), popularTags)
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              meta: { status: 200 },
-              data: { items: mockRankingItems.slice(0, 50) }
-            })
+            text: () => Promise.resolve(mockHTML)
           } as Response)
         }
         
@@ -218,7 +255,7 @@ describe('Tag Filtering', () => {
         return Promise.reject(new Error('Unknown URL'))
       })
       
-      const result = await scrapeRankingPage('other', '24h')
+      const result = await scrapeRankingPage('ramuboyn', '24h')
       
       // 最適化により上位50件のみタグを取得、並列度5
       // 3個のアイテムしかないので、実際の呼び出しは 1(ランキング) + 3(タグ) = 4回
