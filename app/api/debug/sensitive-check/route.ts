@@ -16,11 +16,15 @@ export async function GET(request: NextRequest) {
   const tag = request.nextUrl.searchParams.get('tag') || undefined
 
   try {
-    // 1. completeHybridScrapeで直接データを取得
-    const hybridData = await completeHybridScrape(genre, '24h', tag)
+    // 1. fetchRankingで直接データを取得
+    const rankingData = await fetchRanking(genre, tag || null, '24h')
+    const hybridData = {
+      items: rankingData.items,
+      popularTags: rankingData.popularTags
+    }
     
     // センシティブ動画を検索
-    const sensitiveVideos = hybridData.items.filter(item => 
+    const sensitiveVideos = hybridData.items.filter((item: any) => 
       item.title?.includes('静電気') || 
       item.title?.includes('Gundam') ||
       item.title?.includes('ドッキリ')
@@ -43,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // 3. scrapeRankingPageで取得
     const scraperData = await scrapeRankingPage(genre, '24h', tag)
-    const scraperSensitiveVideos = scraperData.items.filter(item => 
+    const scraperSensitiveVideos = scraperData.items.filter((item: any) => 
       item.title?.includes('静電気') || 
       item.title?.includes('Gundam') ||
       item.title?.includes('ドッキリ')

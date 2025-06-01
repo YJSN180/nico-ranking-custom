@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { completeHybridScrape } from '@/lib/complete-hybrid-scraper'
+import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 
 export const runtime = 'nodejs'
 
@@ -36,11 +36,15 @@ export async function GET() {
     try {
       
       const startTime = Date.now()
-      const result = await completeHybridScrape(
+      const rankingData = await fetchRanking(
         pattern.genre,
-        pattern.term as '24h' | 'hour',
-        pattern.tag
+        pattern.tag || null,
+        pattern.term as '24h' | 'hour'
       )
+      const result = {
+        items: rankingData.items,
+        popularTags: rankingData.popularTags
+      }
       const endTime = Date.now()
       
       const summary = {
@@ -56,7 +60,7 @@ export async function GET() {
         ),
         popularTagsCount: result.popularTags?.length || 0,
         responseTime: `${endTime - startTime}ms`,
-        topItems: result.items.slice(0, 3).map(item => ({
+        topItems: result.items.slice(0, 3).map((item: any) => ({
           rank: item.rank,
           title: item.title,
           views: item.views,

@@ -39,7 +39,7 @@ export async function POST(request: Request) {
           authorName: item.authorName,
           authorIcon: item.authorIcon,
           registeredAt: item.registeredAt,
-        })).filter(item => item.id && item.title)
+        })).filter((item: any) => item.id && item.title)
         
         // ジャンル別にキャッシュ
         await kv.set(`ranking-${genre}`, { items, popularTags }, { ex: 3600 })
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
         // 人気タグ別のデータも事前生成（上位5タグのみ）
         if (popularTags && popularTags.length > 0 && genre !== 'all') {
           for (const tag of popularTags.slice(0, 5)) {
-            const taggedItems = items.filter(item => item.tags?.includes(tag))
+            const taggedItems = items.filter((item: any) => item.tags?.includes(tag))
             if (taggedItems.length > 0) {
               await kv.set(`ranking-${genre}-tag-${encodeURIComponent(tag)}`, taggedItems, { ex: 3600 })
             }

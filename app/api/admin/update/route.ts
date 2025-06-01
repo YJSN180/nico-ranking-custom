@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       itemCount: items.length,
       updatedAt: updateHistory.updatedAt,
       fetchError,
-      sampleItems: items.slice(0, 3).map(item => ({
+      sampleItems: items.slice(0, 3).map((item: any) => ({
         rank: item.rank,
         title: item.title,
         id: item.id,

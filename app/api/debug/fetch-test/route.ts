@@ -13,7 +13,7 @@ export async function GET() {
       success: true,
       fetchTime: `${fetchTime}ms`,
       itemCount: items.length,
-      sampleItems: items.slice(0, 3).map(item => ({
+      sampleItems: items.slice(0, 3).map((item: any) => ({
         rank: item.rank,
         title: item.title,
         views: item.views,

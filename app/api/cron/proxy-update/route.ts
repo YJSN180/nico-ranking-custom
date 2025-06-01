@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   // 各ランキングを更新
   for (const config of RANKINGS_TO_UPDATE) {
     try {
-      const tag = 'tag' in config ? config.tag : undefined
+      const tag: string | undefined = 'tag' in config && typeof config.tag === 'string' ? config.tag : undefined
       
       // プロキシ経由でスクレイピング
       const { items: scrapedItems, popularTags } = await scrapeRankingViaProxy(
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       )
 
       // RankingData形式に変換
-      const items: RankingData = scrapedItems.map((item) => ({
+      const items: RankingData = scrapedItems.map((item: any) => ({
         rank: item.rank || 0,
         id: item.id || '',
         title: item.title || '',
@@ -116,7 +116,7 @@ export async function POST(request: Request) {
         authorName: item.authorName,
         authorIcon: item.authorIcon,
         registeredAt: item.registeredAt,
-      })).filter(item => item.id && item.title)
+      })).filter((item: any) => item.id && item.title)
 
       if (items.length > 0) {
         // キャッシュキーを生成

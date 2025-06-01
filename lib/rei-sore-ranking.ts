@@ -265,7 +265,8 @@ export async function getReiSoreRanking(
   }
   
   // ランキング形式に整形
-  return data.map((item, index) => ({
+  // @ts-ignore - Supabaseの型定義の問題
+  return (data as any[]).map((item: any, index: number) => ({
     rank: index + 1,
     id: item.rei_sore_videos.content_id,
     title: item.rei_sore_videos.title,

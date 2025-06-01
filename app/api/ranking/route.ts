@@ -98,7 +98,7 @@ async function fetchAndCacheRanking(
     // periodは現在24hのみサポート
     const { items: rankingData, popularTags } = await scrapeRankingPage(genre, period, tag)
     
-    const items = rankingData.map((item) => ({
+    const items = rankingData.map((item: any) => ({
       rank: item.rank || 0,
       id: item.id || '',
       title: item.title || '',
@@ -112,7 +112,7 @@ async function fetchAndCacheRanking(
       authorName: item.authorName,
       authorIcon: item.authorIcon,
       registeredAt: item.registeredAt,
-    })).filter(item => item.id && item.title)
+    })).filter((item: any) => item.id && item.title)
     
     if (items.length > 0) {
       // KVにキャッシュ（タグ付きは短めのTTL）

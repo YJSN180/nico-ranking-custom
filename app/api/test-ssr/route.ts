@@ -21,15 +21,15 @@ export async function GET() {
   <h2>センシティブ動画チェック</h2>
   <ul>
     ${items
-      .filter(item => item.title?.includes('静電気') || item.title?.includes('Gundam'))
-      .map(item => `<li>Rank ${item.rank}: ${item.title}</li>`)
+      .filter((item: any) => item.title?.includes('静電気') || item.title?.includes('Gundam'))
+      .map((item: any) => `<li>Rank ${item.rank}: ${item.title}</li>`)
       .join('\n    ')}
   </ul>
   <h2>Top 10</h2>
   <ol>
     ${items
       .slice(0, 10)
-      .map(item => `<li>${item.title} (${item.views} views)</li>`)
+      .map((item: any) => `<li>${item.title} (${item.views} views)</li>`)
       .join('\n    ')}
   </ol>
 </body>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { completeHybridScrape } from '@/lib/complete-hybrid-scraper'
+import { fetchRanking } from '@/lib/complete-hybrid-scraper'
+import type { RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
@@ -8,11 +9,15 @@ export async function GET(request: NextRequest) {
     const genre = request.nextUrl.searchParams.get('genre') || 'all'
     const tag = request.nextUrl.searchParams.get('tag') || undefined
     
-    // Test completeHybridScrape directly
-    const result = await completeHybridScrape(genre, '24h', tag)
+    // Test fetchRanking directly
+    const rankingData = await fetchRanking(genre, tag || null, '24h')
+    const result = {
+      items: rankingData.items,
+      popularTags: rankingData.popularTags
+    }
     
     // Check for sensitive videos
-    const sensitiveVideos = result.items.filter(item => 
+    const sensitiveVideos = result.items.filter((item: RankingItem) => 
       item.title?.includes('静電気') || 
       item.title?.includes('Gundam') ||
       item.title?.includes('ガンダム')
@@ -23,12 +28,12 @@ export async function GET(request: NextRequest) {
       totalItems: result.items.length,
       popularTags: result.popularTags?.length || 0,
       sensitiveCount: sensitiveVideos.length,
-      sensitiveVideos: sensitiveVideos.map(v => ({
+      sensitiveVideos: sensitiveVideos.map((v: RankingItem) => ({
         rank: v.rank,
         id: v.id,
         title: v.title
       })),
-      top5: result.items.slice(0, 5).map(item => ({
+      top5: result.items.slice(0, 5).map((item: RankingItem) => ({
         rank: item.rank,
         id: item.id,
         title: item.title

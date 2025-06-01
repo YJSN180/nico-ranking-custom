@@ -8,7 +8,7 @@ export async function GET() {
   try {
     // 1. Direct scraping result
     const scrapedData = await scrapeRankingPage('all', '24h')
-    const scrapedSensitive = scrapedData.items.filter(item => 
+    const scrapedSensitive = scrapedData.items.filter((item: any) => 
       item.title?.includes('静電気') || item.title?.includes('Gundam')
     )
     
@@ -59,7 +59,7 @@ export async function GET() {
       scrapedData: {
         totalItems: scrapedData.items.length,
         sensitiveCount: scrapedSensitive.length,
-        sensitiveItems: scrapedSensitive.map(item => ({
+        sensitiveItems: scrapedSensitive.map((item: any) => ({
           title: item.title,
           id: item.id,
           rank: item.rank

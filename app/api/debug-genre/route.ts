@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       htmlUrl,
       totalItems: result.items.length,
       popularTags: result.popularTags,
-      top5: result.items.slice(0, 5).map(item => ({
+      top5: result.items.slice(0, 5).map((item: any) => ({
         rank: item.rank,
         title: item.title,
         id: item.id

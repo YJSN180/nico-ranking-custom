@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { RankingItem } from '@/types/ranking'
+import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 
 export const runtime = 'nodejs'
 
@@ -120,10 +121,15 @@ export async function GET() {
     
     // 比較のため、completeHybridScrapeも実行
     const { completeHybridScrape } = await import('@/lib/complete-hybrid-scraper')
-    const hybridResult = await completeHybridScrape('all', '24h')
-    const hybridSensitive = hybridResult.items.filter(item => 
+    const rankingData = await fetchRanking('all', null, '24h')
+    const hybridSensitive = hybridResult.items.filter((item: any) => 
       item.title?.includes('静電気') || item.title?.includes('Gundam')
     )
+    
+    const hybridResult = {
+      items: rankingData.items,
+      popularTags: rankingData.popularTags
+    }
     
     return NextResponse.json({
       timestamp: new Date().toISOString(),
@@ -135,7 +141,7 @@ export async function GET() {
       hybridScrape: {
         totalItems: hybridResult.items.length,
         sensitiveCount: hybridSensitive.length,
-        sensitiveItems: hybridSensitive.map(item => ({
+        sensitiveItems: hybridSensitive.map((item: any) => ({
           title: item.title,
           id: item.id,
           rank: item.rank
