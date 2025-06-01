@@ -4,53 +4,53 @@ export type RankingPeriod = 'hour' | '24h'
 
 export type RankingGenre = 
   | 'all'
-  | 'game'
-  | 'anime'
-  | 'vocaloid'
-  | 'vtuber'
   | 'entertainment'
   | 'radio'
   | 'music'
   | 'sing'
-  | 'dance'
   | 'play'
-  | 'lecture'
-  | 'cooking'
-  | 'travel'
-  | 'nature'
-  | 'vehicle'
+  | 'dance'
+  | 'vocaloid'
+  | 'nicoindies'
   | 'animal'
+  | 'cooking'
+  | 'nature'
+  | 'travel'
   | 'sports'
-  | 'tech'
   | 'society'
-  | 'mmd'
+  | 'technology'
+  | 'handcraft'
+  | 'commentary'
+  | 'anime'
+  | 'game'
   | 'other'
-  | 'r18' // 例のソレ
+  | 'r18'
+  | 'original'
 
 export const GENRE_LABELS: Record<RankingGenre, string> = {
   all: '総合',
-  game: 'ゲーム',
-  anime: 'アニメ',
-  vocaloid: 'ボカロ',
-  vtuber: '音声合成実況・解説・劇場',
   entertainment: 'エンタメ',
   radio: 'ラジオ',
-  music: '音楽',
+  music: '音楽・サウンド',
   sing: '歌ってみた',
-  dance: '踊ってみた',
   play: '演奏してみた',
-  lecture: '解説・講座',
-  cooking: '料理',
-  travel: '旅行・アウトドア',
-  nature: '自然',
-  vehicle: '乗り物',
+  dance: '踊ってみた',
+  vocaloid: 'VOCALOID',
+  nicoindies: 'ニコニコインディーズ',
   animal: '動物',
+  cooking: '料理',
+  nature: '自然',
+  travel: '旅行・アウトドア',
   sports: 'スポーツ',
-  tech: '技術・工作',
   society: '社会・政治・時事',
-  mmd: 'MMD',
+  technology: '科学・技術',
+  handcraft: 'ニコニコ手芸部',
+  commentary: '解説・講座',
+  anime: 'アニメ',
+  game: 'ゲーム',
   other: 'その他',
-  r18: '例のソレ'
+  r18: 'R-18',
+  original: 'オリジナル'
 }
 
 export const PERIOD_LABELS: Record<RankingPeriod, string> = {
