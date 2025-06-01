@@ -83,7 +83,7 @@ function parseServerResponse(html: string, term: string, tag: string | null = nu
   }
   
   // HTMLエンティティをデコード
-  const decoded = match[1]
+  const decoded = match[1]!
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

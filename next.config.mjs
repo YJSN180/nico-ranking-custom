@@ -20,6 +20,27 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    // メモリ使用量を削減
+    workerThreads: false,
+    cpus: 1
+  },
+  // ビルド時のメモリ最適化
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          default: false,
+          vendors: false,
+          commons: {
+            name: 'commons',
+            chunks: 'all',
+            minChunks: 2
+          }
+        }
+      }
+    }
+    return config
   },
 }
 

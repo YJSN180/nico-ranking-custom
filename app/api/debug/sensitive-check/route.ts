@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
-import { completeHybridScrape } from '@/lib/complete-hybrid-scraper'
+import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import { scrapeRankingPage } from '@/lib/scraper'
 
 export const runtime = 'nodejs'

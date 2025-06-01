@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { completeHybridScrape } from '@/lib/complete-hybrid-scraper'
+import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import { cookieScrapeRanking } from '@/lib/cookie-scraper'
+import type { RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
@@ -13,24 +14,24 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     }
     
-    // 1. Test completeHybridScrape
+    // 1. Test fetchRanking (formerly completeHybridScrape)
     try {
-      const hybridResult = await completeHybridScrape(genre, '24h')
-      const sensitiveItems = hybridResult.items.filter(item => 
+      const rankingData = await fetchRanking(genre, null, '24h')
+      const sensitiveItems = rankingData.items.filter((item: RankingItem) => 
         item.title?.includes('静電気') || item.title?.includes('Gundam')
       )
       
       results.hybridScrape = {
         success: true,
-        itemCount: hybridResult.items.length,
-        popularTagCount: hybridResult.popularTags?.length || 0,
+        itemCount: rankingData.items.length,
+        popularTagCount: rankingData.popularTags?.length || 0,
         sensitiveCount: sensitiveItems.length,
-        sensitiveItems: sensitiveItems.map(item => ({
+        sensitiveItems: sensitiveItems.map((item: RankingItem) => ({
           title: item.title,
           id: item.id,
           rank: item.rank
         })),
-        top5: hybridResult.items.slice(0, 5).map(item => ({
+        top5: rankingData.items.slice(0, 5).map((item: RankingItem) => ({
           rank: item.rank,
           title: item.title,
           id: item.id
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     if (genre === 'all') {
       try {
         const cookieResult = await cookieScrapeRanking(genre, '24h')
-        const sensitiveItems = cookieResult.items.filter(item => 
+        const sensitiveItems = cookieResult.items.filter((item: RankingItem) => 
           item.title?.includes('静電気') || item.title?.includes('Gundam')
         )
         
@@ -52,12 +53,12 @@ export async function GET(request: NextRequest) {
           success: cookieResult.success,
           itemCount: cookieResult.items.length,
           sensitiveCount: sensitiveItems.length,
-          sensitiveItems: sensitiveItems.map(item => ({
+          sensitiveItems: sensitiveItems.map((item: RankingItem) => ({
             title: item.title,
             id: item.id,
             rank: item.rank
           })),
-          top5: cookieResult.items.slice(0, 5).map(item => ({
+          top5: cookieResult.items.slice(0, 5).map((item: RankingItem) => ({
             rank: item.rank,
             title: item.title,
             id: item.id
