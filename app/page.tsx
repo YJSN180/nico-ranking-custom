@@ -3,6 +3,7 @@ import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
+import { filterRankingData } from '@/lib/ng-filter'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 30
@@ -26,13 +27,21 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     const cachedData = await kv.get(cacheKey)
     
     if (cachedData) {
+      let result: { items: RankingData, popularTags?: string[] }
+      
       if (tag && Array.isArray(cachedData)) {
         // タグフィルタリング済みデータ
-        return { items: cachedData as RankingData, popularTags: [] }
+        result = { items: cachedData as RankingData, popularTags: [] }
       } else if (typeof cachedData === 'object' && 'items' in cachedData) {
         // ジャンル別データ（itemsとpopularTagsを含む）
-        return cachedData as { items: RankingData, popularTags?: string[] }
+        result = cachedData as { items: RankingData, popularTags?: string[] }
+      } else {
+        result = { items: [], popularTags: [] }
       }
+      
+      // NGフィルタリングを適用
+      const filteredData = await filterRankingData(result)
+      return filteredData
     }
   } catch (kvError) {
     // KVエラーログはスキップ（ESLintエラー回避）
@@ -69,7 +78,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       await kv.set(`ranking-${genre}-${period}`, { items, popularTags }, { ex: 1800 }) // 30分キャッシュ
     }
     
-    return { items, popularTags }
+    // NGフィルタリングを適用
+    const filteredData = await filterRankingData({ items, popularTags })
+    return filteredData
   } catch (error) {
     // スクレイピングエラーログはスキップ（ESLintエラー回避）
     

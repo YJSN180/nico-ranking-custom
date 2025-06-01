@@ -5,6 +5,7 @@ import type { RankingItem } from '@/types/ranking'
 import type { RankingGenre } from '@/types/ranking-config'
 import { GENRE_ID_MAP } from './genre-mapping'
 import { enrichRankingItemsWithTags } from './html-tag-extractor'
+import { filterRankingData } from './ng-filter'
 
 // Googlebot UAを使用してジオブロックを回避
 async function fetchWithGooglebot(url: string): Promise<string> {
@@ -155,9 +156,12 @@ export async function fetchRanking(
       popularTags = extractPopularTagsFromHTML(html, genreId)
     }
     
+    // NGフィルタリングを適用
+    const filteredData = await filterRankingData({ items, popularTags })
+    
     return {
-      items,
-      popularTags,
+      items: filteredData.items,
+      popularTags: filteredData.popularTags || popularTags,
       genre: genreId,
       label: rankingData.label || genre
     }
