@@ -5,8 +5,9 @@ import ClientPage from './client-page'
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 30
+// ISRを使用してFunction Invocationsを削減
+export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
+// dynamicを削除してISRを有効化
 
 interface PageProps {
   searchParams: { [key: string]: string | string[] | undefined }

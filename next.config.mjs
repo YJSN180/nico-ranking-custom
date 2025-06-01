@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    // 外部画像の最適化を無効化
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

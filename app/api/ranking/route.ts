@@ -35,14 +35,14 @@ export async function GET(request: Request | NextRequest) {
           // cron jobが保存した形式 - オブジェクト全体を返す（人気タグを含む）
           return NextResponse.json(cachedData, {
             headers: {
-              'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+              'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
             },
           })
         } else if (Array.isArray(cachedData)) {
           // 直接配列形式（後方互換性のため）
           return NextResponse.json(cachedData, {
             headers: {
-              'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+              'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
             },
           })
         } else {
@@ -55,14 +55,14 @@ export async function GET(request: Request | NextRequest) {
             // オブジェクト形式
             return NextResponse.json(parsed, {
               headers: {
-                'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+                'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
               },
             })
           } else if (Array.isArray(parsed)) {
             // 配列形式
             return NextResponse.json(parsed, {
               headers: {
-                'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+                'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
               },
             })
           } else {
@@ -121,7 +121,7 @@ async function fetchAndCacheRanking(
       
       return NextResponse.json(responseData, {
         headers: {
-          'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+          'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
         },
       })
     }
@@ -129,7 +129,7 @@ async function fetchAndCacheRanking(
     // エラー時は空のデータを返す（モックデータは使用しない）
     return NextResponse.json({ items: [], popularTags: [] }, {
       headers: {
-        'Cache-Control': 's-maxage=30, stale-while-revalidate=30',
+        'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
         'X-Data-Source': 'error',
         'X-Error': error instanceof Error ? error.message : 'Unknown error'
       },
