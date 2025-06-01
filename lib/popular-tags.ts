@@ -16,7 +16,26 @@ export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
   const cacheKey = `${POPULAR_TAGS_KEY_PREFIX}${genre}`
   
   try {
-    // KVキャッシュから取得を試みる
+    // 1. まずGitHub Actionsが保存したランキングデータから取得
+    if (typeof kv !== 'undefined') {
+      const rankingKey = `ranking-${genre}`
+      const rankingData = await kv.get<{
+        items: any[]
+        popularTags: string[]
+        updatedAt: string
+      }>(rankingKey)
+      
+      if (rankingData && rankingData.popularTags && rankingData.popularTags.length > 0) {
+        // 取得できたら返す
+        return rankingData.popularTags
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get popular tags from ranking data:', error)
+  }
+  
+  try {
+    // 2. KVキャッシュから取得を試みる
     if (typeof kv !== 'undefined') {
       const cached = await kv.get<string[]>(cacheKey)
       if (cached && Array.isArray(cached)) {
@@ -28,7 +47,7 @@ export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
   }
   
   try {
-    // 動的に人気タグを取得
+    // 3. 動的に人気タグを取得（フォールバック）
     const genreId = getGenreId(genre)
     const data = await fetchRanking(genreId, null, '24h')
     
@@ -48,7 +67,7 @@ export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
     console.error('Failed to fetch popular tags dynamically:', error)
   }
   
-  // フォールバック：ハードコードされたタグを返す
+  // 4. 最終フォールバック：ハードコードされたタグを返す
   return FALLBACK_POPULAR_TAGS[genre] || []
 }
 
