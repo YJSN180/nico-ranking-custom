@@ -63,26 +63,33 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
         <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#333' }}>
           ジャンル
         </h3>
-        <select
-          value={config.genre}
-          onChange={(e) => handleGenreChange(e.target.value as RankingGenre)}
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            fontSize: '14px',
-            border: '1px solid #e5e5e5',
-            borderRadius: '6px',
-            background: 'white',
-            cursor: 'pointer',
-            outline: 'none'
-          }}
-        >
+        <div style={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
           {(Object.entries(GENRE_LABELS) as [RankingGenre, string][]).map(([value, label]) => (
-            <option key={value} value={value}>
+            <button
+              key={value}
+              onClick={() => handleGenreChange(value)}
+              style={{
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: '500',
+                border: '1px solid',
+                borderColor: config.genre === value ? '#667eea' : '#e5e5e5',
+                background: config.genre === value ? '#667eea' : 'white',
+                color: config.genre === value ? 'white' : '#333',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                minWidth: '80px'
+              }}
+            >
               {label}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
     </div>
   )
