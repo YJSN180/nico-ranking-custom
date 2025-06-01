@@ -43,14 +43,14 @@ export async function scrapeRankingPage(
   genre: string,
   term: '24h' | 'hour',
   tag?: string,
-  limit: number = 100 // ニコニコ動画のserver-responseデータは最大100件
+  limit: number = 100,
+  page: number = 1
 ): Promise<{
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // 全てのジャンルでfetchRankingを使用
-  // これによりmeta tagベースの新形式に対応し、センシティブ動画も取得できる
-  const data = await fetchRanking(genre, tag, term, limit)
+  // fetchRankingを使用（指定されたページのデータを取得）
+  const data = await fetchRanking(genre, tag, term, limit, page)
   return {
     items: data.items,
     popularTags: data.popularTags

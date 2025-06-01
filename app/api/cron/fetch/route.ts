@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
+import { filterRankingData } from '@/lib/ng-filter'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
@@ -24,24 +25,55 @@ export async function POST(request: Request) {
     for (const genre of genres) {
       for (const period of periods) {
         try {
-          const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, period, undefined) // server-responseデータは最大100件
-        
-        // Partial<RankingItem>をRankingItemに変換
-        const items: RankingData = scrapedItems.map((item): RankingItem => ({
-          rank: item.rank || 0,
-          id: item.id || '',
-          title: item.title || '',
-          thumbURL: item.thumbURL || '',
-          views: item.views || 0,
-          comments: item.comments,
-          mylists: item.mylists,
-          likes: item.likes,
-          tags: item.tags,
-          authorId: item.authorId,
-          authorName: item.authorName,
-          authorIcon: item.authorIcon,
-          registeredAt: item.registeredAt,
-        })).filter((item: any) => item.id && item.title)
+          // 300件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
+          const targetCount = 300
+          const allItems: RankingItem[] = []
+          let popularTags: string[] = []
+          let page = 1
+          const maxPages = 5 // 最大5ページまで取得
+          
+          while (allItems.length < targetCount && page <= maxPages) {
+            const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, undefined, 100, page)
+            
+            // 最初のページから人気タグを取得
+            if (page === 1 && pageTags) {
+              popularTags = pageTags
+            }
+            
+            // Partial<RankingItem>をRankingItemに変換
+            const convertedItems: RankingItem[] = pageItems.map((item): RankingItem => ({
+              rank: item.rank || 0,
+              id: item.id || '',
+              title: item.title || '',
+              thumbURL: item.thumbURL || '',
+              views: item.views || 0,
+              comments: item.comments,
+              mylists: item.mylists,
+              likes: item.likes,
+              tags: item.tags,
+              authorId: item.authorId,
+              authorName: item.authorName,
+              authorIcon: item.authorIcon,
+              registeredAt: item.registeredAt,
+            })).filter((item: any) => item.id && item.title)
+            
+            // NGフィルタリングを適用
+            const { items: filteredItems } = await filterRankingData({ items: convertedItems })
+            
+            allItems.push(...filteredItems)
+            page++
+            
+            // レート制限対策
+            if (page <= maxPages && allItems.length < targetCount) {
+              await new Promise(resolve => setTimeout(resolve, 500))
+            }
+          }
+          
+          // 300件に切り詰め、ランク番号を振り直す
+          const items: RankingData = allItems.slice(0, targetCount).map((item, index) => ({
+            ...item,
+            rank: index + 1
+          }))
         
         // ジャンル別・期間別にキャッシュ
         await kv.set(`ranking-${genre}-${period}`, { items, popularTags }, { ex: 3600 })

@@ -98,7 +98,8 @@ export async function fetchRanking(
   genre: RankingGenre | string,
   tag: string | null = null,
   term: '24h' | 'hour' = '24h',
-  limit: number = 100 // ニコニコ動画のserver-responseデータは最大100件
+  limit: number = 100,
+  page: number = 1
 ): Promise<{
   items: RankingItem[]
   popularTags: string[]
@@ -114,6 +115,9 @@ export async function fetchRanking(
     if (tag) {
       url += `&tag=${encodeURIComponent(tag)}`
     }
+    if (page > 1) {
+      url += `&page=${page}`
+    }
     
     // HTMLを取得
     const html = await fetchWithGooglebot(url)
@@ -126,10 +130,20 @@ export async function fetchRanking(
       throw new Error('ランキングデータが見つかりません')
     }
     
-    // アイテムを整形（詳細情報を含む）- server-responseデータは最大100件
-    const maxItems = Math.min(limit, 100) // server-responseの制限により最大100件
-    let items: RankingItem[] = (rankingData.items || []).slice(0, maxItems).map((item: any, index: number) => ({
-      rank: index + 1,
+    // ラベルと人気タグを取得
+    const label = rankingData.label || genre
+    let popularTags: string[] = []
+    
+    // 人気タグを取得（2つの方法を試す）
+    popularTags = extractTrendTagsFromServerResponse(serverData)
+    if (popularTags.length === 0) {
+      popularTags = extractPopularTagsFromHTML(html, genreId)
+    }
+    
+    // アイテムを整形（ランク番号はページを考慮して計算）
+    const startRank = (page - 1) * 100 + 1
+    let items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
+      rank: startRank + index,
       id: item.id,
       title: item.title,
       thumbURL: item.thumbnail?.url || item.thumbnail?.middleUrl || '',
@@ -147,25 +161,16 @@ export async function fetchRanking(
     // HTMLからタグ情報を抽出して追加
     items = enrichRankingItemsWithTags(items, html)
     
-    // 人気タグを取得（2つの方法を試す）
-    let popularTags: string[] = []
+    // limitに合わせて切り詰め
+    const limitedItems = items.slice(0, limit)
     
-    // 1. server-responseのtrendTagsから取得を試みる
-    popularTags = extractTrendTagsFromServerResponse(serverData)
-    
-    // 2. trendTagsが空の場合、HTMLから抽出
-    if (popularTags.length === 0) {
-      popularTags = extractPopularTagsFromHTML(html, genreId)
-    }
-    
-    // NGフィルタリングを適用
-    const filteredData = await filterRankingData({ items, popularTags })
+    // NGフィルタリングはここでは適用しない（呼び出し側で制御）
     
     return {
-      items: filteredData.items,
-      popularTags: filteredData.popularTags || popularTags,
+      items: limitedItems,
+      popularTags: popularTags,
       genre: genreId,
-      label: rankingData.label || genre
+      label: label
     }
   } catch (error) {
     console.error('fetchRanking error:', error)
