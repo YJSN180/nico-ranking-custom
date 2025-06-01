@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
@@ -37,6 +37,13 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
   
+  // 前回の設定を記録（useRefで即座に反映）
+  const prevConfigRef = useRef<RankingConfig>({
+    period: initialPeriod as '24h' | 'hour',
+    genre: initialGenre as RankingGenre,
+    tag: initialTag
+  })
+
   useEffect(() => {
     const fetchRanking = async () => {
       setLoading(true)
@@ -91,12 +98,17 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
       }
     }
 
-    // 初期値から変更があった場合のみ実行
-    const hasChanged = config.period !== initialPeriod || config.genre !== initialGenre || config.tag !== initialTag
+    // 前回の設定から変更があった場合に実行（初期値との比較ではなく）
+    const prevConfig = prevConfigRef.current
+    const hasChanged = config.period !== prevConfig.period || 
+                      config.genre !== prevConfig.genre || 
+                      config.tag !== prevConfig.tag
+    
     if (hasChanged) {
       fetchRanking()
+      prevConfigRef.current = config // 現在の設定を前回の設定として記録
     }
-  }, [config, initialGenre, initialPeriod, initialTag, previousGenre])
+  }, [config, previousGenre])
 
   return (
     <>
