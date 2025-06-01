@@ -53,7 +53,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
   // 2. Fallback: Generate data on demand
   try {
-    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
+    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag, MAX_ITEMS)
     
     // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
