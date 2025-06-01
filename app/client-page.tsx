@@ -132,30 +132,32 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
       
       {!loading && !error && rankingData.length > 0 && (
         <>
-          {/* リアルタイム更新インジケーター */}
-          {isUpdating && (
+          {/* リアルタイム更新インジケーター（固定高さ） */}
+          <div style={{
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 8px',
+            marginBottom: '8px'
+          }}>
             <div style={{ 
-              textAlign: 'center', 
-              padding: '8px',
               fontSize: '12px',
               color: '#666',
-              marginBottom: '8px'
+              visibility: isUpdating ? 'visible' : 'hidden'
             }}>
               統計情報を更新中...
             </div>
-          )}
-          
-          {lastUpdated && (
-            <div style={{ 
-              textAlign: 'right', 
-              padding: '8px',
-              fontSize: '11px',
-              color: '#999',
-              marginBottom: '8px'
-            }}>
-              最終更新: {new Date(lastUpdated).toLocaleTimeString('ja-JP')}
-            </div>
-          )}
+            
+            {lastUpdated && (
+              <div style={{ 
+                fontSize: '11px',
+                color: '#999'
+              }}>
+                最終更新: {new Date(lastUpdated).toLocaleTimeString('ja-JP')}
+              </div>
+            )}
+          </div>
           
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {realtimeItems.map((item) => (
