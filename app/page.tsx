@@ -40,7 +40,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
   // 2. Fallback: Generate data on demand
   try {
-    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
+    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag, true) // コメント取得を有効化
     
     // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
@@ -62,11 +62,12 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       authorName: item.authorName,
       authorIcon: item.authorIcon,
       registeredAt: item.registeredAt,
+      latestComments: item.latestComments,
     })).filter(item => item.id && item.title)
     
     // Cache the result for future requests
     if (!tag && items.length > 0) {
-      await kv.set(`ranking-${genre}`, { items, popularTags }, { ex: 1800 }) // 30分キャッシュ
+      await kv.set(`ranking-${genre}-${period}`, { items, popularTags }, { ex: 1800 }) // 30分キャッシュ
     }
     
     return { items, popularTags }

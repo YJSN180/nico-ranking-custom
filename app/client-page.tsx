@@ -92,11 +92,11 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
     }
 
     // 初期値から変更があった場合のみ実行
-    const hasChanged = config.period !== '24h' || config.genre !== initialGenre || config.tag !== initialTag
+    const hasChanged = config.period !== initialPeriod || config.genre !== initialGenre || config.tag !== initialTag
     if (hasChanged) {
       fetchRanking()
     }
-  }, [config, initialGenre, initialTag, previousGenre])
+  }, [config, initialGenre, initialPeriod, initialTag, previousGenre])
 
   return (
     <>
