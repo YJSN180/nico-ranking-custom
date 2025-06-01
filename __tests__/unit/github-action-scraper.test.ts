@@ -71,9 +71,9 @@ describe('GitHub Action Scraper', () => {
       const results = await scrapeAllGenres(genres)
       
       expect(results).toHaveLength(3)
-      expect(results[0].popularTags).toEqual(['マインクラフト', 'RTA'])
-      expect(results[1].popularTags).toEqual(['アニメ', '2025冬'])
-      expect(results[2].popularTags).toEqual(['初音ミク', 'オリジナル曲'])
+      expect(results[0]?.popularTags).toEqual(['マインクラフト', 'RTA'])
+      expect(results[1]?.popularTags).toEqual(['アニメ', '2025冬'])
+      expect(results[2]?.popularTags).toEqual(['初音ミク', 'オリジナル曲'])
     })
 
     it('should handle errors gracefully', async () => {

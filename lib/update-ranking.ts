@@ -5,28 +5,28 @@ import type { RankingGenre } from '@/types/ranking-config'
 // 更新するジャンルのリスト
 const GENRES_TO_UPDATE: RankingGenre[] = [
   'all',
+  'game',
+  'anime',
+  'vocaloid',
+  'voicesynthesis',
   'entertainment',
-  'radio',
   'music',
   'sing',
-  'play',
   'dance',
-  'vocaloid',
-  'nicoindies',
-  'animal',
-  'cooking',
-  'nature',
-  'travel',
-  'sports',
-  'society',
-  'technology',
-  'handcraft',
+  'play',
   'commentary',
-  'anime',
-  'game',
-  'other',
-  'original'
-  // 'r18' // R-18は除外
+  'cooking',
+  'travel',
+  'nature',
+  'vehicle',
+  'technology',
+  'society',
+  'mmd',
+  'vtuber',
+  'radio',
+  'sports',
+  'animal',
+  'other'
 ]
 
 interface UpdateResult {

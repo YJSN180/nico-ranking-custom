@@ -2,6 +2,7 @@
 
 import type { RankingItem } from '../types/ranking'
 import type { RankingGenre } from '../types/ranking-config'
+import { GENRE_ID_MAP } from '../lib/genre-mapping'
 
 // fetchを動的に解決（テスト環境とランタイムの両方に対応）
 const getFetch = () => {
@@ -58,32 +59,7 @@ function extractTrendTags(serverData: any): string[] {
   }
 }
 
-// ジャンルIDマッピング
-const GENRE_ID_MAP: Record<RankingGenre, string> = {
-  all: 'all',
-  entertainment: 'n8vfxdbi',
-  radio: 'oxzi6bje',
-  music: 'rr5ucexc',
-  sing: 'f37eq4d3',
-  play: 'hvcrnqpj',
-  dance: 'z4h8e9mj',
-  vocaloid: 'zc49b03a',
-  nicoindies: 'o8s2vc0m',
-  animal: 'ne72lua2',
-  cooking: '9gkuqw8q',
-  nature: 'l4wy3zaw',
-  travel: 'h67gzba0',
-  sports: '4w3p65pf',
-  society: 'yspx0gpo',
-  technology: 'x0nfxivd',
-  handcraft: 'x3nkg5o7',
-  commentary: 'mfg9v9pa',
-  anime: '4eet3ca4',
-  game: 'ojnwtgrg',
-  other: 'ramuboyn',
-  r18: 'r18',
-  original: 'v5h6eeiw'
-}
+// GENRE_ID_MAPは lib/genre-mapping.ts からインポート済み
 
 // 単一ジャンルのランキングデータを取得
 export async function scrapeRankingData(

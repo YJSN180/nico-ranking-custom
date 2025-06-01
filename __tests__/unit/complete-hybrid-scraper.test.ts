@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { fetchRanking, fetchMultipleRankings, GENRES } from '@/lib/complete-hybrid-scraper'
+import { fetchRanking, fetchMultipleRankings } from '@/lib/complete-hybrid-scraper'
+import { GENRE_ID_MAP } from '@/lib/genre-mapping'
+import type { RankingGenre } from '@/types/ranking-config'
 
 // Mock fetch and global fetch
 const mockFetch = vi.fn()
@@ -11,213 +13,198 @@ describe('complete-hybrid-scraper', () => {
   })
 
   describe('fetchRanking', () => {
-    it('should extract popular tags from HTML dynamically', async () => {
-      const mockHTML = `
-        <html>
-          <head>
-            <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;ramuboyn&quot;,&quot;label&quot;:&quot;その他&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm123&quot;,&quot;title&quot;:&quot;Test Video&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;https://example.com/thumb.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:1000}}]}}}}}">
-          </head>
-          <body>
-            <div class="RankingMainContainer">
-              <a class="PopularTag" href="/ranking/genre/ramuboyn?tag=料理">料理</a>
-              <a class="PopularTag" href="/ranking/genre/ramuboyn?tag=動物">動物</a>
-              <a class="PopularTag" href="/ranking/genre/ramuboyn?tag=自然">自然</a>
-              <a class="PopularTag" href="/ranking/genre/ramuboyn?tag=科学">科学</a>
-              <a class="PopularTag" href="/ranking/genre/ramuboyn?tag=歴史">歴史</a>
-            </div>
-          </body>
-        </html>
-      `
+    const mockHTML = (genreId: string, tag: string | null) => `
+<html>
+  <head>
+    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;${genreId}&quot;,&quot;label&quot;:&quot;テストジャンル&quot;,&quot;tag&quot;:${tag ? `&quot;${tag}&quot;` : 'null'},&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;テスト動画&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;https://example.com/thumb.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:1000}}]}},&quot;$getTeibanRankingFeaturedKeyAndTrendTags&quot;:{&quot;data&quot;:{&quot;trendTags&quot;:[&quot;人気タグ1&quot;,&quot;人気タグ2&quot;]}}}}" />
+  </head>
+  <body></body>
+</html>
+    `
 
+    it('should fetch ranking with popular tags from trendTags', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockHTML
-      })
-
-      const result = await fetchRanking('ramuboyn', null, '24h')
-
-      expect(result.popularTags).toEqual(['料理', '動物', '自然', '科学', '歴史'])
-      expect(result.genre).toBe('ramuboyn')
-      expect(result.label).toBe('その他')
-      expect(result.items).toHaveLength(1)
-      expect(result.items[0]).toEqual({
-        rank: 1,
-        id: 'sm123',
-        title: 'Test Video',
-        thumbURL: 'https://example.com/thumb.jpg',
-        views: 1000
-      })
-    })
-
-    it('should extract popular tags from alternative pattern', async () => {
-      const mockHTML = `
-        <html>
-          <head>
-            <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;4eet3ca4&quot;,&quot;label&quot;:&quot;ゲーム&quot;,&quot;items&quot;:[]}}}}}">
-          </head>
-          <body>
-            <section class="RankingMainContainer">
-              <div>
-                <a href="/ranking/genre/4eet3ca4?tag=ゆっくり実況">ゆっくり実況</a>
-                <a href="/ranking/genre/4eet3ca4?tag=VOICEROID実況">VOICEROID実況</a>
-                <a href="/ranking/genre/4eet3ca4?tag=実況プレイ動画">実況プレイ動画</a>
-              </div>
-            </section>
-          </body>
-        </html>
-      `
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: async () => mockHTML
-      })
-
-      const result = await fetchRanking('4eet3ca4', null, '24h')
-
-      expect(result.popularTags).toEqual(['ゆっくり実況', 'VOICEROID実況', '実況プレイ動画'])
-    })
-
-    it('should exclude "すべて" tag from popular tags', async () => {
-      const mockHTML = `
-        <html>
-          <head>
-            <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;all&quot;,&quot;label&quot;:&quot;総合&quot;,&quot;items&quot;:[]}}}}}">
-          </head>
-          <body>
-            <div class="RankingMainContainer">
-              <a class="PopularTag" href="/ranking/genre/all">すべて</a>
-              <a class="PopularTag" href="/ranking/genre/all?tag=音楽">音楽</a>
-              <a class="PopularTag" href="/ranking/genre/all?tag=ゲーム">ゲーム</a>
-            </div>
-          </body>
-        </html>
-      `
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: async () => mockHTML
+        text: async () => mockHTML('all', null)
       })
 
       const result = await fetchRanking('all', null, '24h')
 
-      expect(result.popularTags).toEqual(['音楽', 'ゲーム'])
-      expect(result.popularTags).not.toContain('すべて')
+      expect(result.items).toHaveLength(1)
+      expect(result.items[0]).toMatchObject({
+        rank: 1,
+        id: 'sm1',
+        title: 'テスト動画',
+        thumbURL: 'https://example.com/thumb.jpg',
+        views: 1000
+      })
+      expect(result.popularTags).toEqual(['人気タグ1', '人気タグ2'])
+      expect(result.genre).toBe('e9uj2uks') // 'all'のID
+      expect(result.label).toBe('テストジャンル')
     })
 
-    it('should throw error for 例のソレ genre', async () => {
-      await expect(fetchRanking('d2um7mc4', null, '24h')).rejects.toThrow('例のソレジャンルは対応していません')
-    })
-
-    it('should handle tag-based rankings', async () => {
-      const mockHTML = `
-        <html>
-          <head>
-            <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;ramuboyn&quot;,&quot;label&quot;:&quot;その他&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm456&quot;,&quot;title&quot;:&quot;料理動画&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;https://example.com/thumb2.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:2000}}]}}}}}">
-          </head>
-          <body></body>
-        </html>
-      `
-
+    it('should fetch tag-specific ranking', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockHTML
+        text: async () => mockHTML('4eet3ca4', '料理')
       })
 
-      const result = await fetchRanking('ramuboyn', '料理', '24h')
-
-      expect(result.tag).toBe('料理')
-      expect(result.items[0]?.title).toBe('料理動画')
-    })
-
-    it('should use correct Googlebot User-Agent', async () => {
-      const mockHTML = `
-        <html>
-          <head>
-            <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;all&quot;,&quot;label&quot;:&quot;総合&quot;,&quot;items&quot;:[]}}}}}">
-          </head>
-        </html>
-      `
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        text: async () => mockHTML
-      })
-
-      await fetchRanking('all', null, '24h')
+      const result = await fetchRanking('game', '料理', '24h')
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.nicovideo.jp/ranking/genre/all?term=24h',
-        {
-          headers: {
-            'User-Agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
-          }
-        }
+        'https://www.nicovideo.jp/ranking/genre/4eet3ca4?term=24h&tag=%E6%96%99%E7%90%86',
+        expect.any(Object)
       )
+      expect(result.genre).toBe('4eet3ca4')
+    })
+
+    it('should handle missing trendTags gracefully', async () => {
+      const htmlWithoutTrendTags = `
+<html>
+  <head>
+    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;all&quot;,&quot;label&quot;:&quot;総合&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;テスト&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;test.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:100}}]}}}}" />
+  </head>
+  <body>
+    <a href="/ranking/genre/all?tag=タグ1">タグ1</a>
+    <a href="/ranking/genre/all?tag=タグ2">タグ2</a>
+  </body>
+</html>
+      `
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => htmlWithoutTrendTags
+      })
+
+      const result = await fetchRanking('all', null, '24h')
+
+      expect(result.popularTags).toEqual(['タグ1', 'タグ2'])
+    })
+
+    it('should handle empty ranking data', async () => {
+      const emptyHTML = `
+<html>
+  <head>
+    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;items&quot;:[]}}}}}" />
+  </head>
+</html>
+      `
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => emptyHTML
+      })
+
+      const result = await fetchRanking('all', null, '24h')
+
+      expect(result.items).toEqual([])
+      expect(result.popularTags).toEqual([])
+    })
+
+    it('should throw error when server-response meta tag is missing', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => '<html><body>No meta tag</body></html>'
+      })
+
+      await expect(fetchRanking('all', null, '24h')).rejects.toThrow('server-responseメタタグが見つかりません')
+    })
+
+    it('should throw error when fetch fails', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403
+      })
+
+      await expect(fetchRanking('all', null, '24h')).rejects.toThrow('Fetch failed: 403')
     })
   })
 
   describe('fetchMultipleRankings', () => {
-    it('should fetch multiple rankings in parallel', async () => {
-      const mockHTML = (genre: string, tag: string | null) => `
-        <html>
-          <head>
-            <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;${genre}&quot;,&quot;label&quot;:&quot;Test&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm${genre}${tag || ''}&quot;,&quot;title&quot;:&quot;Test&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;https://example.com/thumb.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:1000}}]}}}}}">
-          </head>
-        </html>
+    it('should fetch multiple rankings concurrently', async () => {
+      const mockHTML = (genreId: string) => `
+<html>
+  <head>
+    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;${genreId}&quot;,&quot;label&quot;:&quot;${genreId}&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;${genreId}_1&quot;,&quot;title&quot;:&quot;Test&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;test.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:100}}]}}}}}" />
+  </head>
+</html>
       `
 
       mockFetch
-        .mockResolvedValueOnce({ ok: true, text: async () => mockHTML('all', null) })
-        .mockResolvedValueOnce({ ok: true, text: async () => mockHTML('4eet3ca4', null) })
-        .mockResolvedValueOnce({ ok: true, text: async () => mockHTML('ramuboyn', '料理') })
+        .mockResolvedValueOnce({ ok: true, text: async () => mockHTML('e9uj2uks') })
+        .mockResolvedValueOnce({ ok: true, text: async () => mockHTML('4eet3ca4') })
+        .mockResolvedValueOnce({ ok: true, text: async () => mockHTML('zc49b03a') })
 
-      const combinations = [
-        { genre: 'all', tag: null, term: '24h' },
-        { genre: '4eet3ca4', tag: null, term: '24h' },
-        { genre: 'ramuboyn', tag: '料理', term: '24h' }
-      ]
+      const genres: RankingGenre[] = ['all', 'game', 'anime']
+      const results = await fetchMultipleRankings(genres, '24h')
 
-      const results = await fetchMultipleRankings(combinations)
-
-      expect(results).toHaveLength(3)
-      expect(results[0]?.genre).toBe('all')
-      expect(results[1]?.genre).toBe('4eet3ca4')
-      expect(results[2]?.genre).toBe('ramuboyn')
-      expect(results[2]?.tag).toBe('料理')
+      expect(results.size).toBe(3)
+      expect(results.get('all')?.items).toHaveLength(1)
+      expect(results.get('game')?.items).toHaveLength(1)
+      expect(results.get('anime')?.items).toHaveLength(1)
     })
 
-    it('should filter out failed requests', async () => {
+    it('should handle partial failures gracefully', async () => {
       mockFetch
-        .mockResolvedValueOnce({ ok: true, text: async () => '<html><head><meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;all&quot;,&quot;label&quot;:&quot;総合&quot;,&quot;items&quot;:[]}}}}}" /></head></html>' })
+        .mockResolvedValueOnce({ 
+          ok: true, 
+          text: async () => `<html><head><meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;e9uj2uks&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;Test&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;test.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:100}}]}}}}}" /></head></html>` 
+        })
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({ ok: false, status: 403 })
 
-      const combinations = [
-        { genre: 'all', tag: null, term: '24h' },
-        { genre: '4eet3ca4', tag: null, term: '24h' },
-        { genre: 'ramuboyn', tag: null, term: '24h' }
-      ]
+      const genres: RankingGenre[] = ['all', 'game', 'anime']
+      const results = await fetchMultipleRankings(genres, '24h')
 
-      const results = await fetchMultipleRankings(combinations)
+      expect(results.size).toBe(3)
+      expect(results.get('all')?.items).toHaveLength(1)
+      expect(results.get('game')?.items).toEqual([])
+      expect(results.get('anime')?.items).toEqual([])
+    })
 
-      expect(results).toHaveLength(1)
-      expect(results[0]?.genre).toBe('all')
+    it('should respect concurrency limit', async () => {
+      const mockHTML = () => `<html><head><meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;items&quot;:[]}}}}}" /></head></html>`
+      
+      mockFetch.mockImplementation(() => 
+        new Promise(resolve => 
+          setTimeout(() => resolve({ ok: true, text: async () => mockHTML() }), 100)
+        )
+      )
+
+      const genres: RankingGenre[] = ['all', 'game', 'anime', 'vocaloid', 'music', 'other']
+      const startTime = Date.now()
+      
+      await fetchMultipleRankings(genres, '24h')
+      
+      const duration = Date.now() - startTime
+      
+      // 同時実行数が3なので、6ジャンルは2バッチ（200ms + レート制限1000ms）
+      expect(duration).toBeGreaterThanOrEqual(1200)
+      expect(mockFetch).toHaveBeenCalledTimes(6)
     })
   })
 
-  describe('GENRES constant', () => {
-    it('should not include 例のソレ genre', () => {
-      expect(GENRES).not.toHaveProperty('rei_sore')
-      expect(Object.values(GENRES).find(g => g.id === 'd2um7mc4')).toBeUndefined()
+  describe('GENRE_ID_MAP', () => {
+    it('should contain all required genres', () => {
+      const requiredGenres: RankingGenre[] = [
+        'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
+        'entertainment', 'music', 'sing', 'dance', 'play',
+        'commentary', 'cooking', 'travel', 'nature', 'vehicle',
+        'technology', 'society', 'mmd', 'vtuber', 'radio',
+        'sports', 'animal', 'other'
+      ]
+
+      requiredGenres.forEach(genre => {
+        expect(GENRE_ID_MAP).toHaveProperty(genre)
+        expect(GENRE_ID_MAP[genre]).toBeTruthy()
+      })
     })
 
-    it('should include all standard genres', () => {
-      expect(GENRES.all.id).toBe('all')
-      expect(GENRES.game.id).toBe('4eet3ca4')
-      expect(GENRES.other.id).toBe('ramuboyn')
-      expect(Object.keys(GENRES)).toHaveLength(19)
+    it('should have correct IDs for known genres', () => {
+      expect(GENRE_ID_MAP.all).toBe('e9uj2uks')
+      expect(GENRE_ID_MAP.game).toBe('4eet3ca4')
+      expect(GENRE_ID_MAP.anime).toBe('zc49b03a')
+      expect(GENRE_ID_MAP.vocaloid).toBe('dshv5do5')
     })
   })
 })

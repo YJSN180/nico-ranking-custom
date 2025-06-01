@@ -4,7 +4,7 @@
 
 import { kv } from '@vercel/kv'
 import { fetchRanking } from './complete-hybrid-scraper'
-import { getGenreId } from './genre-mapping'
+import { GENRE_ID_MAP } from './genre-mapping'
 import type { RankingGenre } from '../types/ranking-config'
 
 // KVキャッシュのキープレフィックス
@@ -48,8 +48,7 @@ export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
   
   try {
     // 3. 動的に人気タグを取得（フォールバック）
-    const genreId = getGenreId(genre)
-    const data = await fetchRanking(genreId, null, '24h')
+    const data = await fetchRanking(genre, null, '24h')
     
     if (data.popularTags && data.popularTags.length > 0) {
       // KVにキャッシュ

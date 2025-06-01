@@ -28,10 +28,7 @@ describe('getPopularTags dynamic fetching', () => {
     mockFetchRanking.mockResolvedValue({
       genre: 'oxzi6bje',
       label: 'ラジオ',
-      tag: null,
-      term: '24h',
       items: [],
-      updatedAt: new Date().toISOString(),
       popularTags: [
         'ラジオ',
         '声優',
@@ -74,10 +71,10 @@ describe('getPopularTags dynamic fetching', () => {
 
   it('should handle all 23 genres correctly', async () => {
     const genres: RankingGenre[] = [
-      'all', 'game', 'anime', 'vocaloid', 'vtuber', 'entertainment',
-      'radio', 'music', 'sing', 'dance', 'play', 'lecture',
-      'cooking', 'travel', 'nature', 'vehicle', 'animal', 'sports',
-      'tech', 'society', 'mmd', 'other'
+      'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment',
+      'music', 'sing', 'dance', 'play', 'commentary', 'cooking',
+      'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd',
+      'vtuber', 'radio', 'sports', 'animal', 'other'
     ]
 
     for (const genre of genres) {
@@ -85,10 +82,7 @@ describe('getPopularTags dynamic fetching', () => {
       mockFetchRanking.mockResolvedValue({
         genre: genre,
         label: genre,
-        tag: null,
-        term: '24h',
         items: [],
-        updatedAt: new Date().toISOString(),
         popularTags: []
       })
 

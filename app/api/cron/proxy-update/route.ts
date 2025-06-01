@@ -2,68 +2,43 @@ import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { scrapeRankingViaProxy } from '@/lib/proxy-scraper'
 import type { RankingData } from '@/types/ranking'
+import type { RankingGenre } from '@/types/ranking-config'
 
 export const runtime = 'nodejs'
 
 // 更新するランキングの設定
-const RANKINGS_TO_UPDATE = [
+const RANKINGS_TO_UPDATE: Array<{ genre: RankingGenre; term: '24h' | 'hour' }> = [
   // 総合ランキング
-  { genre: 'all', term: '24h' as const },
-  { genre: 'all', term: 'hour' as const },
-  // ジャンル別ランキング
-  { genre: 'entertainment', term: '24h' as const },
-  { genre: 'entertainment', term: 'hour' as const },
-  { genre: 'animal', term: '24h' as const },
-  { genre: 'animal', term: 'hour' as const },
-  { genre: 'sport', term: '24h' as const },
-  { genre: 'sport', term: 'hour' as const },
-  { genre: 'cooking', term: '24h' as const },
-  { genre: 'cooking', term: 'hour' as const },
-  { genre: 'nature', term: '24h' as const },
-  { genre: 'nature', term: 'hour' as const },
-  { genre: 'travel', term: '24h' as const },
-  { genre: 'travel', term: 'hour' as const },
-  { genre: 'drive', term: '24h' as const },
-  { genre: 'drive', term: 'hour' as const },
-  { genre: 'history', term: '24h' as const },
-  { genre: 'history', term: 'hour' as const },
-  { genre: 'railway', term: '24h' as const },
-  { genre: 'railway', term: 'hour' as const },
-  { genre: 'technology', term: '24h' as const },
-  { genre: 'technology', term: 'hour' as const },
-  { genre: 'craft', term: '24h' as const },
-  { genre: 'craft', term: 'hour' as const },
-  { genre: 'politics', term: '24h' as const },
-  { genre: 'politics', term: 'hour' as const },
-  { genre: 'science', term: '24h' as const },
-  { genre: 'science', term: 'hour' as const },
-  { genre: 'material', term: '24h' as const },
-  { genre: 'material', term: 'hour' as const },
-  { genre: 'social', term: '24h' as const },
-  { genre: 'social', term: 'hour' as const },
-  { genre: 'game', term: '24h' as const },
-  { genre: 'game', term: 'hour' as const },
-  { genre: 'commentary', term: '24h' as const },
-  { genre: 'commentary', term: 'hour' as const },
-  { genre: 'anime', term: '24h' as const },
-  { genre: 'anime', term: 'hour' as const },
-  { genre: 'music', term: '24h' as const },
-  { genre: 'music', term: 'hour' as const },
-  { genre: 'sing', term: '24h' as const },
-  { genre: 'sing', term: 'hour' as const },
-  { genre: 'dance', term: '24h' as const },
-  { genre: 'dance', term: 'hour' as const },
-  { genre: 'vocaloid', term: '24h' as const },
-  { genre: 'vocaloid', term: 'hour' as const },
-  { genre: 'nicoindies', term: '24h' as const },
-  { genre: 'nicoindies', term: 'hour' as const },
-  { genre: 'virtualyoutuber', term: '24h' as const },
-  { genre: 'virtualyoutuber', term: 'hour' as const },
-  { genre: 'original', term: '24h' as const },
-  { genre: 'original', term: 'hour' as const },
-  { genre: 'r18', term: '24h' as const },
-  { genre: 'r18', term: 'hour' as const },
-  // 必要に応じてタグ付きランキングも追加可能
+  { genre: 'all', term: '24h' },
+  { genre: 'all', term: 'hour' },
+  // 主要ジャンル - 24時間
+  { genre: 'game', term: '24h' },
+  { genre: 'anime', term: '24h' },
+  { genre: 'vocaloid', term: '24h' },
+  { genre: 'voicesynthesis', term: '24h' },
+  { genre: 'entertainment', term: '24h' },
+  { genre: 'music', term: '24h' },
+  { genre: 'sing', term: '24h' },
+  { genre: 'dance', term: '24h' },
+  { genre: 'play', term: '24h' },
+  { genre: 'commentary', term: '24h' },
+  { genre: 'cooking', term: '24h' },
+  { genre: 'travel', term: '24h' },
+  { genre: 'nature', term: '24h' },
+  { genre: 'vehicle', term: '24h' },
+  { genre: 'technology', term: '24h' },
+  { genre: 'society', term: '24h' },
+  { genre: 'mmd', term: '24h' },
+  { genre: 'vtuber', term: '24h' },
+  { genre: 'radio', term: '24h' },
+  { genre: 'sports', term: '24h' },
+  { genre: 'animal', term: '24h' },
+  { genre: 'other', term: '24h' },
+  // 人気ジャンル - 毎時
+  { genre: 'game', term: 'hour' },
+  { genre: 'anime', term: 'hour' },
+  { genre: 'vocaloid', term: 'hour' },
+  { genre: 'other', term: 'hour' }
 ]
 
 export async function POST(request: Request) {
@@ -87,68 +62,55 @@ export async function POST(request: Request) {
     success: 0,
     failed: 0,
     errors: [] as string[],
+    updated: [] as string[]
   }
 
-  // 各ランキングを更新
+  // 各ランキングを順次更新
   for (const config of RANKINGS_TO_UPDATE) {
     try {
-      const tag: string | undefined = 'tag' in config && typeof config.tag === 'string' ? config.tag : undefined
-      
       // プロキシ経由でスクレイピング
-      const { items: scrapedItems, popularTags } = await scrapeRankingViaProxy(
+      const data = await scrapeRankingViaProxy(
         config.genre,
-        config.term,
-        tag
+        config.term
       )
 
-      // RankingData形式に変換
-      const items: RankingData = scrapedItems.map((item: any) => ({
-        rank: item.rank || 0,
-        id: item.id || '',
-        title: item.title || '',
-        thumbURL: item.thumbURL || '',
-        views: item.views || 0,
-        comments: item.comments,
-        mylists: item.mylists,
-        likes: item.likes,
-        tags: item.tags,
-        authorId: item.authorId,
-        authorName: item.authorName,
-        authorIcon: item.authorIcon,
-        registeredAt: item.registeredAt,
-      })).filter((item: any) => item.id && item.title)
-
-      if (items.length > 0) {
-        // キャッシュキーを生成
-        const cacheKey = tag 
-          ? `ranking-${config.genre}-${config.term}-tag-${encodeURIComponent(tag)}`
-          : `ranking-${config.genre}-${config.term}`
-        
+      if (data && data.items.length > 0) {
         // KVに保存
-        await kv.set(
-          cacheKey,
-          { items, popularTags, updatedAt: new Date().toISOString() },
-          { ex: 3600 } // 1時間のTTL
-        )
-        
-        results.success++
-      } else {
-        throw new Error('No items found')
-      }
+        const key = `ranking:${config.genre}:${config.term}`
+        await kv.set(key, data, {
+          ex: 3600 // 1時間のTTL
+        })
 
-      // レート制限対策で少し待機
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
+        results.success++
+        results.updated.push(`${config.genre}:${config.term}`)
+      } else {
+        results.failed++
+        results.errors.push(`${config.genre}:${config.term} - No data`)
+      }
     } catch (error) {
-      const errorMessage = `Failed to update ${config.genre} ${config.term}: ${error}`
-      results.errors.push(errorMessage)
       results.failed++
+      results.errors.push(
+        `${config.genre}:${config.term} - ${error instanceof Error ? error.message : 'Unknown error'}`
+      )
     }
+
+    // レート制限を考慮して少し待機
+    await new Promise(resolve => setTimeout(resolve, 1000))
   }
 
   return NextResponse.json({
     message: 'Proxy update completed',
     results,
-    timestamp: new Date().toISOString(),
+    timestamp: new Date().toISOString()
+  })
+}
+
+// ヘルスチェック用のGETエンドポイント
+export async function GET() {
+  return NextResponse.json({
+    status: 'ok',
+    proxyConfigured: !!process.env.PROXY_URL,
+    rankingsToUpdate: RANKINGS_TO_UPDATE.length,
+    timestamp: new Date().toISOString()
   })
 }

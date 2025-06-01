@@ -7,10 +7,10 @@ export const runtime = 'edge'
 export async function GET() {
   try {
     const genres: RankingGenre[] = [
-      'all', 'entertainment', 'radio', 'music', 'sing', 'play', 'dance',
-      'vocaloid', 'nicoindies', 'animal', 'cooking', 'nature', 'travel',
-      'sports', 'society', 'technology', 'handcraft', 'commentary',
-      'anime', 'game', 'other', 'original'
+      'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment',
+      'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel',
+      'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber',
+      'radio', 'sports', 'animal', 'other'
     ]
     
     const status: Record<string, any> = {}
