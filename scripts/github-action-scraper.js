@@ -54,8 +54,8 @@ async function fetchRankingWithServerResponse(genre = 'all', tag = null, term = 
     throw new Error('No ranking data found')
   }
   
-  // HTMLから人気タグを抽出
-  const popularTags = extractPopularTagsFromHTML(html)
+  // server-responseから人気タグ（トレンドタグ）を抽出
+  const popularTags = extractTrendTagsFromServerResponse(serverData)
   
   // 必要なデータのみ抽出（KV保存用に軽量化）
   return {

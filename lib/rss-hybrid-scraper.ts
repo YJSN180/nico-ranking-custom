@@ -2,7 +2,7 @@
 // RSSフィードからセンシティブ動画を含む完全なリストを取得
 
 import type { RankingItem } from '@/types/ranking'
-import { completeHybridScrape } from './complete-hybrid-scraper'
+import { fetchRanking } from './complete-hybrid-scraper'
 
 // RSSフィードからランキングデータを取得
 async function fetchFromRSS(
@@ -100,7 +100,11 @@ export async function rssHybridScrape(
 }> {
   // タグ指定がある場合は既存のハイブリッド実装を使用
   if (tag) {
-    return await completeHybridScrape(genre, term, tag)
+    const data = await fetchRanking(genre, tag, term)
+    return {
+      items: data.items,
+      popularTags: data.popularTags
+    }
   }
   
   try {
@@ -108,7 +112,11 @@ export async function rssHybridScrape(
     const rssData = await fetchFromRSS(genre, term)
     
     // 2. nvAPIからリッチなデータを取得
-    const nvapiData = await completeHybridScrape(genre, term)
+    const data = await fetchRanking(genre, null, term)
+    const nvapiData = {
+      items: data.items,
+      popularTags: data.popularTags
+    }
     
     // 3. データをマージ（RSSの順序を維持、nvAPIのリッチなデータを使用）
     const nvapiMap = new Map<string, Partial<RankingItem>>()
@@ -142,6 +150,10 @@ export async function rssHybridScrape(
   } catch (error) {
     // RSSが失敗した場合は既存のハイブリッド実装にフォールバック
     console.error('RSS hybrid scraping failed, falling back:', error)
-    return await completeHybridScrape(genre, term, tag)
+    const data = await fetchRanking(genre, tag, term)
+    return {
+      items: data.items,
+      popularTags: data.popularTags
+    }
   }
 }

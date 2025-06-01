@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { fetchPopularTags } from '@/lib/complete-hybrid-scraper'
+import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingConfig } from '@/types/ranking-config'
 
 interface TagSelectorProps {
@@ -32,17 +32,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       
       setLoading(true)
       try {
-        // まずキャッシュされたタグを確認
-        const { getStoredPopularTags } = await import('@/lib/fetch-ranking')
-        const cachedTags = getStoredPopularTags(config.genre)
-        
-        if (cachedTags.length > 0) {
-          setPopularTags(cachedTags)
-        } else {
-          // キャッシュがない場合はAPIから取得
-          const tags = await fetchPopularTags(config.genre)
-          setPopularTags(tags)
-        }
+        // 動的に人気タグを取得（キャッシュ付き）
+        const tags = await getPopularTags(config.genre)
+        setPopularTags(tags)
       } catch (error) {
         // フォールバックとして空配列を設定
         setPopularTags([])

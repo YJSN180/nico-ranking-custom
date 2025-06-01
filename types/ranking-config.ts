@@ -4,41 +4,51 @@ export type RankingPeriod = 'hour' | '24h'
 
 export type RankingGenre = 
   | 'all'
-  | 'entertainment' 
-  | 'radio'
-  | 'music_sound'
-  | 'dance'
-  | 'anime'
   | 'game'
-  | 'animal'
+  | 'anime'
+  | 'vocaloid'
+  | 'vtuber'
+  | 'entertainment'
+  | 'radio'
+  | 'music'
+  | 'sing'
+  | 'dance'
+  | 'play'
+  | 'lecture'
   | 'cooking'
+  | 'travel'
   | 'nature'
-  | 'traveling_outdoor'
   | 'vehicle'
+  | 'animal'
   | 'sports'
-  | 'society_politics_news'
-  | 'technology_craft'
-  | 'commentary_lecture'
+  | 'tech'
+  | 'society'
+  | 'mmd'
   | 'other'
   | 'r18' // 例のソレ
 
 export const GENRE_LABELS: Record<RankingGenre, string> = {
   all: '総合',
-  entertainment: 'エンターテイメント',
-  radio: 'ラジオ',
-  music_sound: '音楽・サウンド',
-  dance: 'ダンス',
-  anime: 'アニメ',
   game: 'ゲーム',
-  animal: '動物',
+  anime: 'アニメ',
+  vocaloid: 'ボカロ',
+  vtuber: '音声合成実況・解説・劇場',
+  entertainment: 'エンタメ',
+  radio: 'ラジオ',
+  music: '音楽',
+  sing: '歌ってみた',
+  dance: '踊ってみた',
+  play: '演奏してみた',
+  lecture: '解説・講座',
   cooking: '料理',
+  travel: '旅行・アウトドア',
   nature: '自然',
-  traveling_outdoor: '旅行・アウトドア',
   vehicle: '乗り物',
+  animal: '動物',
   sports: 'スポーツ',
-  society_politics_news: '社会・政治・時事',
-  technology_craft: '技術・工作',
-  commentary_lecture: '解説・講座',
+  tech: '技術・工作',
+  society: '社会・政治・時事',
+  mmd: 'MMD',
   other: 'その他',
   r18: '例のソレ'
 }

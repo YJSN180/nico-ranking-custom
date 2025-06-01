@@ -30,6 +30,7 @@ export const GENRES = {
   vocaloid: { id: 'dshv5do5', label: 'ボカロ' },
   vtuber: { id: 'e2bi9pt8', label: '音声合成実況・解説・劇場' },
   entertainment: { id: '8kjl94d9', label: 'エンタメ' },
+  radio: { id: 'oxzi6bje', label: 'ラジオ' },
   music: { id: 'wq76qdin', label: '音楽' },
   sing: { id: '1ya6bnqd', label: '歌ってみた' },
   dance: { id: '6yuf530c', label: '踊ってみた' },
@@ -39,6 +40,8 @@ export const GENRES = {
   travel: { id: 'k1libcse', label: '旅行・アウトドア' },
   nature: { id: '24aa8fkw', label: '自然' },
   vehicle: { id: '3d8zlls9', label: '乗り物' },
+  animal: { id: 'ne72lua2', label: '動物' },
+  sports: { id: '4w3p65pf', label: 'スポーツ' },
   tech: { id: 'n46kcz9u', label: '技術・工作' },
   society: { id: 'lzicx0y6', label: '社会・政治・時事' },
   mmd: { id: 'p1acxuoz', label: 'MMD' },
@@ -94,8 +97,8 @@ function parseServerResponse(html: string, term: string, tag: string | null = nu
     throw new Error('No ranking data found in server response')
   }
   
-  // HTMLから人気タグを抽出
-  const popularTags = extractPopularTagsFromHTML(html)
+  // server-responseから人気タグ（トレンドタグ）を抽出
+  const popularTags = extractTrendTagsFromServerResponse(serverData)
   
   // 必要なデータのみ抽出
   return {
@@ -115,7 +118,25 @@ function parseServerResponse(html: string, term: string, tag: string | null = nu
   }
 }
 
-// HTMLから人気タグを抽出
+// server-responseのJSONからトレンドタグを抽出
+export function extractTrendTagsFromServerResponse(serverData: any): string[] {
+  try {
+    const trendTags = serverData.data?.response?.$getTeibanRankingFeaturedKeyAndTrendTags?.data?.trendTags
+    
+    if (!Array.isArray(trendTags)) {
+      return []
+    }
+    
+    // 有効なタグのみフィルタリング（空文字列、null、undefined、空白のみを除外）
+    return trendTags.filter((tag: any) => {
+      return typeof tag === 'string' && tag.trim().length > 0
+    })
+  } catch (error) {
+    return []
+  }
+}
+
+// 廃止予定：HTMLから人気タグを抽出（後方互換性のため残す）
 function extractPopularTagsFromHTML(html: string): string[] {
   const tags: string[] = []
   
