@@ -33,7 +33,7 @@ describe('Homepage with direct KV access', () => {
 
     // Mock KV to return real data
     vi.mocked(kv.get).mockImplementation(async (key) => {
-      if (key === 'ranking-all') return { items: mockRealData, popularTags: [] }
+      if (key === 'ranking-all-24h') return { items: mockRealData, popularTags: [] }
       return null
     })
     

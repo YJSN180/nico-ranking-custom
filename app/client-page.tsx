@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
+import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingData } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -25,6 +26,13 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // リアルタイム統計更新を使用（1分ごとに自動更新）
+  const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
+    rankingData,
+    true, // 常に有効
+    60000 // 1分ごと
+  )
 
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
@@ -123,11 +131,38 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
       )}
       
       {!loading && !error && rankingData.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {rankingData.map((item) => (
-            <RankingItemComponent key={item.id} item={item} />
-          ))}
-        </ul>
+        <>
+          {/* リアルタイム更新インジケーター */}
+          {isUpdating && (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '8px',
+              fontSize: '12px',
+              color: '#666',
+              marginBottom: '8px'
+            }}>
+              統計情報を更新中...
+            </div>
+          )}
+          
+          {lastUpdated && (
+            <div style={{ 
+              textAlign: 'right', 
+              padding: '8px',
+              fontSize: '11px',
+              color: '#999',
+              marginBottom: '8px'
+            }}>
+              最終更新: {new Date(lastUpdated).toLocaleTimeString('ja-JP')}
+            </div>
+          )}
+          
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {realtimeItems.map((item) => (
+              <RankingItemComponent key={item.id} item={item} />
+            ))}
+          </ul>
+        </>
       )}
     </>
   )

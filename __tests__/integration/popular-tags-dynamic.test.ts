@@ -51,7 +51,7 @@ describe('getPopularTags dynamic fetching', () => {
       'ボイロラジオ',
       'アニメ'
     ])
-    expect(mockFetchRanking).toHaveBeenCalledWith('oxzi6bje', null, '24h')
+    expect(mockFetchRanking).toHaveBeenCalledWith('radio', null, '24h')
   })
 
   it('should return fallback tags when dynamic fetch fails', async () => {

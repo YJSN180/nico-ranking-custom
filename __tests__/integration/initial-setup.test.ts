@@ -48,8 +48,14 @@ describe('Initial Setup Experience', () => {
     const response = await GET(request)
 
     expect(response.status).toBe(200)
-    expect(vi.mocked(kv.set)).toHaveBeenCalledWith('ranking-all', {
-      items: mockData,
+    expect(vi.mocked(kv.set)).toHaveBeenCalledWith('ranking-all-24h', {
+      items: expect.arrayContaining([
+        expect.objectContaining({
+          id: 'sm123',
+          title: 'Test Video',
+          views: 1000
+        })
+      ]),
       popularTags: []
     }, { ex: 3600 })
   })

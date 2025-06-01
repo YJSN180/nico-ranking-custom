@@ -68,7 +68,15 @@ async function fetchRankingWithServerResponse(genre = 'all', tag = null, term = 
       id: item.id,
       title: item.title,
       thumbURL: item.thumbnail?.url || '',
-      views: item.count?.view || 0
+      views: item.count?.view || 0,
+      comments: item.count?.comment || 0,
+      mylists: item.count?.mylist || 0,
+      likes: item.count?.like || 0,
+      tags: item.tags || [],
+      authorId: item.owner?.id || item.user?.id,
+      authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
+      authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
+      registeredAt: item.registeredAt || item.startTime || item.createTime
     })),
     updatedAt: new Date().toISOString(),
     popularTags

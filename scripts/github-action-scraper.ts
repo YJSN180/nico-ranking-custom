@@ -94,13 +94,21 @@ export async function scrapeRankingData(
       throw new Error('ランキングデータが見つかりません')
     }
     
-    // アイテムを整形
+    // アイテムを整形（詳細情報を含む）
     const items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
       rank: index + 1,
       id: item.id,
       title: item.title,
       thumbURL: item.thumbnail?.url || item.thumbnail?.middleUrl || '',
-      views: item.count?.view || 0
+      views: item.count?.view || 0,
+      comments: item.count?.comment || 0,
+      mylists: item.count?.mylist || 0,
+      likes: item.count?.like || 0,
+      tags: item.tags || [],
+      authorId: item.owner?.id || item.user?.id,
+      authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
+      authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
+      registeredAt: item.registeredAt || item.startTime || item.createTime
     }))
     
     // 人気タグを取得

@@ -2,8 +2,8 @@ name: Ranking Scraper
 
 on:
   schedule:
-    # 毎時15分と45分に実行（日本時間）
-    - cron: '15,45 * * * *'
+    # 10分ごとに実行（0,10,20,30,40,50分）
+    - cron: '*/10 * * * *'
   workflow_dispatch: # 手動実行も可能
 
 jobs:

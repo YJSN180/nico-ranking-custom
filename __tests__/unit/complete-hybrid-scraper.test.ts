@@ -13,14 +13,40 @@ describe('complete-hybrid-scraper', () => {
   })
 
   describe('fetchRanking', () => {
-    const mockHTML = (genreId: string, tag: string | null) => `
-<html>
-  <head>
-    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;${genreId}&quot;,&quot;label&quot;:&quot;テストジャンル&quot;,&quot;tag&quot;:${tag ? `&quot;${tag}&quot;` : 'null'},&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;テスト動画&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;https://example.com/thumb.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:1000}}]}},&quot;$getTeibanRankingFeaturedKeyAndTrendTags&quot;:{&quot;data&quot;:{&quot;trendTags&quot;:[&quot;人気タグ1&quot;,&quot;人気タグ2&quot;]}}}}" />
-  </head>
-  <body></body>
-</html>
-    `
+    const mockHTML = (genreId: string, tag: string | null) => {
+      const serverData = {
+        data: {
+          response: {
+            $getTeibanRanking: {
+              data: {
+                featuredKey: genreId,
+                label: "テストジャンル",
+                tag: tag,
+                items: [{
+                  id: "sm1",
+                  title: "テスト動画",
+                  thumbnail: { url: "https://example.com/thumb.jpg" },
+                  count: { view: 1000, comment: 50, mylist: 10, like: 100 },
+                  owner: { id: "user123", name: "テストユーザー", iconUrl: "https://example.com/icon.jpg" },
+                  registeredAt: "2025-01-01T00:00:00+09:00"
+                }]
+              }
+            },
+            $getTeibanRankingFeaturedKeyAndTrendTags: {
+              data: {
+                trendTags: ["人気タグ1", "人気タグ2"]
+              }
+            }
+          }
+        }
+      }
+      const encodedData = JSON.stringify(serverData)
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      
+      return `<html><head><meta name="server-response" content="${encodedData}" /></head><body></body></html>`
+    }
 
     it('should fetch ranking with popular tags from trendTags', async () => {
       mockFetch.mockResolvedValueOnce({
