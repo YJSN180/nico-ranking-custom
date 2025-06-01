@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
+import { Pagination } from '@/components/pagination'
 import RankingItemComponent from '@/components/ranking-item'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingData } from '@/types/ranking'
@@ -14,9 +15,19 @@ interface ClientPageProps {
   initialPeriod?: string
   initialTag?: string
   popularTags?: string[]
+  currentPage?: number
+  totalItems?: number
 }
 
-export default function ClientPage({ initialData, initialGenre = 'all', initialPeriod = '24h', initialTag, popularTags = [] }: ClientPageProps) {
+export default function ClientPage({ 
+  initialData, 
+  initialGenre = 'all', 
+  initialPeriod = '24h', 
+  initialTag, 
+  popularTags = [],
+  currentPage = 1,
+  totalItems = 0
+}: ClientPageProps) {
   const [config, setConfig] = useState<RankingConfig>({
     period: initialPeriod as '24h' | 'hour',
     genre: initialGenre as RankingGenre,
@@ -144,6 +155,16 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
       
       {!loading && !error && rankingData.length > 0 && (
         <>
+          {/* 上部ページネーション */}
+          {totalItems > 100 && (
+            <Pagination 
+              currentPage={currentPage}
+              totalItems={totalItems}
+              itemsPerPage={100}
+              position="top"
+            />
+          )}
+          
           {/* リアルタイム更新インジケーター（固定高さ） */}
           <div style={{
             height: '28px',
@@ -176,6 +197,16 @@ export default function ClientPage({ initialData, initialGenre = 'all', initialP
               <RankingItemComponent key={item.id} item={item} />
             ))}
           </ul>
+          
+          {/* 下部ページネーション */}
+          {totalItems > 100 && (
+            <Pagination 
+              currentPage={currentPage}
+              totalItems={totalItems}
+              itemsPerPage={100}
+              position="bottom"
+            />
+          )}
         </>
       )}
     </>

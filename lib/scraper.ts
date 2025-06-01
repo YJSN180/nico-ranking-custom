@@ -42,14 +42,15 @@ async function checkRateLimit(): Promise<void> {
 export async function scrapeRankingPage(
   genre: string,
   term: '24h' | 'hour',
-  tag?: string
+  tag?: string,
+  limit: number = 100 // デフォルト100件
 ): Promise<{
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
   // 全てのジャンルでfetchRankingを使用
   // これによりmeta tagベースの新形式に対応し、センシティブ動画も取得できる
-  const data = await fetchRanking(genre, tag, term)
+  const data = await fetchRanking(genre, tag, term, limit)
   return {
     items: data.items,
     popularTags: data.popularTags

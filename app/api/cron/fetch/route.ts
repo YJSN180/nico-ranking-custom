@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     for (const genre of genres) {
       for (const period of periods) {
         try {
-          const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, period, undefined)
+          const { items: scrapedItems, popularTags } = await scrapeRankingPage(genre, period, undefined, 300) // 300件取得
         
         // Partial<RankingItem>をRankingItemに変換
         const items: RankingData = scrapedItems.map((item): RankingItem => ({
