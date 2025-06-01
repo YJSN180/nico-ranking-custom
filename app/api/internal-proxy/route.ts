@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     }
     
     // HTMLエンティティをデコード
-    const decodedContent = serverResponseMatch[1]
+    const decodedContent = serverResponseMatch[1]!
       .replace(/&quot;/g, '"')
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
@@ -110,7 +110,7 @@ async function tryAlternativeApproach(genre: string, term: string, tag?: string)
   const targetTag = tag || reiSoreTags[0]
   
   try {
-    const rssUrl = `https://www.nicovideo.jp/tag/${encodeURIComponent(targetTag)}?sort=h&rss=2.0`
+    const rssUrl = `https://www.nicovideo.jp/tag/${encodeURIComponent(targetTag!)}?sort=h&rss=2.0`
     const response = await fetch(rssUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0',
@@ -126,9 +126,9 @@ async function tryAlternativeApproach(genre: string, term: string, tag?: string)
       const itemMatches = rssText.matchAll(/<item>([\s\S]*?)<\/item>/g)
       
       for (const match of itemMatches) {
-        const itemXml = match[1]
-        const title = itemXml.match(/<title>([^<]+)<\/title>/)?.[1] || ''
-        const link = itemXml.match(/<link>([^<]+)<\/link>/)?.[1] || ''
+        const itemXml = match[1]!
+        const title = itemXml!.match(/<title>([^<]+)<\/title>/)?.[1] || ''
+        const link = itemXml!.match(/<link>([^<]+)<\/link>/)?.[1] || ''
         const videoId = link.match(/(sm|nm|so)\d+/)?.[0] || ''
         
         if (videoId) {

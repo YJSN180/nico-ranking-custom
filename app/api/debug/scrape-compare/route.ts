@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
     // 1. Test fetchRanking (formerly completeHybridScrape)
     try {
       const rankingData = await fetchRanking(genre, null, '24h')
-      const sensitiveItems = rankingData.items.filter((item: RankingItem) => 
-        item.title?.includes('静電気') || item.title?.includes('Gundam')
+      const sensitiveItems = rankingData.items.filter((item) => 
+        item.title && (item.title.includes('静電気') || item.title.includes('Gundam'))
       )
       
       results.hybridScrape = {
@@ -26,15 +26,15 @@ export async function GET(request: NextRequest) {
         itemCount: rankingData.items.length,
         popularTagCount: rankingData.popularTags?.length || 0,
         sensitiveCount: sensitiveItems.length,
-        sensitiveItems: sensitiveItems.map((item: RankingItem) => ({
-          title: item.title,
-          id: item.id,
-          rank: item.rank
+        sensitiveItems: sensitiveItems.map((item) => ({
+          title: item.title || '',
+          id: item.id || '',
+          rank: item.rank || 0
         })),
-        top5: rankingData.items.slice(0, 5).map((item: RankingItem) => ({
-          rank: item.rank,
-          title: item.title,
-          id: item.id
+        top5: rankingData.items.slice(0, 5).map((item) => ({
+          rank: item.rank || 0,
+          title: item.title || '',
+          id: item.id || ''
         }))
       }
     } catch (error: any) {
@@ -45,23 +45,23 @@ export async function GET(request: NextRequest) {
     if (genre === 'all') {
       try {
         const cookieResult = await cookieScrapeRanking(genre, '24h')
-        const sensitiveItems = cookieResult.items.filter((item: RankingItem) => 
-          item.title?.includes('静電気') || item.title?.includes('Gundam')
+        const sensitiveItems = cookieResult.items.filter((item) => 
+          item.title && (item.title.includes('静電気') || item.title.includes('Gundam'))
         )
         
         results.cookieScrape = {
           success: cookieResult.success,
           itemCount: cookieResult.items.length,
           sensitiveCount: sensitiveItems.length,
-          sensitiveItems: sensitiveItems.map((item: RankingItem) => ({
-            title: item.title,
-            id: item.id,
-            rank: item.rank
+          sensitiveItems: sensitiveItems.map((item) => ({
+            title: item.title || '',
+            id: item.id || '',
+            rank: item.rank || 0
           })),
-          top5: cookieResult.items.slice(0, 5).map((item: RankingItem) => ({
-            rank: item.rank,
-            title: item.title,
-            id: item.id
+          top5: cookieResult.items.slice(0, 5).map((item) => ({
+            rank: item.rank || 0,
+            title: item.title || '',
+            id: item.id || ''
           }))
         }
       } catch (error: any) {

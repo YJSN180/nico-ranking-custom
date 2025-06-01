@@ -119,17 +119,15 @@ export async function GET() {
       })
     }
     
-    // 比較のため、completeHybridScrapeも実行
-    const { completeHybridScrape } = await import('@/lib/complete-hybrid-scraper')
+    // 比較のため、fetchRankingを実行
     const rankingData = await fetchRanking('all', null, '24h')
-    const hybridSensitive = hybridResult.items.filter((item: any) => 
-      item.title?.includes('静電気') || item.title?.includes('Gundam')
-    )
-    
     const hybridResult = {
       items: rankingData.items,
       popularTags: rankingData.popularTags
     }
+    const hybridSensitive = hybridResult.items.filter((item: any) => 
+      item.title?.includes('静電気') || item.title?.includes('Gundam')
+    )
     
     return NextResponse.json({
       timestamp: new Date().toISOString(),
