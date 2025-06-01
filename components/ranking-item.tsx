@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import Image from 'next/image'
 import { ViewIcon, CommentIcon, MylistIcon, LikeIcon } from '@/components/icons'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
@@ -9,24 +10,12 @@ interface RankingItemProps {
   item: RankingItem
 }
 
-// コメント時刻をフォーマット
-function formatCommentTime(postedAt: string): string {
-  const now = new Date()
-  const commentTime = new Date(postedAt)
-  const diffMs = now.getTime() - commentTime.getTime()
-  const diffMinutes = Math.floor(diffMs / (1000 * 60))
-  
-  if (diffMinutes < 60) {
-    return `${diffMinutes}分前`
+// コメントを短縮
+function truncateComment(comment: string, maxLength: number = 10): string {
+  if (comment.length <= maxLength) {
+    return comment
   }
-  
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) {
-    return `${diffHours}時間前`
-  }
-  
-  const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays}日前`
+  return comment.substring(0, maxLength) + '...'
 }
 
 export default function RankingItemComponent({ item }: RankingItemProps) {
@@ -205,7 +194,7 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
             </div>
             
             {/* 最新コメント */}
-            {item.latestComment && (
+            {item.latestComments && item.latestComments.length > 0 && (
               <div style={{ 
                 marginTop: '8px',
                 padding: '8px 12px',
@@ -215,24 +204,30 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
                 color: '#555',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '8px',
+                overflow: 'hidden'
               }}>
                 <span style={{ flexShrink: 0 }}>💬</span>
-                <span style={{ 
+                <div style={{ 
                   flex: 1,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  overflow: 'hidden'
                 }}>
-                  {item.latestComment.body}
-                </span>
-                <span style={{ 
-                  flexShrink: 0,
-                  fontSize: '11px',
-                  color: '#999'
-                }}>
-                  {formatCommentTime(item.latestComment.postedAt)}
-                </span>
+                  {item.latestComments.map((comment, index) => (
+                    <React.Fragment key={index}>
+                      {index > 0 && <span style={{ color: '#ccc' }}>|</span>}
+                      <span style={{ 
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {truncateComment(comment)}
+                      </span>
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
             )}
           </div>

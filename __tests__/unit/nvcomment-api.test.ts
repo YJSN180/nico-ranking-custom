@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { fetchLatestComment } from '@/lib/nvcomment-api'
+import { fetchLatestComments, fetchMultipleVideoComments } from '@/lib/nvcomment-api'
 
 // fetchのモック
 global.fetch = vi.fn()
@@ -9,7 +9,7 @@ describe('nvComment API', () => {
     vi.clearAllMocks()
   })
 
-  test('動画の最新コメントを取得できる', async () => {
+  test('動画の最新コメントを複数取得できる', async () => {
     const videoId = 'sm12345'
     
     // 動画ページのモック
@@ -31,7 +31,11 @@ describe('nvComment API', () => {
             fork: 'main',
             comments: [
               { body: '古いコメント', postedAt: '2025-01-01T00:00:00+09:00' },
-              { body: '最新のコメント', postedAt: '2025-01-01T12:00:00+09:00' }
+              { body: 'コメント1', postedAt: '2025-01-01T10:00:00+09:00' },
+              { body: 'コメント2', postedAt: '2025-01-01T11:00:00+09:00' },
+              { body: 'コメント3', postedAt: '2025-01-01T12:00:00+09:00' },
+              { body: 'コメント4', postedAt: '2025-01-01T13:00:00+09:00' },
+              { body: '最新コメント', postedAt: '2025-01-01T14:00:00+09:00' }
             ]
           }
         ]
@@ -48,12 +52,16 @@ describe('nvComment API', () => {
         text: async () => mockCommentResponse
       } as Response)
     
-    const result = await fetchLatestComment(videoId)
+    const result = await fetchLatestComments(videoId)
     
-    expect(result).toEqual({
-      body: '最新のコメント',
-      postedAt: '2025-01-01T12:00:00+09:00'
-    })
+    // 最新5件が新しい順に返される
+    expect(result).toEqual([
+      '最新コメント',
+      'コメント4',
+      'コメント3',
+      'コメント2',
+      'コメント1'
+    ])
     
     // 正しいURLが呼ばれたか確認
     expect(fetch).toHaveBeenCalledWith(
@@ -76,7 +84,7 @@ describe('nvComment API', () => {
     )
   })
 
-  test('コメントがない場合はundefinedを返す', async () => {
+  test('コメントがない場合は空配列を返す', async () => {
     const mockHTML = `
       <html>
         <head>
@@ -108,31 +116,31 @@ describe('nvComment API', () => {
         text: async () => mockCommentResponse
       } as Response)
     
-    const result = await fetchLatestComment('sm12345')
+    const result = await fetchLatestComments('sm12345')
     
-    expect(result).toBeUndefined()
+    expect(result).toEqual([])
   })
 
-  test('エラー時はundefinedを返す', async () => {
+  test('エラー時は空配列を返す', async () => {
     vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'))
     
-    const result = await fetchLatestComment('sm12345')
+    const result = await fetchLatestComments('sm12345')
     
-    expect(result).toBeUndefined()
+    expect(result).toEqual([])
   })
 
   test('複数の動画の最新コメントを並列で取得できる', async () => {
     const videoIds = ['sm1', 'sm2', 'sm3']
     
     // fetchの実装をカスタマイズして、URLベースで適切なレスポンスを返す
-    vi.mocked(fetch).mockImplementation(async (url: string | URL, options?: any) => {
-      const urlStr = url.toString()
+    vi.mocked(fetch).mockImplementation(async (input, options?: any) => {
+      const urlStr = typeof input === 'string' ? input : input.toString()
       
       // 動画IDを抽出
       let videoId: string | null = null
       if (urlStr.includes('/watch/')) {
         const match = urlStr.match(/\/watch\/([^?]+)/)
-        videoId = match ? match[1] : null
+        videoId = match?.[1] ?? null
       }
       
       // HTMLレスポンスの場合
@@ -190,13 +198,12 @@ describe('nvComment API', () => {
     })
     
     // 並列実行をシミュレート
-    const { fetchLatestComments } = await import('@/lib/nvcomment-api')
-    const results = await fetchLatestComments(videoIds)
+    const results = await fetchMultipleVideoComments(videoIds)
     
     expect(results).toEqual({
-      sm1: { body: 'コメント0', postedAt: '2025-01-01T00:00:00+09:00' },
-      sm2: { body: 'コメント1', postedAt: '2025-01-01T01:00:00+09:00' },
-      sm3: { body: 'コメント2', postedAt: '2025-01-01T02:00:00+09:00' }
+      sm1: ['コメント0'],
+      sm2: ['コメント1'],
+      sm3: ['コメント2']
     })
   })
 })

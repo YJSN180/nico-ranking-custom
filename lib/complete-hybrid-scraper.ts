@@ -5,7 +5,7 @@ import type { RankingItem } from '@/types/ranking'
 import type { RankingGenre } from '@/types/ranking-config'
 import { GENRE_ID_MAP } from './genre-mapping'
 import { enrichRankingItemsWithTags } from './html-tag-extractor'
-import { fetchLatestComments } from './nvcomment-api'
+import { fetchMultipleVideoComments } from './nvcomment-api'
 
 // Googlebot UAを使用してジオブロックを回避
 async function fetchWithGooglebot(url: string): Promise<string> {
@@ -149,12 +149,12 @@ export async function fetchRanking(
     // 最新コメントを取得（オプション）
     if (fetchComments && items.length > 0) {
       const videoIds = items.map(item => item.id)
-      const comments = await fetchLatestComments(videoIds)
+      const comments = await fetchMultipleVideoComments(videoIds)
       
       // コメントをアイテムに追加
       items = items.map(item => ({
         ...item,
-        latestComment: comments[item.id]
+        latestComments: comments[item.id] || []
       }))
     }
     

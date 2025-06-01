@@ -20,10 +20,7 @@ test.describe('最新コメント表示機能', () => {
               likes: 1000,
               authorName: 'テスト投稿者',
               registeredAt: new Date().toISOString(),
-              latestComment: {
-                body: 'すごい動画ですね！',
-                postedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString() // 5分前
-              }
+              latestComments: ['すごい！', 'かわいい', '88888', '神回だった', '泣いた']
             },
             {
               rank: 2,
@@ -35,11 +32,8 @@ test.describe('最新コメント表示機能', () => {
               mylists: 50,
               likes: 500,
               authorName: 'テスト投稿者2',
-              registeredAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2時間前
-              latestComment: {
-                body: 'これは本当に長いコメントで、表示領域を超えるような内容になっています。省略されるかどうかを確認するためのテストです。',
-                postedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() // 2時間前
-              }
+              registeredAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+              latestComments: ['これは本当に長いコメントで、表示領域を超えるような内容になっています', 'もう一つ', 'コメント3']
             },
             {
               rank: 3,
@@ -48,8 +42,8 @@ test.describe('最新コメント表示機能', () => {
               thumbURL: 'https://example.com/thumb3.jpg',
               views: 1000,
               authorName: 'テスト投稿者3',
-              registeredAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() // 1日前
-              // latestCommentなし
+              registeredAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+              // latestCommentsなし
             }
           ],
           popularTags: []
@@ -61,19 +55,20 @@ test.describe('最新コメント表示機能', () => {
     await page.goto('/')
 
     // 最新コメントが表示されることを確認
-    const comment1 = page.locator('text=すごい動画ですね！')
-    await expect(comment1).toBeVisible()
+    await expect(page.locator('text=すごい！')).toBeVisible()
+    await expect(page.locator('text=かわいい')).toBeVisible()
+    await expect(page.locator('text=88888')).toBeVisible()
     
-    // コメント時刻が表示されることを確認
-    await expect(page.locator('text=5分前')).toBeVisible()
-    await expect(page.locator('text=2時間前')).toBeVisible()
+    // コメントが | で区切られていることを確認
+    const commentContainer = page.locator('text=すごい！').locator('xpath=..')
+    await expect(commentContainer).toContainText('|')
     
-    // 長いコメントが省略されることを確認（text-overflowが適用される）
-    const longComment = page.locator('text=/これは本当に長いコメントで/')
-    await expect(longComment).toBeVisible()
+    // 長いコメントが省略されることを確認
+    await expect(page.locator('text=/これは本当に長い/')).toBeVisible()
+    await expect(page.locator('text=...')).toBeVisible()
     
     // コメントの背景色が薄いグレーであることを確認
-    const commentBox = page.locator('div:has-text("すごい動画ですね！")').first()
+    const commentBox = page.locator('div:has-text("すごい！")').first()
     await expect(commentBox).toHaveCSS('background-color', 'rgb(245, 245, 245)') // #f5f5f5
     
     // コメントアイコンが表示されることを確認

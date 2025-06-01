@@ -13,10 +13,7 @@ export interface RankingItem {
   authorName?: string
   authorIcon?: string
   registeredAt?: string  // ISO 8601形式の投稿日時
-  latestComment?: {
-    body: string
-    postedAt: string
-  }
+  latestComments?: string[] // 最新5件のコメント本文
 }
 
 export type RankingData = RankingItem[]

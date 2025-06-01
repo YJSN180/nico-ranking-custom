@@ -16,15 +16,15 @@ async function fetchWithGooglebot(url: string): Promise<Response> {
   })
 }
 
-// 単一動画の最新コメントを取得
-export async function fetchLatestComment(videoId: string): Promise<LatestComment | undefined> {
+// 単一動画の最新コメント（複数）を取得
+export async function fetchLatestComments(videoId: string): Promise<string[]> {
   try {
     // 1. 動画ページからthread情報を取得
     const watchUrl = `https://www.nicovideo.jp/watch/${videoId}`
     const pageResponse = await fetchWithGooglebot(watchUrl)
     
     if (!pageResponse.ok) {
-      return undefined
+      return []
     }
     
     const html = await pageResponse.text()
@@ -32,12 +32,12 @@ export async function fetchLatestComment(videoId: string): Promise<LatestComment
     // server-responseメタタグから情報を抽出
     const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/)
     if (!metaMatch) {
-      return undefined
+      return []
     }
     
     const encodedData = metaMatch[1]
     if (!encodedData) {
-      return undefined
+      return []
     }
     const decodedData = encodedData
       .replace(/&quot;/g, '"')
@@ -50,7 +50,7 @@ export async function fetchLatestComment(videoId: string): Promise<LatestComment
     const nvComment = serverData.data?.response?.comment?.nvComment
     
     if (!nvComment || !nvComment.threadKey || !nvComment.params?.targets?.[0]?.id) {
-      return undefined
+      return []
     }
     
     // 2. nvComment APIを呼び出す
@@ -81,24 +81,28 @@ export async function fetchLatestComment(videoId: string): Promise<LatestComment
     })
     
     if (!commentResponse.ok) {
-      return undefined
+      return []
     }
     
     const responseText = await commentResponse.text()
     const lines = responseText.trim().split('\n')
     
-    // レスポンスから最新コメントを探す
+    // レスポンスから最新5件のコメントを探す
+    const comments: string[] = []
     for (const line of lines) {
       try {
         const data = JSON.parse(line)
         if (data.data?.threads) {
           for (const thread of data.data.threads) {
             if (thread.comments && thread.comments.length > 0) {
-              // 最新のコメントを取得（配列の最後）
-              const latestComment = thread.comments[thread.comments.length - 1]
-              return {
-                body: latestComment.body,
-                postedAt: latestComment.postedAt
+              // 最新5件のコメントを取得（配列の最後から）
+              const recentComments = thread.comments
+                .slice(-5)
+                .reverse()
+                .map((comment: any) => comment.body)
+              comments.push(...recentComments)
+              if (comments.length >= 5) {
+                return comments.slice(0, 5)
               }
             }
           }
@@ -108,18 +112,18 @@ export async function fetchLatestComment(videoId: string): Promise<LatestComment
       }
     }
     
-    return undefined
+    return comments
   } catch (error) {
-    console.error(`Failed to fetch comment for ${videoId}:`, error)
-    return undefined
+    console.error(`Failed to fetch comments for ${videoId}:`, error)
+    return []
   }
 }
 
 // 複数動画の最新コメントを並列で取得
-export async function fetchLatestComments(
+export async function fetchMultipleVideoComments(
   videoIds: string[]
-): Promise<Record<string, LatestComment>> {
-  const results: Record<string, LatestComment> = {}
+): Promise<Record<string, string[]>> {
+  const results: Record<string, string[]> = {}
   
   // バッチ処理（10個ずつ）
   const batchSize = 10
@@ -128,9 +132,9 @@ export async function fetchLatestComments(
     
     // 並列で取得
     const promises = batch.map(async (videoId) => {
-      const comment = await fetchLatestComment(videoId)
-      if (comment) {
-        results[videoId] = comment
+      const comments = await fetchLatestComments(videoId)
+      if (comments.length > 0) {
+        results[videoId] = comments
       }
     })
     

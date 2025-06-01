@@ -39,7 +39,7 @@ export async function POST(request: Request) {
           authorName: item.authorName,
           authorIcon: item.authorIcon,
           registeredAt: item.registeredAt,
-          latestComment: item.latestComment,
+          latestComments: item.latestComments,
         })).filter((item: any) => item.id && item.title)
         
         // ジャンル別にキャッシュ
