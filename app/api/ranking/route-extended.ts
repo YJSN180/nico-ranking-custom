@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { fetchRankingWithRetry } from '@/lib/complete-hybrid-scraper'
 import { filterRankingData } from '@/lib/ng-filter'
+import { trackTagUsage } from '@/lib/tag-popularity-tracker'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
 export const runtime = 'nodejs'
@@ -30,7 +31,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // タグ別ランキングの処理
+    // タグ使用統計を記録（人気度追跡のため）
+    if (tag) {
+      await trackTagUsage(genre, tag)
+    }
 
     // タグ別ランキングの場合
     if (tag) {
