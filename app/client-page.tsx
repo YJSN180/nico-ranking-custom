@@ -40,6 +40,12 @@ export default function ClientPage({
     true, // 常に有効
     60000 // 1分ごと
   )
+  
+  // initialDataが変更されたときにdisplayCountをリセット
+  useEffect(() => {
+    setDisplayCount(100)
+    setRankingData(initialData)
+  }, [initialData])
 
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
