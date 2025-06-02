@@ -119,58 +119,9 @@ export async function POST(request: Request) {
           }
         }
         
-        // 「その他」ジャンルのすべての人気タグを両期間で事前生成
-        if (genre === 'other' && popularTags && popularTags.length > 0) {
-          
-          // すべての人気タグを処理（最大15タグ程度を想定）
-          for (const tag of popularTags) {
-            try {
-              // タグ別ランキングを取得
-              const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
-              
-              if (tagItems.length > 0) {
-                // NGフィルタリング後に300件確保
-                const targetCount = 300
-                const allTagItems: RankingItem[] = []
-                let tagPage = 1
-                const maxTagPages = 5
-                
-                while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
-                  const { items: pageTagItems } = await scrapeRankingPage(genre, period, tag, 100, tagPage)
-                  const convertedTagItems: RankingItem[] = pageTagItems.map((item): RankingItem => ({
-                    rank: item.rank || 0,
-                    id: item.id || '',
-                    title: item.title || '',
-                    thumbURL: item.thumbURL || '',
-                    views: item.views || 0,
-                    comments: item.comments,
-                    mylists: item.mylists,
-                    likes: item.likes,
-                    tags: item.tags,
-                    authorId: item.authorId,
-                    authorName: item.authorName,
-                    authorIcon: item.authorIcon,
-                    registeredAt: item.registeredAt
-                  }))
-                  
-                  const { items: filteredTagItems } = await filterRankingData({ items: convertedTagItems })
-                  allTagItems.push(...filteredTagItems)
-                  tagPage++
-                }
-                
-                // 300件に切り詰め、ランク番号を振り直す
-                const tagRankingItems = allTagItems.slice(0, targetCount).map((item, index) => ({
-                  ...item,
-                  rank: index + 1
-                }))
-                
-                await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
-              }
-            } catch (tagError) {
-              // console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
-            }
-          }
-        }
+        // 「その他」ジャンルの人気タグ別ランキングは動的取得に変更
+        // ニコニコ動画のタグ別ランキングはページネーションをサポートしていないため、
+        // 100件を超えるデータの事前キャッシュは不可能
         } catch (error) {
           // console.error(`Failed to fetch ${genre} ${period} ranking:`, error)
           allSuccess = false

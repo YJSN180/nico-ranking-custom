@@ -79,12 +79,11 @@ export default function ClientPage({
           setRankingData(state.items)
           setDisplayCount(state.displayCount || 100)
           setCurrentPage(state.currentPage || 1)
-          // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
-          if (state.hasMore === false) {
+          // hasMoreの復元: タグ別ランキングは常にfalse
+          if (initialTag) {
             setHasMore(false)
-          } else if (initialTag) {
-            // タグ別ランキングの場合は、データ長で判断
-            setHasMore(state.items.length >= 100)
+          } else if (state.hasMore === false) {
+            setHasMore(false)
           } else {
             setHasMore(true)
           }
@@ -133,9 +132,9 @@ export default function ClientPage({
     setDisplayCount(100)
     setRankingData(initialData)
     setCurrentPage(1)
-    // タグ別ランキングの場合、初期データが100件ちょうどならhasMore=true、それ以外はfalse
+    // タグ別ランキングは最大100件（ページネーション非対応）
     if (config.tag) {
-      setHasMore(initialData.length === 100)
+      setHasMore(false)
     } else {
       // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
       setHasMore(initialData.length > 100)

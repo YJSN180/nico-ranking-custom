@@ -108,8 +108,9 @@ const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'a
 
 ### Tag Support
 - Popular tags extracted from server response data
-- Tag-filtered rankings cached separately: `ranking-${genre}-${period}-tag-${tag}`
-- Only top 5 popular tags are pre-cached per genre
+- Tag-filtered rankings are fetched on-demand (not pre-cached)
+- **Important**: Nico Nico's tag-filtered rankings don't support pagination beyond 100 items
+- All tag rankings are limited to 100 items maximum due to platform limitations
 
 ## Testing Philosophy
 

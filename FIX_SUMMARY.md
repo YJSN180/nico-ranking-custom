@@ -2,6 +2,17 @@
 
 ## 変更履歴
 
+### 2025-01-06 追加修正2（タグ別ランキング問題）
+- **問題**: 「その他」ジャンルの人気タグ別ランキングで100件しか表示されない、「もっと見る」でエラー
+- **原因**: ニコニコ動画のタグ別ランキングはページネーション非対応（最大100件）
+- **解決**: 
+  - cronジョブでのタグ別ランキング事前キャッシュを削除（動的取得のみに変更）
+  - クライアント側でタグ別ランキングの「もっと見る」ボタンを無効化
+- **対象ファイル**:
+  - app/api/cron/fetch/route.ts（タグ別事前キャッシュ削除）
+  - app/client-page.tsx（hasMoreを常にfalseに）
+  - CLAUDE.md（仕様を文書化）
+
 ### 2025-01-06 追加修正
 - **問題**: `tech` vs `technology` の不一致によるビルドエラー
 - **解決**: すべてのファイルで `technology` に統一
@@ -10,7 +21,7 @@
   - app/api/ranking/route.ts
   - types/ranking-config.ts
   - components/ranking-selector.tsx
-- **追加実装**: `ACTIVE_GENRES`と`ACTIVE_GENRE_LABELS`を導入してUIに表示するジャンルを制限
+- **追加実装**: `CACHED_GENRES`を導入して事前キャッシュするジャンルを明確化
 
 ## 実装した内容
 
