@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'

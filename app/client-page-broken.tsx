@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
-import RankingItemComponent from '@/components/ranking-item'
+import { InfiniteScrollList } from '@/components/infinite-scroll-list'
+import { useScrollPosition } from '@/hooks/use-scroll-position'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingData } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
@@ -32,7 +33,10 @@ export default function ClientPage({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [displayCount, setDisplayCount] = useState(100) // 初期表示を100件に
+  
+  // スクロール位置の保存と復元
+  const scrollKey = `${config.genre}-${config.period}${config.tag ? `-${config.tag}` : ''}`
+  const { scrollY, isRestored } = useScrollPosition(scrollKey)
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -55,7 +59,6 @@ export default function ClientPage({
     const fetchRanking = async () => {
       setLoading(true)
       setError(null)
-      setDisplayCount(100) // 新しいデータ取得時は100件にリセット
       
       try {
         const params = new URLSearchParams({
@@ -118,9 +121,6 @@ export default function ClientPage({
     }
   }, [config, previousGenre])
 
-  // 表示するアイテム
-  const displayItems = realtimeItems.slice(0, displayCount)
-
   return (
     <>
       <RankingSelector config={config} onConfigChange={setConfig} />
@@ -182,33 +182,13 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 通常のリスト表示 */}
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {displayItems.map((item) => (
-              <RankingItemComponent key={item.id} item={item} />
-            ))}
-          </ul>
-          
-          {/* もっと見るボタン */}
-          {displayCount < realtimeItems.length && (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <button
-                onClick={() => setDisplayCount(prev => Math.min(prev + 100, realtimeItems.length))}
-                style={{
-                  padding: '12px 32px',
-                  fontSize: '16px',
-                  background: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                もっと見る（{displayCount} / {realtimeItems.length}件）
-              </button>
-            </div>
-          )}
+          {/* 無限スクロールリスト */}
+          <InfiniteScrollList 
+            items={realtimeItems}
+            initialDisplayCount={50}
+            batchSize={50}
+            restoreScrollPosition={isRestored ? undefined : scrollY}
+          />
         </>
       )}
     </>
