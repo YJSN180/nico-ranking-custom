@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
-import { Pagination } from '@/components/pagination'
-import RankingItemComponent from '@/components/ranking-item'
+import { InfiniteScrollList } from '@/components/infinite-scroll-list'
+import { useScrollPosition } from '@/hooks/use-scroll-position'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingData } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
@@ -15,8 +15,6 @@ interface ClientPageProps {
   initialPeriod?: string
   initialTag?: string
   popularTags?: string[]
-  currentPage?: number
-  totalItems?: number
 }
 
 export default function ClientPage({ 
@@ -24,9 +22,7 @@ export default function ClientPage({
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
-  popularTags = [],
-  currentPage = 1,
-  totalItems = 0
+  popularTags = []
 }: ClientPageProps) {
   const [config, setConfig] = useState<RankingConfig>({
     period: initialPeriod as '24h' | 'hour',
@@ -37,6 +33,10 @@ export default function ClientPage({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // スクロール位置の保存と復元
+  const scrollKey = `${config.genre}-${config.period}${config.tag ? `-${config.tag}` : ''}`
+  const { scrollY, isRestored } = useScrollPosition(scrollKey)
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -155,16 +155,6 @@ export default function ClientPage({
       
       {!loading && !error && rankingData.length > 0 && (
         <>
-          {/* 上部ページネーション */}
-          {totalItems > 100 && (
-            <Pagination 
-              currentPage={currentPage}
-              totalItems={totalItems}
-              itemsPerPage={100}
-              position="top"
-            />
-          )}
-          
           {/* リアルタイム更新インジケーター（固定高さ） */}
           <div style={{
             height: '28px',
@@ -192,21 +182,13 @@ export default function ClientPage({
             )}
           </div>
           
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {realtimeItems.map((item) => (
-              <RankingItemComponent key={item.id} item={item} />
-            ))}
-          </ul>
-          
-          {/* 下部ページネーション */}
-          {totalItems > 100 && (
-            <Pagination 
-              currentPage={currentPage}
-              totalItems={totalItems}
-              itemsPerPage={100}
-              position="bottom"
-            />
-          )}
+          {/* 無限スクロールリスト */}
+          <InfiniteScrollList 
+            items={realtimeItems}
+            initialDisplayCount={50}
+            batchSize={50}
+            restoreScrollPosition={isRestored ? undefined : scrollY}
+          />
         </>
       )}
     </>

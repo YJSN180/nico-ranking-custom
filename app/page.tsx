@@ -94,18 +94,10 @@ export default async function Home({ searchParams }: PageProps) {
   const genre = (searchParams.genre as string) || 'all'
   const period = (searchParams.period as string) || '24h'
   const tag = searchParams.tag as string | undefined
-  const currentPage = Number(searchParams.page) || 1
-  const itemsPerPage = 100
   
   try {
     
-    const { items: allRankingData, popularTags } = await fetchRankingData(genre, period, tag)
-    
-    // ページネーション処理
-    const totalItems = allRankingData.length
-    const startIndex = (currentPage - 1) * itemsPerPage
-    const endIndex = startIndex + itemsPerPage
-    const rankingData = allRankingData.slice(startIndex, endIndex)
+    const { items: rankingData, popularTags } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
       return (
@@ -210,8 +202,6 @@ export default async function Home({ searchParams }: PageProps) {
             initialPeriod={period}
             initialTag={tag}
             popularTags={popularTags}
-            currentPage={currentPage}
-            totalItems={totalItems}
           />
         </div>
       </main>

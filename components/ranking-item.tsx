@@ -41,7 +41,9 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
   const dateDisplay = formatRegisteredDate(item.registeredAt)
 
   return (
-    <li style={{ 
+    <li 
+      data-testid="ranking-item"
+      style={{ 
       marginBottom: '12px',
       background: 'white',
       borderRadius: '8px',
@@ -85,8 +87,6 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
             {/* タイトル */}
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
               style={{ 
                 color: '#0066cc', 
                 textDecoration: 'none',
@@ -128,8 +128,6 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
                     ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
                     : `https://www.nicovideo.jp/user/${item.authorId}`
                   }
-                  target="_blank"
-                  rel="noopener noreferrer"
                   style={{ 
                     color: '#666',
                     textDecoration: 'none',
