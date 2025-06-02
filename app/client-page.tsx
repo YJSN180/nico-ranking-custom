@@ -5,6 +5,8 @@ import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
+import { useUserPreferences } from '@/hooks/use-user-preferences'
+import { useUserNGList } from '@/hooks/use-user-ng-list'
 import type { RankingData } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -36,6 +38,12 @@ export default function ClientPage({
   const [currentPage, setCurrentPage] = useState(1) // 現在のページ数
   const [hasMore, setHasMore] = useState(true) // さらに読み込めるか
   const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
+  
+  // ユーザー設定の永続化
+  const { updatePreferences } = useUserPreferences()
+  
+  // カスタムNGリスト
+  const { filterItems } = useUserNGList()
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -154,8 +162,15 @@ export default function ClientPage({
     if (hasChanged) {
       fetchRanking()
       prevConfigRef.current = config // 現在の設定を前回の設定として記録
+      
+      // ユーザー設定を保存
+      updatePreferences({
+        lastGenre: config.genre,
+        lastPeriod: config.period,
+        lastTag: config.tag,
+      })
     }
-  }, [config, previousGenre])
+  }, [config, previousGenre, updatePreferences])
 
   // sessionStorageに状態を保存
   const saveStateToStorage = useCallback(() => {
@@ -223,8 +238,9 @@ export default function ClientPage({
     }
   }
 
-  // 表示するアイテム
-  const displayItems = realtimeItems.slice(0, displayCount)
+  // カスタムNGフィルタを適用してから表示するアイテムを取得
+  const filteredItems = filterItems(realtimeItems)
+  const displayItems = filteredItems.slice(0, displayCount)
 
   return (
     <>
@@ -295,11 +311,11 @@ export default function ClientPage({
           </ul>
           
           {/* もっと見るボタン */}
-          {displayCount < realtimeItems.length && (
+          {displayCount < filteredItems.length && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={() => {
-                  setDisplayCount(prev => Math.min(prev + 100, realtimeItems.length))
+                  setDisplayCount(prev => Math.min(prev + 100, filteredItems.length))
                   saveStateToStorage()
                 }}
                 style={{
@@ -313,13 +329,13 @@ export default function ClientPage({
                   fontWeight: 'bold'
                 }}
               >
-                もっと見る（{displayCount} / {realtimeItems.length}件）
+                もっと見る（{displayCount} / {filteredItems.length}件）
               </button>
             </div>
           )}
           
           {/* タグ別ランキングの場合の追加読み込みボタン */}
-          {config.tag && displayCount >= realtimeItems.length && hasMore && (
+          {config.tag && displayCount >= filteredItems.length && hasMore && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={loadMoreItems}

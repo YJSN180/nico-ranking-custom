@@ -1,6 +1,8 @@
 import type { RankingData } from '@/types/ranking'
 import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
+import { PreferenceLoader } from '@/components/preference-loader'
+import { HeaderWithSettings } from '@/components/header-with-settings'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
@@ -106,32 +108,7 @@ export default async function Home({ searchParams }: PageProps) {
           minHeight: '100vh',
           background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
         }}>
-          <header style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            padding: '40px 20px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-            marginBottom: '40px'
-          }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-              <h1 style={{ 
-                color: '#ffffff', 
-                marginBottom: '8px',
-                textAlign: 'center',
-                fontSize: '2.5rem',
-                fontWeight: '800',
-                textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-                letterSpacing: '-0.02em'
-              }}>ニコニコランキング</h1>
-              <p style={{
-                color: 'rgba(255, 255, 255, 0.9)',
-                textAlign: 'center',
-                fontSize: '1.1rem',
-                margin: 0
-              }}>
-                最新の人気動画をチェック
-              </p>
-            </div>
-          </header>
+          <HeaderWithSettings />
           
           <div style={{ 
             maxWidth: '600px', 
@@ -164,38 +141,14 @@ export default async function Home({ searchParams }: PageProps) {
         minHeight: '100vh',
         background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
       }}>
-        <header style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: '40px 20px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-          marginBottom: '40px'
-        }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <h1 style={{ 
-              color: '#ffffff', 
-              marginBottom: '8px',
-              textAlign: 'center',
-              fontSize: '2.5rem',
-              fontWeight: '800',
-              textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-              letterSpacing: '-0.02em'
-            }}>ニコニコランキング</h1>
-            <p style={{
-              color: 'rgba(255, 255, 255, 0.9)',
-              textAlign: 'center',
-              fontSize: '1.1rem',
-              margin: 0
-            }}>
-              最新の人気動画をチェック
-            </p>
-          </div>
-        </header>
+        <HeaderWithSettings />
         
         <div style={{ 
           maxWidth: '1200px', 
           margin: '0 auto',
           padding: '0 20px 40px'
         }}>
+          <PreferenceLoader />
           <ClientPage 
             initialData={rankingData} 
             initialGenre={genre}
@@ -213,32 +166,7 @@ export default async function Home({ searchParams }: PageProps) {
         minHeight: '100vh',
         background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
       }}>
-        <header style={{
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: '40px 20px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-          marginBottom: '40px'
-        }}>
-          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-            <h1 style={{ 
-              color: '#ffffff', 
-              marginBottom: '8px',
-              textAlign: 'center',
-              fontSize: '2.5rem',
-              fontWeight: '800',
-              textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-              letterSpacing: '-0.02em'
-            }}>ニコニコランキング</h1>
-            <p style={{
-              color: 'rgba(255, 255, 255, 0.9)',
-              textAlign: 'center',
-              fontSize: '1.1rem',
-              margin: 0
-            }}>
-              最新の人気動画をチェック
-            </p>
-          </div>
-        </header>
+        <HeaderWithSettings />
         
         <div style={{ 
           maxWidth: '600px', 
