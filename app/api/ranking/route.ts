@@ -4,6 +4,7 @@ import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
+import type { RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') || '1', 10)
 
   // Validate inputs
-  const validGenres = ['all', 'game', 'entertainment', 'other', 'tech', 'anime', 'voicesynthesis']
+  const validGenres = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
   const validPeriods = ['24h', 'hour']
   
   if (!validGenres.includes(genre) || !validPeriods.includes(period)) {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       const cached = await kv.get(cacheKey)
       
       if (cached) {
-        console.log(`[API] Cache hit for ${cacheKey}`)
+        // console.log(`[API] Cache hit for ${cacheKey}`)
         const response = NextResponse.json(cached)
         response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
         response.headers.set('X-Cache-Status', 'HIT')
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
       }
       
       // キャッシュミス時は動的取得
-      console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
+      // console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
       
       // NGフィルタリング後に100件確保
       const targetCount = 100
@@ -70,7 +71,17 @@ export async function GET(request: NextRequest) {
         
         if (!pageItems || pageItems.length === 0) break
         
-        const { items: filteredItems } = await filterRankingData({ items: pageItems })
+        // Convert Partial<RankingItem>[] to RankingItem[]
+        const completeItems: RankingItem[] = pageItems
+          .filter((item): item is RankingItem => 
+            item.rank !== undefined &&
+            item.id !== undefined &&
+            item.title !== undefined &&
+            item.thumbURL !== undefined &&
+            item.views !== undefined
+          )
+        
+        const { items: filteredItems } = await filterRankingData({ items: completeItems })
         allItems = allItems.concat(filteredItems)
         currentPage++
       }
@@ -93,7 +104,7 @@ export async function GET(request: NextRequest) {
     // 通常のジャンル別ランキング
     // ページ番号が4以上の場合（301位以降）は動的取得
     if (page >= 4) {
-      console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
+      // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
       
       // 100件単位で動的取得
       const { items: pageItems } = await scrapeRankingPage(
@@ -104,8 +115,18 @@ export async function GET(request: NextRequest) {
         page
       )
       
+      // Convert Partial<RankingItem>[] to RankingItem[]
+      const completeItems: RankingItem[] = pageItems
+        .filter((item): item is RankingItem => 
+          item.rank !== undefined &&
+          item.id !== undefined &&
+          item.title !== undefined &&
+          item.thumbURL !== undefined &&
+          item.views !== undefined
+        )
+      
       // NGフィルタリング
-      const { items: filteredItems } = await filterRankingData({ items: pageItems })
+      const { items: filteredItems } = await filterRankingData({ items: completeItems })
       
       // ランク番号を調整
       const adjustedItems = filteredItems.map((item, index) => ({
@@ -122,10 +143,10 @@ export async function GET(request: NextRequest) {
     
     // 1-3ページ（1-300位）は事前キャッシュから配信
     const cacheKey = getCacheKey(genre, period)
-    const cachedData = await kv.get(cacheKey)
+    const cachedData = await kv.get<{ items: RankingItem[], popularTags?: string[] }>(cacheKey)
     
     if (cachedData) {
-      console.log(`[API] Cache hit for ${cacheKey}`)
+      // console.log(`[API] Cache hit for ${cacheKey}`)
       
       // キャッシュデータの構造を確認
       if (typeof cachedData === 'object' && 'items' in cachedData && Array.isArray(cachedData.items)) {
@@ -156,13 +177,23 @@ export async function GET(request: NextRequest) {
     }
     
     // キャッシュミス時はフォールバック
-    console.log(`[API] Cache miss for ${cacheKey}, fetching fresh data...`)
+    // console.log(`[API] Cache miss for ${cacheKey}, fetching fresh data...`)
     const { items, popularTags } = await scrapeRankingPage(
       genre,
       period as RankingPeriod
     )
     
-    const { items: filteredItems } = await filterRankingData({ items })
+    // Convert Partial<RankingItem>[] to RankingItem[]
+    const completeItems: RankingItem[] = items
+      .filter((item): item is RankingItem => 
+        item.rank !== undefined &&
+        item.id !== undefined &&
+        item.title !== undefined &&
+        item.thumbURL !== undefined &&
+        item.views !== undefined
+      )
+    
+    const { items: filteredItems } = await filterRankingData({ items: completeItems })
     const data = { items: filteredItems, popularTags }
     
     await kv.set(cacheKey, data, { ex: 3600 })

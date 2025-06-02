@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   try {
     // 人気ジャンルのデータを取得してキャッシュ
-    const genres = ['all', 'game', 'entertainment', 'other', 'tech', 'anime', 'voicesynthesis']
+    const genres = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
     const periods: ('24h' | 'hour')[] = ['24h', 'hour']
     let allSuccess = true
     let totalItems = 0
@@ -166,12 +166,12 @@ export async function POST(request: Request) {
                 await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
               }
             } catch (tagError) {
-              console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
+              // console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
             }
           }
         }
         } catch (error) {
-          console.error(`Failed to fetch ${genre} ${period} ranking:`, error)
+          // console.error(`Failed to fetch ${genre} ${period} ranking:`, error)
           allSuccess = false
           
           // エラー時は空のデータを設定（モックデータは使用しない）

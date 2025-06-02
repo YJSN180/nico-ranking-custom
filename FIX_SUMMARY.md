@@ -1,5 +1,17 @@
 # 修正内容まとめ
 
+## 変更履歴
+
+### 2025-01-06 追加修正
+- **問題**: `tech` vs `technology` の不一致によるビルドエラー
+- **解決**: すべてのファイルで `technology` に統一
+- **対象ファイル**:
+  - app/api/cron/fetch/route.ts
+  - app/api/ranking/route.ts
+  - types/ranking-config.ts
+  - components/ranking-selector.tsx
+- **追加実装**: `ACTIVE_GENRES`と`ACTIVE_GENRE_LABELS`を導入してUIに表示するジャンルを制限
+
 ## 実装した内容
 
 ### 1. ジャンル構成の変更
