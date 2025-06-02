@@ -40,7 +40,13 @@ export default function ClientPage({
   const [error, setError] = useState<string | null>(null)
   const [displayCount, setDisplayCount] = useState(100) // 初期表示を100件に
   const [currentPage, setCurrentPage] = useState(1) // 現在のページ数
-  const [hasMore, setHasMore] = useState(true) // さらに読み込めるか
+  // タグ別ランキングの場合、初期データが100件未満ならhasMoreをfalseに初期化
+  const [hasMore, setHasMore] = useState(() => {
+    if (initialTag && initialData.length < 100) {
+      return false
+    }
+    return true
+  })
   const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
   
   // ユーザー設定の永続化
@@ -69,7 +75,15 @@ export default function ClientPage({
           setRankingData(state.items)
           setDisplayCount(state.displayCount || 100)
           setCurrentPage(state.currentPage || 1)
-          setHasMore(state.hasMore !== false)
+          // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
+          if (state.hasMore === false) {
+            setHasMore(false)
+          } else if (initialTag) {
+            // タグ別ランキングの場合は、データ長で判断
+            setHasMore(state.items.length >= 100)
+          } else {
+            setHasMore(true)
+          }
           
           // スクロール位置を復元
           setTimeout(() => {
@@ -87,8 +101,14 @@ export default function ClientPage({
     setDisplayCount(100)
     setRankingData(initialData)
     setCurrentPage(1)
-    setHasMore(true)
-  }, [initialData])
+    // タグ別ランキングの場合、初期データが100件ちょうどならhasMore=true、それ以外はfalse
+    if (config.tag) {
+      setHasMore(initialData.length === 100)
+    } else {
+      // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
+      setHasMore(initialData.length > 100)
+    }
+  }, [initialData, config.tag])
 
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
@@ -215,8 +235,16 @@ export default function ClientPage({
   }, [saveStateToStorage])
 
   // タグ別ランキングの追加読み込み
+  const MAX_TAG_RANKING_ITEMS = 500 // 安全のため500件まで
+  
   const loadMoreItems = async () => {
     if (!config.tag || loadingMore || !hasMore) return
+    
+    // 最大件数チェック
+    if (rankingData.length >= MAX_TAG_RANKING_ITEMS) {
+      setHasMore(false)
+      return
+    }
     
     setLoadingMore(true)
     try {
@@ -246,10 +274,18 @@ export default function ClientPage({
         // 現在の表示件数 + 新しく追加された件数
         setDisplayCount(prev => prev + adjustedData.length)
       } else {
+        // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
+        // エラーメッセージは表示しない
+        return
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '追加読み込みに失敗しました')
+      // より具体的なエラーメッセージ
+      if (err instanceof Error && err.message === 'Failed to fetch') {
+        setError('データの取得に失敗しました。しばらく経ってから再度お試しください。')
+      } else {
+        setError(err instanceof Error ? err.message : '予期しないエラーが発生しました')
+      }
     } finally {
       setLoadingMore(false)
     }
@@ -327,48 +363,33 @@ export default function ClientPage({
             ))}
           </ul>
           
-          {/* もっと見るボタン */}
-          {displayCount < filteredItems.length && (
+          {/* もっと見るボタン（既存データの表示または新規データの読み込み） */}
+          {(displayCount < filteredItems.length || (config.tag && hasMore)) && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={() => {
-                  setDisplayCount(prev => Math.min(prev + 100, filteredItems.length))
-                  saveStateToStorage()
+                  if (displayCount < filteredItems.length) {
+                    // 既存データから追加表示
+                    setDisplayCount(prev => Math.min(prev + 100, filteredItems.length))
+                    saveStateToStorage()
+                  } else if (config.tag && hasMore) {
+                    // タグ別ランキングで新規データを読み込み
+                    loadMoreItems()
+                  }
                 }}
-                style={{
-                  padding: '12px 32px',
-                  fontSize: '16px',
-                  background: '#667eea',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                もっと見る（{displayCount} / {filteredItems.length}件）
-              </button>
-            </div>
-          )}
-          
-          {/* タグ別ランキングの場合の次ページ読み込みボタン */}
-          {config.tag && displayCount >= filteredItems.length && hasMore && (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <button
-                onClick={loadMoreItems}
                 disabled={loadingMore}
                 style={{
                   padding: '12px 32px',
                   fontSize: '16px',
                   background: loadingMore ? '#ccc' : '#667eea',
-                  color: '#fff',
+                  color: 'white',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: loadingMore ? 'not-allowed' : 'pointer',
                   fontWeight: 'bold'
                 }}
               >
-                {loadingMore ? '読み込み中...' : `もっと見る（${displayCount}件～）`}
+                {loadingMore ? '読み込み中...' : 'もっと見る'}
               </button>
             </div>
           )}

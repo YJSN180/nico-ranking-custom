@@ -38,7 +38,7 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
   })
 }))
 
-describe('ボタンテキストの統一性', () => {
+describe('もっと見るボタンの表示ロジック', () => {
   const createMockData = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({
       rank: i + 1,
@@ -52,8 +52,40 @@ describe('ボタンテキストの統一性', () => {
     }))
   }
 
-  it('通常のランキングで「もっと見る」ボタンが表示される', () => {
-    const mockData = createMockData(200)
+  it('47件しかないタグ別ランキングではボタンが表示されない', () => {
+    const mockData = createMockData(47)
+    
+    render(
+      <ClientPage 
+        initialData={mockData}
+        initialGenre="game"
+        initialPeriod="24h"
+        initialTag="レアタグ"
+      />
+    )
+
+    // 47件すべて表示されており、hasMore=falseなのでボタンは表示されない
+    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+  })
+
+  it('100件ちょうどのタグ別ランキングではボタンが表示される', () => {
+    const mockData = createMockData(100)
+    
+    render(
+      <ClientPage 
+        initialData={mockData}
+        initialGenre="game"
+        initialPeriod="24h"
+        initialTag="人気タグ"
+      />
+    )
+
+    // 100件ちょうどなので、まだデータがある可能性
+    expect(screen.getByText('もっと見る')).toBeInTheDocument()
+  })
+
+  it('通常ランキングで150件ある場合', () => {
+    const mockData = createMockData(150)
     
     render(
       <ClientPage 
@@ -63,42 +95,22 @@ describe('ボタンテキストの統一性', () => {
       />
     )
 
-    // 最初は100件表示されているので、もっと見るボタンがあるはず
+    // 100件表示、残り50件あるのでボタン表示
     expect(screen.getByText('もっと見る')).toBeInTheDocument()
   })
 
-  it('タグ別ランキングで「もっと見る」ボタンが表示される', () => {
-    const mockData = createMockData(100)
+  it('通常ランキングで80件しかない場合', () => {
+    const mockData = createMockData(80)
     
     render(
       <ClientPage 
         initialData={mockData}
-        initialGenre="game"
+        initialGenre="all"
         initialPeriod="24h"
-        initialTag="ゲーム"
       />
     )
 
-    // 100件表示されている状態で、次のページがある場合
-    expect(screen.getByText('もっと見る')).toBeInTheDocument()
-  })
-
-  it('統一されたボタンテキストが使用されるべき', () => {
-    // このテストは現在の実装では失敗するが、
-    // 統一後は成功するようになる
-    const mockData = createMockData(100)
-    
-    render(
-      <ClientPage 
-        initialData={mockData}
-        initialGenre="game"
-        initialPeriod="24h"
-        initialTag="ゲーム"
-      />
-    )
-
-    // 統一案：「さらに読み込む」→「もっと見る」に統一
-    // または両方に件数表示を追加
-    // expect(screen.getByText(/もっと見る/)).toBeInTheDocument()
+    // 80件すべて表示されているのでボタンなし
+    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
   })
 })
