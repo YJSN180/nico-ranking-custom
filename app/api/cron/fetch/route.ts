@@ -7,6 +7,14 @@ import type { RankingData, RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
+// Vercel Cronは無効化（GitHub Actionsを使用）
+// export const crons = [
+//   {
+//     path: '/api/cron/fetch',
+//     schedule: '15,45 * * * *'
+//   }
+// ]
+
 export async function POST(request: Request) {
   const authHeader = request.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
@@ -14,6 +22,27 @@ export async function POST(request: Request) {
   if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // 重複実行を防ぐため、最終更新時刻をチェック
+  const lastUpdateKey = 'last-cron-execution'
+  const lastUpdate = await kv.get(lastUpdateKey) as string | null
+  if (lastUpdate) {
+    const lastUpdateTime = new Date(lastUpdate).getTime()
+    const now = Date.now()
+    const fiveMinutes = 5 * 60 * 1000
+    
+    if (now - lastUpdateTime < fiveMinutes) {
+      return NextResponse.json({
+        error: 'Too soon',
+        message: 'Cron job was executed recently. Please wait at least 5 minutes.',
+        lastUpdate,
+        nextAllowedTime: new Date(lastUpdateTime + fiveMinutes).toISOString()
+      }, { status: 429 })
+    }
+  }
+  
+  // 実行開始時刻を記録
+  await kv.set(lastUpdateKey, new Date().toISOString(), { ex: 3600 })
 
   try {
     // 人気ジャンルのデータを取得してキャッシュ
