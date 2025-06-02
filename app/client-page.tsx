@@ -351,7 +351,7 @@ export default function ClientPage({
             </div>
           )}
           
-          {/* タグ別ランキングの場合の追加読み込みボタン */}
+          {/* タグ別ランキングの場合の次ページ読み込みボタン */}
           {config.tag && displayCount >= filteredItems.length && hasMore && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
@@ -368,7 +368,7 @@ export default function ClientPage({
                   fontWeight: 'bold'
                 }}
               >
-                {loadingMore ? '読み込み中...' : 'さらに読み込む'}
+                {loadingMore ? '読み込み中...' : `もっと見る（${displayCount}件～）`}
               </button>
             </div>
           )}
