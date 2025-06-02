@@ -42,9 +42,21 @@ interface UpdateResult {
 export async function updateRankingData(): Promise<UpdateResult> {
   const updatedGenres: string[] = []
   const failedGenres: string[] = []
+  const periods: ('24h' | 'hour')[] = ['24h', 'hour']
+  
+  // NGリストのサマリーを出力
+  const { getNGList } = await import('@/lib/ng-filter')
+  const ngList = await getNGList()
+  console.log('NG List Summary:')
+  console.log(`  Video IDs: ${ngList.videoIds.length}`)
+  console.log(`  Video Titles: ${ngList.videoTitles.length}`)
+  console.log(`  Author IDs: ${ngList.authorIds.length}`)
+  console.log(`  Author Names: ${ngList.authorNames.length}`)
+  console.log(`  Derived Video IDs: ${ngList.derivedVideoIds.length}`)
 
-  // 各ジャンルを順番に更新（レート制限を考慮）
+  // 各ジャンルと期間を順番に更新（レート制限を考慮）
   for (const genre of GENRES_TO_UPDATE) {
+    for (const period of periods) {
     try {
       // スキップ（ESLintエラー回避）
       
@@ -56,7 +68,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
       const maxPages = 5 // 最大5ページまで取得
       
       while (allItems.length < targetCount && page <= maxPages) {
-        const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, '24h', undefined, 100, page)
+        const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, undefined, 100, page)
         
         // 最初のページから人気タグを取得
         if (page === 1 && pageTags) {
@@ -81,7 +93,14 @@ export async function updateRankingData(): Promise<UpdateResult> {
         })).filter((item: any) => item.id && item.title)
         
         // NGフィルタリングを適用
+        const beforeCount = convertedItems.length
         const { items: filteredItems } = await filterRankingData({ items: convertedItems })
+        const removedCount = beforeCount - filteredItems.length
+        
+        // デバッグ用ログ（本番では出力される）
+        if (removedCount > 0) {
+          console.log(`[${genre}] Page ${page}: ${removedCount} items removed by NG filter (${beforeCount} -> ${filteredItems.length})`)
+        }
         
         allItems.push(...filteredItems)
         page++
@@ -105,23 +124,29 @@ export async function updateRankingData(): Promise<UpdateResult> {
         updatedAt: new Date().toISOString()
       }
       
-      // KVに保存（TTL: 1時間）
-      await kv.set(`ranking-${genre}`, dataToStore)
-      await kv.expire(`ranking-${genre}`, 3600)
+      // 新しい形式で保存（period付き）
+      await kv.set(`ranking-${genre}-${period}`, dataToStore, { ex: 3600 })
       
-      // 24hと hourの両方の期間で保存（後方互換性のため）
-      await kv.set(`ranking-${genre}-24h`, dataToStore, { ex: 3600 })
+      // 後方互換性のため、24hのデータは旧形式でも保存
+      if (period === '24h') {
+        await kv.set(`ranking-${genre}`, dataToStore, { ex: 3600 })
+        
+        // 'all'ジャンルは'ranking-data'にも保存
+        if (genre === 'all') {
+          await kv.set('ranking-data', items, { ex: 3600 })
+        }
+      }
       
-      updatedGenres.push(genre)
-      // スキップ（ESLintエラー回避）
+      updatedGenres.push(`${genre}-${period}`)
+      console.log(`✅ Updated ${genre}-${period}: ${items.length} items saved`)
       
       // ジャンル間に少し遅延を入れる（レート制限対策）
-      if (process.env.NODE_ENV !== 'test' && genre !== GENRES_TO_UPDATE[GENRES_TO_UPDATE.length - 1]) {
+      if (process.env.NODE_ENV !== 'test') {
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
     } catch (error) {
       // エラーログはスキップ（ESLintエラー回避）
-      failedGenres.push(genre)
+      failedGenres.push(`${genre}-${period}`)
       
       // KVエラーの場合は全体を失敗とする
       if (error instanceof Error && error.message.includes('KV')) {
@@ -131,6 +156,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
           error: error.message
         }
       }
+    }
     }
   }
 
