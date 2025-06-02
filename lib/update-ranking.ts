@@ -44,15 +44,10 @@ export async function updateRankingData(): Promise<UpdateResult> {
   const failedGenres: string[] = []
   const periods: ('24h' | 'hour')[] = ['24h', 'hour']
   
-  // NGリストのサマリーを出力
+  // NGリストのサマリーを取得（ログは出力しない - ESLintエラー回避）
   const { getNGList } = await import('@/lib/ng-filter')
   const ngList = await getNGList()
-  console.log('NG List Summary:')
-  console.log(`  Video IDs: ${ngList.videoIds.length}`)
-  console.log(`  Video Titles: ${ngList.videoTitles.length}`)
-  console.log(`  Author IDs: ${ngList.authorIds.length}`)
-  console.log(`  Author Names: ${ngList.authorNames.length}`)
-  console.log(`  Derived Video IDs: ${ngList.derivedVideoIds.length}`)
+  // スキップ（ESLintエラー回避）
 
   // 各ジャンルと期間を順番に更新（レート制限を考慮）
   for (const genre of GENRES_TO_UPDATE) {
@@ -97,10 +92,8 @@ export async function updateRankingData(): Promise<UpdateResult> {
         const { items: filteredItems } = await filterRankingData({ items: convertedItems })
         const removedCount = beforeCount - filteredItems.length
         
-        // デバッグ用ログ（本番では出力される）
-        if (removedCount > 0) {
-          console.log(`[${genre}] Page ${page}: ${removedCount} items removed by NG filter (${beforeCount} -> ${filteredItems.length})`)
-        }
+        // NGフィルタリング結果を記録（ログは出力しない - ESLintエラー回避）
+        // スキップ（ESLintエラー回避）
         
         allItems.push(...filteredItems)
         page++
@@ -138,7 +131,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
       }
       
       updatedGenres.push(`${genre}-${period}`)
-      console.log(`✅ Updated ${genre}-${period}: ${items.length} items saved`)
+      // 更新成功（ログは出力しない - ESLintエラー回避）
       
       // ジャンル間に少し遅延を入れる（レート制限対策）
       if (process.env.NODE_ENV !== 'test') {

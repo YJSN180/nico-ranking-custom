@@ -1,6 +1,22 @@
 import ClientPage from '../client-page'
+import { kv } from '@vercel/kv'
 
-async function get300TestItems() {
+async function getOtherGenre300Items() {
+  try {
+    // KVから直接「その他」ジャンルのデータを取得
+    const data = await kv.get('ranking-other-24h') as any
+    
+    if (data && data.items) {
+      return {
+        items: data.items,
+        popularTags: data.popularTags || []
+      }
+    }
+  } catch (error) {
+    console.error('KV Error:', error)
+  }
+  
+  // フォールバック: テストデータ
   const response = await fetch('http://localhost:3000/api/test-300-items', {
     cache: 'no-store'
   })
@@ -13,16 +29,19 @@ async function get300TestItems() {
 }
 
 export default async function Test300Page() {
-  const { items, popularTags } = await get300TestItems()
+  const { items, popularTags } = await getOtherGenre300Items()
   
   return (
     <div>
       <h1 style={{ textAlign: 'center', margin: '20px 0' }}>
-        300件テストページ（{items.length}件のデータ）
+        その他ジャンル300件テスト（{items.length}件のデータ）
       </h1>
+      <p style={{ textAlign: 'center', color: '#666', marginBottom: '20px' }}>
+        NGフィルタリング済み、「もっと見る」ボタンで100件ずつ表示
+      </p>
       <ClientPage 
         initialData={items} 
-        initialGenre="all"
+        initialGenre="other"
         initialPeriod="24h"
         popularTags={popularTags}
       />
