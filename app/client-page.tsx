@@ -225,9 +225,13 @@ export default function ClientPage({
           ...item,
           rank: currentPage * 100 + index + 1
         }))
-        setRankingData([...rankingData, ...adjustedData])
+        const newRankingData = [...rankingData, ...adjustedData]
+        setRankingData(newRankingData)
         setCurrentPage(currentPage + 1)
         setHasMore(data.length === 100) // 100件未満なら次はない
+        // 新しく追加されたデータも表示するようdisplayCountを更新
+        // 現在の表示件数 + 新しく追加された件数
+        setDisplayCount(prev => prev + adjustedData.length)
       } else {
         setHasMore(false)
       }
