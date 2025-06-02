@@ -2,8 +2,8 @@ name: Update Nico Ranking Data
 
 on:
   schedule:
-    # Run every hour
-    - cron: '0 * * * *'
+    # Run every 30 minutes
+    - cron: '0,30 * * * *'
   workflow_dispatch: # Allow manual trigger
   
 jobs:
