@@ -94,9 +94,13 @@ The hybrid scraper (`complete-hybrid-scraper.ts`) combines:
 ## Genre and Period Management
 
 ### Supported Genres
+**事前キャッシュされるジャンル（7個）:**
 ```typescript
-const genres = ['all', 'game', 'entertainment', 'music', 'other', 'tech', 'anime', 'animal', 'd2um7mc4']
+const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
 ```
+
+**全ジャンル（オンデマンド対応）:**
+すべての`RankingGenre`型で定義されたジャンルがAPIで利用可能。キャッシュされていないジャンルはオンデマンドで取得。
 
 ### Period Types
 - `'24h'` - 24-hour ranking (default)

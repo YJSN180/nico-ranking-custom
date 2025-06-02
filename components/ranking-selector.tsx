@@ -1,6 +1,6 @@
 'use client'
 
-import { ACTIVE_GENRE_LABELS, PERIOD_LABELS } from '@/types/ranking-config'
+import { GENRE_LABELS, PERIOD_LABELS } from '@/types/ranking-config'
 import type { RankingGenre, RankingPeriod, RankingConfig } from '@/types/ranking-config'
 
 interface RankingSelectorProps {
@@ -68,10 +68,10 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
           flexWrap: 'wrap',
           gap: '8px'
         }}>
-          {(Object.entries(ACTIVE_GENRE_LABELS) as [string, string][]).map(([value, label]) => (
+          {(Object.entries(GENRE_LABELS) as [RankingGenre, string][]).map(([value, label]) => (
             <button
               key={value}
-              onClick={() => handleGenreChange(value as RankingGenre)}
+              onClick={() => handleGenreChange(value)}
               style={{
                 padding: '8px 16px',
                 fontSize: '14px',

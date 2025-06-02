@@ -58,8 +58,8 @@ export const PERIOD_LABELS: Record<RankingPeriod, string> = {
   '24h': '24時間'
 }
 
-// アクティブに取得されているジャンル（cron jobで実際に使用）
-export const ACTIVE_GENRES: RankingGenre[] = [
+// 事前キャッシュされるジャンル（cron jobで実際に使用）
+export const CACHED_GENRES: RankingGenre[] = [
   'all',
   'game',
   'entertainment',
@@ -68,12 +68,6 @@ export const ACTIVE_GENRES: RankingGenre[] = [
   'anime',
   'voicesynthesis'
 ]
-
-// アクティブなジャンルのラベルのみを含むマップ
-export const ACTIVE_GENRE_LABELS: Record<string, string> = ACTIVE_GENRES.reduce((acc, genre) => {
-  acc[genre] = GENRE_LABELS[genre]
-  return acc
-}, {} as Record<string, string>)
 
 export interface RankingConfig {
   period: RankingPeriod

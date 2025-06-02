@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
+import { CACHED_GENRES } from '@/types/ranking-config'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
 
   try {
     // 人気ジャンルのデータを取得してキャッシュ
-    const genres = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
+    const genres = CACHED_GENRES
     const periods: ('24h' | 'hour')[] = ['24h', 'hour']
     let allSuccess = true
     let totalItems = 0

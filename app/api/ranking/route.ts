@@ -23,12 +23,11 @@ export async function GET(request: NextRequest) {
   const tag = searchParams.get('tag') || undefined
   const page = parseInt(searchParams.get('page') || '1', 10)
 
-  // Validate inputs
-  const validGenres = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
+  // Validate inputs - period のみチェック（genreはすべて受け入れる）
   const validPeriods = ['24h', 'hour']
   
-  if (!validGenres.includes(genre) || !validPeriods.includes(period)) {
-    return NextResponse.json({ error: 'Invalid genre or period' }, { status: 400 })
+  if (!validPeriods.includes(period)) {
+    return NextResponse.json({ error: 'Invalid period' }, { status: 400 })
   }
 
   try {
