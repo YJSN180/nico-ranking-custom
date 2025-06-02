@@ -1,258 +1,203 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
-import type { RankingData } from '@/types/ranking'
-import type { RankingPeriod, RankingGenre } from '@/types/ranking-config'
-import { scrapeRankingPage } from '@/lib/scraper'
+import { fetchRankingWithRetry } from '@/lib/complete-hybrid-scraper'
 import { filterRankingData } from '@/lib/ng-filter'
-// import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
+import { trackTagUsage } from '@/lib/tag-popularity-tracker'
+import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
-export const runtime = 'nodejs' // Edge RuntimeではなくNode.jsを使用
+export const runtime = 'nodejs'
 
-// キャッシュキーを生成
-function getCacheKey(genre: RankingGenre, period: RankingPeriod, tag?: string): string {
+// キャッシュキーの生成
+function getCacheKey(genre: string, period: string, tag?: string): string {
   if (tag) {
     return `ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`
   }
   return `ranking-${genre}-${period}`
 }
 
-export async function GET(request: Request | NextRequest) {
-  try {
-    // URLパラメータを取得
-    const { searchParams } = new URL(request.url)
-    const period = (searchParams.get('period') || '24h') as RankingPeriod
-    const genre = (searchParams.get('genre') || 'all') as RankingGenre
-    const tag = searchParams.get('tag') || undefined
-    const page = parseInt(searchParams.get('page') || '1', 10)
-    
-    // タグ別ランキングの場合はページごとにキャッシュキーを分ける
-    const cacheKey = tag && page > 1 
-      ? `${getCacheKey(genre, period, tag)}-page${page}`
-      : getCacheKey(genre, period, tag)
-    
-    // KVからキャッシュを確認
-    const cachedData = await kv.get(cacheKey)
-    
-    if (cachedData) {
-      // データ構造を確認: { items: RankingData, popularTags?: string[] } または RankingData
-      if (typeof cachedData === 'object') {
-        if ('items' in cachedData && Array.isArray(cachedData.items)) {
-          // タグ別ランキングの場合は、キャッシュされたデータにもNGフィルタリングを適用
-          if (tag) {
-            const { items: filtered } = await filterRankingData({ items: cachedData.items })
-            return NextResponse.json({ items: filtered }, {
-              headers: {
-                'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-              },
-            })
-          }
-          // cron jobが保存した形式 - オブジェクト全体を返す（人気タグを含む）
-          return NextResponse.json(cachedData, {
-            headers: {
-              'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-            },
-          })
-        } else if (Array.isArray(cachedData)) {
-          // タグ別ランキングの場合は、配列形式のデータにもNGフィルタリングを適用
-          if (tag) {
-            const { items: filtered } = await filterRankingData({ items: cachedData })
-            return NextResponse.json(filtered, {
-              headers: {
-                'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-              },
-            })
-          }
-          // 直接配列形式（後方互換性のため）
-          return NextResponse.json(cachedData, {
-            headers: {
-              'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-            },
-          })
-        } else {
-          return fetchAndCacheRanking(period, genre, cacheKey, tag, page)
-        }
-      } else if (typeof cachedData === 'string') {
-        try {
-          const parsed = JSON.parse(cachedData)
-          if ('items' in parsed && Array.isArray(parsed.items)) {
-            // タグ別ランキングの場合は、オブジェクト形式のデータにもNGフィルタリングを適用
-            if (tag) {
-              const { items: filtered } = await filterRankingData({ items: parsed.items })
-              return NextResponse.json({ items: filtered }, {
-                headers: {
-                  'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-                },
-              })
-            }
-            // オブジェクト形式
-            return NextResponse.json(parsed, {
-              headers: {
-                'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-              },
-            })
-          } else if (Array.isArray(parsed)) {
-            // タグ別ランキングの場合は、配列形式のデータにもNGフィルタリングを適用
-            if (tag) {
-              const { items: filtered } = await filterRankingData({ items: parsed })
-              return NextResponse.json(filtered, {
-                headers: {
-                  'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-                },
-              })
-            }
-            // 配列形式
-            return NextResponse.json(parsed, {
-              headers: {
-                'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-              },
-            })
-          } else {
-            return fetchAndCacheRanking(period, genre, cacheKey, tag, page)
-          }
-        } catch {
-          return fetchAndCacheRanking(period, genre, cacheKey, tag)
-        }
-      } else {
-        return fetchAndCacheRanking(period, genre, cacheKey, tag, page)
-      }
-    }
-    
-    // キャッシュがない場合は新しくフェッチ
-    return fetchAndCacheRanking(period, genre, cacheKey, tag, page)
-    
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch ranking data' },
-      { status: 502 }
-    )
-  }
-}
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const genre = searchParams.get('genre') || 'all'
+  const period = searchParams.get('period') || '24h'
+  const tag = searchParams.get('tag') || undefined
+  const page = parseInt(searchParams.get('page') || '1', 10)
 
-async function fetchAndCacheRanking(
-  period: RankingPeriod, 
-  genre: RankingGenre, 
-  cacheKey: string,
-  tag?: string,
-  page: number = 1
-): Promise<NextResponse> {
+  // Validate inputs
+  const validGenres = ['all', 'game', 'entertainment', 'other', 'tech', 'anime', 'voicesynthesis']
+  const validPeriods = ['24h', 'hour']
+  
+  if (!validGenres.includes(genre) || !validPeriods.includes(period)) {
+    return NextResponse.json({ error: 'Invalid genre or period' }, { status: 400 })
+  }
+
   try {
-    // タグ別ランキングの場合は、NGフィルタリング後100件を確保する
-    let allItems: any[] = []
-    let popularTags: string[] = []
-    
+    // タグ使用統計を記録（人気度追跡のため）
     if (tag) {
-      // タグ別ランキング: NGフィルタリング後100件を確保
+      await trackTagUsage(genre, tag)
+    }
+
+    // タグ別ランキングの場合
+    if (tag) {
+      const cacheKey = page > 1 
+        ? `${getCacheKey(genre, period, tag)}-page${page}`
+        : getCacheKey(genre, period, tag)
+      
+      // キャッシュチェック
+      const cached = await kv.get(cacheKey)
+      
+      if (cached) {
+        console.log(`[API] Cache hit for ${cacheKey}`)
+        const response = NextResponse.json(cached)
+        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+        response.headers.set('X-Cache-Status', 'HIT')
+        return response
+      }
+      
+      // キャッシュミス時は動的取得
+      console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
+      
+      // NGフィルタリング後に100件確保
       const targetCount = 100
+      let allItems: any[] = []
       let currentPage = page
-      const maxAttempts = 3 // 最大3回まで追加取得を試みる
+      const maxAttempts = 3
       
       while (allItems.length < targetCount && currentPage < page + maxAttempts) {
-        const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, tag, 100, currentPage)
+        const { items: pageItems } = await fetchRankingWithRetry(
+          genre as RankingGenre,
+          period as RankingPeriod,
+          tag,
+          100,
+          currentPage
+        )
         
-        if (currentPage === page && pageTags) {
-          popularTags = pageTags
-        }
+        if (!pageItems || pageItems.length === 0) break
         
-        // マップして必要な形式に変換
-        const mappedItems = pageItems.map((item: any) => ({
-          rank: item.rank || 0,
-          id: item.id || '',
-          title: item.title || '',
-          thumbURL: item.thumbURL || '',
-          views: item.views || 0,
-          comments: item.comments,
-          mylists: item.mylists,
-          likes: item.likes,
-          tags: item.tags,
-          authorId: item.authorId,
-          authorName: item.authorName,
-          authorIcon: item.authorIcon,
-          registeredAt: item.registeredAt,
-        })).filter((item: any) => item.id && item.title)
-        
-        // NGフィルタリングを適用
-        const { items: filtered } = await filterRankingData({ items: mappedItems })
-        allItems.push(...filtered)
-        
-        if (pageItems.length < 100) {
-          // これ以上データがない
-          break
-        }
-        
+        const { items: filteredItems } = await filterRankingData({ items: pageItems })
+        allItems = allItems.concat(filteredItems)
         currentPage++
       }
       
-      // 100件に切り詰めてランク番号を振り直す
+      // 100件に制限してランク番号を再割り当て
       allItems = allItems.slice(0, targetCount).map((item, index) => ({
         ...item,
         rank: (page - 1) * targetCount + index + 1
       }))
       
-    } else {
-      // 通常ランキング: 従来通り
-      const { items: rankingData, popularTags: pageTags } = await scrapeRankingPage(genre, period, tag)
-      allItems = rankingData
-      popularTags = pageTags || []
+      // キャッシュに保存（1時間TTL）
+      await kv.set(cacheKey, allItems, { ex: 3600 })
+      
+      const response = NextResponse.json(allItems)
+      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+      response.headers.set('X-Cache-Status', 'MISS')
+      return response
+    }
+
+    // 通常のジャンル別ランキング
+    // ページ番号が4以上の場合（301位以降）は動的取得
+    if (page >= 4) {
+      console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
+      
+      // 100件単位で動的取得
+      const { items: pageItems } = await fetchRankingWithRetry(
+        genre as RankingGenre,
+        period as RankingPeriod,
+        undefined,
+        100,
+        page
+      )
+      
+      // NGフィルタリング
+      const { items: filteredItems } = await filterRankingData({ items: pageItems })
+      
+      // ランク番号を調整
+      const adjustedItems = filteredItems.map((item, index) => ({
+        ...item,
+        rank: (page - 1) * 100 + index + 1
+      }))
+      
+      const response = NextResponse.json(adjustedItems)
+      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+      response.headers.set('X-Cache-Status', 'DYNAMIC')
+      response.headers.set('X-Max-Items', '500')
+      return response
     }
     
-    // 通常ランキングの場合のみマッピングが必要
-    const items = tag ? allItems : allItems.map((item: any) => ({
-      rank: item.rank || 0,
-      id: item.id || '',
-      title: item.title || '',
-      thumbURL: item.thumbURL || '',
-      views: item.views || 0,
-      comments: item.comments,
-      mylists: item.mylists,
-      likes: item.likes,
-      tags: item.tags,
-      authorId: item.authorId,
-      authorName: item.authorName,
-      authorIcon: item.authorIcon,
-      registeredAt: item.registeredAt,
-    })).filter((item: any) => item.id && item.title)
+    // 1-3ページ（1-300位）は事前キャッシュから配信
+    const cacheKey = getCacheKey(genre, period)
+    const cachedData = await kv.get(cacheKey)
     
-    if (items.length > 0) {
-      // 通常ランキングの場合はNGフィルタリングを適用（タグ別は既に適用済み）
-      let filteredItems = items
-      if (!tag) {
-        const { items: filtered } = await filterRankingData({ items })
-        filteredItems = filtered
+    if (cachedData) {
+      console.log(`[API] Cache hit for ${cacheKey}`)
+      
+      // キャッシュデータの構造を確認
+      if (typeof cachedData === 'object' && 'items' in cachedData && Array.isArray(cachedData.items)) {
+        // ページ番号に応じてスライス
+        const startIdx = (page - 1) * 100
+        const endIdx = page * 100
+        const pageItems = cachedData.items.slice(startIdx, endIdx)
+        
+        // ページ1の場合は人気タグも含めて返す
+        if (page === 1) {
+          const response = NextResponse.json({
+            items: pageItems,
+            popularTags: cachedData.popularTags || []
+          })
+          response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+          response.headers.set('X-Cache-Status', 'HIT')
+          response.headers.set('X-Max-Items', '500')
+          return response
+        } else {
+          // ページ2以降はアイテムのみ
+          const response = NextResponse.json(pageItems)
+          response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+          response.headers.set('X-Cache-Status', 'HIT')
+          response.headers.set('X-Max-Items', '500')
+          return response
+        }
       }
-      
-      // KVにキャッシュ（タグ付きは短めのTTL）
-      const ttl = tag ? 900 : 3600 // タグ: 15分、通常: 1時間
-      const responseData = tag ? filteredItems : { items: filteredItems, popularTags }
-      await kv.set(cacheKey, responseData, { ex: ttl })
-      
-      return NextResponse.json(responseData, {
-        headers: {
-          'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-        },
+    }
+    
+    // キャッシュミス時はフォールバック
+    console.log(`[API] Cache miss for ${cacheKey}, fetching fresh data...`)
+    const { items, popularTags } = await fetchRankingWithRetry(
+      genre as RankingGenre,
+      period as RankingPeriod
+    )
+    
+    const { items: filteredItems } = await filterRankingData({ items })
+    const data = { items: filteredItems, popularTags }
+    
+    await kv.set(cacheKey, data, { ex: 3600 })
+    
+    // ページ1の場合
+    if (page === 1) {
+      const response = NextResponse.json({
+        items: filteredItems.slice(0, 100),
+        popularTags
       })
+      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+      response.headers.set('X-Cache-Status', 'MISS')
+      response.headers.set('X-Max-Items', '500')
+      return response
     }
+    
+    // ページ2-3の場合
+    const startIdx = (page - 1) * 100
+    const endIdx = page * 100
+    const pageItems = filteredItems.slice(startIdx, endIdx)
+    
+    const response = NextResponse.json(pageItems)
+    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+    response.headers.set('X-Cache-Status', 'MISS')
+    response.headers.set('X-Max-Items', '500')
+    return response
+    
   } catch (error) {
-    // エラー時は空のデータを返す（モックデータは使用しない）
-    return NextResponse.json({ items: [], popularTags: [] }, {
-      headers: {
-        'Cache-Control': 's-maxage=300, stale-while-revalidate=60',
-        'X-Data-Source': 'error',
-        'X-Error': error instanceof Error ? error.message : 'Unknown error'
-      },
-    })
+    console.error('[API] Error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch ranking data' },
+      { status: 500 }
+    )
   }
-  
-  // データが取得できない場合
-  return NextResponse.json(
-    { 
-      error: 'No ranking data available',
-      message: 'データが準備されるまでお待ちください。'
-    },
-    { 
-      status: 502,
-      headers: {
-        'Retry-After': '300',
-      }
-    }
-  )
 }

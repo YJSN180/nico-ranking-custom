@@ -279,26 +279,39 @@ export default function ClientPage({
     }
   }, [saveStateToStorage])
 
-  // タグ別ランキングの追加読み込み
-  const MAX_TAG_RANKING_ITEMS = 500 // 安全のため500件まで
+  // ランキングの追加読み込み（タグ別、ジャンル別共通）
+  const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
   
   const loadMoreItems = async () => {
-    if (!config.tag || loadingMore || !hasMore) return
+    if (loadingMore || !hasMore) return
     
     // 最大件数チェック
-    if (rankingData.length >= MAX_TAG_RANKING_ITEMS) {
+    if (rankingData.length >= MAX_RANKING_ITEMS) {
       setHasMore(false)
       return
     }
     
     setLoadingMore(true)
     try {
+      // ページ番号の計算（タグ別とジャンル別で異なる）
+      let pageNumber: number
+      if (config.tag) {
+        // タグ別: currentPageを使用
+        pageNumber = currentPage + 1
+      } else {
+        // ジャンル別: データ長から計算（300件まではキャッシュ、301件目からpage=4）
+        pageNumber = Math.floor(rankingData.length / 100) + 1
+      }
+      
       const params = new URLSearchParams({
         genre: config.genre,
-        period: config.period,
-        tag: config.tag,
-        page: (currentPage + 1).toString()
+        period: config.period
       })
+      
+      if (config.tag) {
+        params.append('tag', config.tag)
+      }
+      params.append('page', pageNumber.toString())
       
       const response = await fetch(`/api/ranking?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch')
@@ -309,14 +322,20 @@ export default function ClientPage({
         // ランク番号を調整
         const adjustedData = data.map((item, index) => ({
           ...item,
-          rank: currentPage * 100 + index + 1
+          rank: config.tag 
+            ? currentPage * 100 + index + 1  // タグ別の場合
+            : rankingData.length + index + 1  // ジャンル別の場合
         }))
         const newRankingData = [...rankingData, ...adjustedData]
         setRankingData(newRankingData)
-        setCurrentPage(currentPage + 1)
+        
+        // currentPageはタグ別の場合のみ更新
+        if (config.tag) {
+          setCurrentPage(currentPage + 1)
+        }
+        
         setHasMore(data.length === 100) // 100件未満なら次はない
         // 新しく追加されたデータも表示するようdisplayCountを更新
-        // 現在の表示件数 + 新しく追加された件数
         setDisplayCount(prev => prev + adjustedData.length)
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
@@ -409,16 +428,16 @@ export default function ClientPage({
           </ul>
           
           {/* もっと見るボタン（既存データの表示または新規データの読み込み） */}
-          {(displayCount < filteredItems.length || (config.tag && hasMore)) && (
+          {(displayCount < filteredItems.length || hasMore) && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={() => {
                   if (displayCount < filteredItems.length) {
-                    // 既存データから追加表示
+                    // 既存データから追加表示（ジャンル別ランキングの1-300位）
                     setDisplayCount(prev => Math.min(prev + 100, filteredItems.length))
                     saveStateToStorage()
-                  } else if (config.tag && hasMore) {
-                    // タグ別ランキングで新規データを読み込み
+                  } else if (hasMore) {
+                    // 新規データを読み込み（タグ別 or ジャンル別301位以降）
                     loadMoreItems()
                   }
                 }}

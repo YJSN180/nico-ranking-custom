@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
   try {
     // 人気ジャンルのデータを取得してキャッシュ
-    const genres = ['all', 'game', 'entertainment', 'music', 'other', 'tech', 'anime', 'animal', 'd2um7mc4']
+    const genres = ['all', 'game', 'entertainment', 'other', 'tech', 'anime', 'voicesynthesis']
     const periods: ('24h' | 'hour')[] = ['24h', 'hour']
     let allSuccess = true
     let totalItems = 0
@@ -118,14 +118,58 @@ export async function POST(request: Request) {
           }
         }
         
-        // 人気タグ別のデータも事前生成（上位5タグのみ、24hのみ）
-        if (period === '24h' && popularTags && popularTags.length > 0 && genre !== 'all') {
-          for (const tag of popularTags.slice(0, 5)) {
-            const taggedItems = items.filter((item: any) => item.tags?.includes(tag))
-            if (taggedItems.length > 0) {
-              await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, taggedItems, { ex: 3600 })
-              // 後方互換性
-              await kv.set(`ranking-${genre}-tag-${encodeURIComponent(tag)}`, taggedItems, { ex: 3600 })
+        // 「その他」ジャンルのすべての人気タグを両期間で事前生成
+        if (genre === 'other' && popularTags && popularTags.length > 0) {
+          console.log(`[Cron] Pre-caching ${popularTags.length} popular tags for ${genre} (${period})`)
+          
+          // すべての人気タグを処理（最大15タグ程度を想定）
+          for (const tag of popularTags) {
+            try {
+              // タグ別ランキングを取得
+              console.log(`[Cron] Fetching tag ranking: ${genre}/${period}/${tag}`)
+              const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
+              
+              if (tagItems.length > 0) {
+                // NGフィルタリング後に300件確保
+                const targetCount = 300
+                const allTagItems: RankingItem[] = []
+                let tagPage = 1
+                const maxTagPages = 5
+                
+                while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
+                  const { items: pageTagItems } = await scrapeRankingPage(genre, period, tag, 100, tagPage)
+                  const convertedTagItems: RankingItem[] = pageTagItems.map((item): RankingItem => ({
+                    rank: item.rank || 0,
+                    id: item.id || '',
+                    title: item.title || '',
+                    thumbURL: item.thumbURL || '',
+                    views: item.views || 0,
+                    comments: item.comments,
+                    mylists: item.mylists,
+                    likes: item.likes,
+                    tags: item.tags,
+                    authorId: item.authorId,
+                    authorName: item.authorName,
+                    authorIcon: item.authorIcon,
+                    registeredAt: item.registeredAt
+                  }))
+                  
+                  const { items: filteredTagItems } = await filterRankingData({ items: convertedTagItems })
+                  allTagItems.push(...filteredTagItems)
+                  tagPage++
+                }
+                
+                // 300件に切り詰め、ランク番号を振り直す
+                const tagRankingItems = allTagItems.slice(0, targetCount).map((item, index) => ({
+                  ...item,
+                  rank: index + 1
+                }))
+                
+                await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
+                console.log(`[Cron] Cached tag ranking: ${genre}/${period}/${tag} (${tagRankingItems.length} items)`)
+              }
+            } catch (tagError) {
+              console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
             }
           }
         }
