@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
@@ -25,6 +26,9 @@ export default function ClientPage({
   initialTag, 
   popularTags = []
 }: ClientPageProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
   const [config, setConfig] = useState<RankingConfig>({
     period: initialPeriod as '24h' | 'hour',
     genre: initialGenre as RankingGenre,
@@ -169,8 +173,17 @@ export default function ClientPage({
         lastPeriod: config.period,
         lastTag: config.tag,
       })
+      
+      // URLを更新（ブラウザの履歴に残す）
+      const newParams = new URLSearchParams()
+      if (config.genre !== 'all') newParams.set('genre', config.genre)
+      if (config.period !== '24h') newParams.set('period', config.period)
+      if (config.tag) newParams.set('tag', config.tag)
+      
+      const newUrl = newParams.toString() ? `?${newParams.toString()}` : '/'
+      router.push(newUrl, { scroll: false })
     }
-  }, [config, previousGenre, updatePreferences])
+  }, [config, previousGenre, updatePreferences, router])
 
   // sessionStorageに状態を保存
   const saveStateToStorage = useCallback(() => {
