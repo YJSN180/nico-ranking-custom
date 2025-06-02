@@ -1,5 +1,6 @@
 import ClientPage from '../client-page'
 import { kv } from '@vercel/kv'
+import { SuspenseWrapper } from '@/components/suspense-wrapper'
 
 async function getOtherGenre300Items() {
   try {
@@ -13,7 +14,7 @@ async function getOtherGenre300Items() {
       }
     }
   } catch (error) {
-    console.error('KV Error:', error)
+    // KVエラーは無視してフォールバックを使用
   }
   
   // フォールバック: テストデータ
@@ -39,12 +40,14 @@ export default async function Test300Page() {
       <p style={{ textAlign: 'center', color: '#666', marginBottom: '20px' }}>
         NGフィルタリング済み、「もっと見る」ボタンで100件ずつ表示
       </p>
-      <ClientPage 
-        initialData={items} 
-        initialGenre="other"
-        initialPeriod="24h"
-        popularTags={popularTags}
-      />
+      <SuspenseWrapper>
+        <ClientPage 
+          initialData={items} 
+          initialGenre="other"
+          initialPeriod="24h"
+          popularTags={popularTags}
+        />
+      </SuspenseWrapper>
     </div>
   )
 }

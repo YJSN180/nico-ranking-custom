@@ -3,6 +3,7 @@ import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
 import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
+import { SuspenseWrapper } from '@/components/suspense-wrapper'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
@@ -149,13 +150,15 @@ export default async function Home({ searchParams }: PageProps) {
           padding: '0 20px 40px'
         }}>
           <PreferenceLoader />
-          <ClientPage 
-            initialData={rankingData} 
-            initialGenre={genre}
-            initialPeriod={period}
-            initialTag={tag}
-            popularTags={popularTags}
-          />
+          <SuspenseWrapper>
+            <ClientPage 
+              initialData={rankingData} 
+              initialGenre={genre}
+              initialPeriod={period}
+              initialTag={tag}
+              popularTags={popularTags}
+            />
+          </SuspenseWrapper>
         </div>
       </main>
     )
