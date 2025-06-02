@@ -79,11 +79,12 @@ export default function ClientPage({
           setRankingData(state.items)
           setDisplayCount(state.displayCount || 100)
           setCurrentPage(state.currentPage || 1)
-          // hasMoreの復元: タグ別ランキングは常にfalse
-          if (initialTag) {
+          // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
+          if (state.hasMore === false) {
             setHasMore(false)
-          } else if (state.hasMore === false) {
-            setHasMore(false)
+          } else if (initialTag) {
+            // タグ別ランキングの場合は、データ長で判断
+            setHasMore(state.items.length >= 100)
           } else {
             setHasMore(true)
           }
@@ -132,9 +133,9 @@ export default function ClientPage({
     setDisplayCount(100)
     setRankingData(initialData)
     setCurrentPage(1)
-    // タグ別ランキングは最大100件（ページネーション非対応）
+    // タグ別ランキングの場合、初期データが100件ちょうどならhasMore=true、それ以外はfalse
     if (config.tag) {
-      setHasMore(false)
+      setHasMore(initialData.length === 100)
     } else {
       // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
       setHasMore(initialData.length > 100)
@@ -317,9 +318,27 @@ export default function ClientPage({
       
       const data = await response.json()
       
-      if (Array.isArray(data) && data.length > 0) {
+      // 新しいAPIレスポンス形式に対応
+      let items: RankingItem[]
+      let hasMoreData: boolean
+      
+      if (data.items && Array.isArray(data.items)) {
+        // 新しい形式: { items, hasMore, totalCached }
+        items = data.items
+        hasMoreData = data.hasMore ?? false
+      } else if (Array.isArray(data)) {
+        // 旧形式: 配列
+        items = data
+        hasMoreData = data.length === 100
+      } else {
+        // データがない場合
+        setHasMore(false)
+        return
+      }
+      
+      if (items.length > 0) {
         // ランク番号を調整
-        const adjustedData = data.map((item, index) => ({
+        const adjustedData = items.map((item, index) => ({
           ...item,
           rank: config.tag 
             ? currentPage * 100 + index + 1  // タグ別の場合
@@ -333,7 +352,7 @@ export default function ClientPage({
           setCurrentPage(currentPage + 1)
         }
         
-        setHasMore(data.length === 100) // 100件未満なら次はない
+        setHasMore(hasMoreData)
         // 新しく追加されたデータも表示するようdisplayCountを更新
         setDisplayCount(prev => prev + adjustedData.length)
       } else {

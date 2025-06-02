@@ -35,18 +35,31 @@ export async function GET(request: NextRequest) {
 
     // タグ別ランキングの場合
     if (tag) {
-      const cacheKey = page > 1 
-        ? `${getCacheKey(genre, period, tag)}-page${page}`
-        : getCacheKey(genre, period, tag)
+      const cacheKey = getCacheKey(genre, period, tag)
       
-      // キャッシュチェック
-      const cached = await kv.get(cacheKey)
+      // まず、cronが作成した300件のキャッシュをチェック
+      const cached = await kv.get(cacheKey) as RankingItem[] | null
       
-      if (cached) {
-        // console.log(`[API] Cache hit for ${cacheKey}`)
-        const response = NextResponse.json(cached)
+      if (cached && Array.isArray(cached)) {
+        // console.log(`[API] Cache hit for ${cacheKey}, total items: ${cached.length}`)
+        
+        // ページネーション処理
+        const itemsPerPage = 100
+        const startIdx = (page - 1) * itemsPerPage
+        const endIdx = page * itemsPerPage
+        const pageItems = cached.slice(startIdx, endIdx)
+        
+        // hasMoreフラグを計算
+        const hasMore = endIdx < cached.length
+        
+        const response = NextResponse.json({
+          items: pageItems,
+          hasMore,
+          totalCached: cached.length
+        })
         response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
         response.headers.set('X-Cache-Status', 'HIT')
+        response.headers.set('X-Total-Cached', cached.length.toString())
         return response
       }
       
@@ -91,10 +104,15 @@ export async function GET(request: NextRequest) {
         rank: (page - 1) * targetCount + index + 1
       }))
       
-      // キャッシュに保存（1時間TTL）
-      await kv.set(cacheKey, allItems, { ex: 3600 })
+      // 動的取得の場合は、個別ページキャッシュに保存
+      const dynamicCacheKey = `${cacheKey}-page${page}`
+      await kv.set(dynamicCacheKey, allItems, { ex: 3600 })
       
-      const response = NextResponse.json(allItems)
+      const response = NextResponse.json({
+        items: allItems,
+        hasMore: allItems.length >= targetCount, // 100件取れたら次のページがある可能性
+        totalCached: 0 // 動的取得の場合は総数不明
+      })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'MISS')
       return response

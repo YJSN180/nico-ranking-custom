@@ -108,9 +108,10 @@ const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'a
 
 ### Tag Support
 - Popular tags extracted from server response data
-- Tag-filtered rankings are fetched on-demand (not pre-cached)
-- **Important**: Nico Nico's tag-filtered rankings don't support pagination beyond 100 items
-- All tag rankings are limited to 100 items maximum due to platform limitations
+- **「その他」ジャンルの人気タグ**: 事前キャッシュ（最初の300件）
+- **他のジャンルのタグ**: 動的取得のみ
+- タグ別ランキングも最大500件まで取得可能（ページネーション対応）
+- キャッシュキー: `ranking-${genre}-${period}-tag-${tag}`（300件の配列）
 
 ## Testing Philosophy
 
