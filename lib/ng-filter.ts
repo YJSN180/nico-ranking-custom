@@ -15,19 +15,35 @@ const DEFAULT_NG_LIST: NGList = {
   derivedVideoIds: []
 }
 
+// NGリストのメモリキャッシュ
+let ngListCache: NGList | null = null
+let ngListCacheTime = 0
+const CACHE_DURATION = 60000 // 1分間キャッシュ
+
 // NGリストを取得
 export async function getNGList(): Promise<NGList> {
+  // キャッシュが有効な場合はキャッシュから返す
+  if (ngListCache && Date.now() - ngListCacheTime < CACHE_DURATION) {
+    return ngListCache
+  }
+  
   try {
     const [manual, derived] = await Promise.all([
       kv.get<Omit<NGList, 'derivedVideoIds'>>(NG_LIST_MANUAL_KEY),
       kv.get<string[]>(NG_LIST_DERIVED_KEY)
     ])
     
-    return {
+    const ngList = {
       ...DEFAULT_NG_LIST,
       ...(manual || {}),
       derivedVideoIds: derived || []
     }
+    
+    // キャッシュを更新
+    ngListCache = ngList
+    ngListCacheTime = Date.now()
+    
+    return ngList
   } catch (error) {
     // エラーは無視してデフォルト値を返す
     return DEFAULT_NG_LIST
@@ -37,6 +53,9 @@ export async function getNGList(): Promise<NGList> {
 // 手動NGリストを保存
 export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
   await kv.set(NG_LIST_MANUAL_KEY, ngList)
+  // キャッシュを無効化
+  ngListCache = null
+  ngListCacheTime = 0
 }
 
 // 派生NGリストに追加
@@ -57,27 +76,32 @@ export async function filterRankingItems(items: RankingItem[]): Promise<NGFilter
   const ngList = await getNGList()
   const newDerivedIds: string[] = []
   
+  // 高速検索のためにSetを作成
+  const videoIdSet = new Set([...ngList.videoIds, ...ngList.derivedVideoIds])
+  const titleSet = new Set(ngList.videoTitles)
+  const authorIdSet = new Set(ngList.authorIds)
+  const authorNameSet = new Set(ngList.authorNames)
+  
   const filteredItems = items.filter((item, index) => {
     // 既にNGリストにある場合
-    if (ngList.videoIds.includes(item.id) || 
-        ngList.derivedVideoIds.includes(item.id)) {
+    if (videoIdSet.has(item.id)) {
       return false
     }
     
     // タイトルでチェック（完全一致）
-    if (ngList.videoTitles.includes(item.title)) {
+    if (titleSet.has(item.title)) {
       newDerivedIds.push(item.id)
       return false
     }
     
     // 投稿者IDでチェック
-    if (item.authorId && ngList.authorIds.includes(item.authorId)) {
+    if (item.authorId && authorIdSet.has(item.authorId)) {
       newDerivedIds.push(item.id)
       return false
     }
     
     // 投稿者名でチェック（完全一致）
-    if (item.authorName && ngList.authorNames.includes(item.authorName)) {
+    if (item.authorName && authorNameSet.has(item.authorName)) {
       newDerivedIds.push(item.id)
       return false
     }

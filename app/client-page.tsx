@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
@@ -33,6 +33,9 @@ export default function ClientPage({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [displayCount, setDisplayCount] = useState(100) // 初期表示を100件に
+  const [currentPage, setCurrentPage] = useState(1) // 現在のページ数
+  const [hasMore, setHasMore] = useState(true) // さらに読み込めるか
+  const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -41,10 +44,38 @@ export default function ClientPage({
     60000 // 1分ごと
   )
   
-  // initialDataが変更されたときにdisplayCountをリセット
+  // sessionStorageから状態を復元
+  useEffect(() => {
+    const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+    const savedState = sessionStorage.getItem(storageKey)
+    
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        // 保存されたデータがある場合は復元
+        if (state.items && state.items.length > 0) {
+          setRankingData(state.items)
+          setDisplayCount(state.displayCount || 100)
+          setCurrentPage(state.currentPage || 1)
+          setHasMore(state.hasMore !== false)
+          
+          // スクロール位置を復元
+          setTimeout(() => {
+            window.scrollTo(0, state.scrollPosition || 0)
+          }, 100)
+        }
+      } catch (e) {
+        // エラーは無視
+      }
+    }
+  }, [initialGenre, initialPeriod, initialTag])
+  
+  // initialDataが変更されたときに状態をリセット
   useEffect(() => {
     setDisplayCount(100)
     setRankingData(initialData)
+    setCurrentPage(1)
+    setHasMore(true)
   }, [initialData])
 
   // ジャンルが変更されたときのみ人気タグをリセット
@@ -62,6 +93,8 @@ export default function ClientPage({
       setLoading(true)
       setError(null)
       setDisplayCount(100) // 新しいデータ取得時は100件にリセット
+      setCurrentPage(1) // ページ番号をリセット
+      setHasMore(true) // 追加読み込み可能状態にリセット
       
       try {
         const params = new URLSearchParams({
@@ -123,6 +156,72 @@ export default function ClientPage({
       prevConfigRef.current = config // 現在の設定を前回の設定として記録
     }
   }, [config, previousGenre])
+
+  // sessionStorageに状態を保存
+  const saveStateToStorage = useCallback(() => {
+    const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
+    const state = {
+      items: rankingData,
+      displayCount,
+      currentPage,
+      hasMore,
+      scrollPosition: window.scrollY,
+      timestamp: Date.now()
+    }
+    sessionStorage.setItem(storageKey, JSON.stringify(state))
+  }, [config, rankingData, displayCount, currentPage, hasMore])
+
+  // スクロール時に状態を保存（デバウンス付き）
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+    const handleScroll = () => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(saveStateToStorage, 300)
+    }
+    
+    window.addEventListener('scroll', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      clearTimeout(timeoutId)
+    }
+  }, [saveStateToStorage])
+
+  // タグ別ランキングの追加読み込み
+  const loadMoreItems = async () => {
+    if (!config.tag || loadingMore || !hasMore) return
+    
+    setLoadingMore(true)
+    try {
+      const params = new URLSearchParams({
+        genre: config.genre,
+        period: config.period,
+        tag: config.tag,
+        page: (currentPage + 1).toString()
+      })
+      
+      const response = await fetch(`/api/ranking?${params.toString()}`)
+      if (!response.ok) throw new Error('Failed to fetch')
+      
+      const data = await response.json()
+      
+      if (Array.isArray(data) && data.length > 0) {
+        // ランク番号を調整
+        const adjustedData = data.map((item, index) => ({
+          ...item,
+          rank: currentPage * 100 + index + 1
+        }))
+        setRankingData([...rankingData, ...adjustedData])
+        setCurrentPage(currentPage + 1)
+        setHasMore(data.length === 100) // 100件未満なら次はない
+      } else {
+        setHasMore(false)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '追加読み込みに失敗しました')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   // 表示するアイテム
   const displayItems = realtimeItems.slice(0, displayCount)
@@ -199,7 +298,10 @@ export default function ClientPage({
           {displayCount < realtimeItems.length && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
-                onClick={() => setDisplayCount(prev => Math.min(prev + 100, realtimeItems.length))}
+                onClick={() => {
+                  setDisplayCount(prev => Math.min(prev + 100, realtimeItems.length))
+                  saveStateToStorage()
+                }}
                 style={{
                   padding: '12px 32px',
                   fontSize: '16px',
@@ -212,6 +314,28 @@ export default function ClientPage({
                 }}
               >
                 もっと見る（{displayCount} / {realtimeItems.length}件）
+              </button>
+            </div>
+          )}
+          
+          {/* タグ別ランキングの場合の追加読み込みボタン */}
+          {config.tag && displayCount >= realtimeItems.length && hasMore && (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <button
+                onClick={loadMoreItems}
+                disabled={loadingMore}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '16px',
+                  background: loadingMore ? '#ccc' : '#667eea',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: loadingMore ? 'not-allowed' : 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                {loadingMore ? '読み込み中...' : 'さらに読み込む'}
               </button>
             </div>
           )}

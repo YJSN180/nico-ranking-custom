@@ -41,7 +41,7 @@ async function testSingleGenreUpdate() {
     console.log('')
     
     const genre = 'other'  // その他ジャンルに変更
-    const period = '24h'
+    const period = 'hour' as const  // 毎時ランキングをテスト
     const targetCount = 300
     const allItems: RankingItem[] = []
     let popularTags: string[] = []
