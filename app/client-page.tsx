@@ -49,6 +49,10 @@ export default function ClientPage({
   })
   const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
   
+  // スクロール復元用のフラグ
+  const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
+  const scrollPositionRef = useRef<number>(0)
+  
   // ユーザー設定の永続化
   const { updatePreferences } = useUserPreferences()
   
@@ -85,16 +89,44 @@ export default function ClientPage({
             setHasMore(true)
           }
           
-          // スクロール位置を復元
-          setTimeout(() => {
-            window.scrollTo(0, state.scrollPosition || 0)
-          }, 100)
+          // スクロール位置を保存してフラグを立てる
+          scrollPositionRef.current = state.scrollPosition || 0
+          setShouldRestoreScroll(true)
         }
       } catch (e) {
         // エラーは無視
       }
     }
   }, [initialGenre, initialPeriod, initialTag])
+  
+  // DOM更新後にスクロール位置を復元
+  useEffect(() => {
+    if (shouldRestoreScroll && scrollPositionRef.current > 0) {
+      // requestAnimationFrameを使ってレンダリング完了を待つ
+      const restoreScroll = () => {
+        requestAnimationFrame(() => {
+          // さらにsetTimeoutで確実にDOM更新を待つ
+          setTimeout(() => {
+            window.scrollTo(0, scrollPositionRef.current)
+            setShouldRestoreScroll(false)
+          }, 0)
+        })
+      }
+      
+      // displayCountに応じたアイテム数がレンダリングされるのを待つ
+      const checkAndRestore = () => {
+        const items = document.querySelectorAll('[data-testid="ranking-item"]')
+        if (items.length >= Math.min(displayCount, rankingData.length)) {
+          restoreScroll()
+        } else {
+          // まだレンダリングされていない場合は再試行
+          requestAnimationFrame(checkAndRestore)
+        }
+      }
+      
+      checkAndRestore()
+    }
+  }, [shouldRestoreScroll, displayCount, rankingData.length])
   
   // initialDataが変更されたときに状態をリセット
   useEffect(() => {
@@ -127,6 +159,7 @@ export default function ClientPage({
       setDisplayCount(100) // 新しいデータ取得時は100件にリセット
       setCurrentPage(1) // ページ番号をリセット
       setHasMore(true) // 追加読み込み可能状態にリセット
+      setShouldRestoreScroll(false) // 新しいデータ取得時はスクロール復元しない
       
       try {
         const params = new URLSearchParams({
@@ -231,6 +264,18 @@ export default function ClientPage({
     return () => {
       window.removeEventListener('scroll', handleScroll)
       clearTimeout(timeoutId)
+    }
+  }, [saveStateToStorage])
+
+  // ページ離脱時にも状態を保存
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveStateToStorage()
+    }
+    
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
   }, [saveStateToStorage])
 
