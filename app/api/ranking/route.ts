@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
-import { fetchRankingWithRetry } from '@/lib/complete-hybrid-scraper'
+import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import { filterRankingData } from '@/lib/ng-filter'
+import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
 export const runtime = 'nodejs'
@@ -59,8 +60,8 @@ export async function GET(request: NextRequest) {
       const maxAttempts = 3
       
       while (allItems.length < targetCount && currentPage < page + maxAttempts) {
-        const { items: pageItems } = await fetchRankingWithRetry(
-          genre as RankingGenre,
+        const { items: pageItems } = await scrapeRankingPage(
+          genre,
           period as RankingPeriod,
           tag,
           100,
@@ -95,8 +96,8 @@ export async function GET(request: NextRequest) {
       console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
       
       // 100件単位で動的取得
-      const { items: pageItems } = await fetchRankingWithRetry(
-        genre as RankingGenre,
+      const { items: pageItems } = await scrapeRankingPage(
+        genre,
         period as RankingPeriod,
         undefined,
         100,
@@ -156,8 +157,8 @@ export async function GET(request: NextRequest) {
     
     // キャッシュミス時はフォールバック
     console.log(`[API] Cache miss for ${cacheKey}, fetching fresh data...`)
-    const { items, popularTags } = await fetchRankingWithRetry(
-      genre as RankingGenre,
+    const { items, popularTags } = await scrapeRankingPage(
+      genre,
       period as RankingPeriod
     )
     

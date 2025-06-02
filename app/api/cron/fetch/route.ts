@@ -120,13 +120,11 @@ export async function POST(request: Request) {
         
         // 「その他」ジャンルのすべての人気タグを両期間で事前生成
         if (genre === 'other' && popularTags && popularTags.length > 0) {
-          console.log(`[Cron] Pre-caching ${popularTags.length} popular tags for ${genre} (${period})`)
           
           // すべての人気タグを処理（最大15タグ程度を想定）
           for (const tag of popularTags) {
             try {
               // タグ別ランキングを取得
-              console.log(`[Cron] Fetching tag ranking: ${genre}/${period}/${tag}`)
               const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
               
               if (tagItems.length > 0) {
@@ -166,7 +164,6 @@ export async function POST(request: Request) {
                 }))
                 
                 await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
-                console.log(`[Cron] Cached tag ranking: ${genre}/${period}/${tag} (${tagRankingItems.length} items)`)
               }
             } catch (tagError) {
               console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
