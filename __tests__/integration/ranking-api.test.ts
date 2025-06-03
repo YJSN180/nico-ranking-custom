@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
+import { NextRequest } from 'next/server'
 
 vi.mock('@vercel/kv', () => ({
   kv: {
@@ -37,7 +38,7 @@ describe('Ranking API Integration', () => {
 
     vi.mocked(kv.get).mockResolvedValueOnce(JSON.stringify(mockData))
 
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
     expect(response.status).toBe(200)
@@ -54,7 +55,7 @@ describe('Ranking API Integration', () => {
     vi.mocked(kv.get).mockResolvedValueOnce(null)
     vi.mocked(scrapeRankingPage).mockRejectedValueOnce(new Error('Scraping failed'))
 
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
     expect(response.status).toBe(200)
@@ -82,7 +83,7 @@ describe('Ranking API Integration', () => {
       popularTags: [],
     })
 
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
     expect(response.status).toBe(200)
@@ -97,7 +98,7 @@ describe('Ranking API Integration', () => {
   it('should handle KV errors gracefully', async () => {
     vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV error'))
 
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
     expect(response.status).toBe(502)

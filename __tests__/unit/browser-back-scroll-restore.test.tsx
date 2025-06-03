@@ -71,13 +71,13 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     originalScrollTo = window.scrollTo
     originalScrollY = window.scrollY
     
-    window.scrollTo = vi.fn((x, y) => {
+    window.scrollTo = vi.fn((x: any, y: any) => {
       Object.defineProperty(window, 'scrollY', {
         value: y,
         writable: true,
         configurable: true
       })
-    })
+    }) as any
     
     // requestAnimationFrameをモック
     global.requestAnimationFrame = vi.fn(cb => {

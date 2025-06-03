@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 import { kv } from '@vercel/kv'
 
 // Mock KV
@@ -32,7 +33,7 @@ describe('Data Flow Integration', () => {
     vi.mocked(kv.get).mockResolvedValueOnce(mockRealData)
     
     const { GET } = await import('@/app/api/ranking/route')
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response1 = await GET(request)
     const data1 = await response1.json()
     

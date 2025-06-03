@@ -92,18 +92,18 @@ describe('fetchRanking with pagination', () => {
       if (urlStr.includes('page=2')) {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[1], 2)
+          text: async () => createMockHtml(mockPages[1] || [], 2)
         } as Response
       } else if (urlStr.includes('page=3')) {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[2], 3)
+          text: async () => createMockHtml(mockPages[2] || [], 3)
         } as Response
       } else {
         // page=1 またはpageパラメータなし
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[0], 1)
+          text: async () => createMockHtml(mockPages[0] || [], 1)
         } as Response
       }
     })
@@ -112,18 +112,18 @@ describe('fetchRanking with pagination', () => {
     const result = await fetchRanking('other', null, 'hour', 300)
     
     expect(result.items).toHaveLength(300)
-    expect(result.items[0].id).toBe('sm1000')
-    expect(result.items[0].title).toBe('動画タイトル 1')
-    expect(result.items[0].rank).toBe(1)
-    expect(result.items[99].id).toBe('sm1099')
-    expect(result.items[99].rank).toBe(100)
-    expect(result.items[100].id).toBe('sm2000')
-    expect(result.items[100].title).toBe('動画タイトル 101')
-    expect(result.items[100].rank).toBe(101)
-    expect(result.items[199].rank).toBe(200)
-    expect(result.items[200].id).toBe('sm3000')
-    expect(result.items[200].rank).toBe(201)
-    expect(result.items[299].rank).toBe(300)
+    expect(result.items[0]?.id).toBe('sm1000')
+    expect(result.items[0]?.title).toBe('動画タイトル 1')
+    expect(result.items[0]?.rank).toBe(1)
+    expect(result.items[99]?.id).toBe('sm1099')
+    expect(result.items[99]?.rank).toBe(100)
+    expect(result.items[100]?.id).toBe('sm2000')
+    expect(result.items[100]?.title).toBe('動画タイトル 101')
+    expect(result.items[100]?.rank).toBe(101)
+    expect(result.items[199]?.rank).toBe(200)
+    expect(result.items[200]?.id).toBe('sm3000')
+    expect(result.items[200]?.rank).toBe(201)
+    expect(result.items[299]?.rank).toBe(300)
     
     // 人気タグも取得できているか
     expect(result.popularTags).toEqual(['タグ1', 'タグ2', 'タグ3'])
@@ -164,17 +164,17 @@ describe('fetchRanking with pagination', () => {
       if (urlStr.includes('page=2')) {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[1], 2)
+          text: async () => createMockHtml(mockPages[1] || [], 2)
         } as Response
       } else if (urlStr.includes('page=3')) {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[2], 3)
+          text: async () => createMockHtml(mockPages[2] || [], 3)
         } as Response
       } else {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[0], 1)
+          text: async () => createMockHtml(mockPages[0] || [], 1)
         } as Response
       }
     })
@@ -182,8 +182,8 @@ describe('fetchRanking with pagination', () => {
     const result = await fetchRanking('other', null, 'hour', 300)
     
     expect(result.items).toHaveLength(250)
-    expect(result.items[249].id).toBe('sm3049')
-    expect(result.items[249].rank).toBe(250)
+    expect(result.items[249]?.id).toBe('sm3049')
+    expect(result.items[249]?.rank).toBe(250)
   })
 
   it('should respect limit parameter', async () => {
@@ -209,12 +209,12 @@ describe('fetchRanking with pagination', () => {
       if (urlStr.includes('page=2')) {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[1], 2)
+          text: async () => createMockHtml(mockPages[1] || [], 2)
         } as Response
       } else {
         return {
           ok: true,
-          text: async () => createMockHtml(mockPages[0], 1)
+          text: async () => createMockHtml(mockPages[0] || [], 1)
         } as Response
       }
     })
@@ -222,7 +222,7 @@ describe('fetchRanking with pagination', () => {
     const result = await fetchRanking('other', null, 'hour', 150)
     
     expect(result.items).toHaveLength(150)
-    expect(result.items[149].rank).toBe(150)
+    expect(result.items[149]?.rank).toBe(150)
     
     // 2ページ分取得することを確認
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)

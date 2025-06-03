@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { scrapeRankingPage } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
+import type { RankingItem } from '@/types/ranking'
 
 // モックデータ生成
 const createMockItem = (id: string, page: number) => ({
@@ -34,7 +35,7 @@ describe('タグ別ランキングの重複排除', () => {
     // モックの設定：3ページに渡って重複を含むデータを返す
     const mockScrapeRankingPage = vi.mocked(scrapeRankingPage)
     const mockFilterRankingData = vi.mocked(filterRankingData)
-    mockFilterRankingData.mockImplementation(({ items }) => ({ items }))
+    mockFilterRankingData.mockImplementation(async ({ items }) => Promise.resolve({ items, popularTags: [] }))
     
     // ページ1: video1-video90（90件）
     mockScrapeRankingPage.mockResolvedValueOnce({
@@ -70,7 +71,7 @@ describe('タグ別ランキングの重複排除', () => {
     while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
       const result = await scrapeRankingPage('other', '24h', 'タグA', 100, tagPage)
       const pageTagItems = result.items || []
-      const { items: filteredTagItems } = await filterRankingData({ items: pageTagItems })
+      const { items: filteredTagItems } = await filterRankingData({ items: pageTagItems as RankingItem[] })
       
       // 重複を除外しながら追加
       for (const item of filteredTagItems) {
@@ -100,7 +101,7 @@ describe('タグ別ランキングの重複排除', () => {
   it('300件に到達するまで必要なページ数を取得する', async () => {
     const mockScrapeRankingPage = vi.mocked(scrapeRankingPage)
     const mockFilterRankingData = vi.mocked(filterRankingData)
-    mockFilterRankingData.mockImplementation(({ items }) => ({ items }))
+    mockFilterRankingData.mockImplementation(async ({ items }) => Promise.resolve({ items, popularTags: [] }))
     
     // ページごとに85件のユニークデータを返す（NGフィルタリング後を想定）
     for (let page = 1; page <= 4; page++) {
@@ -127,7 +128,7 @@ describe('タグ別ランキングの重複排除', () => {
     while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
       const result = await scrapeRankingPage('other', '24h', 'タグA', 100, tagPage)
       const pageTagItems = result.items || []
-      const { items: filteredTagItems } = await filterRankingData({ items: pageTagItems })
+      const { items: filteredTagItems } = await filterRankingData({ items: pageTagItems as RankingItem[] })
       
       // 重複を除外しながら追加
       for (const item of filteredTagItems) {
@@ -151,16 +152,17 @@ describe('タグ別ランキングの重複排除', () => {
   it('最大ページ数に達した場合は処理を停止する', async () => {
     const mockScrapeRankingPage = vi.mocked(scrapeRankingPage)
     const mockFilterRankingData = vi.mocked(filterRankingData)
-    mockFilterRankingData.mockImplementation(({ items }) => ({ items }))
+    mockFilterRankingData.mockImplementation(async ({ items }) => Promise.resolve({ items, popularTags: [] }))
     
     // 各ページで30件しか返さない（NGフィルタリングで大幅に減った想定）
     mockScrapeRankingPage.mockImplementation(async (genre, period, tag, limit, page) => {
-      if (page > 8) {
+      const pageNum = page ?? 1
+      if (pageNum > 8) {
         return { items: [], popularTags: [] }
       }
-      const startId = (page - 1) * 30 + 1
+      const startId = (pageNum - 1) * 30 + 1
       return {
-        items: Array.from({ length: 30 }, (_, i) => createMockItem(`video${startId + i}`, page)),
+        items: Array.from({ length: 30 }, (_, i) => createMockItem(`video${startId + i}`, pageNum)),
         popularTags: ['タグA', 'タグB']
       }
     })
@@ -175,7 +177,7 @@ describe('タグ別ランキングの重複排除', () => {
     while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
       const result = await scrapeRankingPage('other', '24h', 'タグA', 100, tagPage)
       const pageTagItems = result.items || []
-      const { items: filteredTagItems } = await filterRankingData({ items: pageTagItems })
+      const { items: filteredTagItems } = await filterRankingData({ items: pageTagItems as RankingItem[] })
       
       // 重複を除外しながら追加
       for (const item of filteredTagItems) {

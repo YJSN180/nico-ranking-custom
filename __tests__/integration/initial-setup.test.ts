@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
@@ -17,7 +18,7 @@ describe('Initial Setup Experience', () => {
     vi.mocked(kv.get).mockResolvedValueOnce(null)
     vi.mocked(scrapeRankingPage).mockRejectedValueOnce(new Error('Scraping failed'))
 
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
     expect(response.status).toBe(200) // Now returns mock data on error
@@ -44,7 +45,7 @@ describe('Initial Setup Experience', () => {
       popularTags: [],
     })
 
-    const request = new Request('http://localhost:3000/api/ranking')
+    const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
     expect(response.status).toBe(200)
