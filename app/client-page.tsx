@@ -133,7 +133,8 @@ export default function ClientPage({
     setDisplayCount(100)
     setRankingData(initialData)
     setCurrentPage(1)
-    // タグ別ランキングの場合、初期データが100件ちょうどならhasMore=true、それ以外はfalse
+    // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
+    // 実際のhasMoreはAPIレスポンスで決まる
     if (config.tag) {
       setHasMore(initialData.length === 100)
     } else {

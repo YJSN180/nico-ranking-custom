@@ -130,6 +130,77 @@ export async function updateRankingData(): Promise<UpdateResult> {
         }
       }
       
+      // 「その他」ジャンルのすべての人気タグを両期間で事前生成
+      if (genre === 'other' && popularTags && popularTags.length > 0) {
+        // すべての人気タグを処理（最大15タグ程度を想定）
+        for (const tag of popularTags) {
+          try {
+            // タグ別ランキングを取得（300件目標）
+            const targetTagCount = 300
+            const allTagItems: RankingItem[] = []
+            const seenTagVideoIds = new Set<string>()
+            let tagPage = 1
+            const maxTagPages = 8
+            
+            while (allTagItems.length < targetTagCount && tagPage <= maxTagPages) {
+              try {
+                const { items: pageTagItems } = await scrapeRankingPage(genre, period, tag, 100, tagPage)
+                
+                // ページにアイテムがない場合は終了
+                if (!pageTagItems || pageTagItems.length === 0) {
+                  break
+                }
+                
+                const convertedTagItems: RankingItem[] = pageTagItems.map((item): RankingItem => ({
+                  rank: item.rank || 0,
+                  id: item.id || '',
+                  title: item.title || '',
+                  thumbURL: item.thumbURL || '',
+                  views: item.views || 0,
+                  comments: item.comments,
+                  mylists: item.mylists,
+                  likes: item.likes,
+                  tags: item.tags,
+                  authorId: item.authorId,
+                  authorName: item.authorName,
+                  authorIcon: item.authorIcon,
+                  registeredAt: item.registeredAt
+                })).filter((item: any) => item.id && item.title)
+                
+                const { items: filteredTagItems } = await filterRankingData({ items: convertedTagItems })
+                
+                // 重複を除外しながら追加
+                for (const item of filteredTagItems) {
+                  if (!seenTagVideoIds.has(item.id)) {
+                    seenTagVideoIds.add(item.id)
+                    allTagItems.push(item)
+                  }
+                }
+                
+                tagPage++
+                
+                // 500msの遅延
+                await new Promise(resolve => setTimeout(resolve, 500))
+              } catch (pageError) {
+                // ページ取得エラーの場合はループを終了
+                break
+              }
+            }
+            
+            // 300件に切り詰め、ランク番号を振り直す
+            const tagRankingItems = allTagItems.slice(0, targetTagCount).map((item, index) => ({
+              ...item,
+              rank: index + 1
+            }))
+            
+            // KVに保存（エンコードされたタグ名をキーに使用）
+            await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
+          } catch (tagError) {
+            // タグ別ランキングの取得に失敗してもメイン処理は継続
+          }
+        }
+      }
+      
       updatedGenres.push(`${genre}-${period}`)
       // 更新成功（ログは出力しない - ESLintエラー回避）
       
