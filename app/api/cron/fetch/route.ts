@@ -58,9 +58,10 @@ export async function POST(request: Request) {
           // 300件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
           const targetCount = 300
           const allItems: RankingItem[] = []
+          const seenVideoIds = new Set<string>() // 重複チェック用
           let popularTags: string[] = []
           let page = 1
-          const maxPages = 5 // 最大5ページまで取得
+          const maxPages = 8 // 重複を考慮して上限を増やす
           
           while (allItems.length < targetCount && page <= maxPages) {
             const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, undefined, 100, page)
@@ -90,7 +91,14 @@ export async function POST(request: Request) {
             // NGフィルタリングを適用
             const { items: filteredItems } = await filterRankingData({ items: convertedItems })
             
-            allItems.push(...filteredItems)
+            // 重複を除外しながら追加
+            for (const item of filteredItems) {
+              if (!seenVideoIds.has(item.id)) {
+                seenVideoIds.add(item.id)
+                allItems.push(item)
+              }
+            }
+            
             page++
             
             // レート制限対策
@@ -132,12 +140,20 @@ export async function POST(request: Request) {
                 // NGフィルタリング後に300件確保
                 const targetCount = 300
                 const allTagItems: RankingItem[] = []
+                const seenVideoIds = new Set<string>() // 重複チェック用
                 let tagPage = 1
-                const maxTagPages = 5
+                const maxTagPages = 8 // 重複があるため上限を増やす
                 
                 while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
-                  const { items: pageTagItems } = await scrapeRankingPage(genre, period, tag, 100, tagPage)
-                  const convertedTagItems: RankingItem[] = pageTagItems.map((item): RankingItem => ({
+                  try {
+                    const { items: pageTagItems } = await scrapeRankingPage(genre, period, tag, 100, tagPage)
+                    
+                    // ページにアイテムがない場合は終了
+                    if (!pageTagItems || pageTagItems.length === 0) {
+                      break
+                    }
+                    
+                    const convertedTagItems: RankingItem[] = pageTagItems.map((item): RankingItem => ({
                     rank: item.rank || 0,
                     id: item.id || '',
                     title: item.title || '',
@@ -154,11 +170,23 @@ export async function POST(request: Request) {
                   }))
                   
                   const { items: filteredTagItems } = await filterRankingData({ items: convertedTagItems })
-                  allTagItems.push(...filteredTagItems)
-                  tagPage++
                   
-                  // 500msの遅延
-                  await new Promise(resolve => setTimeout(resolve, 500))
+                  // 重複を除外しながら追加
+                  for (const item of filteredTagItems) {
+                    if (!seenVideoIds.has(item.id)) {
+                      seenVideoIds.add(item.id)
+                      allTagItems.push(item)
+                    }
+                  }
+                  
+                    tagPage++
+                    
+                    // 500msの遅延
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                  } catch (pageError) {
+                    // ページ取得エラーの場合はループを終了
+                    break
+                  }
                 }
                 
                 // 300件に切り詰め、ランク番号を振り直す
