@@ -66,32 +66,49 @@ export default function ClientPage({
     60000 // 1分ごと
   )
   
-  // sessionStorageから状態を復元
+  // sessionStorageとlocalStorageから状態を復元
   useEffect(() => {
     const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
-    const savedState = sessionStorage.getItem(storageKey)
+    
+    // まずsessionStorageを確認
+    let savedState = sessionStorage.getItem(storageKey)
+    
+    // sessionStorageになければlocalStorageを確認（外部サイトから戻った場合用）
+    if (!savedState) {
+      savedState = localStorage.getItem(storageKey)
+      // localStorageから復元した場合は、sessionStorageにもコピー
+      if (savedState) {
+        sessionStorage.setItem(storageKey, savedState)
+      }
+    }
     
     if (savedState) {
       try {
         const state = JSON.parse(savedState)
-        // 保存されたデータがある場合は復元
-        if (state.items && state.items.length > 0) {
-          setRankingData(state.items)
-          setDisplayCount(state.displayCount || 100)
-          setCurrentPage(state.currentPage || 1)
-          // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
-          if (state.hasMore === false) {
-            setHasMore(false)
-          } else if (initialTag) {
-            // タグ別ランキングの場合は、データ長で判断
-            setHasMore(state.items.length >= 100)
-          } else {
-            setHasMore(true)
+        // 1時間以内のデータのみ復元（古いデータは使わない）
+        if (state.timestamp && Date.now() - state.timestamp < 3600000) {
+          // 保存されたデータがある場合は復元
+          if (state.items && state.items.length > 0) {
+            setRankingData(state.items)
+            setDisplayCount(state.displayCount || 100)
+            setCurrentPage(state.currentPage || 1)
+            // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
+            if (state.hasMore === false) {
+              setHasMore(false)
+            } else if (initialTag) {
+              // タグ別ランキングの場合は、データ長で判断
+              setHasMore(state.items.length >= 100)
+            } else {
+              setHasMore(true)
+            }
+            
+            // スクロール位置を保存してフラグを立てる
+            scrollPositionRef.current = state.scrollPosition || 0
+            setShouldRestoreScroll(true)
           }
-          
-          // スクロール位置を保存してフラグを立てる
-          scrollPositionRef.current = state.scrollPosition || 0
-          setShouldRestoreScroll(true)
+        } else {
+          // 古いデータは削除
+          localStorage.removeItem(storageKey)
         }
       } catch (e) {
         // エラーは無視
@@ -239,7 +256,7 @@ export default function ClientPage({
     }
   }, [config, previousGenre, updatePreferences, router])
 
-  // sessionStorageに状態を保存
+  // sessionStorageとlocalStorageに状態を保存
   const saveStateToStorage = useCallback(() => {
     const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
     const state = {
@@ -250,7 +267,10 @@ export default function ClientPage({
       scrollPosition: window.scrollY,
       timestamp: Date.now()
     }
-    sessionStorage.setItem(storageKey, JSON.stringify(state))
+    const stateString = JSON.stringify(state)
+    // 両方に保存（外部サイトから戻った場合のため）
+    sessionStorage.setItem(storageKey, stateString)
+    localStorage.setItem(storageKey, stateString)
   }, [config, rankingData, displayCount, currentPage, hasMore])
 
   // スクロール時に状態を保存（デバウンス付き）
@@ -268,15 +288,22 @@ export default function ClientPage({
     }
   }, [saveStateToStorage])
 
-  // ページ離脱時にも状態を保存
+  // ページ離脱時やリンククリック時に状態を保存
   useEffect(() => {
     const handleBeforeUnload = () => {
       saveStateToStorage()
     }
     
+    const handleSaveRankingState = () => {
+      saveStateToStorage()
+    }
+    
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('saveRankingState', handleSaveRankingState)
+    
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('saveRankingState', handleSaveRankingState)
     }
   }, [saveStateToStorage])
 
