@@ -4,6 +4,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import ClientPage from '@/app/client-page'
 import type { RankingData } from '@/types/ranking'
 
+// Next.js navigation モック
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: (key: string) => null,
+  }),
+}))
+
 // モックデータ
 const mockRankingData: RankingData = [
   {
