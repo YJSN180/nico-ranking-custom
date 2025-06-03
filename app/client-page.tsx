@@ -237,7 +237,7 @@ export default function ClientPage({
       const newUrl = newParams.toString() ? `?${newParams.toString()}` : '/'
       router.push(newUrl, { scroll: false })
     }
-  }, [config, previousGenre, updatePreferences, router])
+  }, [config, previousGenre, updatePreferences, router, currentPopularTags])
 
   // sessionStorageに状態を保存
   const saveStateToStorage = useCallback(() => {
