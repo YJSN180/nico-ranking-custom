@@ -34,6 +34,19 @@ export default function ClientPage({
     genre: initialGenre as RankingGenre,
     tag: initialTag
   })
+  
+  // URLパラメータの変更を監視してconfigを更新
+  useEffect(() => {
+    const genre = searchParams.get('genre') || 'all'
+    const period = searchParams.get('period') || '24h'
+    const tag = searchParams.get('tag') || undefined
+    
+    setConfig({
+      genre: genre as RankingGenre,
+      period: period as '24h' | 'hour',
+      tag
+    })
+  }, [searchParams])
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)

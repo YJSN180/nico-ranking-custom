@@ -197,6 +197,14 @@ export async function updateRankingData(): Promise<UpdateResult> {
             await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
           } catch (tagError) {
             // タグ別ランキングの取得に失敗してもメイン処理は継続
+            console.error(`[ERROR] Failed to cache tag ranking for "${tag}" (${genre}/${period}):`, tagError)
+            // エラーの詳細を記録
+            if (tagError instanceof Error) {
+              console.error(`  Message: ${tagError.message}`)
+              if (tagError.stack) {
+                console.error(`  Stack: ${tagError.stack.split('\n')[1]?.trim() || 'N/A'}`)
+              }
+            }
           }
         }
       }
