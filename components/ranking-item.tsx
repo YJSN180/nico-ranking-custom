@@ -24,11 +24,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       return {
         background: rank <= 3 ? rankColors[rank] : '#f5f5f5',
         color: rank <= 3 ? 'white' : '#666',
-        fontSize: '14px',
+        fontSize: '12px',
         fontWeight: '700' as const,
-        minWidth: '24px',
-        height: '24px',
-        lineHeight: '24px'
+        minWidth: '20px',
+        height: '20px',
+        lineHeight: '20px'
       }
     }
     
@@ -63,20 +63,20 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
         data-testid="ranking-item"
         className="mobile-compact"
         style={{ 
-          marginBottom: '4px',
+          marginBottom: '2px',
           background: 'white',
-          borderRadius: '6px',
+          borderRadius: '4px',
           overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
           border: '1px solid #e5e5e5',
-          height: '100px'
+          height: '80px'
         }}>
         <div style={{ 
           display: 'flex', 
           gap: '6px', 
           alignItems: 'stretch', 
           height: '100%',
-          padding: '6px'
+          padding: '4px'
         }}>
           {/* ランクバッジ */}
           <div style={{ 
@@ -102,11 +102,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               <Image
                 src={item.thumbURL}
                 alt={item.title}
-                width={90}
-                height={50}
+                width={80}
+                height={45}
                 style={{ 
                   objectFit: 'cover',
-                  borderRadius: '4px'
+                  borderRadius: '3px'
                 }}
               />
             </div>
