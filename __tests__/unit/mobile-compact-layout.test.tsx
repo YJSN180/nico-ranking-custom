@@ -86,12 +86,12 @@ describe('モバイルコンパクトレイアウト', () => {
     expect(screen.getByText('テスト投稿者')).toBeInTheDocument()
   })
 
-  it('サムネイルサイズが110x62pxに設定される', () => {
+  it('サムネイルサイズが90x50pxに設定される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
     const thumbnail = screen.getByAltText(mockItem.title)
-    expect(thumbnail).toHaveAttribute('width', '110')
-    expect(thumbnail).toHaveAttribute('height', '62')
+    expect(thumbnail).toHaveAttribute('width', '90')
+    expect(thumbnail).toHaveAttribute('height', '50')
   })
 
   it('投稿者アイコンが表示される', () => {

@@ -102,8 +102,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               <Image
                 src={item.thumbURL}
                 alt={item.title}
-                width={110}
-                height={62}
+                width={90}
+                height={50}
                 style={{ 
                   objectFit: 'cover',
                   borderRadius: '4px'
@@ -118,7 +118,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             minWidth: 0, 
             display: 'flex', 
             flexDirection: 'column',
-            justifyContent: 'space-between'
+            justifyContent: 'center',
+            gap: '2px'
           }}>
             {/* タイトル */}
             <a
@@ -131,9 +132,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               style={{ 
                 color: '#0066cc', 
                 textDecoration: 'none',
-                fontSize: '13px',
+                fontSize: '12px',
                 fontWeight: '600',
-                lineHeight: '1.3',
+                lineHeight: '1.2',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
                 WebkitBoxOrient: 'vertical',
@@ -152,7 +153,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               gap: '3px',
               fontSize: '10px',
               color: '#666',
-              marginTop: '2px'
+              marginTop: '0'
             }}>
               {/* 投稿者アイコン */}
               {item.authorIcon && (
@@ -197,12 +198,12 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             <div 
               data-testid="video-stats"
               style={{ 
-                fontSize: '10px',
+                fontSize: '9px',
                 color: '#666',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '5px',
-                marginTop: '2px',
+                gap: '4px',
+                marginTop: '0',
                 flexWrap: 'nowrap',
                 whiteSpace: 'nowrap'
               }}
