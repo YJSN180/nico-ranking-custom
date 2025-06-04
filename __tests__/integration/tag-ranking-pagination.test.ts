@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
 import * as scraperModule from '@/lib/scraper'
@@ -51,7 +52,7 @@ describe('タグ別ランキングの動的読み込み', () => {
     vi.mocked(kv.get).mockResolvedValue(null)
 
     // APIリクエスト
-    const request = new Request('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
+    const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
     const response = await GET(request)
     const data = await response.json()
 
@@ -92,7 +93,7 @@ describe('タグ別ランキングの動的読み込み', () => {
 
     vi.mocked(kv.get).mockResolvedValue(null)
 
-    const request = new Request('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=2')
+    const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=2')
     const response = await GET(request)
     const data = await response.json()
 
@@ -124,7 +125,7 @@ describe('タグ別ランキングの動的読み込み', () => {
 
     vi.mocked(kv.get).mockResolvedValue(null)
 
-    const request = new Request('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=3')
+    const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=3')
     const response = await GET(request)
     const data = await response.json()
 
@@ -151,7 +152,7 @@ describe('タグ別ランキングの動的読み込み', () => {
       newDerivedIds: []
     }) as any)
 
-    const request = new Request('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
+    const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
     const response = await GET(request)
     const data = await response.json()
 

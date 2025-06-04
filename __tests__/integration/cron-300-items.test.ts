@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/cron/fetch/route'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
@@ -53,7 +54,7 @@ describe('Cron job with 300 items collection', () => {
     })
 
     // リクエストを作成
-    const request = new Request('http://localhost:3000/api/cron/fetch', {
+    const request = new NextRequest('http://localhost:3000/api/cron/fetch', {
       method: 'POST',
       headers: {
         'authorization': 'Bearer test-secret'
@@ -79,8 +80,8 @@ describe('Cron job with 300 items collection', () => {
     expect(savedData.popularTags).toEqual(['タグ1', 'タグ2', 'タグ3'])
     
     // ランク番号が正しく振り直されているか確認
-    expect(savedData.items[0].rank).toBe(1)
-    expect(savedData.items[299].rank).toBe(300)
+    expect(savedData.items[0]?.rank).toBe(1)
+    expect(savedData.items[299]?.rank).toBe(300)
     
     // 4ページ分のデータ取得を確認（80件×3ページ + 60件×1ページ = 300件）
     const scraperCalls = vi.mocked(scrapeRankingPage).mock.calls.filter(
@@ -113,7 +114,7 @@ describe('Cron job with 300 items collection', () => {
       popularTags: []
     }))
 
-    const request = new Request('http://localhost:3000/api/cron/fetch', {
+    const request = new NextRequest('http://localhost:3000/api/cron/fetch', {
       method: 'POST',
       headers: {
         'authorization': 'Bearer test-secret'

@@ -66,38 +66,69 @@ export default function ClientPage({
     60000 // 1分ごと
   )
   
-  // sessionStorageから状態を復元
+  // sessionStorageとlocalStorageから状態を復元
   useEffect(() => {
     const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
-    const savedState = sessionStorage.getItem(storageKey)
+    
+    // まずsessionStorageを確認
+    let savedState = sessionStorage.getItem(storageKey)
+    
+    // sessionStorageになければlocalStorageを確認（外部サイトから戻った場合用）
+    if (!savedState) {
+      savedState = localStorage.getItem(storageKey)
+      // localStorageから復元した場合は、sessionStorageにもコピー
+      if (savedState) {
+        sessionStorage.setItem(storageKey, savedState)
+      }
+    }
     
     if (savedState) {
       try {
         const state = JSON.parse(savedState)
-        // 保存されたデータがある場合は復元
-        if (state.items && state.items.length > 0) {
-          setRankingData(state.items)
-          setDisplayCount(state.displayCount || 100)
-          setCurrentPage(state.currentPage || 1)
-          // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
-          if (state.hasMore === false) {
-            setHasMore(false)
-          } else if (initialTag) {
-            // タグ別ランキングの場合は、データ長で判断
-            setHasMore(state.items.length >= 100)
-          } else {
-            setHasMore(true)
+        // 1時間以内のデータのみ復元（古いデータは使わない）
+        if (state.timestamp && Date.now() - state.timestamp < 3600000) {
+          // 保存されたデータがある場合は復元
+          if (state.items && state.items.length > 0) {
+            setRankingData(state.items)
+            setDisplayCount(state.displayCount || 100)
+            setCurrentPage(state.currentPage || 1)
+            // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
+            if (state.hasMore === false) {
+              setHasMore(false)
+            } else if (initialTag) {
+              // タグ別ランキングの場合は、データ長で判断
+              setHasMore(state.items.length >= 100)
+            } else {
+              setHasMore(true)
+            }
+            
+            // スクロール位置を保存してフラグを立てる
+            scrollPositionRef.current = state.scrollPosition || 0
+            setShouldRestoreScroll(true)
           }
-          
-          // スクロール位置を保存してフラグを立てる
-          scrollPositionRef.current = state.scrollPosition || 0
-          setShouldRestoreScroll(true)
+        } else {
+          // 古いデータは削除
+          localStorage.removeItem(storageKey)
         }
       } catch (e) {
         // エラーは無視
       }
     }
-  }, [initialGenre, initialPeriod, initialTag])
+    
+    // 復元が完了したら、一度だけクリーンアップ
+    // （次回の復元で古いデータを使わないように）
+    return () => {
+      // コンポーネントがアンマウントされる時ではなく、
+      // 復元が成功した後に削除するためのフラグを設定
+      if (savedState && shouldRestoreScroll) {
+        // 少し遅延を入れて、復元処理が完了してから削除
+        setTimeout(() => {
+          sessionStorage.removeItem(storageKey)
+          // localStorageは1時間の有効期限があるので残しておく
+        }, 1000)
+      }
+    }
+  }, [initialGenre, initialPeriod, initialTag, shouldRestoreScroll])
   
   // DOM更新後にスクロール位置を復元
   useEffect(() => {
@@ -129,19 +160,26 @@ export default function ClientPage({
   }, [shouldRestoreScroll, displayCount, rankingData.length])
   
   // initialDataが変更されたときに状態をリセット
+  // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
   useEffect(() => {
-    setDisplayCount(100)
-    setRankingData(initialData)
-    setCurrentPage(1)
-    // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
-    // 実際のhasMoreはAPIレスポンスで決まる
-    if (config.tag) {
-      setHasMore(initialData.length === 100)
-    } else {
-      // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
-      setHasMore(initialData.length > 100)
+    // 復元されたデータがある場合は、initialDataの変更を無視
+    const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+    const hasRestoredData = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey)
+    
+    if (!hasRestoredData) {
+      setDisplayCount(100)
+      setRankingData(initialData)
+      setCurrentPage(1)
+      // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
+      // 実際のhasMoreはAPIレスポンスで決まる
+      if (config.tag) {
+        setHasMore(initialData.length === 100)
+      } else {
+        // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
+        setHasMore(initialData.length > 100)
+      }
     }
-  }, [initialData, config.tag])
+  }, [initialData, config.tag, initialGenre, initialPeriod, initialTag])
 
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
@@ -239,7 +277,7 @@ export default function ClientPage({
     }
   }, [config, previousGenre, updatePreferences, router, currentPopularTags])
 
-  // sessionStorageに状態を保存
+  // sessionStorageとlocalStorageに状態を保存
   const saveStateToStorage = useCallback(() => {
     const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
     const state = {
@@ -250,7 +288,10 @@ export default function ClientPage({
       scrollPosition: window.scrollY,
       timestamp: Date.now()
     }
-    sessionStorage.setItem(storageKey, JSON.stringify(state))
+    const stateString = JSON.stringify(state)
+    // 両方に保存（外部サイトから戻った場合のため）
+    sessionStorage.setItem(storageKey, stateString)
+    localStorage.setItem(storageKey, stateString)
   }, [config, rankingData, displayCount, currentPage, hasMore])
 
   // スクロール時に状態を保存（デバウンス付き）
@@ -268,15 +309,22 @@ export default function ClientPage({
     }
   }, [saveStateToStorage])
 
-  // ページ離脱時にも状態を保存
+  // ページ離脱時やリンククリック時に状態を保存
   useEffect(() => {
     const handleBeforeUnload = () => {
       saveStateToStorage()
     }
     
+    const handleSaveRankingState = () => {
+      saveStateToStorage()
+    }
+    
     window.addEventListener('beforeunload', handleBeforeUnload)
+    window.addEventListener('saveRankingState', handleSaveRankingState)
+    
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
+      window.removeEventListener('saveRankingState', handleSaveRankingState)
     }
   }, [saveStateToStorage])
 

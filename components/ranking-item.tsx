@@ -87,6 +87,11 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
             {/* タイトル */}
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
+              onClick={(e) => {
+                // 状態を保存してから遷移
+                const event = new CustomEvent('saveRankingState')
+                window.dispatchEvent(event)
+              }}
               style={{ 
                 color: '#0066cc', 
                 textDecoration: 'none',

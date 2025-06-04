@@ -67,7 +67,7 @@ describe('さらに読み込むボタンの自動表示テスト', () => {
     const secondPageData = generateMockData(101, 100)
     
     // fetch のモック設定
-    const fetchMock = global.fetch as jest.MockedFunction<typeof fetch>
+    const fetchMock = vi.mocked(global.fetch)
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => secondPageData,

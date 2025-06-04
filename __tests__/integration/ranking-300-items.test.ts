@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
@@ -47,7 +48,7 @@ describe('Ranking API with 300 items', () => {
     })
 
     // リクエストを作成
-    const request = new Request('http://localhost:3000/api/ranking?limit=300', {
+    const request = new NextRequest('http://localhost:3000/api/ranking?limit=300', {
       method: 'GET'
     })
 
@@ -79,7 +80,7 @@ describe('Ranking API with 300 items', () => {
       popularTags: []
     })
 
-    const request = new Request('http://localhost:3000/api/ranking?genre=game&limit=300', {
+    const request = new NextRequest('http://localhost:3000/api/ranking?genre=game&limit=300', {
       method: 'GET'
     })
 
@@ -115,7 +116,7 @@ describe('Ranking API with 300 items', () => {
       popularTags: []
     })
 
-    const request = new Request('http://localhost:3000/api/ranking?limit=300', {
+    const request = new NextRequest('http://localhost:3000/api/ranking?limit=300', {
       method: 'GET'
     })
 

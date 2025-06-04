@@ -3,6 +3,18 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ClientPage from '@/app/client-page'
 
+// Next.js navigation モック
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: (key: string) => null,
+  }),
+}))
+
 // localStorageのモック
 const localStorageMock = {
   getItem: vi.fn(),
