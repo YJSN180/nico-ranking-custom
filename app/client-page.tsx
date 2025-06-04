@@ -114,7 +114,21 @@ export default function ClientPage({
         // エラーは無視
       }
     }
-  }, [initialGenre, initialPeriod, initialTag])
+    
+    // 復元が完了したら、一度だけクリーンアップ
+    // （次回の復元で古いデータを使わないように）
+    return () => {
+      // コンポーネントがアンマウントされる時ではなく、
+      // 復元が成功した後に削除するためのフラグを設定
+      if (savedState && shouldRestoreScroll) {
+        // 少し遅延を入れて、復元処理が完了してから削除
+        setTimeout(() => {
+          sessionStorage.removeItem(storageKey)
+          // localStorageは1時間の有効期限があるので残しておく
+        }, 1000)
+      }
+    }
+  }, [initialGenre, initialPeriod, initialTag, shouldRestoreScroll])
   
   // DOM更新後にスクロール位置を復元
   useEffect(() => {
@@ -146,19 +160,26 @@ export default function ClientPage({
   }, [shouldRestoreScroll, displayCount, rankingData.length])
   
   // initialDataが変更されたときに状態をリセット
+  // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
   useEffect(() => {
-    setDisplayCount(100)
-    setRankingData(initialData)
-    setCurrentPage(1)
-    // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
-    // 実際のhasMoreはAPIレスポンスで決まる
-    if (config.tag) {
-      setHasMore(initialData.length === 100)
-    } else {
-      // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
-      setHasMore(initialData.length > 100)
+    // 復元されたデータがある場合は、initialDataの変更を無視
+    const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+    const hasRestoredData = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey)
+    
+    if (!hasRestoredData) {
+      setDisplayCount(100)
+      setRankingData(initialData)
+      setCurrentPage(1)
+      // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
+      // 実際のhasMoreはAPIレスポンスで決まる
+      if (config.tag) {
+        setHasMore(initialData.length === 100)
+      } else {
+        // 通常のランキングは、初期データが100件以上ある場合のみhasMore=true
+        setHasMore(initialData.length > 100)
+      }
     }
-  }, [initialData, config.tag])
+  }, [initialData, config.tag, initialGenre, initialPeriod, initialTag])
 
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
