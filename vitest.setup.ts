@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+import './__tests__/mocks/next-router'
 
 // Mock environment variables
 vi.stubEnv('NODE_ENV', 'test')
