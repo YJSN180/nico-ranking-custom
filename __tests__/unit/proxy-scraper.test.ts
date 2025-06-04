@@ -175,7 +175,7 @@ describe('proxy-scraper', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://www.nicovideo.jp/ranking/genre/all?term=24h&tag=%E3%82%B2%E3%83%BC%E3%83%A0',
-        expect.anyObject()
+        expect.any(Object)
       )
     })
 
