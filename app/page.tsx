@@ -107,7 +107,6 @@ export default async function Home({ searchParams }: PageProps) {
         <main style={{ 
           padding: '0',
           minHeight: '100vh',
-          background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
         }}>
           <HeaderWithSettings />
           

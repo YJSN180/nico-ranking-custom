@@ -9,27 +9,29 @@ export function HeaderWithSettings() {
   return (
     <>
       <header style={{
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        padding: '40px 20px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-        marginBottom: '40px',
+        background: 'linear-gradient(135deg, #0080ff 0%, #00bfff 100%)',
+        padding: '32px 20px',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+        marginBottom: '32px',
         position: 'relative'
       }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
           <h1 style={{ 
             color: '#ffffff', 
-            marginBottom: '8px',
+            marginBottom: '4px',
             textAlign: 'center',
-            fontSize: '2.5rem',
-            fontWeight: '800',
-            textShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-            letterSpacing: '-0.02em'
-          }}>ニコニコランキング</h1>
+            fontSize: 'clamp(1.5rem, 5vw, 2.5rem)',
+            fontWeight: '700',
+            textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)',
+            letterSpacing: '0.02em',
+            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif'
+          }}>ニコニコランキング(Re:turn)</h1>
           <p style={{
-            color: 'rgba(255, 255, 255, 0.9)',
+            color: 'rgba(255, 255, 255, 0.95)',
             textAlign: 'center',
-            fontSize: '1.1rem',
-            margin: 0
+            fontSize: 'clamp(0.875rem, 2.5vw, 1rem)',
+            margin: 0,
+            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif'
           }}>
             最新の人気動画をチェック
           </p>
@@ -39,22 +41,26 @@ export function HeaderWithSettings() {
           onClick={() => setIsSettingsOpen(true)}
           style={{
             position: 'absolute',
-            top: '20px',
-            right: '20px',
-            background: 'rgba(255, 255, 255, 0.2)',
-            border: 'none',
-            borderRadius: '8px',
-            padding: '8px 12px',
+            top: '16px',
+            right: '16px',
+            background: 'rgba(255, 255, 255, 0.25)',
+            border: '1px solid rgba(255, 255, 255, 0.4)',
+            borderRadius: '6px',
+            padding: '6px 10px',
             color: 'white',
-            fontSize: '20px',
+            fontSize: '18px',
             cursor: 'pointer',
-            transition: 'background-color 0.2s',
+            transition: 'all 0.2s',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)'
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.3)'
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
+            e.currentTarget.style.transform = 'scale(1.05)'
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.2)'
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
+            e.currentTarget.style.transform = 'scale(1)'
           }}
           aria-label="設定"
         >

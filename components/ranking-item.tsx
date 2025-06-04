@@ -43,13 +43,15 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
   return (
     <li 
       data-testid="ranking-item"
+      className="ranking-item-card"
       style={{ 
       marginBottom: '12px',
       background: 'white',
       borderRadius: '8px',
       overflow: 'hidden',
       boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5'
+      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5',
+      height: '100%'
     }}>
       <div style={{ padding: '16px' }}>
         {/* メインコンテンツ行 */}
@@ -74,6 +76,7 @@ export default function RankingItemComponent({ item }: RankingItemProps) {
                 alt={item.title}
                 width={160}
                 height={90}
+                className="thumbnail-image"
                 style={{ 
                   objectFit: 'cover',
                   borderRadius: '6px'

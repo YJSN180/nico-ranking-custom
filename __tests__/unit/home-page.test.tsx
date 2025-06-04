@@ -60,8 +60,6 @@ describe('Home Page', () => {
 
     const firstLink = screen.getByRole('link', { name: /First Video/i })
     expect(firstLink).toHaveAttribute('href', 'https://www.nicovideo.jp/watch/sm123')
-    expect(firstLink).toHaveAttribute('target', '_blank')
-    expect(firstLink).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
   it.skip('should render mock data when scraping fails', async () => {

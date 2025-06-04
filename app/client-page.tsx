@@ -487,8 +487,17 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 通常のリスト表示 */}
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {/* レスポンシブ表示 - モバイルでは横スクロール */}
+          <div className="block md:hidden">
+            <div className="ranking-list-mobile">
+              {displayItems.map((item) => (
+                <RankingItemComponent key={item.id} item={item} />
+              ))}
+            </div>
+          </div>
+          
+          {/* タブレット以上では通常のリスト表示 */}
+          <ul className="hidden md:block" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {displayItems.map((item) => (
               <RankingItemComponent key={item.id} item={item} />
             ))}
@@ -512,12 +521,29 @@ export default function ClientPage({
                 style={{
                   padding: '12px 32px',
                   fontSize: '16px',
-                  background: loadingMore ? '#ccc' : '#667eea',
+                  background: loadingMore ? '#b0b0b0' : '#0080ff',
                   color: 'white',
                   border: 'none',
-                  borderRadius: '8px',
+                  borderRadius: '6px',
                   cursor: loadingMore ? 'not-allowed' : 'pointer',
-                  fontWeight: 'bold'
+                  fontWeight: '600',
+                  transition: 'all 0.2s',
+                  fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
+                  boxShadow: loadingMore ? 'none' : '0 2px 8px rgba(0, 128, 255, 0.3)'
+                }}
+                onMouseEnter={(e) => {
+                  if (!loadingMore) {
+                    e.currentTarget.style.background = '#0066cc'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 128, 255, 0.4)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!loadingMore) {
+                    e.currentTarget.style.background = '#0080ff'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 128, 255, 0.3)'
+                  }
                 }}
               >
                 {loadingMore ? '読み込み中...' : 'もっと見る'}

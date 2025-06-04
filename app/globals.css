@@ -18,12 +18,8 @@
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  background: #f5f7fa;
+  min-height: 100vh;
 }
 
 /* ニコニコ動画風のスタイル */
@@ -48,4 +44,56 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* レスポンシブグリッドレイアウト */
+.ranking-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: 1fr;
+}
+
+/* タブレット（768px以上） */
+@media (min-width: 768px) {
+  .ranking-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* デスクトップ（1024px以上） */
+@media (min-width: 1024px) {
+  .ranking-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ワイドスクリーン（1536px以上） */
+@media (min-width: 1536px) {
+  .ranking-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* モバイルで横スクロール可能なリスト */
+.ranking-list-mobile {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 16px;
+}
+
+.ranking-list-mobile > * {
+  flex: 0 0 calc(100vw - 40px);
+  max-width: 400px;
+  scroll-snap-align: center;
+}
+
+/* 小さい画面でのサムネイルサイズ調整 */
+@media (max-width: 640px) {
+  .thumbnail-image {
+    width: 120px !important;
+    height: 67.5px !important;
+  }
 }

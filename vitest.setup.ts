@@ -16,3 +16,32 @@ global.console = {
   info: vi.fn(),
   debug: vi.fn(),
 }
+
+// Mock Next.js navigation globally
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: vi.fn(() => null),
+    getAll: vi.fn(() => []),
+    has: vi.fn(() => false),
+    keys: vi.fn(() => []),
+    values: vi.fn(() => []),
+    entries: vi.fn(() => []),
+    forEach: vi.fn(),
+    toString: vi.fn(() => ''),
+  }),
+  usePathname: () => '/',
+}))
+
+// Mock window.scrollTo to avoid jsdom errors
+Object.defineProperty(window, 'scrollTo', {
+  value: vi.fn(),
+  writable: true,
+})
