@@ -115,11 +115,8 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
             flex: 1, 
             minWidth: 0, 
             display: 'flex', 
-            flexDirection: 'column', 
-            justifyContent: 'space-between',
-            height: '100%',
-            paddingTop: '4px',
-            paddingBottom: '4px'
+            flexDirection: 'column',
+            justifyContent: 'space-between'
           }}>
             {/* タイトル */}
             <a
@@ -150,10 +147,10 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
             <div style={{ 
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '4px',
               fontSize: '11px',
               color: '#666',
-              marginTop: '2px'
+              marginTop: '4px'
             }}>
               {/* 投稿者アイコン */}
               {item.authorIcon && (
@@ -175,7 +172,7 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  flex: 1
+                  maxWidth: '120px'
                 }}>
                   {item.authorName || item.authorId}
                 </span>
@@ -185,14 +182,15 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
                 <span style={{ 
                   flexShrink: 0,
                   color: isNew ? '#e74c3c' : '#999',
-                  fontWeight: isNew ? '600' : '400'
+                  fontWeight: isNew ? '600' : '400',
+                  marginLeft: 'auto'
                 }}>
                   {dateDisplay}
                 </span>
               )}
             </div>
             
-            {/* 統計情報（最下部） */}
+            {/* 統計情報 */}
             <div 
               data-testid="video-stats"
               style={{ 
@@ -201,7 +199,7 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                marginTop: 'auto'
+                marginTop: '4px'
               }}
             >
               <span>{formatNumberMobile(item.views)}</span>
