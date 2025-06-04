@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import Image from 'next/image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo } from '@/lib/format-utils'
@@ -10,7 +11,7 @@ interface RankingItemProps {
   isMobile?: boolean
 }
 
-export default function RankingItemComponent({ item, isMobile = false }: RankingItemProps) {
+const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile = false }: RankingItemProps) {
   const rankColors: Record<number, string> = {
     1: '#FFD700', // Gold
     2: '#C0C0C0', // Silver
@@ -361,4 +362,6 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
       </div>
     </li>
   )
-}
+})
+
+export default RankingItemComponent
