@@ -71,100 +71,144 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
           border: '1px solid #e5e5e5',
           height: '100px'
         }}>
-        <div style={{ padding: '8px', height: '100%' }}>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch', height: '100%' }}>
-            {/* ランクバッジ */}
+        <div style={{ 
+          display: 'flex', 
+          gap: '8px', 
+          alignItems: 'center', 
+          height: '100%',
+          padding: '8px'
+        }}>
+          {/* ランクバッジ */}
+          <div style={{ 
+            ...getRankStyle(item.rank, true),
+            borderRadius: '4px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            {item.rank}
+          </div>
+          
+          {/* サムネイル（中央配置） */}
+          {item.thumbURL && (
             <div style={{ 
-              ...getRankStyle(item.rank, true),
-              borderRadius: '4px',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <Image
+                src={item.thumbURL}
+                alt={item.title}
+                width={120}
+                height={67}
+                style={{ 
+                  objectFit: 'cover',
+                  borderRadius: '4px'
+                }}
+              />
+            </div>
+          )}
+          
+          {/* コンテンツ */}
+          <div style={{ 
+            flex: 1, 
+            minWidth: 0, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'space-between',
+            height: '100%',
+            paddingTop: '4px',
+            paddingBottom: '4px'
+          }}>
+            {/* タイトル */}
+            <a
+              href={`https://www.nicovideo.jp/watch/${item.id}`}
+              onClick={(e) => {
+                const event = new CustomEvent('saveRankingState')
+                window.dispatchEvent(event)
+              }}
+              data-testid="video-title"
+              style={{ 
+                color: '#0066cc', 
+                textDecoration: 'none',
+                fontSize: '13px',
+                fontWeight: '600',
+                lineHeight: '1.3',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                wordBreak: 'break-all'
+              }}
+            >
+              {item.title}
+            </a>
+            
+            {/* 投稿者情報と投稿日時 */}
+            <div style={{ 
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              alignSelf: 'flex-start'
+              gap: '6px',
+              fontSize: '11px',
+              color: '#666',
+              marginTop: '2px'
             }}>
-              {item.rank}
-            </div>
-            
-            {/* サムネイル */}
-            {item.thumbURL && (
-              <div style={{ flexShrink: 0 }}>
+              {/* 投稿者アイコン */}
+              {item.authorIcon && (
                 <Image
-                  src={item.thumbURL}
-                  alt={item.title}
-                  width={120}
-                  height={67}
+                  src={item.authorIcon}
+                  alt={item.authorName || ''}
+                  width={16}
+                  height={16}
                   style={{ 
-                    objectFit: 'cover',
-                    borderRadius: '4px'
+                    borderRadius: '50%',
+                    border: '1px solid #e5e5e5',
+                    flexShrink: 0
                   }}
                 />
-              </div>
-            )}
-            
-            {/* コンテンツ */}
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              {/* タイトル */}
-              <a
-                href={`https://www.nicovideo.jp/watch/${item.id}`}
-                onClick={(e) => {
-                  const event = new CustomEvent('saveRankingState')
-                  window.dispatchEvent(event)
-                }}
-                data-testid="video-title"
-                style={{ 
-                  color: '#0066cc', 
-                  textDecoration: 'none',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  lineHeight: '1.3',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  wordBreak: 'break-all',
-                  marginBottom: '4px'
-                }}
-              >
-                {item.title}
-              </a>
-              
+              )}
               {/* 投稿者名 */}
               {(item.authorName || item.authorId) && (
-                <div style={{ 
-                  fontSize: '11px',
-                  color: '#666',
-                  marginBottom: '4px',
+                <span style={{ 
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flex: 1
                 }}>
                   {item.authorName || item.authorId}
-                </div>
+                </span>
               )}
-              
-              {/* 統計情報（1行） */}
-              <div 
-                data-testid="video-stats"
-                style={{ 
-                  fontSize: '11px',
-                  color: '#666',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  flexWrap: 'nowrap',
-                  overflow: 'hidden'
-                }}
-              >
-                <span>{formatNumberMobile(item.views)}</span>
-                <span>•</span>
-                <span>💬{item.comments || 0}</span>
-                <span>•</span>
-                <span>❤️{formatNumberMobile(item.likes || 0)}</span>
-                <span>•</span>
-                <span style={{ flexShrink: 0 }}>{dateDisplay}</span>
-              </div>
+              {/* 投稿日時 */}
+              {dateDisplay && (
+                <span style={{ 
+                  flexShrink: 0,
+                  color: isNew ? '#e74c3c' : '#999',
+                  fontWeight: isNew ? '600' : '400'
+                }}>
+                  {dateDisplay}
+                </span>
+              )}
+            </div>
+            
+            {/* 統計情報（最下部） */}
+            <div 
+              data-testid="video-stats"
+              style={{ 
+                fontSize: '11px',
+                color: '#666',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                marginTop: 'auto'
+              }}
+            >
+              <span>{formatNumberMobile(item.views)}</span>
+              <span>•</span>
+              <span>💬{item.comments || 0}</span>
+              <span>•</span>
+              <span>❤️{formatNumberMobile(item.likes || 0)}</span>
             </div>
           </div>
         </div>

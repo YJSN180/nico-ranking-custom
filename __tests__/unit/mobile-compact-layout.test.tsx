@@ -30,6 +30,7 @@ describe('モバイルコンパクトレイアウト', () => {
     likes: 2401,
     authorId: 'user123',
     authorName: 'テスト投稿者',
+    authorIcon: 'https://example.com/author-icon.jpg',
     registeredAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2時間前
   }
 
@@ -73,9 +74,9 @@ describe('モバイルコンパクトレイアウト', () => {
   it('統計情報が1行にコンパクトに表示される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
-    // 形式: 1.4万 • 💬47 • ❤️2,401 • 2時間前
+    // 形式: 1.4万 • 💬47 • ❤️2,401
     const stats = screen.getByTestId('video-stats')
-    expect(stats.textContent).toMatch(/1\.4万.*💬47.*❤️2,401.*2時間前/)
+    expect(stats.textContent).toMatch(/1\.4万.*💬47.*❤️2,401/)
   })
 
   it('投稿者名が表示される', () => {
@@ -90,5 +91,21 @@ describe('モバイルコンパクトレイアウト', () => {
     const thumbnail = screen.getByAltText(mockItem.title)
     expect(thumbnail).toHaveAttribute('width', '120')
     expect(thumbnail).toHaveAttribute('height', '67')
+  })
+
+  it('投稿者アイコンが表示される', () => {
+    render(<RankingItemComponent item={mockItem} isMobile={true} />)
+    
+    const authorIcon = screen.getByAltText(mockItem.authorName)
+    expect(authorIcon).toBeInTheDocument()
+    expect(authorIcon).toHaveAttribute('width', '16')
+    expect(authorIcon).toHaveAttribute('height', '16')
+    expect(authorIcon).toHaveStyle({ borderRadius: '50%' })
+  })
+
+  it('投稿日時が投稿者名の横に表示される', () => {
+    render(<RankingItemComponent item={mockItem} isMobile={true} />)
+    
+    expect(screen.getByText('2時間前')).toBeInTheDocument()
   })
 })
