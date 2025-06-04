@@ -8,6 +8,7 @@ import RankingItemComponent from '@/components/ranking-item'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -58,6 +59,9 @@ export default function ClientPage({
   
   // カスタムNGリスト
   const { filterItems } = useUserNGList()
+  
+  // モバイル検出
+  const isMobile = useMobileDetect()
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -490,7 +494,7 @@ export default function ClientPage({
           {/* 通常のリスト表示 */}
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {displayItems.map((item) => (
-              <RankingItemComponent key={item.id} item={item} />
+              <RankingItemComponent key={item.id} item={item} isMobile={isMobile} />
             ))}
           </ul>
           
