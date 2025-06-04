@@ -368,6 +368,14 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       </div>
     </li>
   )
+}, (prevProps, nextProps) => {
+  // カスタム比較関数：itemのIDが同じでisMobileが同じなら再レンダリングしない
+  return prevProps.item.id === nextProps.item.id && 
+         prevProps.isMobile === nextProps.isMobile &&
+         prevProps.item.views === nextProps.item.views &&
+         prevProps.item.comments === nextProps.item.comments &&
+         prevProps.item.mylists === nextProps.item.mylists &&
+         prevProps.item.likes === nextProps.item.likes
 })
 
 export default RankingItemComponent

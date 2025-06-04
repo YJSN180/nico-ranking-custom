@@ -91,8 +91,18 @@ export default function ClientPage({
         const state = JSON.parse(savedState)
         // 1時間以内のデータのみ復元（古いデータは使わない）
         if (state.timestamp && Date.now() - state.timestamp < 3600000) {
-          // 保存されたデータがある場合は復元
-          if (state.items && state.items.length > 0) {
+          // 新しいデータ構造（dataVersion = 1）の場合
+          if (state.dataVersion === 1) {
+            // 表示設定のみ復元（データは初期データを使用）
+            setDisplayCount(state.displayCount || 100)
+            setCurrentPage(state.currentPage || 1)
+            setHasMore(state.hasMore ?? true)
+            
+            // スクロール位置を保存してフラグを立てる
+            scrollPositionRef.current = state.scrollPosition || 0
+            setShouldRestoreScroll(true)
+          } else if (state.items && state.items.length > 0) {
+            // 旧データ構造（後方互換性のため）
             setRankingData(state.items)
             setDisplayCount(state.displayCount || 100)
             setCurrentPage(state.currentPage || 1)
@@ -283,19 +293,34 @@ export default function ClientPage({
 
   // sessionStorageとlocalStorageに状態を保存
   const saveStateToStorage = useCallback(() => {
-    const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
-    const state = {
-      items: rankingData,
-      displayCount,
-      currentPage,
-      hasMore,
-      scrollPosition: window.scrollY,
-      timestamp: Date.now()
+    try {
+      const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
+      
+      // スクロール位置と表示設定のみを保存（データは保存しない）
+      const lightState = {
+        displayCount,
+        currentPage,
+        hasMore,
+        scrollPosition: window.scrollY,
+        timestamp: Date.now(),
+        // データのIDのみを保存（完全なデータは保存しない）
+        itemIds: rankingData.map(item => item.id),
+        dataVersion: 1 // データ構造のバージョン
+      }
+      
+      const stateString = JSON.stringify(lightState)
+      
+      // サイズチェック（1MB以下）
+      if (stateString.length > 1024 * 1024) {
+        return
+      }
+      
+      // 両方に保存（外部サイトから戻った場合のため）
+      sessionStorage.setItem(storageKey, stateString)
+      localStorage.setItem(storageKey, stateString)
+    } catch (error) {
+      // エラーは静かに無視
     }
-    const stateString = JSON.stringify(state)
-    // 両方に保存（外部サイトから戻った場合のため）
-    sessionStorage.setItem(storageKey, stateString)
-    localStorage.setItem(storageKey, stateString)
   }, [config, rankingData, displayCount, currentPage, hasMore])
 
   // スクロール時に状態を保存（デバウンス付き）
