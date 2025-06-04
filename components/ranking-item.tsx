@@ -1,7 +1,6 @@
 'use client'
 
 import Image from 'next/image'
-import { ViewIcon, CommentIcon, MylistIcon, LikeIcon } from '@/components/icons'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
@@ -198,14 +197,13 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
                 color: '#666',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px',
+                gap: '8px',
                 marginTop: '4px'
               }}
             >
-              <span>{formatNumberMobile(item.views)}</span>
-              <span>•</span>
-              <span>💬{item.comments || 0}</span>
-              <span>•</span>
+              <span>👁{formatNumberMobile(item.views)}</span>
+              <span>💬{formatNumberMobile(item.comments || 0)}</span>
+              <span>📁{formatNumberMobile(item.mylists || 0)}</span>
               <span>❤️{formatNumberMobile(item.likes || 0)}</span>
             </div>
           </div>
@@ -338,27 +336,23 @@ export default function RankingItemComponent({ item, isMobile = false }: Ranking
               alignItems: 'center',
               marginBottom: '8px'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                <ViewIcon style={{ width: '14px', height: '14px' }} />
-                <span>{item.views.toLocaleString()} 回再生</span>
-              </div>
+              <span style={{ color: '#666' }}>
+                👁 {formatNumberMobile(item.views)}
+              </span>
               {item.comments !== undefined && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                  <CommentIcon style={{ width: '14px', height: '14px' }} />
-                  <span>{item.comments.toLocaleString()}</span>
-                </div>
+                <span style={{ color: '#666' }}>
+                  💬 {formatNumberMobile(item.comments)}
+                </span>
               )}
               {item.mylists !== undefined && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                  <MylistIcon style={{ width: '14px', height: '14px' }} />
-                  <span>{item.mylists.toLocaleString()}</span>
-                </div>
+                <span style={{ color: '#666' }}>
+                  📁 {formatNumberMobile(item.mylists)}
+                </span>
               )}
               {item.likes !== undefined && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}>
-                  <LikeIcon style={{ width: '14px', height: '14px' }} />
-                  <span>{item.likes.toLocaleString()}</span>
-                </div>
+                <span style={{ color: '#666' }}>
+                  ❤️ {formatNumberMobile(item.likes)}
+                </span>
               )}
             </div>
             

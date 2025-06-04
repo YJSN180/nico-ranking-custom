@@ -59,7 +59,8 @@ describe('モバイルコンパクトレイアウト', () => {
   it('再生数が1万以上の場合「万」表記になる', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
-    expect(screen.getByText(/1\.4万/)).toBeInTheDocument()
+    const stats = screen.getByTestId('video-stats')
+    expect(stats.textContent).toContain('👁1.4万')
   })
 
   it('再生数が1万未満の場合カンマ区切り表記になる', () => {
@@ -68,15 +69,15 @@ describe('モバイルコンパクトレイアウト', () => {
     
     // 統計情報内で確認
     const stats = screen.getByTestId('video-stats')
-    expect(stats.textContent).toContain('2,401')
+    expect(stats.textContent).toContain('👁2,401')
   })
 
   it('統計情報が1行にコンパクトに表示される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
-    // 形式: 1.4万 • 💬47 • ❤️2,401
+    // 形式: 👁1.4万 💬47 📁234 ❤️2,401
     const stats = screen.getByTestId('video-stats')
-    expect(stats.textContent).toMatch(/1\.4万.*💬47.*❤️2,401/)
+    expect(stats.textContent).toMatch(/👁1\.4万.*💬47.*📁234.*❤️2,401/)
   })
 
   it('投稿者名が表示される', () => {
@@ -96,7 +97,7 @@ describe('モバイルコンパクトレイアウト', () => {
   it('投稿者アイコンが表示される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
-    const authorIcon = screen.getByAltText(mockItem.authorName)
+    const authorIcon = screen.getByAltText(mockItem.authorName || '')
     expect(authorIcon).toBeInTheDocument()
     expect(authorIcon).toHaveAttribute('width', '16')
     expect(authorIcon).toHaveAttribute('height', '16')
