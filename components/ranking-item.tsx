@@ -73,10 +73,10 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
         }}>
         <div style={{ 
           display: 'flex', 
-          gap: '8px', 
-          alignItems: 'center', 
+          gap: '6px', 
+          alignItems: 'stretch', 
           height: '100%',
-          padding: '8px'
+          padding: '6px'
         }}>
           {/* ランクバッジ */}
           <div style={{ 
@@ -85,7 +85,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0
+            flexShrink: 0,
+            alignSelf: 'center'
           }}>
             {item.rank}
           </div>
@@ -95,13 +96,14 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             <div style={{ 
               flexShrink: 0,
               display: 'flex',
-              alignItems: 'center'
+              alignItems: 'center',
+              alignSelf: 'center'
             }}>
               <Image
                 src={item.thumbURL}
                 alt={item.title}
-                width={120}
-                height={67}
+                width={110}
+                height={62}
                 style={{ 
                   objectFit: 'cover',
                   borderRadius: '4px'
@@ -147,18 +149,18 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             <div style={{ 
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
-              fontSize: '11px',
+              gap: '3px',
+              fontSize: '10px',
               color: '#666',
-              marginTop: '4px'
+              marginTop: '2px'
             }}>
               {/* 投稿者アイコン */}
               {item.authorIcon && (
                 <Image
                   src={item.authorIcon}
                   alt={item.authorName || ''}
-                  width={16}
-                  height={16}
+                  width={14}
+                  height={14}
                   style={{ 
                     borderRadius: '50%',
                     border: '1px solid #e5e5e5',
@@ -172,7 +174,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  maxWidth: '120px'
+                  maxWidth: '80px'
                 }}>
                   {item.authorName || item.authorId}
                 </span>
@@ -183,7 +185,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   flexShrink: 0,
                   color: isNew ? '#e74c3c' : '#999',
                   fontWeight: isNew ? '600' : '400',
-                  marginLeft: 'auto'
+                  marginLeft: 'auto',
+                  fontSize: '9px'
                 }}>
                   {dateDisplay}
                 </span>
@@ -194,18 +197,20 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             <div 
               data-testid="video-stats"
               style={{ 
-                fontSize: '11px',
+                fontSize: '10px',
                 color: '#666',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                marginTop: '4px'
+                gap: '5px',
+                marginTop: '2px',
+                flexWrap: 'nowrap',
+                whiteSpace: 'nowrap'
               }}
             >
-              <span>👁{formatNumberMobile(item.views)}</span>
-              <span>💬{formatNumberMobile(item.comments || 0)}</span>
-              <span>📁{formatNumberMobile(item.mylists || 0)}</span>
-              <span>❤️{formatNumberMobile(item.likes || 0)}</span>
+              <span style={{ flexShrink: 0 }}>👁{formatNumberMobile(item.views)}</span>
+              <span style={{ flexShrink: 0 }}>💬{formatNumberMobile(item.comments || 0)}</span>
+              <span style={{ flexShrink: 0 }}>📁{formatNumberMobile(item.mylists || 0)}</span>
+              <span style={{ flexShrink: 0 }}>❤️{formatNumberMobile(item.likes || 0)}</span>
             </div>
           </div>
         </div>

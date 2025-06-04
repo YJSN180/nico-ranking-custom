@@ -86,12 +86,12 @@ describe('モバイルコンパクトレイアウト', () => {
     expect(screen.getByText('テスト投稿者')).toBeInTheDocument()
   })
 
-  it('サムネイルサイズが120x67pxに設定される', () => {
+  it('サムネイルサイズが110x62pxに設定される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
     const thumbnail = screen.getByAltText(mockItem.title)
-    expect(thumbnail).toHaveAttribute('width', '120')
-    expect(thumbnail).toHaveAttribute('height', '67')
+    expect(thumbnail).toHaveAttribute('width', '110')
+    expect(thumbnail).toHaveAttribute('height', '62')
   })
 
   it('投稿者アイコンが表示される', () => {
@@ -99,8 +99,8 @@ describe('モバイルコンパクトレイアウト', () => {
     
     const authorIcon = screen.getByAltText(mockItem.authorName || '')
     expect(authorIcon).toBeInTheDocument()
-    expect(authorIcon).toHaveAttribute('width', '16')
-    expect(authorIcon).toHaveAttribute('height', '16')
+    expect(authorIcon).toHaveAttribute('width', '14')
+    expect(authorIcon).toHaveAttribute('height', '14')
     expect(authorIcon).toHaveStyle({ borderRadius: '50%' })
   })
 
