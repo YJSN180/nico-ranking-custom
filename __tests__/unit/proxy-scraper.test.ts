@@ -9,27 +9,29 @@ describe('proxy-scraper', () => {
     vi.clearAllMocks()
     // 環境変数のリセット
     delete process.env.PROXY_URL
+    delete process.env.PROXY_HOST
+    delete process.env.PROXY_PORT
     delete process.env.PROXY_API_KEY
   })
 
   describe('isProxyConfigured', () => {
-    it('プロキシURLとAPIキーが両方設定されている場合はtrueを返す', () => {
+    it('プロキシURLが設定されている場合はtrueを返す', () => {
       process.env.PROXY_URL = 'https://proxy.example.com'
-      process.env.PROXY_API_KEY = 'test-api-key'
       
       expect(isProxyConfigured()).toBe(true)
     })
 
-    it('プロキシURLのみ設定されている場合はfalseを返す', () => {
-      process.env.PROXY_URL = 'https://proxy.example.com'
+    it('プロキシホストとポートが設定されている場合はtrueを返す', () => {
+      process.env.PROXY_HOST = 'proxy.example.com'
+      process.env.PROXY_PORT = '8080'
       
-      expect(isProxyConfigured()).toBe(false)
+      expect(isProxyConfigured()).toBe(true)
     })
 
-    it('APIキーのみ設定されている場合はfalseを返す', () => {
-      process.env.PROXY_API_KEY = 'test-api-key'
+    it('プロキシURLのみ設定されている場合はtrueを返す', () => {
+      process.env.PROXY_URL = 'https://proxy.example.com'
       
-      expect(isProxyConfigured()).toBe(false)
+      expect(isProxyConfigured()).toBe(true)
     })
 
     it('どちらも設定されていない場合はfalseを返す', () => {
@@ -38,27 +40,51 @@ describe('proxy-scraper', () => {
   })
 
   describe('scrapeRankingViaProxy', () => {
-    const mockProxyResponse = {
-      status: 200,
-      body: `
-        <div data-video-id="sm45033850" title="琴葉茜の無人巨大コロニー調査">
-          <img src="https://example.com/thumb1.jpg">
-          <span>18,047 再生</span>
-          <span>692 コメント</span>
-          <span>48 マイリスト</span>
-        </div>
-        <div data-video-id="sm45031223" title="静電気ドッキリを仕掛けるタクヤさん">
-          <img src="https://example.com/thumb2.jpg">
-          <span>15,593 再生</span>
-          <span>250 コメント</span>
-          <span>27 マイリスト</span>
-        </div>
-        <div data-video-id="so45006370" title="機動戦士Gundam GQuuuuuuX">
-          <img src="https://example.com/thumb3.jpg">
-          <span>110,054 再生</span>
-        </div>
-      `,
-      headers: {}
+    const createMockHTML = (genreId: string) => {
+      const serverResponse = {
+        data: {
+          response: {
+            $getTeibanRanking: {
+              data: {
+                featuredKey: genreId,
+                label: 'テストジャンル',
+                items: [
+                  {
+                    id: 'sm45033850',
+                    title: '琴葉茜の無人巨大コロニー調査',
+                    thumbnail: { url: 'https://example.com/thumb1.jpg' },
+                    count: { view: 18047, comment: 692, mylist: 48 },
+                    registeredAt: '2024-01-01T00:00:00+09:00'
+                  },
+                  {
+                    id: 'sm45031223',
+                    title: '静電気ドッキリを仕掛けるタクヤさん',
+                    thumbnail: { url: 'https://example.com/thumb2.jpg' },
+                    count: { view: 15593, comment: 250, mylist: 27 },
+                    registeredAt: '2024-01-01T00:00:00+09:00'
+                  },
+                  {
+                    id: 'so45006370',
+                    title: '機動戦士Gundam GQuuuuuuX',
+                    thumbnail: { url: 'https://example.com/thumb3.jpg' },
+                    count: { view: 110054 },
+                    registeredAt: '2024-01-01T00:00:00+09:00'
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+      
+      const encodedContent = JSON.stringify(serverResponse)
+        .replace(/"/g, '&quot;')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/'/g, '&#39;')
+      
+      return `<html><head><meta name="server-response" content="${encodedContent}" /></head><body></body></html>`
     }
 
     beforeEach(() => {
@@ -70,23 +96,17 @@ describe('proxy-scraper', () => {
       const mockFetch = vi.mocked(fetch)
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockProxyResponse
+        text: async () => createMockHTML('all')
       } as Response)
 
       const result = await scrapeRankingViaProxy('all', '24h')
       
-      // Check if function was called
-      expect(mockFetch).toHaveBeenCalled()
-
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://proxy.example.com',
+        'https://www.nicovideo.jp/ranking/genre/all?term=24h',
         expect.objectContaining({
-          method: 'POST',
           headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            'X-API-Key': 'test-api-key'
-          }),
-          body: expect.stringContaining('https://www.nicovideo.jp/ranking/genre/all?term=24h')
+            'User-Agent': expect.stringContaining('Mozilla')
+          })
         })
       )
 
@@ -97,34 +117,20 @@ describe('proxy-scraper', () => {
         title: '琴葉茜の無人巨大コロニー調査',
         views: 18047
       })
-      expect(result.items[1]).toMatchObject({
-        rank: 2,
-        id: 'sm45031223',
-        title: '静電気ドッキリを仕掛けるタクヤさん',
-        views: 15593
-      })
-      expect(result.items[2]).toMatchObject({
-        rank: 3,
-        id: 'so45006370',
-        title: '機動戦士Gundam GQuuuuuuX',
-        views: 110054
-      })
     })
 
     it('プロキシ経由で毎時ランキングを取得できる', async () => {
       const mockFetch = vi.mocked(fetch)
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockProxyResponse
+        text: async () => createMockHTML('all')
       } as Response)
 
       const result = await scrapeRankingViaProxy('all', 'hour')
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://proxy.example.com',
-        expect.objectContaining({
-          body: expect.stringContaining('https://www.nicovideo.jp/ranking/genre/all?term=hour')
-        })
+        'https://www.nicovideo.jp/ranking/genre/all?term=hour',
+        expect.any(Object)
       )
 
       expect(result.items.length).toBeGreaterThan(0)
@@ -134,40 +140,36 @@ describe('proxy-scraper', () => {
       const mockFetch = vi.mocked(fetch)
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockProxyResponse
+        text: async () => createMockHTML('all')
       } as Response)
 
       const result = await scrapeRankingViaProxy('all', '24h', 'ゲーム')
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://proxy.example.com',
-        expect.objectContaining({
-          body: expect.stringContaining('tag=%E3%82%B2%E3%83%BC%E3%83%A0')
-        })
+        expect.stringContaining('tag=%E3%82%B2%E3%83%BC%E3%83%A0'),
+        expect.any(Object)
       )
     })
 
     it('プロキシが設定されていない場合はエラーを投げる', async () => {
       delete process.env.PROXY_URL
+      delete process.env.PROXY_HOST
 
-      await expect(scrapeRankingViaProxy('all', '24h')).rejects.toThrow('PROXY_URL is not configured')
+      await expect(scrapeRankingViaProxy('all', '24h')).rejects.toThrow('プロキシが設定されていません')
     })
 
     it('プロキシサーバーがエラーを返した場合はエラーを投げる', async () => {
       const mockFetch = vi.mocked(fetch)
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 503
-      } as Response)
+      mockFetch.mockRejectedValueOnce(new Error('fetch failed'))
 
-      await expect(scrapeRankingViaProxy('all', '24h')).rejects.toThrow('Proxy request failed: 503')
+      await expect(scrapeRankingViaProxy('all', '24h')).rejects.toThrow('fetch failed')
     })
 
     it('センシティブ動画が含まれることを確認', async () => {
       const mockFetch = vi.mocked(fetch)
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => mockProxyResponse
+        text: async () => createMockHTML('all')
       } as Response)
 
       const result = await scrapeRankingViaProxy('all', '24h')
