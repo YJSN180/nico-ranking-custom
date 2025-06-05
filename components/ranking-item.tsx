@@ -73,10 +73,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           borderRadius: '6px',
           overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-          border: '1px solid #e5e5e5',
-          height: '110px'
+          border: '1px solid #e5e5e5'
         }}>
-        <div style={{ padding: '6px 8px' }}>
+        <div style={{ padding: '8px' }}>
           {/* メインコンテンツ */}
           <div style={{ display: 'flex', gap: '10px' }}>
             {/* 左側：順位 + サムネイル */}
@@ -106,9 +105,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               flex: 1, 
               display: 'flex', 
               flexDirection: 'column', 
-              gap: '3px',
+              gap: '4px',
               minWidth: 0,
-              justifyContent: 'center'
+              paddingTop: '2px'
             }}>
               {/* タイトル */}
               <a
