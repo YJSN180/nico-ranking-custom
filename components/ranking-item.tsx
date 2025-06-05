@@ -272,7 +272,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 style={{ 
                   color: '#0066cc', 
                   textDecoration: 'none',
-                  fontSize: '15px',
+                  fontSize: '16px',
                   fontWeight: '600',
                   lineHeight: '1.4',
                   display: 'block',
@@ -313,7 +313,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                     style={{ 
                       color: '#666',
                       textDecoration: 'none',
-                      fontSize: '13px',
+                      fontSize: '14px',
                       fontWeight: '500'
                     }}
                   >
@@ -321,7 +321,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   </a>
                   {dateDisplay && (
                     <span style={{ 
-                      fontSize: '12px',
+                      fontSize: '13px',
                       color: isNew ? '#e74c3c' : '#999',
                       fontWeight: isNew ? '600' : '400'
                     }}>
@@ -335,7 +335,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               <div style={{ 
                 display: 'flex', 
                 gap: '12px', 
-                fontSize: '12px', 
+                fontSize: '14px', 
                 flexWrap: 'wrap', 
                 alignItems: 'center'
               }}>
