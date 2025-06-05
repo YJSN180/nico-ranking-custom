@@ -150,8 +150,43 @@ describe('ジャンル別ランキング500件表示対応', () => {
     })
   })
 
-  it('300件で上限に達し、もっと見るボタンが消える', async () => {
+  it('500件で上限に達し、もっと見るボタンが消える', async () => {
     const mockData = createMockData(300)
+    
+    // 301-400, 401-500のAPIレスポンスをモック
+    ;(global.fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: createMockData(100).map((_, i) => ({
+            rank: 301 + i,
+            id: `sm${301 + i}`,
+            title: `Test Video ${301 + i}`,
+            thumbURL: 'https://example.com/thumb.jpg',
+            views: 1000,
+            comments: 10,
+            mylists: 5,
+            likes: 20
+          })),
+          hasMore: true
+        })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: createMockData(100).map((_, i) => ({
+            rank: 401 + i,
+            id: `sm${401 + i}`,
+            title: `Test Video ${401 + i}`,
+            thumbURL: 'https://example.com/thumb.jpg',
+            views: 1000,
+            comments: 10,
+            mylists: 5,
+            likes: 20
+          })),
+          hasMore: false // 500件で上限なのでfalse
+        })
+      })
     
     render(
       <ClientPage 
@@ -176,12 +211,30 @@ describe('ジャンル別ランキング500件表示対応', () => {
       expect(screen.queryByText('Test Video 201')).not.toBeInTheDocument()
     })
     
-    // 300件まで表示してもっと見るボタンが消える
+    // 300件まで表示
     fireEvent.click(screen.getByText('もっと見る'))
     await waitFor(() => {
       expect(screen.getByText('Test Video 300')).toBeInTheDocument()
-      // もっと見るボタンが消える（300件が上限）
-      expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
     })
+
+    // 301件目以降を取得（APIから）
+    fireEvent.click(screen.getByText('もっと見る'))
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled()
+      // APIレスポンスの処理を待つ
+    })
+
+    // 400件目が表示されることを確認
+    await waitFor(() => {
+      expect(screen.getByText('Test Video 400')).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // 500件まで表示してボタンが消える
+    fireEvent.click(screen.getByText('もっと見る'))
+    await waitFor(() => {
+      expect(screen.getByText('Test Video 500')).toBeInTheDocument()
+      // もっと見るボタンが消える
+      expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    }, { timeout: 3000 })
   })
 })
