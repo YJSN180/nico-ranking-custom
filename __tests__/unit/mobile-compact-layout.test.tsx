@@ -34,14 +34,15 @@ describe('モバイルコンパクトレイアウト', () => {
     registeredAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2時間前
   }
 
-  it('モバイルで動画カードがコンパクトに表示される', () => {
+  it('モバイルで動画カードが新レイアウトで表示される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
     const card = screen.getByTestId('ranking-item')
     expect(card).toBeInTheDocument()
     
-    // コンパクトなクラスが適用されている
-    expect(card.className).toContain('mobile-compact')
+    // 新レイアウトのクラスが適用されている
+    expect(card.className).toContain('mobile-v2')
+    expect(card).toHaveStyle({ height: '120px' })
   })
 
   it('タイトルが最大2行で省略される', () => {
@@ -86,22 +87,21 @@ describe('モバイルコンパクトレイアウト', () => {
     expect(screen.getByText('テスト投稿者')).toBeInTheDocument()
   })
 
-  it('サムネイルサイズが80x45pxに設定される', () => {
+  it('サムネイルサイズが120x67pxに設定される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
     const thumbnail = screen.getByAltText(mockItem.title)
-    expect(thumbnail).toHaveAttribute('width', '80')
-    expect(thumbnail).toHaveAttribute('height', '45')
+    expect(thumbnail).toHaveAttribute('width', '120')
+    expect(thumbnail).toHaveAttribute('height', '67')
   })
 
-  it('投稿者アイコンが表示される', () => {
+  it('投稿者情報が適切に表示される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
-    const authorIcon = screen.getByAltText(mockItem.authorName || '')
-    expect(authorIcon).toBeInTheDocument()
-    expect(authorIcon).toHaveAttribute('width', '14')
-    expect(authorIcon).toHaveAttribute('height', '14')
-    expect(authorIcon).toHaveStyle({ borderRadius: '50%' })
+    const authorInfo = screen.getByTestId('author-info')
+    expect(authorInfo).toBeInTheDocument()
+    expect(authorInfo).toHaveStyle({ fontSize: '13px' })
+    expect(screen.getByText('👤')).toBeInTheDocument()
   })
 
   it('投稿日時が投稿者名の横に表示される', () => {

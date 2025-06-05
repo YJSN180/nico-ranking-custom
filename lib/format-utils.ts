@@ -27,3 +27,14 @@ export function formatTimeAgo(dateString?: string): string {
   if (diffMonths < 12) return `${diffMonths}ヶ月前`
   return `${diffYears}年前`
 }
+
+// 時間表示をコンパクトにフォーマット（狭い画面用）
+export function formatTimeCompact(timeAgo: string): string {
+  return timeAgo
+    .replace('分前', 'm')
+    .replace('時間前', 'h')
+    .replace('日前', 'd')
+    .replace('週間前', 'w')
+    .replace('ヶ月前', 'M')
+    .replace('年前', 'y')
+}

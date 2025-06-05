@@ -3,7 +3,8 @@
 import { memo } from 'react'
 import Image from 'next/image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
-import { formatNumberMobile, formatTimeAgo } from '@/lib/format-utils'
+import { formatNumberMobile, formatTimeAgo, formatTimeCompact } from '@/lib/format-utils'
+import { useMobileLayout } from '@/hooks/use-mobile-layout'
 import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
@@ -12,6 +13,8 @@ interface RankingItemProps {
 }
 
 const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile = false }: RankingItemProps) {
+  const { isNarrow, isVeryNarrow } = useMobileLayout()
+  
   const rankColors: Record<number, string> = {
     1: '#FFD700', // Gold
     2: '#C0C0C0', // Silver
@@ -22,13 +25,13 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
     if (mobile) {
       // モバイル用のコンパクトなスタイル
       return {
-        background: rank <= 3 ? rankColors[rank] : '#f5f5f5',
-        color: rank <= 3 ? 'white' : '#666',
-        fontSize: '12px',
+        fontSize: '18px',
         fontWeight: '700' as const,
-        minWidth: '20px',
-        height: '20px',
-        lineHeight: '20px'
+        color: rank <= 3 ? rankColors[rank] : '#333',
+        marginBottom: '4px',
+        height: '22px',
+        display: 'flex',
+        alignItems: 'center'
       }
     }
     
@@ -56,162 +59,133 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   const isNew = isWithin24Hours(item.registeredAt)
   const dateDisplay = isMobile ? formatTimeAgo(item.registeredAt) : formatRegisteredDate(item.registeredAt)
 
-  // モバイル用コンパクトレイアウト
+  // モバイル用新レイアウト（順位を上に配置）
   if (isMobile) {
+    const timeDisplay = isVeryNarrow ? formatTimeCompact(dateDisplay) : dateDisplay
+    
     return (
       <li 
         data-testid="ranking-item"
-        className="mobile-compact"
+        className="mobile-v2"
         style={{ 
-          marginBottom: '2px',
+          marginBottom: '4px',
           background: 'white',
-          borderRadius: '4px',
+          borderRadius: '6px',
           overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
           border: '1px solid #e5e5e5',
-          height: '80px'
+          height: '120px'
         }}>
-        <div style={{ 
-          display: 'flex', 
-          gap: '6px', 
-          alignItems: 'stretch', 
-          height: '100%',
-          padding: '4px'
-        }}>
-          {/* ランクバッジ */}
-          <div style={{ 
-            ...getRankStyle(item.rank, true),
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            alignSelf: 'center'
-          }}>
-            {item.rank}
-          </div>
-          
-          {/* サムネイル（中央配置） */}
-          {item.thumbURL && (
-            <div style={{ 
-              flexShrink: 0,
-              display: 'flex',
-              alignItems: 'center',
-              alignSelf: 'center'
-            }}>
-              <Image
-                src={item.thumbURL}
-                alt={item.title}
-                width={80}
-                height={45}
-                style={{ 
-                  objectFit: 'cover',
-                  borderRadius: '3px'
-                }}
-              />
-            </div>
-          )}
-          
-          {/* コンテンツ */}
-          <div style={{ 
-            flex: 1, 
-            minWidth: 0, 
-            display: 'flex', 
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: '2px'
-          }}>
-            {/* タイトル */}
-            <a
-              href={`https://www.nicovideo.jp/watch/${item.id}`}
-              onClick={(e) => {
-                const event = new CustomEvent('saveRankingState')
-                window.dispatchEvent(event)
-              }}
-              data-testid="video-title"
-              style={{ 
-                color: '#0066cc', 
-                textDecoration: 'none',
-                fontSize: '12px',
-                fontWeight: '600',
-                lineHeight: '1.2',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                wordBreak: 'break-all'
-              }}
-            >
-              {item.title}
-            </a>
-            
-            {/* 投稿者情報と投稿日時 */}
-            <div style={{ 
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-              fontSize: '10px',
-              color: '#666',
-              marginTop: '0'
-            }}>
-              {/* 投稿者アイコン */}
-              {item.authorIcon && (
+        <div style={{ padding: '8px' }}>
+          {/* メインコンテンツ */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {/* 左側：順位 + サムネイル */}
+            <div style={{ flexShrink: 0 }}>
+              {/* 順位 */}
+              <div style={{ ...getRankStyle(item.rank, true) }}>
+                {item.rank}
+              </div>
+              
+              {/* サムネイル */}
+              {item.thumbURL && (
                 <Image
-                  src={item.authorIcon}
-                  alt={item.authorName || ''}
-                  width={14}
-                  height={14}
+                  src={item.thumbURL}
+                  alt={item.title}
+                  width={120}
+                  height={67}
                   style={{ 
-                    borderRadius: '50%',
-                    border: '1px solid #e5e5e5',
-                    flexShrink: 0
+                    objectFit: 'cover',
+                    borderRadius: '4px'
                   }}
                 />
               )}
-              {/* 投稿者名 */}
-              {(item.authorName || item.authorId) && (
-                <span style={{ 
+            </div>
+            
+            {/* 右側：テキストエリア */}
+            <div style={{ 
+              flex: 1, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '3px',
+              minWidth: 0
+            }}>
+              {/* タイトル */}
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                onClick={(e) => {
+                  const event = new CustomEvent('saveRankingState')
+                  window.dispatchEvent(event)
+                }}
+                data-testid="video-title"
+                style={{ 
+                  color: '#0066cc', 
+                  textDecoration: 'none',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  lineHeight: '1.3',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  maxWidth: '80px'
+                  wordBreak: 'break-all',
+                  minHeight: '39px'
+                }}
+              >
+                {item.title}
+              </a>
+              
+              {/* 投稿者情報 */}
+              <div 
+                data-testid="author-info"
+                style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: isVeryNarrow ? '11px' : '13px',
+                  color: '#666'
                 }}>
-                  {item.authorName || item.authorId}
-                </span>
-              )}
-              {/* 投稿日時 */}
-              {dateDisplay && (
+                {/* 投稿者アイコン */}
+                {item.authorIcon && (
+                  <span>👤</span>
+                )}
+                {/* 投稿者名 */}
+                {(item.authorName || item.authorId) && (
+                  <span style={{ 
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    maxWidth: isVeryNarrow ? '80px' : '100px'
+                  }}>
+                    {item.authorName || item.authorId}
+                  </span>
+                )}
+                <span>·</span>
+                {/* 投稿日時 */}
                 <span style={{ 
                   flexShrink: 0,
                   color: isNew ? '#e74c3c' : '#999',
-                  fontWeight: isNew ? '600' : '400',
-                  marginLeft: 'auto',
-                  fontSize: '9px'
+                  fontWeight: isNew ? '600' : '400'
                 }}>
-                  {dateDisplay}
+                  {timeDisplay}
                 </span>
-              )}
-            </div>
-            
-            {/* 統計情報 */}
-            <div 
-              data-testid="video-stats"
-              style={{ 
-                fontSize: '9px',
-                color: '#666',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                marginTop: '0',
-                flexWrap: 'nowrap',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <span style={{ flexShrink: 0 }}>👁{formatNumberMobile(item.views)}</span>
-              <span style={{ flexShrink: 0 }}>💬{formatNumberMobile(item.comments || 0)}</span>
-              <span style={{ flexShrink: 0 }}>📁{formatNumberMobile(item.mylists || 0)}</span>
-              <span style={{ flexShrink: 0 }}>❤️{formatNumberMobile(item.likes || 0)}</span>
+              </div>
+              
+              {/* 統計情報 */}
+              <div 
+                data-testid="video-stats"
+                style={{ 
+                  fontSize: isVeryNarrow ? '10px' : isNarrow ? '11px' : '12px',
+                  color: '#666',
+                  display: 'flex',
+                  gap: isVeryNarrow ? '4px' : '8px'
+                }}
+              >
+                <span>👁{formatNumberMobile(item.views)}</span>
+                <span>💬{formatNumberMobile(item.comments || 0)}</span>
+                {!isVeryNarrow && <span>📁{formatNumberMobile(item.mylists || 0)}</span>}
+                <span>❤️{formatNumberMobile(item.likes || 0)}</span>
+              </div>
             </div>
           </div>
         </div>
