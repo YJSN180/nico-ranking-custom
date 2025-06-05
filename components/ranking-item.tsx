@@ -252,86 +252,93 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           )}
           
           {/* コンテンツ */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* タイトル */}
-            <a
-              href={`https://www.nicovideo.jp/watch/${item.id}`}
-              onClick={(e) => {
-                // 状態を保存してから遷移
-                const event = new CustomEvent('saveRankingState')
-                window.dispatchEvent(event)
-              }}
-              style={{ 
-                color: '#0066cc', 
-                textDecoration: 'none',
-                fontSize: '15px',
-                fontWeight: '600',
-                lineHeight: '1.4',
-                display: 'block',
-                marginBottom: '6px',
-                wordBreak: 'break-word'
-              }}
-            >
-              {item.title}
-            </a>
-            
-            {/* 投稿者情報 */}
-            {(item.authorName || item.authorId) && (
+          <div style={{ 
+            flex: 1, 
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            minHeight: '90px'
+          }}>
+            <div>
+              {/* タイトル */}
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                onClick={(e) => {
+                  // 状態を保存してから遷移
+                  const event = new CustomEvent('saveRankingState')
+                  window.dispatchEvent(event)
+                }}
+                style={{ 
+                  color: '#0066cc', 
+                  textDecoration: 'none',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  lineHeight: '1.4',
+                  display: 'block',
+                  marginBottom: '6px',
+                  wordBreak: 'break-word'
+                }}
+              >
+                {item.title}
+              </a>
+              
+              {/* 投稿者情報 */}
+              {(item.authorName || item.authorId) && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  {item.authorIcon && (
+                    <Image
+                      src={item.authorIcon}
+                      alt={item.authorName || ''}
+                      width={24}
+                      height={24}
+                      style={{ 
+                        borderRadius: '50%',
+                        border: '1px solid #e5e5e5'
+                      }}
+                    />
+                  )}
+                  <a
+                    href={item.authorId?.startsWith('channel/') 
+                      ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
+                      : item.authorId?.startsWith('community/') 
+                      ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
+                      : `https://www.nicovideo.jp/user/${item.authorId}`
+                    }
+                    style={{ 
+                      color: '#666',
+                      textDecoration: 'none',
+                      fontSize: '13px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {item.authorName || item.authorId}
+                  </a>
+                  {dateDisplay && (
+                    <span style={{ 
+                      fontSize: '12px',
+                      color: isNew ? '#e74c3c' : '#999',
+                      fontWeight: isNew ? '600' : '400'
+                    }}>
+                      {dateDisplay}
+                    </span>
+                  )}
+                </div>
+              )}
+              
+              {/* 統計情報 */}
               <div style={{ 
                 display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                marginBottom: '8px'
+                gap: '12px', 
+                fontSize: '12px', 
+                flexWrap: 'wrap', 
+                alignItems: 'center'
               }}>
-                {item.authorIcon && (
-                  <Image
-                    src={item.authorIcon}
-                    alt={item.authorName || ''}
-                    width={24}
-                    height={24}
-                    style={{ 
-                      borderRadius: '50%',
-                      border: '1px solid #e5e5e5'
-                    }}
-                  />
-                )}
-                <a
-                  href={item.authorId?.startsWith('channel/') 
-                    ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
-                    : item.authorId?.startsWith('community/') 
-                    ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
-                    : `https://www.nicovideo.jp/user/${item.authorId}`
-                  }
-                  style={{ 
-                    color: '#666',
-                    textDecoration: 'none',
-                    fontSize: '13px',
-                    fontWeight: '500'
-                  }}
-                >
-                  {item.authorName || item.authorId}
-                </a>
-                {dateDisplay && (
-                  <span style={{ 
-                    fontSize: '12px',
-                    color: isNew ? '#e74c3c' : '#999',
-                    fontWeight: isNew ? '600' : '400'
-                  }}>
-                    {dateDisplay}
-                  </span>
-                )}
-              </div>
-            )}
-            
-            {/* 統計情報 */}
-            <div style={{ 
-              display: 'flex', 
-              gap: '12px', 
-              fontSize: '12px', 
-              flexWrap: 'wrap', 
-              alignItems: 'center',
-              marginBottom: '8px'
-            }}>
               <span style={{ color: '#666' }}>
                 👁 {formatNumberMobile(item.views)}
               </span>
@@ -351,7 +358,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 </span>
               )}
             </div>
-            
+            </div>
           </div>
         </div>
       </div>
