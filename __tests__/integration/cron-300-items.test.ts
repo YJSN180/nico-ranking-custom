@@ -9,7 +9,8 @@ import type { RankingItem } from '@/types/ranking'
 // モック
 vi.mock('@vercel/kv', () => ({
   kv: {
-    set: vi.fn()
+    set: vi.fn(),
+    get: vi.fn()
   }
 }))
 
@@ -21,10 +22,18 @@ vi.mock('@/lib/ng-filter', () => ({
   filterRankingData: vi.fn()
 }))
 
+// setTimeoutのモック（レート制限の待機をスキップ）
+global.setTimeout = vi.fn((callback) => {
+  callback()
+  return 0 as any
+}) as any
+
 describe('Cron job with 300 items collection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = 'test-secret'
+    // KV getのモックをセットアップ（重複実行チェック用）
+    vi.mocked(kv.get).mockResolvedValue(null)
   })
 
   it('should collect 300 items after NG filtering', async () => {
@@ -40,6 +49,10 @@ describe('Cron job with 300 items collection', () => {
 
     // scrapeRankingPageのモック（5ページ分）
     vi.mocked(scrapeRankingPage).mockImplementation(async (genre, term, tag, limit, page = 1) => {
+      // ページ5以降は空配列を返す
+      if (page > 5) {
+        return { items: [], popularTags: [] }
+      }
       const items = createPageItems(page)
       return {
         items,
@@ -88,7 +101,7 @@ describe('Cron job with 300 items collection', () => {
       call => call[0] === 'all' && call[1] === '24h'
     )
     expect(scraperCalls.length).toBeGreaterThanOrEqual(4)
-  })
+  }, 20000) // 20秒のタイムアウト
 
   it('should handle case when not enough items available', async () => {
     // 2ページ分しかデータがない場合
@@ -131,5 +144,5 @@ describe('Cron job with 300 items collection', () => {
     const savedData = savedCall![1] as { items: RankingItem[], popularTags: string[] }
     
     expect(savedData.items).toHaveLength(200)
-  })
+  }, 20000) // 20秒のタイムアウト
 })

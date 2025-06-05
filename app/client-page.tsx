@@ -8,6 +8,7 @@ import RankingItemComponent from '@/components/ranking-item'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -52,12 +53,49 @@ export default function ClientPage({
   // スクロール復元用のフラグ
   const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
   const scrollPositionRef = useRef<number>(0)
+  const abortControllerRef = useRef<AbortController | null>(null)
   
   // ユーザー設定の永続化
   const { updatePreferences } = useUserPreferences()
   
   // カスタムNGリスト
   const { filterItems } = useUserNGList()
+  
+  // モバイル検出
+  const isMobile = useMobileDetect()
+  
+  // ストレージのクリーンアップ
+  const cleanupOldStorage = useCallback(() => {
+    try {
+      const now = Date.now()
+      const oneHourAgo = now - 60 * 60 * 1000
+      
+      // localStorageのクリーンアップ
+      const keysToRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith('ranking-state-')) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || '{}')
+            if (data.timestamp && data.timestamp < oneHourAgo) {
+              keysToRemove.push(key)
+            }
+          } catch {
+            // パースエラーの場合も削除
+            keysToRemove.push(key)
+          }
+        }
+      }
+      
+      // 一括削除
+      keysToRemove.forEach(key => localStorage.removeItem(key))
+      
+      // sessionStorageもクリア（念のため）
+      sessionStorage.clear()
+    } catch (error) {
+      // エラーは静かに無視
+    }
+  }, [])
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -87,8 +125,18 @@ export default function ClientPage({
         const state = JSON.parse(savedState)
         // 1時間以内のデータのみ復元（古いデータは使わない）
         if (state.timestamp && Date.now() - state.timestamp < 3600000) {
-          // 保存されたデータがある場合は復元
-          if (state.items && state.items.length > 0) {
+          // 新しいデータ構造（dataVersion = 1）の場合
+          if (state.dataVersion === 1) {
+            // 表示設定のみ復元（データは初期データを使用）
+            setDisplayCount(state.displayCount || 100)
+            setCurrentPage(state.currentPage || 1)
+            setHasMore(state.hasMore ?? true)
+            
+            // スクロール位置を保存してフラグを立てる
+            scrollPositionRef.current = state.scrollPosition || 0
+            setShouldRestoreScroll(true)
+          } else if (state.items && state.items.length > 0) {
+            // 旧データ構造（後方互換性のため）
             setRankingData(state.items)
             setDisplayCount(state.displayCount || 100)
             setCurrentPage(state.currentPage || 1)
@@ -193,12 +241,24 @@ export default function ClientPage({
 
   useEffect(() => {
     const fetchRanking = async () => {
+      // 前回のリクエストをキャンセル
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+      
+      // 新しいAbortControllerを作成
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      
       setLoading(true)
       setError(null)
       setDisplayCount(100) // 新しいデータ取得時は100件にリセット
       setCurrentPage(1) // ページ番号をリセット
       setHasMore(true) // 追加読み込み可能状態にリセット
       setShouldRestoreScroll(false) // 新しいデータ取得時はスクロール復元しない
+      
+      // ジャンル/タグ切り替え時にストレージをクリーンアップ
+      cleanupOldStorage()
       
       try {
         const params = new URLSearchParams({
@@ -210,7 +270,9 @@ export default function ClientPage({
           params.append('tag', config.tag)
         }
         
-        const response = await fetch(`/api/ranking?${params}`)
+        const response = await fetch(`/api/ranking?${params}`, {
+          signal: controller.signal
+        })
         
         if (!response.ok) {
           throw new Error('ランキングの取得に失敗しました')
@@ -242,8 +304,11 @@ export default function ClientPage({
         if (previousGenre !== config.genre) {
           setPreviousGenre(config.genre)
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'エラーが発生しました')
+      } catch (err: any) {
+        // AbortErrorは無視
+        if (err.name !== 'AbortError') {
+          setError(err instanceof Error ? err.message : 'エラーが発生しました')
+        }
       } finally {
         setLoading(false)
       }
@@ -275,34 +340,54 @@ export default function ClientPage({
       const newUrl = newParams.toString() ? `?${newParams.toString()}` : '/'
       router.push(newUrl, { scroll: false })
     }
-  }, [config, previousGenre, updatePreferences, router, currentPopularTags])
+  }, [config, previousGenre, updatePreferences, router, currentPopularTags, cleanupOldStorage])
 
-  // sessionStorageとlocalStorageに状態を保存
+  // localStorageに状態を保存（sessionStorageは使用しない）
   const saveStateToStorage = useCallback(() => {
-    const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
-    const state = {
-      items: rankingData,
-      displayCount,
-      currentPage,
-      hasMore,
-      scrollPosition: window.scrollY,
-      timestamp: Date.now()
+    try {
+      const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
+      
+      // スクロール位置と表示設定のみを保存（IDリストは保存しない）
+      const lightState = {
+        displayCount,
+        currentPage,
+        hasMore,
+        scrollPosition: window.scrollY,
+        timestamp: Date.now(),
+        dataVersion: 2 // データ構造のバージョンを更新
+      }
+      
+      const stateString = JSON.stringify(lightState)
+      
+      // サイズチェック（10KB以下に制限）
+      if (stateString.length > 10 * 1024) {
+        return
+      }
+      
+      // localStorageのみに保存
+      localStorage.setItem(storageKey, stateString)
+    } catch (error) {
+      // エラーは静かに無視
     }
-    const stateString = JSON.stringify(state)
-    // 両方に保存（外部サイトから戻った場合のため）
-    sessionStorage.setItem(storageKey, stateString)
-    localStorage.setItem(storageKey, stateString)
-  }, [config, rankingData, displayCount, currentPage, hasMore])
+  }, [config, displayCount, currentPage, hasMore])
 
   // スクロール時に状態を保存（デバウンス付き）
   useEffect(() => {
     let timeoutId: NodeJS.Timeout
     const handleScroll = () => {
       clearTimeout(timeoutId)
-      timeoutId = setTimeout(saveStateToStorage, 300)
+      // より長いデバウンス時間と、スクロール量チェックを追加
+      timeoutId = setTimeout(() => {
+        const scrollDiff = Math.abs(window.scrollY - (scrollPositionRef.current || 0))
+        // 100px以上スクロールした場合のみ保存
+        if (scrollDiff > 100) {
+          scrollPositionRef.current = window.scrollY
+          saveStateToStorage()
+        }
+      }, 1000) // 300ms → 1000msに増加
     }
     
-    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', handleScroll)
       clearTimeout(timeoutId)
@@ -490,7 +575,7 @@ export default function ClientPage({
           {/* 通常のリスト表示 */}
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {displayItems.map((item) => (
-              <RankingItemComponent key={item.id} item={item} />
+              <RankingItemComponent key={item.id} item={item} isMobile={isMobile} />
             ))}
           </ul>
           

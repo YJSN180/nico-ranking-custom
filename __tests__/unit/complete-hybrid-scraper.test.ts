@@ -88,11 +88,11 @@ describe('complete-hybrid-scraper', () => {
       const htmlWithoutTrendTags = `
 <html>
   <head>
-    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;all&quot;,&quot;label&quot;:&quot;総合&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;テスト&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;test.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:100}}]}}}}" />
+    <meta name="server-response" content="{&quot;data&quot;:{&quot;response&quot;:{&quot;$getTeibanRanking&quot;:{&quot;data&quot;:{&quot;featuredKey&quot;:&quot;e9uj2uks&quot;,&quot;label&quot;:&quot;総合&quot;,&quot;items&quot;:[{&quot;id&quot;:&quot;sm1&quot;,&quot;title&quot;:&quot;テスト&quot;,&quot;thumbnail&quot;:{&quot;url&quot;:&quot;test.jpg&quot;},&quot;count&quot;:{&quot;view&quot;:100}}]}}}}}" />
   </head>
   <body>
-    <a href="/ranking/genre/all?tag=タグ1">タグ1</a>
-    <a href="/ranking/genre/all?tag=タグ2">タグ2</a>
+    <a href="/ranking/genre/e9uj2uks?tag=%E3%82%BF%E3%82%B01">タグ1</a>
+    <a href="/ranking/genre/e9uj2uks?tag=%E3%82%BF%E3%82%B02">タグ2</a>
   </body>
 </html>
       `

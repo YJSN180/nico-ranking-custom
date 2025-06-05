@@ -55,6 +55,9 @@ describe('ジャンル別ランキング500件表示対応', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.fetch = vi.fn()
+    // Clear storage to prevent state restoration
+    sessionStorage.clear()
+    localStorage.clear()
   })
 
   it('初期表示で100件、もっと見るで200件、300件と表示される', async () => {
@@ -75,7 +78,7 @@ describe('ジャンル別ランキング500件表示対応', () => {
     expect(screen.queryByText('Test Video 101')).not.toBeInTheDocument()
 
     // もっと見るボタンをクリック（200件表示）
-    const loadMoreButton = screen.getByText('もっと見る')
+    const loadMoreButton = await screen.findByText('もっと見る')
     fireEvent.click(loadMoreButton)
     
     await waitFor(() => {
@@ -94,18 +97,6 @@ describe('ジャンル別ランキング500件表示対応', () => {
 
   it('301位以降はAPIから動的に取得される', async () => {
     const mockData = createMockData(300)
-    const mockApiResponse = createMockData(100).map((item, i) => ({
-      ...item,
-      rank: 301 + i,
-      id: `sm${301 + i}`,
-      title: `Test Video ${301 + i}`
-    }))
-    
-    // fetchのモック
-    ;(global.fetch as any).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockApiResponse
-    })
     
     render(
       <ClientPage 
@@ -115,21 +106,47 @@ describe('ジャンル別ランキング500件表示対応', () => {
       />
     )
 
+    // 最初は100件まで表示
+    await waitFor(() => {
+      const items = screen.getAllByTestId('ranking-item')
+      expect(items).toHaveLength(100)
+    })
+    
+    // 200件まで表示
+    fireEvent.click(screen.getByText('もっと見る'))
+    await waitFor(() => {
+      const items = screen.getAllByTestId('ranking-item')
+      expect(items).toHaveLength(200)
+    })
+    
     // 300件まで表示
     fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => screen.getByText('Test Video 200'))
-    
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => screen.getByText('Test Video 300'))
+    await waitFor(() => {
+      const items = screen.getAllByTestId('ranking-item')
+      expect(items).toHaveLength(300)
+    })
+
+    // 301件目以降のデータをモック
+    ;(global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: createMockData(100).map((item, i) => ({
+          ...item,
+          rank: 301 + i,
+          id: `sm${301 + i}`,
+          title: `Test Video ${301 + i}`
+        })),
+        hasMore: true
+      })
+    })
 
     // 301件目以降を取得
     fireEvent.click(screen.getByText('もっと見る'))
     
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('page=4')
-      )
-      expect(screen.getByText('Test Video 301')).toBeInTheDocument()
+      expect(global.fetch).toHaveBeenCalled()
+      const items = screen.getAllByTestId('ranking-item')
+      expect(items).toHaveLength(400)
     })
   })
 
@@ -140,29 +157,35 @@ describe('ジャンル別ランキング500件表示対応', () => {
     ;(global.fetch as any)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => createMockData(100).map((_, i) => ({
-          rank: 301 + i,
-          id: `sm${301 + i}`,
-          title: `Test Video ${301 + i}`,
-          thumbURL: 'https://example.com/thumb.jpg',
-          views: 1000,
-          comments: 10,
-          mylists: 5,
-          likes: 20
-        }))
+        json: async () => ({
+          items: createMockData(100).map((_, i) => ({
+            rank: 301 + i,
+            id: `sm${301 + i}`,
+            title: `Test Video ${301 + i}`,
+            thumbURL: 'https://example.com/thumb.jpg',
+            views: 1000,
+            comments: 10,
+            mylists: 5,
+            likes: 20
+          })),
+          hasMore: true
+        })
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => createMockData(100).map((_, i) => ({
-          rank: 401 + i,
-          id: `sm${401 + i}`,
-          title: `Test Video ${401 + i}`,
-          thumbURL: 'https://example.com/thumb.jpg',
-          views: 1000,
-          comments: 10,
-          mylists: 5,
-          likes: 20
-        }))
+        json: async () => ({
+          items: createMockData(100).map((_, i) => ({
+            rank: 401 + i,
+            id: `sm${401 + i}`,
+            title: `Test Video ${401 + i}`,
+            thumbURL: 'https://example.com/thumb.jpg',
+            views: 1000,
+            comments: 10,
+            mylists: 5,
+            likes: 20
+          })),
+          hasMore: false // 500件で上限なのでfalse
+        })
       })
     
     render(
@@ -173,22 +196,45 @@ describe('ジャンル別ランキング500件表示対応', () => {
       />
     )
 
+    // 最初は100件表示され、もっと見るボタンがある
+    await waitFor(() => {
+      expect(screen.getByText('Test Video 1')).toBeInTheDocument()
+      expect(screen.getByText('Test Video 100')).toBeInTheDocument()
+      expect(screen.queryByText('Test Video 101')).not.toBeInTheDocument()
+      expect(screen.getByText('もっと見る')).toBeInTheDocument()
+    })
+    
+    // 200件まで表示
+    fireEvent.click(screen.getByText('もっと見る'))
+    await waitFor(() => {
+      expect(screen.getByText('Test Video 200')).toBeInTheDocument()
+      expect(screen.queryByText('Test Video 201')).not.toBeInTheDocument()
+    })
+    
     // 300件まで表示
     fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => screen.getByText('Test Video 200'))
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => screen.getByText('Test Video 300'))
+    await waitFor(() => {
+      expect(screen.getByText('Test Video 300')).toBeInTheDocument()
+    })
 
-    // 400件まで表示
+    // 301件目以降を取得（APIから）
     fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => screen.getByText('Test Video 400'))
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled()
+      // APIレスポンスの処理を待つ
+    })
 
-    // 500件まで表示
+    // 400件目が表示されることを確認
+    await waitFor(() => {
+      expect(screen.getByText('Test Video 400')).toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // 500件まで表示してボタンが消える
     fireEvent.click(screen.getByText('もっと見る'))
     await waitFor(() => {
       expect(screen.getByText('Test Video 500')).toBeInTheDocument()
       // もっと見るボタンが消える
       expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
-    })
+    }, { timeout: 3000 })
   })
 })

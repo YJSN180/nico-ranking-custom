@@ -40,6 +40,23 @@ describe('ユーザー設定の永続化', () => {
       ok: true,
       json: async () => ({ items: [], popularTags: [] }),
     } as Response)
+    
+    // localStorageのデフォルト返却値を設定
+    localStorageMock.getItem.mockImplementation((key: string) => {
+      // NGリストのデフォルト値を返す
+      if (key === 'user-ng-list') {
+        return JSON.stringify({
+          videoIds: [],
+          videoTitles: { exact: [], partial: [] },
+          authorIds: [],
+          authorNames: { exact: [], partial: [] },
+          version: 1,
+          totalCount: 0,
+          updatedAt: new Date().toISOString()
+        })
+      }
+      return null
+    })
   })
 
   it('ジャンル変更時に設定が保存される', async () => {
@@ -54,9 +71,9 @@ describe('ユーザー設定の永続化', () => {
       />
     )
 
-    // ジャンルセレクターをクリック
-    const genreSelector = screen.getByRole('combobox', { name: /ジャンル/i })
-    await user.selectOptions(genreSelector, 'game')
+    // ジャンルボタンをクリック
+    const gameButton = screen.getByRole('button', { name: 'ゲーム' })
+    await user.click(gameButton)
 
     // localStorageに保存されたことを確認
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
@@ -124,7 +141,24 @@ describe('ユーザー設定の永続化', () => {
       version: 1,
       updatedAt: new Date().toISOString(),
     }
-    localStorageMock.getItem.mockReturnValue(JSON.stringify(savedPreferences))
+    localStorageMock.getItem.mockImplementation((key: string) => {
+      if (key === 'user-preferences') {
+        return JSON.stringify(savedPreferences)
+      }
+      // NGリストのデフォルト値を返す
+      if (key === 'user-ng-list') {
+        return JSON.stringify({
+          videoIds: [],
+          videoTitles: { exact: [], partial: [] },
+          authorIds: [],
+          authorNames: { exact: [], partial: [] },
+          version: 1,
+          totalCount: 0,
+          updatedAt: new Date().toISOString()
+        })
+      }
+      return null
+    })
 
     // app/page.tsxが設定を読み込んでClientPageに渡すことをシミュレート
     render(
@@ -138,12 +172,14 @@ describe('ユーザー設定の永続化', () => {
     )
 
     // UIに反映されていることを確認
-    const genreSelector = screen.getByRole('combobox', { name: /ジャンル/i })
-    expect(genreSelector).toHaveValue('anime')
+    // ジャンルセクション内のアニメボタンが選択状態になっているか確認
+    const genreSection = screen.getByText('ジャンル').parentElement
+    const animeButtons = genreSection?.querySelectorAll('button')
+    const animeButton = Array.from(animeButtons || []).find(btn => btn.textContent === 'アニメ')
+    expect(animeButton).toHaveStyle({ background: 'rgb(102, 126, 234)', color: 'rgb(255, 255, 255)' })
     
-    // 期間ボタンの状態を確認（実装により異なる可能性あり）
-    const periodButtons = screen.getAllByRole('button')
-    const hourButton = periodButtons.find(btn => btn.textContent === '毎時')
-    expect(hourButton?.getAttribute('data-active')).toBeTruthy()
+    // 毎時ボタンが選択状態になっているか確認
+    const hourButton = screen.getByRole('button', { name: '毎時' })
+    expect(hourButton).toHaveStyle({ background: 'rgb(102, 126, 234)', color: 'rgb(255, 255, 255)' })
   })
 })

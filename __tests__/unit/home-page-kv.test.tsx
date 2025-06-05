@@ -43,8 +43,8 @@ describe('Homepage with direct KV access', () => {
     const title = await findByText('【Farthest Frontier】領主のお姉さん実況 39【街づくり】')
     expect(title).toBeDefined()
     
-    // Should display view count
-    const views = await findByText('15,672 回再生')
+    // Should display view count in the format used by RankingItem component
+    const views = await findByText(/15,672/)
     expect(views).toBeDefined()
   })
 
@@ -101,7 +101,7 @@ describe('Homepage with direct KV access', () => {
     const title = await findByText('Scraped Video from String Fallback')
     expect(title).toBeDefined()
     
-    const views = await findByText('5,000 回再生')
+    const views = await findByText(/5,000/)
     expect(views).toBeDefined()
   })
 })

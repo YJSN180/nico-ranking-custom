@@ -53,7 +53,7 @@ describe('fetchRanking with pagination', () => {
     `
   }
 
-  it('should fetch up to 300 items using page parameter', async () => {
+  it('should fetch 100 items per page (page 1 by default)', async () => {
     // 各ページのモックアイテム
     const mockPages = [
       // page 1
@@ -108,32 +108,25 @@ describe('fetchRanking with pagination', () => {
       }
     })
 
-    // 300件取得をテスト
-    const result = await fetchRanking('other', null, 'hour', 300)
+    // 100件取得をテスト（デフォルトはページ1）
+    const result = await fetchRanking('other', null, 'hour')
     
-    expect(result.items).toHaveLength(300)
+    expect(result.items).toHaveLength(100)
     expect(result.items[0]?.id).toBe('sm1000')
     expect(result.items[0]?.title).toBe('動画タイトル 1')
     expect(result.items[0]?.rank).toBe(1)
     expect(result.items[99]?.id).toBe('sm1099')
     expect(result.items[99]?.rank).toBe(100)
-    expect(result.items[100]?.id).toBe('sm2000')
-    expect(result.items[100]?.title).toBe('動画タイトル 101')
-    expect(result.items[100]?.rank).toBe(101)
-    expect(result.items[199]?.rank).toBe(200)
-    expect(result.items[200]?.id).toBe('sm3000')
-    expect(result.items[200]?.rank).toBe(201)
-    expect(result.items[299]?.rank).toBe(300)
     
     // 人気タグも取得できているか
     expect(result.popularTags).toEqual(['タグ1', 'タグ2', 'タグ3'])
     
-    // 3回のfetch呼び出しを確認
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3)
+    // 1回のfetch呼び出しを確認（1ページのみ）
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
   })
 
-  it('should handle less than 300 items gracefully', async () => {
-    // 250件のみ存在する場合
+  it('should fetch specific page when page parameter is provided', async () => {
+    // ページ2を指定して取得
     const mockPages = [
       // page 1: 100件
       Array.from({ length: 100 }, (_, i) => ({
@@ -149,8 +142,8 @@ describe('fetchRanking with pagination', () => {
         thumbnail: { url: `thumb${101 + i}.jpg` },
         count: { view: 2000 + i }
       })),
-      // page 3: 50件のみ
-      Array.from({ length: 50 }, (_, i) => ({
+      // page 3: 100件
+      Array.from({ length: 100 }, (_, i) => ({
         id: `sm${3000 + i}`,
         title: `動画タイトル ${201 + i}`,
         thumbnail: { url: `thumb${201 + i}.jpg` },
@@ -179,15 +172,24 @@ describe('fetchRanking with pagination', () => {
       }
     })
 
-    const result = await fetchRanking('other', null, 'hour', 300)
+    const result = await fetchRanking('other', null, 'hour', 100, 2)
     
-    expect(result.items).toHaveLength(250)
-    expect(result.items[249]?.id).toBe('sm3049')
-    expect(result.items[249]?.rank).toBe(250)
+    expect(result.items).toHaveLength(100)
+    expect(result.items[0]?.id).toBe('sm2000')
+    expect(result.items[0]?.rank).toBe(101) // ページ2の最初は101位
+    expect(result.items[99]?.id).toBe('sm2099')
+    expect(result.items[99]?.rank).toBe(200)
+    
+    // 1回のfetch呼び出しを確認（ページ2のみ）
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining('page=2'),
+      expect.any(Object)
+    )
   })
 
-  it('should respect limit parameter', async () => {
-    // 150件のみ要求
+  it('should respect limit parameter when less than 100', async () => {
+    // 50件のみ要求
     const mockPages = [
       Array.from({ length: 100 }, (_, i) => ({
         id: `sm${1000 + i}`,
@@ -219,19 +221,17 @@ describe('fetchRanking with pagination', () => {
       }
     })
 
-    const result = await fetchRanking('other', null, 'hour', 150)
+    const result = await fetchRanking('other', null, 'hour', 50)
     
-    expect(result.items).toHaveLength(150)
-    expect(result.items[149]?.rank).toBe(150)
+    expect(result.items).toHaveLength(50)
+    expect(result.items[0]?.id).toBe('sm1000')
+    expect(result.items[49]?.id).toBe('sm1049')
+    expect(result.items[49]?.rank).toBe(50)
     
-    // 2ページ分取得することを確認
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
+    // 1ページ分のみ取得
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      expect.stringContaining('https://www.nicovideo.jp/ranking/genre/other?term=hour'),
-      expect.any(Object)
-    )
-    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      expect.stringContaining('https://www.nicovideo.jp/ranking/genre/other?term=hour&page=2'),
+      expect.stringContaining('https://www.nicovideo.jp/ranking/genre/ramuboyn?term=hour'),
       expect.any(Object)
     )
   })

@@ -58,13 +58,14 @@ describe('タグ別ランキングの動的読み込み', () => {
 
     // アサーション
     expect(response.status).toBe(200)
-    expect(Array.isArray(data)).toBe(true)
-    expect(data.length).toBe(100) // ちょうど100件
-    expect(data[0].rank).toBe(1)
-    expect(data[99].rank).toBe(100)
+    expect(data.items).toBeDefined()
+    expect(data.hasMore).toBe(true) // 100件取得できたので次のページがある可能性
+    expect(data.items.length).toBe(100) // ちょうど100件
+    expect(data.items[0].rank).toBe(1)
+    expect(data.items[99].rank).toBe(100)
     
     // NG作者が含まれていないことを確認
-    expect(data.every((item: any) => item.authorName !== '蠍媛')).toBe(true)
+    expect(data.items.every((item: any) => item.authorName !== '蠍媛')).toBe(true)
     
     // 2ページ分取得したことを確認
     expect(scraperModule.scrapeRankingPage).toHaveBeenCalledTimes(2)
@@ -98,9 +99,10 @@ describe('タグ別ランキングの動的読み込み', () => {
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.length).toBe(100)
-    expect(data[0].rank).toBe(101) // ページ2の最初は101
-    expect(data[99].rank).toBe(200) // ページ2の最後は200
+    expect(data.items).toBeDefined()
+    expect(data.items.length).toBe(100)
+    expect(data.items[0].rank).toBe(101) // ページ2の最初は101
+    expect(data.items[99].rank).toBe(200) // ページ2の最後は200
   })
 
   it('データが少ない場合はあるだけ返す', async () => {
@@ -113,10 +115,29 @@ describe('タグ別ランキングの動的読み込み', () => {
       authorName: `作者${i}`,
     }))
 
-    vi.spyOn(scraperModule, 'scrapeRankingPage').mockResolvedValue({ 
-      items: mockItems,
-      popularTags: []
-    })
+    // 最初の呼び出しで30件返す
+    vi.spyOn(scraperModule, 'scrapeRankingPage')
+      .mockResolvedValueOnce({ 
+        items: mockItems,
+        popularTags: []
+      })
+      // 2回目の呼び出しで60件返す（合計90件にする）
+      .mockResolvedValueOnce({ 
+        items: Array.from({ length: 60 }, (_, i) => ({
+          rank: 31 + i,
+          id: `sm${330 + i}`,
+          title: `追加動画${i + 1}`,
+          thumbURL: 'https://example.com/thumb.jpg',
+          views: 3000,
+          authorName: `作者${30 + i}`,
+        })),
+        popularTags: []
+      })
+      // 3回目の呼び出しで空を返す
+      .mockResolvedValueOnce({ 
+        items: [],
+        popularTags: []
+      })
 
     vi.spyOn(ngFilterModule, 'filterRankingData').mockImplementation(async ({ items }) => ({
       items: items,
@@ -130,34 +151,34 @@ describe('タグ別ランキングの動的読み込み', () => {
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.length).toBe(30) // 30件しかない
-    expect(data[0].rank).toBe(201) // ページ3の最初
-    expect(data[29].rank).toBe(230) // ページ3の最後
+    expect(data.items).toBeDefined()
+    expect(data.items.length).toBe(90) // API は100件確保しようとして90件取得
+    expect(data.items[0].rank).toBe(201) // ページ3の最初
+    expect(data.items[89].rank).toBe(290) // ページ3の最後
   })
 
-  it('キャッシュからデータを取得してもNGフィルタリングを適用する', async () => {
-    const cachedData = Array.from({ length: 100 }, (_, i) => ({
+  it('cronが作成した300件のキャッシュからページ1を取得する', async () => {
+    // cronが作成した300件のキャッシュ
+    const cachedData = Array.from({ length: 300 }, (_, i) => ({
       rank: i + 1,
       id: `sm${100 + i}`,
       title: `キャッシュ動画${i + 1}`,
       thumbURL: 'https://example.com/thumb.jpg',
       views: 1000,
-      authorName: i % 10 === 0 ? '蠍媛' : `作者${i}`, // 10%がNG作者
+      authorName: `作者${i}`,
     }))
 
     vi.mocked(kv.get).mockResolvedValue(cachedData)
-
-    vi.spyOn(ngFilterModule, 'filterRankingData').mockImplementation(async ({ items }) => ({
-      items: items.filter((item: any) => item.authorName !== '蠍媛'),
-      newDerivedIds: []
-    }) as any)
 
     const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
     const response = await GET(request)
     const data = await response.json()
 
     expect(response.status).toBe(200)
-    expect(data.length).toBe(90) // 100件から10件フィルタリング
-    expect(data.every((item: any) => item.authorName !== '蠍媛')).toBe(true)
+    expect(data.items).toBeDefined()
+    expect(data.items.length).toBe(100) // 最初の100件
+    expect(data.hasMore).toBe(true) // 300件中100件なのでまだある
+    expect(data.totalCached).toBe(300) // キャッシュ総数
+    expect(response.headers.get('X-Cache-Status')).toBe('HIT')
   })
 })
