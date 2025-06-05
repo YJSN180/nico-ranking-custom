@@ -149,7 +149,18 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 }}>
                 {/* 投稿者アイコン */}
                 {item.authorIcon && (
-                  <span>👤</span>
+                  <Image
+                    src={item.authorIcon}
+                    alt={item.authorName || ''}
+                    width={16}
+                    height={16}
+                    style={{ 
+                      borderRadius: '50%',
+                      border: '1px solid #e5e5e5',
+                      flexShrink: 0
+                    }}
+                    loading="lazy"
+                  />
                 )}
                 {/* 投稿者名 */}
                 {(item.authorName || item.authorId) && (
