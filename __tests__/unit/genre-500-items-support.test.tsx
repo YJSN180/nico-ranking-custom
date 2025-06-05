@@ -215,6 +215,8 @@ describe('ジャンル別ランキング500件表示対応', () => {
     fireEvent.click(screen.getByText('もっと見る'))
     await waitFor(() => {
       expect(screen.getByText('Test Video 300')).toBeInTheDocument()
+      // 300件まで表示した時点では、まだAPIから追加データを取得可能なのでボタンは表示される
+      expect(screen.queryByText('もっと見る')).toBeInTheDocument()
     })
 
     // 301件目以降を取得（APIから）
