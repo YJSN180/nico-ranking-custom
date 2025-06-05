@@ -29,26 +29,18 @@ describe('Data Flow Integration', () => {
       }
     ]
 
-    // Test 1: KV returns data as array (object)
-    vi.mocked(kv.get).mockResolvedValueOnce(mockRealData)
+    // Test 1: KV returns data as object (new format)
+    vi.mocked(kv.get).mockResolvedValueOnce({ items: mockRealData, popularTags: [] })
     
     const { GET } = await import('@/app/api/ranking/route')
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response1 = await GET(request)
     const data1 = await response1.json()
     
-    expect(data1).toEqual(mockRealData)
-    expect(data1[0].views).toBe(15672)
-    expect(data1[0].title).not.toContain('サンプル動画')
-    
-    // Test 2: KV returns data as JSON string
-    vi.mocked(kv.get).mockResolvedValueOnce(JSON.stringify(mockRealData))
-    
-    const response2 = await GET(request)
-    const data2 = await response2.json()
-    
-    expect(data2).toEqual(mockRealData)
-    expect(data2[0].views).toBe(15672)
+    expect(data1.items).toEqual(mockRealData)
+    expect(data1.popularTags).toEqual([])
+    expect(data1.items[0].views).toBe(15672)
+    expect(data1.items[0].title).not.toContain('サンプル動画')
   })
 
   it('should display real data on homepage when available', async () => {

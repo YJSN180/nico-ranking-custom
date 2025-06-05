@@ -36,7 +36,7 @@ describe('Ranking API Integration', () => {
       },
     ]
 
-    vi.mocked(kv.get).mockResolvedValueOnce(JSON.stringify(mockData))
+    vi.mocked(kv.get).mockResolvedValueOnce({ items: mockData, popularTags: [] })
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
@@ -44,11 +44,11 @@ describe('Ranking API Integration', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('application/json')
     expect(response.headers.get('Cache-Control')).toBe(
-      's-maxage=30, stale-while-revalidate=30'
+      'public, s-maxage=30, stale-while-revalidate=60'
     )
 
     const data = await response.json()
-    expect(data).toEqual(mockData)
+    expect(data).toEqual({ items: mockData, popularTags: [] })
   })
 
   it.skip('should return mock data when KV has no data and scraping fails', async () => {
@@ -97,11 +97,12 @@ describe('Ranking API Integration', () => {
 
   it('should handle KV errors gracefully', async () => {
     vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV error'))
+    vi.mocked(scrapeRankingPage).mockRejectedValueOnce(new Error('Scraping also failed'))
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
-    expect(response.status).toBe(502)
+    expect(response.status).toBe(500)
     
     const data = await response.json()
     expect(data.error).toBe('Failed to fetch ranking data')
