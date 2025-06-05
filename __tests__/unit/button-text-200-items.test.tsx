@@ -72,27 +72,21 @@ describe('200件表示時のボタンテキスト', () => {
     )
 
     // 最初は100件表示
-    expect(screen.getByText(/もっと見る（101位～）/)).toBeInTheDocument()
+    expect(screen.getByText('もっと見る')).toBeInTheDocument()
 
     // もっと見るボタンをクリック
-    const button = screen.getByText(/もっと見る（101位～）/)
+    const button = screen.getByText('もっと見る')
     fireEvent.click(button)
 
     // 200件表示時
     await waitFor(() => {
-      expect(screen.getByText(/もっと見る（201位～）/)).toBeInTheDocument()
+      expect(screen.getByText('もっと見る')).toBeInTheDocument()
     })
   })
 
   it('タグ別ランキングで200件表示時の問題', async () => {
     const mockData = createMockData(100)
     
-    // 2ページ目のデータをモック
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => createMockData(100, 101)
-    })
-
     render(
       <ClientPage 
         initialData={mockData}
@@ -103,27 +97,47 @@ describe('200件表示時のボタンテキスト', () => {
     )
 
     // 最初の100件が表示されている
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
-
-    // 次のページを読み込む
     await waitFor(() => {
-      expect(screen.getByText(/もっと見る（100件～）/)).toBeInTheDocument()
+      expect(screen.getAllByText(/Test Video/)).toHaveLength(100)
+    })
+    
+    // タグ別ランキングの初期データが100件の場合、hasMoreがtrueならもっと見るボタンが表示される
+    expect(screen.getByText('もっと見る')).toBeInTheDocument()
+
+    // 2ページ目のデータをモック
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: createMockData(100, 101),
+        hasMore: true
+      })
     })
 
-    const loadMoreButton = screen.getByText(/もっと見る（100件～）/)
+    // もっと見るボタンをクリックして次のページを読み込む
+    const loadMoreButton = screen.getByText('もっと見る')
     fireEvent.click(loadMoreButton)
 
-    // 200件表示時 - ここが問題！
+    // 200件表示時
     await waitFor(() => {
-      // 現在の実装では「もっと見る（200件～）」と表示される
-      // これは通常ランキングと整合性がない
-      expect(screen.getByText(/もっと見る（200件～）/)).toBeInTheDocument()
+      expect(screen.getAllByText(/Test Video/)).toHaveLength(200)
+      // まだデータがあればもっと見るボタンが表示される
+      expect(screen.getByText('もっと見る')).toBeInTheDocument()
     })
   })
 
-  it('理想的な表示（修正案）', async () => {
-    // タグ別ランキングでも、次のページがある場合は
-    // 「もっと見る（201件目～）」のように表示すべき
-    // または「次の100件を読み込む」のような別の表記にする
+  it('現在の実装では「もっと見る」と統一表示される', async () => {
+    // 現在の実装では、ボタンテキストは常に「もっと見る」
+    // ランク表示は不要と判断され、シンプルな表記に統一されている
+    const mockData = createMockData(100)
+    
+    render(
+      <ClientPage 
+        initialData={mockData}
+        initialGenre="all"
+        initialPeriod="24h"
+      />
+    )
+
+    expect(screen.getByText('もっと見る')).toBeInTheDocument()
   })
 })
