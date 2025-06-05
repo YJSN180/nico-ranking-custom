@@ -96,7 +96,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                     objectFit: 'cover',
                     borderRadius: '4px'
                   }}
-                  loading="lazy"
+                  loading={item.rank <= 3 ? undefined : "lazy"}
                   priority={item.rank <= 3}
                 />
               )}
@@ -245,7 +245,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   objectFit: 'cover',
                   borderRadius: '6px'
                 }}
-                loading="lazy"
+                loading={item.rank <= 3 ? undefined : "lazy"}
                 priority={item.rank <= 3}
               />
             </div>

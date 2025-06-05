@@ -340,7 +340,7 @@ export default function ClientPage({
       const newUrl = newParams.toString() ? `?${newParams.toString()}` : '/'
       router.push(newUrl, { scroll: false })
     }
-  }, [config, previousGenre, updatePreferences, router, currentPopularTags])
+  }, [config, previousGenre, updatePreferences, router, currentPopularTags, cleanupOldStorage])
 
   // localStorageに状態を保存（sessionStorageは使用しない）
   const saveStateToStorage = useCallback(() => {
