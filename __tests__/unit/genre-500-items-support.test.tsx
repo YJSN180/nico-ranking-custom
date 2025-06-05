@@ -158,7 +158,7 @@ describe('ジャンル別ランキング500件表示対応', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          items: createMockData(100).map((_, i) => ({
+          items: Array.from({ length: 100 }, (_, i) => ({
             rank: 301 + i,
             id: `sm${301 + i}`,
             title: `Test Video ${301 + i}`,
@@ -174,7 +174,7 @@ describe('ジャンル別ランキング500件表示対応', () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          items: createMockData(100).map((_, i) => ({
+          items: Array.from({ length: 100 }, (_, i) => ({
             rank: 401 + i,
             id: `sm${401 + i}`,
             title: `Test Video ${401 + i}`,
