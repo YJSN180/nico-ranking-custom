@@ -107,7 +107,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               display: 'flex', 
               flexDirection: 'column', 
               gap: '3px',
-              minWidth: 0
+              minWidth: 0,
+              justifyContent: 'center'
             }}>
               {/* タイトル */}
               <a
