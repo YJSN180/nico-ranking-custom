@@ -328,10 +328,18 @@ export default function ClientPage({
     let timeoutId: NodeJS.Timeout
     const handleScroll = () => {
       clearTimeout(timeoutId)
-      timeoutId = setTimeout(saveStateToStorage, 300)
+      // より長いデバウンス時間と、スクロール量チェックを追加
+      timeoutId = setTimeout(() => {
+        const scrollDiff = Math.abs(window.scrollY - (scrollPositionRef.current || 0))
+        // 100px以上スクロールした場合のみ保存
+        if (scrollDiff > 100) {
+          scrollPositionRef.current = window.scrollY
+          saveStateToStorage()
+        }
+      }, 1000) // 300ms → 1000msに増加
     }
     
-    window.addEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       window.removeEventListener('scroll', handleScroll)
       clearTimeout(timeoutId)
