@@ -194,10 +194,10 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   gap: isVeryNarrow ? '4px' : '8px'
                 }}
               >
-                <span>👁{formatNumberMobile(item.views)}</span>
+                <span>▶️{formatNumberMobile(item.views)}</span>
                 <span>💬{formatNumberMobile(item.comments || 0)}</span>
-                {!isVeryNarrow && <span>📁{formatNumberMobile(item.mylists || 0)}</span>}
                 <span>❤️{formatNumberMobile(item.likes || 0)}</span>
+                {!isVeryNarrow && <span>📁{formatNumberMobile(item.mylists || 0)}</span>}
               </div>
             </div>
           </div>
@@ -340,21 +340,21 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 alignItems: 'center'
               }}>
               <span style={{ color: '#666' }}>
-                👁 {formatNumberMobile(item.views)}
+                ▶️ {formatNumberMobile(item.views)}
               </span>
               {item.comments !== undefined && (
                 <span style={{ color: '#666' }}>
                   💬 {formatNumberMobile(item.comments)}
                 </span>
               )}
-              {item.mylists !== undefined && (
-                <span style={{ color: '#666' }}>
-                  📁 {formatNumberMobile(item.mylists)}
-                </span>
-              )}
               {item.likes !== undefined && (
                 <span style={{ color: '#666' }}>
                   ❤️ {formatNumberMobile(item.likes)}
+                </span>
+              )}
+              {item.mylists !== undefined && (
+                <span style={{ color: '#666' }}>
+                  📁 {formatNumberMobile(item.mylists)}
                 </span>
               )}
             </div>
