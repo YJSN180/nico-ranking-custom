@@ -79,8 +79,8 @@ describe('300件表示時のボタン表示', () => {
       />
     )
 
-    // タグ別ランキングでは300件表示後も、hasMore=trueなら「もっと見る（301位～）」が表示される
-    expect(screen.getByText(/もっと見る（301位～）/)).toBeInTheDocument()
+    // タグ別ランキングでは300件表示後も、単に「もっと見る」ボタンが表示される
+    expect(screen.getByText('もっと見る')).toBeInTheDocument()
   })
 
   it('実際の仕様：タグ別ランキングも最大300件が一般的', () => {
