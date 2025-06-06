@@ -24,7 +24,7 @@ export function HeaderWithSettings() {
         }}>
           <h1 style={{ 
             color: '#ffffff', 
-            marginBottom: '4px',
+            margin: 0,
             textAlign: 'center',
             fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
             fontWeight: '700',
@@ -36,19 +36,6 @@ export function HeaderWithSettings() {
             MozUserSelect: 'none',
             msUserSelect: 'none'
           }}>ニコニコランキング(Re:turn)</h1>
-          <p style={{
-            color: 'rgba(255, 255, 255, 0.95)',
-            textAlign: 'center',
-            fontSize: 'clamp(0.875rem, 2vw, 1.1rem)',
-            margin: 0,
-            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            MozUserSelect: 'none',
-            msUserSelect: 'none'
-          }}>
-            最新の人気動画をリアルタイムで
-          </p>
         </div>
         
         <button
