@@ -471,14 +471,8 @@ export default function ClientPage({
       }
       
       if (items.length > 0) {
-        // ランク番号を調整
-        const adjustedData = items.map((item, index) => ({
-          ...item,
-          rank: config.tag 
-            ? currentPage * 100 + index + 1  // タグ別の場合
-            : rankingData.length + index + 1  // ジャンル別の場合
-        }))
-        const newRankingData = [...rankingData, ...adjustedData]
+        // 新しいデータをそのまま追加（順位はNGフィルタ後に再計算される）
+        const newRankingData = [...rankingData, ...items]
         setRankingData(newRankingData)
         
         // currentPageはタグ別の場合のみ更新
@@ -488,7 +482,11 @@ export default function ClientPage({
         
         setHasMore(hasMoreData)
         // 新しく追加されたデータも表示するようdisplayCountを更新
-        setDisplayCount(prev => prev + adjustedData.length)
+        // NGフィルタ適用後の実際の追加件数を計算
+        const prevFilteredCount = filterItems(rankingData).length
+        const newFilteredCount = filterItems(newRankingData).length
+        const actualAddedCount = newFilteredCount - prevFilteredCount
+        setDisplayCount(prev => prev + actualAddedCount)
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
@@ -509,7 +507,14 @@ export default function ClientPage({
 
   // カスタムNGフィルタを適用してから表示するアイテムを取得
   const filteredItems = filterItems(realtimeItems)
-  const displayItems = filteredItems.slice(0, displayCount)
+  
+  // フィルタリング後に順位を振り直す
+  const rerankedItems = filteredItems.map((item, index) => ({
+    ...item,
+    rank: index + 1
+  }))
+  
+  const displayItems = rerankedItems.slice(0, displayCount)
 
   return (
     <>
@@ -518,7 +523,14 @@ export default function ClientPage({
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '16px', color: '#666' }}>読み込み中...</div>
+          <div style={{ 
+            fontSize: '16px', 
+            color: '#666',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          }}>読み込み中...</div>
         </div>
       )}
       
@@ -537,7 +549,14 @@ export default function ClientPage({
       
       {!loading && !error && rankingData.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '16px', color: '#666' }}>
+          <div style={{ 
+            fontSize: '16px', 
+            color: '#666',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          }}>
             ランキングデータがありません
           </div>
         </div>
@@ -557,7 +576,11 @@ export default function ClientPage({
             <div style={{ 
               fontSize: '12px',
               color: '#666',
-              visibility: isUpdating ? 'visible' : 'hidden'
+              visibility: isUpdating ? 'visible' : 'hidden',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none'
             }}>
               統計情報を更新中...
             </div>
@@ -565,7 +588,11 @@ export default function ClientPage({
             {lastUpdated && (
               <div style={{ 
                 fontSize: '11px',
-                color: '#999'
+                color: '#999',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
               }}>
                 最終更新: {new Date(lastUpdated).toLocaleTimeString('ja-JP')}
               </div>
@@ -580,13 +607,13 @@ export default function ClientPage({
           </ul>
           
           {/* もっと見るボタン（既存データの表示または新規データの読み込み） */}
-          {(displayCount < filteredItems.length || hasMore) && (
+          {(displayCount < rerankedItems.length || hasMore) && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={() => {
-                  if (displayCount < filteredItems.length) {
+                  if (displayCount < rerankedItems.length) {
                     // 既存データから追加表示（ジャンル別ランキングの1-300位）
-                    setDisplayCount(prev => Math.min(prev + 100, filteredItems.length))
+                    setDisplayCount(prev => Math.min(prev + 100, rerankedItems.length))
                     saveStateToStorage()
                   } else if (hasMore) {
                     // 新規データを読み込み（タグ別 or ジャンル別301位以降）

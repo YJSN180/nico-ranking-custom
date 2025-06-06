@@ -73,7 +73,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           borderRadius: '6px',
           overflow: 'hidden',
           boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-          border: '1px solid #e5e5e5'
+          border: '1px solid #e5e5e5',
+          cursor: 'default'
         }}>
         <div style={{ padding: '6px 8px' }}>
           {/* メインコンテンツ */}
@@ -81,7 +82,13 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             {/* 左側：順位 + サムネイル */}
             <div style={{ flexShrink: 0 }}>
               {/* 順位 */}
-              <div style={{ ...getRankStyle(item.rank, true) }}>
+              <div style={{ 
+                ...getRankStyle(item.rank, true),
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
+              }}>
                 {item.rank}
               </div>
               
@@ -191,7 +198,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   fontSize: isVeryNarrow ? '10px' : isNarrow ? '11px' : '12px',
                   color: '#666',
                   display: 'flex',
-                  gap: isVeryNarrow ? '4px' : '8px'
+                  gap: isVeryNarrow ? '4px' : '8px',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none'
                 }}
               >
                 <span>▶️{formatNumberMobile(item.views)}</span>
@@ -216,7 +227,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       borderRadius: '8px',
       overflow: 'hidden',
       boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5'
+      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5',
+      cursor: 'default'
     }}>
       <div style={{ padding: '16px' }}>
         {/* メインコンテンツ行 */}
@@ -228,7 +240,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            flexShrink: 0
+            flexShrink: 0,
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
           }}>
             {item.rank}
           </div>
@@ -337,7 +353,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 gap: '12px', 
                 fontSize: '14px', 
                 flexWrap: 'wrap', 
-                alignItems: 'center'
+                alignItems: 'center',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
               }}>
               <span style={{ color: '#666' }}>
                 ▶️ {formatNumberMobile(item.views)}

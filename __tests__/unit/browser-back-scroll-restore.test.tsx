@@ -64,8 +64,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
   let originalScrollY: number
   
   beforeEach(() => {
-    // sessionStorageをクリア
-    sessionStorage.clear()
+    // localStorageをクリア
+    localStorage.clear()
     
     // scrollToとscrollYをモック
     originalScrollTo = window.scrollTo
@@ -124,14 +124,14 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       window.scrollTo(0, 5000)
     })
 
-    // beforeunloadイベントを発火して状態を保存
+    // saveRankingStateイベントを発火して状態を保存
     act(() => {
-      window.dispatchEvent(new Event('beforeunload'))
+      window.dispatchEvent(new Event('saveRankingState'))
     })
 
-    // sessionStorageに保存されているか確認
+    // localStorageに保存されているか確認
     const storageKey = 'ranking-state-all-24h-none'
-    const savedState = sessionStorage.getItem(storageKey)
+    const savedState = localStorage.getItem(storageKey)
     expect(savedState).toBeTruthy()
     
     const state = JSON.parse(savedState!)
@@ -194,7 +194,7 @@ describe('ブラウザバック時のスクロール位置復元', () => {
 
     // 状態を保存
     act(() => {
-      window.dispatchEvent(new Event('beforeunload'))
+      window.dispatchEvent(new Event('saveRankingState'))
     })
 
     // ページを再レンダリング

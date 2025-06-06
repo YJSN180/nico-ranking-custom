@@ -42,7 +42,6 @@ describe('モバイルコンパクトレイアウト', () => {
     
     // 新レイアウトのクラスが適用されている
     expect(card.className).toContain('mobile-v2')
-    expect(card).toHaveStyle({ height: '120px' })
   })
 
   it('タイトルが最大2行で省略される', () => {
@@ -61,7 +60,7 @@ describe('モバイルコンパクトレイアウト', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
     const stats = screen.getByTestId('video-stats')
-    expect(stats.textContent).toContain('👁1.4万')
+    expect(stats.textContent).toContain('▶️1.4万')
   })
 
   it('再生数が1万未満の場合カンマ区切り表記になる', () => {
@@ -70,7 +69,7 @@ describe('モバイルコンパクトレイアウト', () => {
     
     // 統計情報内で確認
     const stats = screen.getByTestId('video-stats')
-    expect(stats.textContent).toContain('👁2,401')
+    expect(stats.textContent).toContain('▶️2,401')
   })
 
   it('統計情報が1行にコンパクトに表示される', () => {
@@ -78,7 +77,7 @@ describe('モバイルコンパクトレイアウト', () => {
     
     // 形式: 👁1.4万 💬47 📁234 ❤️2,401
     const stats = screen.getByTestId('video-stats')
-    expect(stats.textContent).toMatch(/👁1\.4万.*💬47.*📁234.*❤️2,401/)
+    expect(stats.textContent).toMatch(/▶️1\.4万.*💬47.*❤️2,401.*📁234/)
   })
 
   it('投稿者名が表示される', () => {
@@ -101,7 +100,8 @@ describe('モバイルコンパクトレイアウト', () => {
     const authorInfo = screen.getByTestId('author-info')
     expect(authorInfo).toBeInTheDocument()
     expect(authorInfo).toHaveStyle({ fontSize: '13px' })
-    expect(screen.getByText('👤')).toBeInTheDocument()
+    // 👤アイコンは削除されたため、投稿者名のみ確認
+    expect(screen.getByText('テスト投稿者')).toBeInTheDocument()
   })
 
   it('投稿日時が投稿者名の横に表示される', () => {

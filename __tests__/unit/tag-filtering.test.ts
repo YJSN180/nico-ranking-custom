@@ -164,9 +164,9 @@ describe('Tag Filtering', () => {
   })
 
   describe('scrapeRankingPage with tag filtering', () => {
-    it('should return up to 200 items without tag filter', async () => {
-      // 200件のモックデータを生成
-      const mockItems = Array.from({ length: 200 }, (_, i) => ({
+    it('should return up to 100 items without tag filter', async () => {
+      // 100件のモックデータを生成
+      const mockItems = Array.from({ length: 100 }, (_, i) => ({
         type: 'essential',
         id: `sm${String(i + 1).padStart(3, '0')}`,
         title: `Video ${i + 1}`,
@@ -183,9 +183,9 @@ describe('Tag Filtering', () => {
       
       const result = await scrapeRankingPage('all', '24h')
       
-      expect(result.items).toHaveLength(200)
+      expect(result.items).toHaveLength(100)
       expect(result.items[0]?.rank).toBe(1)
-      expect(result.items[199]?.rank).toBe(200)
+      expect(result.items[99]?.rank).toBe(100)
     })
 
     it('should pass tag parameter to nvapi', async () => {
@@ -257,9 +257,8 @@ describe('Tag Filtering', () => {
       
       const result = await scrapeRankingPage('ramuboyn', '24h')
       
-      // 最適化により上位50件のみタグを取得、並列度5
-      // 3個のアイテムしかないので、実際の呼び出しは 1(ランキング) + 3(タグ) = 4回
-      expect(fetch).toHaveBeenCalledTimes(4)
+      // 現在の実装では、ランキングページから人気タグを取得するだけで、個別のタグ取得は行わない
+      expect(fetch).toHaveBeenCalledTimes(1)
       expect(result.popularTags).toBeDefined()
       expect(result.popularTags?.length).toBeGreaterThan(0)
     })

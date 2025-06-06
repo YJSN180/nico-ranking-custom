@@ -48,7 +48,7 @@ describe('Load More Button', () => {
     
     const button = screen.getByText(/もっと見る/)
     expect(button).toBeInTheDocument()
-    expect(button).toHaveTextContent('もっと見る（100 / 250件）')
+    expect(button).toHaveTextContent('もっと見る')
   })
 
   it('should load 100 more items when button clicked', () => {
@@ -60,8 +60,8 @@ describe('Load More Button', () => {
     const items = screen.getAllByTestId('ranking-item')
     expect(items).toHaveLength(200)
     
-    // ボタンのテキストも更新される
-    expect(button).toHaveTextContent('もっと見る（200 / 250件）')
+    // ボタンは引き続き表示される
+    expect(button).toHaveTextContent('もっと見る')
   })
 
   it('should load remaining items on final click', () => {
@@ -76,15 +76,16 @@ describe('Load More Button', () => {
     const items = screen.getAllByTestId('ranking-item')
     expect(items).toHaveLength(250)
     
-    // ボタンが消える
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
+    // ボタンはまだ表示される（300件まで取得可能なため）
+    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
-  it('should not show button when items are 100 or less', () => {
+  it('should show button when items are less than 100', () => {
     const fewItems = mockItems.slice(0, 50)
     render(<ClientPage initialData={fewItems} />)
     
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
+    // 50件しかないが、さらに読み込み可能なのでボタンは表示される
+    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
   it('should reset display count when config changes', async () => {

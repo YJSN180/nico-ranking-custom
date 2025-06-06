@@ -2,57 +2,59 @@
 
 import { useState } from 'react'
 import { SettingsModal } from './settings-modal'
+import { useMobileDetect } from '@/hooks/use-mobile-detect'
 
 export function HeaderWithSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const isMobile = useMobileDetect()
 
   return (
     <>
       <header role="banner" style={{
         background: 'linear-gradient(135deg, #00A8E8 0%, #0077BE 100%)',
-        padding: '20px',
+        padding: isMobile ? '16px 12px' : '20px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         marginBottom: '24px',
         position: 'relative'
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ 
+          maxWidth: '1200px', 
+          margin: '0 auto',
+          paddingRight: isMobile ? '48px' : '0' // モバイルで設定ボタンのスペースを確保
+        }}>
           <h1 style={{ 
             color: '#ffffff', 
-            marginBottom: '4px',
+            margin: 0,
             textAlign: 'center',
             fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
             fontWeight: '700',
             textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
             letterSpacing: '0.02em',
-            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif'
+            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
           }}>ニコニコランキング(Re:turn)</h1>
-          <p style={{
-            color: 'rgba(255, 255, 255, 0.95)',
-            textAlign: 'center',
-            fontSize: 'clamp(0.875rem, 2vw, 1.1rem)',
-            margin: 0,
-            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif'
-          }}>
-            最新の人気動画をリアルタイムで
-          </p>
         </div>
         
         <button
           onClick={() => setIsSettingsOpen(true)}
           style={{
             position: 'absolute',
-            top: '16px',
-            right: '16px',
+            top: isMobile ? '12px' : '16px',
+            right: isMobile ? '12px' : '16px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
             borderRadius: '6px',
-            padding: '6px 10px',
+            padding: isMobile ? '4px 8px' : '6px 10px',
             color: 'white',
-            fontSize: '18px',
+            fontSize: isMobile ? '16px' : '18px',
             cursor: 'pointer',
             transition: 'all 0.2s',
             backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)'
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 10
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
