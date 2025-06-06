@@ -52,11 +52,11 @@ describe('Home Page', () => {
 
     expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText('First Video')).toBeInTheDocument()
-    expect(screen.getByText('100,000 回再生')).toBeInTheDocument()
+    expect(screen.getByText('▶️10万')).toBeInTheDocument()
 
     expect(screen.getByText('2')).toBeInTheDocument()
     expect(screen.getByText('Second Video')).toBeInTheDocument()
-    expect(screen.getByText('50,000 回再生')).toBeInTheDocument()
+    expect(screen.getByText('▶️5万')).toBeInTheDocument()
 
     const firstLink = screen.getByRole('link', { name: /First Video/i })
     expect(firstLink).toHaveAttribute('href', 'https://www.nicovideo.jp/watch/sm123')

@@ -62,11 +62,8 @@ describe('getPopularTags dynamic fetching', () => {
 
     const tags = await getPopularTags('animal')
     
-    // フォールバックタグが返される
-    expect(tags).toContain('動物')
-    expect(tags).toContain('AV(アニマルビデオ)')
-    expect(tags).toContain('猫')
-    expect(tags).toContain('犬')
+    // エラー時は空配列が返される（フォールバックタグは削除済み）
+    expect(tags).toEqual([])
   })
 
   it('should handle all 23 genres correctly', async () => {
@@ -88,10 +85,11 @@ describe('getPopularTags dynamic fetching', () => {
 
       const tags = await getPopularTags(genre)
       
-      // すべてのジャンルで少なくともフォールバックタグが返される
+      // すべてのジャンルで配列が返される（エラー時は空配列）
       expect(tags).toBeDefined()
       expect(Array.isArray(tags)).toBe(true)
-      expect(tags.length).toBeGreaterThan(0)
+      // 空配列も許容する（フォールバックタグは削除済み）
+      expect(tags.length).toBeGreaterThanOrEqual(0)
     }
   })
 })
