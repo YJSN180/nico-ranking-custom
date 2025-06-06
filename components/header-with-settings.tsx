@@ -2,20 +2,26 @@
 
 import { useState } from 'react'
 import { SettingsModal } from './settings-modal'
+import { useMobileDetect } from '@/hooks/use-mobile-detect'
 
 export function HeaderWithSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const isMobile = useMobileDetect()
 
   return (
     <>
       <header role="banner" style={{
         background: 'linear-gradient(135deg, #00A8E8 0%, #0077BE 100%)',
-        padding: '20px',
+        padding: isMobile ? '16px 12px' : '20px',
         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
         marginBottom: '24px',
         position: 'relative'
       }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div style={{ 
+          maxWidth: '1200px', 
+          margin: '0 auto',
+          paddingRight: isMobile ? '48px' : '0' // モバイルで設定ボタンのスペースを確保
+        }}>
           <h1 style={{ 
             color: '#ffffff', 
             marginBottom: '4px',
@@ -49,18 +55,19 @@ export function HeaderWithSettings() {
           onClick={() => setIsSettingsOpen(true)}
           style={{
             position: 'absolute',
-            top: '16px',
-            right: '16px',
+            top: isMobile ? '12px' : '16px',
+            right: isMobile ? '12px' : '16px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
             borderRadius: '6px',
-            padding: '6px 10px',
+            padding: isMobile ? '4px 8px' : '6px 10px',
             color: 'white',
-            fontSize: '18px',
+            fontSize: isMobile ? '16px' : '18px',
             cursor: 'pointer',
             transition: 'all 0.2s',
             backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)'
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 10
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
