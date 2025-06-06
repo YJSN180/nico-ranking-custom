@@ -81,6 +81,37 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
     console.error('Failed to fetch popular tags dynamically:', error)
   }
   
-  // 4. 最終フォールバック：空配列を返す
+  // 4. バックアップデータから取得を試みる
+  try {
+    if (typeof kv !== 'undefined') {
+      const now = new Date()
+      
+      // 現在時刻から過去7日間のバックアップを探す
+      for (let daysAgo = 0; daysAgo < 7; daysAgo++) {
+        const checkDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000)
+        
+        // 4時間ごとのバックアップ時刻（0, 4, 8, 12, 16, 20）
+        const backupHours = [20, 16, 12, 8, 4, 0]
+        
+        for (const hour of backupHours) {
+          // 未来の時刻はスキップ
+          if (daysAgo === 0 && hour > now.getHours()) continue
+          
+          const backupKey = `popular-tags-backup:${checkDate.getFullYear()}-${String(checkDate.getMonth() + 1).padStart(2, '0')}-${String(checkDate.getDate()).padStart(2, '0')}:${String(hour).padStart(2, '0')}`
+          
+          const backupData = await kv.get(backupKey) as Record<string, string[]> | null
+          
+          if (backupData && backupData[genre] && Array.isArray(backupData[genre]) && backupData[genre].length > 0) {
+            // バックアップから取得できた
+            return backupData[genre]
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get popular tags from backup:', error)
+  }
+  
+  // 5. 最終フォールバック：空配列を返す
   return []
 }
