@@ -146,12 +146,14 @@ describe('NG設定反映後の表示挙動', () => {
     // sm4（元4位）が2位として表示
     // sm6（元6位）が3位として表示
     const firstItem = rankingItems[0]
-    expect(firstItem.textContent).toContain('1') // 順位
-    expect(firstItem.textContent).toContain('テスト動画 2') // タイトル
+    expect(firstItem).toBeDefined()
+    expect(firstItem?.textContent).toContain('1') // 順位
+    expect(firstItem?.textContent).toContain('テスト動画 2') // タイトル
     
     const secondItem = rankingItems[1]
-    expect(secondItem.textContent).toContain('2') // 順位
-    expect(secondItem.textContent).toContain('テスト動画 4') // タイトル
+    expect(secondItem).toBeDefined()
+    expect(secondItem?.textContent).toContain('2') // 順位
+    expect(secondItem?.textContent).toContain('テスト動画 4') // タイトル
   })
 
   it('もっと見るボタンの表示条件', () => {
