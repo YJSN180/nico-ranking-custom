@@ -12,13 +12,14 @@ const POPULAR_TAGS_KEY_PREFIX = 'popular-tags:'
 const POPULAR_TAGS_TTL = 3600 // 1時間
 
 // ジャンルの人気タグを取得（キャッシュ付き）
-export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
-  const cacheKey = `${POPULAR_TAGS_KEY_PREFIX}${genre}`
+export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
+  const cacheKey = `${POPULAR_TAGS_KEY_PREFIX}${genre}-${period}`
   
   try {
     // 1. まずGitHub Actionsが保存したランキングデータから取得
     if (typeof kv !== 'undefined') {
-      const rankingKey = `ranking-${genre}`
+      // period付きのキーで取得を試みる
+      const rankingKey = `ranking-${genre}-${period}`
       const rankingData = await kv.get<{
         items: any[]
         popularTags: string[]
@@ -28,6 +29,20 @@ export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
       if (rankingData && rankingData.popularTags && rankingData.popularTags.length > 0) {
         // 取得できたら返す
         return rankingData.popularTags
+      }
+      
+      // 24hの場合は後方互換性のため旧形式のキーも試す
+      if (period === '24h') {
+        const legacyKey = `ranking-${genre}`
+        const legacyData = await kv.get<{
+          items: any[]
+          popularTags: string[]
+          updatedAt: string
+        }>(legacyKey)
+        
+        if (legacyData && legacyData.popularTags && legacyData.popularTags.length > 0) {
+          return legacyData.popularTags
+        }
       }
     }
   } catch (error) {
@@ -48,7 +63,7 @@ export async function getPopularTags(genre: RankingGenre): Promise<string[]> {
   
   try {
     // 3. 動的に人気タグを取得（フォールバック）
-    const data = await fetchRanking(genre, null, '24h')
+    const data = await fetchRanking(genre, null, period)
     
     if (data.popularTags && data.popularTags.length > 0) {
       // KVにキャッシュ

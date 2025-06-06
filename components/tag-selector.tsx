@@ -37,7 +37,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       setLoading(true)
       try {
         // 動的に人気タグを取得（キャッシュ付き）
-        const tags = await getPopularTags(config.genre)
+        const tags = await getPopularTags(config.genre, config.period)
         setPopularTags(tags)
       } catch (error) {
         // フォールバックとして空配列を設定
@@ -48,7 +48,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     }
 
     loadTags()
-  }, [config.genre, propsTags])
+  }, [config.genre, config.period, propsTags])
 
   const handleTagSelect = (tag: string) => {
     if (tag === 'すべて') {
