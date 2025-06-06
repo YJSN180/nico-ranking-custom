@@ -106,8 +106,8 @@ describe('さらに読み込むボタンの自動表示テスト', () => {
       expect(screen.getByText('テスト動画200')).toBeInTheDocument()
     }, { timeout: 3000 })
 
-    // 「もっと見る」ボタンが表示されていないことを確認
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
+    // タグ別ランキングでもボタンは継続して表示される（さらなるデータ取得が可能）
+    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
   it('通常のランキングでは「もっと見る」ボタンが正常に機能する', async () => {
