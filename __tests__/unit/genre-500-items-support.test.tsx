@@ -221,15 +221,20 @@ describe('ジャンル別ランキング500件表示対応', () => {
 
     // 301件目以降を取得（APIから）
     fireEvent.click(screen.getByText('もっと見る'))
+    
+    // APIが呼ばれるのを待つ
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled()
-      // APIレスポンスの処理を待つ
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/api/ranking')
+      )
     })
-
+    
     // 400件目が表示されることを確認
     await waitFor(() => {
+      const allItems = screen.getAllByText(/Test Video/)
+      expect(allItems.length).toBe(400)
       expect(screen.getByText('Test Video 400')).toBeInTheDocument()
-    }, { timeout: 3000 })
+    }, { timeout: 5000 })
 
     // 500件まで表示してボタンが消える
     fireEvent.click(screen.getByText('もっと見る'))

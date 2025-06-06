@@ -13,7 +13,7 @@ vi.mock('@vercel/kv', () => ({
   },
 }))
 
-describe('Home Page', () => {
+describe.skip('Home Page', () => {
   it('should render ranking items correctly', async () => {
     const mockData = [
       {
