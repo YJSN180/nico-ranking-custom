@@ -31,7 +31,16 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
     }}>
       {/* 期間セレクター */}
       <div>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#333' }}>
+        <h3 style={{ 
+          fontSize: '14px', 
+          fontWeight: '600', 
+          marginBottom: '8px', 
+          color: '#333',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        }}>
           期間
         </h3>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -60,7 +69,16 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
 
       {/* ジャンルセレクター */}
       <div>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#333' }}>
+        <h3 style={{ 
+          fontSize: '14px', 
+          fontWeight: '600', 
+          marginBottom: '8px', 
+          color: '#333',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        }}>
           ジャンル
         </h3>
         <div style={{ 

@@ -70,7 +70,16 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
         marginBottom: '16px'
       }}>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', color: '#333' }}>
+        <h3 style={{ 
+          fontSize: '14px', 
+          fontWeight: '600', 
+          marginBottom: '8px', 
+          color: '#333',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        }}>
           人気タグ
         </h3>
         <div style={{ color: '#666', fontSize: '14px' }}>
@@ -95,7 +104,16 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       marginBottom: '16px'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-        <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#333', margin: 0 }}>
+        <h3 style={{ 
+          fontSize: '14px', 
+          fontWeight: '600', 
+          color: '#333', 
+          margin: 0,
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        }}>
           人気タグ
         </h3>
         {config.tag && (
@@ -123,7 +141,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             color: '#666',
             background: '#f0f0f0',
             padding: '4px 8px',
-            borderRadius: '4px'
+            borderRadius: '4px',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
           }}>
             選択中: {config.tag}
           </span>

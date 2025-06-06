@@ -518,7 +518,14 @@ export default function ClientPage({
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '16px', color: '#666' }}>読み込み中...</div>
+          <div style={{ 
+            fontSize: '16px', 
+            color: '#666',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          }}>読み込み中...</div>
         </div>
       )}
       
@@ -537,7 +544,14 @@ export default function ClientPage({
       
       {!loading && !error && rankingData.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
-          <div style={{ fontSize: '16px', color: '#666' }}>
+          <div style={{ 
+            fontSize: '16px', 
+            color: '#666',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none'
+          }}>
             ランキングデータがありません
           </div>
         </div>
@@ -557,7 +571,11 @@ export default function ClientPage({
             <div style={{ 
               fontSize: '12px',
               color: '#666',
-              visibility: isUpdating ? 'visible' : 'hidden'
+              visibility: isUpdating ? 'visible' : 'hidden',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none'
             }}>
               統計情報を更新中...
             </div>
@@ -565,7 +583,11 @@ export default function ClientPage({
             {lastUpdated && (
               <div style={{ 
                 fontSize: '11px',
-                color: '#999'
+                color: '#999',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
               }}>
                 最終更新: {new Date(lastUpdated).toLocaleTimeString('ja-JP')}
               </div>

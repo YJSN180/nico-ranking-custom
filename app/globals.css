@@ -49,3 +49,40 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* テキスト選択制御 */
+/* ボタンやUI要素でのテキスト選択を防止 */
+button,
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* ランキング要素の選択制御 */
+[data-testid="ranking-item"] {
+  /* デフォルトでテキスト選択を無効化 */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* 動画タイトルは選択可能にする */
+[data-testid="ranking-item"] a[data-testid="video-title"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+/* 投稿者名リンクも選択可能にする */
+[data-testid="ranking-item"] a[href*="nicovideo.jp/user"],
+[data-testid="ranking-item"] a[href*="ch.nicovideo.jp"],
+[data-testid="ranking-item"] a[href*="com.nicovideo.jp"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
