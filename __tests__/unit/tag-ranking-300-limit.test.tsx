@@ -52,7 +52,7 @@ describe('300件表示時のボタン表示', () => {
     }))
   }
 
-  it('通常ランキングで300件表示時はボタンが消える', () => {
+  it('通常ランキングで300件表示時でもボタンが表示される', () => {
     const mockData = createMockData(300)
     
     render(
@@ -63,8 +63,8 @@ describe('300件表示時のボタン表示', () => {
       />
     )
 
-    // 300件すべて表示されているのでボタンは表示されない
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
+    // 300件のデータがあっても、初期表示は100件なのでボタンは表示される
+    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
   it('タグ別ランキングで300件表示時は次ページボタンが表示される（hasMore=trueの場合）', () => {

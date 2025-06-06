@@ -108,11 +108,9 @@ describe('NG設定反映後の表示挙動', () => {
       />
     )
 
-    // 100件中、3の倍数（実況動画）が除外される
-    // 100件中約33件が除外されるので、約67件表示される
+    // NGフィルタリング後も100件表示される（追加データが読み込まれる）
     const items = screen.getAllByText(/テスト動画/)
-    expect(items.length).toBeLessThan(100)
-    expect(items.length).toBeGreaterThan(60)
+    expect(items.length).toBe(100)
     
     // 順位は繰り上がる（1位の実況動画がNGなら、2位が1位として表示）
     // テスト動画 2 が最初に表示されるはず
