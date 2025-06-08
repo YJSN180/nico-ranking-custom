@@ -115,15 +115,30 @@ const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'a
 
 ## Testing Philosophy
 
-This project follows strict TDD with 90% coverage requirement. When adding features:
-1. Write failing tests first
-2. Implement minimal code to pass
-3. Refactor while keeping tests green
+This project follows strict Test-Driven Development (TDD) principles. **Always write tests before implementing features.**
 
-Tests are organized by type:
+### TDD Process:
+1. **Red**: Write a failing test that defines the desired behavior
+2. **Green**: Write the minimal code to make the test pass
+3. **Refactor**: Improve the code while keeping tests green
+
+### Coverage Requirements:
+- Current threshold: 42% (temporarily lowered from 90% during refactoring)
+- Goal: Return to 90% coverage across all metrics
+- Run `npm run test:coverage` to check coverage
+
+### Test Organization:
 - `__tests__/unit/` - Component and utility tests
 - `__tests__/integration/` - API and data flow tests
-- `__tests__/e2e/` - Full user journey tests
+- `__tests__/e2e/` - Full user journey tests (Playwright)
+
+### Running Tests:
+```bash
+npm test                    # Watch mode
+npm test -- --run          # Single run
+npm run test:coverage      # With coverage report
+npx vitest run <file>      # Run specific test file
+```
 
 ## Common Pitfalls
 
@@ -161,3 +176,53 @@ Tests are organized by type:
 8. **Tag Ranking Dynamic Loading**: Tag-filtered rankings use dynamic loading (100 items per page) instead of pre-fetching 300 items. This conserves KV storage and improves initial load time. The state is preserved in sessionStorage for browser back button support.
 
 9. **NG Filtering for Tag Rankings**: Tag rankings apply NG filtering at display time (runtime) since they are fetched on-demand. The `ng-filter.ts` module includes memory caching (1 minute) and Set-based O(1) lookups for performance.
+
+10. **Popular Tags Backup System**: 4-hour interval backup (0:00, 4:00, 8:00, 12:00, 16:00, 20:00) for popular tags to prevent display issues. Backup keys: `popular-tags-backup:YYYY-MM-DD:HH`
+
+11. **Mobile UI Improvements**: 
+    - Horizontal scroll for genre/tag selection
+    - Dynamic popular tag updates on genre/period change
+    - Adjusted header layout to prevent title overlap
+
+12. **NG List Rank Reordering**: When videos are blocked via NG list, ranks are properly reordered to maintain continuous numbering.
+
+## GitHub Access
+
+### Repository Information
+- Repository: `YJSN180/nico-ranking-custom`
+- Main branch: `main`
+- PR workflow: Create feature branches, submit PRs, merge after CI passes
+
+### GitHub CLI Commands
+```bash
+# View PR status
+gh pr view <PR_NUMBER> --json state,statusCheckRollup,mergeable
+
+# Create new PR
+gh pr create --title "Title" --body "Description"
+
+# Merge PR (after all checks pass)
+gh pr merge <PR_NUMBER> --squash --delete-branch
+
+# Check workflow runs
+gh run list
+gh run view <RUN_ID>
+```
+
+### CI/CD Pipeline
+1. **On Push/PR**:
+   - Security checks
+   - Unit/Integration tests (Vitest)
+   - TypeScript type checking
+   - ESLint
+   - Build verification
+   - CodeQL analysis
+
+2. **On Schedule**:
+   - Update Nico Ranking Data (every 10 minutes)
+   - Fetches and caches ranking data for all genres/periods
+
+### Deployment
+- Automatic deployment to Vercel on push to `main`
+- Preview deployments for all PRs
+- Environment variables managed in Vercel dashboard
