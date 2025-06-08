@@ -9,6 +9,7 @@ import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
+import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -341,6 +342,30 @@ export default function ClientPage({
       router.push(newUrl, { scroll: false })
     }
   }, [config, previousGenre, updatePreferences, router, currentPopularTags, cleanupOldStorage])
+
+  // ジャンルやperiod変更時に人気タグを動的に更新
+  useEffect(() => {
+    // 初回レンダリング時はスキップ（propsの値を使用）
+    if (config.genre === initialGenre && config.period === initialPeriod) {
+      return
+    }
+    
+    async function updatePopularTags() {
+      if (config.genre !== 'all') {
+        try {
+          const tags = await getPopularTags(config.genre, config.period)
+          setCurrentPopularTags(tags)
+        } catch (error) {
+          // エラー時は空配列を設定
+          setCurrentPopularTags([])
+        }
+      } else {
+        setCurrentPopularTags([])
+      }
+    }
+    
+    updatePopularTags()
+  }, [config.genre, config.period, initialGenre, initialPeriod])
 
   // localStorageに状態を保存（sessionStorageは使用しない）
   const saveStateToStorage = useCallback(() => {
