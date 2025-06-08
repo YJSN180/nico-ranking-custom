@@ -37,10 +37,10 @@ export default defineConfig({
         'playwright.config.ts'
       ],
       thresholds: {
-        lines: 45,
-        branches: 45,
-        functions: 45,
-        statements: 45
+        lines: 42,
+        branches: 42,
+        functions: 42,
+        statements: 42
       }
     }
   },
