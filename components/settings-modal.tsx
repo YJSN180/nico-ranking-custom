@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -29,6 +30,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     addAuthorName,
     removeAuthorName,
   } = useUserNGList()
+
+  const { preferences, updatePreferences } = useUserPreferences()
 
   if (!isOpen) return null
 
@@ -86,7 +89,70 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         <div className={styles.content}>
           {activeTab === 'display' ? (
             <div className={styles.displaySettings}>
-              <p>表示設定は今後追加予定です。</p>
+              <section className={styles.section}>
+                <h3>🎨 テーマ設定</h3>
+                <div style={{ marginTop: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="light"
+                      checked={preferences.theme === 'light'}
+                      onChange={() => updatePreferences({ theme: 'light' })}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span style={{ fontSize: '16px' }}>☀️ ライトモード</span>
+                    <span style={{ 
+                      display: 'block', 
+                      marginLeft: '24px', 
+                      fontSize: '14px', 
+                      color: 'var(--text-secondary)',
+                      marginTop: '4px'
+                    }}>
+                      明るい背景に黒文字の標準的なテーマ
+                    </span>
+                  </label>
+                  
+                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="dark"
+                      checked={preferences.theme === 'dark'}
+                      onChange={() => updatePreferences({ theme: 'dark' })}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span style={{ fontSize: '16px' }}>🌙 ダークモード</span>
+                    <span style={{ 
+                      display: 'block', 
+                      marginLeft: '24px', 
+                      fontSize: '14px', 
+                      color: 'var(--text-secondary)',
+                      marginTop: '4px'
+                    }}>
+                      暗い背景に白文字で目に優しいテーマ
+                    </span>
+                  </label>
+                  
+                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="darkblue"
+                      checked={preferences.theme === 'darkblue'}
+                      onChange={() => updatePreferences({ theme: 'darkblue' })}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span style={{ fontSize: '16px' }}>🌌 ダークブルー</span>
+                    <span style={{ 
+                      display: 'block', 
+                      marginLeft: '24px', 
+                      fontSize: '14px', 
+                      color: 'var(--text-secondary)',
+                      marginTop: '4px'
+                    }}>
+                      深い青を基調とした落ち着いたテーマ
+                    </span>
+                  </label>
+                </div>
+              </section>
             </div>
           ) : (
             <div className={styles.ngListSettings}>

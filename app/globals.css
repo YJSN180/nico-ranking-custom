@@ -2,28 +2,97 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ライトテーマ */
+:root,
+[data-theme="light"] {
+  /* 基本色 */
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
+  --background-color: #ffffff;
+  --surface-color: #ffffff;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-muted: #999999;
+  --border-color: #e5e5e5;
+  --link-color: #0066cc;
+  --header-bg: linear-gradient(135deg, #00A8E8 0%, #0077BE 100%);
+  --header-text: #ffffff;
+  
+  /* シャドウ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+/* ダークテーマ */
+[data-theme="dark"] {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 20, 20, 20;
+  --background-end-rgb: 0, 0, 0;
+  --background-color: #121212;
+  --surface-color: #1e1e1e;
+  --text-primary: #ffffff;
+  --text-secondary: #b3b3b3;
+  --text-muted: #808080;
+  --border-color: #333333;
+  --link-color: #4db8ff;
+  --header-bg: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+  --header-text: #ffffff;
+  
+  /* シャドウ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* ダークブルーテーマ */
+[data-theme="darkblue"] {
+  --foreground-rgb: 240, 248, 255;
+  --background-start-rgb: 25, 39, 52;
+  --background-end-rgb: 13, 27, 42;
+  --background-color: #0d1b2a;
+  --surface-color: #1b3a5f;
+  --text-primary: #e0f2ff;
+  --text-secondary: #b3d9ff;
+  --text-muted: #7ab8f5;
+  --border-color: #2a5a8f;
+  --link-color: #66ccff;
+  --header-bg: linear-gradient(135deg, #004080 0%, #002855 100%);
+  --header-text: #ffffff;
+  
+  /* シャドウ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* システムの設定に従う場合 */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
+    --background-start-rgb: 20, 20, 20;
     --background-end-rgb: 0, 0, 0;
+    --background-color: #121212;
+    --surface-color: #1e1e1e;
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --text-muted: #808080;
+    --border-color: #333333;
+    --link-color: #4db8ff;
+    --header-bg: #1a1a1a;
+    --header-text: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
   }
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
+  color: var(--text-primary);
   background: linear-gradient(
       to bottom,
       transparent,
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 /* ニコニコ動画風のスタイル */

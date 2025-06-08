@@ -94,18 +94,27 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               
               {/* サムネイル */}
               {item.thumbURL && (
-                <Image
-                  src={item.thumbURL}
-                  alt={item.title}
-                  width={120}
-                  height={67}
-                  style={{ 
-                    objectFit: 'cover',
-                    borderRadius: '4px'
+                <a
+                  href={`https://www.nicovideo.jp/watch/${item.id}`}
+                  onClick={(e) => {
+                    const event = new CustomEvent('saveRankingState')
+                    window.dispatchEvent(event)
                   }}
-                  loading={item.rank <= 3 ? undefined : "lazy"}
-                  priority={item.rank <= 3}
-                />
+                  style={{ display: 'block', cursor: 'pointer' }}
+                >
+                  <Image
+                    src={item.thumbURL}
+                    alt={item.title}
+                    width={120}
+                    height={67}
+                    style={{ 
+                      objectFit: 'cover',
+                      borderRadius: '4px'
+                    }}
+                    loading={item.rank <= 3 ? undefined : "lazy"}
+                    priority={item.rank <= 3}
+                  />
+                </a>
               )}
             </div>
             
@@ -184,7 +193,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 {/* 投稿日時 */}
                 <span style={{ 
                   flexShrink: 0,
-                  color: isNew ? '#e74c3c' : '#999',
+                  color: isNew ? '#e74c3c' : 'var(--text-muted)',
                   fontWeight: isNew ? '600' : '400'
                 }}>
                   {timeDisplay}
@@ -252,18 +261,27 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           {/* サムネイル */}
           {item.thumbURL && (
             <div style={{ flexShrink: 0 }}>
-              <Image
-                src={item.thumbURL}
-                alt={item.title}
-                width={160}
-                height={90}
-                style={{ 
-                  objectFit: 'cover',
-                  borderRadius: '6px'
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                onClick={(e) => {
+                  const event = new CustomEvent('saveRankingState')
+                  window.dispatchEvent(event)
                 }}
-                loading={item.rank <= 3 ? undefined : "lazy"}
-                priority={item.rank <= 3}
-              />
+                style={{ display: 'block', cursor: 'pointer' }}
+              >
+                <Image
+                  src={item.thumbURL}
+                  alt={item.title}
+                  width={160}
+                  height={90}
+                  style={{ 
+                    objectFit: 'cover',
+                    borderRadius: '6px'
+                  }}
+                  loading={item.rank <= 3 ? undefined : "lazy"}
+                  priority={item.rank <= 3}
+                />
+              </a>
             </div>
           )}
           
@@ -338,7 +356,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   {dateDisplay && (
                     <span style={{ 
                       fontSize: '13px',
-                      color: isNew ? '#e74c3c' : '#999',
+                      color: isNew ? '#e74c3c' : 'var(--text-muted)',
                       fontWeight: isNew ? '600' : '400'
                     }}>
                       {dateDisplay}
