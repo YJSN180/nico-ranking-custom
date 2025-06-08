@@ -40,7 +40,9 @@ export default function ClientPage({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [displayCount, setDisplayCount] = useState(100) // 初期表示を100件に
+  // URLから初期表示件数を取得
+  const initialDisplayCount = parseInt(searchParams.get('show') || '100', 10)
+  const [displayCount, setDisplayCount] = useState(Math.min(Math.max(100, initialDisplayCount), 500)) // 初期表示
   const [currentPage, setCurrentPage] = useState(1) // 現在のページ数
   // タグ別ランキングの場合、初期データが100件未満ならhasMoreをfalseに初期化
   const [hasMore, setHasMore] = useState(() => {
@@ -50,6 +52,8 @@ export default function ClientPage({
     return true
   })
   const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
+  const [isRestoring, setIsRestoring] = useState(false) // 復元中か
+  const [restoreProgress, setRestoreProgress] = useState(0) // 復元進捗（0-100）
   
   // スクロール復元用のフラグ
   const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
@@ -105,6 +109,18 @@ export default function ClientPage({
     60000 // 1分ごと
   )
   
+  // URLの更新（履歴を汚さない）
+  const updateURL = useCallback((newDisplayCount: number) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (newDisplayCount > 100) {
+      params.set('show', newDisplayCount.toString())
+    } else {
+      params.delete('show')
+    }
+    const newURL = params.toString() ? `?${params.toString()}` : window.location.pathname
+    window.history.replaceState({}, '', newURL)
+  }, [searchParams])
+
   // sessionStorageとlocalStorageから状態を復元
   useEffect(() => {
     const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
@@ -126,8 +142,8 @@ export default function ClientPage({
         const state = JSON.parse(savedState)
         // 1時間以内のデータのみ復元（古いデータは使わない）
         if (state.timestamp && Date.now() - state.timestamp < 3600000) {
-          // 新しいデータ構造（dataVersion = 1）の場合
-          if (state.dataVersion === 1) {
+          // 新しいデータ構造（dataVersion = 1, 2, 3）の場合
+          if (state.dataVersion === 1 || state.dataVersion === 2 || state.dataVersion === 3) {
             // 表示設定のみ復元（データは初期データを使用）
             setDisplayCount(state.displayCount || 100)
             setCurrentPage(state.currentPage || 1)
@@ -207,6 +223,91 @@ export default function ClientPage({
       checkAndRestore()
     }
   }, [shouldRestoreScroll, displayCount, rankingData.length])
+
+  // ブラウザバック時などの自動復元
+  useEffect(() => {
+    const restoreToPosition = async (targetCount: number) => {
+      // すでに必要なデータがある場合はスキップ
+      if (rankingData.length >= targetCount) {
+        setDisplayCount(targetCount)
+        return
+      }
+
+      setIsRestoring(true)
+      setRestoreProgress(0)
+
+      try {
+        // 必要なページ数を計算
+        const currentDataLength = rankingData.length
+        const neededPages = Math.ceil((targetCount - currentDataLength) / 100)
+        
+        for (let i = 0; i < neededPages; i++) {
+          if (!hasMore) break
+
+          // ページ番号の計算
+          let pageNumber: number
+          if (config.tag) {
+            pageNumber = currentPage + i + 1
+          } else {
+            pageNumber = Math.floor((currentDataLength + i * 100) / 100) + 1
+          }
+
+          const params = new URLSearchParams({
+            genre: config.genre,
+            period: config.period
+          })
+          
+          if (config.tag) {
+            params.append('tag', config.tag)
+          }
+          params.append('page', pageNumber.toString())
+
+          const response = await fetch(`/api/ranking?${params.toString()}`)
+          if (!response.ok) throw new Error('Failed to fetch')
+          
+          const data = await response.json()
+          
+          let items: RankingItem[]
+          let hasMoreData: boolean
+          
+          if (data.items && Array.isArray(data.items)) {
+            items = data.items
+            hasMoreData = data.hasMore ?? false
+          } else if (Array.isArray(data)) {
+            items = data
+            hasMoreData = data.length === 100
+          } else {
+            break
+          }
+
+          if (items.length > 0) {
+            setRankingData(prev => [...prev, ...items])
+            setHasMore(hasMoreData)
+            if (config.tag) {
+              setCurrentPage(pageNumber)
+            }
+          }
+
+          // 進捗を更新
+          const progress = Math.min(100, ((i + 1) / neededPages) * 100)
+          setRestoreProgress(progress)
+        }
+
+        setDisplayCount(Math.min(targetCount, rankingData.length))
+      } catch (error) {
+        console.error('Failed to restore data:', error)
+      } finally {
+        setIsRestoring(false)
+        setRestoreProgress(0)
+      }
+    }
+
+    // URLのshowパラメータまたは保存された状態から復元が必要か判断
+    const targetCount = initialDisplayCount
+    if (targetCount > 100 && rankingData.length < targetCount && !isRestoring) {
+      restoreToPosition(targetCount)
+    }
+  }, [initialDisplayCount])
   
   // initialDataが変更されたときに状態をリセット
   // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
@@ -379,7 +480,7 @@ export default function ClientPage({
         hasMore,
         scrollPosition: window.scrollY,
         timestamp: Date.now(),
-        dataVersion: 2 // データ構造のバージョンを更新
+        dataVersion: 3 // データ構造のバージョンを更新
       }
       
       const stateString = JSON.stringify(lightState)
@@ -429,14 +530,100 @@ export default function ClientPage({
       saveStateToStorage()
     }
     
+    // ブラウザの戻るボタン検知
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search)
+      const showCount = parseInt(params.get('show') || '100', 10)
+      if (showCount > 100 && showCount !== displayCount) {
+        // URLのshowパラメータが変更された場合、その位置まで復元
+        const targetCount = Math.min(Math.max(100, showCount), 500)
+        if (targetCount > rankingData.length && !isRestoring) {
+          // データが不足している場合は自動復元
+          const restoreToPosition = async (target: number) => {
+            setIsRestoring(true)
+            setRestoreProgress(0)
+
+            try {
+              const currentDataLength = rankingData.length
+              const neededPages = Math.ceil((target - currentDataLength) / 100)
+              
+              for (let i = 0; i < neededPages; i++) {
+                if (!hasMore) break
+
+                let pageNumber: number
+                if (config.tag) {
+                  pageNumber = currentPage + i + 1
+                } else {
+                  pageNumber = Math.floor((currentDataLength + i * 100) / 100) + 1
+                }
+
+                const params = new URLSearchParams({
+                  genre: config.genre,
+                  period: config.period
+                })
+                
+                if (config.tag) {
+                  params.append('tag', config.tag)
+                }
+                params.append('page', pageNumber.toString())
+
+                const response = await fetch(`/api/ranking?${params.toString()}`)
+                if (!response.ok) throw new Error('Failed to fetch')
+                
+                const data = await response.json()
+                
+                let items: RankingItem[]
+                let hasMoreData: boolean
+                
+                if (data.items && Array.isArray(data.items)) {
+                  items = data.items
+                  hasMoreData = data.hasMore ?? false
+                } else if (Array.isArray(data)) {
+                  items = data
+                  hasMoreData = data.length === 100
+                } else {
+                  break
+                }
+
+                if (items.length > 0) {
+                  setRankingData(prev => [...prev, ...items])
+                  setHasMore(hasMoreData)
+                  if (config.tag) {
+                    setCurrentPage(pageNumber)
+                  }
+                }
+
+                const progress = Math.min(100, ((i + 1) / neededPages) * 100)
+                setRestoreProgress(progress)
+              }
+
+              setDisplayCount(Math.min(target, rankingData.length))
+            } catch (error) {
+              console.error('Failed to restore data:', error)
+            } finally {
+              setIsRestoring(false)
+              setRestoreProgress(0)
+            }
+          }
+          
+          restoreToPosition(targetCount)
+        } else {
+          // データが十分ある場合は表示件数を更新するだけ
+          setDisplayCount(Math.min(targetCount, rankingData.length))
+        }
+      }
+    }
+    
     window.addEventListener('beforeunload', handleBeforeUnload)
     window.addEventListener('saveRankingState', handleSaveRankingState)
+    window.addEventListener('popstate', handlePopState)
     
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('saveRankingState', handleSaveRankingState)
+      window.removeEventListener('popstate', handlePopState)
     }
-  }, [saveStateToStorage])
+  }, [saveStateToStorage, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
   const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
@@ -511,7 +698,14 @@ export default function ClientPage({
         const prevFilteredCount = filterItems(rankingData).length
         const newFilteredCount = filterItems(newRankingData).length
         const actualAddedCount = newFilteredCount - prevFilteredCount
-        setDisplayCount(prev => prev + actualAddedCount)
+        const newDisplayCount = displayCount + actualAddedCount
+        setDisplayCount(newDisplayCount)
+        
+        // URLを更新
+        updateURL(newDisplayCount)
+        
+        // 状態を保存
+        saveStateToStorage()
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
@@ -545,6 +739,49 @@ export default function ClientPage({
     <>
       <RankingSelector config={config} onConfigChange={setConfig} />
       <TagSelector config={config} onConfigChange={setConfig} popularTags={currentPopularTags} />
+      
+      {/* 復元中のプログレスバー */}
+      {isRestoring && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          background: 'var(--surface-color)',
+          borderBottom: '1px solid var(--border-color)',
+          padding: '16px',
+          boxShadow: 'var(--shadow-md)'
+        }}>
+          <div style={{
+            maxWidth: '600px',
+            margin: '0 auto',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              fontSize: '14px',
+              color: 'var(--text-primary)',
+              marginBottom: '8px'
+            }}>
+              前回の表示位置を復元中...
+            </div>
+            <div style={{
+              width: '100%',
+              height: '4px',
+              background: 'var(--border-color)',
+              borderRadius: '2px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${restoreProgress}%`,
+                height: '100%',
+                background: 'var(--primary-color)',
+                transition: 'width 0.3s ease'
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -638,7 +875,9 @@ export default function ClientPage({
                 onClick={() => {
                   if (displayCount < rerankedItems.length) {
                     // 既存データから追加表示（ジャンル別ランキングの1-300位）
-                    setDisplayCount(prev => Math.min(prev + 100, rerankedItems.length))
+                    const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length)
+                    setDisplayCount(newDisplayCount)
+                    updateURL(newDisplayCount)
                     saveStateToStorage()
                   } else if (hasMore) {
                     // 新規データを読み込み（タグ別 or ジャンル別301位以降）
