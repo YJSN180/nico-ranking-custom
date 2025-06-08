@@ -36,6 +36,7 @@ describe('useUserPreferences', () => {
       lastGenre: 'all',
       lastPeriod: '24h',
       lastTag: undefined,
+      theme: 'light',
       version: 1,
       updatedAt: expect.any(String),
     })

@@ -3,6 +3,11 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import ClientPage from '@/app/client-page'
 
+// Next.js Imageコンポーネントをモック
+vi.mock('next/image', () => ({
+  default: vi.fn(({ src, alt }: any) => <img src={src} alt={alt} />)
+}))
+
 // モックの設定
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(),
@@ -80,7 +85,10 @@ describe('ハイブリッドページネーション', () => {
   })
 
   it('URLに表示件数が保存される', async () => {
-    const searchParams = new URLSearchParams()
+    const searchParams = {
+      get: (key: string) => null,
+      toString: () => ''
+    }
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
     const { rerender } = render(
@@ -109,8 +117,11 @@ describe('ハイブリッドページネーション', () => {
     )
   })
 
-  it('URLのshowパラメータから初期表示件数が設定される', () => {
-    const searchParams = new URLSearchParams('?show=200')
+  it('URLのshowパラメータから初期表示件数が設定される', async () => {
+    const searchParams = {
+      get: (key: string) => key === 'show' ? '200' : null,
+      toString: () => 'show=200'
+    }
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
     render(
@@ -121,12 +132,17 @@ describe('ハイブリッドページネーション', () => {
       />
     )
 
-    // 200件表示されることを確認
-    expect(screen.getAllByTestId('ranking-item')).toHaveLength(200)
+    // 初期データが300件あるので、すぐに200件表示される
+    await waitFor(() => {
+      expect(screen.getAllByTestId('ranking-item')).toHaveLength(200)
+    })
   })
 
   it('ブラウザバック時に自動復元される', async () => {
-    const searchParams = new URLSearchParams('?show=200')
+    const searchParams = {
+      get: (key: string) => key === 'show' ? '200' : null,
+      toString: () => 'show=200'
+    }
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
     // APIレスポンスのモック
@@ -158,7 +174,10 @@ describe('ハイブリッドページネーション', () => {
   })
 
   it('popstateイベントで復元が実行される', async () => {
-    const searchParams = new URLSearchParams()
+    const searchParams = {
+      get: (key: string) => null,
+      toString: () => ''
+    }
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
     render(
@@ -194,7 +213,10 @@ describe('ハイブリッドページネーション', () => {
   })
 
   it('最大500件まで表示される', async () => {
-    const searchParams = new URLSearchParams()
+    const searchParams = {
+      get: (key: string) => null,
+      toString: () => ''
+    }
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
     render(
