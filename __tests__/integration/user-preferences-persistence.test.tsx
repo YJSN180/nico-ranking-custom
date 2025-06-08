@@ -176,10 +176,13 @@ describe('ユーザー設定の永続化', () => {
     const genreSection = screen.getByText('ジャンル').parentElement
     const animeButtons = genreSection?.querySelectorAll('button')
     const animeButton = Array.from(animeButtons || []).find(btn => btn.textContent === 'アニメ')
-    expect(animeButton).toHaveStyle({ background: 'rgb(102, 126, 234)', color: 'rgb(255, 255, 255)' })
+    // CSS変数を使用しているため、style属性を直接確認
+    expect(animeButton?.getAttribute('style')).toContain('background: var(--primary-color)')
+    expect(animeButton?.getAttribute('style')).toContain('border-color: var(--primary-color)')
     
     // 毎時ボタンが選択状態になっているか確認
     const hourButton = screen.getByRole('button', { name: '毎時' })
-    expect(hourButton).toHaveStyle({ background: 'rgb(102, 126, 234)', color: 'rgb(255, 255, 255)' })
+    expect(hourButton.getAttribute('style')).toContain('background: var(--primary-color)')
+    expect(hourButton.getAttribute('style')).toContain('border-color: var(--primary-color)')
   })
 })

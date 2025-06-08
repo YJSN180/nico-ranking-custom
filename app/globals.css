@@ -37,6 +37,9 @@
   --rank-gold: #FFD700;
   --rank-silver: #C0C0C0;
   --rank-bronze: #CD7F32;
+  
+  /* ボタンテキスト */
+  --button-text-active: #ffffff;
 }
 
 /* ダークテーマ */
@@ -72,6 +75,9 @@
   --rank-gold: #FFD700;
   --rank-silver: #C0C0C0;
   --rank-bronze: #CD7F32;
+  
+  /* ボタンテキスト */
+  --button-text-active: #ffffff;
 }
 
 /* ダークブルーテーマ */
@@ -107,6 +113,9 @@
   --rank-gold: #FFD700;
   --rank-silver: #C0C0C0;
   --rank-bronze: #CD7F32;
+  
+  /* ボタンテキスト */
+  --button-text-active: #ffffff;
 }
 
 /* システムの設定に従う場合 */
@@ -141,6 +150,9 @@
     --rank-gold: #FFD700;
     --rank-silver: #C0C0C0;
     --rank-bronze: #CD7F32;
+    
+    /* ボタンテキスト */
+    --button-text-active: #ffffff;
   }
 }
 

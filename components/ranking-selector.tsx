@@ -44,9 +44,9 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
       flexDirection: 'column',
       gap: '16px',
       padding: '16px',
-      background: 'white',
+      background: 'var(--surface-color)',
       borderRadius: '8px',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      boxShadow: 'var(--shadow-md)',
       marginBottom: '24px'
     }}>
       {/* 期間セレクター */}
@@ -73,9 +73,9 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
                 fontSize: '14px',
                 fontWeight: '500',
                 border: '1px solid',
-                borderColor: config.period === value ? '#667eea' : '#e5e5e5',
-                background: config.period === value ? '#667eea' : 'white',
-                color: config.period === value ? 'white' : '#333',
+                borderColor: config.period === value ? 'var(--primary-color)' : 'var(--border-color)',
+                background: config.period === value ? 'var(--primary-color)' : 'var(--surface-color)',
+                color: config.period === value ? 'var(--button-text-active)' : 'var(--text-primary)',
                 borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease'
@@ -149,7 +149,7 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
                     border: '1px solid',
                     borderColor: config.genre === value ? 'var(--primary-color)' : 'var(--border-color)',
                     background: config.genre === value ? 'var(--primary-color)' : 'var(--surface-color)',
-                    color: config.genre === value ? 'white' : 'var(--text-primary)',
+                    color: config.genre === value ? 'var(--button-text-active)' : 'var(--text-primary)',
                     borderRadius: '20px',
                     cursor: 'pointer',
                     transition: 'all 0.2s ease',

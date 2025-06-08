@@ -45,7 +45,11 @@ export default function ClientPage({
   const [displayCount, setDisplayCount] = useState(Math.min(Math.max(100, initialDisplayCount), 500)) // 初期表示
   const [currentPage, setCurrentPage] = useState(1) // 現在のページ数
   // タグ別ランキングの場合、初期データが100件未満ならhasMoreをfalseに初期化
+  // すべてのランキングで500件以上の場合もhasMoreをfalseに
   const [hasMore, setHasMore] = useState(() => {
+    if (initialData.length >= 500) {
+      return false
+    }
     if (initialTag && initialData.length < 100) {
       return false
     }
@@ -232,13 +236,20 @@ export default function ClientPage({
       }
       
       // displayCountに応じたアイテム数がレンダリングされるのを待つ
+      let retryCount = 0
+      const maxRetries = 20 // 最大20回まで再試行
+      
       const checkAndRestore = () => {
         const items = document.querySelectorAll('[data-testid="ranking-item"]')
         if (items.length >= Math.min(displayCount, rankingData.length)) {
           restoreScroll()
-        } else {
+        } else if (retryCount < maxRetries) {
           // まだレンダリングされていない場合は再試行
+          retryCount++
           requestAnimationFrame(checkAndRestore)
+        } else {
+          // 最大リトライ回数に達したら、現在のスクロール位置で復元
+          restoreScroll()
         }
       }
       
@@ -275,6 +286,7 @@ export default function ClientPage({
         // 必要なページ数を計算
         const currentDataLength = rankingData.length
         const neededPages = Math.ceil((targetCount - currentDataLength) / 100)
+        let accumulatedDataLength = currentDataLength
         
         for (let i = 0; i < neededPages; i++) {
           if (!hasMore) break
@@ -316,6 +328,7 @@ export default function ClientPage({
           }
 
           if (items.length > 0) {
+            accumulatedDataLength += items.length
             setRankingData(prev => [...prev, ...items])
             setHasMore(hasMoreData)
             if (config.tag) {
@@ -328,7 +341,7 @@ export default function ClientPage({
           setRestoreProgress(progress)
         }
 
-        setDisplayCount(Math.min(targetCount, rankingData.length))
+        setDisplayCount(Math.min(targetCount, accumulatedDataLength))
       } catch (error) {
         console.error('Failed to restore data:', error)
       } finally {
@@ -342,7 +355,7 @@ export default function ClientPage({
     if (targetCount > 100 && rankingData.length < targetCount && !isRestoring) {
       restoreToPosition(targetCount)
     }
-  }, [initialDisplayCount])
+  }, [initialDisplayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
   
   // initialDataが変更されたときに状態をリセット
   // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
@@ -352,7 +365,8 @@ export default function ClientPage({
     const hasRestoredData = sessionStorage.getItem(storageKey) || localStorage.getItem(storageKey)
     
     if (!hasRestoredData) {
-      setDisplayCount(100)
+      // URLからの初期表示件数を保持する
+      setDisplayCount(Math.min(Math.max(100, initialDisplayCount), Math.min(500, initialData.length)))
       setRankingData(initialData)
       setCurrentPage(1)
       // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
@@ -592,86 +606,110 @@ export default function ClientPage({
     
     // ブラウザの戻るボタン検知
     const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search)
-      const showCount = parseInt(params.get('show') || '100', 10)
-      if (showCount > 100 && showCount !== displayCount) {
-        // URLのshowパラメータが変更された場合、その位置まで復元
-        const targetCount = Math.min(Math.max(100, showCount), 500)
-        if (targetCount > rankingData.length && !isRestoring) {
-          // データが不足している場合は自動復元
-          const restoreToPosition = async (target: number) => {
-            setIsRestoring(true)
-            setRestoreProgress(0)
+      // スクロールロックを防ぐため、非同期処理の前に即座にイベントを完了させる
+      requestAnimationFrame(() => {
+        const params = new URLSearchParams(window.location.search)
+        const showCount = parseInt(params.get('show') || '100', 10)
+        if (showCount > 100 && showCount !== displayCount) {
+          // URLのshowパラメータが変更された場合、その位置まで復元
+          const targetCount = Math.min(Math.max(100, showCount), 500)
+          if (targetCount > rankingData.length && !isRestoring) {
+            // データが不足している場合は自動復元
+            const restoreToPosition = async (target: number) => {
+              // 復元中でもスクロールを妨げないように
+              setIsRestoring(true)
+              setRestoreProgress(0)
 
-            try {
-              const currentDataLength = rankingData.length
-              const neededPages = Math.ceil((target - currentDataLength) / 100)
-              
-              for (let i = 0; i < neededPages; i++) {
-                if (!hasMore) break
-
-                let pageNumber: number
-                if (config.tag) {
-                  pageNumber = currentPage + i + 1
-                } else {
-                  pageNumber = Math.floor((currentDataLength + i * 100) / 100) + 1
-                }
-
-                const params = new URLSearchParams({
-                  genre: config.genre,
-                  period: config.period
-                })
+              try {
+                const currentDataLength = rankingData.length
+                const neededPages = Math.ceil((target - currentDataLength) / 100)
                 
-                if (config.tag) {
-                  params.append('tag', config.tag)
-                }
-                params.append('page', pageNumber.toString())
+                for (let i = 0; i < neededPages; i++) {
+                  if (!hasMore) break
 
-                const response = await fetch(`/api/ranking?${params.toString()}`)
-                if (!response.ok) throw new Error('Failed to fetch')
-                
-                const data = await response.json()
-                
-                let items: RankingItem[]
-                let hasMoreData: boolean
-                
-                if (data.items && Array.isArray(data.items)) {
-                  items = data.items
-                  hasMoreData = data.hasMore ?? false
-                } else if (Array.isArray(data)) {
-                  items = data
-                  hasMoreData = data.length === 100
-                } else {
-                  break
-                }
-
-                if (items.length > 0) {
-                  setRankingData(prev => [...prev, ...items])
-                  setHasMore(hasMoreData)
+                  let pageNumber: number
                   if (config.tag) {
-                    setCurrentPage(pageNumber)
+                    pageNumber = currentPage + i + 1
+                  } else {
+                    pageNumber = Math.floor((currentDataLength + i * 100) / 100) + 1
                   }
+
+                  const params = new URLSearchParams({
+                    genre: config.genre,
+                    period: config.period
+                  })
+                  
+                  if (config.tag) {
+                    params.append('tag', config.tag)
+                  }
+                  params.append('page', pageNumber.toString())
+
+                  const response = await fetch(`/api/ranking?${params.toString()}`)
+                  if (!response.ok) throw new Error('Failed to fetch')
+                  
+                  const data = await response.json()
+                  
+                  let items: RankingItem[]
+                  let hasMoreData: boolean
+                  
+                  if (data.items && Array.isArray(data.items)) {
+                    items = data.items
+                    hasMoreData = data.hasMore ?? false
+                  } else if (Array.isArray(data)) {
+                    items = data
+                    hasMoreData = data.length === 100
+                  } else {
+                    break
+                  }
+
+                  if (items.length > 0) {
+                    setRankingData(prev => {
+                      const newData = [...prev, ...items]
+                      // 500件に達したらhasMoreをfalseに
+                      if (newData.length >= 500) {
+                        setHasMore(false)
+                      } else {
+                        setHasMore(hasMoreData)
+                      }
+                      return newData
+                    })
+                    if (config.tag) {
+                      setCurrentPage(pageNumber)
+                    }
+                  }
+
+                  const progress = Math.min(100, ((i + 1) / neededPages) * 100)
+                  setRestoreProgress(progress)
                 }
 
-                const progress = Math.min(100, ((i + 1) / neededPages) * 100)
-                setRestoreProgress(progress)
+                // データの実際の長さを追跡
+                setRankingData(prev => {
+                  setDisplayCount(Math.min(target, prev.length))
+                  return prev
+                })
+              } catch (error) {
+                console.error('Failed to restore data:', error)
+                // エラー時も確実にリセット
+                setIsRestoring(false)
+                setRestoreProgress(0)
+              } finally {
+                setIsRestoring(false)
+                setRestoreProgress(0)
               }
-
-              setDisplayCount(Math.min(target, rankingData.length))
-            } catch (error) {
-              console.error('Failed to restore data:', error)
-            } finally {
+            }
+            
+            // 非同期で実行（メインスレッドをブロックしない）
+            restoreToPosition(targetCount).catch(err => {
+              console.error('Restore failed:', err)
               setIsRestoring(false)
               setRestoreProgress(0)
-            }
+            })
+          } else {
+            // データが十分ある場合は表示件数を更新するだけ
+            setDisplayCount(Math.min(targetCount, rankingData.length))
           }
-          
-          restoreToPosition(targetCount)
-        } else {
-          // データが十分ある場合は表示件数を更新するだけ
-          setDisplayCount(Math.min(targetCount, rankingData.length))
         }
-      }
+      })
     }
     
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -752,7 +790,12 @@ export default function ClientPage({
           setCurrentPage(currentPage + 1)
         }
         
-        setHasMore(hasMoreData)
+        // 500件に達したらhasMoreをfalseに
+        if (newRankingData.length >= MAX_RANKING_ITEMS) {
+          setHasMore(false)
+        } else {
+          setHasMore(hasMoreData)
+        }
         // 新しく追加されたデータも表示するようdisplayCountを更新
         // NGフィルタ適用後の実際の追加件数を計算
         const prevFilteredCount = filterItems(rankingData).length

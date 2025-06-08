@@ -83,9 +83,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     return (
       <div style={{
         padding: '16px',
-        background: 'white',
+        background: 'var(--surface-color)',
         borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        boxShadow: 'var(--shadow-md)',
         marginBottom: '16px'
       }}>
         <h3 style={{ 
@@ -217,7 +217,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                 border: '1px solid',
                 borderColor: !config.tag ? 'var(--primary-color)' : 'var(--border-color)',
                 background: !config.tag ? 'var(--primary-color)' : 'var(--surface-color)',
-                color: !config.tag ? 'white' : 'var(--text-primary)',
+                color: !config.tag ? 'var(--button-text-active)' : 'var(--text-primary)',
                 borderRadius: '20px',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
@@ -242,7 +242,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                   border: '1px solid',
                   borderColor: config.tag === tag ? 'var(--primary-color)' : 'var(--border-color)',
                   background: config.tag === tag ? 'var(--primary-color)' : 'var(--surface-color)',
-                  color: config.tag === tag ? 'white' : 'var(--text-primary)',
+                  color: config.tag === tag ? 'var(--button-text-active)' : 'var(--text-primary)',
                   borderRadius: '20px',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
