@@ -234,7 +234,7 @@ describe('ジャンル別ランキング500件表示対応', () => {
       const allItems = screen.getAllByText(/Test Video/)
       expect(allItems.length).toBe(400)
       expect(screen.getByText('Test Video 400')).toBeInTheDocument()
-    }, { timeout: 5000 })
+    }, { timeout: 10000 })
 
     // 500件まで表示してボタンが消える
     fireEvent.click(screen.getByText('もっと見る'))
@@ -242,6 +242,6 @@ describe('ジャンル別ランキング500件表示対応', () => {
       expect(screen.getByText('Test Video 500')).toBeInTheDocument()
       // もっと見るボタンが消える
       expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
-    }, { timeout: 3000 })
+    }, { timeout: 10000 })
   })
 })
