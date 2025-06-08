@@ -146,13 +146,9 @@
 
 body {
   color: var(--text-primary);
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-  transition: background 0.3s ease, color 0.3s ease;
+  background-color: var(--background-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
 }
 
 /* ニコニコ動画風のスタイル */

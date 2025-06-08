@@ -97,7 +97,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="radio"
                       value="light"
                       checked={preferences.theme === 'light'}
-                      onChange={() => updatePreferences({ theme: 'light' })}
+                      onChange={() => {
+                        updatePreferences({ theme: 'light' })
+                        // 即座にdata-theme属性を更新
+                        document.documentElement.setAttribute('data-theme', 'light')
+                      }}
                       style={{ marginRight: '8px' }}
                     />
                     <span style={{ fontSize: '16px' }}>☀️ ライトモード</span>
@@ -117,7 +121,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="radio"
                       value="dark"
                       checked={preferences.theme === 'dark'}
-                      onChange={() => updatePreferences({ theme: 'dark' })}
+                      onChange={() => {
+                        updatePreferences({ theme: 'dark' })
+                        // 即座にdata-theme属性を更新
+                        document.documentElement.setAttribute('data-theme', 'dark')
+                      }}
                       style={{ marginRight: '8px' }}
                     />
                     <span style={{ fontSize: '16px' }}>🌙 ダークモード</span>
@@ -137,7 +145,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       type="radio"
                       value="darkblue"
                       checked={preferences.theme === 'darkblue'}
-                      onChange={() => updatePreferences({ theme: 'darkblue' })}
+                      onChange={() => {
+                        updatePreferences({ theme: 'darkblue' })
+                        // 即座にdata-theme属性を更新
+                        document.documentElement.setAttribute('data-theme', 'darkblue')
+                      }}
                       style={{ marginRight: '8px' }}
                     />
                     <span style={{ fontSize: '16px' }}>🌌 ダークブルー</span>

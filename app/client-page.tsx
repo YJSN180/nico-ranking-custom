@@ -73,16 +73,27 @@ export default function ClientPage({
   const cleanupOldStorage = useCallback(() => {
     try {
       const now = Date.now()
-      const oneHourAgo = now - 60 * 60 * 1000
+      const thirtyMinutesAgo = now - 30 * 60 * 1000 // 30分前
+      const currentKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
       
       // localStorageのクリーンアップ
       const keysToRemove: string[] = []
+      const allKeys: Array<{ key: string; timestamp: number }> = []
+      
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
         if (key?.startsWith('ranking-state-')) {
           try {
             const data = JSON.parse(localStorage.getItem(key) || '{}')
-            if (data.timestamp && data.timestamp < oneHourAgo) {
+            if (key === currentKey) {
+              // 現在のキーはスキップ
+              continue
+            }
+            
+            allKeys.push({ key, timestamp: data.timestamp || 0 })
+            
+            // 30分以上古いデータを削除対象に
+            if (!data.timestamp || data.timestamp < thirtyMinutesAgo) {
               keysToRemove.push(key)
             }
           } catch {
@@ -92,15 +103,26 @@ export default function ClientPage({
         }
       }
       
+      // 10個以上のキーがある場合は、古い順に削除（最新5個を残す）
+      if (allKeys.length > 5) {
+        allKeys.sort((a, b) => b.timestamp - a.timestamp)
+        const keysToKeep = allKeys.slice(0, 5).map(item => item.key)
+        allKeys.forEach(item => {
+          if (!keysToKeep.includes(item.key) && !keysToRemove.includes(item.key)) {
+            keysToRemove.push(item.key)
+          }
+        })
+      }
+      
       // 一括削除
       keysToRemove.forEach(key => localStorage.removeItem(key))
       
-      // sessionStorageもクリア（念のため）
+      // sessionStorageもクリア
       sessionStorage.clear()
     } catch (error) {
       // エラーは静かに無視
     }
-  }, [])
+  }, [config])
   
   // リアルタイム統計更新を使用（1分ごとに自動更新）
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
@@ -223,6 +245,19 @@ export default function ClientPage({
       checkAndRestore()
     }
   }, [shouldRestoreScroll, displayCount, rankingData.length])
+
+  // コンポーネントマウント時にクリーンアップを実行
+  useEffect(() => {
+    // 初回レンダリング時にクリーンアップ
+    cleanupOldStorage()
+    
+    // 5分ごとに定期的にクリーンアップ
+    const interval = setInterval(() => {
+      cleanupOldStorage()
+    }, 5 * 60 * 1000)
+    
+    return () => clearInterval(interval)
+  }, [cleanupOldStorage])
 
   // ブラウザバック時などの自動復元
   useEffect(() => {
@@ -485,32 +520,57 @@ export default function ClientPage({
       
       const stateString = JSON.stringify(lightState)
       
-      // サイズチェック（10KB以下に制限）
-      if (stateString.length > 10 * 1024) {
+      // サイズチェック（5KB以下に制限）
+      if (stateString.length > 5 * 1024) {
         return
       }
       
       // localStorageのみに保存
       localStorage.setItem(storageKey, stateString)
+      
+      // 保存成功後、古いデータをクリーンアップ（非同期で実行）
+      setTimeout(() => cleanupOldStorage(), 0)
     } catch (error) {
-      // エラーは静かに無視
+      // QuotaExceededErrorの場合は、古いデータを削除してリトライ
+      if (error instanceof Error && error.name === 'QuotaExceededError') {
+        try {
+          cleanupOldStorage()
+          // 再度保存を試みる
+          const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
+          localStorage.setItem(storageKey, JSON.stringify({
+            displayCount,
+            currentPage,
+            hasMore,
+            scrollPosition: window.scrollY,
+            timestamp: Date.now(),
+            dataVersion: 3
+          }))
+        } catch {
+          // それでも失敗した場合は諦める
+        }
+      }
     }
-  }, [config, displayCount, currentPage, hasMore])
+  }, [config, displayCount, currentPage, hasMore, cleanupOldStorage])
 
-  // スクロール時に状態を保存（デバウンス付き）
+  // スクロール時に状態を保存（デバウンス付き、より制限的に）
   useEffect(() => {
     let timeoutId: NodeJS.Timeout
+    let lastSaveTime = 0
+    
     const handleScroll = () => {
       clearTimeout(timeoutId)
-      // より長いデバウンス時間と、スクロール量チェックを追加
       timeoutId = setTimeout(() => {
+        const now = Date.now()
+        const timeSinceLastSave = now - lastSaveTime
         const scrollDiff = Math.abs(window.scrollY - (scrollPositionRef.current || 0))
-        // 100px以上スクロールした場合のみ保存
-        if (scrollDiff > 100) {
+        
+        // 前回の保存から5秒以上経過かつ500px以上スクロールした場合のみ保存
+        if (timeSinceLastSave > 5000 && scrollDiff > 500) {
           scrollPositionRef.current = window.scrollY
+          lastSaveTime = now
           saveStateToStorage()
         }
-      }, 1000) // 300ms → 1000msに増加
+      }, 2000) // 2秒のデバウンス
     }
     
     window.addEventListener('scroll', handleScroll, { passive: true })
