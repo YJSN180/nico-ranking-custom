@@ -378,7 +378,7 @@ export default function ClientPage({
         setHasMore(initialData.length > 100)
       }
     }
-  }, [initialData, config.tag, initialGenre, initialPeriod, initialTag])
+  }, [initialData, config.tag, initialGenre, initialPeriod, initialTag, initialDisplayCount])
 
   // ジャンルが変更されたときのみ人気タグをリセット
   const [previousGenre, setPreviousGenre] = useState(config.genre)
