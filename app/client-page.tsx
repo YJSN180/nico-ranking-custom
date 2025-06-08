@@ -596,6 +596,11 @@ export default function ClientPage({
 
   // ページ離脱時やリンククリック時に状態を保存
   useEffect(() => {
+    // ブラウザのデフォルトのスクロール復元を無効化
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual'
+    }
+    
     const handleBeforeUnload = () => {
       saveStateToStorage()
     }
@@ -606,11 +611,13 @@ export default function ClientPage({
     
     // ブラウザの戻るボタン検知
     const handlePopState = () => {
-      // スクロールロックを防ぐため、非同期処理の前に即座にイベントを完了させる
-      requestAnimationFrame(() => {
-        const params = new URLSearchParams(window.location.search)
-        const showCount = parseInt(params.get('show') || '100', 10)
-        if (showCount > 100 && showCount !== displayCount) {
+      const params = new URLSearchParams(window.location.search)
+      const showCount = parseInt(params.get('show') || '100', 10)
+      
+      // URLパラメータに基づいて表示件数を調整する必要がある場合のみ処理
+      if (showCount > 100 && showCount !== displayCount) {
+        // requestAnimationFrameで非同期化して、スクロールロックを防ぐ
+        requestAnimationFrame(() => {
           // URLのshowパラメータが変更された場合、その位置まで復元
           const targetCount = Math.min(Math.max(100, showCount), 500)
           if (targetCount > rankingData.length && !isRestoring) {
@@ -708,8 +715,11 @@ export default function ClientPage({
             // データが十分ある場合は表示件数を更新するだけ
             setDisplayCount(Math.min(targetCount, rankingData.length))
           }
-        }
-      })
+        })
+      } else if (showCount === 100 && displayCount > 100) {
+        // URLにshowパラメータがない場合（通常のページ遷移）、100件表示に戻す
+        setDisplayCount(100)
+      }
     }
     
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -720,6 +730,11 @@ export default function ClientPage({
       window.removeEventListener('beforeunload', handleBeforeUnload)
       window.removeEventListener('saveRankingState', handleSaveRankingState)
       window.removeEventListener('popstate', handlePopState)
+      
+      // スクロール復元を元に戻す
+      if ('scrollRestoration' in window.history) {
+        window.history.scrollRestoration = 'auto'
+      }
     }
   }, [saveStateToStorage, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
 
