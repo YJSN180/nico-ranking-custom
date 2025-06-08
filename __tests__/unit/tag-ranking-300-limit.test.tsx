@@ -52,7 +52,7 @@ describe('300件表示時のボタン表示', () => {
     }))
   }
 
-  it('通常ランキングで300件表示時はボタンが消える', () => {
+  it('通常ランキングで300件表示時でもボタンが表示される', () => {
     const mockData = createMockData(300)
     
     render(
@@ -63,8 +63,8 @@ describe('300件表示時のボタン表示', () => {
       />
     )
 
-    // 300件すべて表示されているのでボタンは表示されない
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
+    // 300件のデータがあっても、初期表示は100件なのでボタンは表示される
+    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
   it('タグ別ランキングで300件表示時は次ページボタンが表示される（hasMore=trueの場合）', () => {
@@ -79,8 +79,8 @@ describe('300件表示時のボタン表示', () => {
       />
     )
 
-    // タグ別ランキングでは300件表示後も、hasMore=trueなら「もっと見る（301位～）」が表示される
-    expect(screen.getByText(/もっと見る（301位～）/)).toBeInTheDocument()
+    // タグ別ランキングでは300件表示後も、単に「もっと見る」ボタンが表示される
+    expect(screen.getByText('もっと見る')).toBeInTheDocument()
   })
 
   it('実際の仕様：タグ別ランキングも最大300件が一般的', () => {

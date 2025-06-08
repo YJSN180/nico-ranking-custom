@@ -20,31 +20,29 @@ vi.mock('@/hooks/use-user-preferences', () => ({
   })
 }))
 
-let mockNGList: {
-  videoIds: string[]
-  videoTitles: { exact: string[], partial: string[] }
-  authorIds: string[]
-  authorNames: { exact: string[], partial: string[] }
-} = {
-  videoIds: [],
-  videoTitles: { exact: [], partial: [] },
-  authorIds: [],
-  authorNames: { exact: [], partial: [] }
-}
+let mockFilterItems = (items: any[]) => items
 
 vi.mock('@/hooks/use-user-ng-list', () => ({
   useUserNGList: () => ({
-    ngList: mockNGList,
-    filterItems: (items: any[]) => {
-      // NGリストに基づいてフィルタリング
-      return items.filter(item => {
-        if (mockNGList.videoIds.includes(item.id)) return false
-        if (mockNGList.videoTitles.partial.some((ng: string) => item.title.includes(ng))) return false
-        return true
-      })
+    ngList: {
+      videoIds: [],
+      videoTitles: { exact: [], partial: [] },
+      authorIds: [],
+      authorNames: { exact: [], partial: [] },
+      version: 1,
+      totalCount: 0,
+      updatedAt: new Date().toISOString()
     },
+    filterItems: mockFilterItems,
     addVideoId: vi.fn(),
     removeVideoId: vi.fn(),
+    addVideoTitle: vi.fn(),
+    removeVideoTitle: vi.fn(),
+    addAuthorId: vi.fn(),
+    removeAuthorId: vi.fn(),
+    addAuthorName: vi.fn(),
+    removeAuthorName: vi.fn(),
+    resetNGList: vi.fn()
   })
 }))
 
@@ -58,25 +56,24 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
 
 describe('NG設定反映後の表示挙動', () => {
   const createMockData = (count: number) => {
-    return Array.from({ length: count }, (_, i) => ({
-      rank: i + 1,
-      id: `sm${i + 1}`,
-      title: i % 3 === 0 ? `【実況】テスト動画 ${i + 1}` : `テスト動画 ${i + 1}`,
-      thumbURL: 'https://example.com/thumb.jpg',
-      views: 1000 - i,
-      comments: 10,
-      mylists: 5,
-      likes: 20
-    }))
+    return Array.from({ length: count }, (_, i) => {
+      const index = i + 1
+      return {
+        rank: index,
+        id: `sm${index}`,
+        title: index % 3 === 1 ? `【実況】テスト動画 ${index}` : `テスト動画 ${index}`,
+        thumbURL: 'https://example.com/thumb.jpg',
+        views: 1000 - i,
+        comments: 10,
+        mylists: 5,
+        likes: 20
+      }
+    })
   }
 
   beforeEach(() => {
-    mockNGList = {
-      videoIds: [],
-      videoTitles: { exact: [], partial: [] },
-      authorIds: [],
-      authorNames: { exact: [], partial: [] }
-    }
+    // デフォルトのフィルタ（何もフィルタしない）
+    mockFilterItems = (items: any[]) => items
   })
 
   it('通常時: 100件表示される', () => {
@@ -95,9 +92,11 @@ describe('NG設定反映後の表示挙動', () => {
     expect(items).toHaveLength(100)
   })
 
-  it('NG設定後: 表示件数が減る（順位は詰められない）', () => {
+  it('NG設定後: 表示件数が減り、順位が繰り上がる', () => {
     // 「実況」をNGワードに設定
-    mockNGList.videoTitles.partial = ['実況']
+    mockFilterItems = (items: any[]) => {
+      return items.filter(item => !item.title.includes('実況'))
+    }
     
     const mockData = createMockData(200)
     
@@ -109,19 +108,57 @@ describe('NG設定反映後の表示挙動', () => {
       />
     )
 
-    // 100件中、3の倍数（実況動画）が除外される
-    // 100件中約33件が除外されるので、約67件表示される
+    // NGフィルタリング後も100件表示される（追加データが読み込まれる）
     const items = screen.getAllByText(/テスト動画/)
-    expect(items.length).toBeLessThan(100)
-    expect(items.length).toBeGreaterThan(60)
+    expect(items.length).toBe(100)
     
-    // 順位は元のまま（1位の実況動画がNGなら、2位が最初に表示）
-    // rank: 2 の動画が最初に表示されるはず
+    // 順位は繰り上がる（1位の実況動画がNGなら、2位が1位として表示）
+    // テスト動画 2 が最初に表示されるはず
     expect(items[0]).toHaveTextContent('テスト動画 2')
   })
 
+  it('NG設定後: 順位番号が正しく振り直される', () => {
+    // 特定の動画IDをNGに設定
+    mockFilterItems = (items: any[]) => {
+      return items.filter(item => !['sm1', 'sm3', 'sm5'].includes(item.id))
+    }
+    
+    const mockData = createMockData(10)
+    
+    const { container } = render(
+      <ClientPage 
+        initialData={mockData}
+        initialGenre="all"
+        initialPeriod="24h"
+      />
+    )
+
+    // ランキングアイテムを取得
+    const rankingItems = container.querySelectorAll('[data-testid="ranking-item"]')
+    
+    // 7件表示される（10件中3件がNG）
+    expect(rankingItems).toHaveLength(7)
+    
+    // 順位が1から連続していることを確認
+    // sm2（元2位）が1位として表示
+    // sm4（元4位）が2位として表示
+    // sm6（元6位）が3位として表示
+    const firstItem = rankingItems[0]
+    expect(firstItem).toBeDefined()
+    expect(firstItem?.textContent).toContain('1') // 順位
+    expect(firstItem?.textContent).toContain('テスト動画 2') // タイトル
+    
+    const secondItem = rankingItems[1]
+    expect(secondItem).toBeDefined()
+    expect(secondItem?.textContent).toContain('2') // 順位
+    expect(secondItem?.textContent).toContain('テスト動画 4') // タイトル
+  })
+
   it('もっと見るボタンの表示条件', () => {
-    mockNGList.videoTitles.partial = ['実況']
+    // 「実況」をNGワードに設定
+    mockFilterItems = (items: any[]) => {
+      return items.filter(item => !item.title.includes('実況'))
+    }
     
     const mockData = createMockData(200)
     

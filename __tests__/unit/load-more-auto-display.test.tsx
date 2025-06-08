@@ -89,8 +89,8 @@ describe('さらに読み込むボタンの自動表示テスト', () => {
       expect(screen.queryByText('テスト動画101')).not.toBeInTheDocument()
     })
 
-    // 「さらに読み込む」ボタンを探してクリック
-    const loadMoreButton = screen.getByText('さらに読み込む')
+    // 「もっと見る」ボタンを探してクリック（統一されている）
+    const loadMoreButton = screen.getByText('もっと見る')
     await user.click(loadMoreButton)
 
     // APIが呼ばれたことを確認
@@ -106,8 +106,8 @@ describe('さらに読み込むボタンの自動表示テスト', () => {
       expect(screen.getByText('テスト動画200')).toBeInTheDocument()
     }, { timeout: 3000 })
 
-    // 「もっと見る」ボタンが表示されていないことを確認
-    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
+    // タグ別ランキングでもボタンは継続して表示される（さらなるデータ取得が可能）
+    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
   it('通常のランキングでは「もっと見る」ボタンが正常に機能する', async () => {
@@ -129,8 +129,8 @@ describe('さらに読み込むボタンの自動表示テスト', () => {
       expect(screen.queryByText('テスト動画101')).not.toBeInTheDocument()
     })
 
-    // 「もっと見る」ボタンが表示される
-    const showMoreButton = screen.getByText(/もっと見る.*100.*200/)
+    // 「もっと見る」ボタンが表示される（件数表示なし）
+    const showMoreButton = screen.getByText('もっと見る')
     expect(showMoreButton).toBeInTheDocument()
 
     // クリックすると追加の100件が表示される

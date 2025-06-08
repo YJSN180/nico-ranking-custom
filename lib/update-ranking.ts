@@ -201,6 +201,26 @@ export async function updateRankingData(): Promise<UpdateResult> {
         }
       }
       
+      // 4時間ごとに人気タグをバックアップ
+      const currentHour = new Date().getHours()
+      if (currentHour % 4 === 0 && popularTags && popularTags.length > 0) {
+        try {
+          const backupDate = new Date()
+          const backupKey = `popular-tags-backup:${backupDate.getFullYear()}-${String(backupDate.getMonth() + 1).padStart(2, '0')}-${String(backupDate.getDate()).padStart(2, '0')}:${String(currentHour).padStart(2, '0')}`
+          
+          // 既存のバックアップデータを取得（なければ新規作成）
+          let backupData = await kv.get(backupKey) as Record<string, string[]> || {}
+          
+          // 現在のジャンルのタグを更新
+          backupData[genre] = popularTags
+          
+          // 7日間のTTLで保存
+          await kv.set(backupKey, backupData, { ex: 7 * 24 * 3600 })
+        } catch (backupError) {
+          // バックアップエラーは無視してメイン処理を継続
+        }
+      }
+      
       updatedGenres.push(`${genre}-${period}`)
       // 更新成功（ログは出力しない - ESLintエラー回避）
       

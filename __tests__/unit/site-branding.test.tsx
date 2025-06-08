@@ -9,10 +9,11 @@ describe('サイトブランディング', () => {
     expect(screen.getByText('ニコニコランキング(Re:turn)')).toBeInTheDocument()
   })
 
-  it('サブタイトルが表示される', () => {
+  it('サブタイトルは削除された', () => {
     render(<HeaderWithSettings />)
     
-    expect(screen.getByText('最新の人気動画をリアルタイムで')).toBeInTheDocument()
+    // 副題は削除されたため表示されない
+    expect(screen.queryByText('最新の人気動画をリアルタイムで')).not.toBeInTheDocument()
   })
 
   it('ヘッダーの高さがモバイルサイズで適切', () => {
