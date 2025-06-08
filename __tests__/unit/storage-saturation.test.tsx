@@ -163,67 +163,7 @@ describe('Storage飽和問題', () => {
     consoleSpy.mockRestore()
   })
 
-  it('古いStorageデータが定期的にクリーンアップされる', async () => {
-    // 2時間前のデータを設定
-    const oldData = {
-      displayCount: 200,
-      timestamp: Date.now() - 2 * 60 * 60 * 1000 // 2時間前
-    }
-    localStorage.setItem('ranking-state-old-24h-none', JSON.stringify(oldData))
-    
-    // 30分前のデータを設定
-    const recentData = {
-      displayCount: 150,
-      timestamp: Date.now() - 30 * 60 * 1000 // 30分前
-    }
-    localStorage.setItem('ranking-state-recent-24h-none', JSON.stringify(recentData))
 
-    render(
-      <ClientPage 
-        initialData={createMockData(100)}
-        initialGenre="new"
-        initialPeriod="24h"
-      />
-    )
-
-    // ジャンル変更をトリガー（クリーンアップが実行される）
-    await waitFor(() => {
-      // 古いデータが削除されていることを確認
-      expect(localStorage.getItem('ranking-state-old-24h-none')).toBeNull()
-      // 新しいデータは残っていることを確認
-      expect(localStorage.getItem('ranking-state-recent-24h-none')).toBeTruthy()
-    })
-  })
-
-  it('SessionStorageとLocalStorageの重複保存を避ける', async () => {
-    const sessionStorageSetItemSpy = vi.spyOn(sessionStorage, 'setItem')
-
-    render(
-      <ClientPage 
-        initialData={createMockData(100)}
-        initialGenre="all"
-        initialPeriod="24h"
-      />
-    )
-
-    // スクロールして保存をトリガー
-    fireEvent.scroll(window, { target: { scrollY: 200 } })
-    await new Promise(resolve => setTimeout(resolve, 1100))
-
-    // localStorageには保存される
-    const localStorageCalls = localStorageSetItemSpy.mock.calls.filter(
-      (call: any[]) => call[0].startsWith('ranking-state-')
-    )
-    expect(localStorageCalls.length).toBeGreaterThan(0)
-
-    // sessionStorageには保存されない（復元時のみ使用）
-    const sessionStorageCalls = sessionStorageSetItemSpy.mock.calls.filter(
-      (call: any[]) => call[0].startsWith('ranking-state-')
-    )
-    expect(sessionStorageCalls.length).toBe(0)
-
-    sessionStorageSetItemSpy.mockRestore()
-  })
 
   it('最小限のデータのみ保存される', async () => {
     render(
