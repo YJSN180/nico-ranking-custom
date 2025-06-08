@@ -22,6 +22,21 @@
   /* シャドウ */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.1);
+  
+  /* 追加の色 */
+  --primary-color: #667eea;
+  --primary-hover: #5567d8;
+  --error-color: #dc3545;
+  --error-bg: #fee;
+  --success-color: #28a745;
+  --warning-color: #ffc107;
+  --surface-secondary: #f5f5f5;
+  --surface-hover: #f0f0f0;
+  
+  /* ランク色 */
+  --rank-gold: #FFD700;
+  --rank-silver: #C0C0C0;
+  --rank-bronze: #CD7F32;
 }
 
 /* ダークテーマ */
@@ -42,6 +57,21 @@
   /* シャドウ */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
+  
+  /* 追加の色 */
+  --primary-color: #7c8eff;
+  --primary-hover: #6b7df0;
+  --error-color: #ff6b6b;
+  --error-bg: rgba(255, 107, 107, 0.2);
+  --success-color: #4caf50;
+  --warning-color: #ff9800;
+  --surface-secondary: #2a2a2a;
+  --surface-hover: #333333;
+  
+  /* ランク色 */
+  --rank-gold: #FFD700;
+  --rank-silver: #C0C0C0;
+  --rank-bronze: #CD7F32;
 }
 
 /* ダークブルーテーマ */
@@ -62,6 +92,21 @@
   /* シャドウ */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.6);
+  
+  /* 追加の色 */
+  --primary-color: #66ccff;
+  --primary-hover: #4db8ff;
+  --error-color: #ff8a8a;
+  --error-bg: rgba(255, 138, 138, 0.2);
+  --success-color: #66d9a8;
+  --warning-color: #ffcc66;
+  --surface-secondary: #0f2942;
+  --surface-hover: #1a3a5f;
+  
+  /* ランク色 */
+  --rank-gold: #FFD700;
+  --rank-silver: #C0C0C0;
+  --rank-bronze: #CD7F32;
 }
 
 /* システムの設定に従う場合 */
@@ -81,6 +126,21 @@
     --header-text: #ffffff;
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
+    
+    /* 追加の色 */
+    --primary-color: #7c8eff;
+    --primary-hover: #6b7df0;
+    --error-color: #ff6b6b;
+    --error-bg: rgba(255, 107, 107, 0.2);
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --surface-secondary: #2a2a2a;
+    --surface-hover: #333333;
+    
+    /* ランク色 */
+    --rank-gold: #FFD700;
+    --rank-silver: #C0C0C0;
+    --rank-bronze: #CD7F32;
   }
 }
 

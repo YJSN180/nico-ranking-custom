@@ -16,9 +16,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   const { isNarrow, isVeryNarrow } = useMobileLayout()
   
   const rankColors: Record<number, string> = {
-    1: '#FFD700', // Gold
-    2: '#C0C0C0', // Silver
-    3: '#CD7F32'  // Bronze
+    1: 'var(--rank-gold)', // Gold
+    2: 'var(--rank-silver)', // Silver
+    3: 'var(--rank-bronze)'  // Bronze
   }
   
   const getRankStyle = (rank: number, mobile: boolean) => {

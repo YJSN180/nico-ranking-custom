@@ -550,7 +550,7 @@ export default function ClientPage({
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
-            color: '#666',
+            color: 'var(--text-secondary)',
             userSelect: 'none',
             WebkitUserSelect: 'none',
             MozUserSelect: 'none',
@@ -561,12 +561,12 @@ export default function ClientPage({
       
       {error && (
         <div style={{ 
-          background: '#fee', 
-          border: '1px solid #fcc',
+          background: 'var(--error-bg)', 
+          border: '1px solid var(--error-color)',
           borderRadius: '8px',
           padding: '16px',
           marginBottom: '16px',
-          color: '#c00'
+          color: 'var(--error-color)'
         }}>
           {error}
         </div>
@@ -576,7 +576,7 @@ export default function ClientPage({
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
-            color: '#666',
+            color: 'var(--text-secondary)',
             userSelect: 'none',
             WebkitUserSelect: 'none',
             MozUserSelect: 'none',
@@ -600,7 +600,7 @@ export default function ClientPage({
           }}>
             <div style={{ 
               fontSize: '12px',
-              color: '#666',
+              color: 'var(--text-secondary)',
               visibility: isUpdating ? 'visible' : 'hidden',
               userSelect: 'none',
               WebkitUserSelect: 'none',
@@ -613,7 +613,7 @@ export default function ClientPage({
             {lastUpdated && (
               <div style={{ 
                 fontSize: '11px',
-                color: '#999',
+                color: 'var(--text-muted)',
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
                 MozUserSelect: 'none',
@@ -649,7 +649,7 @@ export default function ClientPage({
                 style={{
                   padding: '12px 32px',
                   fontSize: '16px',
-                  background: loadingMore ? '#ccc' : '#667eea',
+                  background: loadingMore ? 'var(--text-muted)' : 'var(--primary-color)',
                   color: 'white',
                   border: 'none',
                   borderRadius: '8px',
