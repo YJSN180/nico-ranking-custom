@@ -5,7 +5,10 @@ import type { RankingItem } from '@/types/ranking'
 
 // モックの設定
 vi.mock('next/image', () => ({
-  default: ({ src, alt, ...props }: any) => <img src={src} alt={alt} {...props} />
+  default: vi.fn((props: any) => {
+    // eslint-disable-next-line jsx-a11y/alt-text
+    return <img {...props} />
+  })
 }))
 
 vi.mock('@/hooks/use-mobile-layout', () => ({

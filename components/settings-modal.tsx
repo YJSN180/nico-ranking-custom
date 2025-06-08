@@ -90,8 +90,11 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {activeTab === 'display' ? (
             <div className={styles.displaySettings}>
               <section className={styles.section}>
-                <h3>🎨 テーマ設定</h3>
-                <div style={{ marginTop: '16px' }}>
+                <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+                  <legend style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+                    🎨 テーマ設定
+                  </legend>
+                  <div>
                   <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
                     <input
                       type="radio"
@@ -163,7 +166,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                       深い青を基調とした落ち着いたテーマ
                     </span>
                   </label>
-                </div>
+                  </div>
+                </fieldset>
               </section>
             </div>
           ) : (

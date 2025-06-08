@@ -801,7 +801,7 @@ export default function ClientPage({
         const prevFilteredCount = filterItems(rankingData).length
         const newFilteredCount = filterItems(newRankingData).length
         const actualAddedCount = newFilteredCount - prevFilteredCount
-        const newDisplayCount = displayCount + actualAddedCount
+        const newDisplayCount = Math.min(displayCount + actualAddedCount, MAX_RANKING_ITEMS)
         setDisplayCount(newDisplayCount)
         
         // URLを更新
@@ -972,13 +972,13 @@ export default function ClientPage({
           </ul>
           
           {/* もっと見るボタン（既存データの表示または新規データの読み込み） */}
-          {(displayCount < rerankedItems.length || hasMore) && (
+          {(displayCount < rerankedItems.length || hasMore) && displayCount < MAX_RANKING_ITEMS && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
                 onClick={() => {
                   if (displayCount < rerankedItems.length) {
                     // 既存データから追加表示（ジャンル別ランキングの1-300位）
-                    const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length)
+                    const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length, MAX_RANKING_ITEMS)
                     setDisplayCount(newDisplayCount)
                     updateURL(newDisplayCount)
                     saveStateToStorage()
