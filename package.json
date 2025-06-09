@@ -43,7 +43,10 @@
     "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
-    "@types/react-dom": "^18"
+    "@types/react-dom": "^18",
+    "@types/pako": "^2.0.3",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.21"
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.12",
@@ -53,12 +56,9 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/pako": "^2.0.3",
     "@vitejs/plugin-react": "^4.3.4",
     "@vitest/coverage-v8": "^2.1.8",
     "dotenv": "^16.5.0",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.21",
     "jsdom": "^25.0.1",
     "prettier": "^3.4.2",
     "puppeteer": "^24.9.0",
