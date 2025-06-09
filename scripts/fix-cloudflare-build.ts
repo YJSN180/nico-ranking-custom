@@ -68,7 +68,7 @@ async function fixBuildConfiguration() {
     console.log('\n2. Updating build configuration...');
     const updateData = {
       build_config: {
-        build_command: 'npm ci && npm run build:cloudflare',
+        build_command: 'npm ci && npx @cloudflare/next-on-pages@1',
         destination_dir: '.vercel/output/static',
         root_dir: '',
         web_analytics_tag: null,
