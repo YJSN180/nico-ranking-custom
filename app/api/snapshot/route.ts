@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getFromCloudflareKV } from '@/lib/cloudflare-kv'
+import { getFromCloudflareKV } from '../../../lib/cloudflare-kv'
 import { ungzip } from 'pako'
 
 export const runtime = 'edge'

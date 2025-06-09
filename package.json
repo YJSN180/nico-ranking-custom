@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && npx @cloudflare/next-on-pages@1",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
@@ -33,6 +33,7 @@
     "tsx": "^4.19.2"
   },
   "devDependencies": {
+    "@cloudflare/next-on-pages": "^1.13.12",
     "@playwright/test": "^1.49.1",
     "@stagewise/toolbar-next": "^0.1.2",
     "@testing-library/dom": "^10.4.0",
@@ -52,6 +53,7 @@
     "prettier": "^3.4.2",
     "puppeteer": "^24.9.0",
     "typescript": "^5",
+    "vercel": "^42.3.0",
     "vitest": "^2.1.8"
   }
 }

@@ -1,11 +1,11 @@
 import ClientPage from './client-page'
-import { PreferenceLoader } from '@/components/preference-loader'
-import { HeaderWithSettings } from '@/components/header-with-settings'
-import { SuspenseWrapper } from '@/components/suspense-wrapper'
-import { getFromCloudflareKV } from '@/lib/cloudflare-kv'
+import { PreferenceLoader } from '../components/preference-loader'
+import { HeaderWithSettings } from '../components/header-with-settings'
+import { SuspenseWrapper } from '../components/suspense-wrapper'
+import { getFromCloudflareKV } from '../lib/cloudflare-kv'
 import { ungzip } from 'pako'
-import { filterRankingData } from '@/lib/ng-filter'
-import type { RankingData, RankingItem } from '@/types/ranking'
+import { filterRankingData } from '../lib/ng-filter'
+import type { RankingData, RankingItem } from '../types/ranking'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 300 // 5分間キャッシュ

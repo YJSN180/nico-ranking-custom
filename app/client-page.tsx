@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { RankingSelector } from '@/components/ranking-selector'
-import { TagSelector } from '@/components/tag-selector'
-import RankingItemComponent from '@/components/ranking-item'
-import { useRealtimeStats } from '@/hooks/use-realtime-stats'
-import { useUserPreferences } from '@/hooks/use-user-preferences'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
-import { useMobileDetect } from '@/hooks/use-mobile-detect'
-import { getPopularTags } from '@/lib/popular-tags'
-import type { RankingData, RankingItem } from '@/types/ranking'
-import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
+import { RankingSelector } from '../components/ranking-selector'
+import { TagSelector } from '../components/tag-selector'
+import RankingItemComponent from '../components/ranking-item'
+import { useRealtimeStats } from '../hooks/use-realtime-stats'
+import { useUserPreferences } from '../hooks/use-user-preferences'
+import { useUserNGList } from '../hooks/use-user-ng-list'
+import { useMobileDetect } from '../hooks/use-mobile-detect'
+import { getPopularTags } from '../lib/popular-tags'
+import type { RankingData, RankingItem } from '../types/ranking'
+import type { RankingConfig, RankingGenre } from '../types/ranking-config'
 
 interface ClientPageProps {
   initialData: RankingData
