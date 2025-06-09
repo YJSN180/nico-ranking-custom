@@ -13,8 +13,8 @@ curl -X PATCH "https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/pages
   -H "Content-Type: application/json" \
   -d '{
     "build_config": {
-      "build_command": "npm install && npm run build:cloudflare-pages",
-      "destination_dir": ".vercel/output/static",
+      "build_command": "",
+      "destination_dir": "public",
       "root_dir": "",
       "web_analytics_tag": null,
       "web_analytics_token": null

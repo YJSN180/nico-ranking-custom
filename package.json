@@ -10,7 +10,7 @@
     "build": "next build",
     "build:next": "next build",
     "build:cloudflare": "./scripts/cloudflare-build.sh",
-    "build:cloudflare-pages": "next build && npx @cloudflare/next-on-pages --experimental-minify",
+    "build:cloudflare-pages": "echo 'Using static HTML + Worker API'",
     "preview": "npm run pages:build && wrangler pages dev",
     "deploy": "npm run pages:build && wrangler pages deploy",
     "start": "next start",
