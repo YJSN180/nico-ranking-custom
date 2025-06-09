@@ -122,6 +122,13 @@ This project follows strict Test-Driven Development (TDD) principles. **Always w
 2. **Green**: Write the minimal code to make the test pass
 3. **Refactor**: Improve the code while keeping tests green
 
+### TDD Best Practices:
+- **Test First**: Never write production code without a failing test
+- **One Test at a Time**: Write one test, make it pass, then write the next
+- **Minimal Implementation**: Write only enough code to make the test pass
+- **Refactor with Confidence**: Clean up code after tests are green
+- **Test Behavior, Not Implementation**: Focus on what the code does, not how
+
 ### Coverage Requirements:
 - Current threshold: 42% (temporarily lowered from 90% during refactoring)
 - Goal: Return to 90% coverage across all metrics
@@ -138,6 +145,22 @@ npm test                    # Watch mode
 npm test -- --run          # Single run
 npm run test:coverage      # With coverage report
 npx vitest run <file>      # Run specific test file
+```
+
+### Example TDD Workflow:
+```bash
+# 1. Create a test file
+touch __tests__/unit/new-feature.test.tsx
+
+# 2. Write a failing test
+# 3. Run the test to see it fail
+npx vitest run __tests__/unit/new-feature.test.tsx
+
+# 4. Implement the feature
+# 5. Run the test again to see it pass
+# 6. Refactor if needed
+# 7. Run all tests to ensure nothing broke
+npm test -- --run
 ```
 
 ## Common Pitfalls
@@ -186,12 +209,31 @@ npx vitest run <file>      # Run specific test file
 
 12. **NG List Rank Reordering**: When videos are blocked via NG list, ranks are properly reordered to maintain continuous numbering.
 
+13. **Theme System**: The application supports three themes (light, dark, dark blue) with CSS variables. Theme preference is stored in localStorage and applied instantly without flash.
+
+14. **Hybrid Pagination**: URL parameters track display count (`?show=300`). Browser back button preserves state. Maximum 500 items supported with automatic restoration.
+
+15. **Scroll Restoration**: Custom scroll restoration with `history.scrollRestoration = 'manual'` to prevent conflicts with browser defaults.
+
 ## GitHub Access
 
 ### Repository Information
 - Repository: `YJSN180/nico-ranking-custom`
 - Main branch: `main`
 - PR workflow: Create feature branches, submit PRs, merge after CI passes
+
+### GitHub Authentication
+When working with GitHub CLI, ensure the correct account is active:
+```bash
+# Check current authentication status
+gh auth status
+
+# Switch to YJSN180 account if needed
+gh auth switch -u YJSN180
+
+# If authentication fails, re-login
+gh auth login
+```
 
 ### GitHub CLI Commands
 ```bash
@@ -207,6 +249,25 @@ gh pr merge <PR_NUMBER> --squash --delete-branch
 # Check workflow runs
 gh run list
 gh run view <RUN_ID>
+
+# View specific job logs
+gh run view <RUN_ID> --log
+gh run view <RUN_ID> --log-failed
+```
+
+### Working with Branches
+```bash
+# Create and checkout new feature branch
+git checkout -b feat/feature-name
+
+# Push branch to remote
+git push -u origin feat/feature-name
+
+# Delete local branch after merge
+git branch -D feat/feature-name
+
+# Clean up remote tracking branches
+git remote prune origin
 ```
 
 ### CI/CD Pipeline
