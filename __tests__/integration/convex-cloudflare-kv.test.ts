@@ -141,8 +141,12 @@ describe('Convex + Cloudflare KV Integration', () => {
       
       // Mock KV response
       vi.mocked(getRankingFromKV).mockResolvedValueOnce({
-        value: 'compressed-data',
-        metadata: { compressed: true }
+        genres: {},
+        metadata: {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          totalItems: 0
+        }
       })
       
       // TODO: Implement decompression logic

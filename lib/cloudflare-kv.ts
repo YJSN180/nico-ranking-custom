@@ -75,7 +75,7 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
   const compressed = await compressData(data)
   
   // Store with metadata
-  await RANKING_KV.put(RANKING_DATA_KEY, compressed, {
+  await RANKING_KV.put(RANKING_DATA_KEY, compressed as any, {
     metadata: {
       compressed: true,
       version: data.metadata.version,
