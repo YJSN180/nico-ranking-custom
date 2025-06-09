@@ -1,4 +1,4 @@
-import { action } from "./_generated/server";
+import { action } from "convex/server";
 import { v } from "convex/values";
 import pako from "pako";
 
