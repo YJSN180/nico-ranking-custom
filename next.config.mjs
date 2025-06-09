@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Cloudflare Pages向けの設定
+  output: 'standalone',
   images: {
     // 外部画像の最適化を無効化
     unoptimized: true,

@@ -12,16 +12,16 @@
     "test:e2e": "playwright test",
     "test:all": "npm run test -- --run && npm run test:e2e",
     "typecheck": "tsc --noEmit",
-    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
-    "update:kv": "npx tsx scripts/update-ranking-kv.ts"
+    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
-    "@vercel/kv": "^1.0.1",
     "cheerio": "^1.0.0",
+    "convex": "^1.24.8",
     "fast-xml-parser": "^4.5.3",
     "next": "14.2.21",
     "node-fetch": "^2.7.0",
+    "pako": "^2.1.0",
     "react": "^18",
     "react-dom": "^18",
     "tsx": "^4.19.2"
@@ -34,6 +34,7 @@
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
+    "@types/pako": "^2.0.3",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4.3.4",

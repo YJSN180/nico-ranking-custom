@@ -1,10 +1,5 @@
-import { kv } from '@vercel/kv'
 import type { NGList, NGFilterResult } from '@/types/ng-list'
 import type { RankingItem } from '@/types/ranking'
-
-// NGリストのキー
-const NG_LIST_MANUAL_KEY = 'ng-list-manual'
-const NG_LIST_DERIVED_KEY = 'ng-list-derived'
 
 // デフォルトの空のNGリスト
 const DEFAULT_NG_LIST: NGList = {
@@ -20,55 +15,35 @@ let ngListCache: NGList | null = null
 let ngListCacheTime = 0
 const CACHE_DURATION = 60000 // 1分間キャッシュ
 
-// NGリストを取得
+// NGリストを取得（現在は空のリストを返す）
 export async function getNGList(): Promise<NGList> {
   // キャッシュが有効な場合はキャッシュから返す
   if (ngListCache && Date.now() - ngListCacheTime < CACHE_DURATION) {
     return ngListCache
   }
   
-  try {
-    const [manual, derived] = await Promise.all([
-      kv.get<Omit<NGList, 'derivedVideoIds'>>(NG_LIST_MANUAL_KEY),
-      kv.get<string[]>(NG_LIST_DERIVED_KEY)
-    ])
-    
-    const ngList = {
-      ...DEFAULT_NG_LIST,
-      ...(manual || {}),
-      derivedVideoIds: derived || []
-    }
-    
-    // キャッシュを更新
-    ngListCache = ngList
-    ngListCacheTime = Date.now()
-    
-    return ngList
-  } catch (error) {
-    // エラーは無視してデフォルト値を返す
-    return DEFAULT_NG_LIST
-  }
+  // 現在はデフォルトの空のNGリストを返す
+  // TODO: Convex DBから取得するように実装
+  ngListCache = DEFAULT_NG_LIST
+  ngListCacheTime = Date.now()
+  
+  return DEFAULT_NG_LIST
 }
 
-// 手動NGリストを保存
+// 手動NGリストを保存（現在は何もしない）
 export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
-  await kv.set(NG_LIST_MANUAL_KEY, ngList)
+  // TODO: Convex DBに保存するように実装
   // キャッシュを無効化
   ngListCache = null
   ngListCacheTime = 0
 }
 
-// 派生NGリストに追加
+// 派生NGリストに追加（現在は何もしない）
 export async function addToDerivedNGList(videoIds: string[]): Promise<void> {
-  if (videoIds.length === 0) return
-  
-  try {
-    const existing = await kv.get<string[]>(NG_LIST_DERIVED_KEY) || []
-    const newSet = new Set([...existing, ...videoIds])
-    await kv.set(NG_LIST_DERIVED_KEY, Array.from(newSet))
-  } catch (error) {
-    // エラーは無視
-  }
+  // TODO: Convex DBに保存するように実装
+  // キャッシュを無効化
+  ngListCache = null
+  ngListCacheTime = 0
 }
 
 // ランキングアイテムをフィルタリング
