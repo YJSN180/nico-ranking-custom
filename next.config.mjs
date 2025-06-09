@@ -1,7 +1,8 @@
-import { resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /** @type {import('next').NextConfig} */
 export default {
@@ -9,7 +10,7 @@ export default {
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': resolve(__dirname),
+      '@': __dirname,
     };
     return config;
   },
