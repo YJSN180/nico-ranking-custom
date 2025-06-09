@@ -146,8 +146,8 @@ async function fixBuildConfiguration() {
     
     if (updateResponse.success) {
       console.log('✅ Build configuration updated successfully!');
-      console.log('   Build command: npm run build');
-      console.log('   Build output: .next');
+      console.log('   Build command: npm ci && npm run build:cloudflare');
+      console.log('   Build output: .vercel/output/static');
       console.log('   Environment variables: Set');
       
       // Trigger new deployment

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 export async function GET() {
   try {

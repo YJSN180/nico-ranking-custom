@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
   const genre = request.nextUrl.searchParams.get('genre') || 'vocaloid'

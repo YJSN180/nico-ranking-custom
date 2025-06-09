@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import type { RankingItem } from '@/types/ranking'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
   try {

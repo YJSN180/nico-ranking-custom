@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 // テストするランキングパターン
 const TEST_PATTERNS = [

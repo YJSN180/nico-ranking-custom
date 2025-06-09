@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { RankingItem } from '@/types/ranking'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 export async function GET() {
   // 300件のテストデータを生成

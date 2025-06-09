@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getFromCloudflareKV } from '../../../lib/cloudflare-kv'
+import { getFromCloudflareKV } from '../../../lib/cloudflare-kv-edge'
 import { ungzip } from 'pako'
 import { filterRankingData } from '../../../lib/ng-filter'
 import type { RankingItem } from '../../../types/ranking'

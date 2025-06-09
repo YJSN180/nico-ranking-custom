@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { RankingItem } from '@/types/ranking'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 // テスト用のCookie設定
 const COOKIE_CONFIGS = [

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchVideoStats } from '@/lib/snapshot-api'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 // 動画の最新統計情報を取得するAPI
 export async function GET(request: Request | NextRequest) {
