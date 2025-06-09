@@ -1,5 +1,8 @@
 import { ungzip } from 'pako';
-import type { Env } from '../../lib/kv-binding';
+
+interface Env {
+  RANKING_KV: KVNamespace;
+}
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
