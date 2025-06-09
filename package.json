@@ -37,7 +37,8 @@
     "pako": "^2.1.0",
     "react": "^18",
     "react-dom": "^18",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "wrangler": "^3.0.0"
   },
   "devDependencies": {
     "@cloudflare/next-on-pages": "^1.13.12",
