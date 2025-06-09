@@ -68,7 +68,7 @@ async function fixBuildConfiguration() {
     console.log('\n2. Updating build configuration...');
     const updateData = {
       build_config: {
-        build_command: 'npm install && npm run build',
+        build_command: 'npm install && npm run build:cloudflare-pages',
         destination_dir: '.vercel/output/static',
         root_dir: '',
         web_analytics_tag: null,
@@ -164,7 +164,7 @@ async function fixBuildConfiguration() {
     
     if (updateResponse.success) {
       console.log('✅ Build configuration updated successfully!');
-      console.log('   Build command: npm install && npm run build');
+      console.log('   Build command: npm install && npm run build:cloudflare-pages');
       console.log('   Build output: .vercel/output/static');
       console.log('   Environment variables: Set');
       
