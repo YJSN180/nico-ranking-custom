@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "pages:build": "npx @cloudflare/next-on-pages@1 --experimental-minify",
+    "pages:build": "next build && npx @cloudflare/next-on-pages --experimental-minify",
     "build:cloudflare": "next build",
     "preview": "npm run pages:build && wrangler pages dev",
     "deploy": "npm run pages:build && wrangler pages deploy",

@@ -68,7 +68,7 @@ async function fixBuildConfiguration() {
     console.log('\n2. Updating build configuration...');
     const updateData = {
       build_config: {
-        build_command: 'npm ci && next build && npx @cloudflare/next-on-pages@1 --experimental-minify',
+        build_command: 'npm install @cloudflare/next-on-pages && npm run pages:build',
         destination_dir: '.vercel/output/static',
         root_dir: '',
         web_analytics_tag: null,
@@ -156,7 +156,7 @@ async function fixBuildConfiguration() {
     
     if (updateResponse.success) {
       console.log('✅ Build configuration updated successfully!');
-      console.log('   Build command: npm ci && next build && npx @cloudflare/next-on-pages@1 --experimental-minify');
+      console.log('   Build command: npm install @cloudflare/next-on-pages && npm run pages:build');
       console.log('   Build output: .vercel/output/static');
       console.log('   Environment variables: Set');
       
