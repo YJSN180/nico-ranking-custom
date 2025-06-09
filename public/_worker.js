@@ -14,7 +14,6 @@ export default {
 };
 
 async function handleRankingAPI(request, env) {
-  const { ungzip } = await import('pako');
   const url = new URL(request.url);
   
   const genre = url.searchParams.get('genre') || 'all';
@@ -42,10 +41,11 @@ async function handleRankingAPI(request, env) {
       });
     }
     
-    // Decompress
-    const decompressed = ungzip(new Uint8Array(compressed));
-    const decoder = new TextDecoder();
-    const jsonStr = decoder.decode(decompressed);
+    // Decompress using native DecompressionStream
+    const stream = new Response(compressed).body;
+    const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'));
+    const decompressedResponse = new Response(decompressedStream);
+    const jsonStr = await decompressedResponse.text();
     const snapshot = JSON.parse(jsonStr);
     
     // Get genre and period data
