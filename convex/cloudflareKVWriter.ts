@@ -1,6 +1,5 @@
 import { action } from "convex/server";
 import { v } from "convex/values";
-import pako from "pako";
 
 // Write compressed data to Cloudflare KV
 export const writeToCloudflareKV = action({
@@ -18,6 +17,7 @@ export const writeToCloudflareKV = action({
     }
 
     // Compress the data
+    const pako = await import('pako');
     const jsonString = JSON.stringify(args.data);
     const compressed = pako.gzip(jsonString);
 
