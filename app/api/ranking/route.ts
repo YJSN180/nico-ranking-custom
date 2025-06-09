@@ -9,9 +9,9 @@ export const runtime = 'edge'
 export async function GET(request: NextRequest) {
   // Cloudflare Pages環境変数を取得
   const env = {
-    CF_ACCOUNT_ID: process.env.CF_ACCOUNT_ID || request.headers.get('CF-ACCOUNT-ID') || '',
-    CF_NAMESPACE_ID: process.env.CF_NAMESPACE_ID || request.headers.get('CF-NAMESPACE-ID') || '',
-    CF_API_TOKEN: process.env.CF_API_TOKEN || request.headers.get('CF-API-TOKEN') || ''
+    CF_ACC: process.env.CF_ACC || request.headers.get('CF-ACC') || '',
+    CF_NS: process.env.CF_NS || request.headers.get('CF-NS') || '',
+    CF_KV_TOKEN_READ: process.env.CF_KV_TOKEN_READ || request.headers.get('CF-KV-TOKEN-READ') || ''
   };
   const { searchParams } = new URL(request.url)
   const genre = searchParams.get('genre') || 'all'

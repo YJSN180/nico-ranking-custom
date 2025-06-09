@@ -1,9 +1,9 @@
 // Cloudflare KV操作用のヘルパー関数
 
 export async function putToCloudflareKV(key: string, data: Uint8Array): Promise<void> {
-  const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
-  const CF_NAMESPACE_ID = process.env.CF_NAMESPACE_ID;
-  const CF_API_TOKEN = process.env.CF_API_TOKEN;
+  const CF_ACCOUNT_ID = process.env.CF_ACC;
+  const CF_NAMESPACE_ID = process.env.CF_NS;
+  const CF_API_TOKEN = process.env.CF_KV_TOKEN_WRITE;
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     throw new Error("Cloudflare credentials not configured");
@@ -28,9 +28,9 @@ export async function putToCloudflareKV(key: string, data: Uint8Array): Promise<
 }
 
 export async function getFromCloudflareKV(key: string): Promise<ArrayBuffer | null> {
-  const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
-  const CF_NAMESPACE_ID = process.env.CF_NAMESPACE_ID;
-  const CF_API_TOKEN = process.env.CF_API_TOKEN;
+  const CF_ACCOUNT_ID = process.env.CF_ACC;
+  const CF_NAMESPACE_ID = process.env.CF_NS;
+  const CF_API_TOKEN = process.env.CF_KV_TOKEN_READ;
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     throw new Error("Cloudflare credentials not configured");
@@ -57,9 +57,9 @@ export async function getFromCloudflareKV(key: string): Promise<ArrayBuffer | nu
 }
 
 export async function deleteFromCloudflareKV(key: string): Promise<void> {
-  const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
-  const CF_NAMESPACE_ID = process.env.CF_NAMESPACE_ID;
-  const CF_API_TOKEN = process.env.CF_API_TOKEN;
+  const CF_ACCOUNT_ID = process.env.CF_ACC;
+  const CF_NAMESPACE_ID = process.env.CF_NS;
+  const CF_API_TOKEN = process.env.CF_KV_TOKEN_WRITE;
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     throw new Error("Cloudflare credentials not configured");

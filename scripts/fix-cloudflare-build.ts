@@ -68,8 +68,8 @@ async function fixBuildConfiguration() {
     console.log('\n2. Updating build configuration...');
     const updateData = {
       build_config: {
-        build_command: '',
-        destination_dir: 'public',
+        build_command: 'npm install && npm run build',
+        destination_dir: '.vercel/output/static',
         root_dir: '',
         web_analytics_tag: null,
         web_analytics_token: null
@@ -81,15 +81,19 @@ async function fixBuildConfiguration() {
               value: 'https://judicious-lemming-629.convex.cloud',
               type: 'plain_text'
             },
-            CF_ACCOUNT_ID: {
+            CF_ACC: {
               value: ACCOUNT_ID,
               type: 'plain_text'
             },
-            CF_NAMESPACE_ID: {
+            CF_NS: {
               value: '80f4535c379b4e8cb89ce6dbdb7d2dc9',
               type: 'plain_text'
             },
-            CF_API_TOKEN: {
+            CF_KV_TOKEN_READ: {
+              value: CF_API_TOKEN,
+              type: 'secret_text'
+            },
+            CF_KV_TOKEN_WRITE: {
               value: CF_API_TOKEN,
               type: 'secret_text'
             },
@@ -116,15 +120,19 @@ async function fixBuildConfiguration() {
               value: 'https://judicious-lemming-629.convex.cloud',
               type: 'plain_text'
             },
-            CF_ACCOUNT_ID: {
+            CF_ACC: {
               value: ACCOUNT_ID,
               type: 'plain_text'
             },
-            CF_NAMESPACE_ID: {
+            CF_NS: {
               value: '80f4535c379b4e8cb89ce6dbdb7d2dc9',
               type: 'plain_text'
             },
-            CF_API_TOKEN: {
+            CF_KV_TOKEN_READ: {
+              value: CF_API_TOKEN,
+              type: 'secret_text'
+            },
+            CF_KV_TOKEN_WRITE: {
               value: CF_API_TOKEN,
               type: 'secret_text'
             },
@@ -156,8 +164,8 @@ async function fixBuildConfiguration() {
     
     if (updateResponse.success) {
       console.log('✅ Build configuration updated successfully!');
-      console.log('   Build command: (none - static files only)');
-      console.log('   Build output: public');
+      console.log('   Build command: npm install && npm run build');
+      console.log('   Build output: .vercel/output/static');
       console.log('   Environment variables: Set');
       
       // Trigger new deployment

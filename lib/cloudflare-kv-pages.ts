@@ -2,24 +2,25 @@
 // process.envを使わず、環境変数を直接受け取る
 
 interface CloudflareEnv {
-  CF_ACCOUNT_ID: string;
-  CF_NAMESPACE_ID: string;
-  CF_API_TOKEN: string;
+  CF_ACC: string;
+  CF_NS: string;
+  CF_KV_TOKEN_READ?: string;
+  CF_KV_TOKEN_WRITE?: string;
 }
 
 export async function putToCloudflareKV(key: string, data: Uint8Array, env: CloudflareEnv): Promise<void> {
-  const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = env;
+  const { CF_ACC, CF_NS, CF_KV_TOKEN_WRITE } = env;
   
-  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+  if (!CF_ACC || !CF_NS || !CF_KV_TOKEN_WRITE) {
     throw new Error("Cloudflare credentials not configured");
   }
   
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${key}`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACC}/storage/kv/namespaces/${CF_NS}/values/${key}`;
   
   const response = await fetch(url, {
     method: "PUT",
     headers: {
-      "Authorization": `Bearer ${CF_API_TOKEN}`,
+      "Authorization": `Bearer ${CF_KV_TOKEN_WRITE}`,
       "Content-Encoding": "gzip",
       "Content-Type": "application/json",
     },
@@ -33,17 +34,17 @@ export async function putToCloudflareKV(key: string, data: Uint8Array, env: Clou
 }
 
 export async function getFromCloudflareKV(key: string, env: CloudflareEnv): Promise<ArrayBuffer | null> {
-  const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = env;
+  const { CF_ACC, CF_NS, CF_KV_TOKEN_READ } = env;
   
-  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+  if (!CF_ACC || !CF_NS || !CF_KV_TOKEN_READ) {
     throw new Error("Cloudflare credentials not configured");
   }
   
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${key}`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACC}/storage/kv/namespaces/${CF_NS}/values/${key}`;
   
   const response = await fetch(url, {
     headers: {
-      "Authorization": `Bearer ${CF_API_TOKEN}`,
+      "Authorization": `Bearer ${CF_KV_TOKEN_READ}`,
     },
   });
   
@@ -60,18 +61,18 @@ export async function getFromCloudflareKV(key: string, env: CloudflareEnv): Prom
 }
 
 export async function deleteFromCloudflareKV(key: string, env: CloudflareEnv): Promise<void> {
-  const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = env;
+  const { CF_ACC, CF_NS, CF_KV_TOKEN_WRITE } = env;
   
-  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+  if (!CF_ACC || !CF_NS || !CF_KV_TOKEN_WRITE) {
     throw new Error("Cloudflare credentials not configured");
   }
   
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${key}`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACC}/storage/kv/namespaces/${CF_NS}/values/${key}`;
   
   const response = await fetch(url, {
     method: "DELETE",
     headers: {
-      "Authorization": `Bearer ${CF_API_TOKEN}`,
+      "Authorization": `Bearer ${CF_KV_TOKEN_WRITE}`,
     },
   });
   
