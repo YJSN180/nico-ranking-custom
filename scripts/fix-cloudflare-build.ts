@@ -102,8 +102,9 @@ async function fixBuildConfiguration() {
               type: 'plain_text'
             }
           },
-          compatibility_date: '2024-01-01',
-          compatibility_flags: ['nodejs_compat']
+          compatibility_date: '2023-05-18',
+          compatibility_flags: ['nodejs_compat'],
+          node_compat: true
         },
         preview: {
           environment_variables: {
@@ -132,8 +133,9 @@ async function fixBuildConfiguration() {
               type: 'plain_text'
             }
           },
-          compatibility_date: '2024-01-01',
-          compatibility_flags: ['nodejs_compat']
+          compatibility_date: '2023-05-18',
+          compatibility_flags: ['nodejs_compat'],
+          node_compat: true
         }
       }
     };
