@@ -1,10 +1,5 @@
 {
-  "functions": "convex/",
   "authConfig": {
     "providers": []
-  },
-  "project": {
-    "name": "nico-ranking",
-    "slug": "judicious-lemming-629"
   }
 }
