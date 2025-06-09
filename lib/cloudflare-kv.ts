@@ -1,11 +1,19 @@
 // Cloudflare KV integration for ranking data storage
 // This module handles reading and writing compressed ranking data to Cloudflare KV
 
-import pako from 'pako'
+// Dynamic import for Edge runtime compatibility
+let pako: any
 
 // KV namespace binding (will be injected by Cloudflare Workers)
 declare global {
-  const RANKING_KV: KVNamespace
+  const RANKING_KV: KVNamespace | undefined
+}
+
+// Mock KVNamespace for type checking
+interface KVNamespace {
+  get(key: string): Promise<string | null>
+  getWithMetadata<T>(key: string, options?: any): Promise<{ value: T | null, metadata: any | null }>
+  put(key: string, value: string | ArrayBuffer, options?: any): Promise<void>
 }
 
 export interface KVRankingData {
@@ -36,7 +44,10 @@ const RANKING_DATA_KEY = 'ranking-data-bundle'
 /**
  * Compress data using gzip
  */
-export function compressData(data: any): Uint8Array {
+export async function compressData(data: any): Promise<Uint8Array> {
+  if (!pako) {
+    pako = await import('pako')
+  }
   const jsonString = JSON.stringify(data)
   return pako.gzip(jsonString)
 }
@@ -44,7 +55,10 @@ export function compressData(data: any): Uint8Array {
 /**
  * Decompress gzipped data
  */
-export function decompressData(compressed: Uint8Array): any {
+export async function decompressData(compressed: Uint8Array): Promise<any> {
+  if (!pako) {
+    pako = await import('pako')
+  }
   const jsonString = pako.ungzip(compressed, { to: 'string' })
   return JSON.parse(jsonString)
 }
@@ -58,7 +72,7 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
   }
 
   // Compress the data
-  const compressed = compressData(data)
+  const compressed = await compressData(data)
   
   // Store with metadata
   await RANKING_KV.put(RANKING_DATA_KEY, compressed, {
@@ -89,7 +103,7 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
 
   // Decompress if needed
   if (result.metadata?.compressed) {
-    return decompressData(new Uint8Array(result.value))
+    return await decompressData(new Uint8Array(result.value))
   }
 
   // Fallback to uncompressed (shouldn't happen in production)
