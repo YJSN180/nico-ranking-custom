@@ -68,7 +68,7 @@ async function fixBuildConfiguration() {
     console.log('\n2. Updating build configuration...');
     const updateData = {
       build_config: {
-        build_command: 'npm ci && npx @cloudflare/next-on-pages@1',
+        build_command: 'npm ci && next build && npx @cloudflare/next-on-pages@1 --experimental-minify',
         destination_dir: '.vercel/output/static',
         root_dir: '',
         web_analytics_tag: null,
@@ -99,6 +99,10 @@ async function fixBuildConfiguration() {
             },
             NODE_VERSION: {
               value: '20',
+              type: 'plain_text'
+            },
+            SKIP_DEPENDENCY_INSTALL: {
+              value: 'true',
               type: 'plain_text'
             }
           },
@@ -131,6 +135,10 @@ async function fixBuildConfiguration() {
             NODE_VERSION: {
               value: '20',
               type: 'plain_text'
+            },
+            SKIP_DEPENDENCY_INSTALL: {
+              value: 'true',
+              type: 'plain_text'
             }
           },
           compatibility_date: '2023-05-18',
@@ -148,7 +156,7 @@ async function fixBuildConfiguration() {
     
     if (updateResponse.success) {
       console.log('✅ Build configuration updated successfully!');
-      console.log('   Build command: npm ci && npm run build:cloudflare');
+      console.log('   Build command: npm ci && next build && npx @cloudflare/next-on-pages@1 --experimental-minify');
       console.log('   Build output: .vercel/output/static');
       console.log('   Environment variables: Set');
       

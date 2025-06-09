@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getFromCloudflareKV } from '../../../lib/cloudflare-kv'
+import { getFromCloudflareKV } from '../../../lib/cloudflare-kv-pages'
 import { ungzip } from 'pako'
 import { filterRankingData } from '../../../lib/ng-filter'
 import type { RankingItem } from '../../../types/ranking'
@@ -7,6 +7,12 @@ import type { RankingItem } from '../../../types/ranking'
 export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
+  // Cloudflare Pages環境変数を取得
+  const env = {
+    CF_ACCOUNT_ID: process.env.CF_ACCOUNT_ID || request.headers.get('CF-ACCOUNT-ID') || '',
+    CF_NAMESPACE_ID: process.env.CF_NAMESPACE_ID || request.headers.get('CF-NAMESPACE-ID') || '',
+    CF_API_TOKEN: process.env.CF_API_TOKEN || request.headers.get('CF-API-TOKEN') || ''
+  };
   const { searchParams } = new URL(request.url)
   const genre = searchParams.get('genre') || 'all'
   const period = searchParams.get('period') || '24h'
@@ -21,7 +27,7 @@ export async function GET(request: NextRequest) {
   
   try {
     // Cloudflare KVからフルスナップショットを取得
-    const compressed = await getFromCloudflareKV('RANKING_LATEST')
+    const compressed = await getFromCloudflareKV('RANKING_LATEST', env)
     
     if (!compressed) {
       return NextResponse.json(
