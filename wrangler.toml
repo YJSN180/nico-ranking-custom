@@ -7,7 +7,7 @@ bucket = "./.next"
 
 [[kv_namespaces]]
 binding = "RANKING_KV"
-id = "your_namespace_id_here"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
 [env.production]
 vars = { NODE_ENV = "production" }
