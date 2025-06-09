@@ -63,11 +63,11 @@ async function fetchWithGooglebot(url: string): Promise<string> {
 // server-responseメタタグからJSONデータを抽出
 function extractServerResponseData(html: string): any {
   const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/);
-  if (!metaMatch) {
+  if (!metaMatch || !metaMatch[1]) {
     throw new Error('server-responseメタタグが見つかりません');
   }
   
-  const encodedData = metaMatch[1]!;
+  const encodedData = metaMatch[1];
   const decodedData = encodedData
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&')

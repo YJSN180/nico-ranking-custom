@@ -35,7 +35,7 @@ async function fetchWithGooglebot(url: string): Promise<string> {
 
 function extractServerResponseData(html: string): any {
   const match = html.match(/<script id="js-state-data" type="application\/json" data-sore data-state>([^<]+)<\/script>/);
-  if (!match) return { data: null };
+  if (!match || !match[1]) return { data: null };
   
   try {
     return JSON.parse(match[1]);
