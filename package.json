@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npx @cloudflare/next-on-pages@1",
+    "build": "next build",
+    "pages:build": "npx @cloudflare/next-on-pages",
+    "build:cloudflare": "next build && npm run pages:build",
+    "preview": "npm run pages:build && wrangler pages dev",
+    "deploy": "npm run pages:build && wrangler pages deploy",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",

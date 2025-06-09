@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../news_feed"
+		},
+		{
+			"path": "../../AI_agent_orchestartion"
+		}
+	],
+	"settings": {}
+}

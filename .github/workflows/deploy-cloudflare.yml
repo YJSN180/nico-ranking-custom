@@ -24,7 +24,9 @@ jobs:
         run: npm ci
       
       - name: Build application
-        run: npm run build
+        run: |
+          npm run build
+          npx @cloudflare/next-on-pages@1
         env:
           NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
           CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
@@ -42,7 +44,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          projectName: nico-ranking
-          directory: .next
+          projectName: nico-ranking-custom
+          directory: .vercel/output/static
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           wranglerVersion: '3'

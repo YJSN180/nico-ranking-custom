@@ -1,6 +1,6 @@
 import * as https from 'https';
 
-const CF_API_TOKEN = 'EGklUpfD3okGVJ5zhrx1k3mHRJ0YdRrjLGIusCLg';
+const CF_API_TOKEN = 'ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj';
 const ACCOUNT_ID = '5984977746a3dfcd71415bed5c324eb1';
 
 interface CloudflareResponse {
@@ -56,7 +56,7 @@ async function createCloudflareProject() {
     // 1. Create Pages project
     console.log('1. Creating Pages project...');
     const projectData = {
-      name: 'nico-ranking',
+      name: 'nico-ranking-custom',
       source: {
         type: 'github',
         config: {
