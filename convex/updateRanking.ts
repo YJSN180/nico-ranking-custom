@@ -1,0 +1,354 @@
+import { v } from "convex/values";
+import { mutation, action } from "./_generated/server";
+import { api } from "./_generated/api";
+import type { RankingGenre } from "../types/ranking-config";
+import type { RankingItem } from "../types/ranking";
+
+// All 23 genres to fetch
+const ALL_GENRES: RankingGenre[] = [
+  'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
+  'entertainment', 'music', 'sing', 'dance', 'play',
+  'commentary', 'cooking', 'travel', 'nature', 'vehicle',
+  'technology', 'society', 'mmd', 'vtuber', 'radio',
+  'sports', 'animal', 'other'
+];
+
+// Genre ID mapping
+const GENRE_ID_MAP: Record<RankingGenre, string> = {
+  all: 'e9uj2uks',
+  game: '4eet3ca4',
+  anime: 'zc49b03a',
+  vocaloid: 'dshv5do5',
+  voicesynthesis: 'e2bi9pt8',
+  entertainment: '8kjl94d9',
+  music: 'wq76qdin',
+  sing: '1ya6bnqd',
+  dance: '6yuf530c',
+  play: '6r5jr8nd',
+  commentary: 'v6wdx6p5',
+  cooking: 'lq8d5918',
+  travel: 'k1libcse',
+  nature: '24aa8fkw',
+  vehicle: '3d8zlls9',
+  technology: 'n46kcz9u',
+  society: 'lzicx0y6',
+  mmd: 'p1acxuoz',
+  vtuber: '6mkdo4xd',
+  radio: 'oxzi6bje',
+  sports: '4w3p65pf',
+  animal: 'ne72lua2',
+  other: 'ramuboyn'
+};
+
+// Mutation to update cron job status
+export const updateCronStatus = mutation({
+  args: {
+    name: v.string(),
+    status: v.union(v.literal("success"), v.literal("error"), v.literal("running")),
+    error: v.optional(v.string()),
+    metadata: v.optional(v.object({
+      genresUpdated: v.optional(v.number()),
+      totalItems: v.optional(v.number()),
+      kvWriteSize: v.optional(v.number()),
+      duration: v.optional(v.number()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("cronJobs")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        lastRun: Date.now(),
+        status: args.status,
+        error: args.error,
+        metadata: args.metadata,
+      });
+    } else {
+      await ctx.db.insert("cronJobs", {
+        name: args.name,
+        lastRun: Date.now(),
+        status: args.status,
+        error: args.error,
+        metadata: args.metadata,
+      });
+    }
+  },
+});
+
+// Helper to fetch with Googlebot UA
+async function fetchWithGooglebot(url: string): Promise<Response> {
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'ja',
+      'Cookie': 'sensitive_material_status=accept'
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Fetch failed: ${response.status}`);
+  }
+  
+  return response;
+}
+
+// Extract server-response data from HTML
+function extractServerResponseData(html: string): any {
+  const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/);
+  if (!metaMatch || !metaMatch[1]) {
+    throw new Error('server-responseメタタグが見つかりません');
+  }
+  
+  const encodedData = metaMatch[1];
+  const decodedData = encodedData
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#39;/g, "'");
+  
+  return JSON.parse(decodedData);
+}
+
+// Extract trend tags from server response
+function extractTrendTags(serverData: any): string[] {
+  try {
+    const trendTags = serverData.data?.response?.$getTeibanRankingFeaturedKeyAndTrendTags?.data?.trendTags;
+    
+    if (!Array.isArray(trendTags)) {
+      return [];
+    }
+    
+    return trendTags.filter((tag: any) => {
+      return typeof tag === 'string' && tag.trim().length > 0;
+    });
+  } catch (error) {
+    return [];
+  }
+}
+
+// Convert thumbnail URL from .M to .L for higher resolution
+function convertThumbnailUrl(url: string): string {
+  return url.replace(/\.M$/, '.L');
+}
+
+// Fetch ranking for a specific genre/period/tag combination
+async function fetchRankingPage(
+  genre: RankingGenre,
+  period: '24h' | 'hour',
+  tag?: string,
+  page: number = 1
+): Promise<{ items: RankingItem[], popularTags: string[] }> {
+  const genreId = GENRE_ID_MAP[genre];
+  let url = `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${period}`;
+  
+  if (tag) {
+    url += `&tag=${encodeURIComponent(tag)}`;
+  }
+  if (page > 1) {
+    url += `&page=${page}`;
+  }
+
+  const response = await fetchWithGooglebot(url);
+  const html = await response.text();
+  
+  const serverData = extractServerResponseData(html);
+  const rankingData = serverData.data?.response?.$getTeibanRanking?.data;
+  
+  if (!rankingData) {
+    throw new Error('ランキングデータが見つかりません');
+  }
+
+  // Extract popular tags
+  const popularTags = extractTrendTags(serverData);
+
+  // Parse items
+  const startRank = (page - 1) * 100 + 1;
+  const items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
+    rank: startRank + index,
+    id: item.id,
+    title: item.title,
+    thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
+    views: item.count?.view || 0,
+    comments: item.count?.comment || 0,
+    mylists: item.count?.mylist || 0,
+    likes: item.count?.like || 0,
+    tags: item.tags || [],
+    authorId: item.owner?.id || item.user?.id,
+    authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
+    authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
+    registeredAt: item.registeredAt || item.startTime || item.createTime
+  }));
+
+  return { items, popularTags };
+}
+
+// Fetch all pages for a genre/period to get 500 items
+async function fetchAllPages(
+  genre: RankingGenre,
+  period: '24h' | 'hour',
+  tag?: string
+): Promise<{ items: RankingItem[], popularTags: string[] }> {
+  const allItems: RankingItem[] = [];
+  let popularTags: string[] = [];
+  const targetItems = 500;
+  const maxPages = 5; // 5 pages × 100 items = 500 items
+
+  for (let page = 1; page <= maxPages; page++) {
+    try {
+      const { items, popularTags: pageTags } = await fetchRankingPage(genre, period, tag, page);
+      
+      // Get popular tags from first page
+      if (page === 1 && pageTags.length > 0) {
+        popularTags = pageTags;
+      }
+
+      allItems.push(...items);
+
+      // Stop if we have enough items
+      if (allItems.length >= targetItems) {
+        break;
+      }
+
+      // Rate limiting
+      if (page < maxPages) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error(`Failed to fetch page ${page} for ${genre}/${period}:`, error);
+      break;
+    }
+  }
+
+  // Limit to target number and rerank
+  const limitedItems = allItems.slice(0, targetItems).map((item, index) => ({
+    ...item,
+    rank: index + 1
+  }));
+
+  return { items: limitedItems, popularTags };
+}
+
+// Main action to update all rankings
+export const updateAllRankings = action({
+  args: {},
+  handler: async (ctx) => {
+    const startTime = Date.now();
+    
+    // Update cron status to running
+    await ctx.runMutation(api.updateRanking.updateCronStatus, {
+      name: "updateAllRankings",
+      status: "running",
+    });
+
+    try {
+      // Data structure for all rankings
+      const rankingData: any = {
+        genres: {},
+        metadata: {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          totalItems: 0
+        }
+      };
+
+      const periods: ('24h' | 'hour')[] = ['24h', 'hour'];
+      let totalGenresUpdated = 0;
+      let totalItemsCount = 0;
+
+      // Fetch all genres
+      for (const genre of ALL_GENRES) {
+        rankingData.genres[genre] = {};
+
+        for (const period of periods) {
+          try {
+            console.log(`Fetching ${genre}/${period}...`);
+            const { items, popularTags } = await fetchAllPages(genre, period);
+            
+            rankingData.genres[genre][period] = {
+              items,
+              popularTags,
+              tags: {} // Will be populated for popular tags
+            };
+
+            totalItemsCount += items.length;
+
+            // For each popular tag, fetch tag-specific rankings
+            if (popularTags.length > 0) {
+              for (const tag of popularTags) {
+                try {
+                  console.log(`Fetching tag ranking for ${genre}/${period}/${tag}...`);
+                  const { items: tagItems } = await fetchAllPages(genre, period, tag);
+                  rankingData.genres[genre][period].tags[tag] = tagItems;
+                  totalItemsCount += tagItems.length;
+                  
+                  // Rate limiting between tag fetches
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (error) {
+                  console.error(`Failed to fetch tag ranking for ${genre}/${period}/${tag}:`, error);
+                }
+              }
+            }
+
+            totalGenresUpdated++;
+            
+            // Rate limiting between genres
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Failed to fetch ${genre}/${period}:`, error);
+          }
+        }
+      }
+
+      rankingData.metadata.totalItems = totalItemsCount;
+
+      // Compress data
+      const jsonString = JSON.stringify(rankingData);
+      const jsonSize = new TextEncoder().encode(jsonString).length;
+      
+      console.log(`Total data size: ${jsonSize} bytes (${(jsonSize / 1024 / 1024).toFixed(2)} MB)`);
+
+      // Write to Cloudflare KV
+      const kvResult = await ctx.runAction(api.cloudflareKVWriter.writeToCloudflareKV, {
+        data: rankingData,
+      });
+
+      console.log(`KV write successful: ${kvResult.size} bytes (compression ratio: ${kvResult.compressionRatio.toFixed(2)})`);
+
+      const duration = Date.now() - startTime;
+
+      // Update cron status to success
+      await ctx.runMutation(api.updateRanking.updateCronStatus, {
+        name: "updateAllRankings",
+        status: "success",
+        metadata: {
+          genresUpdated: totalGenresUpdated,
+          totalItems: totalItemsCount,
+          kvWriteSize: jsonSize,
+          duration: duration,
+        },
+      });
+
+      return {
+        success: true,
+        genresUpdated: totalGenresUpdated,
+        totalItems: totalItemsCount,
+        dataSize: jsonSize,
+        duration: duration,
+      };
+    } catch (error) {
+      // Update cron status to error
+      await ctx.runMutation(api.updateRanking.updateCronStatus, {
+        name: "updateAllRankings",
+        status: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      throw error;
+    }
+  },
+});
