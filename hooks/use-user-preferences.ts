@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
+export type ThemeType = 'light' | 'dark' | 'darkblue'
+
 export interface UserPreferences {
   lastGenre: RankingGenre
   lastPeriod: RankingPeriod
   lastTag?: string
+  theme?: ThemeType
   version: number
   updatedAt: string
 }
@@ -16,6 +19,7 @@ const defaultPreferences: UserPreferences = {
   lastGenre: 'all',
   lastPeriod: '24h',
   lastTag: undefined,
+  theme: 'light',
   version: CURRENT_VERSION,
   updatedAt: new Date().toISOString(),
 }

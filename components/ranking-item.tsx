@@ -16,9 +16,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   const { isNarrow, isVeryNarrow } = useMobileLayout()
   
   const rankColors: Record<number, string> = {
-    1: '#FFD700', // Gold
-    2: '#C0C0C0', // Silver
-    3: '#CD7F32'  // Bronze
+    1: 'var(--rank-gold)', // Gold
+    2: 'var(--rank-silver)', // Silver
+    3: 'var(--rank-bronze)'  // Bronze
   }
   
   const getRankStyle = (rank: number, mobile: boolean) => {
@@ -27,7 +27,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       return {
         fontSize: '18px',
         fontWeight: '700' as const,
-        color: rank <= 3 ? rankColors[rank] : '#333',
+        color: rank <= 3 ? rankColors[rank] : 'var(--text-primary)',
         marginBottom: '4px',
         height: '22px',
         display: 'flex',
@@ -38,8 +38,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
     // デスクトップ用の大きめのスタイル
     if (rank <= 3) {
       return {
-        background: rankColors[rank] || '#f5f5f5',
-        color: 'white',
+        background: rankColors[rank] || 'var(--surface-secondary)',
+        color: 'var(--button-text-active)',
         fontSize: '32px',
         fontWeight: '800' as const,
         minWidth: '56px',
@@ -47,8 +47,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       }
     }
     return {
-      background: '#f5f5f5',
-      color: '#333',
+      background: 'var(--surface-secondary)',
+      color: 'var(--text-primary)',
       fontSize: '24px',
       fontWeight: '700' as const,
       minWidth: '44px',
@@ -69,11 +69,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
         className="mobile-v2"
         style={{ 
           marginBottom: '4px',
-          background: 'white',
+          background: 'var(--surface-color)',
           borderRadius: '6px',
           overflow: 'hidden',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-          border: '1px solid #e5e5e5',
+          boxShadow: 'var(--shadow-sm)',
+          border: '1px solid var(--border-color)',
           cursor: 'default'
         }}>
         <div style={{ padding: '6px 8px' }}>
@@ -94,18 +94,27 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               
               {/* サムネイル */}
               {item.thumbURL && (
-                <Image
-                  src={item.thumbURL}
-                  alt={item.title}
-                  width={120}
-                  height={67}
-                  style={{ 
-                    objectFit: 'cover',
-                    borderRadius: '4px'
+                <a
+                  href={`https://www.nicovideo.jp/watch/${item.id}`}
+                  onClick={(e) => {
+                    const event = new CustomEvent('saveRankingState')
+                    window.dispatchEvent(event)
                   }}
-                  loading={item.rank <= 3 ? undefined : "lazy"}
-                  priority={item.rank <= 3}
-                />
+                  style={{ display: 'block', cursor: 'pointer' }}
+                >
+                  <Image
+                    src={item.thumbURL}
+                    alt={item.title}
+                    width={120}
+                    height={67}
+                    style={{ 
+                      objectFit: 'cover',
+                      borderRadius: '4px'
+                    }}
+                    loading={item.rank <= 3 ? undefined : "lazy"}
+                    priority={item.rank <= 3}
+                  />
+                </a>
               )}
             </div>
             
@@ -127,7 +136,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 }}
                 data-testid="video-title"
                 style={{ 
-                  color: '#0066cc', 
+                  color: 'var(--link-color)', 
                   textDecoration: 'none',
                   fontSize: '15px',
                   fontWeight: '600',
@@ -152,7 +161,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   alignItems: 'center',
                   gap: '4px',
                   fontSize: isVeryNarrow ? '11px' : '13px',
-                  color: '#666'
+                  color: 'var(--text-secondary)'
                 }}>
                 {/* 投稿者アイコン */}
                 {item.authorIcon && (
@@ -163,7 +172,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                     height={16}
                     style={{ 
                       borderRadius: '50%',
-                      border: '1px solid #e5e5e5',
+                      border: '1px solid var(--border-color)',
                       flexShrink: 0
                     }}
                     loading="lazy"
@@ -184,7 +193,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 {/* 投稿日時 */}
                 <span style={{ 
                   flexShrink: 0,
-                  color: isNew ? '#e74c3c' : '#999',
+                  color: isNew ? '#e74c3c' : 'var(--text-muted)',
                   fontWeight: isNew ? '600' : '400'
                 }}>
                   {timeDisplay}
@@ -196,7 +205,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 data-testid="video-stats"
                 style={{ 
                   fontSize: isVeryNarrow ? '10px' : isNarrow ? '11px' : '12px',
-                  color: '#666',
+                  color: 'var(--text-secondary)',
                   display: 'flex',
                   gap: isVeryNarrow ? '4px' : '8px',
                   userSelect: 'none',
@@ -223,11 +232,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       data-testid="ranking-item"
       style={{ 
       marginBottom: '12px',
-      background: 'white',
+      background: 'var(--surface-color)',
       borderRadius: '8px',
       overflow: 'hidden',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid #e5e5e5',
+      boxShadow: 'var(--shadow-md)',
+      border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
       cursor: 'default'
     }}>
       <div style={{ padding: '16px' }}>
@@ -252,18 +261,27 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           {/* サムネイル */}
           {item.thumbURL && (
             <div style={{ flexShrink: 0 }}>
-              <Image
-                src={item.thumbURL}
-                alt={item.title}
-                width={160}
-                height={90}
-                style={{ 
-                  objectFit: 'cover',
-                  borderRadius: '6px'
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                onClick={(e) => {
+                  const event = new CustomEvent('saveRankingState')
+                  window.dispatchEvent(event)
                 }}
-                loading={item.rank <= 3 ? undefined : "lazy"}
-                priority={item.rank <= 3}
-              />
+                style={{ display: 'block', cursor: 'pointer' }}
+              >
+                <Image
+                  src={item.thumbURL}
+                  alt={item.title}
+                  width={160}
+                  height={90}
+                  style={{ 
+                    objectFit: 'cover',
+                    borderRadius: '6px'
+                  }}
+                  loading={item.rank <= 3 ? undefined : "lazy"}
+                  priority={item.rank <= 3}
+                />
+              </a>
             </div>
           )}
           
@@ -286,7 +304,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   window.dispatchEvent(event)
                 }}
                 style={{ 
-                  color: '#0066cc', 
+                  color: 'var(--link-color)', 
                   textDecoration: 'none',
                   fontSize: '16px',
                   fontWeight: '600',
@@ -315,7 +333,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                       height={24}
                       style={{ 
                         borderRadius: '50%',
-                        border: '1px solid #e5e5e5'
+                        border: '1px solid var(--border-color)'
                       }}
                     />
                   )}
@@ -327,7 +345,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                       : `https://www.nicovideo.jp/user/${item.authorId}`
                     }
                     style={{ 
-                      color: '#666',
+                      color: 'var(--text-secondary)',
                       textDecoration: 'none',
                       fontSize: '14px',
                       fontWeight: '500'
@@ -338,7 +356,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   {dateDisplay && (
                     <span style={{ 
                       fontSize: '13px',
-                      color: isNew ? '#e74c3c' : '#999',
+                      color: isNew ? 'var(--error-color)' : 'var(--text-muted)',
                       fontWeight: isNew ? '600' : '400'
                     }}>
                       {dateDisplay}
@@ -359,21 +377,21 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 MozUserSelect: 'none',
                 msUserSelect: 'none'
               }}>
-              <span style={{ color: '#666' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>
                 ▶️ {formatNumberMobile(item.views)}
               </span>
               {item.comments !== undefined && (
-                <span style={{ color: '#666' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>
                   💬 {formatNumberMobile(item.comments)}
                 </span>
               )}
               {item.likes !== undefined && (
-                <span style={{ color: '#666' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>
                   ❤️ {formatNumberMobile(item.likes)}
                 </span>
               )}
               {item.mylists !== undefined && (
-                <span style={{ color: '#666' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>
                   📁 {formatNumberMobile(item.mylists)}
                 </span>
               )}

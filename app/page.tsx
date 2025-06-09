@@ -107,7 +107,7 @@ export default async function Home({ searchParams }: PageProps) {
         <main style={{ 
           padding: '0',
           minHeight: '100vh',
-          background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
+          background: 'var(--background-color)'
         }}>
           <HeaderWithSettings />
           
@@ -118,16 +118,16 @@ export default async function Home({ searchParams }: PageProps) {
             textAlign: 'center'
           }}>
             <div style={{
-              background: 'white',
+              background: 'var(--surface-color)',
               borderRadius: '16px',
               padding: '60px 40px',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+              boxShadow: 'var(--shadow-md)'
             }}>
               <div style={{ fontSize: '64px', marginBottom: '24px' }}>📊</div>
-              <h2 style={{ color: '#333', fontSize: '1.5rem', marginBottom: '16px' }}>
+              <h2 style={{ color: 'var(--text-primary)', fontSize: '1.5rem', marginBottom: '16px' }}>
                 {tag ? 'このタグの動画が見つかりません' : 'ランキングデータがありません'}
               </h2>
-              <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
                 {tag ? '別のタグをお試しください。' : 'データを取得中です。しばらくお待ちください。'}
               </p>
             </div>
@@ -140,14 +140,14 @@ export default async function Home({ searchParams }: PageProps) {
       <main style={{ 
         padding: '0',
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
+        background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />
         
         <div style={{ 
           maxWidth: '1200px', 
           margin: '0 auto',
-          padding: '0 20px 40px'
+          padding: '20px'
         }}>
           <PreferenceLoader />
           <SuspenseWrapper>
@@ -167,7 +167,7 @@ export default async function Home({ searchParams }: PageProps) {
       <main style={{ 
         padding: '0',
         minHeight: '100vh',
-        background: 'linear-gradient(180deg, #f0f2f5 0%, #ffffff 100%)'
+        background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />
         
@@ -178,28 +178,28 @@ export default async function Home({ searchParams }: PageProps) {
           textAlign: 'center'
         }}>
           <div style={{
-            background: 'white',
+            background: 'var(--surface-color)',
             borderRadius: '16px',
             padding: '60px 40px',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.08)'
+            boxShadow: 'var(--shadow-md)'
           }}>
             <div style={{ fontSize: '64px', marginBottom: '24px' }}>⏳</div>
-            <h2 style={{ color: '#333', fontSize: '1.5rem', marginBottom: '16px' }}>
+            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.5rem', marginBottom: '16px' }}>
               データを準備しています
             </h2>
-            <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6', marginBottom: '8px' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6', marginBottom: '8px' }}>
               ランキングデータは毎時更新されます。
             </p>
-            <p style={{ color: '#666', fontSize: '1rem', lineHeight: '1.6' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
               初回アクセスの場合、しばらくお待ちください。
             </p>
             
             {/* Debug info */}
-            <details style={{ marginTop: '32px', fontSize: '12px', color: '#999' }}>
+            <details style={{ marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
               <summary style={{ cursor: 'pointer' }}>技術的な詳細</summary>
               <pre style={{ 
                 textAlign: 'left', 
-                background: '#f5f5f5', 
+                background: 'var(--surface-secondary)', 
                 padding: '12px', 
                 borderRadius: '8px',
                 marginTop: '8px',

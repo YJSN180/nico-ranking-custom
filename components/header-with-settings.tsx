@@ -11,9 +11,9 @@ export function HeaderWithSettings() {
   return (
     <>
       <header role="banner" style={{
-        background: 'linear-gradient(135deg, #00A8E8 0%, #0077BE 100%)',
+        background: 'var(--header-bg)',
         padding: isMobile ? '16px 12px' : '20px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+        boxShadow: 'var(--shadow-md)',
         marginBottom: '24px',
         position: 'relative'
       }}>

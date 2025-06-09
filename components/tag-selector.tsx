@@ -83,16 +83,16 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     return (
       <div style={{
         padding: '16px',
-        background: 'white',
+        background: 'var(--surface-color)',
         borderRadius: '8px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        boxShadow: 'var(--shadow-md)',
         marginBottom: '16px'
       }}>
         <h3 style={{ 
           fontSize: '14px', 
           fontWeight: '600', 
           marginBottom: '8px', 
-          color: '#333',
+          color: 'var(--text-primary)',
           userSelect: 'none',
           WebkitUserSelect: 'none',
           MozUserSelect: 'none',
@@ -100,7 +100,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         }}>
           人気タグ
         </h3>
-        <div style={{ color: '#666', fontSize: '14px' }}>
+        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
           タグを読み込み中...
         </div>
       </div>
@@ -116,16 +116,16 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   return (
     <div style={{
       padding: '16px',
-      background: 'white',
+      background: 'var(--surface-color)',
       borderRadius: '8px',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      boxShadow: 'var(--shadow-md)',
       marginBottom: '16px'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
         <h3 style={{ 
           fontSize: '14px', 
           fontWeight: '600', 
-          color: '#333', 
+          color: 'var(--text-primary)', 
           margin: 0,
           userSelect: 'none',
           WebkitUserSelect: 'none',
@@ -140,11 +140,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             style={{
               padding: '4px 8px',
               fontSize: '12px',
-              background: '#f5f5f5',
-              border: '1px solid #ddd',
+              background: 'var(--surface-secondary)',
+              border: '1px solid var(--border-color)',
               borderRadius: '4px',
               cursor: 'pointer',
-              color: '#666'
+              color: 'var(--text-secondary)'
             }}
           >
             クリア
@@ -156,8 +156,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         <div style={{ marginBottom: '12px' }}>
           <span style={{ 
             fontSize: '12px', 
-            color: '#666',
-            background: '#f0f0f0',
+            color: 'var(--text-secondary)',
+            background: 'var(--surface-hover)',
             padding: '4px 8px',
             borderRadius: '4px',
             userSelect: 'none',
@@ -179,7 +179,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             top: 0,
             bottom: 0,
             width: '20px',
-            background: 'linear-gradient(to right, white, transparent)',
+            background: 'linear-gradient(to right, var(--surface-color), transparent)',
             zIndex: 1,
             pointerEvents: 'none'
           }} />
@@ -190,7 +190,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             top: 0,
             bottom: 0,
             width: '20px',
-            background: 'linear-gradient(to left, white, transparent)',
+            background: 'linear-gradient(to left, var(--surface-color), transparent)',
             zIndex: 1,
             pointerEvents: 'none'
           }} />
@@ -215,9 +215,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                 fontSize: !config.tag ? '14px' : '13px',
                 fontWeight: '600',
                 border: '1px solid',
-                borderColor: !config.tag ? '#667eea' : '#e5e5e5',
-                background: !config.tag ? '#667eea' : 'white',
-                color: !config.tag ? 'white' : '#333',
+                borderColor: !config.tag ? 'var(--primary-color)' : 'var(--border-color)',
+                background: !config.tag ? 'var(--primary-color)' : 'var(--surface-color)',
+                color: !config.tag ? 'var(--button-text-active)' : 'var(--text-primary)',
                 borderRadius: '20px',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
@@ -240,9 +240,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                   fontSize: config.tag === tag ? '14px' : '13px',
                   fontWeight: '600',
                   border: '1px solid',
-                  borderColor: config.tag === tag ? '#667eea' : '#e5e5e5',
-                  background: config.tag === tag ? '#667eea' : 'white',
-                  color: config.tag === tag ? 'white' : '#333',
+                  borderColor: config.tag === tag ? 'var(--primary-color)' : 'var(--border-color)',
+                  background: config.tag === tag ? 'var(--primary-color)' : 'var(--surface-color)',
+                  color: config.tag === tag ? 'var(--button-text-active)' : 'var(--text-primary)',
                   borderRadius: '20px',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease',
@@ -275,9 +275,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
               fontSize: '13px',
               fontWeight: '500',
               border: '1px solid',
-              borderColor: !config.tag ? '#667eea' : '#e5e5e5',
-              background: !config.tag ? '#667eea' : 'white',
-              color: !config.tag ? 'white' : '#333',
+              borderColor: !config.tag ? 'var(--primary-color)' : 'var(--border-color)',
+              background: !config.tag ? 'var(--primary-color)' : 'var(--surface-color)',
+              color: !config.tag ? 'white' : 'var(--text-primary)',
               borderRadius: '20px',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
@@ -297,9 +297,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                 fontSize: '13px',
                 fontWeight: '500',
                 border: '1px solid',
-                borderColor: config.tag === tag ? '#667eea' : '#e5e5e5',
-                background: config.tag === tag ? '#667eea' : 'white',
-                color: config.tag === tag ? 'white' : '#333',
+                borderColor: config.tag === tag ? 'var(--primary-color)' : 'var(--border-color)',
+                background: config.tag === tag ? 'var(--primary-color)' : 'var(--surface-color)',
+                color: config.tag === tag ? 'white' : 'var(--text-primary)',
                 borderRadius: '20px',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
