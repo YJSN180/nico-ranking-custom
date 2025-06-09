@@ -54,10 +54,10 @@ export const updateCronStatus = mutation({
       duration: v.optional(v.number()),
     })),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: any, args: any) => {
     const existing = await ctx.db
       .query("cronJobs")
-      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .withIndex("by_name", (q: any) => q.eq("name", args.name))
       .first();
 
     if (existing) {
@@ -237,7 +237,7 @@ async function fetchAllPages(
 // Main action to update all rankings
 export const updateAllRankings = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx: any) => {
     const startTime = Date.now();
     
     // Update cron status to running

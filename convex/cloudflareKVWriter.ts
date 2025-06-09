@@ -7,7 +7,7 @@ export const writeToCloudflareKV = action({
   args: {
     data: v.any(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx: any, args: any) => {
     // Get Cloudflare KV credentials from environment
     const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
     const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
