@@ -1,8 +1,6 @@
-import { ungzip } from 'pako';
+/// <reference path="../../env.d.ts" />
 
-interface Env {
-  RANKING_KV: KVNamespace;
-}
+import { ungzip } from 'pako';
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
