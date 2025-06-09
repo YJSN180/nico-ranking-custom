@@ -1,0 +1,49 @@
+name: Monitor Convex Cron Jobs
+
+on:
+  schedule:
+    # Run every hour to check cron job health
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Check Convex Cron Health
+        run: |
+          npx tsx scripts/check-convex-health.ts
+        env:
+          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          
+      - name: Check Cloudflare KV Data Freshness
+        run: |
+          npx tsx scripts/check-kv-freshness.ts
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_NAMESPACE_ID: ${{ secrets.CF_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          
+      - name: Send Alert if Data is Stale
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Alert: Convex Cron Job or KV Data Issue',
+              body: 'The monitoring job detected that either the Convex cron job is not running properly or the Cloudflare KV data is stale. Please check the logs.'
+            })

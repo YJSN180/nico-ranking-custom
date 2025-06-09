@@ -74,11 +74,11 @@ jobs:
 
       - name: Build application
         run: npm run build
-
-      - name: Check bundle size
-        run: |
-          npm install -g @next/bundle-analyzer
-          ANALYZE=true npm run build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: ${{ secrets.NEXT_PUBLIC_CONVEX_URL }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_NAMESPACE_ID: ${{ secrets.CF_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
 
   security:
     runs-on: ubuntu-latest
