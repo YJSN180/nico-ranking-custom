@@ -14,6 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as crons from "../crons.js";
+import type * as quickUpdate from "../quickUpdate.js";
 import type * as ranking from "../ranking.js";
 
 /**
@@ -26,6 +27,7 @@ import type * as ranking from "../ranking.js";
  */
 declare const fullApi: ApiFromModules<{
   crons: typeof crons;
+  quickUpdate: typeof quickUpdate;
   ranking: typeof ranking;
 }>;
 export declare const api: FilterApi<

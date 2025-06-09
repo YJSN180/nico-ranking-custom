@@ -12,7 +12,13 @@
     "test:e2e": "playwright test",
     "test:all": "npm run test -- --run && npm run test:e2e",
     "typecheck": "tsc --noEmit",
-    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build"
+    "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
+    "check:convex": "npx tsx scripts/check-convex-health.ts",
+    "check:kv": "npx tsx scripts/check-kv-freshness.ts",
+    "test:production": "npx tsx scripts/test-production.ts",
+    "verify:deployment": "npx tsx scripts/verify-cloudflare-deployment.ts",
+    "deploy:check": "npm run check:convex && npm run check:kv",
+    "deploy:verify": "npm run verify:deployment"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
