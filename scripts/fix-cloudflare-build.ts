@@ -68,8 +68,8 @@ async function fixBuildConfiguration() {
     console.log('\n2. Updating build configuration...');
     const updateData = {
       build_config: {
-        build_command: 'npm install @cloudflare/next-on-pages && npm run pages:build',
-        destination_dir: '.vercel/output/static',
+        build_command: '',
+        destination_dir: 'public',
         root_dir: '',
         web_analytics_tag: null,
         web_analytics_token: null
@@ -156,8 +156,8 @@ async function fixBuildConfiguration() {
     
     if (updateResponse.success) {
       console.log('✅ Build configuration updated successfully!');
-      console.log('   Build command: npm install @cloudflare/next-on-pages && npm run pages:build');
-      console.log('   Build output: .vercel/output/static');
+      console.log('   Build command: (none - static files only)');
+      console.log('   Build output: public');
       console.log('   Environment variables: Set');
       
       // Trigger new deployment
