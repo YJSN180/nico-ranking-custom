@@ -596,10 +596,8 @@ export default function ClientPage({
 
   // ページ離脱時やリンククリック時に状態を保存
   useEffect(() => {
-    // ブラウザのデフォルトのスクロール復元を無効化
-    if ('scrollRestoration' in window.history) {
-      window.history.scrollRestoration = 'manual'
-    }
+    // scrollRestorationはデフォルトのautoのままにする
+    // 必要な時だけ一時的にmanualに設定する
     
     const handleBeforeUnload = () => {
       saveStateToStorage()
@@ -706,11 +704,23 @@ export default function ClientPage({
             }
             
             // 非同期で実行（メインスレッドをブロックしない）
-            restoreToPosition(targetCount).catch(err => {
-              console.error('Restore failed:', err)
-              setIsRestoring(false)
-              setRestoreProgress(0)
-            })
+            // スクロール復元の前だけ一時的にmanualに設定
+            if ('scrollRestoration' in window.history) {
+              window.history.scrollRestoration = 'manual'
+            }
+            
+            restoreToPosition(targetCount)
+              .catch(err => {
+                console.error('Restore failed:', err)
+                setIsRestoring(false)
+                setRestoreProgress(0)
+              })
+              .finally(() => {
+                // 復元処理が完了したらautoに戻す
+                if ('scrollRestoration' in window.history) {
+                  window.history.scrollRestoration = 'auto'
+                }
+              })
           } else {
             // データが十分ある場合は表示件数を更新するだけ
             setDisplayCount(Math.min(targetCount, rankingData.length))
@@ -731,7 +741,7 @@ export default function ClientPage({
       window.removeEventListener('saveRankingState', handleSaveRankingState)
       window.removeEventListener('popstate', handlePopState)
       
-      // スクロール復元を元に戻す
+      // クリーンアップ時にも念のためautoに戻す
       if ('scrollRestoration' in window.history) {
         window.history.scrollRestoration = 'auto'
       }
