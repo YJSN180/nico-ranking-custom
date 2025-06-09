@@ -1,13 +1,12 @@
 name = "nico-ranking"
 compatibility_date = "2024-01-09"
 compatibility_flags = ["nodejs_compat"]
-
-[site]
-bucket = "./.next"
+pages_build_output_dir = ".vercel/output/static"
 
 [[kv_namespaces]]
 binding = "RANKING_KV"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
-[env.production]
-vars = { NODE_ENV = "production" }
+[vars]
+NEXT_PUBLIC_CONVEX_URL = "https://judicious-lemming-629.convex.cloud"
+NODE_ENV = "production"
