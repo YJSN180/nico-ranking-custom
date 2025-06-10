@@ -2,8 +2,8 @@ name: Update Nico Ranking Data
 
 on:
   schedule:
-    # Run every 30 minutes
-    - cron: '0,30 * * * *'
+    # Run every 10 minutes
+    - cron: '*/10 * * * *'
   workflow_dispatch: # Allow manual trigger
   
 jobs:
@@ -23,11 +23,16 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Update ranking data in KV
+    - name: Update ranking data
       env:
+        # Cloudflare KV認証情報
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+        # Vercel KV認証情報（NGリスト取得用）
         KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
         KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
-      run: npm run update:kv
+      run: npm run update:github-action
     
     - name: Check update status
       run: |
