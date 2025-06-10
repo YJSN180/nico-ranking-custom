@@ -147,79 +147,36 @@ export default function ClientPage({
     window.history.replaceState({}, '', newURL)
   }, [searchParams])
 
-  // sessionStorageとlocalStorageから状態を復元
+  // 動画ページから戻った時のみスクロール位置を復元
   useEffect(() => {
-    const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+    // performance.navigationでブラウザバックを検出
+    const isBackNavigation = window.performance && 
+      window.performance.navigation && 
+      window.performance.navigation.type === 2;
     
-    // まずsessionStorageを確認
-    let savedState = sessionStorage.getItem(storageKey)
-    
-    // sessionStorageになければlocalStorageを確認（外部サイトから戻った場合用）
-    if (!savedState) {
-      savedState = localStorage.getItem(storageKey)
-      // localStorageから復元した場合は、sessionStorageにもコピー
-      if (savedState) {
-        sessionStorage.setItem(storageKey, savedState)
-      }
+    // URLのshowパラメータから表示件数を復元
+    const urlDisplayCount = parseInt(searchParams.get('show') || '100', 10)
+    if (urlDisplayCount > 100 && urlDisplayCount <= 500) {
+      setDisplayCount(urlDisplayCount)
     }
     
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState)
-        // 1時間以内のデータのみ復元（古いデータは使わない）
-        if (state.timestamp && Date.now() - state.timestamp < 3600000) {
-          // 新しいデータ構造（dataVersion = 1, 2, 3）の場合
-          if (state.dataVersion === 1 || state.dataVersion === 2 || state.dataVersion === 3) {
-            // 表示設定のみ復元（データは初期データを使用）
-            setDisplayCount(state.displayCount || 100)
-            setCurrentPage(state.currentPage || 1)
-            setHasMore(state.hasMore ?? true)
-            
-            // スクロール位置を保存してフラグを立てる
-            scrollPositionRef.current = state.scrollPosition || 0
-            setShouldRestoreScroll(true)
-          } else if (state.items && state.items.length > 0) {
-            // 旧データ構造（後方互換性のため）
-            setRankingData(state.items)
-            setDisplayCount(state.displayCount || 100)
-            setCurrentPage(state.currentPage || 1)
-            // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
-            if (state.hasMore === false) {
-              setHasMore(false)
-            } else if (initialTag) {
-              // タグ別ランキングの場合は、データ長で判断
-              setHasMore(state.items.length >= 100)
-            } else {
-              setHasMore(true)
-            }
-            
-            // スクロール位置を保存してフラグを立てる
-            scrollPositionRef.current = state.scrollPosition || 0
-            setShouldRestoreScroll(true)
-          }
-        } else {
-          // 古いデータは削除
-          localStorage.removeItem(storageKey)
-        }
-      } catch (e) {
-        // エラーは無視
-      }
-    }
-    
-    // 復元が完了したら、一度だけクリーンアップ
-    // （次回の復元で古いデータを使わないように）
-    return () => {
-      // コンポーネントがアンマウントされる時ではなく、
-      // 復元が成功した後に削除するためのフラグを設定
-      if (savedState && shouldRestoreScroll) {
-        // 少し遅延を入れて、復元処理が完了してから削除
+    // ブラウザバックの場合のみスクロール位置を復元
+    if (isBackNavigation) {
+      const storageKey = `ranking-scroll-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+      const savedScrollPosition = sessionStorage.getItem(storageKey)
+      
+      if (savedScrollPosition) {
+        const scrollPosition = parseInt(savedScrollPosition, 10)
+        scrollPositionRef.current = scrollPosition
+        setShouldRestoreScroll(true)
+        
+        // 復元後は削除
         setTimeout(() => {
           sessionStorage.removeItem(storageKey)
-          // localStorageは1時間の有効期限があるので残しておく
         }, 1000)
       }
     }
-  }, [initialGenre, initialPeriod, initialTag, shouldRestoreScroll])
+  }, [initialGenre, initialPeriod, initialTag, searchParams])
   
   // DOM更新後にスクロール位置を復元
   useEffect(() => {
@@ -517,82 +474,13 @@ export default function ClientPage({
     updatePopularTags()
   }, [config.genre, config.period, initialGenre, initialPeriod])
 
-  // localStorageに状態を保存（sessionStorageは使用しない）
-  const saveStateToStorage = useCallback(() => {
-    try {
-      const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
-      
-      // スクロール位置と表示設定のみを保存（IDリストは保存しない）
-      const lightState = {
-        displayCount,
-        currentPage,
-        hasMore,
-        scrollPosition: window.scrollY,
-        timestamp: Date.now(),
-        dataVersion: 3 // データ構造のバージョンを更新
-      }
-      
-      const stateString = JSON.stringify(lightState)
-      
-      // サイズチェック（5KB以下に制限）
-      if (stateString.length > 5 * 1024) {
-        return
-      }
-      
-      // localStorageのみに保存
-      localStorage.setItem(storageKey, stateString)
-      
-      // 保存成功後、古いデータをクリーンアップ（非同期で実行）
-      setTimeout(() => cleanupOldStorage(), 0)
-    } catch (error) {
-      // QuotaExceededErrorの場合は、古いデータを削除してリトライ
-      if (error instanceof Error && error.name === 'QuotaExceededError') {
-        try {
-          cleanupOldStorage()
-          // 再度保存を試みる
-          const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
-          localStorage.setItem(storageKey, JSON.stringify({
-            displayCount,
-            currentPage,
-            hasMore,
-            scrollPosition: window.scrollY,
-            timestamp: Date.now(),
-            dataVersion: 3
-          }))
-        } catch {
-          // それでも失敗した場合は諦める
-        }
-      }
-    }
-  }, [config, displayCount, currentPage, hasMore, cleanupOldStorage])
+  // 動画クリック時にスクロール位置を保存
+  const saveScrollPosition = useCallback(() => {
+    const storageKey = `ranking-scroll-${config.genre}-${config.period}-${config.tag || 'none'}`
+    sessionStorage.setItem(storageKey, String(window.scrollY))
+  }, [config])
 
-  // スクロール時に状態を保存（デバウンス付き、より制限的に）
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout
-    let lastSaveTime = 0
-    
-    const handleScroll = () => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => {
-        const now = Date.now()
-        const timeSinceLastSave = now - lastSaveTime
-        const scrollDiff = Math.abs(window.scrollY - (scrollPositionRef.current || 0))
-        
-        // 前回の保存から5秒以上経過かつ500px以上スクロールした場合のみ保存
-        if (timeSinceLastSave > 5000 && scrollDiff > 500) {
-          scrollPositionRef.current = window.scrollY
-          lastSaveTime = now
-          saveStateToStorage()
-        }
-      }, 2000) // 2秒のデバウンス
-    }
-    
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      clearTimeout(timeoutId)
-    }
-  }, [saveStateToStorage])
+  // スクロール時の状態保存は削除（動画クリック時のみ保存するため）
 
   // ページ離脱時やリンククリック時に状態を保存
   useEffect(() => {
@@ -600,11 +488,12 @@ export default function ClientPage({
     // 必要な時だけ一時的にmanualに設定する
     
     const handleBeforeUnload = () => {
-      saveStateToStorage()
+      // ページ離脱時は何もしない（スクロール位置は保存しない）
     }
     
     const handleSaveRankingState = () => {
-      saveStateToStorage()
+      // 動画クリック時のみスクロール位置を保存
+      saveScrollPosition()
     }
     
     // ブラウザの戻るボタン検知
@@ -746,7 +635,7 @@ export default function ClientPage({
         window.history.scrollRestoration = 'auto'
       }
     }
-  }, [saveStateToStorage, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+  }, [saveScrollPosition, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
   const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
@@ -832,8 +721,7 @@ export default function ClientPage({
         // URLを更新
         updateURL(newDisplayCount)
         
-        // 状態を保存
-        saveStateToStorage()
+        // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
@@ -1006,7 +894,7 @@ export default function ClientPage({
                     const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length, MAX_RANKING_ITEMS)
                     setDisplayCount(newDisplayCount)
                     updateURL(newDisplayCount)
-                    saveStateToStorage()
+                    // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
                   } else if (hasMore) {
                     // 新規データを読み込み（タグ別 or ジャンル別301位以降）
                     loadMoreItems()
