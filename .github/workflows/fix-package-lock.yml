@@ -1,0 +1,30 @@
+name: Fix package-lock.json
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/vercel-convex-cloudflare-kv
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Generate package-lock.json
+        run: |
+          rm -f package-lock.json
+          npm install --package-lock-only
+      
+      - name: Commit and push
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git add package-lock.json
+          git commit -m "fix: Update package-lock.json for Node.js 20"
+          git push
