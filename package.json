@@ -14,13 +14,12 @@
     "typecheck": "tsc --noEmit",
     "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
     "update:kv": "npx tsx scripts/update-ranking-kv.ts",
-    "update:github-action": "npx tsx scripts/update-ranking-github-action.ts"
+    "update:ranking-github": "npx tsx scripts/update-ranking-github-action.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
     "@vercel/kv": "^1.0.1",
     "cheerio": "^1.0.0",
-    "convex": "^1.24.8",
     "fast-xml-parser": "^4.5.3",
     "next": "14.2.21",
     "node-fetch": "^2.7.0",

@@ -32,7 +32,7 @@ jobs:
         # Vercel KV認証情報（NGリスト取得用）
         KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
         KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
-      run: npm run update:github-action
+      run: npm run update:ranking-github
     
     - name: Check update status
       run: |

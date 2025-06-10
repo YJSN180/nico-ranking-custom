@@ -6,13 +6,9 @@ import type { RankingGenre } from '@/types/ranking-config'
 // Mock fetch
 vi.mock('node-fetch')
 
-// Mock Convex
-vi.mock('@/convex/_generated/server', () => ({
-  api: {
-    updateRanking: {
-      updateAllRankings: 'updateAllRankings'
-    }
-  }
+// Mock GitHub Actions script
+vi.mock('@/scripts/update-ranking-github-action', () => ({
+  updateRankingData: vi.fn()
 }))
 
 // Mock Cloudflare KV bindings
@@ -21,7 +17,7 @@ vi.mock('@/lib/cloudflare-kv', () => ({
   setRankingToKV: vi.fn()
 }))
 
-describe('Convex + Cloudflare KV Integration', () => {
+describe('GitHub Actions + Cloudflare KV Integration', () => {
   const mockFetch = vi.fn()
   global.fetch = mockFetch as any
 
