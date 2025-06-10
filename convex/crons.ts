@@ -4,11 +4,11 @@ import { api } from "./_generated/api";
 
 const crons = cronJobs();
 
-// 10分間隔でランキングを更新
+// 10分間隔でランキングを更新（NGフィルタリング付き）
 crons.interval(
-  "update all rankings",
+  "update all rankings with NG",
   { minutes: 10 },
-  api.updateRanking.updateAllRankings
+  api.updateRankingWithNG.updateAllRankingsWithNG
 );
 
 export default crons;

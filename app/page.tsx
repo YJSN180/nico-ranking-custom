@@ -43,7 +43,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
         result = { items: [], popularTags: [] }
       }
       
-      // NGフィルタリングを適用
+      // NGフィルタリングを適用（メタデータでngFilteredがtrueの場合はスキップ）
+      if (typeof cachedData === 'object' && 'metadata' in cachedData && (cachedData as any).metadata?.ngFiltered) {
+        return result
+      }
       const filteredData = await filterRankingData(result)
       return filteredData
     }

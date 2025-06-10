@@ -116,14 +116,20 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
 export async function getGenreRanking(
   genre: string,
   period: '24h' | 'hour'
-): Promise<{ items: any[], popularTags: string[], tags?: { [tag: string]: any[] } } | null> {
+): Promise<{ items: any[], popularTags: string[], tags?: { [tag: string]: any[] }, metadata?: any } | null> {
   const data = await getRankingFromKV()
   
   if (!data || !data.genres[genre]) {
     return null
   }
 
-  return data.genres[genre][period]
+  const result = data.genres[genre][period]
+  // Add metadata if available
+  if (data.metadata) {
+    return { ...result, metadata: data.metadata }
+  }
+  
+  return result
 }
 
 /**

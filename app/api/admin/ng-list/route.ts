@@ -2,22 +2,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getNGList, saveManualNGList } from '@/lib/ng-filter'
 import type { NGList } from '@/types/ng-list'
 
-// Basic認証チェック
+// 認証チェック（Basic認証またはBearer token）
 function checkAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get('authorization')
-  if (!authHeader || !authHeader.startsWith('Basic ')) {
+  if (!authHeader) {
     return false
   }
   
-  const base64Credentials = authHeader.split(' ')[1]
-  const credentials = Buffer.from(base64Credentials!, 'base64').toString('ascii')
-  const [username, password] = credentials.split(':')
+  // Bearer token認証（Convexからのアクセス用）
+  if (authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1]
+    const validToken = process.env.CRON_SECRET
+    return !!validToken && token === validToken
+  }
   
-  // 環境変数で認証情報を管理
-  const validUsername = process.env.ADMIN_USERNAME || 'admin'
-  const validPassword = process.env.ADMIN_PASSWORD || 'password'
+  // Basic認証（管理画面用）
+  if (authHeader.startsWith('Basic ')) {
+    const base64Credentials = authHeader.split(' ')[1]
+    const credentials = Buffer.from(base64Credentials!, 'base64').toString('ascii')
+    const [username, password] = credentials.split(':')
+    
+    // 環境変数で認証情報を管理
+    const validUsername = process.env.ADMIN_USERNAME || 'admin'
+    const validPassword = process.env.ADMIN_PASSWORD || 'password'
+    
+    return username === validUsername && password === validPassword
+  }
   
-  return username === validUsername && password === validPassword
+  return false
 }
 
 // NGリストを取得
