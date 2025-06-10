@@ -29,9 +29,9 @@ describe('GitHub Actions + Cloudflare KV Integration', () => {
     vi.restoreAllMocks()
   })
 
-  describe('updateAllRankings Convex function', () => {
+  describe('updateAllRankings GitHub Actions function', () => {
     it('should fetch all 23 genres for both periods (46 total)', async () => {
-      // This test verifies that the Convex cron job fetches all genres
+      // This test verifies that the GitHub Actions job fetches all genres
       const genres: RankingGenre[] = [
         'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
         'entertainment', 'music', 'sing', 'dance', 'play',
@@ -45,7 +45,7 @@ describe('GitHub Actions + Cloudflare KV Integration', () => {
       // Total expected fetches: 23 genres × 2 periods = 46
       const expectedFetchCount = genres.length * periods.length
       
-      // TODO: Implement the actual Convex function and verify it makes 46 fetches
+      // TODO: Implement the actual GitHub Actions function and verify it makes 46 fetches
       expect(expectedFetchCount).toBe(46)
     })
 
