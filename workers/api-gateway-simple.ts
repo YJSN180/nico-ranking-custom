@@ -3,6 +3,11 @@
  * デバッグ用のシンプルな実装
  */
 
+interface KVNamespace {
+  get(key: string): Promise<string | null>
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+}
+
 export interface Env {
   RATE_LIMIT: KVNamespace
   RANKING_DATA: KVNamespace
