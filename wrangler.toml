@@ -37,9 +37,9 @@ ip = "0.0.0.0"
 command = ""
 
 # Performance settings
-[limits]
-cpu_ms = 50
-memory_mb = 128
+# [limits]
+# cpu_ms = 50  # CPU limits require paid plan
+# memory_mb = 128
 
 # Compatibility settings
 compatibility_flags = ["nodejs_compat"]
