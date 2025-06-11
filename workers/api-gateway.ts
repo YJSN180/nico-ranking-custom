@@ -10,6 +10,7 @@ export interface Env {
   RATE_LIMIT: KVNamespace
   RANKING_DATA: KVNamespace
   NEXT_APP_URL: string
+  VERCEL_PROTECTION_BYPASS_SECRET?: string
 }
 
 // レート制限設定（より厳格に）
@@ -145,9 +146,16 @@ export default {
       if (!response) {
         // キャッシュミス時はNext.jsアプリケーションに転送
         try {
+          // Vercel Protection Bypassのヘッダーを追加
+          const apiHeaders = new Headers(request.headers)
+          if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
+            apiHeaders.set('x-vercel-protection-bypass', env.VERCEL_PROTECTION_BYPASS_SECRET)
+            apiHeaders.set('x-vercel-set-bypass-cookie', 'true')
+          }
+          
           response = await fetch(`${env.NEXT_APP_URL}${url.pathname}${url.search}`, {
             method: request.method,
-            headers: request.headers,
+            headers: apiHeaders,
             body: request.body
           })
           
@@ -209,9 +217,17 @@ export default {
       }
       
       const targetUrl = `${env.NEXT_APP_URL}${url.pathname}${url.search}`
+      
+      // Vercel Protection Bypassのヘッダーを追加
+      const headers = new Headers(request.headers)
+      if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
+        headers.set('x-vercel-protection-bypass', env.VERCEL_PROTECTION_BYPASS_SECRET)
+        headers.set('x-vercel-set-bypass-cookie', 'true')
+      }
+      
       const response = await fetch(targetUrl, {
         method: request.method,
-        headers: request.headers,
+        headers: headers,
         body: request.body
       })
       

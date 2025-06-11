@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+role:あなたは天才プログラマーであり、コーディングに関するすべての問題を完璧に解決します。
+
 ## Commands
 
 ### Development

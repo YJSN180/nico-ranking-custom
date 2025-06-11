@@ -7,6 +7,9 @@ export interface Env {
   RATE_LIMIT: KVNamespace
   RANKING_DATA: KVNamespace
   NEXT_APP_URL: string
+  USE_PREVIEW?: string
+  PREVIEW_URL?: string
+  VERCEL_PROTECTION_BYPASS_SECRET?: string
 }
 
 export default {
@@ -16,9 +19,16 @@ export default {
       
       // デバッグ情報
       if (url.pathname === '/debug') {
+        const targetUrl = env.USE_PREVIEW === 'true' && env.PREVIEW_URL 
+          ? env.PREVIEW_URL 
+          : env.NEXT_APP_URL
+          
         return new Response(JSON.stringify({
           env: {
             NEXT_APP_URL: env.NEXT_APP_URL || 'NOT SET',
+            USE_PREVIEW: env.USE_PREVIEW || 'false',
+            PREVIEW_URL: env.PREVIEW_URL || 'NOT SET',
+            ACTIVE_URL: targetUrl,
             hasRateLimit: !!env.RATE_LIMIT,
             hasRankingData: !!env.RANKING_DATA
           },
@@ -32,16 +42,26 @@ export default {
         })
       }
       
-      // シンプルなプロキシ
-      if (!env.NEXT_APP_URL) {
-        return new Response('NEXT_APP_URL not configured', { status: 500 })
+      // プレビュー環境または本番環境を選択
+      const baseUrl = env.USE_PREVIEW === 'true' && env.PREVIEW_URL 
+        ? env.PREVIEW_URL 
+        : env.NEXT_APP_URL
+        
+      if (!baseUrl) {
+        return new Response('Target URL not configured', { status: 500 })
       }
       
-      const targetUrl = `${env.NEXT_APP_URL}${url.pathname}${url.search}`
+      const targetUrl = `${baseUrl}${url.pathname}${url.search}`
       
       // 認証ヘッダーを追加してプロキシ
       const proxyHeaders = new Headers(request.headers)
       proxyHeaders.set('X-Worker-Auth', 'nico-rank-secure-2025')
+      
+      // Vercel Protection Bypassヘッダーを追加
+      if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
+        proxyHeaders.set('x-vercel-protection-bypass', env.VERCEL_PROTECTION_BYPASS_SECRET)
+        proxyHeaders.set('x-vercel-set-bypass-cookie', 'true')
+      }
       
       const response = await fetch(targetUrl, {
         method: request.method,
