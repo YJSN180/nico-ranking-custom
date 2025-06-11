@@ -316,6 +316,42 @@ export default function ClientPage({
       restoreToPosition(targetCount)
     }
   }, [initialDisplayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+
+  // 外部サイトから戻った時の状態復元
+  useEffect(() => {
+    const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
+    const savedState = localStorage.getItem(storageKey)
+    
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        const now = Date.now()
+        
+        // 1時間以内のデータのみ復元
+        if (state.timestamp && now - state.timestamp < 60 * 60 * 1000) {
+          // 保存されたデータを復元
+          if (state.items && Array.isArray(state.items) && state.items.length > 0) {
+            setRankingData(state.items)
+            setDisplayCount(state.displayCount || state.items.length)
+            setCurrentPage(state.currentPage || Math.ceil(state.items.length / 100))
+            setHasMore(state.hasMore ?? true)
+            
+            // スクロール位置の復元
+            if (state.scrollPosition && state.scrollPosition > 0) {
+              scrollPositionRef.current = state.scrollPosition
+              setShouldRestoreScroll(true)
+            }
+          }
+        } else {
+          // 古いデータは削除
+          localStorage.removeItem(storageKey)
+        }
+      } catch (error) {
+        console.error('Failed to restore state:', error)
+        localStorage.removeItem(storageKey)
+      }
+    }
+  }, [config.genre, config.period, config.tag])
   
   // initialDataが変更されたときに状態をリセット
   // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
