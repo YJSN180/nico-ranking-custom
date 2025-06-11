@@ -9,7 +9,7 @@ function checkAuth(request: NextRequest): boolean {
     return false
   }
   
-  // Bearer token認証（Convexからのアクセス用）
+  // Bearer token認証（内部APIアクセス用）
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1]
     const validToken = process.env.CRON_SECRET
