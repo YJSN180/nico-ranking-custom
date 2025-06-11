@@ -4,7 +4,7 @@
  * DDoS保護、レート制限、キャッシング、セキュリティヘッダー
  */
 
-import type { KVNamespace, ExecutionContext } from './cloudflare'
+import type { KVNamespace, ExecutionContext } from './cloudflare.d'
 
 export interface Env {
   RATE_LIMIT: KVNamespace
@@ -188,7 +188,28 @@ export default {
     
     // その他のリクエストはNext.jsアプリケーションに転送
     try {
-      const response = await fetch(`${env.NEXT_APP_URL}${url.pathname}${url.search}`, {
+      // デバッグ用: NEXT_APP_URLの確認
+      if (!env.NEXT_APP_URL) {
+        return new Response(
+          JSON.stringify({
+            error: 'Configuration error',
+            message: 'NEXT_APP_URL is not configured',
+            debug: {
+              pathname: url.pathname,
+              search: url.search
+            }
+          }),
+          {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+        )
+      }
+      
+      const targetUrl = `${env.NEXT_APP_URL}${url.pathname}${url.search}`
+      const response = await fetch(targetUrl, {
         method: request.method,
         headers: request.headers,
         body: request.body
@@ -196,7 +217,22 @@ export default {
       
       return addSecurityHeaders(response)
     } catch (error) {
-      return new Response('Service unavailable', { status: 503 })
+      return new Response(
+        JSON.stringify({
+          error: 'Service unavailable', 
+          message: error instanceof Error ? error.message : 'Unknown error',
+          debug: {
+            nextAppUrl: env.NEXT_APP_URL,
+            pathname: url.pathname
+          }
+        }), 
+        { 
+          status: 503,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
+      )
     }
   }
 }

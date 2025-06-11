@@ -1,5 +1,5 @@
 name = "nico-ranking-api-gateway"
-main = "workers/api-gateway.ts"
+main = "workers/api-gateway-simple.ts"
 compatibility_date = "2024-01-01"
 workers_dev = true
 
@@ -21,10 +21,14 @@ binding = "RANKING_DATA"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 preview_id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
-# Routes (ドメイン設定後に有効化)
-# [[routes]]
-# pattern = "yourdomain.com/*"
-# zone_name = "yourdomain.com"
+# Routes
+[[routes]]
+pattern = "nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+[[routes]]
+pattern = "www.nico-rank.com/*"
+zone_name = "nico-rank.com"
 
 # Development settings
 [dev]

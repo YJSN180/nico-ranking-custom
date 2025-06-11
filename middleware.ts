@@ -22,6 +22,20 @@ function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000
 }
 
 export function middleware(request: NextRequest) {
+  // Cloudflare Workers経由のアクセスチェック（本番環境のみ）
+  if (process.env.NODE_ENV === 'production' && !request.nextUrl.pathname.startsWith('/api/')) {
+    const cfWorkerKey = request.headers.get('X-Worker-Auth')
+    const expectedKey = process.env.WORKER_AUTH_KEY || 'nico-rank-secure-2025'
+    
+    // Workersからの認証がない場合はカスタムドメインにリダイレクト
+    if (!cfWorkerKey || cfWorkerKey !== expectedKey) {
+      // Vercel URLへの直接アクセスをブロック
+      if (request.headers.get('host')?.includes('vercel.app')) {
+        return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+      }
+    }
+  }
+  
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
              request.headers.get('x-real-ip') || 
              request.ip || 
@@ -105,5 +119,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/admin/:path*'
+  matcher: [
+    '/admin/:path*',
+    '/api/:path*',
+    '/((?!_next/static|_next/image|favicon.ico).*)'
+  ]
 }
