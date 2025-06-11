@@ -5,7 +5,8 @@ import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
-import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
+import { scrapeRankingPage } from '@/lib/scraper'
+import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingData } from '@/lib/ng-filter'
 
 // ISRを使用してFunction Invocationsを削減
@@ -58,10 +59,15 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   try {
     const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
     
-    // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
+    // 人気タグを取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
     if (!tag && genre !== 'all') {
-      popularTags = await fetchPopularTags(genre)
+      try {
+        // popular-tags.tsのgetPopularTagsを使用（KVやバックアップから取得）
+        popularTags = await getPopularTags(genre as any, period as '24h' | 'hour')
+      } catch (error) {
+        // エラー時は空配列のまま
+      }
     }
     
     const items: RankingData = scrapedItems.map((item) => ({
@@ -103,7 +109,7 @@ export default async function Home({ searchParams }: PageProps) {
   
   try {
     
-    const { items: rankingData, popularTags } = await fetchRankingData(genre, period, tag)
+    const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
       return (

@@ -31,7 +31,9 @@ export interface KVRankingData {
       }
     }
   }
-  metadata: {
+  timestamp?: string
+  version?: number
+  metadata?: {
     version: number
     updatedAt: string
     totalItems: number
@@ -39,7 +41,7 @@ export interface KVRankingData {
 }
 
 // Single key for all ranking data
-const RANKING_DATA_KEY = 'ranking-data-bundle'
+const RANKING_DATA_KEY = 'RANKING_LATEST'
 
 /**
  * Compress data using gzip
@@ -78,8 +80,8 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
   await RANKING_KV.put(RANKING_DATA_KEY, compressed as any, {
     metadata: {
       compressed: true,
-      version: data.metadata.version,
-      updatedAt: data.metadata.updatedAt
+      version: data.metadata?.version || 1,
+      updatedAt: data.metadata?.updatedAt || new Date().toISOString()
     }
   })
 }
@@ -88,26 +90,66 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
  * Read ranking data from Cloudflare KV
  */
 export async function getRankingFromKV(): Promise<KVRankingData | null> {
-  if (typeof RANKING_KV === 'undefined') {
-    throw new Error('Cloudflare KV namespace not available')
-  }
+  // Worker環境の場合
+  if (typeof RANKING_KV !== 'undefined') {
+    const result = await RANKING_KV.getWithMetadata<Uint8Array>(
+      RANKING_DATA_KEY,
+      { type: 'arrayBuffer' }
+    )
+    
+    if (!result.value) {
+      return null
+    }
 
-  const result = await RANKING_KV.getWithMetadata<Uint8Array>(
-    RANKING_DATA_KEY,
-    { type: 'arrayBuffer' }
-  )
+    // Decompress if needed
+    if (result.metadata?.compressed) {
+      return await decompressData(new Uint8Array(result.value))
+    }
+
+    // Fallback to uncompressed (shouldn't happen in production)
+    return JSON.parse(new TextDecoder().decode(result.value))
+  }
   
-  if (!result.value) {
+  // Node.js環境の場合はREST APIを使用
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+  
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    console.error('Cloudflare KV credentials not configured')
     return null
   }
-
-  // Decompress if needed
-  if (result.metadata?.compressed) {
-    return await decompressData(new Uint8Array(result.value))
+  
+  try {
+    const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${RANKING_DATA_KEY}`
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${CF_API_TOKEN}`,
+      },
+    })
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error(`Cloudflare KV read failed: ${response.status}`)
+    }
+    
+    const data = await response.arrayBuffer()
+    const uint8Array = new Uint8Array(data)
+    
+    // データが圧縮されているかチェック（gzipマジックナンバー）
+    if (uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
+      return await decompressData(uint8Array)
+    }
+    
+    // 非圧縮データ
+    return JSON.parse(new TextDecoder().decode(uint8Array))
+  } catch (error) {
+    console.error('Failed to read from Cloudflare KV:', error)
+    return null
   }
-
-  // Fallback to uncompressed (shouldn't happen in production)
-  return JSON.parse(new TextDecoder().decode(result.value))
 }
 
 /**

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { kv } from '@vercel/kv'
+import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 import { scrapeRankingPage } from '@/lib/scraper'
@@ -31,10 +32,40 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Cloudflare KVが利用可能かチェック（環境変数で判定）
+    const useCloudflareKV = process.env.CLOUDFLARE_KV_NAMESPACE_ID ? true : false
+    
     // タグ別ランキングの処理
-
-    // タグ別ランキングの場合
     if (tag) {
+      // Cloudflare KVからの取得を試みる
+      if (useCloudflareKV) {
+        try {
+          const cfItems = await getTagRanking(genre, period as RankingPeriod, tag)
+          if (cfItems && cfItems.length > 0) {
+            // ページネーション処理
+            const itemsPerPage = 100
+            const startIdx = (page - 1) * itemsPerPage
+            const endIdx = page * itemsPerPage
+            const pageItems = cfItems.slice(startIdx, endIdx)
+            const hasMore = endIdx < cfItems.length
+            
+            const response = NextResponse.json({
+              items: pageItems,
+              hasMore,
+              totalCached: cfItems.length
+            })
+            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('X-Cache-Status', 'CF-HIT')
+            response.headers.set('X-Total-Cached', cfItems.length.toString())
+            return response
+          }
+        } catch (error) {
+          console.error('[API] Cloudflare KV error:', error)
+          // フォールバックとしてVercel KVを使用
+        }
+      }
+      
+      // Vercel KVからの取得
       const cacheKey = getCacheKey(genre, period, tag)
       
       // まず、cronが作成した300件のキャッシュをチェック
@@ -119,6 +150,42 @@ export async function GET(request: NextRequest) {
     }
 
     // 通常のジャンル別ランキング
+    
+    // Cloudflare KVからの取得を試みる（ページ1-3）
+    if (useCloudflareKV && page <= 3) {
+      try {
+        const cfData = await getGenreRanking(genre, period as RankingPeriod)
+        if (cfData && cfData.items && cfData.items.length > 0) {
+          // ページネーション処理
+          const startIdx = (page - 1) * 100
+          const endIdx = page * 100
+          const pageItems = cfData.items.slice(startIdx, endIdx)
+          
+          // ページ1の場合は人気タグも含めて返す
+          if (page === 1) {
+            const response = NextResponse.json({
+              items: pageItems,
+              popularTags: cfData.popularTags || []
+            })
+            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('X-Cache-Status', 'CF-HIT')
+            response.headers.set('X-Max-Items', '500')
+            return response
+          } else {
+            // ページ2以降はアイテムのみ
+            const response = NextResponse.json(pageItems)
+            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('X-Cache-Status', 'CF-HIT')
+            response.headers.set('X-Max-Items', '500')
+            return response
+          }
+        }
+      } catch (error) {
+        console.error('[API] Cloudflare KV error:', error)
+        // フォールバックとしてVercel KVを使用
+      }
+    }
+    
     // ページ番号が4以上の場合（301位以降）は動的取得
     if (page >= 4) {
       // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)

@@ -391,21 +391,17 @@ export default function ClientPage({
         // APIがオブジェクト形式（{ items, popularTags }）または配列形式を返す可能性がある
         if (Array.isArray(data)) {
           setRankingData(data)
-          // タグ選択時は人気タグを更新しない
-          if (previousGenre !== config.genre || !config.tag) {
-            setCurrentPopularTags([])
-          }
+          // 配列形式の場合、人気タグは別のuseEffectで動的に取得される
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
-          // ジャンルが変更された場合、またはタグが選択されていない場合のみ人気タグを更新
-          if (previousGenre !== config.genre || !config.tag) {
-            setCurrentPopularTags(data.popularTags || [])
+          // APIレスポンスに人気タグが含まれている場合のみ更新
+          if (data.popularTags && data.popularTags.length > 0) {
+            setCurrentPopularTags(data.popularTags)
           }
+          // 人気タグが空の場合は、別のuseEffectで動的に取得される
         } else {
           setRankingData([])
-          if (previousGenre !== config.genre || !config.tag) {
-            setCurrentPopularTags([])
-          }
+          // エラー時でも人気タグの動的取得は別のuseEffectで行われる
         }
         
         // ジャンルを記録
@@ -452,27 +448,26 @@ export default function ClientPage({
 
   // ジャンルやperiod変更時に人気タグを動的に更新
   useEffect(() => {
-    // 初回レンダリング時はスキップ（propsの値を使用）
-    if (config.genre === initialGenre && config.period === initialPeriod) {
+    // 初回レンダリング時でpropsに人気タグがある場合はそれを使用
+    const isInitialRender = config.genre === initialGenre && config.period === initialPeriod
+    if (isInitialRender && popularTags.length > 0) {
+      setCurrentPopularTags(popularTags)
       return
     }
     
+    // ジャンルやperiodが変更された場合、または初期propsが空の場合は動的に取得
     async function updatePopularTags() {
-      if (config.genre !== 'all') {
-        try {
-          const tags = await getPopularTags(config.genre, config.period)
-          setCurrentPopularTags(tags)
-        } catch (error) {
-          // エラー時は空配列を設定
-          setCurrentPopularTags([])
-        }
-      } else {
+      try {
+        const tags = await getPopularTags(config.genre, config.period)
+        setCurrentPopularTags(tags)
+      } catch (error) {
+        // エラー時は空配列を設定
         setCurrentPopularTags([])
       }
     }
     
     updatePopularTags()
-  }, [config.genre, config.period, initialGenre, initialPeriod])
+  }, [config.genre, config.period, initialGenre, initialPeriod, popularTags])
 
   // 動画クリック時にスクロール位置を保存
   const saveScrollPosition = useCallback(() => {

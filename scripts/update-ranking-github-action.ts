@@ -257,7 +257,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
   const jsonString = JSON.stringify(data);
   const compressed = pako.gzip(jsonString);
 
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ranking-data-bundle`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
 
   const response = await fetch(url, {
     method: "PUT",
@@ -274,7 +274,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
   }
 
   // Set metadata
-  const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/ranking-data-bundle`;
+  const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/RANKING_LATEST`;
   
   await fetch(metadataUrl, {
     method: "PUT",
