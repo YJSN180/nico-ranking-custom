@@ -5,21 +5,21 @@ workers_dev = true
 
 # Environment variables
 [vars]
-NEXT_APP_URL = "https://nico-ranking.vercel.app"
+NEXT_APP_URL = "https://nico-ranking-custom.vercel.app"
 
 # Account settings
-account_id = "your_account_id"
+account_id = "5984977746a3dfcd71415bed5c324eb1"
 
-# KV Namespaces (実際のIDに置き換えてください)
+# KV Namespaces
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "your_rate_limit_namespace_id"
-preview_id = "your_rate_limit_preview_id"
+id = "c49751cf8c27464aac68cf030b9e0713"
+preview_id = "c49751cf8c27464aac68cf030b9e0713"
 
 [[kv_namespaces]]
 binding = "RANKING_DATA"
-id = "your_ranking_data_namespace_id"
-preview_id = "your_ranking_data_preview_id"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+preview_id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
 # Routes (ドメイン設定後に有効化)
 # [[routes]]
@@ -34,7 +34,7 @@ ip = "0.0.0.0"
 
 # Build settings
 [build]
-command = "npm install && npm run build"
+command = ""
 watch_paths = ["workers/**/*.ts"]
 
 # Performance settings
