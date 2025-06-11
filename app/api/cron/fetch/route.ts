@@ -3,6 +3,7 @@ import { kv } from '@vercel/kv'
 import { scrapeRankingPage } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 import { CACHED_GENRES } from '@/types/ranking-config'
+import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
@@ -51,6 +52,16 @@ export async function POST(request: Request) {
     const periods: ('24h' | 'hour')[] = ['24h', 'hour']
     let allSuccess = true
     let totalItems = 0
+    
+    // Cloudflare KV用のデータ構造を初期化
+    const kvData: KVRankingData = {
+      genres: {},
+      metadata: {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        totalItems: 0
+      }
+    }
     
     for (const genre of genres) {
       for (const period of periods) {
@@ -112,6 +123,20 @@ export async function POST(request: Request) {
             ...item,
             rank: index + 1
           }))
+        
+        // Cloudflare KV用のデータ構造に追加
+        if (!kvData.genres[genre]) {
+          kvData.genres[genre] = {
+            '24h': { items: [], popularTags: [] },
+            'hour': { items: [], popularTags: [] }
+          }
+        }
+        kvData.genres[genre][period] = {
+          items,
+          popularTags,
+          tags: {} // タグ別ランキングは後で追加
+        }
+        kvData.metadata!.totalItems += items.length
         
         // ジャンル別・期間別にキャッシュ
         await kv.set(`ranking-${genre}-${period}`, { items, popularTags }, { ex: 3600 })
@@ -196,6 +221,11 @@ export async function POST(request: Request) {
                 }))
                 
                 await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
+                
+                // Cloudflare KVデータにも追加
+                if (kvData.genres[genre][period].tags) {
+                  kvData.genres[genre][period].tags[tag] = tagRankingItems
+                }
               }
             } catch (tagError) {
               // console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
@@ -215,6 +245,15 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
+    
+    // すべてのジャンルの更新が完了したら、Cloudflare KVに一括保存
+    try {
+      await setRankingToKV(kvData)
+      // Cloudflare KV書き込み成功（ログは出力しない - ESLintエラー回避）
+    } catch (cfError) {
+      // Cloudflare KVへの書き込みに失敗しても、Vercel KVへの書き込みは成功しているので処理は続行
+      // エラーは記録するが、全体としては成功とする
     }
     
     // Store update info

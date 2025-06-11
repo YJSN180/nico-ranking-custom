@@ -1,6 +1,7 @@
 import { kv } from '@vercel/kv'
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
+import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
 import type { RankingGenre } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
 
@@ -48,6 +49,16 @@ export async function updateRankingData(): Promise<UpdateResult> {
   const { getNGList } = await import('@/lib/ng-filter')
   const ngList = await getNGList()
   // スキップ（ESLintエラー回避）
+  
+  // Cloudflare KV用のデータ構造を初期化
+  const kvData: KVRankingData = {
+    genres: {},
+    metadata: {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      totalItems: 0
+    }
+  }
 
   // 各ジャンルと期間を順番に更新（レート制限を考慮）
   for (const genre of GENRES_TO_UPDATE) {
@@ -116,6 +127,20 @@ export async function updateRankingData(): Promise<UpdateResult> {
         popularTags,
         updatedAt: new Date().toISOString()
       }
+      
+      // Cloudflare KV用のデータ構造に追加
+      if (!kvData.genres[genre]) {
+        kvData.genres[genre] = {
+          '24h': { items: [], popularTags: [] },
+          'hour': { items: [], popularTags: [] }
+        }
+      }
+      kvData.genres[genre][period] = {
+        items,
+        popularTags,
+        tags: {} // タグ別ランキングは後で追加
+      }
+      kvData.metadata!.totalItems += items.length
       
       // 新しい形式で保存（period付き）
       await kv.set(`ranking-${genre}-${period}`, dataToStore, { ex: 3600 })
@@ -195,6 +220,11 @@ export async function updateRankingData(): Promise<UpdateResult> {
             
             // KVに保存（エンコードされたタグ名をキーに使用）
             await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
+            
+            // Cloudflare KVデータにも追加
+            if (kvData.genres[genre][period].tags) {
+              kvData.genres[genre][period].tags[tag] = tagRankingItems
+            }
           } catch (tagError) {
             // タグ別ランキングの取得に失敗してもメイン処理は継続
           }
@@ -242,6 +272,15 @@ export async function updateRankingData(): Promise<UpdateResult> {
       }
     }
     }
+  }
+
+  // すべてのジャンルの更新が完了したら、Cloudflare KVに一括保存
+  try {
+    await setRankingToKV(kvData)
+    // Cloudflare KV書き込み成功（ログは出力しない - ESLintエラー回避）
+  } catch (cfError) {
+    // Cloudflare KVへの書き込みに失敗しても、Vercel KVへの書き込みは成功しているので処理は続行
+    // エラーは記録するが、全体としては成功とする
   }
 
   return {

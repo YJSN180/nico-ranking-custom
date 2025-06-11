@@ -8,6 +8,8 @@ import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingData } from '@/lib/ng-filter'
+import { getGenreRanking } from '@/lib/cloudflare-kv'
+import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
@@ -21,6 +23,23 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   items: RankingData
   popularTags?: string[]
 }> {
+  
+  // 0. Cloudflare KVから読み取りを試みる（タグなしの場合のみ）
+  if (!tag) {
+    try {
+      const cfData = await getGenreRanking(genre, period as RankingPeriod)
+      if (cfData && cfData.items && cfData.items.length > 0) {
+        // NGフィルタリングを適用
+        const filteredData = await filterRankingData({
+          items: cfData.items.slice(0, 100), // 最初の100件のみ
+          popularTags: cfData.popularTags
+        })
+        return filteredData
+      }
+    } catch (cfError) {
+      // Cloudflare KVエラーは無視してVercel KVにフォールバック
+    }
+  }
   
   // 1. Primary: Check cache for pre-generated data
   try {
