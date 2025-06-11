@@ -9,7 +9,7 @@ export default {
         url: url.toString(),
         pathname: url.pathname,
         hostname: url.hostname,
-        headers: Object.fromEntries(request.headers.entries())
+        headers: {} // Headers simplified for debugging
       }, null, 2),
       {
         status: 200,

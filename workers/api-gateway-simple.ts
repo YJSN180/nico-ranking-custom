@@ -40,7 +40,7 @@ export default {
           request: {
             url: request.url,
             method: request.method,
-            headers: Object.fromEntries(request.headers.entries())
+            headers: {} // Headers simplified for debugging
           }
         }, null, 2), {
           headers: { 'Content-Type': 'application/json' }

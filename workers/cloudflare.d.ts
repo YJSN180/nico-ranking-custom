@@ -70,7 +70,3 @@ export interface ExecutionContext {
 export interface CacheStorage {
   default: Cache
 }
-
-declare global {
-  const caches: CacheStorage
-}

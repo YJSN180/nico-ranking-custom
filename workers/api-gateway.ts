@@ -4,7 +4,9 @@
  * DDoS保護、レート制限、キャッシング、セキュリティヘッダー
  */
 
-import type { KVNamespace, ExecutionContext } from './cloudflare.d'
+import type { KVNamespace, ExecutionContext, CacheStorage } from './cloudflare.d'
+
+declare const caches: CacheStorage
 
 export interface Env {
   RATE_LIMIT: KVNamespace
@@ -109,7 +111,7 @@ export default {
     
     // 静的アセットのキャッシュ
     if (url.pathname.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/)) {
-      const cache = (caches as any).default as Cache
+      const cache = caches.default
       let response = await cache.match(request)
       
       if (!response) {
@@ -135,7 +137,7 @@ export default {
     
     // ランキングAPIのキャッシュ
     if (url.pathname === '/api/ranking') {
-      const cache = (caches as any).default as Cache
+      const cache = caches.default
       const cacheKey = new Request(url.toString(), {
         method: 'GET',
         headers: { 'Cache-Key': url.search }
