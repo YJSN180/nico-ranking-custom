@@ -48,3 +48,8 @@ gh
 
 # claude
 .claude/
+
+# wrangler
+.wrangler/
+.dev.vars
+.env.cloudflare

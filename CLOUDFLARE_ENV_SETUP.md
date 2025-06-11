@@ -1,80 +1,79 @@
-# Cloudflare 環境変数設定ガイド
+# Cloudflare Environment Variables Setup
 
-このドキュメントでは、Cloudflare KVと連携するために必要な環境変数の設定方法を説明します。
+This document contains the Cloudflare environment variables that need to be configured in Vercel for the nico-ranking-custom project.
 
-## 必要な環境変数
+## Required Environment Variables
 
-以下の環境変数をVercelダッシュボードで設定する必要があります：
+The following environment variables must be set in Vercel for all environments (Production, Preview, and Development):
 
-### Cloudflare KV設定
-
-```bash
-# Cloudflareアカウント情報
-CLOUDFLARE_ACCOUNT_ID=5984977746a3dfcd71415bed5c324eb1
-
-# メインのKVネームスペース（ランキングデータ保存用）
-CLOUDFLARE_KV_NAMESPACE_ID=80f4535c379b4e8cb89ce6dbdb7d2dc9
-
-# レート制限用のKVネームスペース
-RATE_LIMIT_NAMESPACE_ID=c49751cf8c27464aac68cf030b9e0713
-
-# Cloudflare API トークン
-CLOUDFLARE_KV_API_TOKEN=ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj
+### 1. CLOUDFLARE_ACCOUNT_ID
+```
+5984977746a3dfcd71415bed5c324eb1
 ```
 
-## Vercelでの設定手順
-
-1. **Vercelダッシュボードにアクセス**
-   - https://vercel.com にログイン
-   - プロジェクト「nico-ranking-custom」を選択
-
-2. **Settings → Environment Variables に移動**
-
-3. **各環境変数を追加**
-   - Key: 上記の環境変数名
-   - Value: 対応する値
-   - Environment: Production, Preview, Development すべてにチェック
-
-4. **保存後、再デプロイ**
-   - 環境変数の変更を反映させるため、最新のコミットを再デプロイ
-
-## GitHub Secretsの設定
-
-GitHub Actionsでも同じ環境変数が必要です：
-
-1. **リポジトリのSettings → Secrets and variables → Actions**
-
-2. **New repository secret** で以下を追加：
-   - `CLOUDFLARE_ACCOUNT_ID`
-   - `CLOUDFLARE_KV_NAMESPACE_ID`
-   - `CLOUDFLARE_KV_API_TOKEN`
-   - `RATE_LIMIT_NAMESPACE_ID`
-
-## 確認方法
-
-設定が正しく行われているか確認：
-
-```bash
-# ローカルで確認（.env.localファイルを作成後）
-npm run dev
-
-# APIエンドポイントで確認
-curl https://your-app.vercel.app/api/status
+### 2. CLOUDFLARE_KV_NAMESPACE_ID
+```
+80f4535c379b4e8cb89ce6dbdb7d2dc9
 ```
 
-## セキュリティ上の注意
+### 3. CLOUDFLARE_KV_API_TOKEN
+```
+ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj
+```
 
-- **APIトークンは絶対に公開しない**
-- **環境変数は暗号化されて保存される**
-- **必要最小限の権限のみを付与したトークンを使用**
+### 4. RATE_LIMIT_NAMESPACE_ID
+```
+c49751cf8c27464aac68cf030b9e0713
+```
 
-## トラブルシューティング
+## Manual Setup Instructions
 
-### エラー: "KV namespace not found"
-→ `CLOUDFLARE_KV_NAMESPACE_ID` が正しく設定されているか確認
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Navigate to your project: `nico-ranking-custom`
+3. Go to Settings → Environment Variables
+4. For each variable above:
+   - Click "Add Variable"
+   - Enter the variable name (e.g., `CLOUDFLARE_ACCOUNT_ID`)
+   - Paste the corresponding value
+   - Select all environments: Production ✓, Preview ✓, Development ✓
+   - Click "Save"
 
-### エラー: "Authentication failed"
-→ `CLOUDFLARE_KV_API_TOKEN` が有効か確認
+## Using Vercel CLI
 
-### エラー: "Rate limit namespace not found"
-→ `RATE_LIMIT_NAMESPACE_ID` が正しく設定されているか確認
+If you have Vercel CLI installed and authenticated, you can run the provided script:
+
+```bash
+# First, ensure you're logged in
+vercel login
+
+# Then run the setup script
+./scripts/set-cloudflare-env.sh
+```
+
+## Triggering a New Deployment
+
+After setting all environment variables, trigger a new deployment:
+
+### Option 1: Via Vercel Dashboard
+1. Go to your project's deployments page
+2. Click on the latest deployment
+3. Click the "..." menu and select "Redeploy"
+
+### Option 2: Via Git
+```bash
+# Create an empty commit and push
+git commit --allow-empty -m "Trigger deployment with new Cloudflare env vars"
+git push
+```
+
+### Option 3: Via Vercel CLI
+```bash
+vercel --prod
+```
+
+## Verification
+
+After deployment, verify the environment variables are working:
+1. Check the deployment logs for any errors
+2. Test the API endpoints that use Cloudflare KV
+3. Monitor the Functions tab in Vercel for any runtime errors

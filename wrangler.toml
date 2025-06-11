@@ -5,7 +5,7 @@ workers_dev = true
 
 # Environment variables
 [vars]
-NEXT_APP_URL = "https://nico-ranking-custom.vercel.app"
+NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 
 # Account settings
 account_id = "5984977746a3dfcd71415bed5c324eb1"
@@ -35,7 +35,6 @@ ip = "0.0.0.0"
 # Build settings
 [build]
 command = ""
-watch_paths = ["workers/**/*.ts"]
 
 # Performance settings
 [limits]
@@ -43,5 +42,4 @@ cpu_ms = 50
 memory_mb = 128
 
 # Compatibility settings
-[compatibility_flags]
-nodejs_compat = true
+compatibility_flags = ["nodejs_compat"]
