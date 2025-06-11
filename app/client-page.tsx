@@ -9,7 +9,6 @@ import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
-import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -433,11 +432,11 @@ export default function ClientPage({
           // 配列形式の場合、人気タグは別のuseEffectで動的に取得される
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
-          // APIレスポンスに人気タグが含まれている場合のみ更新
-          if (data.popularTags && data.popularTags.length > 0) {
+          // APIレスポンスに人気タグが含まれている場合は更新（空配列も含む）
+          if ('popularTags' in data && Array.isArray(data.popularTags)) {
             setCurrentPopularTags(data.popularTags)
           }
-          // 人気タグが空の場合は、別のuseEffectで動的に取得される
+          // 人気タグがAPIレスポンスに含まれていない場合は、別のuseEffectで動的に取得される
         } else {
           setRankingData([])
           // エラー時でも人気タグの動的取得は別のuseEffectで行われる
@@ -494,18 +493,42 @@ export default function ClientPage({
       return
     }
     
-    // ジャンルやperiodが変更された場合、または初期propsが空の場合は動的に取得
+    // ジャンルやperiodが変更された場合、APIレスポンスから人気タグが取得できなかった場合は
+    // 別途APIから取得を試みる
     async function updatePopularTags() {
       try {
-        const tags = await getPopularTags(config.genre, config.period)
-        setCurrentPopularTags(tags)
+        // APIから人気タグを取得（クライアントサイドではKVに直接アクセスできないため）
+        const params = new URLSearchParams({
+          genre: config.genre,
+          period: config.period
+        })
+        
+        const response = await fetch(`/api/ranking?${params}`)
+        if (response.ok) {
+          const data = await response.json()
+          
+          // APIレスポンスに人気タグが含まれている場合は更新
+          if (data && typeof data === 'object' && 'popularTags' in data && Array.isArray(data.popularTags)) {
+            setCurrentPopularTags(data.popularTags)
+            return
+          }
+        }
+        
+        // 取得できなかった場合は空配列
+        setCurrentPopularTags([])
       } catch (error) {
         // エラー時は空配列を設定
         setCurrentPopularTags([])
       }
     }
     
-    updatePopularTags()
+    // ジャンルまたはperiodが変更された場合は必ず更新
+    // 初回レンダリング時でもpropsに人気タグがない場合は取得を試みる
+    if (config.genre !== initialGenre || 
+        config.period !== initialPeriod || 
+        (isInitialRender && popularTags.length === 0)) {
+      updatePopularTags()
+    }
   }, [config.genre, config.period, initialGenre, initialPeriod, popularTags])
 
   // 動画クリック時にスクロール位置を保存
