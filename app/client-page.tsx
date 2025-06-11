@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
@@ -73,66 +73,69 @@ export default function ClientPage({
   // モバイル検出
   const isMobile = useMobileDetect()
   
-  // ストレージのクリーンアップ
+  // ストレージ管理の設定
+  const STORAGE_CONFIG = {
+    MAX_KEYS: 5, // 最大保存キー数
+    USE_SESSION_STORAGE: false, // sessionStorageを使用しない
+    MAX_AGE_MS: 30 * 60 * 1000, // 30分
+  }
+  
+  // ストレージのクリーンアップ（改善版）
   const cleanupOldStorage = useCallback(() => {
     try {
       const now = Date.now()
-      const thirtyMinutesAgo = now - 30 * 60 * 1000 // 30分前
       const currentKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
       
       // localStorageのクリーンアップ
-      const keysToRemove: string[] = []
-      const allKeys: Array<{ key: string; timestamp: number }> = []
+      const rankingKeys: Array<{ key: string; timestamp: number }> = []
       
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
         if (key?.startsWith('ranking-state-')) {
           try {
             const data = JSON.parse(localStorage.getItem(key) || '{}')
-            if (key === currentKey) {
-              // 現在のキーはスキップ
-              continue
-            }
-            
-            allKeys.push({ key, timestamp: data.timestamp || 0 })
-            
-            // 30分以上古いデータを削除対象に
-            if (!data.timestamp || data.timestamp < thirtyMinutesAgo) {
-              keysToRemove.push(key)
-            }
+            rankingKeys.push({ key, timestamp: data.timestamp || 0 })
           } catch {
-            // パースエラーの場合も削除
-            keysToRemove.push(key)
+            // パースエラーのキーは即削除
+            localStorage.removeItem(key)
           }
         }
       }
       
-      // 10個以上のキーがある場合は、古い順に削除（最新5個を残す）
-      if (allKeys.length > 5) {
-        allKeys.sort((a, b) => b.timestamp - a.timestamp)
-        const keysToKeep = allKeys.slice(0, 5).map(item => item.key)
-        allKeys.forEach(item => {
-          if (!keysToKeep.includes(item.key) && !keysToRemove.includes(item.key)) {
-            keysToRemove.push(item.key)
-          }
-        })
-      }
+      // 現在のキーを除いて、古い順にソート
+      const otherKeys = rankingKeys
+        .filter(item => item.key !== currentKey)
+        .sort((a, b) => b.timestamp - a.timestamp)
+      
+      // 古いキーを削除（MAX_KEYS - 1個を超える分）
+      const keysToRemove = otherKeys.slice(STORAGE_CONFIG.MAX_KEYS - 1)
+      
+      // 30分以上古いキーも削除対象に追加
+      otherKeys.forEach(item => {
+        if (now - item.timestamp > STORAGE_CONFIG.MAX_AGE_MS && 
+            !keysToRemove.find(k => k.key === item.key)) {
+          keysToRemove.push(item)
+        }
+      })
       
       // 一括削除
-      keysToRemove.forEach(key => localStorage.removeItem(key))
+      keysToRemove.forEach(item => localStorage.removeItem(item.key))
       
-      // sessionStorageもクリア
-      sessionStorage.clear()
+      // sessionStorageは使用しない（クリアのみ）
+      if (!STORAGE_CONFIG.USE_SESSION_STORAGE) {
+        sessionStorage.clear()
+      }
     } catch (error) {
-      // エラーは静かに無視
+      console.error('Storage cleanup error:', error)
     }
   }, [config])
   
-  // リアルタイム統計更新を使用（1分ごとに自動更新）
+  // リアルタイム統計更新を使用（3分ごとに自動更新 - メモリ負荷軽減）
+  const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
     rankingData,
     true, // 常に有効
-    60000 // 1分ごと
+    REALTIME_UPDATE_INTERVAL
   )
   
   // URLの更新（履歴を汚さない）
@@ -738,13 +741,20 @@ export default function ClientPage({
   // カスタムNGフィルタを適用してから表示するアイテムを取得
   const filteredItems = filterItems(realtimeItems)
   
-  // フィルタリング後に順位を振り直す
-  const rerankedItems = filteredItems.map((item, index) => ({
-    ...item,
-    rank: index + 1
-  }))
+  // フィルタリング後に順位を振り直す（メモ化）
+  const rerankedItems = React.useMemo(() => 
+    filteredItems.map((item, index) => ({
+      ...item,
+      rank: index + 1
+    })),
+    [filteredItems]
+  )
   
-  const displayItems = rerankedItems.slice(0, displayCount)
+  // 表示アイテムの計算もメモ化
+  const displayItems = React.useMemo(() => 
+    rerankedItems.slice(0, displayCount),
+    [rerankedItems, displayCount]
+  )
 
   return (
     <>
