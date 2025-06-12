@@ -4,37 +4,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 role:あなたは天才プログラマーであり、コーディングに関するすべての問題を完璧に解決します。
 
-## 🚨 CRITICAL SECURITY RULES - APIトークンの取り扱い（絶対厳守）
+## 🚨 CRITICAL SECURITY RULES - 環境変数とAPIトークンの管理（絶対厳守）
+
+### 環境変数管理の鉄則
+
+**絶対にコミットしてはいけないファイル**：
+- `.env.local` - ローカル開発環境用（.gitignoreで除外済み）
+- `.env` - 本番環境用（.gitignoreで除外済み）
+- `.env.production` - 本番環境用（.gitignoreで除外済み）
+- その他すべての`.env*`ファイル（.gitignoreで除外済み）
+
+**コミット可能なファイル**：
+- `.env.example` - 環境変数のテンプレート（実際の値は含めない）
+- `.env.local.example` - ローカル開発用テンプレート（実際の値は含めない）
 
 ### APIトークンを絶対にコミットしないでください！
 
-1. **APIトークンは以下の場所にのみ設定**：
-   - `.env.local` ファイル（ローカル開発用、gitignore済み）
+1. **APIトークンの正しい設定場所**：
+   - `.env.local` ファイル（ローカル開発用、**gitignore済み**）
    - Vercelダッシュボードの環境変数
    - GitHub Secretsの環境変数
+   - Cloudflare Workersの環境変数
 
 2. **絶対にやってはいけないこと**：
    - ❌ コード内にハードコード
-   - ❌ ドキュメントに記載
+   - ❌ ドキュメントに記載（.mdファイル含む）
    - ❌ コミットメッセージに含める
    - ❌ スクリプトファイルに直接記載
    - ❌ テストファイルに記載
-   - ❌ READMEやマークダウンファイルに記載
-   - ❌ .mdファイルへの記載（すべての.mdファイルはgitignoreに追加済み）
+   - ❌ README.mdに記載
+   - ❌ 任意の追跡対象ファイルに記載
 
 3. **正しい使用方法**：
    ```typescript
-   // ✅ 正しい
+   // ✅ 正しい - 環境変数から読み取り
    const apiToken = process.env.CLOUDFLARE_KV_API_TOKEN
    
-   // ❌ 絶対禁止 - トークンを直接記載しない
-   const apiToken = "実際のトークン"
+   // ❌ 絶対禁止 - 実際のトークンを直接記載
+   const apiToken = "実際のトークン値"
    ```
 
-4. **もし露出した場合の対応**：
-   - 即座にCloudflareダッシュボードでトークンをロール（更新）
+4. **環境変数の検証**：
+   ```typescript
+   // ✅ 必須環境変数の検証
+   if (!process.env.CLOUDFLARE_KV_API_TOKEN) {
+     throw new Error('CLOUDFLARE_KV_API_TOKEN is required')
+   }
+   ```
+
+5. **もし露出した場合の対応**：
+   - **即座に**該当サービスのダッシュボードでトークンをローテーション（更新）
    - 新しいトークンを環境変数に設定
    - 古いトークンは自動的に無効化される
+   - コミット履歴から削除（必要に応じて）
+
+### .gitignoreの確認方法
+
+```bash
+# 環境変数ファイルが追跡されていないことを確認
+git status
+git ls-files | grep -E "\.env"
+
+# .env.localが表示されなければ正常
+```
 
 ## 🏗️ DEPLOYMENT ARCHITECTURE
 
