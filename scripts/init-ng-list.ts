@@ -27,8 +27,12 @@ async function initializeNGList() {
 }
 
 // 環境変数チェック
-if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-  console.error('KV_REST_API_URLとKV_REST_API_TOKENが設定されていません')
+if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_KV_NAMESPACE_ID || !process.env.CLOUDFLARE_KV_API_TOKEN) {
+  console.error('Cloudflare KVの環境変数が設定されていません')
+  console.error('以下の環境変数を設定してください:')
+  console.error('  - CLOUDFLARE_ACCOUNT_ID')
+  console.error('  - CLOUDFLARE_KV_NAMESPACE_ID')
+  console.error('  - CLOUDFLARE_KV_API_TOKEN')
   process.exit(1)
 }
 

@@ -29,8 +29,9 @@ describe('Security: Environment Variables', () => {
     it('should accept requests with correct admin key from environment', async () => {
       // 環境変数を設定
       process.env.ADMIN_KEY = 'test-admin-key-123'
-      process.env.KV_REST_API_URL = 'http://mock-kv'
-      process.env.KV_REST_API_TOKEN = 'mock-token'
+      process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
+      process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
+      process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
       
       // KVモック
       vi.mock('@/lib/simple-kv', () => ({

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Vercel KVからCloudflare KVへのデータ移行スクリプト
+ * @deprecated This migration script is no longer needed as we have fully migrated to Cloudflare KV
  */
 
 import { kv } from '../lib/simple-kv'
@@ -10,7 +10,8 @@ import { CACHED_GENRES } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 
 async function migrateToCloudflareKV() {
-  console.log('🚀 Vercel KVからCloudflare KVへのデータ移行を開始します...\n')
+  console.log('❌ This migration script is deprecated. We have already migrated to Cloudflare KV.\n')
+  process.exit(0)
 
   const kvData: KVRankingData = {
     genres: {},
@@ -93,24 +94,6 @@ async function migrateToCloudflareKV() {
   } catch (error) {
     console.error('❌ Cloudflare KVへの書き込みに失敗しました:', error)
   }
-}
-
-// 環境変数チェック
-if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-  console.error('❌ Vercel KVの環境変数が設定されていません')
-  console.error('以下の環境変数を設定してください:')
-  console.error('  - KV_REST_API_URL')
-  console.error('  - KV_REST_API_TOKEN')
-  process.exit(1)
-}
-
-if (!process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.CLOUDFLARE_KV_NAMESPACE_ID || !process.env.CLOUDFLARE_KV_API_TOKEN) {
-  console.error('❌ Cloudflare KVの環境変数が設定されていません')
-  console.error('以下の環境変数を設定してください:')
-  console.error('  - CLOUDFLARE_ACCOUNT_ID')
-  console.error('  - CLOUDFLARE_KV_NAMESPACE_ID') 
-  console.error('  - CLOUDFLARE_KV_API_TOKEN')
-  process.exit(1)
 }
 
 // 実行

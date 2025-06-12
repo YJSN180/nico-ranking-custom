@@ -1,5 +1,5 @@
-// Simple KV utility that mimics Vercel KV API using Cloudflare KV REST API
-// This provides a drop-in replacement for @vercel/kv
+// Simple KV utility using Cloudflare KV REST API
+// Provides a unified interface for key-value storage operations
 
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
 const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID

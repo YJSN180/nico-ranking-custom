@@ -199,7 +199,7 @@ export default async function Home({ searchParams }: PageProps) {
                 error: error instanceof Error ? error.message : String(error),
                 genre,
                 tag,
-                KV_configured: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
+                CloudflareKV_configured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN),
               }, null, 2)}</pre>
             </details>
           </div>
