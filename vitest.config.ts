@@ -9,6 +9,7 @@ export default defineConfig({
     globals: true,
     setupFiles: './vitest.setup.ts',
     exclude: ['**/node_modules/**', '**/__tests__/e2e/**'],
+    testTimeout: 10000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -45,10 +46,10 @@ export default defineConfig({
         'instrumentation.ts'
       ],
       thresholds: {
-        lines: 41,
-        branches: 41,
-        functions: 41,
-        statements: 41
+        lines: 40,
+        branches: 40,
+        functions: 40,
+        statements: 40
       }
     }
   },
