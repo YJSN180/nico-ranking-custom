@@ -22,9 +22,24 @@ function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000
 }
 
 export function middleware(request: NextRequest) {
+  // DEBUGGING: Add explicit console log
+  console.log('MIDDLEWARE EXECUTING:', {
+    path: request.nextUrl.pathname,
+    host: request.headers.get('host'),
+    method: request.method,
+    timestamp: new Date().toISOString()
+  })
+  
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
   // development以外では認証チェックを行う（本番でも必要なので）
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development' && !request.nextUrl.pathname.startsWith('/api/')
+  
+  console.log('MIDDLEWARE AUTH LOGIC:', {
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    shouldCheckAuth,
+    pathStartsWithApi: request.nextUrl.pathname.startsWith('/api/'),
+    willCheckAuth: false // because of the explicit false below
+  })
   
   // TEMPORARY: Completely disable auth check to confirm this is the issue
   if (false) {
