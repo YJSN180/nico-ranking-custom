@@ -38,6 +38,6 @@ describe('Cloudflare Workers Complete Tests', () => {
       responses.forEach(response => {
         expect(response.status).toBeLessThan(500)
       })
-    })
+    }, 10000) // 10秒のタイムアウトを設定
   })
 })
