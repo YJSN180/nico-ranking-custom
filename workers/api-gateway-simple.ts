@@ -78,12 +78,18 @@ export default {
             PREVIEW_URL: env.PREVIEW_URL || 'NOT SET',
             ACTIVE_URL: targetUrl,
             hasRateLimit: !!env.RATE_LIMIT,
-            hasRankingData: !!env.RANKING_DATA
+            hasRankingData: !!env.RANKING_DATA,
+            hasWorkerAuthKey: !!env.WORKER_AUTH_KEY,
+            hasVercelBypassSecret: !!env.VERCEL_PROTECTION_BYPASS_SECRET
           },
           request: {
             url: request.url,
             method: request.method,
             headers: {} // Headers simplified for debugging
+          },
+          authenticationStatus: {
+            workerAuthConfigured: !!env.WORKER_AUTH_KEY,
+            vercelBypassConfigured: !!env.VERCEL_PROTECTION_BYPASS_SECRET
           }
         }, null, 2), {
           headers: { 'Content-Type': 'application/json' }
@@ -103,7 +109,16 @@ export default {
       
       // 認証ヘッダーを追加してプロキシ
       const proxyHeaders = new Headers(request.headers)
-      proxyHeaders.set('X-Worker-Auth', env.WORKER_AUTH_KEY || '')
+      // ホストヘッダーを正しく設定
+      proxyHeaders.set('host', new URL(baseUrl).host)
+      
+      // 重要: Vercel middleware bypass用の認証ヘッダー
+      if (env.WORKER_AUTH_KEY) {
+        proxyHeaders.set('X-Worker-Auth', env.WORKER_AUTH_KEY)
+      } else {
+        // デバッグ用：認証キーが設定されていない場合の警告
+        console.warn('WORKER_AUTH_KEY is not configured')
+      }
       
       // Vercel Protection Bypassヘッダーを追加
       if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
@@ -114,7 +129,7 @@ export default {
       const response = await fetch(targetUrl, {
         method: request.method,
         headers: proxyHeaders,
-        body: request.body
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body
       })
       
       // セキュリティヘッダーを追加

@@ -19,6 +19,8 @@
     "dev:worker": "wrangler dev",
     "tail:worker": "wrangler tail",
     "block:pages": "node pages-build-blocker.js",
+    "setup:domain-auth": "./scripts/setup-domain-auth.sh",
+    "test:domain-config": "./scripts/test-domain-config.sh",
     "info:architecture": "echo 'Deployment Architecture: Vercel (Main App) + Cloudflare Workers (API) + KV (Storage)'"
   },
   "dependencies": {
