@@ -4,6 +4,43 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 role:あなたは天才プログラマーであり、コーディングに関するすべての問題を完璧に解決します。
 
+## 🚨 CRITICAL SECURITY RULES - APIトークンの取り扱い（絶対厳守）
+
+### APIトークンを絶対にコミットしないでください！
+
+**現在のCloudflare APIトークン: `03bxnVVvwIc54UptoDc29RiZGroEn4Lp8OYlvmxj`**
+
+1. **このトークンは以下の場所にのみ設定**：
+   - `.env.local` ファイル（ローカル開発用、gitignore済み）
+   - Vercelダッシュボードの環境変数
+   - GitHub Secretsの環境変数
+
+2. **絶対にやってはいけないこと**：
+   - ❌ コード内にハードコード
+   - ❌ ドキュメントに記載
+   - ❌ コミットメッセージに含める
+   - ❌ スクリプトファイルに直接記載
+   - ❌ テストファイルに記載
+   - ❌ READMEやマークダウンファイルに記載
+
+3. **正しい使用方法**：
+   ```typescript
+   // ✅ 正しい
+   const apiToken = process.env.CLOUDFLARE_KV_API_TOKEN
+   
+   // ❌ 絶対禁止
+   const apiToken = "03bxnVVvwIc54UptoDc29RiZGroEn4Lp8OYlvmxj"
+   ```
+
+4. **過去に露出したトークン（無効化済み）**：
+   - `ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj`
+   - `MveiaVjt0FKnbbKpKUB4uWPRCCsTb37gyby7nlrl`
+
+5. **もし露出した場合の対応**：
+   - 即座にCloudflareダッシュボードでトークンをロール（更新）
+   - 新しいトークンを環境変数に設定
+   - 古いトークンは自動的に無効化される
+
 ## Commands
 
 ### Development
@@ -83,7 +120,9 @@ The hybrid scraper (`complete-hybrid-scraper.ts`) combines:
    ```
 
 3. **Environment Variables**:
-   - `KV_REST_API_URL` & `KV_REST_API_TOKEN` - Required for Vercel KV
+   - `CLOUDFLARE_ACCOUNT_ID` - Cloudflare account ID
+   - `CLOUDFLARE_KV_NAMESPACE_ID` - KV namespace ID
+   - `CLOUDFLARE_KV_API_TOKEN` - **絶対にコミットしない！環境変数でのみ管理**
    - `CRON_SECRET` - Required for cron authentication
    - `VERCEL_URL` - Auto-set by Vercel, used for server-side API calls
 
