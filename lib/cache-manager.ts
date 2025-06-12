@@ -323,5 +323,220 @@ export class CacheManager {
   }
 }
 
-// Export singleton instance
+// キャッシュタグの管理
+export class CacheTagManager {
+  private tags: Map<string, Set<string>> = new Map()
+  private keyToTags: Map<string, Set<string>> = new Map()
+
+  addTag(key: string, tag: string): void {
+    // タグ -> キーのマッピング
+    if (!this.tags.has(tag)) {
+      this.tags.set(tag, new Set())
+    }
+    this.tags.get(tag)!.add(key)
+    
+    // キー -> タグのマッピング
+    if (!this.keyToTags.has(key)) {
+      this.keyToTags.set(key, new Set())
+    }
+    this.keyToTags.get(key)!.add(tag)
+  }
+
+  addTags(key: string, tags: string[]): void {
+    tags.forEach(tag => this.addTag(key, tag))
+  }
+
+  invalidateTag(tag: string): string[] {
+    const keys = Array.from(this.tags.get(tag) || [])
+    
+    // タグに関連するすべてのキーを削除
+    keys.forEach(key => {
+      const keyTags = this.keyToTags.get(key)
+      if (keyTags) {
+        keyTags.delete(tag)
+        if (keyTags.size === 0) {
+          this.keyToTags.delete(key)
+        }
+      }
+    })
+    
+    this.tags.delete(tag)
+    return keys
+  }
+
+  invalidateTags(tags: string[]): string[] {
+    const allKeys = new Set<string>()
+    tags.forEach(tag => {
+      const keys = this.invalidateTag(tag)
+      keys.forEach(key => allKeys.add(key))
+    })
+    return Array.from(allKeys)
+  }
+
+  removeKey(key: string): void {
+    const tags = this.keyToTags.get(key)
+    if (tags) {
+      tags.forEach(tag => {
+        const keys = this.tags.get(tag)
+        if (keys) {
+          keys.delete(key)
+          if (keys.size === 0) {
+            this.tags.delete(tag)
+          }
+        }
+      })
+      this.keyToTags.delete(key)
+    }
+  }
+
+  getTagsForKey(key: string): string[] {
+    return Array.from(this.keyToTags.get(key) || [])
+  }
+
+  getKeysForTag(tag: string): string[] {
+    return Array.from(this.tags.get(tag) || [])
+  }
+}
+
+// 高度なキャッシュマネージャー
+export class AdvancedCacheManager extends CacheManager {
+  private tagManager = new CacheTagManager()
+  private warmupQueue: Set<string> = new Set()
+  private coalesceMap: Map<string, Promise<any>> = new Map()
+  
+  /**
+   * タグ付きでキャッシュを設定
+   */
+  setWithTags<T>(
+    key: string,
+    data: T,
+    tags: string[],
+    options: CacheOptions = {}
+  ): void {
+    this.set(key, data, options)
+    this.tagManager.addTags(key, tags)
+  }
+  
+  /**
+   * タグによるキャッシュ無効化
+   */
+  invalidateByTag(tag: string): string[] {
+    const keys = this.tagManager.invalidateTag(tag)
+    keys.forEach(key => super.invalidate(key))
+    return keys
+  }
+  
+  /**
+   * 複数タグによるキャッシュ無効化
+   */
+  invalidateByTags(tags: string[]): string[] {
+    const keys = this.tagManager.invalidateTags(tags)
+    keys.forEach(key => super.invalidate(key))
+    return keys
+  }
+  
+  /**
+   * リクエスト結合付きのget
+   */
+  async getWithCoalesce<T>(
+    key: string,
+    fetcher: () => Promise<T>
+  ): Promise<{ data: T, stale: boolean, fromCache: boolean }> {
+    // 既に同じキーでフェッチ中の場合は結合
+    if (this.coalesceMap.has(key)) {
+      const data = await this.coalesceMap.get(key)
+      return { data, stale: false, fromCache: false }
+    }
+    
+    // キャッシュチェック
+    try {
+      const cached = await super.get(key)
+      if (cached.fromCache) {
+        return cached
+      }
+    } catch {
+      // キャッシュミス
+    }
+    
+    // 新規フェッチ（結合）
+    const promise = fetcher()
+    this.coalesceMap.set(key, promise)
+    
+    try {
+      const data = await promise
+      this.set(key, data)
+      return { data, stale: false, fromCache: false }
+    } finally {
+      this.coalesceMap.delete(key)
+    }
+  }
+  
+  /**
+   * キャッシュウォーミング
+   */
+  async warmup(
+    keys: string[],
+    fetcher: (key: string) => Promise<any>
+  ): Promise<void> {
+    const promises = keys.map(async key => {
+      if (this.warmupQueue.has(key)) {
+        return // 既にウォーミング中
+      }
+      
+      this.warmupQueue.add(key)
+      
+      try {
+        const data = await fetcher(key)
+        this.set(key, data)
+      } catch (error) {
+        console.error(`Failed to warmup cache for key ${key}:`, error)
+      } finally {
+        this.warmupQueue.delete(key)
+      }
+    })
+    
+    await Promise.all(promises)
+  }
+  
+  /**
+   * 階層型キャッシュの設定
+   */
+  setTiered<T>(
+    key: string,
+    data: T,
+    tiers: {
+      browser?: number
+      edge?: number
+      origin?: number
+    }
+  ): void {
+    const options: CacheOptions = {
+      maxAge: tiers.edge || 30,
+      staleWhileRevalidate: tiers.origin || 60
+    }
+    
+    this.set(key, data, options)
+  }
+  
+  /**
+   * 無効化時にタグマネージャーもクリーンアップ
+   */
+  invalidate(key: string): string[] {
+    this.tagManager.removeKey(key)
+    return super.invalidate(key)
+  }
+  
+  /**
+   * クリア時にタグマネージャーもクリア
+   */
+  clear(): void {
+    super.clear()
+    this.tagManager = new CacheTagManager()
+    this.warmupQueue.clear()
+    this.coalesceMap.clear()
+  }
+}
+
+// Export singleton instances
 export const cacheManager = CacheManager.getInstance()
+export const advancedCacheManager = new AdvancedCacheManager()

@@ -23,6 +23,9 @@ const RATE_LIMIT_CONFIG = {
   bot: { requests: 5, window: 60 }           // ボットは1分間に5リクエストまで
 }
 
+// リクエスト結合用のマップ
+const pendingRequests = new Map<string, Promise<Response>>()
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
@@ -222,6 +225,8 @@ export default {
       
       // Vercel Protection Bypassのヘッダーを追加
       const headers = new Headers(request.headers)
+      // ホストヘッダーを正しく設定
+      headers.set('host', new URL(env.NEXT_APP_URL).host)
       if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
         headers.set('x-vercel-protection-bypass', env.VERCEL_PROTECTION_BYPASS_SECRET)
         headers.set('x-vercel-set-bypass-cookie', 'true')
@@ -230,7 +235,7 @@ export default {
       const response = await fetch(targetUrl, {
         method: request.method,
         headers: headers,
-        body: request.body
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body
       })
       
       return addSecurityHeaders(response)

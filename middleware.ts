@@ -26,11 +26,23 @@ export function middleware(request: NextRequest) {
   if (process.env.NODE_ENV === 'production' && !request.nextUrl.pathname.startsWith('/api/')) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
     const expectedKey = process.env.WORKER_AUTH_KEY
+    const host = request.headers.get('host')
+    
+    // デバッグ: 認証状況をログ出力
+    if (host?.includes('vercel.app')) {
+      console.log('Vercel access attempt:', {
+        hasAuthKey: !!cfWorkerKey,
+        expectedKeySet: !!expectedKey,
+        authMatch: cfWorkerKey === expectedKey,
+        path: request.nextUrl.pathname
+      })
+    }
     
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
-    if (!cfWorkerKey || cfWorkerKey !== expectedKey) {
-      // Vercel URLへの直接アクセスをブロック
-      if (request.headers.get('host')?.includes('vercel.app')) {
+    if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
+      // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
+      if (host?.includes('vercel.app') && request.method !== 'OPTIONS') {
+        console.log('Redirecting to custom domain:', request.nextUrl.pathname)
         return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
       }
     }
