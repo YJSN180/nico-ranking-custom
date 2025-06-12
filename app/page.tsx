@@ -15,7 +15,7 @@ export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
 // dynamicを削除してISRを有効化
 
 interface PageProps {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
 async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
@@ -85,9 +85,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const genre = (searchParams.genre as string) || 'all'
-  const period = (searchParams.period as string) || '24h'
-  const tag = searchParams.tag as string | undefined
+  const params = await searchParams
+  const genre = (params.genre as string) || 'all'
+  const period = (params.period as string) || '24h'
+  const tag = params.tag as string | undefined
   
   try {
     
