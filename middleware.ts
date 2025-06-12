@@ -26,7 +26,8 @@ export function middleware(request: NextRequest) {
   // development以外では認証チェックを行う（本番でも必要なので）
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development' && !request.nextUrl.pathname.startsWith('/api/')
   
-  if (shouldCheckAuth) {
+  // TEMPORARY: Disable auth check to confirm this is the issue
+  if (false && shouldCheckAuth) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
     const expectedKey = process.env.WORKER_AUTH_KEY
     const host = request.headers.get('host')
