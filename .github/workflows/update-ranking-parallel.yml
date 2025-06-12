@@ -1,0 +1,107 @@
+name: Update Nico Ranking Data (Parallel)
+
+on:
+  schedule:
+    # Run every 10 minutes - EXACTLY THE SAME AS ORIGINAL
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allow manual trigger
+  
+jobs:
+  # Step 1: Fetch rankings in parallel groups
+  fetch-rankings:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Split 23 genres into 8 groups (about 3 genres per group)
+        # This provides good parallelization while respecting rate limits
+        group: [1, 2, 3, 4, 5, 6, 7, 8]
+      max-parallel: 8
+      fail-fast: false # Continue other groups even if one fails
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Fetch rankings for group ${{ matrix.group }}
+      env:
+        # Cloudflare KV credentials - EXACTLY THE SAME AS ORIGINAL
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+      run: |
+        echo "Starting group ${{ matrix.group }} at $(date)"
+        npx tsx scripts/update-ranking-parallel.ts --group ${{ matrix.group }} 8
+    
+    - name: Upload partial results
+      uses: actions/upload-artifact@v4
+      with:
+        name: ranking-data-group-${{ matrix.group }}
+        path: ./tmp/ranking-group-${{ matrix.group }}.json
+        retention-days: 1
+        if-no-files-found: error
+
+  # Step 2: Aggregate results and write to KV
+  aggregate-and-write:
+    needs: fetch-rankings
+    runs-on: ubuntu-latest
+    if: always() # Run even if some groups failed
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Create temp directory
+      run: mkdir -p ./tmp
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./tmp
+        pattern: ranking-data-group-*
+    
+    - name: List downloaded files
+      run: |
+        echo "Downloaded artifacts:"
+        ls -la ./tmp/
+        find ./tmp -name "*.json" -exec basename {} \; | sort
+    
+    - name: Move files to correct location
+      run: |
+        # GitHub Actions creates subdirectories for each artifact
+        # Move all JSON files to the tmp directory
+        find ./tmp -name "*.json" -exec mv {} ./tmp/ \;
+        echo "Files after moving:"
+        ls -la ./tmp/*.json
+    
+    - name: Aggregate and write to KV
+      env:
+        # Cloudflare KV credentials - EXACTLY THE SAME AS ORIGINAL
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+      run: |
+        echo "Aggregating results and writing to KV..."
+        npx tsx scripts/aggregate-ranking-results.ts
+    
+    - name: Report completion
+      run: |
+        echo "✅ Ranking update completed at $(date)"
+        echo "Check the logs above for details on processing time and item counts."
