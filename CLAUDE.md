@@ -323,3 +323,92 @@ git remote prune origin
 - Automatic deployment to Vercel on push to `main`
 - Preview deployments for all PRs
 - Environment variables managed in Vercel dashboard
+
+## Documentation Management Policy
+
+### File Commitment Rules
+
+**Files that CAN be committed (allowlist):**
+- `README.md` - Project overview and setup instructions
+- `CLAUDE.md` - This instruction file for AI assistants
+- Source code files (`.ts`, `.tsx`, `.js`, `.jsx`, `.css`, etc.)
+- Configuration files (`package.json`, `tsconfig.json`, `.eslintrc`, etc.)
+- Test files (`*.test.ts`, `*.spec.ts`)
+- Build configuration (`next.config.js`, `playwright.config.ts`, etc.)
+- CI/CD configuration (`.github/workflows/`, `vercel.json`)
+
+**Files that must be gitignored (blocklist):**
+- All other `.md` files (documentation, notes, guides, etc.)
+- Documentation directories (`docs/`, `documentation/`, `doc/`)
+- Alternative documentation formats (`.rst`, `.txt`, `.adoc`, `.markdown`, etc.)
+- Temporary files (`.tmp`, `.bak`, `.log`)
+- Environment files (`.env*`)
+- Generated files (build outputs, coverage reports)
+- Tool-specific files (`.tools/`, `.claude/`, `.wrangler/`)
+
+### Documentation Creation Guidelines
+
+1. **Never create documentation files automatically** - Only create when explicitly requested
+2. **Use appropriate gitignore patterns** - Ensure new documentation types are properly excluded
+3. **Maintain clean repository** - Keep only essential files in version control
+4. **Security first** - Never commit sensitive information in any documentation
+
+## Multi-Agent Task Management
+
+### When to Use Multiple Sub-Agents
+
+Use multiple sub-agents for complex tasks that involve:
+
+1. **Parallel Processing Requirements**:
+   - Multiple independent API calls
+   - Concurrent file operations
+   - Simultaneous test runs across different modules
+
+2. **Specialized Domain Knowledge**:
+   - Frontend UI components + Backend API logic
+   - Testing strategy + Implementation
+   - Security analysis + Performance optimization
+
+3. **Large-Scale Refactoring**:
+   - Database schema changes + API updates + Frontend adjustments
+   - Multi-service deployments
+   - Cross-cutting architectural changes
+
+### Sub-Agent Coordination Guidelines
+
+1. **Clear Task Boundaries**:
+   - Define specific responsibilities for each sub-agent
+   - Avoid overlapping work areas
+   - Establish clear handoff points
+
+2. **Data Sharing Protocols**:
+   - Use shared context for common information
+   - Pass results between agents efficiently
+   - Maintain consistency across all sub-tasks
+
+3. **Error Handling Strategy**:
+   - Each sub-agent handles its own domain errors
+   - Escalate cross-domain issues to main agent
+   - Implement rollback mechanisms for failed multi-agent operations
+
+4. **Progress Tracking**:
+   - Maintain overall task progress visibility
+   - Report sub-agent completion status
+   - Provide unified status updates to users
+
+### Example Multi-Agent Scenarios
+
+**Scenario 1: Full-Stack Feature Implementation**
+- Agent A: Database schema and API endpoints
+- Agent B: Frontend components and state management
+- Agent C: Test suite creation and validation
+
+**Scenario 2: Security Audit and Remediation**
+- Agent A: Vulnerability scanning and analysis
+- Agent B: Code fixes and security hardening
+- Agent C: Testing and deployment verification
+
+**Scenario 3: Performance Optimization**
+- Agent A: Backend optimization (caching, queries)
+- Agent B: Frontend optimization (bundling, lazy loading)
+- Agent C: Infrastructure tuning (CDN, server config)

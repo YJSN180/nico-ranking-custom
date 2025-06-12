@@ -47,6 +47,18 @@ next-env.d.ts
 !README.md
 !CLAUDE.md
 
+# Documentation directories and common documentation formats
+docs/
+documentation/
+doc/
+*.markdown
+*.rst
+*.txt
+*.adoc
+*.asciidoc
+*.org
+*.textile
+
 # playwright
 /test-results/
 /playwright-report/
@@ -66,7 +78,6 @@ gh
 .env.cloudflare
 
 # Documentation and temporary files
-docs/
 *.log
 *.tmp
 *.bak
@@ -78,3 +89,8 @@ CLOUDFLARE_*.md
 GITHUB_*.md
 ENVIRONMENT_*.md
 MIGRATION_*.md
+INSTRUCTIONS_*.md
+SETUP_*.md
+GUIDE_*.md
+MANUAL_*.md
+NOTES_*.md

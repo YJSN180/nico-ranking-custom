@@ -42,7 +42,9 @@ class SimpleKV {
         return text as T
       }
     } catch (error) {
-      console.error(`KV get error for key ${key}:`, error)
+      // Sanitize key for logging to prevent format string injection
+      const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
+      console.error('KV get error for key:', sanitizedKey, error)
       return null
     }
   }
@@ -104,7 +106,9 @@ class SimpleKV {
   async expire(key: string, seconds: number): Promise<void> {
     // Cloudflare KV doesn't support setting TTL on existing keys
     // This is a no-op for compatibility
-    console.warn(`expire() not supported on Cloudflare KV for key: ${key}`)
+    // Sanitize key for logging to prevent format string injection
+    const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
+    console.warn('expire() not supported on Cloudflare KV for key:', sanitizedKey)
   }
 
   /**
