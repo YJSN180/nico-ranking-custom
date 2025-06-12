@@ -1,0 +1,62 @@
+name: Ranking Update Monitoring & Alerting
+
+on:
+  workflow_run:
+    workflows: ["Update Nico Ranking Data"]
+    types:
+      - completed
+  schedule:
+    # Check data freshness every hour
+    - cron: '15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor-health:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Check data freshness and system health
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      run: npx tsx scripts/monitor-ranking-health.ts
+      
+    - name: Generate health report
+      if: always()
+      run: |
+        echo "# Ranking System Health Report" > health-report.md
+        echo "" >> health-report.md
+        echo "**Generated:** $(date -u)" >> health-report.md
+        echo "" >> health-report.md
+        
+        if [ -f "health-status.json" ]; then
+          cat health-status.json >> health-report.md
+        else
+          echo "❌ Health check failed - no status file generated" >> health-report.md
+        fi
+    
+    - name: Upload health report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: health-report-$(date +%Y%m%d-%H%M%S)
+        path: |
+          health-report.md
+          health-status.json
+          error-*.log
+        retention-days: 30

@@ -15,6 +15,7 @@
     "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
     "update:kv": "npx tsx scripts/update-ranking-kv.ts",
     "update:ranking-github": "npx tsx scripts/update-ranking-github-action.ts",
+    "update:ranking-optimized": "npx tsx scripts/update-ranking-optimized.ts",
     "deploy:worker": "wrangler deploy",
     "dev:worker": "wrangler dev",
     "tail:worker": "wrangler tail",

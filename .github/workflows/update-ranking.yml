@@ -2,13 +2,31 @@ name: Update Nico Ranking Data
 
 on:
   schedule:
-    # Run every 10 minutes
-    - cron: '*/10 * * * *'
+    # Optimized schedule: every 30 minutes during peak hours, hourly off-peak
+    - cron: '*/30 6-23 * * *'  # Every 30 minutes from 6 AM to 11 PM JST (peak hours)
+    - cron: '0 0-5 * * *'      # Every hour from midnight to 5 AM JST (off-peak)
   workflow_dispatch: # Allow manual trigger
+    inputs:
+      force_full_update:
+        description: 'Force full update of all genres'
+        required: false
+        default: 'false'
+        type: boolean
+      target_genres:
+        description: 'Comma-separated list of genres to update (empty = priority genres only)'
+        required: false
+        default: ''
+        type: string
   
 jobs:
   update-ranking:
     runs-on: ubuntu-latest
+    timeout-minutes: 25  # Prevent stuck workflows
+    
+    strategy:
+      fail-fast: false  # Don't cancel other jobs if one fails
+      matrix:
+        batch: [1, 2]  # Split into batches for parallel processing
     
     steps:
     - name: Checkout repository
@@ -29,13 +47,68 @@ jobs:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
-      run: npm run update:ranking-github
+        # Optimization flags
+        FORCE_FULL_UPDATE: ${{ github.event.inputs.force_full_update || 'false' }}
+        TARGET_GENRES: ${{ github.event.inputs.target_genres || '' }}
+        BATCH_NUMBER: ${{ matrix.batch }}
+        TOTAL_BATCHES: 2
+        # Monitoring
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_WORKFLOW: ${{ github.workflow }}
+      run: npm run update:ranking-optimized
     
-    - name: Check update status
+    - name: Check update status and report metrics
+      id: status_check
       run: |
         if [ $? -eq 0 ]; then
-          echo "Successfully updated all ranking data"
+          echo "Successfully updated ranking data for batch ${{ matrix.batch }}"
+          echo "success=true" >> $GITHUB_OUTPUT
         else
-          echo "Failed to update some ranking data"
+          echo "Failed to update some ranking data in batch ${{ matrix.batch }}"
+          echo "success=false" >> $GITHUB_OUTPUT
+          # Don't exit 1 - let the monitoring handle failures
+        fi
+    
+    - name: Upload batch results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: batch-${{ matrix.batch }}-results
+        path: |
+          batch-*.json
+          error-*.log
+        retention-days: 7
+  
+  consolidate-results:
+    needs: update-ranking
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all batch results
+      uses: actions/download-artifact@v4
+      with:
+        path: batch-results
+        
+    - name: Consolidate and report final status
+      run: |
+        echo "Workflow completed. Checking batch results..."
+        SUCCESS_COUNT=0
+        TOTAL_BATCHES=2
+        
+        for i in $(seq 1 $TOTAL_BATCHES); do
+          if [ -f "batch-results/batch-${i}-results/success.marker" ]; then
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+          fi
+        done
+        
+        echo "Successful batches: $SUCCESS_COUNT/$TOTAL_BATCHES"
+        
+        if [ $SUCCESS_COUNT -eq $TOTAL_BATCHES ]; then
+          echo "✅ All batches completed successfully"
+        elif [ $SUCCESS_COUNT -gt 0 ]; then
+          echo "⚠️ Partial success: $SUCCESS_COUNT/$TOTAL_BATCHES batches completed"
+        else
+          echo "❌ All batches failed"
           exit 1
         fi
