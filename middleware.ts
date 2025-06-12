@@ -23,7 +23,10 @@ function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000
 
 export function middleware(request: NextRequest) {
   // Cloudflare Workers経由のアクセスチェック（本番・プレビュー環境）
-  if ((process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'preview') && !request.nextUrl.pathname.startsWith('/api/')) {
+  // VERCEL_ENVを使用（production, preview, development）
+  const shouldCheckAuth = (process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview') && !request.nextUrl.pathname.startsWith('/api/')
+  
+  if (shouldCheckAuth) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
     const expectedKey = process.env.WORKER_AUTH_KEY
     const host = request.headers.get('host')
@@ -31,10 +34,15 @@ export function middleware(request: NextRequest) {
     // デバッグ: 認証状況をログ出力
     if (host?.includes('vercel.app')) {
       console.log('Vercel access attempt:', {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL_ENV: process.env.VERCEL_ENV,
+        shouldCheckAuth,
         hasAuthKey: !!cfWorkerKey,
         expectedKeySet: !!expectedKey,
         authMatch: cfWorkerKey === expectedKey,
-        path: request.nextUrl.pathname
+        path: request.nextUrl.pathname,
+        authKeyPreview: cfWorkerKey ? cfWorkerKey.substring(0, 8) + '...' : 'none',
+        expectedKeyPreview: expectedKey ? expectedKey.substring(0, 8) + '...' : 'none'
       })
     }
     
@@ -55,7 +63,7 @@ export function middleware(request: NextRequest) {
   // APIエンドポイントのレート制限
   if (request.nextUrl.pathname.startsWith('/api/')) {
     // デバッグエンドポイントを本番環境で無効化
-    if (process.env.NODE_ENV === 'production' && 
+    if (process.env.VERCEL_ENV === 'production' && 
         (request.nextUrl.pathname.startsWith('/api/debug') || 
          request.nextUrl.pathname.startsWith('/api/test'))) {
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
