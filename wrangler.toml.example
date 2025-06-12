@@ -17,23 +17,23 @@ workers_dev = true
 
 # Environment variables
 [vars]
-NEXT_APP_URL = "https://nico-ranking-custom-git-feat-vercel-conve-921a4d-yjsns-projects.vercel.app"
+NEXT_APP_URL = "YOUR_VERCEL_APP_URL"
 USE_PREVIEW = "false"  # "true" でプレビュー環境を使用
 # WORKER_AUTH_KEY should be set as a secret using: wrangler secret put WORKER_AUTH_KEY
 
 # Account settings
-account_id = "5984977746a3dfcd71415bed5c324eb1"
+account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
 
 # KV Namespaces
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "c49751cf8c27464aac68cf030b9e0713"
-preview_id = "c49751cf8c27464aac68cf030b9e0713"
+id = "YOUR_RATE_LIMIT_KV_NAMESPACE_ID"
+preview_id = "YOUR_RATE_LIMIT_KV_NAMESPACE_ID"
 
 [[kv_namespaces]]
 binding = "RANKING_DATA"
-id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
-preview_id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+id = "YOUR_RANKING_DATA_KV_NAMESPACE_ID"
+preview_id = "YOUR_RANKING_DATA_KV_NAMESPACE_ID"
 
 # Routes
 [[routes]]
@@ -67,7 +67,7 @@ command = ""
 name = "nico-ranking-api-gateway-preview"
 
 [env.preview.vars]
-NEXT_APP_URL = "https://nico-ranking-custom-git-feat-vercel-conve-921a4d-yjsns-projects.vercel.app"
+NEXT_APP_URL = "YOUR_VERCEL_PREVIEW_URL"
 # WORKER_AUTH_KEY should be set as a secret using: wrangler secret put WORKER_AUTH_KEY
 
 [[env.preview.routes]]
@@ -76,8 +76,8 @@ zone_name = "nico-rank.com"
 
 [[env.preview.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "c49751cf8c27464aac68cf030b9e0713"
+id = "YOUR_RATE_LIMIT_KV_NAMESPACE_ID"
 
 [[env.preview.kv_namespaces]]
 binding = "RANKING_DATA"
-id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+id = "YOUR_RANKING_DATA_KV_NAMESPACE_ID"
