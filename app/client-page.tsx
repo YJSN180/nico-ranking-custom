@@ -72,12 +72,12 @@ export default function ClientPage({
   // モバイル検出
   const isMobile = useMobileDetect()
   
-  // ストレージ管理の設定
-  const STORAGE_CONFIG = {
+  // ストレージ管理の設定（定数として定義）
+  const STORAGE_CONFIG = useMemo(() => ({
     MAX_KEYS: 5, // 最大保存キー数
     USE_SESSION_STORAGE: false, // sessionStorageを使用しない
     MAX_AGE_MS: 30 * 60 * 1000, // 30分
-  }
+  }), [])
   
   // ストレージのクリーンアップ（改善版）
   const cleanupOldStorage = useCallback(() => {
@@ -125,9 +125,9 @@ export default function ClientPage({
         sessionStorage.clear()
       }
     } catch (error) {
-      console.error('Storage cleanup error:', error)
+      // Storage cleanup error - silent fail
     }
-  }, [config])
+  }, [config, STORAGE_CONFIG.MAX_KEYS, STORAGE_CONFIG.MAX_AGE_MS, STORAGE_CONFIG.USE_SESSION_STORAGE])
   
   // リアルタイム統計更新を使用（3分ごとに自動更新 - メモリ負荷軽減）
   const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
@@ -302,7 +302,7 @@ export default function ClientPage({
 
         setDisplayCount(Math.min(targetCount, accumulatedDataLength))
       } catch (error) {
-        console.error('Failed to restore data:', error)
+        // Failed to restore data - silent fail
       } finally {
         setIsRestoring(false)
         setRestoreProgress(0)
@@ -346,7 +346,7 @@ export default function ClientPage({
           localStorage.removeItem(storageKey)
         }
       } catch (error) {
-        console.error('Failed to restore state:', error)
+        // Failed to restore state - silent fail
         localStorage.removeItem(storageKey)
       }
     }
@@ -639,7 +639,7 @@ export default function ClientPage({
                   return prev
                 })
               } catch (error) {
-                console.error('Failed to restore data:', error)
+                // Failed to restore data - silent fail
                 // エラー時も確実にリセット
                 setIsRestoring(false)
                 setRestoreProgress(0)
@@ -657,7 +657,7 @@ export default function ClientPage({
             
             restoreToPosition(targetCount)
               .catch(err => {
-                console.error('Restore failed:', err)
+                // Restore failed - silent fail
                 setIsRestoring(false)
                 setRestoreProgress(0)
               })
