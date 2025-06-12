@@ -19,6 +19,8 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: true
         run: npm ci
 
       - name: Type check
@@ -70,6 +72,8 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: true
         run: npm ci
 
       - name: Build application
@@ -93,6 +97,8 @@ jobs:
           node-version: '20'
           
       - name: Install dependencies
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: true
         run: npm ci
       
       - name: Run security audit
