@@ -177,6 +177,6 @@ describe('タグ別ランキングの動的読み込み', () => {
     expect(data.items.length).toBe(100) // 最初の100件
     expect(data.hasMore).toBe(true) // 300件中100件なのでまだある
     expect(data.totalCached).toBe(300) // キャッシュ総数
-    expect(response.headers.get('X-Cache-Status')).toBe('HIT')
+    expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
   })
 })

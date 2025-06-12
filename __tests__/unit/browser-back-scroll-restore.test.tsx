@@ -157,7 +157,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     expect(savedScrollPosition).toBe('5000')
 
     // URLにshowパラメータを付けて再レンダリング（ブラウザバックを模擬）
-    vi.mocked(vi.importMock('next/navigation')).useSearchParams.mockReturnValue(
+    const nextNav = await import('next/navigation')
+    vi.mocked(nextNav.useSearchParams).mockReturnValue(
       new URLSearchParams('show=200')
     )
     

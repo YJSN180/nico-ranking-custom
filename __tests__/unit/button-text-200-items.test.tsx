@@ -128,7 +128,7 @@ describe('200件表示時のボタンテキスト', () => {
   it('現在の実装では「もっと見る」と統一表示される', async () => {
     // 現在の実装では、ボタンテキストは常に「もっと見る」
     // ランク表示は不要と判断され、シンプルな表記に統一されている
-    const mockData = createMockData(100)
+    const mockData = createMockData(300) // もっと見るボタンが表示される十分なデータ
     
     render(
       <ClientPage 
@@ -138,6 +138,9 @@ describe('200件表示時のボタンテキスト', () => {
       />
     )
 
-    expect(screen.getByText('もっと見る')).toBeInTheDocument()
+    // 初期表示で100件表示されており、もっと見るボタンがある
+    await waitFor(() => {
+      expect(screen.getByText('もっと見る')).toBeInTheDocument()
+    })
   })
 })

@@ -4,6 +4,7 @@ import { POST } from '@/app/api/cron/fetch/route'
 import { kv } from '@/lib/simple-kv'
 import { scrapeRankingPage } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
+import { setRankingToKV } from '@/lib/cloudflare-kv'
 import type { RankingItem } from '@/types/ranking'
 
 // モック
@@ -20,6 +21,10 @@ vi.mock('@/lib/scraper', () => ({
 
 vi.mock('@/lib/ng-filter', () => ({
   filterRankingData: vi.fn()
+}))
+
+vi.mock('@/lib/cloudflare-kv', () => ({
+  setRankingToKV: vi.fn()
 }))
 
 // setTimeoutのモック（レート制限の待機をスキップ）
@@ -80,21 +85,25 @@ describe('Cron job with 300 items collection', () => {
     expect(response.status).toBe(200)
     expect(data.success).toBe(true)
 
-    // KVへの保存を確認（allジャンルの24h）
-    const savedCall = vi.mocked(kv.set).mock.calls.find(
-      call => call[0] === 'ranking-all-24h'
-    )
-
-    expect(savedCall).toBeDefined()
-    const savedData = savedCall![1] as { items: RankingItem[], popularTags: string[] }
+    // setRankingToKVが呼ばれたことを確認
+    expect(vi.mocked(setRankingToKV)).toHaveBeenCalled()
+    
+    // 保存されたデータを確認
+    const savedData = vi.mocked(setRankingToKV).mock.calls[0]?.[0]
+    expect(savedData).toBeDefined()
+    expect(savedData.genres).toBeDefined()
+    expect(savedData.genres.all).toBeDefined()
+    expect(savedData.genres.all['24h']).toBeDefined()
+    
+    const allGenre24h = savedData.genres.all['24h']
     
     // 300件保存されていることを確認
-    expect(savedData.items).toHaveLength(300)
-    expect(savedData.popularTags).toEqual(['タグ1', 'タグ2', 'タグ3'])
+    expect(allGenre24h.items).toHaveLength(300)
+    expect(allGenre24h.popularTags).toEqual(['タグ1', 'タグ2', 'タグ3'])
     
     // ランク番号が正しく振り直されているか確認
-    expect(savedData.items[0]?.rank).toBe(1)
-    expect(savedData.items[299]?.rank).toBe(300)
+    expect(allGenre24h.items[0]?.rank).toBe(1)
+    expect(allGenre24h.items[299]?.rank).toBe(300)
     
     // 4ページ分のデータ取得を確認（80件×3ページ + 60件×1ページ = 300件）
     const scraperCalls = vi.mocked(scrapeRankingPage).mock.calls.filter(
@@ -137,12 +146,19 @@ describe('Cron job with 300 items collection', () => {
     const response = await POST(request)
     expect(response.status).toBe(200)
 
-    // 200件のみ保存されることを確認
-    const savedCall = vi.mocked(kv.set).mock.calls.find(
-      call => call[0] === 'ranking-all-24h'
-    )
-    const savedData = savedCall![1] as { items: RankingItem[], popularTags: string[] }
+    // setRankingToKVが呼ばれたことを確認
+    expect(vi.mocked(setRankingToKV)).toHaveBeenCalled()
     
-    expect(savedData.items).toHaveLength(200)
+    // 保存されたデータを確認
+    const savedData = vi.mocked(setRankingToKV).mock.calls[0]?.[0]
+    expect(savedData).toBeDefined()
+    expect(savedData.genres).toBeDefined()
+    expect(savedData.genres.all).toBeDefined()
+    expect(savedData.genres.all['24h']).toBeDefined()
+    
+    const allGenre24h = savedData.genres.all['24h']
+    
+    // 200件のみ保存されることを確認
+    expect(allGenre24h.items).toHaveLength(200)
   }, 20000) // 20秒のタイムアウト
 })
