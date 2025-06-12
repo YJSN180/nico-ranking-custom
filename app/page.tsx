@@ -71,10 +71,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       registeredAt: item.registeredAt,
     })).filter(item => item.id && item.title)
     
-    // Cache the result for future requests
-    if (!tag && items.length > 0) {
-      await kv.set(`ranking-${genre}-${period}`, { items, popularTags }, { ex: 1800 }) // 30分キャッシュ
-    }
+    // Caching is now handled by Cloudflare KV in the scraper
     
     // NGフィルタリングを適用
     const filteredData = await filterRankingData({ items, popularTags })
