@@ -17,7 +17,7 @@ workers_dev = true
 
 # Environment variables
 [vars]
-NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+NEXT_APP_URL = "https://nico-ranking-custom-git-feat-vercel-conve-921a4d-yjsns-projects.vercel.app"
 USE_PREVIEW = "false"  # "true" でプレビュー環境を使用
 WORKER_AUTH_KEY = "5ff08bcd65bbdf9203024f698a6a106a4b22c1da646979342cc6d85439eb1747"
 
