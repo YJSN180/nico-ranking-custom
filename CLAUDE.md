@@ -68,7 +68,18 @@ This project uses a **hybrid deployment architecture** with clear separation of 
 - Only Workers should be deployed to Cloudflare
 - Main app deployment happens via Vercel
 
-If Cloudflare Pages builds are failing, this is expected and correct behavior.
+#### Cloudflare Pages Build Failures
+**Status**: ❌ Expected failures (can be ignored)
+
+The Cloudflare Pages builds will continue to fail because:
+1. This project is not designed for Cloudflare Pages
+2. The integration was likely set up for Workers but mistakenly includes Pages
+3. The failures do NOT affect the main application functionality
+
+**To completely resolve**: 
+- Disable Cloudflare Pages integration in the Cloudflare dashboard
+- Keep only Cloudflare Workers integration active
+- This requires access to the Cloudflare account settings
 
 ## Commands
 
