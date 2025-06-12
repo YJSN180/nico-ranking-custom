@@ -22,8 +22,8 @@ function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000
 }
 
 export function middleware(request: NextRequest) {
-  // Cloudflare Workers経由のアクセスチェック（本番環境のみ）
-  if (process.env.NODE_ENV === 'production' && !request.nextUrl.pathname.startsWith('/api/')) {
+  // Cloudflare Workers経由のアクセスチェック（本番・プレビュー環境）
+  if ((process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'preview') && !request.nextUrl.pathname.startsWith('/api/')) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
     const expectedKey = process.env.WORKER_AUTH_KEY
     const host = request.headers.get('host')
