@@ -107,6 +107,30 @@ To run a single test file:
 npx vitest run path/to/test.ts
 ```
 
+## Cloudflare Pages Configuration
+
+### ❌ Pages Deployment Disabled
+This project includes multiple safeguards to prevent accidental Cloudflare Pages deployment:
+
+1. **`.cfpagesignore`**: Ignores all files to force Pages build failures
+2. **`pages-build-blocker.js`**: Script that detects and blocks Pages environments
+3. **Build script integration**: Automatically runs the blocker before builds
+4. **Documentation**: `DISABLE_CLOUDFLARE_PAGES.md` provides detailed removal instructions
+
+**If Pages builds are still occurring:**
+- Check Cloudflare Dashboard → Pages for active projects
+- Delete any Pages projects connected to this repository
+- Verify that only Workers and KV services are configured
+
+### Correct Architecture
+```
+GitHub Repository
+├── Vercel (Next.js App) ← Primary deployment ✅
+├── Cloudflare Workers (API Gateway) ← Manual deployment ✅
+├── Cloudflare KV (Storage) ← Active ✅
+└── Cloudflare Pages ← DISABLED ❌
+```
+
 ## Architecture
 
 ### Data Flow

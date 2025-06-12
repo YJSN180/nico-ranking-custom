@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node pages-build-blocker.js && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
@@ -17,7 +17,9 @@
     "update:ranking-github": "npx tsx scripts/update-ranking-github-action.ts",
     "deploy:worker": "wrangler deploy",
     "dev:worker": "wrangler dev",
-    "tail:worker": "wrangler tail"
+    "tail:worker": "wrangler tail",
+    "block:pages": "node pages-build-blocker.js",
+    "info:architecture": "echo 'Deployment Architecture: Vercel (Main App) + Cloudflare Workers (API) + KV (Storage)'"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
