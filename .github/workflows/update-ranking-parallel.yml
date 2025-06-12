@@ -7,8 +7,74 @@ on:
   workflow_dispatch: # Allow manual trigger
   
 jobs:
+  # Step 0: Fetch NG list once to avoid rate limiting
+  fetch-ng-list:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Fetch NG List from KV
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+      run: |
+        node -e "
+        const { kv } = require('./lib/simple-kv');
+        
+        async function fetchNGList() {
+          try {
+            const [manual, derived] = await Promise.all([
+              kv.get('ng-list-manual').catch(() => null),
+              kv.get('ng-list-derived').catch(() => null)
+            ]);
+            
+            const ngList = {
+              videoIds: manual?.videoIds || [],
+              videoTitles: manual?.videoTitles || [],
+              authorIds: manual?.authorIds || [],
+              authorNames: manual?.authorNames || [],
+              derivedVideoIds: derived || []
+            };
+            
+            require('fs').writeFileSync('ng-list.json', JSON.stringify(ngList));
+            console.log('NG list fetched successfully');
+          } catch (error) {
+            console.error('Failed to fetch NG list:', error);
+            // Write empty NG list on error
+            require('fs').writeFileSync('ng-list.json', JSON.stringify({
+              videoIds: [],
+              videoTitles: [],
+              authorIds: [],
+              authorNames: [],
+              derivedVideoIds: []
+            }));
+          }
+        }
+        
+        fetchNGList();
+        "
+    
+    - name: Upload NG List
+      uses: actions/upload-artifact@v4
+      with:
+        name: ng-list
+        path: ng-list.json
+        retention-days: 1
+
   # Step 1: Fetch rankings in parallel groups
   fetch-rankings:
+    needs: fetch-ng-list
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,6 +96,12 @@ jobs:
     
     - name: Install dependencies
       run: npm ci
+    
+    - name: Download NG List
+      uses: actions/download-artifact@v4
+      with:
+        name: ng-list
+        path: ./
     
     - name: Fetch rankings for group ${{ matrix.group }}
       env:

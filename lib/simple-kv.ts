@@ -20,33 +20,57 @@ class SimpleKV {
       throw new Error('Cloudflare KV credentials not configured')
     }
 
-    try {
-      const response = await fetch(`${BASE_URL}/values/${encodeURIComponent(key)}`, {
-        headers: {
-          'Authorization': `Bearer ${CF_API_TOKEN}`,
-        },
-      })
-
-      if (response.status === 404) {
-        return null
-      }
-
-      if (!response.ok) {
-        throw new Error(`KV get failed: ${response.status}`)
-      }
-
-      const text = await response.text()
+    const maxRetries = 3
+    let attempt = 0
+    
+    while (attempt < maxRetries) {
       try {
-        return JSON.parse(text)
-      } catch {
-        return text as T
+        const response = await fetch(`${BASE_URL}/values/${encodeURIComponent(key)}`, {
+          headers: {
+            'Authorization': `Bearer ${CF_API_TOKEN}`,
+          },
+        })
+
+        if (response.status === 404) {
+          return null
+        }
+
+        if (response.status === 429) {
+          // Rate limited, wait with exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
+          console.warn(`KV rate limited, retrying in ${delay}ms...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          attempt++
+          continue
+        }
+
+        if (!response.ok) {
+          throw new Error(`KV get failed: ${response.status}`)
+        }
+
+        const text = await response.text()
+        try {
+          return JSON.parse(text)
+        } catch {
+          return text as T
+        }
+      } catch (error) {
+        if (attempt === maxRetries - 1) {
+          // Sanitize key for logging to prevent format string injection
+          const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
+          console.error('KV get error for key:', sanitizedKey, error)
+          return null
+        }
+        
+        // Retry on network errors
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
+        console.warn(`KV request failed, retrying in ${delay}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delay))
+        attempt++
       }
-    } catch (error) {
-      // Sanitize key for logging to prevent format string injection
-      const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
-      console.error('KV get error for key:', sanitizedKey, error)
-      return null
     }
+    
+    return null
   }
 
   /**

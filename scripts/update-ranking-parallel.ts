@@ -109,9 +109,22 @@ function convertThumbnailUrl(url: string): string {
   return url.replace(/\.M$/, '.L');
 }
 
-// Get NG list from Vercel KV - EXACTLY THE SAME AS ORIGINAL
+// Get NG list from artifact file (CI) or Vercel KV (fallback)
 async function getNGList(): Promise<NGList> {
   try {
+    // Check if NG list is available from artifact (in CI environment)
+    const ngListPath = './ng-list.json';
+    try {
+      await fs.access(ngListPath);
+      console.log('Loading NG list from artifact file');
+      const data = JSON.parse(await fs.readFile(ngListPath, 'utf-8'));
+      return data;
+    } catch {
+      // File doesn't exist, continue to KV fetch
+    }
+    
+    // Fallback to fetching from KV (for local development or manual runs)
+    console.log('Fetching NG list from KV');
     const [manual, derived] = await Promise.all([
       kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual'),
       kv.get<string[]>('ng-list-derived')

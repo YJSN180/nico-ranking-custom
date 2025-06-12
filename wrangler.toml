@@ -1,12 +1,13 @@
 # =============================================================================
-# Cloudflare Workers Configuration - API Gateway Only
+# Cloudflare Workers Configuration - API Gateway & Cron Jobs
 # =============================================================================
 # IMPORTANT: This project uses a hybrid deployment strategy:
 # - Main Next.js application: Deployed to Vercel
-# - API Gateway & Rate Limiting: Deployed to Cloudflare Workers (this config)
+# - API Gateway & Rate Limiting: Deployed to Cloudflare Workers
+# - Cron Jobs: Cloudflare Workers Cron for ranking updates
 # - Storage: Cloudflare KV
 # 
-# This wrangler.toml is ONLY for deploying the Workers API Gateway.
+# This wrangler.toml configures both API Gateway and Cron Workers.
 # The main application should NOT be deployed to Cloudflare Pages.
 # =============================================================================
 
@@ -81,3 +82,46 @@ id = "c49751cf8c27464aac68cf030b9e0713"
 [[env.preview.kv_namespaces]]
 binding = "RANKING_DATA"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+# =============================================================================
+# Cron Worker Configuration
+# =============================================================================
+
+# Cron Worker for fetching ranking data
+[env.cron]
+name = "nico-ranking-cron"
+main = "workers/cron-ranking-fetcher.ts"
+
+# Cron triggers - 10分ごとに実行
+[[env.cron.triggers]]
+crons = ["*/10 * * * *"]
+
+# Queue binding for async task processing
+[[env.cron.queues]]
+binding = "RANKING_QUEUE"
+queue = "ranking-tasks"
+
+# Durable Objects for coordination
+[[env.cron.durable_objects]]
+binding = "RANKING_PROCESSOR"
+class_name = "RankingProcessor"
+script_name = "workers/ranking-processor-durable-object"
+
+# Durable Object migrations
+[[env.cron.migrations]]
+tag = "v1"
+new_classes = ["RankingProcessor"]
+
+# KV namespaces for cron worker
+[[env.cron.kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[[env.cron.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "c49751cf8c27464aac68cf030b9e0713"
+
+# Environment variables for cron
+[env.cron.vars]
+# CRON_SECRET should be set as a secret
+# GITHUB_TOKEN for fallback notifications (optional)
