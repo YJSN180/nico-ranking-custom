@@ -32,7 +32,8 @@ class SimpleKV {
       }
 
       if (!response.ok) {
-        throw new Error(`KV get failed: ${response.status}`)
+        const errorText = await response.text().catch(() => 'Unknown error')
+        throw new Error(`KV get failed: ${response.status} - ${errorText}`)
       }
 
       const text = await response.text()
@@ -76,7 +77,8 @@ class SimpleKV {
     })
 
     if (!response.ok) {
-      throw new Error(`KV set failed: ${response.status}`)
+      const errorText = await response.text().catch(() => 'Unknown error')
+      throw new Error(`KV set failed: ${response.status} - ${errorText}`)
     }
   }
 
@@ -96,7 +98,8 @@ class SimpleKV {
     })
 
     if (!response.ok && response.status !== 404) {
-      throw new Error(`KV delete failed: ${response.status}`)
+      const errorText = await response.text().catch(() => 'Unknown error')
+      throw new Error(`KV delete failed: ${response.status} - ${errorText}`)
     }
   }
 

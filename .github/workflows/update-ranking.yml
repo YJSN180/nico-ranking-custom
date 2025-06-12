@@ -23,19 +23,70 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
+    - name: Verify environment variables
+      run: |
+        echo "Checking required environment variables..."
+        if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          echo "❌ CLOUDFLARE_ACCOUNT_ID is not set"
+          exit 1
+        else
+          echo "✅ CLOUDFLARE_ACCOUNT_ID is set (length: ${#CLOUDFLARE_ACCOUNT_ID})"
+        fi
+        
+        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
+          echo "❌ CLOUDFLARE_KV_NAMESPACE_ID is not set"
+          exit 1
+        else
+          echo "✅ CLOUDFLARE_KV_NAMESPACE_ID is set (length: ${#CLOUDFLARE_KV_NAMESPACE_ID})"
+        fi
+        
+        if [ -z "$CLOUDFLARE_KV_API_TOKEN" ]; then
+          echo "❌ CLOUDFLARE_KV_API_TOKEN is not set"
+          exit 1
+        else
+          echo "✅ CLOUDFLARE_KV_API_TOKEN is set (length: ${#CLOUDFLARE_KV_API_TOKEN})"
+        fi
+        
+        echo "All required environment variables are configured ✅"
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+    
+    - name: Test Cloudflare KV connectivity
+      run: |
+        echo "Testing Cloudflare KV API connectivity..."
+        curl -X GET "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/storage/kv/namespaces/$CLOUDFLARE_KV_NAMESPACE_ID" \
+          -H "Authorization: Bearer $CLOUDFLARE_KV_API_TOKEN" \
+          -H "Content-Type: application/json" \
+          --fail --silent --show-error || {
+            echo "❌ Failed to connect to Cloudflare KV API"
+            echo "Please verify the following secrets in GitHub repository settings:"
+            echo "  - CLOUDFLARE_ACCOUNT_ID: $CLOUDFLARE_ACCOUNT_ID"
+            echo "  - CLOUDFLARE_KV_NAMESPACE_ID: $CLOUDFLARE_KV_NAMESPACE_ID"
+            echo "  - CLOUDFLARE_KV_API_TOKEN: [hidden]"
+            exit 1
+          }
+        echo "✅ Cloudflare KV API connectivity confirmed"
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+    
     - name: Update ranking data
       env:
         # Cloudflare KV認証情報
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
-      run: npm run update:ranking-github
-    
-    - name: Check update status
       run: |
-        if [ $? -eq 0 ]; then
-          echo "Successfully updated all ranking data"
+        echo "Starting ranking data update..."
+        npm run update:ranking-github
+        exit_code=$?
+        if [ $exit_code -eq 0 ]; then
+          echo "✅ Successfully updated all ranking data"
         else
-          echo "Failed to update some ranking data"
-          exit 1
+          echo "❌ Failed to update ranking data (exit code: $exit_code)"
+          echo "Check the logs above for detailed error information"
+          exit $exit_code
         fi

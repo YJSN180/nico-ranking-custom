@@ -107,23 +107,35 @@ function convertThumbnailUrl(url: string): string {
   return url.replace(/\.M$/, '.L');
 }
 
-// Get NG list from Vercel KV
+// Get NG list from Cloudflare KV
 async function getNGList(): Promise<NGList> {
   try {
+    console.log('Fetching NG list from Cloudflare KV...');
+    
     const [manual, derived] = await Promise.all([
-      kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual'),
-      kv.get<string[]>('ng-list-derived')
+      kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual').catch(err => {
+        console.warn('Failed to fetch ng-list-manual:', err.message);
+        return null;
+      }),
+      kv.get<string[]>('ng-list-derived').catch(err => {
+        console.warn('Failed to fetch ng-list-derived:', err.message);
+        return null;
+      })
     ]);
     
-    return {
+    const ngList = {
       videoIds: manual?.videoIds || [],
       videoTitles: manual?.videoTitles || [],
       authorIds: manual?.authorIds || [],
       authorNames: manual?.authorNames || [],
       derivedVideoIds: derived || []
     };
+    
+    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.length} author names, ${ngList.derivedVideoIds.length} derived IDs`);
+    
+    return ngList;
   } catch (error) {
-    console.error('Failed to fetch NG list:', error);
+    console.warn('Failed to fetch NG list, proceeding with empty list:', error);
     return {
       videoIds: [],
       videoTitles: [],
@@ -298,10 +310,29 @@ async function main() {
   
   try {
     console.log('Starting ranking update...');
+    console.log(`Node.js version: ${process.version}`);
+    console.log(`Environment: GitHub Actions`);
+    
+    // Validate environment variables
+    const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+    const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN;
+
+    if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+      console.error('❌ Missing required environment variables:');
+      console.error(`  CLOUDFLARE_ACCOUNT_ID: ${CF_ACCOUNT_ID ? '✅' : '❌'}`);
+      console.error(`  CLOUDFLARE_KV_NAMESPACE_ID: ${CF_NAMESPACE_ID ? '✅' : '❌'}`);
+      console.error(`  CLOUDFLARE_KV_API_TOKEN: ${CF_API_TOKEN ? '✅' : '❌'}`);
+      throw new Error('Cloudflare KV credentials not configured');
+    }
+    
+    console.log('✅ All environment variables are configured');
+    console.log(`Account ID: ${CF_ACCOUNT_ID}`);
+    console.log(`Namespace ID: ${CF_NAMESPACE_ID}`);
+    console.log(`API Token: ${CF_API_TOKEN.substring(0, 8)}...`);
     
     // Get NG list
     const ngList = await getNGList();
-    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.length} titles`);
 
     // Data structure
     const rankingData: any = {
