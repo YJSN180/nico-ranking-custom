@@ -22,9 +22,9 @@ function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000
 }
 
 export function middleware(request: NextRequest) {
-  // Cloudflare Workers経由のアクセスチェック（本番・プレビュー環境）
-  // VERCEL_ENVを使用（production, preview, development）
-  const shouldCheckAuth = (process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview') && !request.nextUrl.pathname.startsWith('/api/')
+  // Cloudflare Workers経由のアクセスチェック（開発環境以外）
+  // development以外では認証チェックを行う（本番でも必要なので）
+  const shouldCheckAuth = process.env.VERCEL_ENV !== 'development' && !request.nextUrl.pathname.startsWith('/api/')
   
   if (shouldCheckAuth) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
@@ -32,19 +32,18 @@ export function middleware(request: NextRequest) {
     const host = request.headers.get('host')
     
     // デバッグ: 認証状況をログ出力
-    if (host?.includes('vercel.app')) {
-      console.log('Vercel access attempt:', {
-        NODE_ENV: process.env.NODE_ENV,
-        VERCEL_ENV: process.env.VERCEL_ENV,
-        shouldCheckAuth,
-        hasAuthKey: !!cfWorkerKey,
-        expectedKeySet: !!expectedKey,
-        authMatch: cfWorkerKey === expectedKey,
-        path: request.nextUrl.pathname,
-        authKeyPreview: cfWorkerKey ? cfWorkerKey.substring(0, 8) + '...' : 'none',
-        expectedKeyPreview: expectedKey ? expectedKey.substring(0, 8) + '...' : 'none'
-      })
-    }
+    console.log('Middleware auth check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      shouldCheckAuth,
+      path: request.nextUrl.pathname,
+      host: host,
+      hasAuthKey: !!cfWorkerKey,
+      expectedKeySet: !!expectedKey,
+      authMatch: cfWorkerKey === expectedKey,
+      authKeyPreview: cfWorkerKey ? cfWorkerKey.substring(0, 8) + '...' : 'none',
+      expectedKeyPreview: expectedKey ? expectedKey.substring(0, 8) + '...' : 'none'
+    })
     
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
     if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
