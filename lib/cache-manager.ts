@@ -399,7 +399,8 @@ export class CacheTagManager {
 }
 
 // 高度なキャッシュマネージャー
-export class AdvancedCacheManager extends CacheManager {
+export class AdvancedCacheManager {
+  private cacheManager = CacheManager.getInstance()
   private tagManager = new CacheTagManager()
   private warmupQueue: Set<string> = new Set()
   private coalesceMap: Map<string, Promise<any>> = new Map()
@@ -413,7 +414,7 @@ export class AdvancedCacheManager extends CacheManager {
     tags: string[],
     options: CacheOptions = {}
   ): void {
-    this.set(key, data, options)
+    this.cacheManager.set(key, data, options)
     this.tagManager.addTags(key, tags)
   }
   
@@ -422,7 +423,7 @@ export class AdvancedCacheManager extends CacheManager {
    */
   invalidateByTag(tag: string): string[] {
     const keys = this.tagManager.invalidateTag(tag)
-    keys.forEach(key => super.invalidate(key))
+    keys.forEach(key => this.cacheManager.invalidate(key))
     return keys
   }
   
@@ -431,7 +432,7 @@ export class AdvancedCacheManager extends CacheManager {
    */
   invalidateByTags(tags: string[]): string[] {
     const keys = this.tagManager.invalidateTags(tags)
-    keys.forEach(key => super.invalidate(key))
+    keys.forEach(key => this.cacheManager.invalidate(key))
     return keys
   }
   
@@ -450,7 +451,7 @@ export class AdvancedCacheManager extends CacheManager {
     
     // キャッシュチェック
     try {
-      const cached = await super.get(key)
+      const cached = await this.cacheManager.get<T>(key)
       if (cached.fromCache) {
         return cached
       }
@@ -464,7 +465,7 @@ export class AdvancedCacheManager extends CacheManager {
     
     try {
       const data = await promise
-      this.set(key, data)
+      this.cacheManager.set(key, data)
       return { data, stale: false, fromCache: false }
     } finally {
       this.coalesceMap.delete(key)
@@ -487,7 +488,7 @@ export class AdvancedCacheManager extends CacheManager {
       
       try {
         const data = await fetcher(key)
-        this.set(key, data)
+        this.cacheManager.set(key, data)
       } catch (error) {
         console.error(`Failed to warmup cache for key ${key}:`, error)
       } finally {
@@ -515,7 +516,7 @@ export class AdvancedCacheManager extends CacheManager {
       staleWhileRevalidate: tiers.origin || 60
     }
     
-    this.set(key, data, options)
+    this.cacheManager.set(key, data, options)
   }
   
   /**
@@ -523,14 +524,14 @@ export class AdvancedCacheManager extends CacheManager {
    */
   invalidate(key: string): string[] {
     this.tagManager.removeKey(key)
-    return super.invalidate(key)
+    return this.cacheManager.invalidate(key)
   }
   
   /**
    * クリア時にタグマネージャーもクリア
    */
   clear(): void {
-    super.clear()
+    this.cacheManager.clear()
     this.tagManager = new CacheTagManager()
     this.warmupQueue.clear()
     this.coalesceMap.clear()

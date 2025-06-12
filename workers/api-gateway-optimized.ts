@@ -1,4 +1,17 @@
-import type { KVNamespace, ExecutionContext, Request as WorkerRequest } from '@cloudflare/workers-types'
+// Type definitions for Workers - compatible with both environments  
+interface KVNamespace {
+  get(key: string): Promise<string | null>
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+  delete(key: string): Promise<void>
+  list(options?: { prefix?: string }): Promise<{ keys: Array<{ name: string }> }>
+}
+
+interface ExecutionContext {
+  waitUntil(promise: Promise<any>): void
+  passThroughOnException(): void
+}
+
+type WorkerRequest = Request
 
 interface Env {
   RATE_LIMIT: KVNamespace
@@ -161,7 +174,7 @@ async function handleStaticAsset(
   ctx: ExecutionContext,
   metrics: any
 ): Promise<Response> {
-  const cache = caches.default
+  const cache = (caches as any).default
   const cacheKey = new Request(request.url, request)
   
   // キャッシュから取得
@@ -210,7 +223,7 @@ async function handleCacheableApi(
   }
   
   // エッジキャッシュをチェック
-  const cache = caches.default
+  const cache = (caches as any).default
   const cachedResponse = await cache.match(request)
   if (cachedResponse) {
     metrics.cacheHit = true

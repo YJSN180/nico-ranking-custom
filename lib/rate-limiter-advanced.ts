@@ -1,4 +1,11 @@
-import type { KVNamespace } from '@cloudflare/workers-types'
+// Type definition for Workers KV - compatible with both environments
+interface KVNamespace {
+  get(key: string): Promise<string | null>
+  getWithMetadata<T = any>(key: string): Promise<{ value: string | null, metadata: T }>
+  put(key: string, value: string, options?: { expirationTtl?: number, metadata?: any }): Promise<void>
+  delete(key: string): Promise<void>
+  list(options?: { prefix?: string }): Promise<{ keys: Array<{ name: string }> }>
+}
 
 export interface RateLimitResult {
   allowed: boolean
@@ -163,7 +170,16 @@ export class SlidingWindowRateLimiter implements RateLimiter {
     
     // 過去のリクエストタイムスタンプを取得
     const timestampsStr = await this.kv.get(`sliding:${key}`)
-    let timestamps: number[] = timestampsStr ? JSON.parse(timestampsStr) : []
+    let timestamps: number[] = []
+    
+    if (timestampsStr) {
+      try {
+        const parsed = JSON.parse(timestampsStr)
+        timestamps = Array.isArray(parsed) ? parsed : []
+      } catch {
+        timestamps = []
+      }
+    }
     
     // 古いタイムスタンプを削除
     timestamps = timestamps.filter(ts => ts > windowStart)
@@ -172,7 +188,7 @@ export class SlidingWindowRateLimiter implements RateLimiter {
       return {
         allowed: false,
         remaining: 0,
-        reset: timestamps[0] + windowMs
+        reset: (timestamps[0] || now) + windowMs
       }
     }
     
