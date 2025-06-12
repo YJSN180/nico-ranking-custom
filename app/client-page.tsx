@@ -39,6 +39,9 @@ export default function ClientPage({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // 人気タグのキャッシュ（ジャンル/期間別）
+  const popularTagsCacheRef = useRef<Map<string, { tags: string[], timestamp: number }>>(new Map())
   // URLから初期表示件数を取得
   const initialDisplayCount = parseInt(searchParams.get('show') || '100', 10)
   const [displayCount, setDisplayCount] = useState(Math.min(Math.max(100, initialDisplayCount), 500)) // 初期表示
@@ -62,6 +65,7 @@ export default function ClientPage({
   const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
   const scrollPositionRef = useRef<number>(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const popularTagsAbortRef = useRef<AbortController | null>(null)
   
   // ユーザー設定の永続化
   const { updatePreferences } = useUserPreferences()
@@ -224,6 +228,15 @@ export default function ClientPage({
     // 5分ごとに定期的にクリーンアップ
     const interval = setInterval(() => {
       cleanupOldStorage()
+      
+      // 人気タグキャッシュのクリーンアップ（5分以上古いものを削除）
+      const now = Date.now()
+      const cacheEntries = Array.from(popularTagsCacheRef.current.entries())
+      for (const [key, value] of cacheEntries) {
+        if (now - value.timestamp > 5 * 60 * 1000) {
+          popularTagsCacheRef.current.delete(key)
+        }
+      }
     }, 5 * 60 * 1000)
     
     return () => clearInterval(interval)
@@ -432,11 +445,26 @@ export default function ClientPage({
           // 配列形式の場合、人気タグは別のuseEffectで動的に取得される
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
-          // APIレスポンスに人気タグが含まれている場合は更新（空配列も含む）
-          if ('popularTags' in data && Array.isArray(data.popularTags)) {
+          // APIレスポンスに人気タグが含まれている場合は更新
+          // 空配列の場合は更新せず、現在の人気タグを維持
+          if ('popularTags' in data && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
             setCurrentPopularTags(data.popularTags)
+            // キャッシュに保存（5分間有効）
+            const cacheKey = `${config.genre}-${config.period}`
+            popularTagsCacheRef.current.set(cacheKey, {
+              tags: data.popularTags,
+              timestamp: Date.now()
+            })
+          } else {
+            // APIレスポンスに人気タグがない、または空の場合はキャッシュから復元を試みる
+            const cacheKey = `${config.genre}-${config.period}`
+            const cached = popularTagsCacheRef.current.get(cacheKey)
+            if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) { // 5分以内
+              setCurrentPopularTags(cached.tags)
+            }
           }
-          // 人気タグがAPIレスポンスに含まれていない場合は、別のuseEffectで動的に取得される
+          // 人気タグがAPIレスポンスに含まれていない、または空配列の場合は、
+          // 別のuseEffectで動的に取得される
         } else {
           setRankingData([])
           // エラー時でも人気タグの動的取得は別のuseEffectで行われる
@@ -490,12 +518,35 @@ export default function ClientPage({
     const isInitialRender = config.genre === initialGenre && config.period === initialPeriod
     if (isInitialRender && popularTags.length > 0) {
       setCurrentPopularTags(popularTags)
+      // 初期タグもキャッシュに保存
+      const cacheKey = `${config.genre}-${config.period}`
+      popularTagsCacheRef.current.set(cacheKey, {
+        tags: popularTags,
+        timestamp: Date.now()
+      })
       return
     }
     
-    // ジャンルやperiodが変更された場合、APIレスポンスから人気タグが取得できなかった場合は
+    // メインのfetchRankingで人気タグが取得されなかった場合のみ、
     // 別途APIから取得を試みる
     async function updatePopularTags() {
+      // まずキャッシュをチェック
+      const cacheKey = `${config.genre}-${config.period}`
+      const cached = popularTagsCacheRef.current.get(cacheKey)
+      if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) { // 5分以内
+        setCurrentPopularTags(cached.tags)
+        return
+      }
+      
+      // 前回のリクエストをキャンセル
+      if (popularTagsAbortRef.current) {
+        popularTagsAbortRef.current.abort()
+      }
+      
+      // 新しいAbortControllerを作成
+      const controller = new AbortController()
+      popularTagsAbortRef.current = controller
+      
       try {
         // APIから人気タグを取得（クライアントサイドではKVに直接アクセスできないため）
         const params = new URLSearchParams({
@@ -503,33 +554,62 @@ export default function ClientPage({
           period: config.period
         })
         
-        const response = await fetch(`/api/ranking?${params}`)
+        const response = await fetch(`/api/ranking?${params}`, {
+          signal: controller.signal
+        })
+        
         if (response.ok) {
           const data = await response.json()
           
           // APIレスポンスに人気タグが含まれている場合は更新
           if (data && typeof data === 'object' && 'popularTags' in data && Array.isArray(data.popularTags)) {
-            setCurrentPopularTags(data.popularTags)
+            if (data.popularTags.length > 0) {
+              setCurrentPopularTags(data.popularTags)
+              // キャッシュに保存
+              const cacheKey = `${config.genre}-${config.period}`
+              popularTagsCacheRef.current.set(cacheKey, {
+                tags: data.popularTags,
+                timestamp: Date.now()
+              })
+            }
             return
           }
         }
         
-        // 取得できなかった場合は空配列
-        setCurrentPopularTags([])
-      } catch (error) {
-        // エラー時は空配列を設定
-        setCurrentPopularTags([])
+        // 取得できなかった場合は現在の人気タグを維持（空配列にしない）
+        // これにより、一時的な取得失敗で人気タグが消えることを防ぐ
+      } catch (error: any) {
+        // AbortErrorは無視
+        if (error.name !== 'AbortError') {
+          // エラー時も現在の人気タグを維持（空配列にしない）
+          console.error('Failed to update popular tags:', error)
+        }
       }
     }
     
     // ジャンルまたはperiodが変更された場合は必ず更新
     // 初回レンダリング時でもpropsに人気タグがない場合は取得を試みる
+    // ただし、メインのfetchRankingが実行中の場合は少し遅延させる
     if (config.genre !== initialGenre || 
         config.period !== initialPeriod || 
         (isInitialRender && popularTags.length === 0)) {
-      updatePopularTags()
+      // メインのfetchRankingの結果を待つため、少し遅延を入れる
+      const timeoutId = setTimeout(() => {
+        // currentPopularTagsが空配列の場合のみ更新を試みる
+        if (currentPopularTags.length === 0) {
+          updatePopularTags()
+        }
+      }, 500)
+      
+      return () => {
+        clearTimeout(timeoutId)
+        // クリーンアップ時にリクエストをキャンセル
+        if (popularTagsAbortRef.current) {
+          popularTagsAbortRef.current.abort()
+        }
+      }
     }
-  }, [config.genre, config.period, initialGenre, initialPeriod, popularTags])
+  }, [config.genre, config.period, initialGenre, initialPeriod, popularTags, currentPopularTags])
 
   // 動画クリック時にスクロール位置を保存
   const saveScrollPosition = useCallback(() => {
