@@ -17,7 +17,7 @@ workers_dev = true
 
 # Environment variables
 [vars]
-NEXT_APP_URL = "https://nico-ranking-custom-git-feat-vercel-conve-921a4d-yjsns-projects.vercel.app"
+NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 USE_PREVIEW = "false"  # "true" でプレビュー環境を使用
 # WORKER_AUTH_KEY should be set as a secret using: wrangler secret put WORKER_AUTH_KEY
 
@@ -67,7 +67,7 @@ command = ""
 name = "nico-ranking-api-gateway-preview"
 
 [env.preview.vars]
-NEXT_APP_URL = "https://nico-ranking-custom-git-feat-vercel-conve-921a4d-yjsns-projects.vercel.app"
+NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 # WORKER_AUTH_KEY should be set as a secret using: wrangler secret put WORKER_AUTH_KEY
 
 [[env.preview.routes]]

@@ -41,8 +41,8 @@ export function middleware(request: NextRequest) {
     willCheckAuth: false // because of the explicit false below
   })
   
-  // TEMPORARY: Completely disable auth check to confirm this is the issue
-  if (false) {
+  // Check auth for Cloudflare Workers
+  if (shouldCheckAuth) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
     const expectedKey = process.env.WORKER_AUTH_KEY
     const host = request.headers.get('host')
