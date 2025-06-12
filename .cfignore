@@ -1,0 +1,29 @@
+# Cloudflare Pages Ignore File
+# This project uses Vercel for the main Next.js app
+# Only Cloudflare Workers should be deployed to Cloudflare
+
+# Ignore the entire Next.js application
+*
+!workers/
+!wrangler.toml
+
+# Explicitly ignore Next.js specific files
+.next/
+node_modules/
+.env*
+app/
+components/
+hooks/
+lib/
+types/
+__tests__/
+coverage/
+package.json
+package-lock.json
+tsconfig.json
+next.config.mjs
+vercel.json
+
+# Only allow Workers-related files
+workers/**
+wrangler.toml

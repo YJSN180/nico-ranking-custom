@@ -36,6 +36,40 @@ role:あなたは天才プログラマーであり、コーディングに関す
    - 新しいトークンを環境変数に設定
    - 古いトークンは自動的に無効化される
 
+## 🏗️ DEPLOYMENT ARCHITECTURE
+
+### Hybrid Deployment Strategy
+
+This project uses a **hybrid deployment architecture** with clear separation of concerns:
+
+#### 🚀 Vercel (Main Application)
+- **Purpose**: Hosts the Next.js frontend application
+- **Domain**: `nico-ranking-custom-yjsns-projects.vercel.app`
+- **Configuration**: `vercel.json`, `next.config.mjs`
+- **Auto-deployment**: Triggered on push to `main` branch
+
+#### ⚡ Cloudflare Workers (API Gateway)
+- **Purpose**: API Gateway with rate limiting and DDoS protection
+- **Configuration**: `wrangler.toml`, `workers/` directory
+- **Manual deployment**: `npm run deploy:worker`
+- **Domain**: `nico-rank.com/*` (proxies to Vercel)
+
+#### 💾 Cloudflare KV (Storage)
+- **Purpose**: Caches ranking data and rate limiting
+- **Bindings**: `RANKING_DATA`, `RATE_LIMIT`
+- **Updated by**: GitHub Actions cron job every 10 minutes
+
+### ⚠️ IMPORTANT: Cloudflare Pages Configuration
+
+**Cloudflare Pages should NOT build this project.**
+
+- This is a Next.js app designed for Vercel
+- `.cfignore` file prevents Pages from building the app
+- Only Workers should be deployed to Cloudflare
+- Main app deployment happens via Vercel
+
+If Cloudflare Pages builds are failing, this is expected and correct behavior.
+
 ## Commands
 
 ### Development
