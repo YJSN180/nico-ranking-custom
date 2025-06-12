@@ -16,7 +16,13 @@ import type { RankingItem } from '../types/ranking'
 import { writeFileSync } from 'fs'
 
 // Priority genres (most accessed by users)
-const PRIORITY_GENRES: RankingGenre[] = ['all', 'game', 'anime', 'entertainment', 'other', 'technology', 'voicesynthesis']
+// 全ジャンルの人気タグ取得が必要なため、すべてのジャンルを処理
+const ALL_GENRES: RankingGenre[] = [
+  'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 
+  'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 
+  'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 
+  'sports', 'animal', 'other'
+]
 
 // All genres with priority ranking
 const ALL_GENRES_PRIORITY: Array<{ genre: RankingGenre; priority: 'high' | 'medium' | 'low' }> = [
@@ -350,11 +356,10 @@ async function fetchOptimizedRanking(
 
 // Batch processing logic
 function getBatchGenres(batchNumber: number, totalBatches: number): RankingGenre[] {
+  // 人気タグ取得のため、常にすべてのジャンルを処理
   const genresList = process.env.TARGET_GENRES ? 
     process.env.TARGET_GENRES.split(',').map(g => g.trim() as RankingGenre) :
-    process.env.FORCE_FULL_UPDATE === 'true' ? 
-      ALL_GENRES_PRIORITY.map(g => g.genre) :
-      PRIORITY_GENRES
+    ALL_GENRES
   
   const batchSize = Math.ceil(genresList.length / totalBatches)
   const startIndex = (batchNumber - 1) * batchSize
