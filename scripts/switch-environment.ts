@@ -72,7 +72,7 @@ async function deployProduction() {
   try {
     console.log('デプロイ中...')
     const { stdout } = await execAsync(
-      'export CLOUDFLARE_API_TOKEN=MveiaVjt0FKnbbKpKUB4uWPRCCsTb37gyby7nlrl && ' +
+      `export CLOUDFLARE_API_TOKEN=${process.env.CLOUDFLARE_API_TOKEN} && ` +
       'npx wrangler deploy --var USE_PREVIEW:false'
     )
     console.log('✅ 本番環境にデプロイしました！')
@@ -102,7 +102,7 @@ async function deployPreview() {
     
     // その後デプロイ
     const { stdout } = await execAsync(
-      'export CLOUDFLARE_API_TOKEN=MveiaVjt0FKnbbKpKUB4uWPRCCsTb37gyby7nlrl && ' +
+      `export CLOUDFLARE_API_TOKEN=${process.env.CLOUDFLARE_API_TOKEN} && ` +
       'npx wrangler deploy --var USE_PREVIEW:true'
     )
     
