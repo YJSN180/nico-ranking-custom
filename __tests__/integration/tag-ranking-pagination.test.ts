@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import * as scraperModule from '@/lib/scraper'
 import * as ngFilterModule from '@/lib/ng-filter'
 
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
     set: vi.fn(),

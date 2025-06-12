@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 import type { NGList } from '../types/ng-list'
 
 async function initializeNGList() {

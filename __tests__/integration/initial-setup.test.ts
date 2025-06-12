@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { scrapeRankingPage } from '@/lib/scraper'
 
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
     set: vi.fn(),

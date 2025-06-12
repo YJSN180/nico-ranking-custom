@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 
 async function checkKVDataCount() {
   console.log('=== KVに保存されているデータ件数を確認 ===\n')

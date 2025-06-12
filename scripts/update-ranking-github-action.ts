@@ -2,7 +2,7 @@
 import 'dotenv/config'
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 
 // All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [

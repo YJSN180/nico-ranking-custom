@@ -4,7 +4,7 @@
  * Vercel KVからCloudflare KVへのデータ移行スクリプト
  */
 
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 import { setRankingToKV, type KVRankingData } from '../lib/cloudflare-kv'
 import { CACHED_GENRES } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'

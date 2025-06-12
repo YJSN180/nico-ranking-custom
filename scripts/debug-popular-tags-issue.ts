@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 // 人気タグが「すべて」しか表示されない問題を調査
 
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 require('dotenv').config()

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/cron/fetch/route'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { scrapeRankingPage } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 import type { RankingItem } from '@/types/ranking'
 
 // モック
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     set: vi.fn(),
     get: vi.fn()

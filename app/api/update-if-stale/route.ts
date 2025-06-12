@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 

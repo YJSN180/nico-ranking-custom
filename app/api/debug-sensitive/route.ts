@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 
 export const runtime = 'nodejs'
 

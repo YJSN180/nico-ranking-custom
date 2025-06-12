@@ -1,6 +1,6 @@
 // GitHub Actionsで実行するランキング取得スクリプト
 
-const { kv } = require('@vercel/kv')
+const { kv } = require('../lib/simple-kv.cjs')
 
 // 人気タグをKVに保存する関数
 async function savePopularTags(genre, tags) {

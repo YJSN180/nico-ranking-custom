@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import type { RankingItem } from '@/types/ranking'
 import type { RankingGenre } from '@/types/ranking-config'
 

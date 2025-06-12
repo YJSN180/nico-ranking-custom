@@ -1,6 +1,6 @@
 // Analyze the impact of hybrid caching strategy
 
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 
 interface CacheAnalysis {
   currentStorage: {

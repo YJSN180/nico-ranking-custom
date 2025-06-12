@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 import { scrapeRankingPage } from '../lib/scraper'
 import { filterRankingData } from '../lib/ng-filter'
 import type { RankingItem } from '../types/ranking'

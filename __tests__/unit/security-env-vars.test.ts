@@ -33,7 +33,7 @@ describe('Security: Environment Variables', () => {
       process.env.KV_REST_API_TOKEN = 'mock-token'
       
       // KVモック
-      vi.mock('@vercel/kv', () => ({
+      vi.mock('@/lib/simple-kv', () => ({
         kv: {
           get: vi.fn().mockResolvedValue(null),
           set: vi.fn().mockResolvedValue('OK')
