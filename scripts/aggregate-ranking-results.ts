@@ -3,7 +3,7 @@ import 'dotenv/config'
 import fs from 'fs/promises'
 import path from 'path'
 
-// Write to Cloudflare KV via REST API - EXACTLY THE SAME AS ORIGINAL
+// Write to Cloudflare KV via REST API with retry logic
 async function writeToCloudflareKV(data: any): Promise<void> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
@@ -20,18 +20,45 @@ async function writeToCloudflareKV(data: any): Promise<void> {
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
 
-  const response = await fetch(url, {
-    method: "PUT",
-    headers: {
-      "Authorization": `Bearer ${CF_API_TOKEN}`,
-      "Content-Type": "application/octet-stream",
-    },
-    body: compressed,
-  });
+  const maxRetries = 3;
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${CF_API_TOKEN}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: compressed,
+      });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Cloudflare KV write failed: ${response.status} - ${error}`);
+      if (response.status === 429) {
+        // Rate limited, wait with exponential backoff
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+        console.log(`KV rate limited, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Cloudflare KV write failed: ${response.status} - ${error}`);
+      }
+      
+      // Success, break out of retry loop
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries - 1) {
+        throw error;
+      }
+      // Retry on other errors too
+      const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+      console.log(`KV write failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 
   // Set metadata
