@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 import path from 'path'
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 import { scrapeRankingPage } from '../lib/scraper'
 import { filterRankingData, getNGList } from '../lib/ng-filter'
 import type { RankingItem } from '../types/ranking'
@@ -12,11 +12,15 @@ async function testSingleGenreUpdate() {
   console.log('=== 単一ジャンルの更新テスト（gameジャンル） ===\n')
   
   // 環境変数の確認
-  const hasKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
-  console.log(`KV環境変数: ${hasKV ? '✅ 設定済み' : '❌ 未設定'}\n`)
+  const hasKV = !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN)
+  console.log(`Cloudflare KV環境変数: ${hasKV ? '✅ 設定済み' : '❌ 未設定'}\n`)
   
   if (!hasKV) {
-    console.error('KV環境変数が設定されていません。')
+    console.error('Cloudflare KV環境変数が設定されていません。')
+    console.error('以下の環境変数を設定してください:')
+    console.error('  - CLOUDFLARE_ACCOUNT_ID')
+    console.error('  - CLOUDFLARE_KV_NAMESPACE_ID')
+    console.error('  - CLOUDFLARE_KV_API_TOKEN')
     return
   }
   

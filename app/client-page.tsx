@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
@@ -9,7 +9,6 @@ import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
-import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -40,6 +39,9 @@ export default function ClientPage({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // 人気タグのキャッシュ（ジャンル/期間別）
+  const popularTagsCacheRef = useRef<Map<string, { tags: string[], timestamp: number }>>(new Map())
   // URLから初期表示件数を取得
   const initialDisplayCount = parseInt(searchParams.get('show') || '100', 10)
   const [displayCount, setDisplayCount] = useState(Math.min(Math.max(100, initialDisplayCount), 500)) // 初期表示
@@ -63,6 +65,7 @@ export default function ClientPage({
   const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
   const scrollPositionRef = useRef<number>(0)
   const abortControllerRef = useRef<AbortController | null>(null)
+  const popularTagsAbortRef = useRef<AbortController | null>(null)
   
   // ユーザー設定の永続化
   const { updatePreferences } = useUserPreferences()
@@ -73,66 +76,69 @@ export default function ClientPage({
   // モバイル検出
   const isMobile = useMobileDetect()
   
-  // ストレージのクリーンアップ
+  // ストレージ管理の設定（定数として定義）
+  const STORAGE_CONFIG = useMemo(() => ({
+    MAX_KEYS: 5, // 最大保存キー数
+    USE_SESSION_STORAGE: false, // sessionStorageを使用しない
+    MAX_AGE_MS: 30 * 60 * 1000, // 30分
+  }), [])
+  
+  // ストレージのクリーンアップ（改善版）
   const cleanupOldStorage = useCallback(() => {
     try {
       const now = Date.now()
-      const thirtyMinutesAgo = now - 30 * 60 * 1000 // 30分前
       const currentKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
       
       // localStorageのクリーンアップ
-      const keysToRemove: string[] = []
-      const allKeys: Array<{ key: string; timestamp: number }> = []
+      const rankingKeys: Array<{ key: string; timestamp: number }> = []
       
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
         if (key?.startsWith('ranking-state-')) {
           try {
             const data = JSON.parse(localStorage.getItem(key) || '{}')
-            if (key === currentKey) {
-              // 現在のキーはスキップ
-              continue
-            }
-            
-            allKeys.push({ key, timestamp: data.timestamp || 0 })
-            
-            // 30分以上古いデータを削除対象に
-            if (!data.timestamp || data.timestamp < thirtyMinutesAgo) {
-              keysToRemove.push(key)
-            }
+            rankingKeys.push({ key, timestamp: data.timestamp || 0 })
           } catch {
-            // パースエラーの場合も削除
-            keysToRemove.push(key)
+            // パースエラーのキーは即削除
+            localStorage.removeItem(key)
           }
         }
       }
       
-      // 10個以上のキーがある場合は、古い順に削除（最新5個を残す）
-      if (allKeys.length > 5) {
-        allKeys.sort((a, b) => b.timestamp - a.timestamp)
-        const keysToKeep = allKeys.slice(0, 5).map(item => item.key)
-        allKeys.forEach(item => {
-          if (!keysToKeep.includes(item.key) && !keysToRemove.includes(item.key)) {
-            keysToRemove.push(item.key)
-          }
-        })
-      }
+      // 現在のキーを除いて、古い順にソート
+      const otherKeys = rankingKeys
+        .filter(item => item.key !== currentKey)
+        .sort((a, b) => b.timestamp - a.timestamp)
+      
+      // 古いキーを削除（MAX_KEYS - 1個を超える分）
+      const keysToRemove = otherKeys.slice(STORAGE_CONFIG.MAX_KEYS - 1)
+      
+      // 30分以上古いキーも削除対象に追加
+      otherKeys.forEach(item => {
+        if (now - item.timestamp > STORAGE_CONFIG.MAX_AGE_MS && 
+            !keysToRemove.find(k => k.key === item.key)) {
+          keysToRemove.push(item)
+        }
+      })
       
       // 一括削除
-      keysToRemove.forEach(key => localStorage.removeItem(key))
+      keysToRemove.forEach(item => localStorage.removeItem(item.key))
       
-      // sessionStorageもクリア
-      sessionStorage.clear()
+      // sessionStorageは使用しない（クリアのみ）
+      if (!STORAGE_CONFIG.USE_SESSION_STORAGE) {
+        sessionStorage.clear()
+      }
     } catch (error) {
-      // エラーは静かに無視
+      // Storage cleanup error - silent fail
     }
-  }, [config])
+  }, [config, STORAGE_CONFIG.MAX_KEYS, STORAGE_CONFIG.MAX_AGE_MS, STORAGE_CONFIG.USE_SESSION_STORAGE])
   
-  // リアルタイム統計更新を使用（1分ごとに自動更新）
+  // リアルタイム統計更新を使用（3分ごとに自動更新 - メモリ負荷軽減）
+  const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
     rankingData,
     true, // 常に有効
-    60000 // 1分ごと
+    REALTIME_UPDATE_INTERVAL
   )
   
   // URLの更新（履歴を汚さない）
@@ -147,79 +153,36 @@ export default function ClientPage({
     window.history.replaceState({}, '', newURL)
   }, [searchParams])
 
-  // sessionStorageとlocalStorageから状態を復元
+  // 動画ページから戻った時のみスクロール位置を復元
   useEffect(() => {
-    const storageKey = `ranking-state-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+    // performance.navigationでブラウザバックを検出
+    const isBackNavigation = window.performance && 
+      window.performance.navigation && 
+      window.performance.navigation.type === 2;
     
-    // まずsessionStorageを確認
-    let savedState = sessionStorage.getItem(storageKey)
-    
-    // sessionStorageになければlocalStorageを確認（外部サイトから戻った場合用）
-    if (!savedState) {
-      savedState = localStorage.getItem(storageKey)
-      // localStorageから復元した場合は、sessionStorageにもコピー
-      if (savedState) {
-        sessionStorage.setItem(storageKey, savedState)
-      }
+    // URLのshowパラメータから表示件数を復元
+    const urlDisplayCount = parseInt(searchParams.get('show') || '100', 10)
+    if (urlDisplayCount > 100 && urlDisplayCount <= 500) {
+      setDisplayCount(urlDisplayCount)
     }
     
-    if (savedState) {
-      try {
-        const state = JSON.parse(savedState)
-        // 1時間以内のデータのみ復元（古いデータは使わない）
-        if (state.timestamp && Date.now() - state.timestamp < 3600000) {
-          // 新しいデータ構造（dataVersion = 1, 2, 3）の場合
-          if (state.dataVersion === 1 || state.dataVersion === 2 || state.dataVersion === 3) {
-            // 表示設定のみ復元（データは初期データを使用）
-            setDisplayCount(state.displayCount || 100)
-            setCurrentPage(state.currentPage || 1)
-            setHasMore(state.hasMore ?? true)
-            
-            // スクロール位置を保存してフラグを立てる
-            scrollPositionRef.current = state.scrollPosition || 0
-            setShouldRestoreScroll(true)
-          } else if (state.items && state.items.length > 0) {
-            // 旧データ構造（後方互換性のため）
-            setRankingData(state.items)
-            setDisplayCount(state.displayCount || 100)
-            setCurrentPage(state.currentPage || 1)
-            // hasMoreの復元: 明示的にfalseの場合のみfalse、それ以外はデータ長で判断
-            if (state.hasMore === false) {
-              setHasMore(false)
-            } else if (initialTag) {
-              // タグ別ランキングの場合は、データ長で判断
-              setHasMore(state.items.length >= 100)
-            } else {
-              setHasMore(true)
-            }
-            
-            // スクロール位置を保存してフラグを立てる
-            scrollPositionRef.current = state.scrollPosition || 0
-            setShouldRestoreScroll(true)
-          }
-        } else {
-          // 古いデータは削除
-          localStorage.removeItem(storageKey)
-        }
-      } catch (e) {
-        // エラーは無視
-      }
-    }
-    
-    // 復元が完了したら、一度だけクリーンアップ
-    // （次回の復元で古いデータを使わないように）
-    return () => {
-      // コンポーネントがアンマウントされる時ではなく、
-      // 復元が成功した後に削除するためのフラグを設定
-      if (savedState && shouldRestoreScroll) {
-        // 少し遅延を入れて、復元処理が完了してから削除
+    // ブラウザバックの場合のみスクロール位置を復元
+    if (isBackNavigation) {
+      const storageKey = `ranking-scroll-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
+      const savedScrollPosition = sessionStorage.getItem(storageKey)
+      
+      if (savedScrollPosition) {
+        const scrollPosition = parseInt(savedScrollPosition, 10)
+        scrollPositionRef.current = scrollPosition
+        setShouldRestoreScroll(true)
+        
+        // 復元後は削除
         setTimeout(() => {
           sessionStorage.removeItem(storageKey)
-          // localStorageは1時間の有効期限があるので残しておく
         }, 1000)
       }
     }
-  }, [initialGenre, initialPeriod, initialTag, shouldRestoreScroll])
+  }, [initialGenre, initialPeriod, initialTag, searchParams])
   
   // DOM更新後にスクロール位置を復元
   useEffect(() => {
@@ -265,6 +228,15 @@ export default function ClientPage({
     // 5分ごとに定期的にクリーンアップ
     const interval = setInterval(() => {
       cleanupOldStorage()
+      
+      // 人気タグキャッシュのクリーンアップ（5分以上古いものを削除）
+      const now = Date.now()
+      const cacheEntries = Array.from(popularTagsCacheRef.current.entries())
+      for (const [key, value] of cacheEntries) {
+        if (now - value.timestamp > 5 * 60 * 1000) {
+          popularTagsCacheRef.current.delete(key)
+        }
+      }
     }, 5 * 60 * 1000)
     
     return () => clearInterval(interval)
@@ -343,7 +315,7 @@ export default function ClientPage({
 
         setDisplayCount(Math.min(targetCount, accumulatedDataLength))
       } catch (error) {
-        console.error('Failed to restore data:', error)
+        // Failed to restore data - silent fail
       } finally {
         setIsRestoring(false)
         setRestoreProgress(0)
@@ -356,6 +328,42 @@ export default function ClientPage({
       restoreToPosition(targetCount)
     }
   }, [initialDisplayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+
+  // 外部サイトから戻った時の状態復元
+  useEffect(() => {
+    const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
+    const savedState = localStorage.getItem(storageKey)
+    
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState)
+        const now = Date.now()
+        
+        // 1時間以内のデータのみ復元
+        if (state.timestamp && now - state.timestamp < 60 * 60 * 1000) {
+          // 保存されたデータを復元
+          if (state.items && Array.isArray(state.items) && state.items.length > 0) {
+            setRankingData(state.items)
+            setDisplayCount(state.displayCount || state.items.length)
+            setCurrentPage(state.currentPage || Math.ceil(state.items.length / 100))
+            setHasMore(state.hasMore ?? true)
+            
+            // スクロール位置の復元
+            if (state.scrollPosition && state.scrollPosition > 0) {
+              scrollPositionRef.current = state.scrollPosition
+              setShouldRestoreScroll(true)
+            }
+          }
+        } else {
+          // 古いデータは削除
+          localStorage.removeItem(storageKey)
+        }
+      } catch (error) {
+        // Failed to restore state - silent fail
+        localStorage.removeItem(storageKey)
+      }
+    }
+  }, [config.genre, config.period, config.tag])
   
   // initialDataが変更されたときに状態をリセット
   // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
@@ -434,21 +442,32 @@ export default function ClientPage({
         // APIがオブジェクト形式（{ items, popularTags }）または配列形式を返す可能性がある
         if (Array.isArray(data)) {
           setRankingData(data)
-          // タグ選択時は人気タグを更新しない
-          if (previousGenre !== config.genre || !config.tag) {
-            setCurrentPopularTags([])
-          }
+          // 配列形式の場合、人気タグは別のuseEffectで動的に取得される
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
-          // ジャンルが変更された場合、またはタグが選択されていない場合のみ人気タグを更新
-          if (previousGenre !== config.genre || !config.tag) {
-            setCurrentPopularTags(data.popularTags || [])
+          // APIレスポンスに人気タグが含まれている場合は更新
+          // 空配列の場合は更新せず、現在の人気タグを維持
+          if ('popularTags' in data && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
+            setCurrentPopularTags(data.popularTags)
+            // キャッシュに保存（5分間有効）
+            const cacheKey = `${config.genre}-${config.period}`
+            popularTagsCacheRef.current.set(cacheKey, {
+              tags: data.popularTags,
+              timestamp: Date.now()
+            })
+          } else {
+            // APIレスポンスに人気タグがない、または空の場合はキャッシュから復元を試みる
+            const cacheKey = `${config.genre}-${config.period}`
+            const cached = popularTagsCacheRef.current.get(cacheKey)
+            if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) { // 5分以内
+              setCurrentPopularTags(cached.tags)
+            }
           }
+          // 人気タグがAPIレスポンスに含まれていない、または空配列の場合は、
+          // 別のuseEffectで動的に取得される
         } else {
           setRankingData([])
-          if (previousGenre !== config.genre || !config.tag) {
-            setCurrentPopularTags([])
-          }
+          // エラー時でも人気タグの動的取得は別のuseEffectで行われる
         }
         
         // ジャンルを記録
@@ -495,118 +514,123 @@ export default function ClientPage({
 
   // ジャンルやperiod変更時に人気タグを動的に更新
   useEffect(() => {
-    // 初回レンダリング時はスキップ（propsの値を使用）
-    if (config.genre === initialGenre && config.period === initialPeriod) {
+    // 初回レンダリング時でpropsに人気タグがある場合はそれを使用
+    const isInitialRender = config.genre === initialGenre && config.period === initialPeriod
+    if (isInitialRender && popularTags.length > 0) {
+      setCurrentPopularTags(popularTags)
+      // 初期タグもキャッシュに保存
+      const cacheKey = `${config.genre}-${config.period}`
+      popularTagsCacheRef.current.set(cacheKey, {
+        tags: popularTags,
+        timestamp: Date.now()
+      })
       return
     }
     
+    // メインのfetchRankingで人気タグが取得されなかった場合のみ、
+    // 別途APIから取得を試みる
     async function updatePopularTags() {
-      if (config.genre !== 'all') {
-        try {
-          const tags = await getPopularTags(config.genre, config.period)
-          setCurrentPopularTags(tags)
-        } catch (error) {
-          // エラー時は空配列を設定
-          setCurrentPopularTags([])
-        }
-      } else {
-        setCurrentPopularTags([])
-      }
-    }
-    
-    updatePopularTags()
-  }, [config.genre, config.period, initialGenre, initialPeriod])
-
-  // localStorageに状態を保存（sessionStorageは使用しない）
-  const saveStateToStorage = useCallback(() => {
-    try {
-      const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
-      
-      // スクロール位置と表示設定のみを保存（IDリストは保存しない）
-      const lightState = {
-        displayCount,
-        currentPage,
-        hasMore,
-        scrollPosition: window.scrollY,
-        timestamp: Date.now(),
-        dataVersion: 3 // データ構造のバージョンを更新
-      }
-      
-      const stateString = JSON.stringify(lightState)
-      
-      // サイズチェック（5KB以下に制限）
-      if (stateString.length > 5 * 1024) {
+      // まずキャッシュをチェック
+      const cacheKey = `${config.genre}-${config.period}`
+      const cached = popularTagsCacheRef.current.get(cacheKey)
+      if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) { // 5分以内
+        setCurrentPopularTags(cached.tags)
         return
       }
       
-      // localStorageのみに保存
-      localStorage.setItem(storageKey, stateString)
+      // 前回のリクエストをキャンセル
+      if (popularTagsAbortRef.current) {
+        popularTagsAbortRef.current.abort()
+      }
       
-      // 保存成功後、古いデータをクリーンアップ（非同期で実行）
-      setTimeout(() => cleanupOldStorage(), 0)
-    } catch (error) {
-      // QuotaExceededErrorの場合は、古いデータを削除してリトライ
-      if (error instanceof Error && error.name === 'QuotaExceededError') {
-        try {
-          cleanupOldStorage()
-          // 再度保存を試みる
-          const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
-          localStorage.setItem(storageKey, JSON.stringify({
-            displayCount,
-            currentPage,
-            hasMore,
-            scrollPosition: window.scrollY,
-            timestamp: Date.now(),
-            dataVersion: 3
-          }))
-        } catch {
-          // それでも失敗した場合は諦める
+      // 新しいAbortControllerを作成
+      const controller = new AbortController()
+      popularTagsAbortRef.current = controller
+      
+      try {
+        // APIから人気タグを取得（クライアントサイドではKVに直接アクセスできないため）
+        const params = new URLSearchParams({
+          genre: config.genre,
+          period: config.period
+        })
+        
+        const response = await fetch(`/api/ranking?${params}`, {
+          signal: controller.signal
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          
+          // APIレスポンスに人気タグが含まれている場合は更新
+          if (data && typeof data === 'object' && 'popularTags' in data && Array.isArray(data.popularTags)) {
+            if (data.popularTags.length > 0) {
+              setCurrentPopularTags(data.popularTags)
+              // キャッシュに保存
+              const cacheKey = `${config.genre}-${config.period}`
+              popularTagsCacheRef.current.set(cacheKey, {
+                tags: data.popularTags,
+                timestamp: Date.now()
+              })
+            }
+            return
+          }
+        }
+        
+        // 取得できなかった場合は現在の人気タグを維持（空配列にしない）
+        // これにより、一時的な取得失敗で人気タグが消えることを防ぐ
+      } catch (error: any) {
+        // AbortErrorは無視
+        if (error.name !== 'AbortError') {
+          // エラー時も現在の人気タグを維持（空配列にしない）
+          console.error('Failed to update popular tags:', error)
         }
       }
     }
-  }, [config, displayCount, currentPage, hasMore, cleanupOldStorage])
-
-  // スクロール時に状態を保存（デバウンス付き、より制限的に）
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout
-    let lastSaveTime = 0
     
-    const handleScroll = () => {
-      clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => {
-        const now = Date.now()
-        const timeSinceLastSave = now - lastSaveTime
-        const scrollDiff = Math.abs(window.scrollY - (scrollPositionRef.current || 0))
-        
-        // 前回の保存から5秒以上経過かつ500px以上スクロールした場合のみ保存
-        if (timeSinceLastSave > 5000 && scrollDiff > 500) {
-          scrollPositionRef.current = window.scrollY
-          lastSaveTime = now
-          saveStateToStorage()
+    // ジャンルまたはperiodが変更された場合は必ず更新
+    // 初回レンダリング時でもpropsに人気タグがない場合は取得を試みる
+    // ただし、メインのfetchRankingが実行中の場合は少し遅延させる
+    if (config.genre !== initialGenre || 
+        config.period !== initialPeriod || 
+        (isInitialRender && popularTags.length === 0)) {
+      // メインのfetchRankingの結果を待つため、少し遅延を入れる
+      const timeoutId = setTimeout(() => {
+        // currentPopularTagsが空配列の場合のみ更新を試みる
+        if (currentPopularTags.length === 0) {
+          updatePopularTags()
         }
-      }, 2000) // 2秒のデバウンス
+      }, 500)
+      
+      return () => {
+        clearTimeout(timeoutId)
+        // クリーンアップ時にリクエストをキャンセル
+        if (popularTagsAbortRef.current) {
+          popularTagsAbortRef.current.abort()
+        }
+      }
     }
-    
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => {
-      window.removeEventListener('scroll', handleScroll)
-      clearTimeout(timeoutId)
-    }
-  }, [saveStateToStorage])
+  }, [config.genre, config.period, initialGenre, initialPeriod, popularTags, currentPopularTags])
+
+  // 動画クリック時にスクロール位置を保存
+  const saveScrollPosition = useCallback(() => {
+    const storageKey = `ranking-scroll-${config.genre}-${config.period}-${config.tag || 'none'}`
+    sessionStorage.setItem(storageKey, String(window.scrollY))
+  }, [config])
+
+  // スクロール時の状態保存は削除（動画クリック時のみ保存するため）
 
   // ページ離脱時やリンククリック時に状態を保存
   useEffect(() => {
-    // ブラウザのデフォルトのスクロール復元を無効化
-    if ('scrollRestoration' in window.history) {
-      window.history.scrollRestoration = 'manual'
-    }
+    // scrollRestorationはデフォルトのautoのままにする
+    // 必要な時だけ一時的にmanualに設定する
     
     const handleBeforeUnload = () => {
-      saveStateToStorage()
+      // ページ離脱時は何もしない（スクロール位置は保存しない）
     }
     
     const handleSaveRankingState = () => {
-      saveStateToStorage()
+      // 動画クリック時のみスクロール位置を保存
+      saveScrollPosition()
     }
     
     // ブラウザの戻るボタン検知
@@ -695,7 +719,7 @@ export default function ClientPage({
                   return prev
                 })
               } catch (error) {
-                console.error('Failed to restore data:', error)
+                // Failed to restore data - silent fail
                 // エラー時も確実にリセット
                 setIsRestoring(false)
                 setRestoreProgress(0)
@@ -706,11 +730,23 @@ export default function ClientPage({
             }
             
             // 非同期で実行（メインスレッドをブロックしない）
-            restoreToPosition(targetCount).catch(err => {
-              console.error('Restore failed:', err)
-              setIsRestoring(false)
-              setRestoreProgress(0)
-            })
+            // スクロール復元の前だけ一時的にmanualに設定
+            if ('scrollRestoration' in window.history) {
+              window.history.scrollRestoration = 'manual'
+            }
+            
+            restoreToPosition(targetCount)
+              .catch(err => {
+                // Restore failed - silent fail
+                setIsRestoring(false)
+                setRestoreProgress(0)
+              })
+              .finally(() => {
+                // 復元処理が完了したらautoに戻す
+                if ('scrollRestoration' in window.history) {
+                  window.history.scrollRestoration = 'auto'
+                }
+              })
           } else {
             // データが十分ある場合は表示件数を更新するだけ
             setDisplayCount(Math.min(targetCount, rankingData.length))
@@ -731,12 +767,12 @@ export default function ClientPage({
       window.removeEventListener('saveRankingState', handleSaveRankingState)
       window.removeEventListener('popstate', handlePopState)
       
-      // スクロール復元を元に戻す
+      // クリーンアップ時にも念のためautoに戻す
       if ('scrollRestoration' in window.history) {
         window.history.scrollRestoration = 'auto'
       }
     }
-  }, [saveStateToStorage, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+  }, [saveScrollPosition, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
   const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
@@ -822,8 +858,7 @@ export default function ClientPage({
         // URLを更新
         updateURL(newDisplayCount)
         
-        // 状態を保存
-        saveStateToStorage()
+        // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
@@ -845,13 +880,20 @@ export default function ClientPage({
   // カスタムNGフィルタを適用してから表示するアイテムを取得
   const filteredItems = filterItems(realtimeItems)
   
-  // フィルタリング後に順位を振り直す
-  const rerankedItems = filteredItems.map((item, index) => ({
-    ...item,
-    rank: index + 1
-  }))
+  // フィルタリング後に順位を振り直す（メモ化）
+  const rerankedItems = React.useMemo(() => 
+    filteredItems.map((item, index) => ({
+      ...item,
+      rank: index + 1
+    })),
+    [filteredItems]
+  )
   
-  const displayItems = rerankedItems.slice(0, displayCount)
+  // 表示アイテムの計算もメモ化
+  const displayItems = React.useMemo(() => 
+    rerankedItems.slice(0, displayCount),
+    [rerankedItems, displayCount]
+  )
 
   return (
     <>
@@ -996,7 +1038,7 @@ export default function ClientPage({
                     const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length, MAX_RANKING_ITEMS)
                     setDisplayCount(newDisplayCount)
                     updateURL(newDisplayCount)
-                    saveStateToStorage()
+                    // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
                   } else if (hasMore) {
                     // 新規データを読み込み（タグ別 or ジャンル別301位以降）
                     loadMoreItems()

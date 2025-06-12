@@ -100,7 +100,7 @@ describe('ブラウザバック時のスクロール復元修正', () => {
     }
   })
 
-  it('コンポーネントマウント時にscrollRestorationがmanualに設定される', () => {
+  it('コンポーネントマウント時にscrollRestorationはautoのまま維持される', () => {
     const searchParams = {
       get: (key: string) => null,
       toString: () => ''
@@ -115,8 +115,8 @@ describe('ブラウザバック時のスクロール復元修正', () => {
       />
     )
     
-    // scrollRestorationがmanualに設定されることを確認
-    expect(window.history.scrollRestoration).toBe('manual')
+    // scrollRestorationがautoのままであることを確認
+    expect(window.history.scrollRestoration).toBe('auto')
   })
 
   it('動画ページから戻った際（showパラメータなし）に100件表示に戻る', async () => {
@@ -223,7 +223,7 @@ describe('ブラウザバック時のスクロール復元修正', () => {
     expect(global.requestAnimationFrame).not.toHaveBeenCalled()
   })
 
-  it('コンポーネントアンマウント時にscrollRestorationがautoに戻る', () => {
+  it('コンポーネントアンマウント時もscrollRestorationはautoのまま維持される', () => {
     const searchParams = {
       get: (key: string) => null,
       toString: () => ''
@@ -238,13 +238,13 @@ describe('ブラウザバック時のスクロール復元修正', () => {
       />
     )
     
-    // マウント時はmanual
-    expect(window.history.scrollRestoration).toBe('manual')
+    // マウント時はauto
+    expect(window.history.scrollRestoration).toBe('auto')
     
     // アンマウント
     unmount()
     
-    // アンマウント後はautoに戻る
+    // アンマウント後もautoのまま
     expect(window.history.scrollRestoration).toBe('auto')
   })
 })

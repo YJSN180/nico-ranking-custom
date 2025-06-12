@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 import { scrapeRankingPage } from '@/lib/scraper'
@@ -8,13 +8,7 @@ import type { RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
-// キャッシュキーの生成
-function getCacheKey(genre: string, period: string, tag?: string): string {
-  if (tag) {
-    return `ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`
-  }
-  return `ranking-${genre}-${period}`
-}
+// Cloudflare KVのみ使用するため、getCacheKey関数は削除
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -31,36 +25,37 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Cloudflare KVが利用可能かチェック（環境変数で判定）
+    const useCloudflareKV = process.env.CLOUDFLARE_KV_NAMESPACE_ID ? true : false
+    
     // タグ別ランキングの処理
-
-    // タグ別ランキングの場合
     if (tag) {
-      const cacheKey = getCacheKey(genre, period, tag)
-      
-      // まず、cronが作成した300件のキャッシュをチェック
-      const cached = await kv.get(cacheKey) as RankingItem[] | null
-      
-      if (cached && Array.isArray(cached)) {
-        // console.log(`[API] Cache hit for ${cacheKey}, total items: ${cached.length}`)
-        
-        // ページネーション処理
-        const itemsPerPage = 100
-        const startIdx = (page - 1) * itemsPerPage
-        const endIdx = page * itemsPerPage
-        const pageItems = cached.slice(startIdx, endIdx)
-        
-        // hasMoreフラグを計算
-        const hasMore = endIdx < cached.length
-        
-        const response = NextResponse.json({
-          items: pageItems,
-          hasMore,
-          totalCached: cached.length
-        })
-        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-        response.headers.set('X-Cache-Status', 'HIT')
-        response.headers.set('X-Total-Cached', cached.length.toString())
-        return response
+      // Cloudflare KVからの取得を試みる
+      if (useCloudflareKV) {
+        try {
+          const cfItems = await getTagRanking(genre, period as RankingPeriod, tag)
+          if (cfItems && cfItems.length > 0) {
+            // ページネーション処理
+            const itemsPerPage = 100
+            const startIdx = (page - 1) * itemsPerPage
+            const endIdx = page * itemsPerPage
+            const pageItems = cfItems.slice(startIdx, endIdx)
+            const hasMore = endIdx < cfItems.length
+            
+            const response = NextResponse.json({
+              items: pageItems,
+              hasMore,
+              totalCached: cfItems.length
+            })
+            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('X-Cache-Status', 'CF-HIT')
+            response.headers.set('X-Total-Cached', cfItems.length.toString())
+            return response
+          }
+        } catch (error) {
+          console.error('[API] Cloudflare KV error:', error)
+          // Cloudflare KVが利用できない場合は動的取得にフォールバック
+        }
       }
       
       // キャッシュミス時は動的取得
@@ -104,9 +99,7 @@ export async function GET(request: NextRequest) {
         rank: (page - 1) * targetCount + index + 1
       }))
       
-      // 動的取得の場合は、個別ページキャッシュに保存
-      const dynamicCacheKey = `${cacheKey}-page${page}`
-      await kv.set(dynamicCacheKey, allItems, { ex: 3600 })
+      // 動的取得の場合はキャッシュなし（Cloudflare KVのみ使用）
       
       const response = NextResponse.json({
         items: allItems,
@@ -119,6 +112,42 @@ export async function GET(request: NextRequest) {
     }
 
     // 通常のジャンル別ランキング
+    
+    // Cloudflare KVからの取得を試みる（ページ1-3）
+    if (useCloudflareKV && page <= 3) {
+      try {
+        const cfData = await getGenreRanking(genre, period as RankingPeriod)
+        if (cfData && cfData.items && cfData.items.length > 0) {
+          // ページネーション処理
+          const startIdx = (page - 1) * 100
+          const endIdx = page * 100
+          const pageItems = cfData.items.slice(startIdx, endIdx)
+          
+          // ページ1の場合は人気タグも含めて返す
+          if (page === 1) {
+            const response = NextResponse.json({
+              items: pageItems,
+              popularTags: cfData.popularTags || []
+            })
+            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('X-Cache-Status', 'CF-HIT')
+            response.headers.set('X-Max-Items', '500')
+            return response
+          } else {
+            // ページ2以降はアイテムのみ
+            const response = NextResponse.json(pageItems)
+            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('X-Cache-Status', 'CF-HIT')
+            response.headers.set('X-Max-Items', '500')
+            return response
+          }
+        }
+      } catch (error) {
+        console.error('[API] Cloudflare KV error:', error)
+        // Cloudflare KVが利用できない場合は動的取得にフォールバック
+      }
+    }
+    
     // ページ番号が4以上の場合（301位以降）は動的取得
     if (page >= 4) {
       // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
@@ -158,42 +187,7 @@ export async function GET(request: NextRequest) {
       return response
     }
     
-    // 1-3ページ（1-300位）は事前キャッシュから配信
-    const cacheKey = getCacheKey(genre, period)
-    const cachedData = await kv.get<{ items: RankingItem[], popularTags?: string[] }>(cacheKey)
-    
-    if (cachedData) {
-      // console.log(`[API] Cache hit for ${cacheKey}`)
-      
-      // キャッシュデータの構造を確認
-      if (typeof cachedData === 'object' && 'items' in cachedData && Array.isArray(cachedData.items)) {
-        // ページ番号に応じてスライス
-        const startIdx = (page - 1) * 100
-        const endIdx = page * 100
-        const pageItems = cachedData.items.slice(startIdx, endIdx)
-        
-        // ページ1の場合は人気タグも含めて返す
-        if (page === 1) {
-          const response = NextResponse.json({
-            items: pageItems,
-            popularTags: cachedData.popularTags || []
-          })
-          response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-          response.headers.set('X-Cache-Status', 'HIT')
-          response.headers.set('X-Max-Items', '500')
-          return response
-        } else {
-          // ページ2以降はアイテムのみ
-          const response = NextResponse.json(pageItems)
-          response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-          response.headers.set('X-Cache-Status', 'HIT')
-          response.headers.set('X-Max-Items', '500')
-          return response
-        }
-      }
-    }
-    
-    // キャッシュミス時はフォールバック
+    // Cloudflare KVが利用できない場合、またはキャッシュミス時は動的取得
     // console.log(`[API] Cache miss for ${cacheKey}, fetching fresh data...`)
     const { items, popularTags } = await scrapeRankingPage(
       genre,
@@ -212,8 +206,6 @@ export async function GET(request: NextRequest) {
     
     const { items: filteredItems } = await filterRankingData({ items: completeItems })
     const data = { items: filteredItems, popularTags }
-    
-    await kv.set(cacheKey, data, { ex: 3600 })
     
     // ページ1の場合
     if (page === 1) {

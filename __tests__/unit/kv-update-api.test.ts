@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 // KVモック
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     set: vi.fn(),
     expire: vi.fn()
@@ -16,7 +16,7 @@ describe('KV Update API', () => {
   })
 
   it('should update KV with ranking data', async () => {
-    const { kv } = await import('@vercel/kv')
+    const { kv } = await import('@/lib/simple-kv')
     const { POST } = await import('@/app/api/kv-update/route')
     
     const mockData = {
@@ -102,7 +102,7 @@ describe('KV Update API', () => {
   })
 
   it('should handle KV errors gracefully', async () => {
-    const { kv } = await import('@vercel/kv')
+    const { kv } = await import('@/lib/simple-kv')
     const { POST } = await import('@/app/api/kv-update/route')
     
     // KVエラーをモック
@@ -131,7 +131,7 @@ describe('KV Update API', () => {
   })
 
   it('should update multiple genres from batch request', async () => {
-    const { kv } = await import('@vercel/kv')
+    const { kv } = await import('@/lib/simple-kv')
     const { POST } = await import('@/app/api/kv-update/route')
     
     const mockBatchData = [

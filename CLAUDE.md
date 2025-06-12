@@ -2,6 +2,117 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+role:あなたは天才プログラマーであり、コーディングに関するすべての問題を完璧に解決します。
+
+## 🚨 CRITICAL SECURITY RULES - 環境変数とAPIトークンの管理（絶対厳守）
+
+### 環境変数管理の鉄則
+
+**絶対にコミットしてはいけないファイル**：
+- `.env.local` - ローカル開発環境用（.gitignoreで除外済み）
+- `.env` - 本番環境用（.gitignoreで除外済み）
+- `.env.production` - 本番環境用（.gitignoreで除外済み）
+- その他すべての`.env*`ファイル（.gitignoreで除外済み）
+
+**コミット可能なファイル**：
+- `.env.example` - 環境変数のテンプレート（実際の値は含めない）
+- `.env.local.example` - ローカル開発用テンプレート（実際の値は含めない）
+
+### APIトークンを絶対にコミットしないでください！
+
+1. **APIトークンの正しい設定場所**：
+   - `.env.local` ファイル（ローカル開発用、**gitignore済み**）
+   - Vercelダッシュボードの環境変数
+   - GitHub Secretsの環境変数
+   - Cloudflare Workersの環境変数
+
+2. **絶対にやってはいけないこと**：
+   - ❌ コード内にハードコード
+   - ❌ ドキュメントに記載（.mdファイル含む）
+   - ❌ コミットメッセージに含める
+   - ❌ スクリプトファイルに直接記載
+   - ❌ テストファイルに記載
+   - ❌ README.mdに記載
+   - ❌ 任意の追跡対象ファイルに記載
+
+3. **正しい使用方法**：
+   ```typescript
+   // ✅ 正しい - 環境変数から読み取り
+   const apiToken = process.env.CLOUDFLARE_KV_API_TOKEN
+   
+   // ❌ 絶対禁止 - 実際のトークンを直接記載
+   const apiToken = "実際のトークン値"
+   ```
+
+4. **環境変数の検証**：
+   ```typescript
+   // ✅ 必須環境変数の検証
+   if (!process.env.CLOUDFLARE_KV_API_TOKEN) {
+     throw new Error('CLOUDFLARE_KV_API_TOKEN is required')
+   }
+   ```
+
+5. **もし露出した場合の対応**：
+   - **即座に**該当サービスのダッシュボードでトークンをローテーション（更新）
+   - 新しいトークンを環境変数に設定
+   - 古いトークンは自動的に無効化される
+   - コミット履歴から削除（必要に応じて）
+
+### .gitignoreの確認方法
+
+```bash
+# 環境変数ファイルが追跡されていないことを確認
+git status
+git ls-files | grep -E "\.env"
+
+# .env.localが表示されなければ正常
+```
+
+## 🏗️ DEPLOYMENT ARCHITECTURE
+
+### Hybrid Deployment Strategy
+
+This project uses a **hybrid deployment architecture** with clear separation of concerns:
+
+#### 🚀 Vercel (Main Application)
+- **Purpose**: Hosts the Next.js frontend application
+- **Domain**: `nico-ranking-custom-yjsns-projects.vercel.app`
+- **Configuration**: `vercel.json`, `next.config.mjs`
+- **Auto-deployment**: Triggered on push to `main` branch
+
+#### ⚡ Cloudflare Workers (API Gateway)
+- **Purpose**: API Gateway with rate limiting and DDoS protection
+- **Configuration**: `wrangler.toml`, `workers/` directory
+- **Manual deployment**: `npm run deploy:worker`
+- **Domain**: `nico-rank.com/*` (proxies to Vercel)
+
+#### 💾 Cloudflare KV (Storage)
+- **Purpose**: Caches ranking data and rate limiting
+- **Bindings**: `RANKING_DATA`, `RATE_LIMIT`
+- **Updated by**: GitHub Actions cron job every 10 minutes
+
+### ⚠️ IMPORTANT: Cloudflare Pages Configuration
+
+**Cloudflare Pages should NOT build this project.**
+
+- This is a Next.js app designed for Vercel
+- `.cfignore` file prevents Pages from building the app
+- Only Workers should be deployed to Cloudflare
+- Main app deployment happens via Vercel
+
+#### Cloudflare Pages Build Failures
+**Status**: ❌ Expected failures (can be ignored)
+
+The Cloudflare Pages builds will continue to fail because:
+1. This project is not designed for Cloudflare Pages
+2. The integration was likely set up for Workers but mistakenly includes Pages
+3. The failures do NOT affect the main application functionality
+
+**To completely resolve**: 
+- Disable Cloudflare Pages integration in the Cloudflare dashboard
+- Keep only Cloudflare Workers integration active
+- This requires access to the Cloudflare account settings
+
 ## Commands
 
 ### Development
@@ -28,6 +139,30 @@ To run a single test file:
 npx vitest run path/to/test.ts
 ```
 
+## Cloudflare Pages Configuration
+
+### ❌ Pages Deployment Disabled
+This project includes multiple safeguards to prevent accidental Cloudflare Pages deployment:
+
+1. **`.cfpagesignore`**: Ignores all files to force Pages build failures
+2. **`pages-build-blocker.js`**: Script that detects and blocks Pages environments
+3. **Build script integration**: Automatically runs the blocker before builds
+4. **Documentation**: `DISABLE_CLOUDFLARE_PAGES.md` provides detailed removal instructions
+
+**If Pages builds are still occurring:**
+- Check Cloudflare Dashboard → Pages for active projects
+- Delete any Pages projects connected to this repository
+- Verify that only Workers and KV services are configured
+
+### Correct Architecture
+```
+GitHub Repository
+├── Vercel (Next.js App) ← Primary deployment ✅
+├── Cloudflare Workers (API Gateway) ← Manual deployment ✅
+├── Cloudflare KV (Storage) ← Active ✅
+└── Cloudflare Pages ← DISABLED ❌
+```
+
 ## Architecture
 
 ### Data Flow
@@ -35,7 +170,7 @@ npx vitest run path/to/test.ts
    - Fetches ranking data for 9 genres × 2 periods (24h/hour) = 18 datasets
    - Uses hybrid scraping: HTML parsing + Snapshot API + Tag extraction
    - Googlebot User-Agent bypasses geo-blocking
-   - Stores in Vercel KV with keys `ranking-{genre}-{period}` (1h TTL)
+   - Stores in Cloudflare KV with keys `ranking-{genre}-{period}` (1h TTL)
    - Supports both sensitive and non-sensitive video content
 
 2. **API Route** (`/api/ranking`) serves cached data
@@ -81,7 +216,9 @@ The hybrid scraper (`complete-hybrid-scraper.ts`) combines:
    ```
 
 3. **Environment Variables**:
-   - `KV_REST_API_URL` & `KV_REST_API_TOKEN` - Required for Vercel KV
+   - `CLOUDFLARE_ACCOUNT_ID` - Cloudflare account ID
+   - `CLOUDFLARE_KV_NAMESPACE_ID` - KV namespace ID
+   - `CLOUDFLARE_KV_API_TOKEN` - **絶対にコミットしない！環境変数でのみ管理**
    - `CRON_SECRET` - Required for cron authentication
    - `VERCEL_URL` - Auto-set by Vercel, used for server-side API calls
 
@@ -287,3 +424,92 @@ git remote prune origin
 - Automatic deployment to Vercel on push to `main`
 - Preview deployments for all PRs
 - Environment variables managed in Vercel dashboard
+
+## Documentation Management Policy
+
+### File Commitment Rules
+
+**Files that CAN be committed (allowlist):**
+- `README.md` - Project overview and setup instructions
+- `CLAUDE.md` - This instruction file for AI assistants
+- Source code files (`.ts`, `.tsx`, `.js`, `.jsx`, `.css`, etc.)
+- Configuration files (`package.json`, `tsconfig.json`, `.eslintrc`, etc.)
+- Test files (`*.test.ts`, `*.spec.ts`)
+- Build configuration (`next.config.js`, `playwright.config.ts`, etc.)
+- CI/CD configuration (`.github/workflows/`, `vercel.json`)
+
+**Files that must be gitignored (blocklist):**
+- All other `.md` files (documentation, notes, guides, etc.)
+- Documentation directories (`docs/`, `documentation/`, `doc/`)
+- Alternative documentation formats (`.rst`, `.txt`, `.adoc`, `.markdown`, etc.)
+- Temporary files (`.tmp`, `.bak`, `.log`)
+- Environment files (`.env*`)
+- Generated files (build outputs, coverage reports)
+- Tool-specific files (`.tools/`, `.claude/`, `.wrangler/`)
+
+### Documentation Creation Guidelines
+
+1. **Never create documentation files automatically** - Only create when explicitly requested
+2. **Use appropriate gitignore patterns** - Ensure new documentation types are properly excluded
+3. **Maintain clean repository** - Keep only essential files in version control
+4. **Security first** - Never commit sensitive information in any documentation
+
+## Multi-Agent Task Management
+
+### When to Use Multiple Sub-Agents
+
+Use multiple sub-agents for complex tasks that involve:
+
+1. **Parallel Processing Requirements**:
+   - Multiple independent API calls
+   - Concurrent file operations
+   - Simultaneous test runs across different modules
+
+2. **Specialized Domain Knowledge**:
+   - Frontend UI components + Backend API logic
+   - Testing strategy + Implementation
+   - Security analysis + Performance optimization
+
+3. **Large-Scale Refactoring**:
+   - Database schema changes + API updates + Frontend adjustments
+   - Multi-service deployments
+   - Cross-cutting architectural changes
+
+### Sub-Agent Coordination Guidelines
+
+1. **Clear Task Boundaries**:
+   - Define specific responsibilities for each sub-agent
+   - Avoid overlapping work areas
+   - Establish clear handoff points
+
+2. **Data Sharing Protocols**:
+   - Use shared context for common information
+   - Pass results between agents efficiently
+   - Maintain consistency across all sub-tasks
+
+3. **Error Handling Strategy**:
+   - Each sub-agent handles its own domain errors
+   - Escalate cross-domain issues to main agent
+   - Implement rollback mechanisms for failed multi-agent operations
+
+4. **Progress Tracking**:
+   - Maintain overall task progress visibility
+   - Report sub-agent completion status
+   - Provide unified status updates to users
+
+### Example Multi-Agent Scenarios
+
+**Scenario 1: Full-Stack Feature Implementation**
+- Agent A: Database schema and API endpoints
+- Agent B: Frontend components and state management
+- Agent C: Test suite creation and validation
+
+**Scenario 2: Security Audit and Remediation**
+- Agent A: Vulnerability scanning and analysis
+- Agent B: Code fixes and security hardening
+- Agent C: Testing and deployment verification
+
+**Scenario 3: Performance Optimization**
+- Agent A: Backend optimization (caching, queries)
+- Agent B: Frontend optimization (bundling, lazy loading)
+- Agent C: Infrastructure tuning (CDN, server config)

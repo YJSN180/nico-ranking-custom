@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 
 async function checkCachedTagData() {
   console.log('=== キャッシュされたタグ別ランキングデータの確認 ===\n')

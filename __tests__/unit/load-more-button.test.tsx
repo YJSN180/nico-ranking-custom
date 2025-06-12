@@ -126,12 +126,12 @@ describe('Load More Button', () => {
     expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
-  it('should show button when items are less than 100', () => {
+  it('should not show button when items are less than 100 and hasMore is false', () => {
     const fewItems = mockItems.slice(0, 50)
     render(<ClientPage initialData={fewItems} />)
     
-    // 50件しかないが、さらに読み込み可能なのでボタンは表示される
-    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
+    // 50件しかなく、hasMoreがfalseなのでボタンは表示されない
+    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
   })
 
   it('should reset display count when config changes', async () => {

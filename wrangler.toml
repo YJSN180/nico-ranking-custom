@@ -1,0 +1,79 @@
+# =============================================================================
+# Cloudflare Workers Configuration - API Gateway Only
+# =============================================================================
+# IMPORTANT: This project uses a hybrid deployment strategy:
+# - Main Next.js application: Deployed to Vercel
+# - API Gateway & Rate Limiting: Deployed to Cloudflare Workers (this config)
+# - Storage: Cloudflare KV
+# 
+# This wrangler.toml is ONLY for deploying the Workers API Gateway.
+# The main application should NOT be deployed to Cloudflare Pages.
+# =============================================================================
+
+name = "nico-ranking-api-gateway"
+main = "workers/api-gateway-simple.ts"
+compatibility_date = "2024-01-01"
+workers_dev = true
+
+# Environment variables
+[vars]
+NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+USE_PREVIEW = "false"  # "true" でプレビュー環境を使用
+
+# Account settings
+account_id = "5984977746a3dfcd71415bed5c324eb1"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "c49751cf8c27464aac68cf030b9e0713"
+preview_id = "c49751cf8c27464aac68cf030b9e0713"
+
+[[kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+preview_id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+# Routes
+[[routes]]
+pattern = "nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+[[routes]]
+pattern = "www.nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+# Development settings
+[dev]
+port = 8787
+local_protocol = "http"
+ip = "0.0.0.0"
+
+# Build settings
+[build]
+command = ""
+
+# Performance settings
+# [limits]
+# cpu_ms = 50  # CPU limits require paid plan
+# memory_mb = 128
+
+# Compatibility settings
+# compatibility_flags = ["nodejs_compat"]
+
+# Preview environment for current branch
+[env.preview]
+name = "nico-ranking-api-gateway-preview"
+vars = { NEXT_APP_URL = "https://nico-ranking-custom-git-feat-vercel-conve-921a4d-yjsns-projects.vercel.app" }
+
+[[env.preview.routes]]
+pattern = "preview.nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+[[env.preview.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "c49751cf8c27464aac68cf030b9e0713"
+
+[[env.preview.kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"

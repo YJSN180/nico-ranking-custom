@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 
 // Mock KV
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
     set: vi.fn(),

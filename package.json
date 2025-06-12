@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node pages-build-blocker.js && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest",
@@ -13,18 +13,26 @@
     "test:all": "npm run test -- --run && npm run test:e2e",
     "typecheck": "tsc --noEmit",
     "check:all": "npm run typecheck && npm run lint && npm run test -- --run && npm run build",
-    "update:kv": "npx tsx scripts/update-ranking-kv.ts"
+    "update:kv": "npx tsx scripts/update-ranking-kv.ts",
+    "update:ranking-github": "npx tsx scripts/update-ranking-github-action.ts",
+    "deploy:worker": "wrangler deploy",
+    "dev:worker": "wrangler dev",
+    "tail:worker": "wrangler tail",
+    "block:pages": "node pages-build-blocker.js",
+    "info:architecture": "echo 'Deployment Architecture: Vercel (Main App) + Cloudflare Workers (API) + KV (Storage)'"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.8",
-    "@vercel/kv": "^1.0.1",
     "cheerio": "^1.0.0",
     "fast-xml-parser": "^4.5.3",
-    "next": "14.2.21",
+    "next": "15.3.3",
     "node-fetch": "^2.7.0",
+    "pako": "^2.1.0",
     "react": "^18",
     "react-dom": "^18",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
@@ -37,14 +45,15 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4.3.4",
-    "@vitest/coverage-v8": "^2.1.8",
+    "@vitest/coverage-v8": "^3.2.3",
     "dotenv": "^16.5.0",
     "eslint": "^8",
-    "eslint-config-next": "14.2.21",
+    "eslint-config-next": "15.3.3",
     "jsdom": "^25.0.1",
     "prettier": "^3.4.2",
     "puppeteer": "^24.9.0",
     "typescript": "^5",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.3",
+    "wrangler": "^4.19.1"
   }
 }

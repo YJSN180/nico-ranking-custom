@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 import dotenv from 'dotenv'
 import path from 'path'
 

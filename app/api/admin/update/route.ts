@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 
 // 管理者用：手動でランキングデータを更新
 export async function POST(request: Request) {
   try {
-    // 簡易的な認証（本番環境では環境変数を使用）
+    // 環境変数からの認証
     const { searchParams } = new URL(request.url)
     const adminKey = searchParams.get('key')
     
-    if (adminKey !== process.env.ADMIN_KEY && adminKey !== 'update-ranking-2025') {
+    // ADMIN_KEYが設定されていない場合はエラー
+    if (!process.env.ADMIN_KEY) {
+      console.error('ADMIN_KEY environment variable is not set')
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+    
+    if (adminKey !== process.env.ADMIN_KEY) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

@@ -12,7 +12,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: vi.fn(() => new URLSearchParams())
 }))
 
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(() => ({
       items: [{

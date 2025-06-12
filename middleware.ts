@@ -1,7 +1,72 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// シンプルなインメモリレート制限（本番ではRedisやCloudflareを使用）
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): boolean {
+  const now = Date.now()
+  const entry = rateLimitStore.get(ip)
+  
+  if (!entry || now > entry.resetAt) {
+    rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  
+  if (entry.count >= limit) {
+    return false
+  }
+  
+  entry.count++
+  return true
+}
+
 export function middleware(request: NextRequest) {
+  // Cloudflare Workers経由のアクセスチェック（本番環境のみ）
+  if (process.env.NODE_ENV === 'production' && !request.nextUrl.pathname.startsWith('/api/')) {
+    const cfWorkerKey = request.headers.get('X-Worker-Auth')
+    const expectedKey = process.env.WORKER_AUTH_KEY
+    
+    // Workersからの認証がない場合はカスタムドメインにリダイレクト
+    if (!cfWorkerKey || cfWorkerKey !== expectedKey) {
+      // Vercel URLへの直接アクセスをブロック
+      if (request.headers.get('host')?.includes('vercel.app')) {
+        return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+      }
+    }
+  }
+  
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+             request.headers.get('x-real-ip') || 
+             'unknown'
+
+  // APIエンドポイントのレート制限
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    // デバッグエンドポイントを本番環境で無効化
+    if (process.env.NODE_ENV === 'production' && 
+        (request.nextUrl.pathname.startsWith('/api/debug') || 
+         request.nextUrl.pathname.startsWith('/api/test'))) {
+      return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+    }
+    
+    // レート制限チェック
+    const limit = request.nextUrl.pathname.startsWith('/api/admin') ? 5 : 10
+    const windowMs = request.nextUrl.pathname.startsWith('/api/admin') ? 60000 : 10000
+    
+    if (!checkRateLimit(ip, limit, windowMs)) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': '10',
+            'X-RateLimit-Limit': limit.toString(),
+            'X-RateLimit-Remaining': '0'
+          }
+        }
+      )
+    }
+  }
   // /admin配下のすべてのパスで認証を要求
   if (request.nextUrl.pathname.startsWith('/admin')) {
     const authHeader = request.headers.get('authorization')
@@ -22,8 +87,14 @@ export function middleware(request: NextRequest) {
       const credentials = Buffer.from(base64Credentials!, 'base64').toString('ascii')
       const [username, password] = credentials.split(':')
       
-      const validUsername = process.env.ADMIN_USERNAME || 'admin'
-      const validPassword = process.env.ADMIN_PASSWORD || 'password'
+      // 環境変数が設定されていない場合はエラー
+      if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
+        console.error('ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set')
+        return new NextResponse('Server configuration error', { status: 500 })
+      }
+      
+      const validUsername = process.env.ADMIN_USERNAME
+      const validPassword = process.env.ADMIN_PASSWORD
       
       if (username !== validUsername || password !== validPassword) {
         return new NextResponse('Invalid credentials', {
@@ -47,5 +118,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/admin/:path*'
+  matcher: [
+    '/admin/:path*',
+    '/api/:path*',
+    '/((?!_next/static|_next/image|favicon.ico).*)'
+  ]
 }

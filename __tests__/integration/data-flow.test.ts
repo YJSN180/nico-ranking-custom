@@ -1,72 +1,70 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 
 // Mock KV
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
     set: vi.fn(),
   },
 }))
 
+// Mock scraper
+vi.mock('@/lib/scraper', () => ({
+  scrapeRankingPage: vi.fn()
+}))
+
+// Mock Cloudflare KV
+vi.mock('@/lib/cloudflare-kv', () => ({
+  getGenreRanking: vi.fn(),
+  getTagRanking: vi.fn()
+}))
+
 describe('Data Flow Integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Mock environment variables
+    process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
+    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-api-token'
+  })
+  
+  afterEach(() => {
+    delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
+    delete process.env.CLOUDFLARE_ACCOUNT_ID
+    delete process.env.CLOUDFLARE_KV_API_TOKEN
+  })
+
   it('should handle real ranking data format from KV', async () => {
-    const mockRealData = [
-      {
-        rank: 1,
-        id: 'sm45026928',
-        title: '【Farthest Frontier】領主のお姉さん実況 39【街づくり】',
-        thumbURL: 'https://nicovideo.cdn.nimg.jp/thumbnails/45026928/45026928.66686887',
-        views: 15672
-      },
-      {
-        rank: 2,
-        id: 'sm45027633',
-        title: '琴葉茜と月テラフォーミング用の拠点（崖の上） #2【The Planet Crafter 月編】',
-        thumbURL: 'https://nicovideo.cdn.nimg.jp/thumbnails/45027633/45027633.89193244',
-        views: 13704
-      }
-    ]
+    const mockRealData = Array.from({ length: 100 }, (_, i) => ({
+      rank: i + 1,
+      id: `sm${45026928 + i}`,
+      title: `Test Video ${i + 1}`,
+      thumbURL: `https://nicovideo.cdn.nimg.jp/thumbnails/${45026928 + i}/${45026928 + i}.66686887`,
+      views: 15672 - i * 100
+    }))
 
     // Test 1: KV returns data as object (new format)
     vi.mocked(kv.get).mockResolvedValueOnce({ items: mockRealData, popularTags: [] })
+    const { getGenreRanking } = await import('@/lib/cloudflare-kv')
+    vi.mocked(getGenreRanking).mockResolvedValueOnce({ items: mockRealData, popularTags: [] })
     
     const { GET } = await import('@/app/api/ranking/route')
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response1 = await GET(request)
     const data1 = await response1.json()
     
-    expect(data1.items).toEqual(mockRealData)
-    expect(data1.popularTags).toEqual([])
-    expect(data1.items[0].views).toBe(15672)
-    expect(data1.items[0].title).not.toContain('サンプル動画')
-  })
-
-  it('should display real data on homepage when available', async () => {
-    const mockRealData = [
-      {
-        rank: 1,
-        id: 'sm45026928',
-        title: '【Farthest Frontier】領主のお姉さん実況 39【街づくり】',
-        thumbURL: 'https://nicovideo.cdn.nimg.jp/thumbnails/45026928/45026928.66686887',
-        views: 15672
-      }
-    ]
-
-    // Mock KV to return real data
-    vi.mocked(kv.get).mockImplementation(async (key) => {
-      if (key === 'ranking-data') return mockRealData
-      if (key === 'last-update-info') return {
-        timestamp: new Date().toISOString(),
-        itemCount: 1,
-        source: 'test'
-      }
-      return null
+    expect(data1).toBeDefined()
+    expect(data1.items).toBeDefined()
+    expect(data1.items).toHaveLength(100)
+    expect(data1.items[0]).toMatchObject({
+      rank: 1,
+      id: 'sm45026928',
+      title: 'Test Video 1',
+      views: 15672
     })
-
-    // Test that data would be available
-    const data = await kv.get('ranking-data')
-    expect(data).toEqual(mockRealData)
+    expect(data1.popularTags).toEqual([])
   })
+
 })

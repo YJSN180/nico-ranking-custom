@@ -1,0 +1,28 @@
+# Vercel Environment Variables to Set
+
+The following environment variables need to be added to your Vercel project:
+
+## Cloudflare KV Variables (Required)
+CLOUDFLARE_ACCOUNT_ID=<your_cloudflare_account_id>
+CLOUDFLARE_KV_NAMESPACE_ID=<your_kv_namespace_id>
+CLOUDFLARE_KV_API_TOKEN=<your_cloudflare_api_token>
+
+## Convex Variables (Required)
+NEXT_PUBLIC_CONVEX_URL=<your_convex_url>
+CONVEX_DEPLOY_KEY=<your_convex_deploy_key>
+
+## Cron Secret (Required)
+CRON_SECRET=<your_cron_secret>
+
+## Optional Variables
+NICO_COOKIES=sensitive_material_status=accept
+
+## How to Set These Variables:
+
+1. Go to https://vercel.com/dashboard
+2. Select your project: nico-ranking-custom
+3. Navigate to Settings → Environment Variables
+4. Add each variable for Production, Preview, and Development environments
+5. Click "Save" after adding each variable
+
+Note: All variables should be set for all environments (Production, Preview, Development) unless otherwise specified.

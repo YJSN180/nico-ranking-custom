@@ -4,7 +4,7 @@ import { fetchRanking } from '../../lib/complete-hybrid-scraper'
 import type { RankingGenre } from '../../types/ranking-config'
 
 // KVモックをセットアップ
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
     set: vi.fn()

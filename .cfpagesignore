@@ -1,0 +1,17 @@
+# Cloudflare Pages Ignore File
+# This project should NOT be deployed to Cloudflare Pages
+# It uses Vercel for the main application and Cloudflare Workers for API Gateway
+
+# Ignore everything to prevent Pages builds
+*
+!.cfpagesignore
+
+# This file exists to:
+# 1. Signal that Pages deployment is not intended
+# 2. Prevent accidental Pages builds
+# 3. Force build failures if Pages is misconfigured
+
+# Correct deployment architecture:
+# - Main App: Vercel (Next.js)
+# - API Gateway: Cloudflare Workers (wrangler.toml)
+# - Storage: Cloudflare KV

@@ -1,45 +1,67 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { GET } from '@/app/api/ranking/route'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { scrapeRankingPage } from '@/lib/scraper'
+import { getGenreRanking } from '@/lib/cloudflare-kv'
 import { NextRequest } from 'next/server'
 
-vi.mock('@vercel/kv', () => ({
+vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
     set: vi.fn(),
   },
 }))
 
-vi.mock('@/lib/scraper')
+vi.mock('@/lib/scraper', () => ({
+  scrapeRankingPage: vi.fn()
+}))
+
+vi.mock('@/lib/ng-filter', () => ({
+  filterRankingData: vi.fn().mockImplementation(async ({ items }) => ({
+    items,
+    newDerivedIds: []
+  }))
+}))
+
+vi.mock('@/lib/cloudflare-kv', () => ({
+  getGenreRanking: vi.fn(),
+  getTagRanking: vi.fn()
+}))
 
 describe('Ranking API Integration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Mock environment variables
+    process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
+    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-api-token'
+  })
+  
+  afterEach(() => {
+    delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
+    delete process.env.CLOUDFLARE_ACCOUNT_ID
+    delete process.env.CLOUDFLARE_KV_API_TOKEN
   })
 
   it('should return 200 with ranking data when KV has data', async () => {
-    const mockData = [
-      {
-        rank: 1,
-        id: 'sm123',
-        title: 'Test Video 1',
-        thumbURL: 'https://example.com/thumb1.jpg',
-        views: 10000,
-      },
-      {
-        rank: 2,
-        id: 'sm456',
-        title: 'Test Video 2',
-        thumbURL: 'https://example.com/thumb2.jpg',
-        views: 5000,
-      },
-    ]
+    const mockData = Array.from({ length: 100 }, (_, i) => ({
+      rank: i + 1,
+      id: `sm${123 + i}`,
+      title: `Test Video ${i + 1}`,
+      thumbURL: `https://example.com/thumb${i + 1}.jpg`,
+      views: 10000 - i * 100,
+    }))
 
     vi.mocked(kv.get).mockResolvedValueOnce({ items: mockData, popularTags: [] })
+    vi.mocked(getGenreRanking).mockResolvedValueOnce({ items: mockData, popularTags: [] })
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
+    
+    if (response.status !== 200) {
+      const errorData = await response.json()
+      console.error('Error response:', errorData)
+    }
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('application/json')

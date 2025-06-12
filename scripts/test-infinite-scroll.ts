@@ -1,5 +1,5 @@
 // 無限スクロール実装の動作確認スクリプト
-import { kv } from '@vercel/kv'
+import { kv } from '../lib/simple-kv'
 
 async function testInfiniteScroll() {
   console.log('=== 無限スクロール実装の確認 ===\n')

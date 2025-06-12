@@ -1,13 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  // Simple auth check
-  const debugKey = request.nextUrl.searchParams.get('key')
-  if (debugKey !== 'debug-123') {
+  // 本番環境では404を返す
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+  }
+  
+  // 開発環境では環境変数から認証
+  const authHeader = request.headers.get('authorization')
+  const expectedToken = process.env.DEBUG_TOKEN
+  
+  if (!expectedToken) {
+    console.error('DEBUG_TOKEN environment variable is not set')
+    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+  }
+  
+  if (authHeader !== `Bearer ${expectedToken}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

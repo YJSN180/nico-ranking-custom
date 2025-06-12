@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingConfig } from '@/types/ranking-config'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
 
@@ -18,37 +17,12 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const tagScrollRef = useRef<HTMLDivElement>(null)
   const selectedTagRef = useRef<HTMLButtonElement>(null)
 
-  // propsから渡されたタグを使用、なければAPIから取得
+  // propsから渡されたタグを優先的に使用
   useEffect(() => {
-    if (propsTags.length > 0) {
-      setPopularTags(propsTags)
-      setLoading(false)
-      return
-    }
-
-    async function loadTags() {
-      // 総合ランキングの場合はタグを表示しない
-      if (config.genre === 'all') {
-        setPopularTags([])
-        setLoading(false)
-        return
-      }
-      
-      setLoading(true)
-      try {
-        // 動的に人気タグを取得（キャッシュ付き）
-        const tags = await getPopularTags(config.genre, config.period)
-        setPopularTags(tags)
-      } catch (error) {
-        // フォールバックとして空配列を設定
-        setPopularTags([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadTags()
-  }, [config.genre, config.period, propsTags])
+    // propsTagsが変更されたら常に反映
+    setPopularTags(propsTags)
+    setLoading(false)
+  }, [propsTags])
 
   const handleTagSelect = (tag: string) => {
     if (tag === 'すべて') {
@@ -107,10 +81,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     )
   }
 
-  // 総合ランキングの場合は何も表示しない
-  if (config.genre === 'all') {
-    return null
-  }
+  // 総合ランキングでも人気タグが集計されて表示される
   
   // 常に表示（「すべて」タグを含める）
   return (

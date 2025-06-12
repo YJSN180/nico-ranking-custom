@@ -1,5 +1,5 @@
 import ClientPage from '../client-page'
-import { kv } from '@vercel/kv'
+import { kv } from '@/lib/simple-kv'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 
 async function getOtherGenre300Items() {

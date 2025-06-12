@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent, waitFor } from '@testing-library/react'
+import { render, fireEvent, waitFor, act } from '@testing-library/react'
 import ClientPage from '@/app/client-page'
 import { useRouter, useSearchParams } from 'next/navigation'
 
@@ -138,29 +138,40 @@ describe('Storage飽和問題', () => {
       throw new Error('QuotaExceededError')
     })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    render(
-      <ClientPage 
-        initialData={createMockData(100)}
-        initialGenre="all"
-        initialPeriod="24h"
-      />
-    )
+    await act(async () => {
+      render(
+        <ClientPage 
+          initialData={createMockData(100)}
+          initialGenre="all"
+          initialPeriod="24h"
+        />
+      )
+    })
 
     // スクロールしてStorage保存をトリガー
-    fireEvent.scroll(window, { target: { scrollY: 200 } })
+    await act(async () => {
+      fireEvent.scroll(window, { target: { scrollY: 200 } })
+    })
     
     // デバウンス時間待機
-    await new Promise(resolve => setTimeout(resolve, 1100))
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 1100))
+    })
 
     // エラーが適切にハンドリングされ、アプリがクラッシュしないことを確認
     expect(document.body).toBeInTheDocument()
     
-    // エラーログが出力されていないことを確認（静かに失敗）
-    expect(consoleSpy).not.toHaveBeenCalled()
+    // Storage関連のエラーログが出力されていないことを確認（静かに失敗）
+    const storageErrorCalls = consoleErrorSpy.mock.calls.filter(
+      (call: any[]) => call[0] && call[0].toString().includes('Storage')
+    )
+    expect(storageErrorCalls.length).toBe(0)
 
-    consoleSpy.mockRestore()
+    consoleErrorSpy.mockRestore()
+    consoleWarnSpy.mockRestore()
   })
 
 

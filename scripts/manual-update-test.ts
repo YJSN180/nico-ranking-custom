@@ -5,11 +5,15 @@ async function manualUpdateTest() {
   console.log('=== 手動でupdate-rankingを実行 ===\n')
   
   // 環境変数の確認
-  const hasKV = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN)
-  console.log(`KV環境変数: ${hasKV ? '✅ 設定済み' : '❌ 未設定'}\n`)
+  const hasKV = !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN)
+  console.log(`Cloudflare KV環境変数: ${hasKV ? '✅ 設定済み' : '❌ 未設定'}\n`)
   
   if (!hasKV) {
-    console.error('KV環境変数が設定されていません。.env.localファイルを確認してください。')
+    console.error('Cloudflare KV環境変数が設定されていません。.env.localファイルを確認してください。')
+    console.error('以下の環境変数を設定してください:')
+    console.error('  - CLOUDFLARE_ACCOUNT_ID')
+    console.error('  - CLOUDFLARE_KV_NAMESPACE_ID')
+    console.error('  - CLOUDFLARE_KV_API_TOKEN')
     return
   }
   

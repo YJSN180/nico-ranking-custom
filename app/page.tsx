@@ -1,19 +1,21 @@
 import type { RankingData } from '@/types/ranking'
-import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
 import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
-import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
+import { scrapeRankingPage } from '@/lib/scraper'
+import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingData } from '@/lib/ng-filter'
+import { getGenreRanking } from '@/lib/cloudflare-kv'
+import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
 // dynamicを削除してISRを有効化
 
 interface PageProps {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
 async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
@@ -21,44 +23,36 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
-  // 1. Primary: Check cache for pre-generated data
-  try {
-    let cacheKey = `ranking-${genre}-${period}`
-    if (tag) {
-      cacheKey = `ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`
-    }
-    
-    const cachedData = await kv.get(cacheKey)
-    
-    if (cachedData) {
-      let result: { items: RankingData, popularTags?: string[] }
-      
-      if (tag && Array.isArray(cachedData)) {
-        // タグフィルタリング済みデータ
-        result = { items: cachedData as RankingData, popularTags: [] }
-      } else if (typeof cachedData === 'object' && 'items' in cachedData) {
-        // ジャンル別データ（itemsとpopularTagsを含む）
-        result = cachedData as { items: RankingData, popularTags?: string[] }
-      } else {
-        result = { items: [], popularTags: [] }
+  // 1. Primary: Cloudflare KVから読み取りを試みる
+  if (!tag) {
+    try {
+      const cfData = await getGenreRanking(genre, period as RankingPeriod)
+      if (cfData && cfData.items && cfData.items.length > 0) {
+        // NGフィルタリングを適用
+        const filteredData = await filterRankingData({
+          items: cfData.items.slice(0, 100), // 最初の100件のみ
+          popularTags: cfData.popularTags
+        })
+        return filteredData
       }
-      
-      // NGフィルタリングを適用
-      const filteredData = await filterRankingData(result)
-      return filteredData
+    } catch (cfError) {
+      // Cloudflare KVエラーは無視してスクレイピングにフォールバック
     }
-  } catch (kvError) {
-    // KVエラーログはスキップ（ESLintエラー回避）
   }
 
   // 2. Fallback: Generate data on demand
   try {
     const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
     
-    // 人気タグを公式APIから取得（タグ指定なし、かつallジャンル以外の場合）
+    // 人気タグを取得（タグ指定なし、かつallジャンル以外の場合）
     let popularTags: string[] = []
     if (!tag && genre !== 'all') {
-      popularTags = await fetchPopularTags(genre)
+      try {
+        // popular-tags.tsのgetPopularTagsを使用（KVやバックアップから取得）
+        popularTags = await getPopularTags(genre as any, period as '24h' | 'hour')
+      } catch (error) {
+        // エラー時は空配列のまま
+      }
     }
     
     const items: RankingData = scrapedItems.map((item) => ({
@@ -77,10 +71,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       registeredAt: item.registeredAt,
     })).filter(item => item.id && item.title)
     
-    // Cache the result for future requests
-    if (!tag && items.length > 0) {
-      await kv.set(`ranking-${genre}-${period}`, { items, popularTags }, { ex: 1800 }) // 30分キャッシュ
-    }
+    // Caching is now handled by Cloudflare KV in the scraper
     
     // NGフィルタリングを適用
     const filteredData = await filterRankingData({ items, popularTags })
@@ -94,13 +85,14 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const genre = (searchParams.genre as string) || 'all'
-  const period = (searchParams.period as string) || '24h'
-  const tag = searchParams.tag as string | undefined
+  const params = await searchParams
+  const genre = (params.genre as string) || 'all'
+  const period = (params.period as string) || '24h'
+  const tag = params.tag as string | undefined
   
   try {
     
-    const { items: rankingData, popularTags } = await fetchRankingData(genre, period, tag)
+    const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
       return (
@@ -208,7 +200,7 @@ export default async function Home({ searchParams }: PageProps) {
                 error: error instanceof Error ? error.message : String(error),
                 genre,
                 tag,
-                KV_configured: !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
+                CloudflareKV_configured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN),
               }, null, 2)}</pre>
             </details>
           </div>

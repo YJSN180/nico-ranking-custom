@@ -47,6 +47,9 @@ vi.mock('@/components/ranking-item', () => ({
 }))
 
 describe('ブラウザバック時のスクロール位置復元', () => {
+  // performance.navigationをモック
+  let originalPerformance: any
+  
   const createMockData = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({
       rank: i + 1,
@@ -64,8 +67,22 @@ describe('ブラウザバック時のスクロール位置復元', () => {
   let originalScrollY: number
   
   beforeEach(() => {
-    // localStorageをクリア
+    // localStorageとsessionStorageをクリア
     localStorage.clear()
+    sessionStorage.clear()
+    
+    // performance.navigationをモック
+    originalPerformance = window.performance
+    Object.defineProperty(window, 'performance', {
+      value: {
+        ...window.performance,
+        navigation: {
+          type: 2 // TYPE_BACK_FORWARD
+        }
+      },
+      writable: true,
+      configurable: true
+    })
     
     // scrollToとscrollYをモック
     originalScrollTo = window.scrollTo
@@ -90,6 +107,11 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     window.scrollTo = originalScrollTo
     Object.defineProperty(window, 'scrollY', {
       value: originalScrollY,
+      writable: true,
+      configurable: true
+    })
+    Object.defineProperty(window, 'performance', {
+      value: originalPerformance,
       writable: true,
       configurable: true
     })
@@ -124,21 +146,22 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       window.scrollTo(0, 5000)
     })
 
-    // saveRankingStateイベントを発火して状態を保存
+    // saveRankingStateイベントを発火してスクロール位置を保存
     act(() => {
       window.dispatchEvent(new Event('saveRankingState'))
     })
 
-    // localStorageに保存されているか確認
-    const storageKey = 'ranking-state-all-24h-none'
-    const savedState = localStorage.getItem(storageKey)
-    expect(savedState).toBeTruthy()
-    
-    const state = JSON.parse(savedState!)
-    expect(state.displayCount).toBe(200)
-    expect(state.scrollPosition).toBe(5000)
+    // sessionStorageにスクロール位置が保存されているか確認
+    const scrollKey = 'ranking-scroll-all-24h-none'
+    const savedScrollPosition = sessionStorage.getItem(scrollKey)
+    expect(savedScrollPosition).toBe('5000')
 
-    // ページを再レンダリング（ブラウザバックを模擬）
+    // URLにshowパラメータを付けて再レンダリング（ブラウザバックを模擬）
+    const nextNav = await import('next/navigation')
+    vi.mocked(nextNav.useSearchParams).mockReturnValue(
+      new URLSearchParams('show=200')
+    )
+    
     rerender(
       <ClientPage 
         initialData={mockData}
@@ -192,7 +215,7 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       window.scrollTo(0, 4000)
     })
 
-    // 状態を保存
+    // スクロール位置を保存
     act(() => {
       window.dispatchEvent(new Event('saveRankingState'))
     })

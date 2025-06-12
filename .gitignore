@@ -32,9 +32,32 @@ yarn-error.log*
 # vercel
 .vercel
 
+# environment variable scripts and documentation
+scripts/set-*.sh
+vercel-env-vars.txt
+*.env
+.env.*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Documentation files (except README.md and CLAUDE.md)
+*.md
+!README.md
+!CLAUDE.md
+
+# Documentation directories and common documentation formats
+docs/
+documentation/
+doc/
+*.markdown
+*.rst
+*.txt
+*.adoc
+*.asciidoc
+*.org
+*.textile
 
 # playwright
 /test-results/
@@ -48,3 +71,26 @@ gh
 
 # claude
 .claude/
+
+# wrangler
+.wrangler/
+.dev.vars
+.env.cloudflare
+
+# Documentation and temporary files
+*.log
+*.tmp
+*.bak
+UPDATE_*.md
+SECURITY_*.md
+FINAL_*.md
+VERCEL_*.md
+CLOUDFLARE_*.md
+GITHUB_*.md
+ENVIRONMENT_*.md
+MIGRATION_*.md
+INSTRUCTIONS_*.md
+SETUP_*.md
+GUIDE_*.md
+MANUAL_*.md
+NOTES_*.md
