@@ -57,8 +57,8 @@ export function middleware(request: NextRequest) {
       hasAuthKey: !!cfWorkerKey,
       expectedKeySet: !!expectedKey,
       authMatch: cfWorkerKey === expectedKey,
-      authKeyPreview: cfWorkerKey ? cfWorkerKey.substring(0, 8) + '...' : 'none',
-      expectedKeyPreview: expectedKey ? expectedKey.substring(0, 8) + '...' : 'none'
+      authKeyPreview: cfWorkerKey ? (cfWorkerKey as string).substring(0, 8) + '...' : 'none',
+      expectedKeyPreview: expectedKey ? (expectedKey as string).substring(0, 8) + '...' : 'none'
     })
     
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
