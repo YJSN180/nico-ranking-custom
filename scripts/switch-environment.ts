@@ -96,7 +96,7 @@ async function deployPreview() {
     
     // まずシークレットを設定
     await execAsync(
-      `export CLOUDFLARE_API_TOKEN=MveiaVjt0FKnbbKpKUB4uWPRCCsTb37gyby7nlrl && ` +
+      `export CLOUDFLARE_API_TOKEN=${process.env.CLOUDFLARE_API_TOKEN} && ` +
       `echo "${previewUrl}" | npx wrangler secret put PREVIEW_URL`
     )
     

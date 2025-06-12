@@ -8,7 +8,7 @@ role:あなたは天才プログラマーであり、コーディングに関す
 
 ### APIトークンを絶対にコミットしないでください！
 
-**現在のCloudflare APIトークン: `03bxnVVvwIc54UptoDc29RiZGroEn4Lp8OYlvmxj`**
+**現在のCloudflare APIトークン: `[REDACTED - See environment variables]`**
 
 1. **このトークンは以下の場所にのみ設定**：
    - `.env.local` ファイル（ローカル開発用、gitignore済み）

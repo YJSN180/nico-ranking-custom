@@ -25,7 +25,7 @@ export function middleware(request: NextRequest) {
   // Cloudflare Workers経由のアクセスチェック（本番環境のみ）
   if (process.env.NODE_ENV === 'production' && !request.nextUrl.pathname.startsWith('/api/')) {
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
-    const expectedKey = process.env.WORKER_AUTH_KEY || 'nico-rank-secure-2025'
+    const expectedKey = process.env.WORKER_AUTH_KEY
     
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
     if (!cfWorkerKey || cfWorkerKey !== expectedKey) {

@@ -22,7 +22,7 @@
   "dependencies": {
     "cheerio": "^1.0.0",
     "fast-xml-parser": "^4.5.3",
-    "next": "14.2.21",
+    "next": "14.2.25",
     "node-fetch": "^2.7.0",
     "pako": "^2.1.0",
     "react": "^18",

@@ -15,6 +15,7 @@ export interface Env {
   USE_PREVIEW?: string
   PREVIEW_URL?: string
   VERCEL_PROTECTION_BYPASS_SECRET?: string
+  WORKER_AUTH_KEY?: string
 }
 
 export default {
@@ -60,7 +61,7 @@ export default {
       
       // 認証ヘッダーを追加してプロキシ
       const proxyHeaders = new Headers(request.headers)
-      proxyHeaders.set('X-Worker-Auth', 'nico-rank-secure-2025')
+      proxyHeaders.set('X-Worker-Auth', env.WORKER_AUTH_KEY || '')
       
       // Vercel Protection Bypassヘッダーを追加
       if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
