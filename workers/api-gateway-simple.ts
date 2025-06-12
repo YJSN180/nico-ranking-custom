@@ -18,6 +18,48 @@ export interface Env {
   WORKER_AUTH_KEY?: string
 }
 
+// レート制限用のヘルパー関数
+async function checkRateLimit(
+  request: Request,
+  env: Env,
+  limits: { requests: number; window: number }
+): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
+  if (!env.RATE_LIMIT) {
+    return { allowed: true, remaining: limits.requests, resetAt: 0 }
+  }
+
+  const clientIP = request.headers.get('CF-Connecting-IP') || 
+                   request.headers.get('X-Forwarded-For')?.split(',')[0] || 
+                   'unknown'
+  
+  const now = Date.now()
+  const windowStart = Math.floor(now / limits.window) * limits.window
+  const key = `ratelimit:${clientIP}:${windowStart}`
+  
+  // 現在のカウントを取得
+  const currentCount = await env.RATE_LIMIT.get(key)
+  const count = currentCount ? parseInt(currentCount, 10) : 0
+  
+  if (count >= limits.requests) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: windowStart + limits.window
+    }
+  }
+  
+  // カウントをインクリメント
+  await env.RATE_LIMIT.put(key, (count + 1).toString(), {
+    expirationTtl: Math.ceil(limits.window / 1000) // TTLは秒単位
+  })
+  
+  return {
+    allowed: true,
+    remaining: limits.requests - count - 1,
+    resetAt: windowStart + limits.window
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
@@ -81,6 +123,23 @@ export default {
       newHeaders.set('X-Frame-Options', 'DENY')
       newHeaders.set('X-XSS-Protection', '1; mode=block')
       newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+      
+      // Content Security Policy (CSP) ヘッダーを追加
+      const cspDirectives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel-scripts.com",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+        "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests"
+      ]
+      newHeaders.set('Content-Security-Policy', cspDirectives.join('; '))
       
       return new Response(response.body, {
         status: response.status,

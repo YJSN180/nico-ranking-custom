@@ -42,6 +42,11 @@ vercel-env-vars.txt
 *.tsbuildinfo
 next-env.d.ts
 
+# Documentation files (except README.md and CLAUDE.md)
+*.md
+!README.md
+!CLAUDE.md
+
 # playwright
 /test-results/
 /playwright-report/
@@ -59,3 +64,17 @@ gh
 .wrangler/
 .dev.vars
 .env.cloudflare
+
+# Documentation and temporary files
+docs/
+*.log
+*.tmp
+*.bak
+UPDATE_*.md
+SECURITY_*.md
+FINAL_*.md
+VERCEL_*.md
+CLOUDFLARE_*.md
+GITHUB_*.md
+ENVIRONMENT_*.md
+MIGRATION_*.md
