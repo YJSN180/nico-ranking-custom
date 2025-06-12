@@ -3,12 +3,15 @@ import type { KVRankingData } from '@/lib/cloudflare-kv'
 
 // pako モック
 vi.mock('pako', () => ({
-  gzip: vi.fn((data) => new TextEncoder().encode(data)),
+  gzip: vi.fn((data) => {
+    const buffer = Buffer.from(data)
+    return new Uint8Array(buffer)
+  }),
   ungzip: vi.fn((data, options) => {
     if (options?.to === 'string') {
-      return new TextDecoder().decode(data)
+      return Buffer.from(data).toString()
     }
-    return data
+    return new Uint8Array(data)
   })
 }))
 
@@ -101,7 +104,9 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
 
       expect(mockKV.put).toHaveBeenCalledWith(
         'RANKING_LATEST',
-        expect.any(Uint8Array),
+        expect.objectContaining({
+          length: expect.any(Number)
+        }),
         {
           metadata: {
             compressed: true,
@@ -137,7 +142,9 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
 
       expect(mockKV.put).toHaveBeenCalledWith(
         'RANKING_LATEST',
-        expect.any(Uint8Array),
+        expect.objectContaining({
+          length: expect.any(Number)
+        }),
         {
           metadata: {
             compressed: true,

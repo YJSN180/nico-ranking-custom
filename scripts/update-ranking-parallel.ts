@@ -434,7 +434,7 @@ async function main() {
     
     // Get NG list
     const ngList = await getNGList();
-    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.length} titles`);
+    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.length} titles, ${ngList.authorIds.length} authors, ${ngList.derivedVideoIds.length} derived`);
 
     // Create tasks for all genres (processing both periods at once)
     const tasks: (() => Promise<any>)[] = [];

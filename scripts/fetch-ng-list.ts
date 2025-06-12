@@ -22,6 +22,7 @@ async function fetchNGList() {
     console.log('NG list fetched successfully')
     console.log(`- Manual entries: ${ngList.videoIds.length} videos, ${ngList.videoTitles.length} titles, ${ngList.authorIds.length} authors`)
     console.log(`- Derived entries: ${ngList.derivedVideoIds.length} videos`)
+    // Note: Actual NG list content is not logged for security reasons
   } catch (error) {
     console.error('Failed to fetch NG list:', error)
     // Write empty NG list on error
