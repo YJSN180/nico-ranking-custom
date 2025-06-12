@@ -45,7 +45,7 @@ describe('人気タグの表示問題', () => {
             ok: true,
             json: async () => ({
               items: [{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }],
-              popularTags: [] // allジャンルは人気タグなし
+              popularTags: ['ゲーム', 'エンターテイメント', 'VOICEROID実況プレイ'] // allジャンルでも集計タグを返す
             })
           })
         }

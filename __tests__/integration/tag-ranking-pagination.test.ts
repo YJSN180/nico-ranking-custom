@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
-import { kv } from '@/lib/simple-kv'
+import * as cloudflareKV from '@/lib/cloudflare-kv'
 import * as scraperModule from '@/lib/scraper'
 import * as ngFilterModule from '@/lib/ng-filter'
 
-vi.mock('@/lib/simple-kv', () => ({
-  kv: {
-    get: vi.fn(),
-    set: vi.fn(),
-  },
+vi.mock('@/lib/cloudflare-kv', () => ({
+  getTagRanking: vi.fn(),
+  setTagRanking: vi.fn(),
 }))
 
 vi.mock('@/lib/scraper')
@@ -49,7 +47,7 @@ describe('タグ別ランキングの動的読み込み', () => {
     }) as any)
 
     // KVキャッシュなし
-    vi.mocked(kv.get).mockResolvedValue(null)
+    vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(null)
 
     // APIリクエスト
     const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
@@ -92,7 +90,7 @@ describe('タグ別ランキングの動的読み込み', () => {
       newDerivedIds: []
     }) as any)
 
-    vi.mocked(kv.get).mockResolvedValue(null)
+    vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(null)
 
     const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=2')
     const response = await GET(request)
@@ -144,7 +142,7 @@ describe('タグ別ランキングの動的読み込み', () => {
       newDerivedIds: []
     }) as any)
 
-    vi.mocked(kv.get).mockResolvedValue(null)
+    vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(null)
 
     const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=3')
     const response = await GET(request)
@@ -168,7 +166,7 @@ describe('タグ別ランキングの動的読み込み', () => {
       authorName: `作者${i}`,
     }))
 
-    vi.mocked(kv.get).mockResolvedValue(cachedData)
+    vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(cachedData)
 
     const request = new NextRequest('http://localhost:3000/api/ranking?genre=other&period=24h&tag=インタビューシリーズ&page=1')
     const response = await GET(request)
