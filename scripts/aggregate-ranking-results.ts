@@ -59,11 +59,20 @@ async function main() {
     
     // Read all partial results
     const tmpDir = './tmp';
-    const files = await fs.readdir(tmpDir);
+    let files: string[] = [];
+    try {
+      files = await fs.readdir(tmpDir);
+    } catch (error) {
+      console.error('Failed to read tmp directory:', error);
+      process.exit(1);
+    }
+    
     const groupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
     
     if (groupFiles.length === 0) {
-      throw new Error('No group result files found');
+      console.error('No group result files found in tmp directory');
+      console.error('Available files:', files);
+      process.exit(1);
     }
     
     console.log(`Found ${groupFiles.length} group result files`);
