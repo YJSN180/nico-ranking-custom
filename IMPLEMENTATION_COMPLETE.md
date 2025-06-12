@@ -13,16 +13,16 @@
 ### 2. Cloudflare KV環境変数の設定 ✅
 
 #### 発見した既存のKVネームスペース
-- **NICO_RANKING** (ID: 80f4535c379b4e8cb89ce6dbdb7d2dc9) - メインのランキングデータ用
+- **NICO_RANKING** (ID: <your-kv-namespace-id>) - メインのランキングデータ用
 - **nico-ranking-RATE_LIMIT** (ID: c49751cf8c27464aac68cf030b9e0713) - レート制限用
 
 #### 設定した環境変数
 
 **GitHub Secrets (設定完了) ✅**
 ```
-CLOUDFLARE_ACCOUNT_ID=5984977746a3dfcd71415bed5c324eb1
-CLOUDFLARE_KV_NAMESPACE_ID=80f4535c379b4e8cb89ce6dbdb7d2dc9
-CLOUDFLARE_KV_API_TOKEN=ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj
+CLOUDFLARE_ACCOUNT_ID=<your-cloudflare-account-id>
+CLOUDFLARE_KV_NAMESPACE_ID=<your-kv-namespace-id>
+CLOUDFLARE_KV_API_TOKEN=<your-cloudflare-api-token>
 RATE_LIMIT_NAMESPACE_ID=c49751cf8c27464aac68cf030b9e0713
 ```
 

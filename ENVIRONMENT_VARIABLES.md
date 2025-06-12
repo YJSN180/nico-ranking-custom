@@ -1,70 +1,104 @@
-# Environment Variables Setup Guide
+# Environment Variables Guide
 
-## Convex Environment Variables
+This document describes the environment variables required for the Nico Ranking Custom application.
 
-Set these in the Convex dashboard (https://dashboard.convex.dev/):
+## Security Notice
 
-```
-CLOUDFLARE_ACCOUNT_ID=5984977746a3dfcd71415bed5c324eb1
-CLOUDFLARE_KV_NAMESPACE_ID=80f4535c379b4e8cb89ce6dbdb7d2dc9
-CLOUDFLARE_KV_API_TOKEN=<Your Cloudflare API Token with KV write permissions>
-```
+**NEVER commit actual credentials to the repository**. Always use placeholder values in documentation and example files.
 
-### How to set in Convex:
-1. Go to your project in Convex dashboard
-2. Navigate to Settings → Environment Variables
-3. Add each variable with the values above
-4. The API token should have permissions for:
-   - Account: Cloudflare Workers KV Storage:Edit
-   - Zone: Cache Purge:Purge
+## Required Environment Variables
 
-## Vercel Environment Variables
+### Cloudflare KV Configuration
+- `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
+- `CLOUDFLARE_KV_NAMESPACE_ID`: Your KV namespace ID for ranking data
+- `CLOUDFLARE_KV_API_TOKEN`: API token with KV read/write permissions
+- `RATE_LIMIT_NAMESPACE_ID`: (Optional) KV namespace ID for rate limiting
 
-Set these in the Vercel dashboard (https://vercel.com/):
+### Authentication
+- `CRON_SECRET`: Secret key for authenticating cron job requests
 
-```
-# For Cloudflare KV reading (if using the KV API route)
-CLOUDFLARE_ACCOUNT_ID=5984977746a3dfcd71415bed5c324eb1
-CLOUDFLARE_KV_NAMESPACE_ID=80f4535c379b4e8cb89ce6dbdb7d2dc9
-CLOUDFLARE_KV_API_TOKEN_READ=<Your Cloudflare API Token with KV read permissions>
+### Optional Configuration
+- `NICO_COOKIES`: Cookie values for accessing sensitive content (default: `sensitive_material_status=accept`)
 
-# Existing Vercel KV (keep these for backward compatibility)
-KV_REST_API_URL=<Your existing Vercel KV URL>
-KV_REST_API_TOKEN=<Your existing Vercel KV token>
-```
+## Deprecated Variables (To Be Removed)
 
-### How to set in Vercel:
-1. Go to your project in Vercel dashboard
-2. Navigate to Settings → Environment Variables
-3. Add each variable for Production, Preview, and Development environments
-4. Redeploy your application after adding variables
+### Vercel KV (Being replaced by Cloudflare KV)
+- `KV_REST_API_URL`: Vercel KV REST API URL
+- `KV_REST_API_TOKEN`: Vercel KV authentication token
 
-## Cloudflare API Token Creation
+### Convex (No longer used)
+- `NEXT_PUBLIC_CONVEX_URL`: Convex deployment URL
+- `CONVEX_DEPLOY_KEY`: Convex deployment key
 
-1. Go to https://dash.cloudflare.com/profile/api-tokens
-2. Click "Create Token"
-3. Use "Custom token" template
-4. Set permissions:
-   - Account → Cloudflare Workers KV Storage → Edit (for Convex)
-   - Account → Cloudflare Workers KV Storage → Read (for Vercel)
-5. Set Account Resources: Include → Your Account
-6. Create token and copy the value
+### Supabase (To be removed)
+- `NEXT_PUBLIC_SUPABASE_URL`: Supabase project URL
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase anonymous key
+- `SUPABASE_SERVICE_ROLE_KEY`: Supabase service role key
 
-## Testing the Setup
+## Setting Environment Variables
 
-After setting up environment variables:
+### For Local Development
 
-1. Test Convex cron job:
+1. Copy the example file:
    ```bash
-   npx convex run updateRanking:updateAllRankings
+   cp .env.local.example .env.local
    ```
 
-2. Check Convex logs:
+2. Fill in your actual values in `.env.local`
+
+### For Vercel Production
+
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Select your project
+3. Navigate to Settings → Environment Variables
+4. Add each variable for the appropriate environments:
+   - Production
+   - Preview
+   - Development
+
+### Using Scripts (Recommended)
+
+1. Set environment variables in your shell:
    ```bash
-   npx convex logs
+   export CLOUDFLARE_ACCOUNT_ID="your_account_id"
+   export CLOUDFLARE_KV_NAMESPACE_ID="your_namespace_id"
+   export CLOUDFLARE_KV_API_TOKEN="your_api_token"
    ```
 
-3. Verify data in Cloudflare KV:
-   - Go to Cloudflare dashboard
-   - Navigate to Workers & Pages → KV
-   - Check for key: `ranking-data-bundle`
+2. Run the setup script:
+   ```bash
+   ./scripts/set-cloudflare-env.sh
+   ```
+
+## Getting Credentials
+
+### Cloudflare KV
+1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Go to Workers & Pages → KV
+3. Create a namespace or use existing one
+4. Get your Account ID from the dashboard URL
+5. Create an API token with KV read/write permissions
+
+### Cron Secret
+Generate a secure random string:
+```bash
+openssl rand -base64 32
+```
+
+## Troubleshooting
+
+### Missing Environment Variables
+The application will fail to start if required variables are missing. Check the console for specific error messages.
+
+### Invalid Credentials
+If you get authentication errors, verify:
+1. API tokens have correct permissions
+2. Namespace IDs match your Cloudflare account
+3. No extra spaces or newlines in values
+
+## Migration Notes
+
+We are currently migrating from Vercel KV to Cloudflare KV. During the transition:
+1. Both sets of credentials may be required
+2. The application will gradually phase out Vercel KV usage
+3. Monitor logs for any KV-related errors

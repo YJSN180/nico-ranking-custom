@@ -1,5 +1,4 @@
 import type { RankingData } from '@/types/ranking'
-import { kv } from '@vercel/kv'
 import ClientPage from './client-page'
 import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
@@ -24,7 +23,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
-  // 0. Cloudflare KVから読み取りを試みる（タグなしの場合のみ）
+  // 1. Primary: Cloudflare KVから読み取りを試みる
   if (!tag) {
     try {
       const cfData = await getGenreRanking(genre, period as RankingPeriod)
@@ -37,41 +36,8 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
         return filteredData
       }
     } catch (cfError) {
-      // Cloudflare KVエラーは無視してVercel KVにフォールバック
+      // Cloudflare KVエラーは無視してスクレイピングにフォールバック
     }
-  }
-  
-  // 1. Primary: Check cache for pre-generated data
-  try {
-    let cacheKey = `ranking-${genre}-${period}`
-    if (tag) {
-      cacheKey = `ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`
-    }
-    
-    const cachedData = await kv.get(cacheKey)
-    
-    if (cachedData) {
-      let result: { items: RankingData, popularTags?: string[] }
-      
-      if (tag && Array.isArray(cachedData)) {
-        // タグフィルタリング済みデータ
-        result = { items: cachedData as RankingData, popularTags: [] }
-      } else if (typeof cachedData === 'object' && 'items' in cachedData) {
-        // ジャンル別データ（itemsとpopularTagsを含む）
-        result = cachedData as { items: RankingData, popularTags?: string[] }
-      } else {
-        result = { items: [], popularTags: [] }
-      }
-      
-      // NGフィルタリングを適用（メタデータでngFilteredがtrueの場合はスキップ）
-      if (typeof cachedData === 'object' && 'metadata' in cachedData && (cachedData as any).metadata?.ngFiltered) {
-        return result
-      }
-      const filteredData = await filterRankingData(result)
-      return filteredData
-    }
-  } catch (kvError) {
-    // KVエラーログはスキップ（ESLintエラー回避）
   }
 
   // 2. Fallback: Generate data on demand

@@ -8,9 +8,9 @@ ConvexからGitHub Actions + Cloudflare KVへの移行により、無料でラ�
 GitHub リポジトリの Settings → Secrets and variables → Actions から以下のシークレットを追加してください：
 
 ### 1. Cloudflare KV関連
-- `CLOUDFLARE_ACCOUNT_ID`: `5984977746a3dfcd71415bed5c324eb1`
-- `CLOUDFLARE_KV_NAMESPACE_ID`: `80f4535c379b4e8cb89ce6dbdb7d2dc9`
-- `CLOUDFLARE_KV_API_TOKEN`: `ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj`
+- `CLOUDFLARE_ACCOUNT_ID`: `<your-cloudflare-account-id>`
+- `CLOUDFLARE_KV_NAMESPACE_ID`: `<your-kv-namespace-id>`
+- `CLOUDFLARE_KV_API_TOKEN`: `<your-cloudflare-api-token>`
 
 ### 2. Vercel KV関連（NGリスト取得用）
 - `KV_REST_API_URL`: `https://gentle-camel-16074.upstash.io`

@@ -16,10 +16,10 @@ vercel link
 ```bash
 # For production
 vercel env add CLOUDFLARE_ACCOUNT_ID production
-# Enter value: 5984977746a3dfcd71415bed5c324eb1
+# Enter value: <your-cloudflare-account-id>
 
 vercel env add CLOUDFLARE_KV_NAMESPACE_ID production
-# Enter value: 80f4535c379b4e8cb89ce6dbdb7d2dc9
+# Enter value: <your-kv-namespace-id>
 
 vercel env add CLOUDFLARE_KV_API_TOKEN_READ production
 # Enter value: <Your_Read_Only_Token>
@@ -39,8 +39,8 @@ vercel env add CLOUDFLARE_KV_API_TOKEN_READ preview development
 
 | Key | Value | Environments |
 |-----|-------|--------------|
-| CLOUDFLARE_ACCOUNT_ID | 5984977746a3dfcd71415bed5c324eb1 | Production, Preview, Development |
-| CLOUDFLARE_KV_NAMESPACE_ID | 80f4535c379b4e8cb89ce6dbdb7d2dc9 | Production, Preview, Development |
+| CLOUDFLARE_ACCOUNT_ID | <your-cloudflare-account-id> | Production, Preview, Development |
+| CLOUDFLARE_KV_NAMESPACE_ID | <your-kv-namespace-id> | Production, Preview, Development |
 | CLOUDFLARE_KV_API_TOKEN_READ | <Your_Token> | Production, Preview, Development |
 
 ## Cloudflare Read-Only Token

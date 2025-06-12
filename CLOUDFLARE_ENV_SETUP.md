@@ -8,17 +8,17 @@ The following environment variables must be set in Vercel for all environments (
 
 ### 1. CLOUDFLARE_ACCOUNT_ID
 ```
-5984977746a3dfcd71415bed5c324eb1
+<your-cloudflare-account-id>
 ```
 
 ### 2. CLOUDFLARE_KV_NAMESPACE_ID
 ```
-80f4535c379b4e8cb89ce6dbdb7d2dc9
+<your-kv-namespace-id>
 ```
 
 ### 3. CLOUDFLARE_KV_API_TOKEN
 ```
-ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj
+<your-cloudflare-api-token>
 ```
 
 ### 4. RATE_LIMIT_NAMESPACE_ID

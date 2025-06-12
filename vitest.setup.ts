@@ -4,9 +4,10 @@ import './__tests__/mocks/next-router'
 
 // Mock environment variables
 vi.stubEnv('NODE_ENV', 'test')
-vi.stubEnv('KV_REST_API_URL', 'http://localhost:8080')
-vi.stubEnv('KV_REST_API_TOKEN', 'test-token')
 vi.stubEnv('CRON_SECRET', 'test-cron-secret')
+vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'test-account-id')
+vi.stubEnv('CLOUDFLARE_KV_NAMESPACE_ID', 'test-namespace-id')
+vi.stubEnv('CLOUDFLARE_KV_API_TOKEN', 'test-cf-token')
 
 // Mock console methods to avoid test output
 global.console = {

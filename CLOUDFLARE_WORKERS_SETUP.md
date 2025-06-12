@@ -45,7 +45,7 @@ workers_dev = true
 [vars]
 NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 
-account_id = "5984977746a3dfcd71415bed5c324eb1"
+account_id = "<your-cloudflare-account-id>"
 
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
@@ -53,7 +53,7 @@ id = "c49751cf8c27464aac68cf030b9e0713"
 
 [[kv_namespaces]]
 binding = "RANKING_DATA"
-id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+id = "<your-kv-namespace-id>"
 ```
 
 ### 5. Workersのデプロイ

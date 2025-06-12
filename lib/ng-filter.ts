@@ -1,10 +1,7 @@
-import { kv } from '@vercel/kv'
+// NGリストのフィルタリング機能
+// 現在はローカルストレージを使用（サーバーサイドでは無効）
 import type { NGList, NGFilterResult } from '@/types/ng-list'
 import type { RankingItem } from '@/types/ranking'
-
-// NGリストのキー
-const NG_LIST_MANUAL_KEY = 'ng-list-manual'
-const NG_LIST_DERIVED_KEY = 'ng-list-derived'
 
 // デフォルトの空のNGリスト
 const DEFAULT_NG_LIST: NGList = {
@@ -20,52 +17,70 @@ let ngListCache: NGList | null = null
 let ngListCacheTime = 0
 const CACHE_DURATION = 60000 // 1分間キャッシュ
 
-// NGリストを取得
+// NGリストを取得（サーバーサイドでは常にデフォルト値を返す）
 export async function getNGList(): Promise<NGList> {
+  // サーバーサイドでは常にデフォルト値を返す
+  if (typeof window === 'undefined') {
+    return DEFAULT_NG_LIST
+  }
+  
   // キャッシュが有効な場合はキャッシュから返す
   if (ngListCache && Date.now() - ngListCacheTime < CACHE_DURATION) {
     return ngListCache
   }
   
   try {
-    const [manual, derived] = await Promise.all([
-      kv.get<Omit<NGList, 'derivedVideoIds'>>(NG_LIST_MANUAL_KEY),
-      kv.get<string[]>(NG_LIST_DERIVED_KEY)
-    ])
-    
-    const ngList = {
-      ...DEFAULT_NG_LIST,
-      ...(manual || {}),
-      derivedVideoIds: derived || []
+    // クライアントサイドではローカルストレージから取得
+    const stored = localStorage.getItem('ng-list')
+    if (stored) {
+      const parsed = JSON.parse(stored) as NGList
+      ngListCache = { ...DEFAULT_NG_LIST, ...parsed }
+      ngListCacheTime = Date.now()
+      return ngListCache
     }
-    
-    // キャッシュを更新
-    ngListCache = ngList
-    ngListCacheTime = Date.now()
-    
-    return ngList
   } catch (error) {
-    // エラーは無視してデフォルト値を返す
-    return DEFAULT_NG_LIST
+    // エラーは無視
+  }
+  
+  return DEFAULT_NG_LIST
+}
+
+// 手動NGリストを保存（クライアントサイドのみ）
+export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
+  if (typeof window === 'undefined') {
+    return
+  }
+  
+  try {
+    const current = await getNGList()
+    const updated = {
+      ...current,
+      ...ngList
+    }
+    localStorage.setItem('ng-list', JSON.stringify(updated))
+    // キャッシュを無効化
+    ngListCache = null
+    ngListCacheTime = 0
+  } catch (error) {
+    // エラーは無視
   }
 }
 
-// 手動NGリストを保存
-export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
-  await kv.set(NG_LIST_MANUAL_KEY, ngList)
-  // キャッシュを無効化
-  ngListCache = null
-  ngListCacheTime = 0
-}
-
-// 派生NGリストに追加
+// 派生NGリストに追加（クライアントサイドのみ）
 export async function addToDerivedNGList(videoIds: string[]): Promise<void> {
-  if (videoIds.length === 0) return
+  if (videoIds.length === 0 || typeof window === 'undefined') return
   
   try {
-    const existing = await kv.get<string[]>(NG_LIST_DERIVED_KEY) || []
-    const newSet = new Set([...existing, ...videoIds])
-    await kv.set(NG_LIST_DERIVED_KEY, Array.from(newSet))
+    const current = await getNGList()
+    const newSet = new Set([...current.derivedVideoIds, ...videoIds])
+    const updated = {
+      ...current,
+      derivedVideoIds: Array.from(newSet)
+    }
+    localStorage.setItem('ng-list', JSON.stringify(updated))
+    // キャッシュを無効化
+    ngListCache = null
+    ngListCacheTime = 0
   } catch (error) {
     // エラーは無視
   }

@@ -2,8 +2,8 @@
 
 # Cloudflare KV セットアップスクリプト
 
-export CLOUDFLARE_API_TOKEN="ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj"
-export CLOUDFLARE_ACCOUNT_ID="5984977746a3dfcd71415bed5c324eb1"
+export CLOUDFLARE_API_TOKEN="<your-cloudflare-api-token>"
+export CLOUDFLARE_ACCOUNT_ID="<your-cloudflare-account-id>"
 
 echo "Creating KV namespaces..."
 

@@ -40,7 +40,7 @@
 3. **Cloudflare KV**
    - データの読み書き: 正常
    - 使用中のネームスペース:
-     - NICO_RANKING (80f4535c379b4e8cb89ce6dbdb7d2dc9)
+     - NICO_RANKING (<your-kv-namespace-id>)
      - RATE_LIMIT (c49751cf8c27464aac68cf030b9e0713)
 
 ## 残りのタスク（オプション）

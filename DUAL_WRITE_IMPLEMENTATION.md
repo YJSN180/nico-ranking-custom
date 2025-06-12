@@ -38,9 +38,9 @@ Vercel KVからCloudflare KVへの移行を安全に行うため、両方のKV�
 
 ### Cloudflare KV (必須)
 ```bash
-CLOUDFLARE_ACCOUNT_ID=5984977746a3dfcd71415bed5c324eb1
-CLOUDFLARE_KV_NAMESPACE_ID=80f4535c379b4e8cb89ce6dbdb7d2dc9
-CLOUDFLARE_KV_API_TOKEN=ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj
+CLOUDFLARE_ACCOUNT_ID=<your-cloudflare-account-id>
+CLOUDFLARE_KV_NAMESPACE_ID=<your-kv-namespace-id>
+CLOUDFLARE_KV_API_TOKEN=<your-cloudflare-api-token>
 ```
 
 ### Vercel KV (移行期間中は必須)

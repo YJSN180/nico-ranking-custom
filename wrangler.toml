@@ -9,18 +9,18 @@ NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 USE_PREVIEW = "false"  # "true" でプレビュー環境を使用
 
 # Account settings
-account_id = "5984977746a3dfcd71415bed5c324eb1"
+account_id = "<your-cloudflare-account-id>"
 
 # KV Namespaces
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "c49751cf8c27464aac68cf030b9e0713"
-preview_id = "c49751cf8c27464aac68cf030b9e0713"
+id = "<your-rate-limit-namespace-id>"
+preview_id = "<your-rate-limit-namespace-id>"
 
 [[kv_namespaces]]
 binding = "RANKING_DATA"
-id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
-preview_id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+id = "<your-kv-namespace-id>"
+preview_id = "<your-kv-namespace-id>"
 
 # Routes
 [[routes]]
@@ -60,8 +60,8 @@ zone_name = "nico-rank.com"
 
 [[env.preview.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "c49751cf8c27464aac68cf030b9e0713"
+id = "<your-rate-limit-namespace-id>"
 
 [[env.preview.kv_namespaces]]
 binding = "RANKING_DATA"
-id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+id = "<your-kv-namespace-id>"

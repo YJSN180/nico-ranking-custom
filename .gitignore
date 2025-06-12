@@ -32,6 +32,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# environment variable scripts and documentation
+scripts/set-*.sh
+vercel-env-vars.txt
+*.env
+.env.*
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

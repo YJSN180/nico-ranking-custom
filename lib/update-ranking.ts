@@ -1,4 +1,3 @@
-import { kv } from '@vercel/kv'
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
 import { filterRankingData } from '@/lib/ng-filter'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
@@ -142,18 +141,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
       }
       kvData.metadata!.totalItems += items.length
       
-      // 新しい形式で保存（period付き）
-      await kv.set(`ranking-${genre}-${period}`, dataToStore, { ex: 3600 })
-      
-      // 後方互換性のため、24hのデータは旧形式でも保存
-      if (period === '24h') {
-        await kv.set(`ranking-${genre}`, dataToStore, { ex: 3600 })
-        
-        // 'all'ジャンルは'ranking-data'にも保存
-        if (genre === 'all') {
-          await kv.set('ranking-data', items, { ex: 3600 })
-        }
-      }
+      // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
       
       // 「その他」ジャンルのすべての人気タグを両期間で事前生成
       if (genre === 'other' && popularTags && popularTags.length > 0) {
@@ -218,8 +206,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
               rank: index + 1
             }))
             
-            // KVに保存（エンコードされたタグ名をキーに使用）
-            await kv.set(`ranking-${genre}-${period}-tag-${encodeURIComponent(tag)}`, tagRankingItems, { ex: 3600 })
+            // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
             
             // Cloudflare KVデータにも追加
             if (kvData.genres[genre][period].tags) {
@@ -231,25 +218,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
         }
       }
       
-      // 4時間ごとに人気タグをバックアップ
-      const currentHour = new Date().getHours()
-      if (currentHour % 4 === 0 && popularTags && popularTags.length > 0) {
-        try {
-          const backupDate = new Date()
-          const backupKey = `popular-tags-backup:${backupDate.getFullYear()}-${String(backupDate.getMonth() + 1).padStart(2, '0')}-${String(backupDate.getDate()).padStart(2, '0')}:${String(currentHour).padStart(2, '0')}`
-          
-          // 既存のバックアップデータを取得（なければ新規作成）
-          let backupData = await kv.get(backupKey) as Record<string, string[]> || {}
-          
-          // 現在のジャンルのタグを更新
-          backupData[genre] = popularTags
-          
-          // 7日間のTTLで保存
-          await kv.set(backupKey, backupData, { ex: 7 * 24 * 3600 })
-        } catch (backupError) {
-          // バックアップエラーは無視してメイン処理を継続
-        }
-      }
+      // バックアップ機能は削除（Cloudflare KVで管理）
       
       updatedGenres.push(`${genre}-${period}`)
       // 更新成功（ログは出力しない - ESLintエラー回避）
@@ -262,8 +231,8 @@ export async function updateRankingData(): Promise<UpdateResult> {
       // エラーログはスキップ（ESLintエラー回避）
       failedGenres.push(`${genre}-${period}`)
       
-      // KVエラーの場合は全体を失敗とする
-      if (error instanceof Error && error.message.includes('KV')) {
+      // エラーの場合は全体を失敗とする
+      if (error instanceof Error) {
         return {
           success: false,
           updatedGenres,

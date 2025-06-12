@@ -3,20 +3,20 @@
 The following environment variables need to be added to your Vercel project:
 
 ## Cloudflare KV Variables (Required)
-CLOUDFLARE_ACCOUNT_ID=5984977746a3dfcd71415bed5c324eb1
-CLOUDFLARE_KV_NAMESPACE_ID=80f4535c379b4e8cb89ce6dbdb7d2dc9
-CLOUDFLARE_KV_API_TOKEN=ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj
+CLOUDFLARE_ACCOUNT_ID=<your_cloudflare_account_id>
+CLOUDFLARE_KV_NAMESPACE_ID=<your_kv_namespace_id>
+CLOUDFLARE_KV_API_TOKEN=<your_cloudflare_api_token>
 
 ## Convex Variables (Required)
-NEXT_PUBLIC_CONVEX_URL=https://judicious-lemming-629.convex.cloud
-CONVEX_DEPLOY_KEY=prod:judicious-lemming-629|eyJ2MiI6ImVmNzk0MTk5ZGU0NjRmN2E5N2ZjOTI2ZjA3NjY4NmU4In0=
+NEXT_PUBLIC_CONVEX_URL=<your_convex_url>
+CONVEX_DEPLOY_KEY=<your_convex_deploy_key>
 
 ## Existing Vercel KV Variables (Keep for now)
-KV_REST_API_URL=https://gentle-camel-16074.upstash.io
-KV_REST_API_TOKEN=AT7KAAIjcDE0NzM1NDBhYTEyMWY0ODM3OWQ0NmNlZTcyMmE4NWZmN3AxMA
+KV_REST_API_URL=<your_vercel_kv_url>
+KV_REST_API_TOKEN=<your_vercel_kv_token>
 
 ## Cron Secret (Required)
-CRON_SECRET=your_cron_secret
+CRON_SECRET=<your_cron_secret>
 
 ## Optional Variables
 NICO_COOKIES=sensitive_material_status=accept
