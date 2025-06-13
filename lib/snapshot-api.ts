@@ -7,6 +7,7 @@ export interface VideoStats {
   commentCounter?: number
   mylistCounter?: number
   likeCounter?: number
+  tags?: string[]
 }
 
 // Googlebot UAでSnapshot APIにアクセス
@@ -30,34 +31,44 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
     const batch = videoIds.slice(i, i + batchSize)
     
     try {
-      // contentIdで検索
-      const query = batch.map(id => `contentId:${id}`).join(' OR ')
-      const params = new URLSearchParams({
-        q: query,
-        targets: 'title', // titleフィールドで検索
-        fields: 'contentId,viewCounter,commentCounter,mylistCounter,likeCounter',
-        _limit: String(batch.length)
-      })
+      // 動画IDで検索（各IDを個別に検索）
+      const allStats: Record<string, VideoStats> = {}
       
-      const response = await fetchWithGooglebot(`${SNAPSHOT_API_URL}?${params}`)
-      
-      if (response.ok) {
-        const data = await response.json()
-        
-        // 結果をマップに変換
-        if (data.data && Array.isArray(data.data)) {
-          data.data.forEach((item: any) => {
-            if (item.contentId) {
-              stats[item.contentId] = {
-                viewCounter: item.viewCounter,
-                commentCounter: item.commentCounter,
-                mylistCounter: item.mylistCounter,
-                likeCounter: item.likeCounter
+      for (const videoId of batch) {
+        try {
+          const params = new URLSearchParams({
+            q: videoId,
+            targets: 'title,description', // 複数のフィールドで検索
+            fields: 'contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags',
+            _limit: '10'
+          })
+          
+          const response = await fetchWithGooglebot(`${SNAPSHOT_API_URL}?${params}`)
+          
+          if (response.ok) {
+            const data = await response.json()
+            
+            if (data.data && Array.isArray(data.data)) {
+              // 正確なIDの動画を見つける
+              const video = data.data.find((v: any) => v.contentId === videoId)
+              if (video) {
+                allStats[video.contentId] = {
+                  viewCounter: video.viewCounter,
+                  commentCounter: video.commentCounter,
+                  mylistCounter: video.mylistCounter,
+                  likeCounter: video.likeCounter,
+                  tags: video.tags ? video.tags.split(' ').filter((tag: string) => tag.length > 0) : undefined
+                }
               }
             }
-          })
+          }
+        } catch (error) {
+          // 個別のエラーは無視
         }
       }
+      
+      // バッチの結果をマージ
+      Object.assign(stats, allStats)
     } catch (error) {
       // エラーは静かに処理（部分的な失敗を許容）
       // Failed to fetch stats for batch - error handled silently

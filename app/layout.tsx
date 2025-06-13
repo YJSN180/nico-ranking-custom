@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import Script from 'next/script'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
@@ -23,28 +24,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // 初回ロード時のテーマフラッシュを防ぐ
-              (function() {
-                try {
-                  const saved = localStorage.getItem('user-preferences');
-                  if (saved) {
-                    const prefs = JSON.parse(saved);
-                    const theme = prefs.theme || 'light';
-                    document.documentElement.setAttribute('data-theme', theme);
-                  }
-                } catch (e) {
-                  // エラー時は何もしない
-                }
-              })();
-            `,
-          }}
-        />
-      </head>
       <body className={inter.className}>
+        <Script src="/theme-script.js" strategy="beforeInteractive" />
         <ThemeProvider>
           {children}
         </ThemeProvider>

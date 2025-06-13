@@ -54,6 +54,7 @@
     "eslint": "^8",
     "eslint-config-next": "15.3.3",
     "jsdom": "^25.0.1",
+    "miniflare": "^3.20250408.2",
     "prettier": "^3.4.2",
     "puppeteer": "^24.9.0",
     "typescript": "^5",

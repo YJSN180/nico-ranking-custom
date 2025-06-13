@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
       WORKER_AUTH_KEY: process.env.WORKER_AUTH_KEY ? 'SET' : 'NOT SET',
       hasWorkerAuthKey: !!process.env.WORKER_AUTH_KEY,
       workerAuthKeyLength: process.env.WORKER_AUTH_KEY?.length || 0,
-      workerAuthKeyPreview: process.env.WORKER_AUTH_KEY ? process.env.WORKER_AUTH_KEY.substring(0, 8) + '...' : 'none'
+      // プレビューを完全に削除 - セキュリティリスク
     },
     headers: {
       'x-worker-auth': request.headers.get('x-worker-auth'),

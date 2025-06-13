@@ -32,7 +32,7 @@ id = "c49751cf8c27464aac68cf030b9e0713"
 preview_id = "c49751cf8c27464aac68cf030b9e0713"
 
 [[kv_namespaces]]
-binding = "RANKING_DATA"
+binding = "RANKING_KV"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 preview_id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
@@ -80,7 +80,7 @@ binding = "RATE_LIMIT"
 id = "c49751cf8c27464aac68cf030b9e0713"
 
 [[env.preview.kv_namespaces]]
-binding = "RANKING_DATA"
+binding = "RANKING_KV"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
 # =============================================================================
@@ -114,7 +114,7 @@ new_classes = ["RankingProcessor"]
 
 # KV namespaces for cron worker
 [[env.cron.kv_namespaces]]
-binding = "RANKING_DATA"
+binding = "RANKING_KV"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
 [[env.cron.kv_namespaces]]

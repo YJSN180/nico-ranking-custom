@@ -3,10 +3,12 @@
  * デバッグ用のシンプルな実装
  */
 
-interface KVNamespace {
-  get(key: string): Promise<string | null>
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
-}
+import { 
+  checkRateLimit as performRateLimit, 
+  shouldRateLimit, 
+  getRateLimitConfig,
+  type KVNamespace
+} from './rate-limiter'
 
 export interface Env {
   RATE_LIMIT: KVNamespace
@@ -18,52 +20,35 @@ export interface Env {
   WORKER_AUTH_KEY?: string
 }
 
-// レート制限用のヘルパー関数
-async function checkRateLimit(
-  request: Request,
-  env: Env,
-  limits: { requests: number; window: number }
-): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
-  if (!env.RATE_LIMIT) {
-    return { allowed: true, remaining: limits.requests, resetAt: 0 }
-  }
-
-  const clientIP = request.headers.get('CF-Connecting-IP') || 
-                   request.headers.get('X-Forwarded-For')?.split(',')[0] || 
-                   'unknown'
-  
-  const now = Date.now()
-  const windowStart = Math.floor(now / limits.window) * limits.window
-  const key = `ratelimit:${clientIP}:${windowStart}`
-  
-  // 現在のカウントを取得
-  const currentCount = await env.RATE_LIMIT.get(key)
-  const count = currentCount ? parseInt(currentCount, 10) : 0
-  
-  if (count >= limits.requests) {
-    return {
-      allowed: false,
-      remaining: 0,
-      resetAt: windowStart + limits.window
-    }
-  }
-  
-  // カウントをインクリメント
-  await env.RATE_LIMIT.put(key, (count + 1).toString(), {
-    expirationTtl: Math.ceil(limits.window / 1000) // TTLは秒単位
-  })
-  
-  return {
-    allowed: true,
-    remaining: limits.requests - count - 1,
-    resetAt: windowStart + limits.window
-  }
-}
+// レート制限関数は./rate-limiterからインポート
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url)
+      
+      // レート制限の適用
+      if (shouldRateLimit(url.pathname)) {
+        const limits = getRateLimitConfig(url.pathname)
+        const rateLimit = await performRateLimit(request, env.RATE_LIMIT, limits)
+        
+        if (!rateLimit.allowed) {
+          return new Response(JSON.stringify({
+            error: 'Too Many Requests',
+            message: 'Rate limit exceeded. Please try again later.',
+            retryAfter: Math.ceil((rateLimit.resetAt - Date.now()) / 1000)
+          }), { 
+            status: 429,
+            headers: {
+              'Content-Type': 'application/json',
+              'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
+              'X-RateLimit-Limit': String(limits.requests),
+              'X-RateLimit-Remaining': String(rateLimit.remaining),
+              'X-RateLimit-Reset': String(rateLimit.resetAt)
+            }
+          })
+        }
+      }
       
       // デバッグ情報
       if (url.pathname === '/debug') {
@@ -138,11 +123,12 @@ export default {
       newHeaders.set('X-Frame-Options', 'DENY')
       newHeaders.set('X-XSS-Protection', '1; mode=block')
       newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+      newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
       
-      // Content Security Policy (CSP) ヘッダーを追加
+      // Content Security Policy (CSP) ヘッダーを追加（unsafe-evalを削除）
       const cspDirectives = [
         "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel-scripts.com",
+        "script-src 'self' https://*.vercel-scripts.com",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data:",
