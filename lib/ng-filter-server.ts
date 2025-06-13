@@ -66,7 +66,7 @@ export async function filterRankingItemsServer(items: RankingItem[]): Promise<NG
   }))
   
   return {
-    items: rerankedItems,
+    filteredItems: rerankedItems,
     filteredCount: items.length - rerankedItems.length,
     newDerivedIds: Array.from(new Set(newDerivedIds))
   }
@@ -80,7 +80,7 @@ export async function filterRankingDataServer(data: {
   items: RankingItem[]
   popularTags?: string[]
 }> {
-  const { items: filteredItems } = await filterRankingItemsServer(data.items)
+  const { filteredItems } = await filterRankingItemsServer(data.items)
   
   return {
     items: filteredItems,

@@ -32,13 +32,14 @@ export async function getServerNGList(): Promise<NGList> {
 // Save manual NG list to KV
 export async function saveServerManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
   try {
-    await kv.put('ng-list-manual', ngList)
-    console.log('Saved NG list to KV:', {
+    console.log('Saving NG list to KV:', {
       videoIds: ngList.videoIds.length,
       videoTitles: ngList.videoTitles.length,
       authorIds: ngList.authorIds.length,
       authorNames: ngList.authorNames.length
     })
+    await kv.set('ng-list-manual', ngList)
+    console.log('NG list saved successfully to KV')
   } catch (error) {
     console.error('Failed to save NG list to KV:', error)
     throw error
@@ -52,8 +53,7 @@ export async function addToServerDerivedNGList(videoIds: string[]): Promise<void
   try {
     const current = await kv.get<string[]>('ng-list-derived') || []
     const newSet = new Set([...current, ...videoIds])
-    await kv.put('ng-list-derived', Array.from(newSet))
-    console.log('Added to derived NG list:', videoIds.length, 'items')
+    await kv.set('ng-list-derived', Array.from(newSet))
   } catch (error) {
     console.error('Failed to update derived NG list:', error)
     throw error

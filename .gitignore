@@ -95,6 +95,9 @@ Thumbs.db
 .env.cloudflare
 wrangler.toml
 
+# test scripts
+test-ng-persistence.js
+
 # Documentation and temporary files
 *.log
 *.tmp

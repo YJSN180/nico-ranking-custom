@@ -12,4 +12,5 @@ export interface NGList {
 export interface NGFilterResult {
   filteredItems: any[]
   newDerivedIds: string[]
+  filteredCount?: number
 }

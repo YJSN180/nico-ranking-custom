@@ -121,7 +121,9 @@ export function middleware(request: NextRequest) {
   // /admin配下のすべてのパスで認証を要求
   if (request.nextUrl.pathname.startsWith('/admin')) {
     const authHeader = request.headers.get('authorization')
+    const adminAuthCookie = request.cookies.get('admin-auth')
     
+    // 通常のページアクセスの場合
     // 認証ヘッダーがない場合
     if (!authHeader || !authHeader.startsWith('Basic ')) {
       return new NextResponse('Authentication required', {
@@ -155,6 +157,17 @@ export function middleware(request: NextRequest) {
           },
         })
       }
+      
+      // 認証成功時、クッキーを設定
+      const response = NextResponse.next()
+      response.cookies.set('admin-auth', 'authenticated', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24, // 24 hours
+        path: '/'
+      })
+      return response
     } catch {
       return new NextResponse('Invalid authentication format', {
         status: 401,
@@ -162,6 +175,14 @@ export function middleware(request: NextRequest) {
           'WWW-Authenticate': 'Basic realm="Admin Area"',
         },
       })
+    }
+  }
+  
+  // API admin routes - check cookie
+  if (request.nextUrl.pathname.startsWith('/api/admin')) {
+    const adminAuthCookie = request.cookies.get('admin-auth')
+    if (adminAuthCookie?.value !== 'authenticated') {
+      return new NextResponse('Unauthorized', { status: 401 })
     }
   }
   

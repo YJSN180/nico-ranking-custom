@@ -27,13 +27,21 @@ export default function NGSettingsPage() {
 
   const fetchNGList = async () => {
     try {
-      const response = await fetch('/api/admin/ng-list')
-      if (response.ok) {
+      const response = await fetch('/api/admin/ng-list', {
+        credentials: 'same-origin'
+      })
+      if (!response.ok) {
+        console.error('Failed to fetch NG list:', response.status, response.statusText)
+        if (response.status === 401) {
+          alert('認証エラー: ページをリロードして再度ログインしてください')
+        }
+      } else {
         const data = await response.json()
         setNgList(data)
       }
     } catch (error) {
-      // エラーハンドリング
+      console.error('Error fetching NG list:', error)
+      alert('NGリストの取得に失敗しました')
     } finally {
       setLoading(false)
     }
@@ -43,9 +51,10 @@ export default function NGSettingsPage() {
   const saveNGList = async () => {
     setSaving(true)
     try {
-      await fetch('/api/admin/ng-list', {
+      const response = await fetch('/api/admin/ng-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({
           videoIds: ngList.videoIds,
           videoTitles: ngList.videoTitles,
@@ -53,8 +62,20 @@ export default function NGSettingsPage() {
           authorNames: ngList.authorNames
         })
       })
-      alert('保存しました')
+      if (!response.ok) {
+        console.error('Failed to save NG list:', response.status, response.statusText)
+        if (response.status === 401) {
+          alert('認証エラー: ページをリロードして再度ログインしてください')
+        } else {
+          alert('保存に失敗しました')
+        }
+      } else {
+        alert('保存しました')
+        // 保存後に再取得して最新の状態を反映
+        await fetchNGList()
+      }
     } catch (error) {
+      console.error('Error saving NG list:', error)
       alert('保存に失敗しました')
     } finally {
       setSaving(false)
@@ -100,10 +121,23 @@ export default function NGSettingsPage() {
     if (!confirm('派生NGリストをすべてクリアしますか？')) return
     
     try {
-      await fetch('/api/admin/ng-list/clear-derived', { method: 'POST' })
-      setNgList((prev: NGList) => ({ ...prev, derivedVideoIds: [] }))
-      alert('クリアしました')
+      const response = await fetch('/api/admin/ng-list/clear-derived', { 
+        method: 'POST',
+        credentials: 'same-origin'
+      })
+      if (!response.ok) {
+        console.error('Failed to clear derived list:', response.status, response.statusText)
+        if (response.status === 401) {
+          alert('認証エラー: ページをリロードして再度ログインしてください')
+        } else {
+          alert('クリアに失敗しました')
+        }
+      } else {
+        setNgList((prev: NGList) => ({ ...prev, derivedVideoIds: [] }))
+        alert('クリアしました')
+      }
     } catch (error) {
+      console.error('Error clearing derived list:', error)
       alert('クリアに失敗しました')
     }
   }
