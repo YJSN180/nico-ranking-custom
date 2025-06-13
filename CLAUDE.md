@@ -216,6 +216,99 @@ Refused to execute inline script because it violates the following Content Secur
 
 **注意**: Vercelの自動デプロイだけでは不十分。Cloudflare Workersも手動デプロイが必要。
 
+## Security Configuration
+
+### 🛡️ セキュリティヘッダー実装状況
+
+**実装済みセキュリティヘッダー**:
+- ✅ Content-Security-Policy（厳格なCSP）
+- ✅ Strict-Transport-Security（HSTS）
+- ✅ X-Frame-Options: DENY
+- ✅ X-Content-Type-Options: nosniff
+- ✅ X-XSS-Protection: 1; mode=block
+- ✅ Referrer-Policy: strict-origin-when-cross-origin
+- ✅ Permissions-Policy（デバイス機能制限）
+- ✅ Cross-Origin-Embedder-Policy: require-corp
+- ✅ Cross-Origin-Opener-Policy: same-origin
+- ✅ X-DNS-Prefetch-Control: on
+
+**設定場所**:
+- `next.config.mjs`: Next.jsアプリケーション用
+- `workers/api-gateway-simple.ts`: Cloudflare Workers用
+
+### 🚨 レート制限実装
+
+**多層防御システム**:
+1. **Cloudflare Workers（第1防御線）**:
+   - Admin API: 20 requests/min
+   - 一般API: 50 requests/min
+   - ページアクセス: 200 requests/min
+
+2. **Next.js Middleware（第2防御線）**:
+   - Admin API: 5 requests/min
+   - 一般API: 10 requests/10sec
+
+**セキュリティイベントログ**:
+- レート制限超過
+- 不正な管理画面ログイン試行
+- デバッグエンドポイントへの不正アクセス
+
+### 🔐 認証・認可システム
+
+**管理画面保護**:
+- Basic認証（HTTP認証）
+- セッション管理（HTTP-only cookie）
+- IP別レート制限
+
+**API保護**:
+- Worker Auth Key（内部通信）
+- Cron Secret（定期実行）
+- Preview Protection Key（プレビュー環境）
+
+### ⚙️ Cloudflare設定
+
+**手動設定が必要な項目**（`CLOUDFLARE_SECURITY_SETUP.md`参照）:
+- Zone Lockdown（管理画面IP制限）
+- Bot Fight Mode
+- Firewall Rules
+- Advanced Rate Limiting
+- DDoS Protection設定
+
+**設定済み項目**:
+- SSL/TLS: Full (Strict)
+- HSTS有効
+- CDN + WAF有効
+
+### 🔍 セキュリティ監視
+
+**ログ記録対象**:
+```typescript
+// middleware.tsで実装
+logSecurityEvent('RATE_LIMIT_EXCEEDED', ip, details)
+logSecurityEvent('INVALID_ADMIN_CREDENTIALS', ip, details)  
+logSecurityEvent('DEBUG_ENDPOINT_ACCESS_BLOCKED', ip, details)
+```
+
+**推奨監視項目**:
+- Security Events（Cloudflareダッシュボード）
+- Rate limiting triggers
+- 異常なトラフィックパターン
+- SSL証明書有効期限
+
+### 🚨 緊急時対応
+
+**DDoS攻撃時**:
+1. Cloudflare Security Level を "I'm Under Attack" に変更
+2. Rate Limiting を一時的に厳格化
+3. 攻撃元IPのブロック
+4. 攻撃終了後の設定復旧
+
+**セキュリティインシデント**:
+1. ログの確認・保存
+2. 影響範囲の特定
+3. 必要に応じた緊急メンテナンス
+4. 事後対策の実施
+
 ### Cloudflare Pages Configuration
 
 ### ❌ Pages Deployment Disabled

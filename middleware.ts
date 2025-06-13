@@ -4,6 +4,19 @@ import type { NextRequest } from 'next/server'
 // シンプルなインメモリレート制限（本番ではRedisやCloudflareを使用）
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
+// セキュリティイベントログ機能
+function logSecurityEvent(event: string, ip: string, details?: any) {
+  if (process.env.NODE_ENV === 'production') {
+    // 本番環境でのみログ出力
+    console.warn(`[SECURITY] ${event}`, {
+      timestamp: new Date().toISOString(),
+      ip,
+      details,
+      userAgent: details?.userAgent || 'unknown'
+    })
+  }
+}
+
 function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): boolean {
   const now = Date.now()
   const entry = rateLimitStore.get(ip)
@@ -80,6 +93,10 @@ export function middleware(request: NextRequest) {
     
     if (process.env.VERCEL_ENV === 'production' && 
         dangerousEndpoints.some(path => request.nextUrl.pathname.startsWith(path))) {
+      logSecurityEvent('DEBUG_ENDPOINT_ACCESS_BLOCKED', ip, {
+        path: request.nextUrl.pathname,
+        userAgent: request.headers.get('user-agent')
+      })
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     }
     
@@ -88,6 +105,12 @@ export function middleware(request: NextRequest) {
     const windowMs = request.nextUrl.pathname.startsWith('/api/admin') ? 60000 : 10000
     
     if (!checkRateLimit(ip, limit, windowMs)) {
+      logSecurityEvent('RATE_LIMIT_EXCEEDED', ip, {
+        path: request.nextUrl.pathname,
+        userAgent: request.headers.get('user-agent'),
+        limit,
+        windowMs
+      })
       return NextResponse.json(
         { error: 'Too many requests' },
         { 
@@ -133,6 +156,11 @@ export function middleware(request: NextRequest) {
       const validPassword = process.env.ADMIN_PASSWORD
       
       if (username !== validUsername || password !== validPassword) {
+        logSecurityEvent('INVALID_ADMIN_CREDENTIALS', ip, {
+          path: request.nextUrl.pathname,
+          userAgent: request.headers.get('user-agent'),
+          username
+        })
         return new NextResponse('Invalid credentials', {
           status: 401,
           headers: {
