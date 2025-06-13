@@ -624,6 +624,22 @@ git remote prune origin
 3. **Maintain clean repository** - Keep only essential files in version control
 4. **Security first** - Never commit sensitive information in any documentation
 
+### Project Structure Organization
+
+**All technical documentation has been moved to `/docs` directory (gitignored)**:
+- Deployment guides
+- Security documentation
+- Performance reports
+- Configuration guides
+
+This keeps the project root clean and focused on essential files only. The `/docs` folder contains:
+- Cloudflare setup guides
+- Security configurations
+- Performance optimization reports
+- Deployment checklists
+
+Only `README.md` and `CLAUDE.md` remain in the project root for immediate visibility.
+
 ## Multi-Agent Task Management
 
 ### When to Use Multiple Sub-Agents
