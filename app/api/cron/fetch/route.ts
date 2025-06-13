@@ -123,22 +123,22 @@ export async function POST(request: Request) {
           totalItems = items.length
         }
         
-        // 「その他」ジャンルのすべての人気タグを両期間で事前生成
-        if (genre === 'other' && popularTags && popularTags.length > 0) {
+        // 全ジャンルの人気タグを事前キャッシュ（500件ずつ）
+        if (popularTags && popularTags.length > 0) {
           
-          // すべての人気タグを処理（最大15タグ程度を想定）
+          // 全人気タグを処理（500件ずつキャッシュ）
           for (const tag of popularTags) {
             try {
               // タグ別ランキングを取得
               const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
               
               if (tagItems.length > 0) {
-                // NGフィルタリング後に300件確保
-                const targetCount = 300
+                // NGフィルタリング後に500件確保
+                const targetCount = 500
                 const allTagItems: RankingItem[] = []
                 const seenVideoIds = new Set<string>() // 重複チェック用
                 let tagPage = 1
-                const maxTagPages = 8 // 重複があるため上限を増やす
+                const maxTagPages = 10 // 500件確保のため上限を増やす
                 
                 while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
                   try {
@@ -185,7 +185,7 @@ export async function POST(request: Request) {
                   }
                 }
                 
-                // 300件に切り詰め、ランク番号を振り直す
+                // 500件に切り詰め、ランク番号を振り直す
                 const tagRankingItems = allTagItems.slice(0, targetCount).map((item, index) => ({
                   ...item,
                   rank: index + 1

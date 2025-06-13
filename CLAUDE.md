@@ -156,7 +156,67 @@ To run a single test file:
 npx vitest run path/to/test.ts
 ```
 
-## Cloudflare Pages Configuration
+## Deployment Management
+
+### 🚀 Deployment Workflow
+
+#### Vercel (Main Application)
+- **自動デプロイ**: `main`ブランチへのpush時に自動実行
+- **プレビューデプロイ**: PRごとに自動生成
+- **環境変数**: Vercelダッシュボードで管理
+
+#### Cloudflare Workers (API Gateway)
+- **手動デプロイ**: セキュリティ関連の変更後は必須
+- **デプロイコマンド**:
+  ```bash
+  source .env.local && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_KV_API_TOKEN" wrangler deploy
+  ```
+- **デプロイが必要な変更**:
+  - CSP (Content Security Policy) ヘッダーの修正
+  - セキュリティヘッダーの追加・変更
+  - レート制限設定の変更
+  - ルーティングロジックの変更
+
+#### 🔥 重要：CSP問題のトラブルシューティング
+
+**症状**: ページが一瞬表示された後に真っ白になる、コンソールでCSPエラー
+```
+Refused to execute inline script because it violates the following Content Security Policy directive: "script-src 'self' https://*.vercel-scripts.com"
+```
+
+**原因**: Next.jsのインラインスクリプトがCSPによってブロックされている
+
+**修正手順**:
+1. **next.config.mjs**のCSPを修正:
+   ```javascript
+   "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com"
+   ```
+
+2. **workers/api-gateway-simple.ts**のCSPも同様に修正:
+   ```typescript
+   "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com"
+   ```
+
+3. **変更をコミット・プッシュ**:
+   ```bash
+   git add .
+   git commit -m "fix: add 'unsafe-inline' to CSP for Next.js compatibility"
+   git push
+   ```
+
+4. **Cloudflare Workersを手動デプロイ**:
+   ```bash
+   source .env.local && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_KV_API_TOKEN" wrangler deploy
+   ```
+
+5. **反映確認**（1-2分後）:
+   ```bash
+   curl -I https://nico-rank.com/ | grep -i "content-security-policy"
+   ```
+
+**注意**: Vercelの自動デプロイだけでは不十分。Cloudflare Workersも手動デプロイが必要。
+
+### Cloudflare Pages Configuration
 
 ### ❌ Pages Deployment Disabled
 This project includes multiple safeguards to prevent accidental Cloudflare Pages deployment:

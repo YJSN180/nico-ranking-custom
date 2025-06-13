@@ -157,7 +157,10 @@ export default function ClientPage({
 
   // 動画ページから戻った時のみスクロール位置を復元
   useEffect(() => {
-    // performance.navigationでブラウザバックを検出
+    // ニコニコ動画からの戻り時のみ復元（タグ変更時は復元しない）
+    const isFromNiconico = document.referrer && 
+      (document.referrer.includes('nicovideo.jp') || document.referrer.includes('niconico.jp'));
+    
     const isBackNavigation = window.performance && 
       window.performance.navigation && 
       window.performance.navigation.type === 2;
@@ -168,8 +171,8 @@ export default function ClientPage({
       setDisplayCount(urlDisplayCount)
     }
     
-    // ブラウザバックの場合のみスクロール位置を復元
-    if (isBackNavigation) {
+    // ニコニコ動画からの戻り時のみスクロール位置を復元
+    if (isBackNavigation && isFromNiconico) {
       const storageKey = `ranking-scroll-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
       const savedScrollPosition = sessionStorage.getItem(storageKey)
       
