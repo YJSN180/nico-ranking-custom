@@ -1,9 +1,10 @@
 name: Update Nico Ranking Data (Parallel)
 
 on:
-  schedule:
-    # Run every 10 minutes - EXACTLY THE SAME AS ORIGINAL
-    - cron: '*/10 * * * *'
+  # Temporarily disabled to test non-parallel version
+  # schedule:
+  #   # Run every 10 minutes - EXACTLY THE SAME AS ORIGINAL
+  #   - cron: '*/10 * * * *'
   workflow_dispatch: # Allow manual trigger
   
 jobs:
