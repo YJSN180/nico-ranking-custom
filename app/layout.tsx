@@ -7,8 +7,8 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ニコニコ24h総合ランキング',
-  description: 'ニコニコ動画の24時間総合ランキングを表示',
+  title: 'ニコニコランキング(Re:turn)',
+  description: 'ニコニコ動画のランキングサイト - 24時間・毎時ランキングを表示',
 }
 
 export const viewport = {
