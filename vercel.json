@@ -1,17 +1,13 @@
 {
   "functions": {
-    "app/api/cron/fetch/route.ts": {
-      "maxDuration": 10
-    },
     "app/api/admin/update/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 300
+    },
+    "app/api/cron/fetch/route.ts": {
+      "maxDuration": 300
     }
   },
-  "buildCommand": "npm run build",
-  "outputDirectory": ".next",
-  "framework": "nextjs",
-  "installCommand": "npm install",
-  "env": {
-    "NODE_OPTIONS": "--max-old-space-size=4096"
+  "github": {
+    "silent": true
   }
 }
