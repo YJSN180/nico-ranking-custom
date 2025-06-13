@@ -42,6 +42,11 @@ vercel-env-vars.txt
 *.tsbuildinfo
 next-env.d.ts
 
+# Cloudflare Workers
+wrangler.toml
+.wrangler/
+.dev.vars
+
 # Documentation files (except README.md and CLAUDE.md)
 *.md
 !README.md
