@@ -76,7 +76,8 @@ jobs:
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
-        npx tsx scripts/update-ranking-parallel.ts --group ${{ matrix.group }} 6
+        # Use improved version with better error handling and retry logic
+        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 6
     
     - name: Upload partial results
       uses: actions/upload-artifact@v4

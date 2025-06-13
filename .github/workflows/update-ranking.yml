@@ -1,11 +1,10 @@
-name: Update Nico Ranking Data
+name: Update Nico Ranking Data (DISABLED - Use Parallel Version)
 
 on:
-  # Temporarily disabled to test parallel version
-  # schedule:
-  #   # Run every 10 minutes
-  #   - cron: '*/10 * * * *'
-  workflow_dispatch: # Allow manual trigger
+  # DISABLED - This workflow has been replaced by update-ranking-parallel.yml
+  # The parallel version is more efficient and reduces execution time
+  # from 18 minutes to under 10 minutes while fetching all data
+  workflow_dispatch: # Allow manual trigger only
   
 jobs:
   update-ranking:

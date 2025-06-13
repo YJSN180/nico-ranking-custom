@@ -98,7 +98,8 @@ jobs:
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
         GROUP_COUNT=${{ github.event.inputs.group_count || '6' }}
-        npx tsx scripts/update-ranking-parallel.ts --group ${{ matrix.group }} $GROUP_COUNT
+        # Use improved version with better error handling and retry logic
+        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} $GROUP_COUNT
     
     - name: Upload partial results
       uses: actions/upload-artifact@v4
