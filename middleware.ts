@@ -31,8 +31,8 @@ export function middleware(request: NextRequest) {
   })
   
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
-  // development以外では認証チェックを行う（本番でも必要なので）
-  const shouldCheckAuth = process.env.VERCEL_ENV !== 'development' && !request.nextUrl.pathname.startsWith('/api/')
+  // development以外では認証チェックを行う
+  const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
   
   console.log('MIDDLEWARE AUTH LOGIC:', {
     VERCEL_ENV: process.env.VERCEL_ENV,
@@ -94,9 +94,21 @@ export function middleware(request: NextRequest) {
   // APIエンドポイントのレート制限
   if (request.nextUrl.pathname.startsWith('/api/')) {
     // デバッグエンドポイントを本番環境で無効化
+    const dangerousEndpoints = [
+      '/api/debug',
+      '/api/test',
+      '/api/debug-sensitive',
+      '/api/internal-proxy',
+      '/api/env-check',
+      '/api/debug-env',
+      '/api/test-scraping',
+      '/api/test-hybrid-scrape',
+      '/api/test-hourly-scrape',
+      '/api/debug-genre'
+    ]
+    
     if (process.env.VERCEL_ENV === 'production' && 
-        (request.nextUrl.pathname.startsWith('/api/debug') || 
-         request.nextUrl.pathname.startsWith('/api/test'))) {
+        dangerousEndpoints.some(path => request.nextUrl.pathname.startsWith(path))) {
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     }
     
@@ -186,7 +198,21 @@ export function middleware(request: NextRequest) {
     }
   }
   
-  return NextResponse.next()
+  const response = NextResponse.next()
+  
+  // セキュリティヘッダーを追加
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  
+  // 本番環境でのみHSTSを有効化
+  if (process.env.VERCEL_ENV === 'production') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  }
+  
+  return response
 }
 
 export const config = {
