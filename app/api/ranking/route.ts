@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
-import { filterRankingDataServer } from '@/lib/ng-filter-server'
+import { filterRankingDataServer, filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
@@ -88,7 +89,22 @@ export async function GET(request: NextRequest) {
             item.views !== undefined
           )
         
-        const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
+        // NGフィルタリング（タグ別ランキング）
+        const tagFilterResult = await filterRankingItemsServer(completeItems)
+        const filteredItems = tagFilterResult.filteredItems
+        
+        // 新しく見つかったNG動画IDを派生リストに追加
+        if (tagFilterResult.newDerivedIds.length > 0) {
+          try {
+            await addToServerDerivedNGList(tagFilterResult.newDerivedIds)
+            if (process.env.NODE_ENV === 'production') {
+              // eslint-disable-next-line no-console
+              console.log(`[NG] Added ${tagFilterResult.newDerivedIds.length} new derived NG IDs from tag ranking ${genre}-${period}-${tag}`)
+            }
+          } catch (error) {
+            console.error(`[NG] Failed to add derived NG IDs:`, error)
+          }
+        }
         allItems = allItems.concat(filteredItems)
         currentPage++
       }
@@ -177,8 +193,22 @@ export async function GET(request: NextRequest) {
           item.views !== undefined
         )
       
-      // NGフィルタリング
-      const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
+      // NGフィルタリング（ページ6以降の動的取得）
+      const pageFilterResult = await filterRankingItemsServer(completeItems)
+      const filteredItems = pageFilterResult.filteredItems
+      
+      // 新しく見つかったNG動画IDを派生リストに追加
+      if (pageFilterResult.newDerivedIds.length > 0) {
+        try {
+          await addToServerDerivedNGList(pageFilterResult.newDerivedIds)
+          if (process.env.NODE_ENV === 'production') {
+            // eslint-disable-next-line no-console
+            console.log(`[NG] Added ${pageFilterResult.newDerivedIds.length} new derived NG IDs from page ${page} ranking ${genre}-${period}`)
+          }
+        } catch (error) {
+          console.error(`[NG] Failed to add derived NG IDs:`, error)
+        }
+      }
       
       // ランク番号を調整
       const adjustedItems = filteredItems.map((item, index) => ({
@@ -215,7 +245,23 @@ export async function GET(request: NextRequest) {
         item.views !== undefined
       )
     
-    const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
+    // NGフィルタリング（動的取得フォールバック）
+    const fallbackFilterResult = await filterRankingItemsServer(completeItems)
+    const filteredItems = fallbackFilterResult.filteredItems
+    
+    // 新しく見つかったNG動画IDを派生リストに追加
+    if (fallbackFilterResult.newDerivedIds.length > 0) {
+      try {
+        await addToServerDerivedNGList(fallbackFilterResult.newDerivedIds)
+        if (process.env.NODE_ENV === 'production') {
+          // eslint-disable-next-line no-console
+          console.log(`[NG] Added ${fallbackFilterResult.newDerivedIds.length} new derived NG IDs from fallback ranking ${genre}-${period}`)
+        }
+      } catch (error) {
+        console.error(`[NG] Failed to add derived NG IDs:`, error)
+      }
+    }
+    
     const data = { items: filteredItems, popularTags }
     
     // ページ1の場合

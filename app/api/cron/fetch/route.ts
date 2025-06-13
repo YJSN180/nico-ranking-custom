@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { filterRankingDataServer } from '@/lib/ng-filter-server'
+import { filterRankingDataServer, filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { CACHED_GENRES } from '@/types/ranking-config'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
@@ -80,7 +81,21 @@ export async function POST(request: Request) {
             })).filter((item: any) => item.id && item.title)
             
             // NGフィルタリングを適用
-            const { items: filteredItems } = await filterRankingDataServer({ items: convertedItems })
+            const filterResult = await filterRankingItemsServer(convertedItems)
+            const filteredItems = filterResult.filteredItems
+            
+            // 新しく見つかったNG動画IDを派生リストに追加
+            if (filterResult.newDerivedIds.length > 0) {
+              try {
+                await addToServerDerivedNGList(filterResult.newDerivedIds)
+                if (process.env.NODE_ENV === 'production') {
+                  // eslint-disable-next-line no-console
+                  console.log(`[NG] Added ${filterResult.newDerivedIds.length} new derived NG IDs for ${genre}-${period}`)
+                }
+              } catch (error) {
+                console.error(`[NG] Failed to add derived NG IDs:`, error)
+              }
+            }
             
             // 重複を除外しながら追加
             for (const item of filteredItems) {
@@ -165,7 +180,22 @@ export async function POST(request: Request) {
                     registeredAt: item.registeredAt
                   }))
                   
-                  const { items: filteredTagItems } = await filterRankingDataServer({ items: convertedTagItems })
+                  // NGフィルタリングを適用（タグ別ランキング）
+                  const tagFilterResult = await filterRankingItemsServer(convertedTagItems)
+                  const filteredTagItems = tagFilterResult.filteredItems
+                  
+                  // 新しく見つかったNG動画IDを派生リストに追加
+                  if (tagFilterResult.newDerivedIds.length > 0) {
+                    try {
+                      await addToServerDerivedNGList(tagFilterResult.newDerivedIds)
+                      if (process.env.NODE_ENV === 'production') {
+                        // eslint-disable-next-line no-console
+                        console.log(`[NG] Added ${tagFilterResult.newDerivedIds.length} new derived NG IDs for ${genre}-${period}-tag-${tag}`)
+                      }
+                    } catch (error) {
+                      console.error(`[NG] Failed to add derived NG IDs for tag ${tag}:`, error)
+                    }
+                  }
                   
                   // 重複を除外しながら追加
                   for (const item of filteredTagItems) {
