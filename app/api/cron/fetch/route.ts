@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { filterRankingData } from '@/lib/ng-filter'
+import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import { CACHED_GENRES } from '@/types/ranking-config'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
             })).filter((item: any) => item.id && item.title)
             
             // NGフィルタリングを適用
-            const { items: filteredItems } = await filterRankingData({ items: convertedItems })
+            const { items: filteredItems } = await filterRankingDataServer({ items: convertedItems })
             
             // 重複を除外しながら追加
             for (const item of filteredItems) {
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
                     registeredAt: item.registeredAt
                   }))
                   
-                  const { items: filteredTagItems } = await filterRankingData({ items: convertedTagItems })
+                  const { items: filteredTagItems } = await filterRankingDataServer({ items: convertedTagItems })
                   
                   // 重複を除外しながら追加
                   for (const item of filteredTagItems) {
