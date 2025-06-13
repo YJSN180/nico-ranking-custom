@@ -100,9 +100,10 @@ export function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     }
     
-    // レート制限チェック
-    const limit = request.nextUrl.pathname.startsWith('/api/admin') ? 5 : 10
-    const windowMs = request.nextUrl.pathname.startsWith('/api/admin') ? 60000 : 10000
+    // レート制限チェック（管理画面はさらに厳しく）
+    const isAdminPath = request.nextUrl.pathname.startsWith('/api/admin') || request.nextUrl.pathname.startsWith('/admin')
+    const limit = isAdminPath ? 3 : 10  // 管理画面は3回/分に制限
+    const windowMs = isAdminPath ? 60000 : 10000
     
     if (!checkRateLimit(ip, limit, windowMs)) {
       logSecurityEvent('RATE_LIMIT_EXCEEDED', ip, {
