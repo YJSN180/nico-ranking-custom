@@ -4,7 +4,20 @@ import { middleware } from '../../middleware'
 
 // NextResponseモック
 vi.mock('next/server', () => ({
-  NextRequest: vi.fn(),
+  NextRequest: vi.fn((url, init) => {
+    const urlObj = new URL(url)
+    return {
+      url,
+      nextUrl: urlObj,
+      headers: {
+        get: vi.fn((key) => init?.headers?.[key.toLowerCase()] || null)
+      },
+      cookies: {
+        get: vi.fn((name) => undefined)
+      },
+      method: init?.method || 'GET'
+    }
+  }),
   NextResponse: {
     json: vi.fn((body, init) => ({
       status: init?.status || 200,
@@ -19,7 +32,7 @@ vi.mock('next/server', () => ({
     })),
     redirect: vi.fn((url) => ({
       status: 307,
-      headers: new Map([['Location', url]])
+      headers: new Map([['Location', url.toString()]])
     }))
   }
 }))
