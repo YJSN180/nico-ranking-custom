@@ -32,14 +32,7 @@ export async function getServerNGList(): Promise<NGList> {
 // Save manual NG list to KV
 export async function saveServerManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
   try {
-    console.log('Saving NG list to KV:', {
-      videoIds: ngList.videoIds.length,
-      videoTitles: ngList.videoTitles.length,
-      authorIds: ngList.authorIds.length,
-      authorNames: ngList.authorNames.length
-    })
     await kv.set('ng-list-manual', ngList)
-    console.log('NG list saved successfully to KV')
   } catch (error) {
     console.error('Failed to save NG list to KV:', error)
     throw error
