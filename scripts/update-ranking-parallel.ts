@@ -382,15 +382,34 @@ async function processGenre(
 }> {
   console.log(`[${new Date().toISOString()}] Starting ${genre}...`);
   
+  // Fetch main rankings for both periods independently to handle errors separately
+  let data24h = { items: [], popularTags: [] };
+  let dataHour = { items: [], popularTags: [] };
+  let popularTags: string[] = [];
+  
+  // Try to fetch 24h data
   try {
-    // Fetch main rankings for both periods sequentially to avoid concurrent requests to same genre
-    const data24h = await fetchWithNGFiltering(genre, '24h', ngList);
-    // Add small delay between requests to the same genre endpoint
-    await new Promise(resolve => setTimeout(resolve, 500));
-    const dataHour = await fetchWithNGFiltering(genre, 'hour', ngList);
-    
-    // Popular tags are the same for both periods, so use from 24h
-    const popularTags = data24h.popularTags;
+    data24h = await fetchWithNGFiltering(genre, '24h', ngList);
+    popularTags = data24h.popularTags;
+  } catch (error) {
+    console.error(`Failed to fetch ${genre}/24h:`, error);
+    // Continue with empty data for 24h
+  }
+  
+  // Add small delay between requests to the same genre endpoint
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Try to fetch hour data
+  try {
+    dataHour = await fetchWithNGFiltering(genre, 'hour', ngList);
+    // If we didn't get popular tags from 24h, try from hour
+    if (popularTags.length === 0) {
+      popularTags = dataHour.popularTags;
+    }
+  } catch (error) {
+    console.error(`Failed to fetch ${genre}/hour:`, error);
+    // Continue with empty data for hour
+  }
   
   // Prepare result structure
   const result = {
@@ -449,29 +468,9 @@ async function processGenre(
     }
   }
   
-    console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
-    
-    return result;
-  } catch (error) {
-    console.error(`Failed to process genre ${genre}:`, error);
-    
-    // Return empty data structure so other genres can continue
-    return {
-      genre,
-      data: {
-        '24h': {
-          items: [],
-          popularTags: [],
-          tags: {}
-        },
-        'hour': {
-          items: [],
-          popularTags: [],
-          tags: {}
-        }
-      }
-    };
-  }
+  console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
+  
+  return result;
 }
 
 // Main function for parallel execution
