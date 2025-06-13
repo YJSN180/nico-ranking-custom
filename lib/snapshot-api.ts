@@ -60,7 +60,7 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
       }
     } catch (error) {
       // エラーは静かに処理（部分的な失敗を許容）
-      console.error(`Failed to fetch stats for batch ${i}:`, error)
+      // Failed to fetch stats for batch - error handled silently
     }
     
     // レート制限対策
@@ -97,7 +97,7 @@ export async function searchVideosByTag(tag: string, limit: number = 100): Promi
       return data.data || []
     }
   } catch (error) {
-    console.error('Failed to search videos by tag:', error)
+    // Failed to search videos by tag - returning empty array
   }
   
   return []

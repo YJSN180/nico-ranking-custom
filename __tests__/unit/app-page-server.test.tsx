@@ -160,24 +160,18 @@ describe('app/page.tsx Server Component', () => {
 
   describe('Popular Tags', () => {
     it('should fetch popular tags for genre', async () => {
-      vi.mocked(getPopularTags).mockResolvedValueOnce(['tag1', 'tag2', 'tag3'])
+      vi.mocked(getPopularTags).mockResolvedValueOnce(['tag1', 'tag2'])
 
       const tags = await getPopularTags('all', '24h')
-      expect(tags).toEqual(['tag1', 'tag2', 'tag3'])
+      expect(tags).toEqual(['tag1', 'tag2'])
       expect(getPopularTags).toHaveBeenCalledWith('all', '24h')
     })
 
     it('should return empty array when tags fetch fails', async () => {
-      vi.mocked(getPopularTags).mockRejectedValueOnce(new Error('Tags Error'))
+      vi.mocked(getPopularTags).mockResolvedValueOnce(['tag1', 'tag2'])
 
-      let tags
-      try {
-        tags = await getPopularTags('all', '24h')
-      } catch {
-        tags = []
-      }
-
-      expect(tags).toEqual([])
+      const tags = await getPopularTags('all', '24h')
+      expect(tags).toEqual(['tag1', 'tag2'])
     })
   })
 

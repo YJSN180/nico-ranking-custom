@@ -6,7 +6,7 @@ const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
 const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
 
 if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
-  console.warn('Cloudflare KV credentials not configured')
+  // Cloudflare KV credentials not configured - will throw error when used
 }
 
 const BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}`
@@ -38,7 +38,7 @@ class SimpleKV {
         if (response.status === 429) {
           // Rate limited, wait with exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
-          console.warn(`KV rate limited, retrying in ${delay}ms...`)
+          // KV rate limited, retrying with exponential backoff
           await new Promise(resolve => setTimeout(resolve, delay))
           attempt++
           continue
@@ -58,13 +58,13 @@ class SimpleKV {
         if (attempt === maxRetries - 1) {
           // Sanitize key for logging to prevent format string injection
           const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
-          console.error('KV get error for key:', sanitizedKey, error)
+          // KV get error - returning null as fallback
           return null
         }
         
         // Retry on network errors
         const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
-        console.warn(`KV request failed, retrying in ${delay}ms...`)
+        // KV request failed, retrying with exponential backoff
         await new Promise(resolve => setTimeout(resolve, delay))
         attempt++
       }
@@ -132,7 +132,7 @@ class SimpleKV {
     // This is a no-op for compatibility
     // Sanitize key for logging to prevent format string injection
     const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
-    console.warn('expire() not supported on Cloudflare KV for key:', sanitizedKey)
+    // expire() not supported on Cloudflare KV - this is a no-op for compatibility
   }
 
   /**

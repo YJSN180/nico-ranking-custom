@@ -77,7 +77,7 @@ export function useRealtimeStats(
       } catch (error: any) {
         // AbortErrorは無視
         if (error.name !== 'AbortError') {
-          console.error('Failed to fetch realtime stats:', error)
+          // Failed to fetch realtime stats - error is ignored unless it's an AbortError
         }
       } finally {
         setIsLoading(false)

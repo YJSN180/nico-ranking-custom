@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
             return response
           }
         } catch (error) {
-          console.error('[API] Cloudflare KV error:', error)
+          // Cloudflare KV error - silently fallback to dynamic fetch
           // Cloudflare KVが利用できない場合は動的取得にフォールバック
         }
       }
@@ -113,8 +113,8 @@ export async function GET(request: NextRequest) {
 
     // 通常のジャンル別ランキング
     
-    // Cloudflare KVからの取得を試みる（ページ1-3）
-    if (useCloudflareKV && page <= 3) {
+    // Cloudflare KVからの取得を試みる（ページ1-5、500件まで）
+    if (useCloudflareKV && page <= 5) {
       try {
         const cfData = await getGenreRanking(genre, period as RankingPeriod)
         if (cfData && cfData.items && cfData.items.length > 0) {
@@ -127,15 +127,21 @@ export async function GET(request: NextRequest) {
           if (page === 1) {
             const response = NextResponse.json({
               items: pageItems,
-              popularTags: cfData.popularTags || []
+              popularTags: cfData.popularTags || [],
+              hasMore: cfData.items.length > 100,
+              totalCached: cfData.items.length
             })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Max-Items', '500')
             return response
           } else {
-            // ページ2以降はアイテムのみ
-            const response = NextResponse.json(pageItems)
+            // ページ2以降も統一された形式で返す
+            const response = NextResponse.json({
+              items: pageItems,
+              hasMore: endIdx < cfData.items.length,
+              totalCached: cfData.items.length
+            })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Max-Items', '500')
@@ -143,13 +149,13 @@ export async function GET(request: NextRequest) {
           }
         }
       } catch (error) {
-        console.error('[API] Cloudflare KV error:', error)
+        // Cloudflare KV error - silently fallback to dynamic fetch
         // Cloudflare KVが利用できない場合は動的取得にフォールバック
       }
     }
     
-    // ページ番号が4以上の場合（301位以降）は動的取得
-    if (page >= 4) {
+    // ページ番号が6以上の場合（501位以降）は動的取得
+    if (page >= 6) {
       // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
       
       // 100件単位で動的取得
@@ -180,7 +186,12 @@ export async function GET(request: NextRequest) {
         rank: (page - 1) * 100 + index + 1
       }))
       
-      const response = NextResponse.json(adjustedItems)
+      // 統一された形式で返す
+      const response = NextResponse.json({
+        items: adjustedItems,
+        hasMore: adjustedItems.length === 100, // 100件取得できたら次のページがある可能性
+        totalCached: 0 // 動的取得の場合は未知
+      })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'DYNAMIC')
       response.headers.set('X-Max-Items', '500')
@@ -224,14 +235,19 @@ export async function GET(request: NextRequest) {
     const endIdx = page * 100
     const pageItems = filteredItems.slice(startIdx, endIdx)
     
-    const response = NextResponse.json(pageItems)
+    // 統一された形式で返す
+    const response = NextResponse.json({
+      items: pageItems,
+      hasMore: endIdx < filteredItems.length,
+      totalCached: filteredItems.length
+    })
     response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
     response.headers.set('X-Cache-Status', 'MISS')
     response.headers.set('X-Max-Items', '500')
     return response
     
   } catch (error) {
-    console.error('[API] Error:', error)
+    // API error - return error response
     return NextResponse.json(
       { error: 'Failed to fetch ranking data' },
       { status: 500 }

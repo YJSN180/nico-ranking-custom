@@ -29,8 +29,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       const cfData = await getGenreRanking(genre, period as RankingPeriod)
       if (cfData && cfData.items && cfData.items.length > 0) {
         // NGフィルタリングを適用
+        // 初期表示は100件だが、全データを保持してhasMoreの判定を正しく行えるようにする
         const filteredData = await filterRankingData({
-          items: cfData.items.slice(0, 100), // 最初の100件のみ
+          items: cfData.items, // 全データを渡す（最大300件）
           popularTags: cfData.popularTags
         })
         return filteredData

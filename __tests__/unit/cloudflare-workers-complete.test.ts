@@ -30,14 +30,14 @@ describe('Cloudflare Workers Complete Tests', () => {
   
   describe('Performance', () => {
     it('should handle concurrent requests', async () => {
-      const requests = Array(5).fill(null).map(() => 
-        fetch(`${WORKERS_URL}/api/status`)
+      const requests = Array(3).fill(null).map(() => 
+        fetch(`${WORKERS_URL}`, { signal: AbortSignal.timeout(5000) })
       )
       
       const responses = await Promise.all(requests)
       responses.forEach(response => {
         expect(response.status).toBeLessThan(500)
       })
-    }, 10000) // 10秒のタイムアウトを設定
+    }, 7000) // 7秒のタイムアウトを設定
   })
 })

@@ -57,7 +57,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   }
 
   const isNew = isWithin24Hours(item.registeredAt)
-  const dateDisplay = isMobile ? formatTimeAgo(item.registeredAt) : formatRegisteredDate(item.registeredAt)
+  const dateDisplay = isMobile ? formatTimeAgo(item.registeredAt || '') : formatRegisteredDate(item.registeredAt)
 
   // モバイル用新レイアウト（順位を上に配置）
   if (isMobile) {

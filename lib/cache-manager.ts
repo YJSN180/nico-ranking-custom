@@ -257,7 +257,7 @@ export class CacheManager {
         }
       })
       .catch(err => {
-        console.error(`Failed to revalidate cache for key ${key}:`, err)
+        // Failed to revalidate cache - error handled silently
       })
   }
   
@@ -490,7 +490,7 @@ export class AdvancedCacheManager {
         const data = await fetcher(key)
         this.cacheManager.set(key, data)
       } catch (error) {
-        console.error(`Failed to warmup cache for key ${key}:`, error)
+        // Failed to warmup cache - error handled silently
       } finally {
         this.warmupQueue.delete(key)
       }

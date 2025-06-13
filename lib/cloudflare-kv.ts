@@ -116,7 +116,7 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
   const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
-    console.error('Cloudflare KV credentials not configured')
+    // Cloudflare KV credentials not configured - returning null
     return null
   }
   
@@ -147,7 +147,7 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
     // 非圧縮データ
     return JSON.parse(new TextDecoder().decode(uint8Array))
   } catch (error) {
-    console.error('Failed to read from Cloudflare KV:', error)
+    // Failed to read from Cloudflare KV - returning null
     return null
   }
 }

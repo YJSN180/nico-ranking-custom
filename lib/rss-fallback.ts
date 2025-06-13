@@ -74,7 +74,7 @@ export async function fetchFromRSSFallback(
     
     return { items, success: true }
   } catch (error) {
-    console.error('RSS fallback failed:', error)
+    // RSS fallback failed - returning empty result
     return { items: [], success: false }
   }
 }

@@ -78,7 +78,7 @@ function parseRankingResponse(html: string, expectedGenreId: string) {
   
   // 期待したジャンルか確認
   if (rankingData.featuredKey !== expectedGenreId) {
-    console.warn(`警告: 期待したジャンル(${expectedGenreId})と異なるジャンル(${rankingData.featuredKey})のデータが返されました`)
+    // 警告: 期待したジャンルと異なるジャンルのデータが返されました
   }
   
   return {

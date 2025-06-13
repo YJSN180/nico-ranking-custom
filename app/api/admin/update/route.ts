@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     
     // ADMIN_KEYが設定されていない場合はエラー
     if (!process.env.ADMIN_KEY) {
-      console.error('ADMIN_KEY environment variable is not set')
+      // ADMIN_KEY environment variable is not set
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
     

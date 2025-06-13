@@ -33,7 +33,7 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
       
       return sortedTags
     } catch (error) {
-      console.error('Failed to aggregate popular tags for all genre:', error)
+      // Failed to aggregate popular tags for all genre - returning empty array
       return []
     }
   }
@@ -45,7 +45,7 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
       return cfData.popularTags
     }
   } catch (error) {
-    console.error('Failed to get popular tags from Cloudflare KV:', error)
+    // Failed to get popular tags from Cloudflare KV - trying fallback
   }
   
   try {
@@ -56,7 +56,7 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
       return data.popularTags
     }
   } catch (error) {
-    console.error('Failed to fetch popular tags dynamically:', error)
+    // Failed to fetch popular tags dynamically - returning empty array
   }
   
   // 3. 最終フォールバック：空配列を返す
@@ -72,7 +72,7 @@ async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour
       return cfData.popularTags
     }
   } catch (error) {
-    console.error('Failed to get popular tags from Cloudflare KV:', error)
+    // Failed to get popular tags from Cloudflare KV - trying fallback
   }
   
   try {
@@ -83,7 +83,7 @@ async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour
       return data.popularTags
     }
   } catch (error) {
-    console.error('Failed to fetch popular tags dynamically:', error)
+    // Failed to fetch popular tags dynamically - returning empty array
   }
   
   // 3. 最終フォールバック：空配列を返す

@@ -52,10 +52,12 @@ export default function ClientPage({
     if (initialData.length >= 500) {
       return false
     }
-    if (initialTag && initialData.length < 100) {
-      return false
+    if (initialTag) {
+      // タグ別ランキングは100件ちょうどならもっとある可能性がある
+      return initialData.length === 100
     }
-    return true
+    // 通常のランキングは100件以上あればもっとある（100件ちょうどでも可能性あり）
+    return initialData.length >= 100
   })
   const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
   const [isRestoring, setIsRestoring] = useState(false) // 復元中か
@@ -582,7 +584,7 @@ export default function ClientPage({
         // AbortErrorは無視
         if (error.name !== 'AbortError') {
           // エラー時も現在の人気タグを維持（空配列にしない）
-          console.error('Failed to update popular tags:', error)
+          // Failed to update popular tags - error is handled by maintaining current tags
         }
       }
     }

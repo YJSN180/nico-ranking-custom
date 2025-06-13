@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   const expectedToken = process.env.DEBUG_TOKEN
   
   if (!expectedToken) {
-    console.error('DEBUG_TOKEN environment variable is not set')
+    // DEBUG_TOKEN environment variable is not set
     return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
   }
   

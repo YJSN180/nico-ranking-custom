@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@/lib/simple-kv'
 import { scrapeRankingPage } from '@/lib/scraper'
+import { getGenreRanking } from '@/lib/cloudflare-kv'
 import type { RankingData } from '@/types/ranking'
 
 // モック
@@ -15,6 +16,10 @@ vi.mock('@/lib/simple-kv', () => ({
 
 vi.mock('@/lib/scraper', () => ({
   scrapeRankingPage: vi.fn()
+}))
+
+vi.mock('@/lib/cloudflare-kv', () => ({
+  getGenreRanking: vi.fn()
 }))
 
 describe('Ranking API pagination (100 items per page)', () => {
@@ -88,9 +93,9 @@ describe('Ranking API pagination (100 items per page)', () => {
     const data2 = await response2.json()
 
     expect(response2.status).toBe(200)
-    expect(data2).toHaveLength(100) // ページ2は100件（人気タグなし）
-    expect(data2[0].rank).toBe(101)
-    expect(data2[99].rank).toBe(200)
+    expect(data2.items).toHaveLength(100) // ページ2は100件（人気タグなし）
+    expect(data2.items[0].rank).toBe(101)
+    expect(data2.items[99].rank).toBe(200)
 
     // ページ3のリクエスト
     const request3 = new NextRequest('http://localhost:3000/api/ranking?genre=game&page=3', {
@@ -100,40 +105,49 @@ describe('Ranking API pagination (100 items per page)', () => {
     const data3 = await response3.json()
 
     expect(response3.status).toBe(200)
-    expect(data3).toHaveLength(100) // ページ3は100件
-    expect(data3[0].rank).toBe(201)
-    expect(data3[99].rank).toBe(300)
+    expect(data3.items).toHaveLength(100) // ページ3は100件
+    expect(data3.items[0].rank).toBe(201)
+    expect(data3.items[99].rank).toBe(300)
   })
 
-  it('should handle page 4 and beyond with dynamic fetching', async () => {
-    // ページ4（301位以降）は動的取得
-    const mockItems: RankingData = Array.from({ length: 100 }, (_, i) => ({
+  it('should handle page 4 and 5 from cached data with 500 items', async () => {
+    // 500件のモックデータを準備
+    const mockItems: RankingData = Array.from({ length: 500 }, (_, i) => ({
       rank: i + 1,
-      id: `sm${3000 + i}`,
-      title: `動的取得動画 ${i + 1}`,
-      thumbURL: `https://example.com/dynamic${i + 1}.jpg`,
-      views: 3000 + i * 30
+      id: `sm${1000 + i}`,
+      title: `動画タイトル ${i + 1}`,
+      thumbURL: `https://example.com/thumb${i + 1}.jpg`,
+      views: 1000 + i * 10
     }))
 
-    vi.mocked(kv.get).mockResolvedValue(null)
-    vi.mocked(scrapeRankingPage).mockResolvedValue({
+    // Cloudflare KVモック（500件のデータ）
+    vi.mocked(getGenreRanking).mockResolvedValue({
       items: mockItems,
       popularTags: []
     })
 
-    const request = new NextRequest('http://localhost:3000/api/ranking?page=4', {
+    // ページ4のリクエスト
+    const request4 = new NextRequest('http://localhost:3000/api/ranking?genre=all&page=4', {
       method: 'GET'
     })
+    const response4 = await GET(request4)
+    const data4 = await response4.json()
 
-    const response = await GET(request)
-    const data = await response.json()
+    expect(response4.status).toBe(200)
+    expect(data4.items).toHaveLength(100)
+    expect(data4.items[0].rank).toBe(301) // ページ4の最初は301位
+    expect(data4.items[99].rank).toBe(400) // ページ4の最後は400位
 
-    expect(response.status).toBe(200)
-    expect(data).toHaveLength(100)
-    expect(data[0].rank).toBe(301) // ページ4の最初は301位
-    expect(data[99].rank).toBe(400) // ページ4の最後は400位
-    
-    // 動的取得でページ4が指定されたことを確認
-    expect(scrapeRankingPage).toHaveBeenCalledWith('all', '24h', undefined, 100, 4)
+    // ページ5のリクエスト
+    const request5 = new NextRequest('http://localhost:3000/api/ranking?genre=all&page=5', {
+      method: 'GET'
+    })
+    const response5 = await GET(request5)
+    const data5 = await response5.json()
+
+    expect(response5.status).toBe(200)
+    expect(data5.items).toHaveLength(100)
+    expect(data5.items[0].rank).toBe(401) // ページ5の最初は401位
+    expect(data5.items[99].rank).toBe(500) // ページ5の最後は500位
   })
 })

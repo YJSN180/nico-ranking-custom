@@ -173,7 +173,7 @@ export async function fetchRanking(
       label: label
     }
   } catch (error) {
-    console.error('fetchRanking error:', error)
+    // fetchRanking error - re-throwing for caller to handle
     throw error
   }
 }
@@ -195,7 +195,7 @@ export async function fetchMultipleRankings(
           const result = await fetchRanking(genre, null, term)
           return { genre, result }
         } catch (error) {
-          console.error(`Failed to fetch ${genre}:`, error)
+          // Failed to fetch genre - returning empty result
           return { genre, result: { items: [], popularTags: [] } }
         }
       })

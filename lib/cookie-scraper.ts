@@ -56,7 +56,7 @@ export async function cookieScrapeRanking(
     // ログイン状態を確認
     const isLoggedIn = html.includes('ログアウト') || html.includes('マイページ')
     if (!isLoggedIn && cookieConfig.nicosid) {
-      console.warn('Cookie authentication may have failed')
+      // Cookie authentication may have failed - continuing anyway
     }
     
     // 動画データを抽出
@@ -104,7 +104,7 @@ export async function cookieScrapeRanking(
     }
     
   } catch (error) {
-    console.error('Cookie scraping failed:', error)
+    // Cookie scraping failed - re-throwing error
     return {
       items: [],
       success: false
@@ -129,7 +129,7 @@ export async function scrapeReiSoreRanking(): Promise<{
       }
     }
   } catch (error) {
-    console.error('例のソレ ranking fetch failed:', error)
+    // 例のソレ ranking fetch failed - returning empty array
   }
   
   // フォールバック：Cookieベースでアクセス

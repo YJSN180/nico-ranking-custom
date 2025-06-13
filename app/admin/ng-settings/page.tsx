@@ -89,9 +89,9 @@ export default function NGSettingsPage() {
 
   // アイテムを削除
   const removeItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, index: number) => {
-    setNgList(prev => ({
+    setNgList((prev: NGList) => ({
       ...prev,
-      [type]: prev[type].filter((_, i) => i !== index)
+      [type]: prev[type].filter((_: string, i: number) => i !== index)
     }))
   }
 
@@ -101,7 +101,7 @@ export default function NGSettingsPage() {
     
     try {
       await fetch('/api/admin/ng-list/clear-derived', { method: 'POST' })
-      setNgList(prev => ({ ...prev, derivedVideoIds: [] }))
+      setNgList((prev: NGList) => ({ ...prev, derivedVideoIds: [] }))
       alert('クリアしました')
     } catch (error) {
       alert('クリアに失敗しました')

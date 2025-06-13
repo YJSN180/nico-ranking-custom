@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
           await updateSingleGenre(data)
           updated.push(data.genre)
         } catch (error) {
-          console.error(`Failed to update ${data.genre}:`, error)
+          // Failed to update genre - error handled by adding to failed list
           failed.push(data.genre)
         }
       }
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     }
     
   } catch (error) {
-    console.error('KV update error:', error)
+    // KV update error - returning appropriate error response
     
     if (error instanceof Error && error.message.includes('KV')) {
       return NextResponse.json(

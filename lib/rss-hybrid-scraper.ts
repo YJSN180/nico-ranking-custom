@@ -149,7 +149,7 @@ export async function rssHybridScrape(
     
   } catch (error) {
     // RSSが失敗した場合は既存のハイブリッド実装にフォールバック
-    console.error('RSS hybrid scraping failed, falling back:', error)
+    // RSS hybrid scraping failed - falling back to RSS-only
     const data = await fetchRanking(genre, tag, term)
     return {
       items: data.items,

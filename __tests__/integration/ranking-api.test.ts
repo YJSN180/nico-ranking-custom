@@ -70,7 +70,10 @@ describe('Ranking API Integration', () => {
     )
 
     const data = await response.json()
-    expect(data).toEqual({ items: mockData, popularTags: [] })
+    expect(data.items).toEqual(mockData)
+    expect(data.popularTags).toEqual([])
+    expect(data).toHaveProperty('hasMore')
+    expect(data).toHaveProperty('totalCached')
   })
 
   it.skip('should return mock data when KV has no data and scraping fails', async () => {

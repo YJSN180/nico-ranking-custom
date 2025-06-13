@@ -33,7 +33,7 @@ export async function GET(request: Request | NextRequest) {
       },
     })
   } catch (error) {
-    console.error('Failed to fetch video stats:', error)
+    // Failed to fetch video stats - returning error response
     return NextResponse.json(
       { error: 'Failed to fetch video stats' },
       { status: 500 }
