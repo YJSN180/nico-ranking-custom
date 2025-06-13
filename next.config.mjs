@@ -27,7 +27,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' https://*.vercel-scripts.com",
+              "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に必要
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",

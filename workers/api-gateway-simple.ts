@@ -128,7 +128,7 @@ export default {
       // Content Security Policy (CSP) ヘッダーを追加（unsafe-evalを削除）
       const cspDirectives = [
         "default-src 'self'",
-        "script-src 'self' https://*.vercel-scripts.com",
+        "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com",
         "style-src 'self' 'unsafe-inline'",
         "img-src 'self' data: https: blob:",
         "font-src 'self' data:",
