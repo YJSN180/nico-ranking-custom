@@ -63,7 +63,8 @@ async function fetchWithGooglebot(url: string): Promise<Response> {
   });
   
   if (!response.ok) {
-    throw new Error(`Fetch failed: ${response.status}`);
+    // Include more context in the error for better debugging
+    throw new Error(`Fetch failed: ${response.status} ${response.statusText} for URL: ${url}`);
   }
   
   return response;
@@ -243,8 +244,14 @@ async function fetchWithNGFiltering(
       if (page <= maxPages) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-    } catch (error) {
-      console.error(`Failed to fetch page ${page} for ${genre}/${period}:`, error);
+    } catch (error: any) {
+      // Check if it's a 404 error (no more pages available)
+      if (error.message && error.message.includes('404')) {
+        console.log(`Reached end of pages for ${genre}/${period} at page ${page} (404 - this is normal)`);
+      } else {
+        console.error(`Failed to fetch page ${page} for ${genre}/${period}:`, error);
+      }
+      // Break the loop regardless - we've gotten all available items
       break;
     }
   }
@@ -316,15 +323,26 @@ async function executeInParallel<T>(
   const executing: Promise<void>[] = [];
   
   for (const task of tasks) {
-    const promise = task().then(result => {
-      results.push(result);
-    });
+    const promise = task()
+      .then(result => {
+        results.push(result);
+      })
+      .catch(error => {
+        console.error('Task failed in executeInParallel:', error);
+        // Don't push to results - this task failed
+        // But don't throw either - let other tasks continue
+      });
     
     executing.push(promise);
     
     if (executing.length >= maxConcurrency) {
       await Promise.race(executing);
-      executing.splice(executing.findIndex(p => p === promise), 1);
+      // Clean up completed promises
+      for (let i = executing.length - 1; i >= 0; i--) {
+        if (executing[i] === promise || (executing[i] as any).isFulfilled?.()) {
+          executing.splice(i, 1);
+        }
+      }
     }
   }
   
@@ -353,14 +371,15 @@ async function processGenre(
 }> {
   console.log(`[${new Date().toISOString()}] Starting ${genre}...`);
   
-  // Fetch main rankings for both periods
-  const [data24h, dataHour] = await Promise.all([
-    fetchWithNGFiltering(genre, '24h', ngList),
-    fetchWithNGFiltering(genre, 'hour', ngList)
-  ]);
-  
-  // Popular tags are the same for both periods, so use from 24h
-  const popularTags = data24h.popularTags;
+  try {
+    // Fetch main rankings for both periods
+    const [data24h, dataHour] = await Promise.all([
+      fetchWithNGFiltering(genre, '24h', ngList),
+      fetchWithNGFiltering(genre, 'hour', ngList)
+    ]);
+    
+    // Popular tags are the same for both periods, so use from 24h
+    const popularTags = data24h.popularTags;
   
   // Prepare result structure
   const result = {
@@ -419,9 +438,29 @@ async function processGenre(
     }
   }
   
-  console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
-  
-  return result;
+    console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
+    
+    return result;
+  } catch (error) {
+    console.error(`Failed to process genre ${genre}:`, error);
+    
+    // Return empty data structure so other genres can continue
+    return {
+      genre,
+      data: {
+        '24h': {
+          items: [],
+          popularTags: [],
+          tags: {}
+        },
+        'hour': {
+          items: [],
+          popularTags: [],
+          tags: {}
+        }
+      }
+    };
+  }
 }
 
 // Main function for parallel execution
@@ -460,9 +499,20 @@ async function main() {
     
     let totalItemsCount = 0;
     
+    // Track successful and failed genres
+    const successfulGenres: string[] = [];
+    const failedGenres: string[] = [];
+    
     // Organize results into the same structure as original
     for (const result of results) {
       rankingData.genres[result.genre] = result.data;
+      
+      // Check if genre has data (not failed)
+      if (result.data['24h'].items.length > 0 || result.data['hour'].items.length > 0) {
+        successfulGenres.push(result.genre);
+      } else {
+        failedGenres.push(result.genre);
+      }
       
       // Count items - EXACTLY THE SAME AS ORIGINAL
       totalItemsCount += result.data['24h'].items.length;
@@ -485,6 +535,11 @@ async function main() {
     const duration = Date.now() - startTime;
     console.log(`Update completed successfully in ${Math.round(duration / 1000)}s`);
     console.log(`Total items: ${totalItemsCount}`);
+    console.log(`Successful genres: ${successfulGenres.length}/${ALL_GENRES.length} - ${successfulGenres.join(', ')}`);
+    
+    if (failedGenres.length > 0) {
+      console.log(`Failed genres: ${failedGenres.length}/${ALL_GENRES.length} - ${failedGenres.join(', ')}`);
+    }
     
     // Show time improvement
     console.log(`\n⚡ Parallel execution reduced time by approximately ${Math.round((1 - (duration / (18 * 60 * 1000))) * 100)}%`);
