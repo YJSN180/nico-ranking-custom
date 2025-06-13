@@ -5,6 +5,7 @@ import type { RankingItem } from '@/types/ranking'
 import type { RankingGenre } from '@/types/ranking-config'
 import { GENRE_ID_MAP } from './genre-mapping'
 import { enrichRankingItemsWithTags } from './html-tag-extractor'
+import { enrichWithSnapshotTagsLight } from './snapshot-tag-enricher'
 import { filterRankingData } from './ng-filter'
 
 // Googlebot UAを使用してジオブロックを回避
@@ -160,6 +161,17 @@ export async function fetchRanking(
     
     // HTMLからタグ情報を抽出して追加
     items = enrichRankingItemsWithTags(items, html)
+    
+    // Snapshot APIを使ってタグ情報を強化（HTMLで取得できなかった場合）
+    const itemsWithoutTags = items.filter(item => !item.tags || item.tags.length === 0)
+    if (itemsWithoutTags.length > 0 && itemsWithoutTags.length <= 30) {
+      try {
+        items = await enrichWithSnapshotTagsLight(items)
+      } catch (error) {
+        // Snapshot API enrichment failed, continue with HTML-extracted tags
+        console.warn('Snapshot tag enrichment failed:', error)
+      }
+    }
     
     // limitに合わせて切り詰め
     const limitedItems = items.slice(0, limit)

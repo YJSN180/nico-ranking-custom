@@ -33,7 +33,8 @@ async function checkCloudflareKV() {
     const namespaceResponse = await fetch(namespaceUrl, {
       headers: {
         'Authorization': `Bearer ${CF_API_TOKEN}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Auth-Email': process.env.CLOUDFLARE_EMAIL || ''
       }
     })
     
