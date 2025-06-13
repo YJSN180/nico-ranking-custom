@@ -18,6 +18,32 @@ const nextConfig = {
       },
     ],
   },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' https://*.vercel-scripts.com",
+              "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に必要
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+              "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+              "upgrade-insecure-requests"
+            ].join('; ')
+          }
+        ]
+      }
+    ]
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',

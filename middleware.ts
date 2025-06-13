@@ -22,24 +22,9 @@ function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000
 }
 
 export function middleware(request: NextRequest) {
-  // DEBUGGING: Add explicit console log
-  console.log('MIDDLEWARE EXECUTING:', {
-    path: request.nextUrl.pathname,
-    host: request.headers.get('host'),
-    method: request.method,
-    timestamp: new Date().toISOString()
-  })
-  
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
   // development以外では認証チェックを行う
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
-  
-  console.log('MIDDLEWARE AUTH LOGIC:', {
-    VERCEL_ENV: process.env.VERCEL_ENV,
-    shouldCheckAuth,
-    pathStartsWithApi: request.nextUrl.pathname.startsWith('/api/'),
-    willCheckAuth: false // because of the explicit false below
-  })
   
   // Check auth for Cloudflare Workers
   if (shouldCheckAuth) {
@@ -47,25 +32,11 @@ export function middleware(request: NextRequest) {
     const expectedKey = process.env.WORKER_AUTH_KEY
     const host = request.headers.get('host')
     
-    // デバッグ: 認証状況をログ出力
-    console.log('Middleware auth check:', {
-      NODE_ENV: process.env.NODE_ENV,
-      VERCEL_ENV: process.env.VERCEL_ENV,
-      shouldCheckAuth,
-      path: request.nextUrl.pathname,
-      host: host,
-      hasAuthKey: !!cfWorkerKey,
-      expectedKeySet: !!expectedKey,
-      authMatch: cfWorkerKey === expectedKey,
-      authKeyPreview: cfWorkerKey ? (cfWorkerKey as string).substring(0, 8) + '...' : 'none',
-      expectedKeyPreview: expectedKey ? (expectedKey as string).substring(0, 8) + '...' : 'none'
-    })
     
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
     if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
       // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
       if (host?.includes('vercel.app') && request.method !== 'OPTIONS') {
-        console.log('Redirecting to custom domain:', request.nextUrl.pathname)
         return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
       }
     }
@@ -154,7 +125,7 @@ export function middleware(request: NextRequest) {
       
       // 環境変数が設定されていない場合はエラー
       if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
-        console.error('ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set')
+        // ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set
         return new NextResponse('Server configuration error', { status: 500 })
       }
       
