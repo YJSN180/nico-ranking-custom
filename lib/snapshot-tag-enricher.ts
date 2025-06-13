@@ -169,7 +169,7 @@ export async function enrichWithSnapshotTags(items: RankingItem[]): Promise<Rank
   // Apply tags to ranking items
   const enrichedItems = items.map(item => ({
     ...item,
-    tags: tagMap.get(item.id) || item.tags || []
+    tags: (tagMap.get(item.id) ?? item.tags ?? []) as string[]
   }))
   
   const successCount = enrichedItems.filter(item => item.tags.length > 0).length
@@ -189,7 +189,7 @@ export async function enrichWithSnapshotTagsLight(items: RankingItem[]): Promise
   
   return items.map(item => ({
     ...item,
-    tags: tagMap.get(item.id) || item.tags || []
+    tags: (tagMap.get(item.id) ?? item.tags ?? []) as string[]
   }))
 }
 

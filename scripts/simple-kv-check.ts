@@ -10,8 +10,8 @@ async function simpleKVCheck() {
   const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
   
   console.log('環境変数:')
-  console.log(`- CLOUDFLARE_ACCOUNT_ID: ${CF_ACCOUNT_ID || '未設定'}`)
-  console.log(`- CLOUDFLARE_KV_NAMESPACE_ID: ${CF_NAMESPACE_ID || '未設定'}`)
+  console.log(`- CLOUDFLARE_ACCOUNT_ID: ${CF_ACCOUNT_ID ? CF_ACCOUNT_ID.slice(0,4)+'...' : '未設定'}`)
+  console.log(`- CLOUDFLARE_KV_NAMESPACE_ID: ${CF_NAMESPACE_ID ? CF_NAMESPACE_ID.slice(0,4)+'...' : '未設定'}`)
   console.log(`- CLOUDFLARE_KV_API_TOKEN: ${CF_API_TOKEN ? 'あり' : '未設定'}\n`)
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {

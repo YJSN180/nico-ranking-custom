@@ -215,7 +215,7 @@ export async function enrichWithMultiStrategy(
   // Apply tags to items
   const enrichedItems = items.map(item => ({
     ...item,
-    tags: tagMap.get(item.id) || item.tags || []
+    tags: (tagMap.get(item.id) ?? item.tags ?? []) as string[]
   }))
   
   const successCount = enrichedItems.filter(item => item.tags.length > 0).length

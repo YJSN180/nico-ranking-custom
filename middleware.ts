@@ -120,7 +120,7 @@ export function middleware(request: NextRequest) {
     // 認証情報をチェック
     try {
       const base64Credentials = authHeader.split(' ')[1]
-      const credentials = Buffer.from(base64Credentials!, 'base64').toString('ascii')
+      const credentials = atob(base64Credentials!)
       const [username, password] = credentials.split(':')
       
       // 環境変数が設定されていない場合はエラー

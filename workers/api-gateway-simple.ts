@@ -123,6 +123,7 @@ export default {
       newHeaders.set('X-Frame-Options', 'DENY')
       newHeaders.set('X-XSS-Protection', '1; mode=block')
       newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+      newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
       
       // Content Security Policy (CSP) ヘッダーを追加（unsafe-evalを削除）
       const cspDirectives = [
