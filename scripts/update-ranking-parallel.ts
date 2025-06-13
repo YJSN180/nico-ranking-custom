@@ -383,11 +383,11 @@ async function processGenre(
   console.log(`[${new Date().toISOString()}] Starting ${genre}...`);
   
   try {
-    // Fetch main rankings for both periods
-    const [data24h, dataHour] = await Promise.all([
-      fetchWithNGFiltering(genre, '24h', ngList),
-      fetchWithNGFiltering(genre, 'hour', ngList)
-    ]);
+    // Fetch main rankings for both periods sequentially to avoid concurrent requests to same genre
+    const data24h = await fetchWithNGFiltering(genre, '24h', ngList);
+    // Add small delay between requests to the same genre endpoint
+    await new Promise(resolve => setTimeout(resolve, 500));
+    const dataHour = await fetchWithNGFiltering(genre, 'hour', ngList);
     
     // Popular tags are the same for both periods, so use from 24h
     const popularTags = data24h.popularTags;
@@ -494,8 +494,8 @@ async function main() {
     }
     
     // Execute in parallel with concurrency limit
-    console.log(`Executing ${tasks.length} genre tasks with concurrency limit of 6...`);
-    const results = await executeInParallel(tasks, 6); // 6 concurrent genre fetches
+    console.log(`Executing ${tasks.length} genre tasks with concurrency limit of 4...`);
+    const results = await executeInParallel(tasks, 4); // 4 concurrent genre fetches (reduced to avoid overload)
     
     // Build final data structure - EXACTLY THE SAME AS ORIGINAL
     const rankingData: any = {
@@ -564,7 +564,7 @@ async function main() {
 if (process.argv[2] === '--group') {
   // Group mode for GitHub Actions matrix strategy
   const groupId = parseInt(process.argv[3]);
-  const totalGroups = parseInt(process.argv[4] || '8');
+  const totalGroups = parseInt(process.argv[4] || '6');
   
   if (!groupId || groupId < 1 || groupId > totalGroups) {
     console.error('Invalid group ID. Usage: --group <groupId> [totalGroups]');

@@ -43,10 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Split 23 genres into 8 groups (about 3 genres per group)
+        # Split 23 genres into 6 groups (about 4 genres per group)
         # This provides good parallelization while respecting rate limits
-        group: [1, 2, 3, 4, 5, 6, 7, 8]
-      max-parallel: 8
+        group: [1, 2, 3, 4, 5, 6]
+      max-parallel: 6
       fail-fast: false # Continue other groups even if one fails
     
     steps:
@@ -76,7 +76,7 @@ jobs:
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
-        npx tsx scripts/update-ranking-parallel.ts --group ${{ matrix.group }} 8
+        npx tsx scripts/update-ranking-parallel.ts --group ${{ matrix.group }} 6
     
     - name: Upload partial results
       uses: actions/upload-artifact@v4
