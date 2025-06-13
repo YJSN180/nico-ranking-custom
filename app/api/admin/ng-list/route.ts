@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getNGList, saveManualNGList } from '@/lib/ng-filter'
+import { getServerNGList, saveServerManualNGList } from '@/lib/ng-list-server'
 import type { NGList } from '@/types/ng-list'
 
 // 認証チェック（Basic認証またはBearer token）
@@ -42,9 +42,10 @@ export async function GET(request: NextRequest) {
   }
   
   try {
-    const ngList = await getNGList()
+    const ngList = await getServerNGList()
     return NextResponse.json(ngList)
   } catch (error) {
+    console.error('Failed to get NG list:', error)
     return NextResponse.json({ error: 'Failed to get NG list' }, { status: 500 })
   }
 }
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       authorNames: data.authorNames || []
     }
     
-    await saveManualNGList(manualList)
+    await saveServerManualNGList(manualList)
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to save NG list' }, { status: 500 })

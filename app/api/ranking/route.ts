@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
-import { filterRankingData } from '@/lib/ng-filter'
+import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
             item.views !== undefined
           )
         
-        const { items: filteredItems } = await filterRankingData({ items: completeItems })
+        const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
         allItems = allItems.concat(filteredItems)
         currentPage++
       }
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest) {
         )
       
       // NGフィルタリング
-      const { items: filteredItems } = await filterRankingData({ items: completeItems })
+      const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
       
       // ランク番号を調整
       const adjustedItems = filteredItems.map((item, index) => ({
@@ -215,7 +215,7 @@ export async function GET(request: NextRequest) {
         item.views !== undefined
       )
     
-    const { items: filteredItems } = await filterRankingData({ items: completeItems })
+    const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
     const data = { items: filteredItems, popularTags }
     
     // ページ1の場合

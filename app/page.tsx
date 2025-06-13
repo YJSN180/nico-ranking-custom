@@ -6,7 +6,7 @@ import { SuspenseWrapper } from '@/components/suspense-wrapper'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
-import { filterRankingData } from '@/lib/ng-filter'
+import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import { getGenreRanking } from '@/lib/cloudflare-kv'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
@@ -30,7 +30,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       if (cfData && cfData.items && cfData.items.length > 0) {
         // NGフィルタリングを適用
         // 初期表示は100件だが、全データを保持してhasMoreの判定を正しく行えるようにする
-        const filteredData = await filterRankingData({
+        const filteredData = await filterRankingDataServer({
           items: cfData.items, // 全データを渡す（最大300件）
           popularTags: cfData.popularTags
         })
@@ -75,7 +75,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     // Caching is now handled by Cloudflare KV in the scraper
     
     // NGフィルタリングを適用
-    const filteredData = await filterRankingData({ items, popularTags })
+    const filteredData = await filterRankingDataServer({ items, popularTags })
     return filteredData
   } catch (error) {
     // スクレイピングエラーログはスキップ（ESLintエラー回避）
