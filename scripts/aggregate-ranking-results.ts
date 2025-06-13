@@ -102,7 +102,10 @@ async function main() {
       process.exit(1);
     }
     
-    console.log(`Found ${groupFiles.length} group result files`);
+    console.log(`Found ${groupFiles.length} group result files:`);
+    groupFiles.forEach(file => {
+      console.log(`  - ${file}`);
+    });
     
     // Build final data structure - EXACTLY THE SAME AS ORIGINAL
     const rankingData: any = {
@@ -119,10 +122,31 @@ async function main() {
     
     // Read and merge all group results
     for (const file of groupFiles) {
+      console.log(`\nProcessing ${file}...`);
       const content = await fs.readFile(path.join(tmpDir, file), 'utf-8');
-      const results = JSON.parse(content);
+      
+      let results;
+      try {
+        results = JSON.parse(content);
+      } catch (error) {
+        console.error(`Failed to parse JSON from ${file}:`, error);
+        continue;
+      }
+      
+      if (!Array.isArray(results)) {
+        console.error(`Expected array in ${file}, got:`, typeof results);
+        continue;
+      }
+      
+      console.log(`  Contains ${results.length} genre results`);
       
       for (const result of results) {
+        if (!result || !result.genre || !result.data) {
+          console.error(`  Invalid result structure in ${file}:`, result);
+          continue;
+        }
+        
+        console.log(`  - Adding genre: ${result.genre}`);
         // New structure: result.data contains both '24h' and 'hour'
         rankingData.genres[result.genre] = result.data;
         
@@ -143,10 +167,44 @@ async function main() {
     
     // Verify all genres are present
     const genreCount = Object.keys(rankingData.genres).length;
-    console.log(`Aggregated ${genreCount} genres with ${totalItemsCount} total items`);
+    console.log(`\nAggregated ${genreCount} genres with ${totalItemsCount} total items`);
     
     if (genreCount !== 23) {
-      console.warn(`Warning: Expected 23 genres but found ${genreCount}`);
+      console.warn(`\n⚠️  Warning: Expected 23 genres but found ${genreCount}`);
+      
+      // List which genres we have and which are missing
+      const ALL_GENRES = [
+        'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
+        'entertainment', 'music', 'sing', 'dance', 'play',
+        'commentary', 'cooking', 'travel', 'nature', 'vehicle',
+        'technology', 'society', 'mmd', 'vtuber', 'radio',
+        'sports', 'animal', 'other'
+      ];
+      
+      const foundGenres = Object.keys(rankingData.genres).sort();
+      const missingGenres = ALL_GENRES.filter(g => !foundGenres.includes(g));
+      
+      console.log('\nFound genres:', foundGenres.join(', '));
+      console.log('Missing genres:', missingGenres.join(', '));
+      
+      // Check if missing genres correspond to specific groups
+      const groupSizes = [3, 3, 3, 3, 3, 3, 3, 2]; // Group distribution
+      let currentIndex = 0;
+      const missingGroups: number[] = [];
+      
+      for (let group = 1; group <= 8; group++) {
+        const groupGenres = ALL_GENRES.slice(currentIndex, currentIndex + groupSizes[group - 1]);
+        currentIndex += groupSizes[group - 1];
+        
+        if (groupGenres.every(g => missingGenres.includes(g))) {
+          missingGroups.push(group);
+        }
+      }
+      
+      if (missingGroups.length > 0) {
+        console.log(`\nLikely missing entire groups: ${missingGroups.join(', ')}`);
+        console.log('This suggests these group files may be missing or malformed.');
+      }
     }
 
     // Write to Cloudflare KV - EXACTLY THE SAME AS ORIGINAL

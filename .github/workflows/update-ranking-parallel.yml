@@ -123,10 +123,22 @@ jobs:
     - name: Move files to correct location
       run: |
         # GitHub Actions creates subdirectories for each artifact
-        # Move all JSON files to the tmp directory
-        find ./tmp -name "*.json" -exec mv {} ./tmp/ \; 2>/dev/null || true
+        # First, show the structure
+        echo "Directory structure before moving:"
+        find ./tmp -type f -name "*.json" | sort
+        
+        # Move all JSON files to the tmp directory root
+        # Use a more robust approach that handles nested directories
+        for file in $(find ./tmp -type f -name "*.json" | grep -v "^./tmp/[^/]*\.json$"); do
+          echo "Moving: $file"
+          mv "$file" ./tmp/ 2>/dev/null || echo "Failed to move: $file"
+        done
+        
+        echo ""
         echo "Files after moving:"
-        ls -la ./tmp/*.json 2>/dev/null || echo "No JSON files found"
+        ls -la ./tmp/ranking-group-*.json 2>/dev/null || echo "No ranking group files found"
+        echo ""
+        echo "Total group files found: $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
     
     - name: Aggregate and write to KV
       env:
@@ -136,6 +148,7 @@ jobs:
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
       run: |
         echo "Aggregating results and writing to KV..."
+        echo "Expected 8 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
         npx tsx scripts/aggregate-ranking-results.ts
     
     - name: Report completion

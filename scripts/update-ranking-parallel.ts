@@ -319,18 +319,20 @@ async function executeInParallel<T>(
   tasks: (() => Promise<T>)[],
   maxConcurrency: number
 ): Promise<T[]> {
-  const results: T[] = [];
+  // Use index-based results to maintain order and handle failures
+  const results: (T | null)[] = new Array(tasks.length).fill(null);
   const executing: Promise<void>[] = [];
   
-  for (const task of tasks) {
+  for (let index = 0; index < tasks.length; index++) {
+    const task = tasks[index];
     const promise = task()
       .then(result => {
-        results.push(result);
+        results[index] = result;
       })
       .catch(error => {
-        console.error('Task failed in executeInParallel:', error);
-        // Don't push to results - this task failed
-        // But don't throw either - let other tasks continue
+        console.error(`Task ${index} failed in executeInParallel:`, error);
+        // Keep null in results[index] to maintain array structure
+        // This ensures we know which tasks failed
       });
     
     executing.push(promise);
@@ -347,7 +349,16 @@ async function executeInParallel<T>(
   }
   
   await Promise.all(executing);
-  return results;
+  
+  // Filter out nulls but log how many failed
+  const successfulResults = results.filter((r): r is T => r !== null);
+  const failedCount = results.length - successfulResults.length;
+  
+  if (failedCount > 0) {
+    console.log(`Warning: ${failedCount} out of ${results.length} tasks failed`);
+  }
+  
+  return successfulResults;
 }
 
 // Process single genre (both periods at once to share popular tags)
@@ -578,18 +589,31 @@ if (process.argv[2] === '--group') {
     
     const results = await executeInParallel(tasks, 2); // Lower concurrency per group
     
+    // Verify we have results for all expected genres
+    console.log(`Group ${groupId}: Expected ${groupGenres.length} genres, got ${results.length} results`);
+    
+    if (results.length !== groupGenres.length) {
+      console.warn(`Warning: Some genres may have failed in group ${groupId}`);
+      // Show which genres we got
+      const resultGenres = results.map(r => r.genre);
+      const missingGenres = groupGenres.filter(g => !resultGenres.includes(g));
+      if (missingGenres.length > 0) {
+        console.warn(`Missing genres in group ${groupId}: ${missingGenres.join(', ')}`);
+      }
+    }
+    
     // Save partial results
     const tmpDir = './tmp';
     await fs.mkdir(tmpDir, { recursive: true });
     await fs.writeFile(
       path.join(tmpDir, `ranking-group-${groupId}.json`),
-      JSON.stringify(results)
+      JSON.stringify(results, null, 2)  // Pretty print for easier debugging
     );
     
     const duration = Date.now() - startTime;
-    console.log(`Group ${groupId} completed in ${Math.round(duration / 1000)}s`);
+    console.log(`Group ${groupId} completed in ${Math.round(duration / 1000)}s with ${results.length} genres`);
   })().catch(error => {
-    console.error(`Group ${groupId} failed:`, error);
+    console.error(`Group ${groupId} failed catastrophically:`, error);
     process.exit(1);
   });
 } else {
