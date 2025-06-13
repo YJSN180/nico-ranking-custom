@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+import Script from 'next/script'
 import { ThemeProvider } from '@/components/theme-provider'
 import './globals.css'
 
@@ -23,10 +24,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <head>
-        <script src="/theme-script.js" />
-      </head>
       <body className={inter.className}>
+        <Script src="/theme-script.js" strategy="beforeInteractive" />
         <ThemeProvider>
           {children}
         </ThemeProvider>

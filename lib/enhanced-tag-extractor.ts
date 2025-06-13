@@ -168,7 +168,7 @@ export async function enrichRankingItemsWithEnhancedTags(
   // Method 2: If batch approach didn't get enough results, try individual approach
   const missingIds = videoIds.filter(id => !tagMap.has(id))
   if (missingIds.length > 0 && missingIds.length <= 10) {
-    console.log(`Fetching individual tags for ${missingIds.length} videos`)
+    // Fetching individual tags for missing videos
     const individualTags = await fetchVideoTagsIndividual(missingIds)
     
     // Merge results
@@ -179,7 +179,7 @@ export async function enrichRankingItemsWithEnhancedTags(
   
   // Method 3: Fallback to HTML parsing if provided
   if (fallbackHtml && tagMap.size === 0) {
-    console.log('Falling back to HTML tag extraction')
+    // Falling back to HTML tag extraction
     // You can import and use the existing HTML tag extractor here
   }
   
@@ -192,14 +192,14 @@ export async function enrichRankingItemsWithEnhancedTags(
 
 // Test function to validate tag extraction
 export async function testTagExtraction(testVideoIds: string[] = ['sm15630734', 'sm1097445']) {
-  console.log('Testing enhanced tag extraction...')
+  // Testing enhanced tag extraction...
   
   const tagMap = await fetchVideoTagsBatch(testVideoIds)
   
-  console.log('Results:')
+  // Results:
   testVideoIds.forEach(id => {
     const tags = tagMap.get(id) || []
-    console.log(`${id}: ${tags.length} tags - ${tags.slice(0, 5).join(', ')}`)
+    // Video tags extracted
   })
   
   return tagMap

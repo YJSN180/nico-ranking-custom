@@ -192,7 +192,7 @@ export async function enrichWithMultiStrategy(
   
   let tagMap = new Map<string, string[]>()
   
-  console.log(`Enriching ${videoIds.length} videos without tags using multi-strategy approach...`)
+  // Enriching videos without tags using multi-strategy approach
   
   // Strategy 1: Recent popular search (fast, works for current content)
   const recentTags = await searchRecentPopular(videoIds)
@@ -219,7 +219,7 @@ export async function enrichWithMultiStrategy(
   }))
   
   const successCount = enrichedItems.filter(item => item.tags.length > 0).length
-  console.log(`Multi-strategy enrichment: ${successCount}/${items.length} videos now have tags`)
+  // Multi-strategy enrichment complete
   
   return enrichedItems
 }

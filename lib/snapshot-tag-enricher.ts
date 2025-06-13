@@ -151,13 +151,13 @@ export async function enrichWithSnapshotTags(items: RankingItem[]): Promise<Rank
   let tagMap = new Map<string, string[]>()
   
   // Strategy 1: Try batch fetch first (faster, but less reliable for older videos)
-  console.log(`Fetching tags for ${videoIds.length} videos using batch method...`)
+  // Fetching tags using batch method
   tagMap = await fetchTagsBatch(videoIds)
   
   // Strategy 2: For videos without tags, try individual fetch (slower, but more reliable)
   const missingIds = videoIds.filter(id => !tagMap.has(id))
   if (missingIds.length > 0 && missingIds.length <= 20) { // Only try individual for small numbers
-    console.log(`Fetching tags individually for ${missingIds.length} remaining videos...`)
+    // Fetching tags individually for remaining videos
     const individualTags = await fetchTagsIndividual(missingIds)
     
     // Merge results
@@ -173,7 +173,7 @@ export async function enrichWithSnapshotTags(items: RankingItem[]): Promise<Rank
   }))
   
   const successCount = enrichedItems.filter(item => item.tags.length > 0).length
-  console.log(`Tag enrichment completed: ${successCount}/${items.length} videos have tags`)
+  // Tag enrichment completed
   
   return enrichedItems
 }
@@ -195,7 +195,7 @@ export async function enrichWithSnapshotTagsLight(items: RankingItem[]): Promise
 
 // Test function
 export async function testSnapshotTagEnrichment(testVideoIds: string[] = ['sm15630734', 'sm1097445']): Promise<void> {
-  console.log('Testing Snapshot tag enrichment...')
+  // Testing Snapshot tag enrichment
   
   const mockItems: RankingItem[] = testVideoIds.map((id, index) => ({
     rank: index + 1,
@@ -212,6 +212,6 @@ export async function testSnapshotTagEnrichment(testVideoIds: string[] = ['sm156
   const enriched = await enrichWithSnapshotTags(mockItems)
   
   enriched.forEach(item => {
-    console.log(`${item.id}: ${item.tags.length} tags - ${item.tags.slice(0, 5).join(', ')}`)
+    // Tags retrieved for test video
   })
 }
