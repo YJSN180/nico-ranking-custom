@@ -1,40 +1,38 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { KVRateLimit } from './lib/rate-limit-kv'
+import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 
-// シンプルなインメモリレート制限（本番ではRedisやCloudflareを使用）
+// フォールバック用のインメモリレート制限（KVが利用できない場合）
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
-// セキュリティイベントログ機能
-function logSecurityEvent(event: string, ip: string, details?: any) {
-  if (process.env.NODE_ENV === 'production') {
-    // 本番環境でのみログ出力
-    console.warn(`[SECURITY] ${event}`, {
-      timestamp: new Date().toISOString(),
-      ip,
-      details,
-      userAgent: details?.userAgent || 'unknown'
-    })
-  }
-}
-
-function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): boolean {
-  const now = Date.now()
-  const entry = rateLimitStore.get(ip)
-  
-  if (!entry || now > entry.resetAt) {
-    rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs })
+async function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): Promise<boolean> {
+  try {
+    // Try CloudFlare KV first
+    const kvResult = await KVRateLimit.checkLimit(ip, limit, windowMs)
+    return kvResult
+  } catch (error) {
+    // Fallback to in-memory rate limiting
+    console.error('[RATE_LIMIT] KV failed, using in-memory:', error)
+    
+    const now = Date.now()
+    const entry = rateLimitStore.get(ip)
+    
+    if (!entry || now > entry.resetAt) {
+      rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs })
+      return true
+    }
+    
+    if (entry.count >= limit) {
+      return false
+    }
+    
+    entry.count++
     return true
   }
-  
-  if (entry.count >= limit) {
-    return false
-  }
-  
-  entry.count++
-  return true
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
   // development以外では認証チェックを行う
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
@@ -93,9 +91,11 @@ export function middleware(request: NextRequest) {
     
     if (process.env.VERCEL_ENV === 'production' && 
         dangerousEndpoints.some(path => request.nextUrl.pathname.startsWith(path))) {
-      logSecurityEvent('DEBUG_ENDPOINT_ACCESS_BLOCKED', ip, {
+      SecurityLogger.log({
+        event: SecurityEventType.DEBUG_ENDPOINT_ACCESS,
+        ip,
         path: request.nextUrl.pathname,
-        userAgent: request.headers.get('user-agent')
+        userAgent: request.headers.get('user-agent') || undefined
       })
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     }
@@ -105,13 +105,14 @@ export function middleware(request: NextRequest) {
     const limit = isAdminPath ? 3 : 10  // 管理画面は3回/分に制限
     const windowMs = isAdminPath ? 60000 : 10000
     
-    if (!checkRateLimit(ip, limit, windowMs)) {
-      logSecurityEvent('RATE_LIMIT_EXCEEDED', ip, {
-        path: request.nextUrl.pathname,
-        userAgent: request.headers.get('user-agent'),
+    if (!(await checkRateLimit(ip, limit, windowMs))) {
+      SecurityLogger.logRateLimit(
+        ip,
+        request.nextUrl.pathname,
+        request.headers.get('user-agent') || undefined,
         limit,
         windowMs
-      })
+      )
       return NextResponse.json(
         { error: 'Too many requests' },
         { 
@@ -157,11 +158,13 @@ export function middleware(request: NextRequest) {
       const validPassword = process.env.ADMIN_PASSWORD
       
       if (username !== validUsername || password !== validPassword) {
-        logSecurityEvent('INVALID_ADMIN_CREDENTIALS', ip, {
-          path: request.nextUrl.pathname,
-          userAgent: request.headers.get('user-agent'),
+        SecurityLogger.logAuthFailure(
+          'admin',
+          ip,
+          request.nextUrl.pathname,
+          request.headers.get('user-agent') || undefined,
           username
-        })
+        )
         return new NextResponse('Invalid credentials', {
           status: 401,
           headers: {
