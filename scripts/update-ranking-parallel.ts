@@ -586,7 +586,7 @@ if (process.argv[2] === '--group') {
     // Process each genre (both periods at once)
     const tasks = groupGenres.map(genre => () => processGenre(genre, ngList));
     
-    const results = await executeInParallel(tasks, 2); // Lower concurrency per group
+    const results = await executeInParallel(tasks, 1); // Sequential execution within group to avoid rate limiting
     
     // Verify we have results for all expected genres
     console.log(`Group ${groupId}: Expected ${groupGenres.length} genres, got ${results.length} results`);
