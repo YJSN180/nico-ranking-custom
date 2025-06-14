@@ -59,15 +59,11 @@ export async function filterRankingItemsServer(items: RankingItem[]): Promise<NG
     return true
   })
   
-  // Re-rank items
-  const rerankedItems = filteredItems.map((item, index) => ({
-    ...item,
-    rank: index + 1
-  }))
+  // Keep original rank numbers (no re-ranking)
   
   return {
-    filteredItems: rerankedItems,
-    filteredCount: items.length - rerankedItems.length,
+    filteredItems: filteredItems, // 元のランク番号を保持
+    filteredCount: items.length - filteredItems.length,
     newDerivedIds: Array.from(new Set(newDerivedIds))
   }
 }
