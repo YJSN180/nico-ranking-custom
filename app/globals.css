@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* カスタムフォント定義 */
+@font-face {
+  font-family: 'Nicomoji Plus v2';
+  src: url('/fonts/nicomoji-plus-v2.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Comic Sans MS Bold';
+  src: url('/fonts/comic-sans-ms-bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ライトテーマ */
 :root,
 [data-theme="light"] {
@@ -26,6 +43,7 @@
   /* 追加の色 */
   --primary-color: #667eea;
   --primary-hover: #5567d8;
+  --primary-color-hover: #5567d8;
   --error-color: #dc3545;
   --error-bg: #fee;
   --success-color: #28a745;
@@ -64,6 +82,7 @@
   /* 追加の色 */
   --primary-color: #7c8eff;
   --primary-hover: #6b7df0;
+  --primary-color-hover: #6b7df0;
   --error-color: #ff6b6b;
   --error-bg: rgba(255, 107, 107, 0.2);
   --success-color: #4caf50;
@@ -102,6 +121,7 @@
   /* 追加の色 */
   --primary-color: #1d9bf0; /* X公式のブルー */
   --primary-hover: #1a8cd8; /* ホバー時の少し暗いブルー */
+  --primary-color-hover: #1a8cd8;
   --error-color: #f4212e; /* X公式のエラー/危険色 */
   --error-bg: rgba(244, 33, 46, 0.1);
   --success-color: #00ba7c; /* X公式の成功色 */

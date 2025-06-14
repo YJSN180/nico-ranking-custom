@@ -42,6 +42,20 @@
 - **Cloudflare KV**: ランキングデータのキャッシュストレージ
 - **GitHub Actions**: データ更新のcronジョブ（10分間隔）
 
+## 🎨 カスタムフォント設定
+
+タイトルにカスタムフォントを使用しています。以下のフォントファイルを配置してください：
+
+1. **ニコモジ+v2** (ニコニコランキング部分)
+   - ファイル名: `nicomoji-plus_v2-5.ttf`
+   - 配置先: `public/fonts/nicomoji-plus-v2.ttf`
+
+2. **Comic Sans MS Bold** ((Re:turn)部分)
+   - ファイル名: `comic-sans-ms.ttf`
+   - 配置先: `public/fonts/comic-sans-ms-bold.ttf`
+
+フォントファイルがない場合は、代替フォントが使用されます。
+
 ## 🚀 セットアップ
 
 ### 前提条件
