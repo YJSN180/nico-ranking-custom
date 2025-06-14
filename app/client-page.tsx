@@ -30,10 +30,26 @@ export default function ClientPage({
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  const [config, setConfig] = useState<RankingConfig>({
-    period: initialPeriod as '24h' | 'hour',
-    genre: initialGenre as RankingGenre,
-    tag: initialTag
+  const [config, setConfig] = useState<RankingConfig>(() => {
+    // ローカルストレージから前回の設定を復元
+    const savedConfig = localStorage.getItem('ranking-config')
+    if (savedConfig) {
+      try {
+        const parsed = JSON.parse(savedConfig)
+        return {
+          period: parsed.period || initialPeriod as '24h' | 'hour',
+          genre: parsed.genre || initialGenre as RankingGenre,
+          tag: parsed.tag || initialTag
+        }
+      } catch {
+        // パースエラーの場合はデフォルト値を使用
+      }
+    }
+    return {
+      period: initialPeriod as '24h' | 'hour',
+      genre: initialGenre as RankingGenre,
+      tag: initialTag
+    }
   })
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
@@ -247,7 +263,9 @@ export default function ClientPage({
     return () => clearInterval(interval)
   }, [cleanupOldStorage])
 
-  // ブラウザバック時などの自動復元
+  // ブラウザバック時などの自動復元（削除）
+  // この処理は不要なので削除
+  /*
   useEffect(() => {
     const restoreToPosition = async (targetCount: number) => {
       // すでに必要なデータがある場合はスキップ
@@ -333,8 +351,15 @@ export default function ClientPage({
       restoreToPosition(targetCount)
     }
   }, [initialDisplayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+  */
 
-  // 外部サイトから戻った時の状態復元
+  // 設定が変更されたときにlocalStorageに保存
+  useEffect(() => {
+    localStorage.setItem('ranking-config', JSON.stringify(config))
+  }, [config])
+  
+  // 外部サイトから戻った時の状態復元（削除）
+  /*
   useEffect(() => {
     const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
     const savedState = localStorage.getItem(storageKey)
@@ -369,6 +394,7 @@ export default function ClientPage({
       }
     }
   }, [config.genre, config.period, config.tag])
+  */
   
   // initialDataが変更されたときに状態をリセット
   // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
@@ -640,6 +666,29 @@ export default function ClientPage({
     
     // ブラウザの戻るボタン検知
     const handlePopState = () => {
+      // ニコニコ動画からの戻りでない場合は何もしない
+      const isFromNiconico = document.referrer && 
+        (document.referrer.includes('nicovideo.jp') || document.referrer.includes('niconico.jp'))
+      
+      if (!isFromNiconico) {
+        return
+      }
+      
+      // ニコニコ動画から戻った場合のみ、保存されたスクロール位置を復元
+      const storageKey = `ranking-scroll-${config.genre}-${config.period}-${config.tag || 'none'}`
+      const savedScrollPosition = sessionStorage.getItem(storageKey)
+      
+      if (savedScrollPosition) {
+        const scrollPosition = parseInt(savedScrollPosition, 10)
+        // スクロール位置を復元
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollPosition)
+          sessionStorage.removeItem(storageKey)
+        })
+      }
+      
+      /*
+      // 以下の自動復元処理は削除
       const params = new URLSearchParams(window.location.search)
       const showCount = parseInt(params.get('show') || '100', 10)
       
@@ -761,6 +810,7 @@ export default function ClientPage({
         // URLにshowパラメータがない場合（通常のページ遷移）、100件表示に戻す
         setDisplayCount(100)
       }
+      */
     }
     
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -777,7 +827,7 @@ export default function ClientPage({
         window.history.scrollRestoration = 'auto'
       }
     }
-  }, [saveScrollPosition, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+  }, [saveScrollPosition, config])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
   const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
