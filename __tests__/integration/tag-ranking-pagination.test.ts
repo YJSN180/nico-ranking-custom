@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
 import * as cloudflareKV from '@/lib/cloudflare-kv'
 import * as scraperModule from '@/lib/scraper'
-import * as ngFilterModule from '@/lib/ng-filter'
+import * as ngFilterServerModule from '@/lib/ng-filter-server'
 
 vi.mock('@/lib/cloudflare-kv', () => ({
   getTagRanking: vi.fn(),
@@ -11,7 +11,10 @@ vi.mock('@/lib/cloudflare-kv', () => ({
 }))
 
 vi.mock('@/lib/scraper')
-vi.mock('@/lib/ng-filter')
+vi.mock('@/lib/ng-filter-server')
+vi.mock('@/lib/ng-list-server', () => ({
+  addToServerDerivedNGList: vi.fn()
+}))
 
 describe('タグ別ランキングの動的読み込み', () => {
   beforeEach(() => {
@@ -41,10 +44,10 @@ describe('タグ別ランキングの動的読み込み', () => {
       }))
 
     // NGフィルタリングのモック（5%を除外）
-    vi.spyOn(ngFilterModule, 'filterRankingData').mockImplementation(async ({ items }) => ({
-      items: items.filter((item: any) => item.authorName !== '蠍媛'),
+    vi.spyOn(ngFilterServerModule, 'filterRankingItemsServer').mockImplementation(async (items) => ({
+      filteredItems: items.filter((item: any) => item.authorName !== '蠍媛'),
       newDerivedIds: []
-    }) as any)
+    }))
 
     // KVキャッシュなし
     vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(null)
@@ -58,6 +61,7 @@ describe('タグ別ランキングの動的読み込み', () => {
     expect(response.status).toBe(200)
     expect(data.items).toBeDefined()
     expect(data.hasMore).toBe(true) // 100件取得できたので次のページがある可能性
+    expect(data.totalCached).toBe(0) // 動的取得の場合は0
     expect(data.items.length).toBe(100) // ちょうど100件
     expect(data.items[0].rank).toBe(1)
     expect(data.items[99].rank).toBe(100)
@@ -85,10 +89,10 @@ describe('タグ別ランキングの動的読み込み', () => {
       popularTags: []
     })
 
-    vi.spyOn(ngFilterModule, 'filterRankingData').mockImplementation(async ({ items }) => ({
-      items: items,
+    vi.spyOn(ngFilterServerModule, 'filterRankingItemsServer').mockImplementation(async (items) => ({
+      filteredItems: items,
       newDerivedIds: []
-    }) as any)
+    }))
 
     vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(null)
 
@@ -137,10 +141,10 @@ describe('タグ別ランキングの動的読み込み', () => {
         popularTags: []
       })
 
-    vi.spyOn(ngFilterModule, 'filterRankingData').mockImplementation(async ({ items }) => ({
-      items: items,
+    vi.spyOn(ngFilterServerModule, 'filterRankingItemsServer').mockImplementation(async (items) => ({
+      filteredItems: items,
       newDerivedIds: []
-    }) as any)
+    }))
 
     vi.mocked(cloudflareKV.getTagRanking).mockResolvedValue(null)
 
