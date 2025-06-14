@@ -67,7 +67,7 @@ describe('300件表示時のボタン表示', () => {
     expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
   })
 
-  it('タグ別ランキングで300件表示時は次ページボタンが表示される（hasMore=trueの場合）', () => {
+  it('タグ別ランキングで初期表示時は「もっと見る」ボタンが表示される', () => {
     const mockData = createMockData(300)
     
     render(
@@ -79,7 +79,7 @@ describe('300件表示時のボタン表示', () => {
       />
     )
 
-    // タグ別ランキングでは300件表示後も、単に「もっと見る」ボタンが表示される
+    // 初期表示は100件なので、300件のデータがあればボタンは表示される
     expect(screen.getByText('もっと見る')).toBeInTheDocument()
   })
 

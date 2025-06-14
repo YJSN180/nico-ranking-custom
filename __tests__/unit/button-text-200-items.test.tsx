@@ -98,7 +98,8 @@ describe('200件表示時のボタンテキスト', () => {
 
     // 最初の100件が表示されている
     await waitFor(() => {
-      expect(screen.getAllByText(/Test Video/)).toHaveLength(100)
+      const items = screen.getAllByTestId('ranking-item')
+      expect(items).toHaveLength(100)
     })
     
     // タグ別ランキングの初期データが100件の場合、hasMoreがtrueならもっと見るボタンが表示される
@@ -119,7 +120,8 @@ describe('200件表示時のボタンテキスト', () => {
 
     // 200件表示時
     await waitFor(() => {
-      expect(screen.getAllByText(/Test Video/)).toHaveLength(200)
+      const items = screen.getAllByTestId('ranking-item')
+      expect(items).toHaveLength(200)
       // まだデータがあればもっと見るボタンが表示される
       expect(screen.getByText('もっと見る')).toBeInTheDocument()
     })

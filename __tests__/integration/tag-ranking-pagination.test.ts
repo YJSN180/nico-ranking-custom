@@ -98,9 +98,9 @@ describe('タグ別ランキングの動的読み込み', () => {
     const data = await response.json()
     expect(data.items).toBeDefined()
     
-    // APIは500件確保しようとするため、6回フェッチして570件（95×6）取得
-    expect(data.totalCached).toBeGreaterThanOrEqual(500)
-    expect(data.hasMore).toBe(true) // 570件あるので次のページがある
+    // APIは300件確保しようとするため、4回フェッチして380件（95×4）取得
+    expect(data.totalCached).toBeGreaterThanOrEqual(300)
+    expect(data.hasMore).toBe(true) // 380件あるので次のページがある
     expect(data.items.length).toBe(100) // ページ1は100件
     expect(data.items[0].rank).toBe(1)
     expect(data.items[99].rank).toBe(100)
@@ -108,8 +108,8 @@ describe('タグ別ランキングの動的読み込み', () => {
     // NG作者が含まれていないことを確認
     expect(data.items.every((item: any) => item.authorName !== '蠍媛')).toBe(true)
     
-    // 6回フェッチされたことを確認（500件以上確保するため）
-    expect(scrapeRankingPage).toHaveBeenCalledTimes(6)
+    // 4回フェッチされたことを確認（300件以上確保するため）
+    expect(scrapeRankingPage).toHaveBeenCalledTimes(4)
   })
 
   it('ページ2で正しいランク番号が割り当てられる', async () => {

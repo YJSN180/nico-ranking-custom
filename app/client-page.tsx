@@ -892,32 +892,41 @@ export default function ClientPage({
       }
       
       if (items.length > 0) {
-        // 新しいデータを正しい順位順序で挿入
-        const combinedData = [...rankingData, ...items]
-        // 元のランク番号で正しくソートして順序を保つ
-        const sortedData = combinedData.sort((a, b) => a.rank - b.rank)
-        setRankingData(sortedData)
+        // FIX: 重複を防ぐため、既存のIDセットを作成
+        const existingIds = new Set(rankingData.map(item => item.id))
         
-        // currentPageはタグ別の場合のみ更新
-        if (config.tag) {
-          setCurrentPage(currentPage + 1)
-        }
+        // 重複していない新しいアイテムのみを追加
+        const newItems = items.filter(item => !existingIds.has(item.id))
         
-        // 500件に達したらhasMoreをfalseに
-        if (sortedData.length >= MAX_RANKING_ITEMS) {
-          setHasMore(false)
+        if (newItems.length > 0) {
+          // 新しいデータを追加してソート
+          const combinedData = [...rankingData, ...newItems]
+          const sortedData = combinedData.sort((a, b) => a.rank - b.rank)
+          setRankingData(sortedData)
+          
+          // currentPageはタグ別の場合のみ更新
+          if (config.tag) {
+            setCurrentPage(currentPage + 1)
+          }
+          
+          // 最大件数チェック
+          if (sortedData.length >= MAX_RANKING_ITEMS) {
+            setHasMore(false)
+          } else {
+            setHasMore(hasMoreData)
+          }
+          
+          // 新しく追加されたデータも表示するようdisplayCountを更新
+          // シンプルに100件増やす（NGフィルタは表示時に適用されるので考慮不要）
+          const newDisplayCount = Math.min(displayCount + 100, sortedData.length, MAX_RANKING_ITEMS)
+          setDisplayCount(newDisplayCount)
+          
+          // URLを更新
+          updateURL(newDisplayCount)
         } else {
-          setHasMore(hasMoreData)
+          // すべて重複していた場合は、それ以上データがない
+          setHasMore(false)
         }
-        // 新しく追加されたデータも表示するようdisplayCountを更新
-        // シンプルに100件増やす（NGフィルタは表示時に適用されるので考慮不要）
-        const newDisplayCount = Math.min(displayCount + 100, sortedData.length)
-        setDisplayCount(newDisplayCount)
-        
-        // URLを更新
-        updateURL(newDisplayCount)
-        
-        // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
