@@ -935,14 +935,19 @@ export default function ClientPage({
   // カスタムNGフィルタを適用してから表示するアイテムを取得
   const filteredItems = filterItems(realtimeItems)
   
-  // フィルタリング後に順位を振り直す（メモ化）
-  const rerankedItems = React.useMemo(() => 
-    filteredItems.map((item, index) => ({
+  // フィルタリング後の順位調整
+  // NGフィルタリングで動画が除外された場合、順位を詰めて表示
+  const rerankedItems = React.useMemo(() => {
+    // 元のランク番号でソート
+    const sorted = [...filteredItems].sort((a, b) => a.rank - b.rank)
+    
+    // 連続した順位に振り直す（1, 2, 3, ...）
+    // これによりNGフィルタで除外された動画の順位の穴を埋める
+    return sorted.map((item, index) => ({
       ...item,
       rank: index + 1
-    })),
-    [filteredItems]
-  )
+    }))
+  }, [filteredItems])
   
   // 表示アイテムの計算もメモ化
   const displayItems = React.useMemo(() => 

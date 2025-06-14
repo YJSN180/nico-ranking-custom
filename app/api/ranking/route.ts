@@ -213,11 +213,9 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      // ランク番号を調整
-      const adjustedItems = filteredItems.map((item, index) => ({
-        ...item,
-        rank: (page - 1) * 100 + index + 1
-      }))
+      // ランク番号はscraperで既に設定されているため、そのまま使用
+      // ページ6以降は実際のニコニコ動画のランク番号（501位〜）を保持
+      const adjustedItems = filteredItems
       
       // 統一された形式で返す
       const response = NextResponse.json({
