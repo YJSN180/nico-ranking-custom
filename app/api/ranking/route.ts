@@ -62,11 +62,11 @@ export async function GET(request: NextRequest) {
       // キャッシュミス時は動的取得
       // console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
       
-      // NGフィルタリング後に100件確保
-      const targetCount = 100
+      // NGフィルタリング後に500件確保（通常のジャンルと同じ）
+      const targetCount = 500
       let allItems: any[] = []
       let currentPage = page
-      const maxAttempts = 3
+      const maxAttempts = 10
       
       while (allItems.length < targetCount && currentPage < page + maxAttempts) {
         const { items: pageItems } = await scrapeRankingPage(
@@ -109,18 +109,21 @@ export async function GET(request: NextRequest) {
         currentPage++
       }
       
-      // 100件に制限してランク番号を再割り当て
-      allItems = allItems.slice(0, targetCount).map((item, index) => ({
+      // ランク番号を再割り当て（ページネーション対応）
+      const itemsPerPage = 100
+      const startIdx = (page - 1) * itemsPerPage
+      const endIdx = page * itemsPerPage
+      const pageItems = allItems.slice(startIdx, endIdx).map((item, index) => ({
         ...item,
-        rank: (page - 1) * targetCount + index + 1
+        rank: startIdx + index + 1
       }))
       
       // 動的取得の場合はキャッシュなし（Cloudflare KVのみ使用）
       
       const response = NextResponse.json({
-        items: allItems,
-        hasMore: allItems.length >= targetCount, // 100件取れたら次のページがある可能性
-        totalCached: 0 // 動的取得の場合は総数不明
+        items: pageItems,
+        hasMore: endIdx < allItems.length, // 次のページにアイテムがあるか
+        totalCached: allItems.length // 取得した総数
       })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'MISS')

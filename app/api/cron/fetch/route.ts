@@ -144,10 +144,11 @@ export async function POST(request: Request) {
           // 全人気タグを処理（500件ずつキャッシュ）
           for (const tag of popularTags) {
             try {
-              // タグ別ランキングを取得
-              const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
+              // タグ別ランキングを取得（初期チェックをスキップして直接フェッチ開始）
+              // const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
               
-              if (tagItems.length > 0) {
+              // if (tagItems.length > 0) {
+              if (true) { // 初期チェックをスキップ
                 // NGフィルタリング後に500件確保
                 const targetCount = 500
                 const allTagItems: RankingItem[] = []
