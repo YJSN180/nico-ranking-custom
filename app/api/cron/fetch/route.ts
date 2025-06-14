@@ -47,13 +47,13 @@ export async function POST(request: Request) {
     for (const genre of genres) {
       for (const period of periods) {
         try {
-          // 300件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
-          const targetCount = 300
+          // 500件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
+          const targetCount = 500
           const allItems: RankingItem[] = []
           const seenVideoIds = new Set<string>() // 重複チェック用
           let popularTags: string[] = []
           let page = 1
-          const maxPages = 8 // 重複を考慮して上限を増やす
+          const maxPages = 10 // 500件確保のため上限を増やす
           
           while (allItems.length < targetCount && page <= maxPages) {
             const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, undefined, 100, page)
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
             }
           }
           
-          // 300件に切り詰め、ランク番号を振り直す
+          // 500件に切り詰め、ランク番号を振り直す
           const items: RankingData = allItems.slice(0, targetCount).map((item, index) => ({
             ...item,
             rank: index + 1
