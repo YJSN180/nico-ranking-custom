@@ -355,7 +355,12 @@ export default function ClientPage({
 
   // 設定が変更されたときにlocalStorageに保存
   useEffect(() => {
-    localStorage.setItem('ranking-config', JSON.stringify(config))
+    try {
+      localStorage.setItem('ranking-config', JSON.stringify(config))
+    } catch (error) {
+      // Storage quota exceeded - gracefully degrade
+      console.warn('Could not save ranking config to localStorage:', error)
+    }
   }, [config])
   
   // 外部サイトから戻った時の状態復元（削除）
@@ -405,7 +410,7 @@ export default function ClientPage({
     
     if (!hasRestoredData) {
       // URLからの初期表示件数を保持する
-      setDisplayCount(Math.min(Math.max(100, initialDisplayCount), Math.min(500, initialData.length)))
+      setDisplayCount(Math.min(Math.max(100, initialDisplayCount), Math.min(1000, initialData.length)))
       setRankingData(initialData)
       setCurrentPage(1)
       // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
@@ -830,7 +835,7 @@ export default function ClientPage({
   }, [saveScrollPosition, config])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
-  const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
+  const MAX_RANKING_ITEMS = 1000 // すべてのランキングで1000件まで
   
   const loadMoreItems = async () => {
     if (loadingMore || !hasMore) return
@@ -905,11 +910,8 @@ export default function ClientPage({
           setHasMore(hasMoreData)
         }
         // 新しく追加されたデータも表示するようdisplayCountを更新
-        // NGフィルタ適用後の実際の追加件数を計算
-        const prevFilteredCount = filterItems(rankingData).length
-        const newFilteredCount = filterItems(sortedData).length
-        const actualAddedCount = newFilteredCount - prevFilteredCount
-        const newDisplayCount = Math.min(displayCount + actualAddedCount, MAX_RANKING_ITEMS)
+        // シンプルに100件増やす（NGフィルタは表示時に適用されるので考慮不要）
+        const newDisplayCount = Math.min(displayCount + 100, sortedData.length)
         setDisplayCount(newDisplayCount)
         
         // URLを更新

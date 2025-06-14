@@ -62,8 +62,8 @@ export async function GET(request: NextRequest) {
       // キャッシュミス時は動的取得
       // console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
       
-      // NGフィルタリング後に500件確保（通常のジャンルと同じ）
-      const targetCount = 500
+      // NGフィルタリング後に300件確保（タグ別ランキングの現実的な上限）
+      const targetCount = 300
       let allItems: any[] = []
       let currentPage = page
       const maxAttempts = 10
@@ -132,8 +132,8 @@ export async function GET(request: NextRequest) {
 
     // 通常のジャンル別ランキング
     
-    // Cloudflare KVからの取得を試みる（ページ1-5、500件まで）
-    if (useCloudflareKV && page <= 5) {
+    // Cloudflare KVからの取得を試みる（ページ1-10、1000件まで）
+    if (useCloudflareKV && page <= 10) {
       try {
         const cfData = await getGenreRanking(genre, period as RankingPeriod)
         if (cfData && cfData.items && cfData.items.length > 0) {
@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
             })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
             response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Max-Items', '500')
+            response.headers.set('X-Max-Items', '1000')
             return response
           } else {
             // ページ2以降も統一された形式で返す
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
             })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
             response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Max-Items', '500')
+            response.headers.set('X-Max-Items', '1000')
             return response
           }
         }
@@ -173,8 +173,8 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // ページ番号が6以上の場合（501位以降）は動的取得
-    if (page >= 6) {
+    // ページ番号が11以上の場合（1001位以降）は動的取得
+    if (page >= 11) {
       // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
       
       // 100件単位で動的取得

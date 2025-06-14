@@ -65,12 +65,12 @@ export async function updateRankingData(): Promise<UpdateResult> {
     try {
       // スキップ（ESLintエラー回避）
       
-      // 500件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
-      const targetCount = 500
+      // 1000件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
+      const targetCount = 1000
       const allItems: RankingItem[] = []
       let popularTags: string[] = []
       let page = 1
-      const maxPages = 7 // 最大7ページまで取得
+      const maxPages = 10 // 最大10ページまで取得（ニコニコ動画の上限）
       
       while (allItems.length < targetCount && page <= maxPages) {
         const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, undefined, 100, page)
@@ -114,7 +114,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
         }
       }
       
-      // 500件に切り詰め、ランク番号を振り直す
+      // 1000件に切り詰め、ランク番号を振り直す
       const items = allItems.slice(0, targetCount).map((item, index) => ({
         ...item,
         rank: index + 1
