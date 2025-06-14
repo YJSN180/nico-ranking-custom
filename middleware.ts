@@ -54,21 +54,22 @@ export async function middleware(request: NextRequest) {
     }
   }
   
-  // プレビューデプロイメントの保護
-  if (process.env.VERCEL_ENV === 'preview') {
-    const previewProtectionKey = request.headers.get('X-Preview-Protection')
-    const expectedPreviewKey = process.env.PREVIEW_PROTECTION_KEY
-    
-    // プレビュー保護キーが設定されていて、一致しない場合はアクセスを拒否
-    if (expectedPreviewKey && previewProtectionKey !== expectedPreviewKey) {
-      return new NextResponse('Preview deployment requires authentication', {
-        status: 401,
-        headers: {
-          'WWW-Authenticate': 'Basic realm="Preview Deployment"',
-        },
-      })
-    }
-  }
+  // プレビューデプロイメントの保護を無効化
+  // Vercelのスタンダードプロテクションに依存
+  // if (process.env.VERCEL_ENV === 'preview') {
+  //   const previewProtectionKey = request.headers.get('X-Preview-Protection')
+  //   const expectedPreviewKey = process.env.PREVIEW_PROTECTION_KEY
+  //   
+  //   // プレビュー保護キーが設定されていて、一致しない場合はアクセスを拒否
+  //   if (expectedPreviewKey && previewProtectionKey !== expectedPreviewKey) {
+  //     return new NextResponse('Preview deployment requires authentication', {
+  //       status: 401,
+  //       headers: {
+  //         'WWW-Authenticate': 'Basic realm="Preview Deployment"',
+  //       },
+  //     })
+  //   }
+  // }
   
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
              request.headers.get('x-real-ip') || 

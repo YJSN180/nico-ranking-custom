@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Preview Access Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            background: #0070f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0051cc;
+        }
+        .info {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        code {
+            background: #e0e0e0;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vercel Preview Access Tool</h1>
+    
+    <div class="info">
+        <p>このツールを使用してプレビューデプロイメントにアクセスできます。</p>
+        <p>Protection Key: <code>a0924bd205fe93fe4bbaa7a899fbb52beae77b25a4464f881a4c120f26e1a139</code></p>
+    </div>
+
+    <button onclick="openPreview()">プレビューを開く（新しいタブ）</button>
+    
+    <h2>または、以下のリンクをブックマークとして保存：</h2>
+    <p>
+        <a href="javascript:(function(){fetch('https://nico-ranking-custom-8ppsu76yu-yjsns-projects.vercel.app/',{headers:{'X-Preview-Protection':'a0924bd205fe93fe4bbaa7a899fbb52beae77b25a4464f881a4c120f26e1a139'}}).then(r=>r.text()).then(html=>{document.open();document.write(html);document.close()})})()">
+            プレビューアクセス（ブックマークレット）
+        </a>
+    </p>
+
+    <h2>cURLコマンド：</h2>
+    <pre>curl -H "X-Preview-Protection: a0924bd205fe93fe4bbaa7a899fbb52beae77b25a4464f881a4c120f26e1a139" \
+     https://nico-ranking-custom-8ppsu76yu-yjsns-projects.vercel.app/</pre>
+
+    <script>
+        function openPreview() {
+            // 新しいウィンドウでプレビューを開く
+            const win = window.open('about:blank', '_blank');
+            
+            // Fetchでコンテンツを取得
+            fetch('https://nico-ranking-custom-8ppsu76yu-yjsns-projects.vercel.app/', {
+                headers: {
+                    'X-Preview-Protection': 'a0924bd205fe93fe4bbaa7a899fbb52beae77b25a4464f881a4c120f26e1a139'
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+                // 新しいウィンドウにHTMLを書き込む
+                win.document.open();
+                win.document.write(html);
+                win.document.close();
+            })
+            .catch(error => {
+                alert('エラーが発生しました: ' + error);
+                win.close();
+            });
+        }
+    </script>
+</body>
+</html>

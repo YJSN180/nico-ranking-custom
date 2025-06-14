@@ -15,7 +15,7 @@ export interface RequiredEnvVars {
   ADMIN_PASSWORD: string
   
   // Optional
-  PREVIEW_PROTECTION_KEY?: string
+  // PREVIEW_PROTECTION_KEY?: string  // 無効化
   DEBUG_TOKEN?: string
 }
 
@@ -93,7 +93,7 @@ export class EnvValidator {
       WORKER_AUTH_KEY: process.env.WORKER_AUTH_KEY!,
       ADMIN_USERNAME: process.env.ADMIN_USERNAME!,
       ADMIN_PASSWORD: process.env.ADMIN_PASSWORD!,
-      PREVIEW_PROTECTION_KEY: process.env.PREVIEW_PROTECTION_KEY,
+      // PREVIEW_PROTECTION_KEY: process.env.PREVIEW_PROTECTION_KEY,  // 無効化
       DEBUG_TOKEN: process.env.DEBUG_TOKEN
     }
   }
