@@ -155,9 +155,9 @@ describe('タグ別ランキングの動的読み込み', () => {
     expect(data.items[89].rank).toBe(290) // ページ3の最後
   })
 
-  it('cronが作成した300件のキャッシュからページ1を取得する', async () => {
-    // cronが作成した300件のキャッシュ
-    const cachedData = Array.from({ length: 300 }, (_, i) => ({
+  it('cronが作成した500件のキャッシュからページ1を取得する', async () => {
+    // cronが作成した500件のキャッシュ
+    const cachedData = Array.from({ length: 500 }, (_, i) => ({
       rank: i + 1,
       id: `sm${100 + i}`,
       title: `キャッシュ動画${i + 1}`,
@@ -175,8 +175,8 @@ describe('タグ別ランキングの動的読み込み', () => {
     expect(response.status).toBe(200)
     expect(data.items).toBeDefined()
     expect(data.items.length).toBe(100) // 最初の100件
-    expect(data.hasMore).toBe(true) // 300件中100件なのでまだある
-    expect(data.totalCached).toBe(300) // キャッシュ総数
+    expect(data.hasMore).toBe(true) // 500件中100件なのでまだある
+    expect(data.totalCached).toBe(500) // キャッシュ総数
     expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
   })
 })

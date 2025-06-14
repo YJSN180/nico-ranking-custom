@@ -28,8 +28,8 @@ describe('Ranking API pagination (100 items per page)', () => {
   })
 
   it('should return first 100 items with popularTags for page 1', async () => {
-    // 300件のモックデータを準備
-    const mockItems: RankingData = Array.from({ length: 300 }, (_, i) => ({
+    // 500件のモックデータを準備
+    const mockItems: RankingData = Array.from({ length: 500 }, (_, i) => ({
       rank: i + 1,
       id: `sm${1000 + i}`,
       title: `動画タイトル ${i + 1}`,
@@ -46,7 +46,7 @@ describe('Ranking API pagination (100 items per page)', () => {
     // KVキャッシュなし
     vi.mocked(kv.get).mockResolvedValue(null)
     
-    // スクレイパーが300件返す
+    // スクレイパーが500件返す
     vi.mocked(scrapeRankingPage).mockResolvedValue({
       items: mockItems,
       popularTags: ['タグ1', 'タグ2', 'タグ3']
@@ -71,7 +71,7 @@ describe('Ranking API pagination (100 items per page)', () => {
   })
 
   it('should return page 2 and page 3 from cached data', async () => {
-    const mockItems: RankingData = Array.from({ length: 300 }, (_, i) => ({
+    const mockItems: RankingData = Array.from({ length: 500 }, (_, i) => ({
       rank: i + 1,
       id: `sm${2000 + i}`,
       title: `キャッシュ動画 ${i + 1}`,
@@ -79,8 +79,14 @@ describe('Ranking API pagination (100 items per page)', () => {
       views: 2000 + i * 20
     }))
 
-    // KVに300件のキャッシュデータがある
+    // KVに500件のキャッシュデータがある
     vi.mocked(kv.get).mockResolvedValue({
+      items: mockItems,
+      popularTags: ['タグA', 'タグB']
+    })
+    
+    // getGenreRankingも同じデータを返すようにモック
+    vi.mocked(getGenreRanking).mockResolvedValue({
       items: mockItems,
       popularTags: ['タグA', 'タグB']
     })

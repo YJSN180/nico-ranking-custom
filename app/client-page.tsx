@@ -799,7 +799,7 @@ export default function ClientPage({
         // タグ別: currentPageを使用
         pageNumber = currentPage + 1
       } else {
-        // ジャンル別: データ長から計算（300件まではキャッシュ、301件目からpage=4）
+        // ジャンル別: データ長から計算（500件まではキャッシュ、501件目からpage=6）
         pageNumber = Math.floor(rankingData.length / 100) + 1
       }
       
@@ -1039,13 +1039,13 @@ export default function ClientPage({
               <button
                 onClick={() => {
                   if (displayCount < rerankedItems.length) {
-                    // 既存データから追加表示（ジャンル別ランキングの1-300位）
+                    // 既存データから追加表示（ジャンル別ランキングの1-500位）
                     const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length, MAX_RANKING_ITEMS)
                     setDisplayCount(newDisplayCount)
                     updateURL(newDisplayCount)
                     // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
                   } else if (hasMore) {
-                    // 新規データを読み込み（タグ別 or ジャンル別301位以降）
+                    // 新規データを読み込み（タグ別 or ジャンル別501位以降）
                     loadMoreItems()
                   }
                 }}
