@@ -47,7 +47,8 @@ export async function middleware(request: NextRequest) {
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
     if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
       // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
-      if (host?.includes('vercel.app') && request.method !== 'OPTIONS') {
+      // ただし、プレビューデプロイメントは除外
+      if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
         return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
       }
     }
