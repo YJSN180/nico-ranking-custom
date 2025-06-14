@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import HomePage from '@/app/page'
-import Test300Page from '@/app/test-300/page'
+import Test500Page from '@/app/test-500/page'
 
 // モックの設定
 vi.mock('next/navigation', () => ({
@@ -77,9 +77,9 @@ describe('Suspense Boundary in Pages', () => {
     expect(element.type).toBe('main')
   })
 
-  it('should render Test300Page with Suspense boundary', async () => {
-    // Test300Page も Server Component
-    const element = await Test300Page()
+  it('should render Test500Page with Suspense boundary', async () => {
+    // Test500Page も Server Component
+    const element = await Test500Page()
     
     // element が React Element であることを確認
     expect(element).toBeTruthy()
