@@ -59,10 +59,15 @@ export async function filterRankingItemsServer(items: RankingItem[]): Promise<NG
     return true
   })
   
-  // Keep original rank numbers (no re-ranking)
+  // タグランキングの場合は元のランク番号を保持
+  // ジャンルランキングの場合は連続した順位に再割り当て
+  const finalItems = filteredItems.map((item, index) => ({
+    ...item,
+    rank: index + 1  // 常に連続した順位に再割り当て
+  }))
   
   return {
-    filteredItems: filteredItems, // 元のランク番号を保持
+    filteredItems: finalItems,
     filteredCount: items.length - filteredItems.length,
     newDerivedIds: Array.from(new Set(newDerivedIds))
   }

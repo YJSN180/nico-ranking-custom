@@ -936,18 +936,23 @@ export default function ClientPage({
   const filteredItems = filterItems(realtimeItems)
   
   // フィルタリング後の順位調整
-  // NGフィルタリングで動画が除外された場合、順位を詰めて表示
   const rerankedItems = React.useMemo(() => {
     // 元のランク番号でソート
     const sorted = [...filteredItems].sort((a, b) => a.rank - b.rank)
     
-    // 連続した順位に振り直す（1, 2, 3, ...）
-    // これによりNGフィルタで除外された動画の順位の穴を埋める
-    return sorted.map((item, index) => ({
-      ...item,
-      rank: index + 1
-    }))
-  }, [filteredItems])
+    if (config.tag) {
+      // タグ別ランキング：サーバー側で計算された順位をそのまま使用
+      // （ページネーション対応のため、101, 102, 103... のような順位を保持）
+      return sorted
+    } else {
+      // ジャンル別ランキング：連続した順位に振り直す（1, 2, 3, ...）
+      // NGフィルタで除外された動画の順位の穴を埋める
+      return sorted.map((item, index) => ({
+        ...item,
+        rank: index + 1
+      }))
+    }
+  }, [filteredItems, config.tag])
   
   // 表示アイテムの計算もメモ化
   const displayItems = React.useMemo(() => 
