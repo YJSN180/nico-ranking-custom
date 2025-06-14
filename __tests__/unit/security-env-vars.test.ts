@@ -61,32 +61,12 @@ describe('Security: Environment Variables', () => {
     })
   })
 
+  // Debug endpoints have been removed for security
   describe('Debug Endpoints in Production', () => {
-    it('should return 404 for debug endpoints in production', async () => {
-      process.env.NODE_ENV = 'production'
-      
-      const { GET } = await import('@/app/api/debug/route')
-      const request = new Request('http://localhost:3000/api/debug')
-      
-      const response = await GET(request)
-      expect(response.status).toBe(404)
-      const data = await response.json()
-      expect(data.error).toBe('Not Found')
-    })
-
-    it('should allow debug endpoints in development with proper auth', async () => {
-      process.env.NODE_ENV = 'development'
-      process.env.DEBUG_TOKEN = 'test-debug-token'
-      
-      const { GET } = await import('@/app/api/debug/route')
-      const request = new Request('http://localhost:3000/api/debug', {
-        headers: {
-          'authorization': 'Bearer test-debug-token'
-        }
-      })
-      
-      const response = await GET(request)
-      expect(response.status).not.toBe(404)
+    it('should not have debug endpoints available', () => {
+      // Debug endpoints have been removed from the codebase
+      // This test verifies they don't exist
+      expect(() => require('@/app/api/debug/route')).toThrow()
     })
   })
 
