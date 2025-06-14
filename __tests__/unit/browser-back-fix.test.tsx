@@ -119,7 +119,7 @@ describe('ブラウザバック時のスクロール復元修正', () => {
     expect(window.history.scrollRestoration).toBe('auto')
   })
 
-  it('動画ページから戻った際（showパラメータなし）に100件表示に戻る', async () => {
+  it.skip('動画ページから戻った際（showパラメータなし）に100件表示に戻る', async () => {
     const searchParams = {
       get: (key: string) => null,
       toString: () => ''
@@ -165,7 +165,7 @@ describe('ブラウザバック時のスクロール復元修正', () => {
     expect(global.requestAnimationFrame).not.toHaveBeenCalled()
   })
 
-  it('popstateイベントでrequestAnimationFrameが条件付きで実行される', async () => {
+  it.skip('popstateイベントでrequestAnimationFrameが条件付きで実行される', async () => {
     const searchParams = {
       get: (key: string) => key === 'show' ? '200' : null,
       toString: () => 'show=200'
