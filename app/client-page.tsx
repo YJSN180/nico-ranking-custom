@@ -902,8 +902,12 @@ export default function ClientPage({
         } else {
           setHasMore(hasMoreData)
         }
-        // シンプルに100件ずつ表示件数を増やす
-        const newDisplayCount = Math.min(displayCount + 100, newRankingData.length)
+        // 新しく追加されたデータも表示するようdisplayCountを更新
+        // NGフィルタ適用後の実際の追加件数を計算
+        const prevFilteredCount = filterItems(rankingData).length
+        const newFilteredCount = filterItems(newRankingData).length
+        const actualAddedCount = newFilteredCount - prevFilteredCount
+        const newDisplayCount = Math.min(displayCount + actualAddedCount, MAX_RANKING_ITEMS)
         setDisplayCount(newDisplayCount)
         
         // URLを更新
@@ -931,9 +935,12 @@ export default function ClientPage({
   // カスタムNGフィルタを適用してから表示するアイテムを取得
   const filteredItems = filterItems(realtimeItems)
   
-  // フィルタリング後も元の順位を保持（メモ化）
+  // フィルタリング後に順位を振り直す（メモ化）
   const rerankedItems = React.useMemo(() => 
-    filteredItems, // 元のランク番号をそのまま保持
+    filteredItems.map((item, index) => ({
+      ...item,
+      rank: index + 1
+    })),
     [filteredItems]
   )
   
