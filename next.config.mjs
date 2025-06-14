@@ -40,10 +40,11 @@ const nextConfig = {
               "upgrade-insecure-requests"
             ].join('; ')
           },
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp'
-          },
+          // COEP を削除 - ニコニコ動画のサムネイル画像がCORSヘッダーを提供していないため
+          // {
+          //   key: 'Cross-Origin-Embedder-Policy',
+          //   value: 'require-corp'
+          // },
           {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin'

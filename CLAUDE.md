@@ -228,7 +228,7 @@ Refused to execute inline script because it violates the following Content Secur
 - ✅ X-XSS-Protection: 1; mode=block
 - ✅ Referrer-Policy: strict-origin-when-cross-origin
 - ✅ Permissions-Policy（デバイス機能制限）
-- ✅ Cross-Origin-Embedder-Policy: require-corp
+- ❌ Cross-Origin-Embedder-Policy: 削除済み（ニコニコ動画のサムネイル画像がCORSヘッダーを提供していないため）
 - ✅ Cross-Origin-Opener-Policy: same-origin
 - ✅ X-DNS-Prefetch-Control: on
 
