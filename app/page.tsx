@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import type { RankingData } from '@/types/ranking'
 import ClientPage from './client-page'
 import { PreferenceLoader } from '@/components/preference-loader'
@@ -9,6 +10,7 @@ import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import { getGenreRanking } from '@/lib/cloudflare-kv'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
+import { RANKING_GENRES } from '@/types/ranking-config'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
@@ -16,6 +18,41 @@ export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams
+  const genre = (params.genre as RankingGenre) || 'all'
+  const period = (params.period as RankingPeriod) || '24h'
+  const tag = params.tag as string | undefined
+  
+  const genreInfo = RANKING_GENRES.find(g => g.value === genre)
+  const genreName = genreInfo?.label || '総合'
+  const periodName = period === '24h' ? '24時間' : '毎時'
+  
+  let title = `${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
+  let description = `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
+  
+  if (tag) {
+    title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
+    description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
+  }
+  
+  description += '最新の人気動画をチェック！'
+  
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+    },
+    twitter: {
+      title,
+      description,
+    },
+  }
 }
 
 async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
