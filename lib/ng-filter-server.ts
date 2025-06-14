@@ -59,12 +59,9 @@ export async function filterRankingItemsServer(items: RankingItem[]): Promise<NG
     return true
   })
   
-  // タグランキングの場合は元のランク番号を保持
-  // ジャンルランキングの場合は連続した順位に再割り当て
-  const finalItems = filteredItems.map((item, index) => ({
-    ...item,
-    rank: index + 1  // 常に連続した順位に再割り当て
-  }))
+  // 元のランク番号を保持（クライアント側で表示用の順位調整を行う）
+  // サーバー側では純粋にフィルタリングのみを行い、順位調整はクライアント側に委ねる
+  const finalItems = filteredItems
   
   return {
     filteredItems: finalItems,

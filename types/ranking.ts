@@ -13,6 +13,8 @@ export interface RankingItem {
   authorName?: string
   authorIcon?: string
   registeredAt?: string  // ISO 8601形式の投稿日時
+  // 順位管理用（NGフィルタリング後の元順位保持）
+  originalRank?: number
 }
 
 export type RankingData = RankingItem[]

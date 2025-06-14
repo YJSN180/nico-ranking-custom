@@ -887,9 +887,11 @@ export default function ClientPage({
       }
       
       if (items.length > 0) {
-        // 新しいデータをそのまま追加（順位はNGフィルタ後に再計算される）
-        const newRankingData = [...rankingData, ...items]
-        setRankingData(newRankingData)
+        // 新しいデータを正しい順位順序で挿入
+        const combinedData = [...rankingData, ...items]
+        // 元のランク番号で正しくソートして順序を保つ
+        const sortedData = combinedData.sort((a, b) => a.rank - b.rank)
+        setRankingData(sortedData)
         
         // currentPageはタグ別の場合のみ更新
         if (config.tag) {
@@ -897,7 +899,7 @@ export default function ClientPage({
         }
         
         // 500件に達したらhasMoreをfalseに
-        if (newRankingData.length >= MAX_RANKING_ITEMS) {
+        if (sortedData.length >= MAX_RANKING_ITEMS) {
           setHasMore(false)
         } else {
           setHasMore(hasMoreData)
@@ -905,7 +907,7 @@ export default function ClientPage({
         // 新しく追加されたデータも表示するようdisplayCountを更新
         // NGフィルタ適用後の実際の追加件数を計算
         const prevFilteredCount = filterItems(rankingData).length
-        const newFilteredCount = filterItems(newRankingData).length
+        const newFilteredCount = filterItems(sortedData).length
         const actualAddedCount = newFilteredCount - prevFilteredCount
         const newDisplayCount = Math.min(displayCount + actualAddedCount, MAX_RANKING_ITEMS)
         setDisplayCount(newDisplayCount)
@@ -936,23 +938,21 @@ export default function ClientPage({
   const filteredItems = filterItems(realtimeItems)
   
   // フィルタリング後の順位調整
+  // ユーザーのカスタムNGフィルタ適用後の順位処理
   const rerankedItems = React.useMemo(() => {
-    // 元のランク番号でソート
+    // 元のランク番号でソート（これは正しい順序を保持するために重要）
     const sorted = [...filteredItems].sort((a, b) => a.rank - b.rank)
     
-    if (config.tag) {
-      // タグ別ランキング：サーバー側で計算された順位をそのまま使用
-      // （ページネーション対応のため、101, 102, 103... のような順位を保持）
-      return sorted
-    } else {
-      // ジャンル別ランキング：連続した順位に振り直す（1, 2, 3, ...）
-      // NGフィルタで除外された動画の順位の穴を埋める
-      return sorted.map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }))
-    }
-  }, [filteredItems, config.tag])
+    // 元の順位を保持しつつ、表示用の連続順位も提供
+    // 原則として元の順位を尊重し、フィルタされた項目があっても順序は保つ
+    return sorted.map((item, index) => ({
+      ...item,
+      // 元の rank を originalRank として保存
+      originalRank: item.rank,
+      // 表示用の連続順位（1, 2, 3, ...）
+      rank: index + 1
+    }))
+  }, [filteredItems])
   
   // 表示アイテムの計算もメモ化
   const displayItems = React.useMemo(() => 
