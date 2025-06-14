@@ -10,7 +10,7 @@ const http = require('http');
 const https = require('https');
 
 const PREVIEW_URL = 'https://nico-ranking-custom-8ppsu76yu-yjsns-projects.vercel.app';
-const PROTECTION_KEY = 'a0924bd205fe93fe4bbaa7a899fbb52beae77b25a4464f881a4c120f26e1a139';
+// const PROTECTION_KEY = 'a0924bd205fe93fe4bbaa7a899fbb52beae77b25a4464f881a4c120f26e1a139';  // 無効化
 const LOCAL_PORT = 3001;
 
 const server = http.createServer((req, res) => {
@@ -23,7 +23,7 @@ const server = http.createServer((req, res) => {
     method: req.method,
     headers: {
       ...req.headers,
-      'X-Preview-Protection': PROTECTION_KEY,
+      // 'X-Preview-Protection': PROTECTION_KEY,  // 無効化
       host: url.hostname
     }
   };
