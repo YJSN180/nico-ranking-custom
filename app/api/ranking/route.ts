@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import { fetchRanking } from '@/lib/complete-hybrid-scraper'
-import { filterRankingDataServer } from '@/lib/ng-filter-server'
+import { filterRankingDataServer, filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
@@ -61,11 +62,11 @@ export async function GET(request: NextRequest) {
       // キャッシュミス時は動的取得
       // console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
       
-      // NGフィルタリング後に100件確保
-      const targetCount = 100
+      // NGフィルタリング後に300件確保（タグ別ランキングの現実的な上限）
+      const targetCount = 300
       let allItems: any[] = []
       let currentPage = page
-      const maxAttempts = 3
+      const maxAttempts = 10
       
       while (allItems.length < targetCount && currentPage < page + maxAttempts) {
         const { items: pageItems } = await scrapeRankingPage(
@@ -88,23 +89,41 @@ export async function GET(request: NextRequest) {
             item.views !== undefined
           )
         
-        const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
+        // NGフィルタリング（タグ別ランキング）
+        const tagFilterResult = await filterRankingItemsServer(completeItems)
+        const filteredItems = tagFilterResult.filteredItems
+        
+        // 新しく見つかったNG動画IDを派生リストに追加
+        if (tagFilterResult.newDerivedIds.length > 0) {
+          try {
+            await addToServerDerivedNGList(tagFilterResult.newDerivedIds)
+            if (process.env.NODE_ENV === 'production') {
+              // eslint-disable-next-line no-console
+              console.log(`[NG] Added ${tagFilterResult.newDerivedIds.length} new derived NG IDs from tag ranking ${genre}-${period}-${tag}`)
+            }
+          } catch (error) {
+            console.error(`[NG] Failed to add derived NG IDs:`, error)
+          }
+        }
         allItems = allItems.concat(filteredItems)
         currentPage++
       }
       
-      // 100件に制限してランク番号を再割り当て
-      allItems = allItems.slice(0, targetCount).map((item, index) => ({
+      // ランク番号を再割り当て（ページネーション対応）
+      const itemsPerPage = 100
+      const startIdx = (page - 1) * itemsPerPage
+      const endIdx = page * itemsPerPage
+      const pageItems = allItems.slice(startIdx, endIdx).map((item, index) => ({
         ...item,
-        rank: (page - 1) * targetCount + index + 1
+        rank: startIdx + index + 1
       }))
       
       // 動的取得の場合はキャッシュなし（Cloudflare KVのみ使用）
       
       const response = NextResponse.json({
-        items: allItems,
-        hasMore: allItems.length >= targetCount, // 100件取れたら次のページがある可能性
-        totalCached: 0 // 動的取得の場合は総数不明
+        items: pageItems,
+        hasMore: endIdx < allItems.length, // 次のページにアイテムがあるか
+        totalCached: allItems.length // 取得した総数
       })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'MISS')
@@ -113,8 +132,8 @@ export async function GET(request: NextRequest) {
 
     // 通常のジャンル別ランキング
     
-    // Cloudflare KVからの取得を試みる（ページ1-5、500件まで）
-    if (useCloudflareKV && page <= 5) {
+    // Cloudflare KVからの取得を試みる（ページ1-10、1000件まで）
+    if (useCloudflareKV && page <= 10) {
       try {
         const cfData = await getGenreRanking(genre, period as RankingPeriod)
         if (cfData && cfData.items && cfData.items.length > 0) {
@@ -133,7 +152,7 @@ export async function GET(request: NextRequest) {
             })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
             response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Max-Items', '500')
+            response.headers.set('X-Max-Items', '1000')
             return response
           } else {
             // ページ2以降も統一された形式で返す
@@ -144,7 +163,7 @@ export async function GET(request: NextRequest) {
             })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
             response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Max-Items', '500')
+            response.headers.set('X-Max-Items', '1000')
             return response
           }
         }
@@ -154,8 +173,8 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // ページ番号が6以上の場合（501位以降）は動的取得
-    if (page >= 6) {
+    // ページ番号が11以上の場合（1001位以降）は動的取得
+    if (page >= 11) {
       // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
       
       // 100件単位で動的取得
@@ -177,14 +196,26 @@ export async function GET(request: NextRequest) {
           item.views !== undefined
         )
       
-      // NGフィルタリング
-      const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
+      // NGフィルタリング（ページ6以降の動的取得）
+      const pageFilterResult = await filterRankingItemsServer(completeItems)
+      const filteredItems = pageFilterResult.filteredItems
       
-      // ランク番号を調整
-      const adjustedItems = filteredItems.map((item, index) => ({
-        ...item,
-        rank: (page - 1) * 100 + index + 1
-      }))
+      // 新しく見つかったNG動画IDを派生リストに追加
+      if (pageFilterResult.newDerivedIds.length > 0) {
+        try {
+          await addToServerDerivedNGList(pageFilterResult.newDerivedIds)
+          if (process.env.NODE_ENV === 'production') {
+            // eslint-disable-next-line no-console
+            console.log(`[NG] Added ${pageFilterResult.newDerivedIds.length} new derived NG IDs from page ${page} ranking ${genre}-${period}`)
+          }
+        } catch (error) {
+          console.error(`[NG] Failed to add derived NG IDs:`, error)
+        }
+      }
+      
+      // ランク番号はscraperで既に設定されているため、そのまま使用
+      // ページ6以降は実際のニコニコ動画のランク番号（501位〜）を保持
+      const adjustedItems = filteredItems
       
       // 統一された形式で返す
       const response = NextResponse.json({
@@ -215,7 +246,23 @@ export async function GET(request: NextRequest) {
         item.views !== undefined
       )
     
-    const { items: filteredItems } = await filterRankingDataServer({ items: completeItems })
+    // NGフィルタリング（動的取得フォールバック）
+    const fallbackFilterResult = await filterRankingItemsServer(completeItems)
+    const filteredItems = fallbackFilterResult.filteredItems
+    
+    // 新しく見つかったNG動画IDを派生リストに追加
+    if (fallbackFilterResult.newDerivedIds.length > 0) {
+      try {
+        await addToServerDerivedNGList(fallbackFilterResult.newDerivedIds)
+        if (process.env.NODE_ENV === 'production') {
+          // eslint-disable-next-line no-console
+          console.log(`[NG] Added ${fallbackFilterResult.newDerivedIds.length} new derived NG IDs from fallback ranking ${genre}-${period}`)
+        }
+      } catch (error) {
+        console.error(`[NG] Failed to add derived NG IDs:`, error)
+      }
+    }
+    
     const data = { items: filteredItems, popularTags }
     
     // ページ1の場合

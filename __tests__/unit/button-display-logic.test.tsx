@@ -38,6 +38,35 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
   })
 }))
 
+vi.mock('@/hooks/use-mobile-detect', () => ({
+  useMobileDetect: () => false
+}))
+
+// localStorageのモック
+beforeEach(() => {
+  const localStorageMock = {
+    getItem: vi.fn(() => null),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
+  }
+  Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+    writable: true
+  })
+  
+  const sessionStorageMock = {
+    getItem: vi.fn(() => null),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+    clear: vi.fn(),
+  }
+  Object.defineProperty(window, 'sessionStorage', {
+    value: sessionStorageMock,
+    writable: true
+  })
+})
+
 describe('もっと見るボタンの表示ロジック', () => {
   const createMockData = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({

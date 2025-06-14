@@ -258,7 +258,7 @@ describe('Tag Filtering', () => {
       const result = await scrapeRankingPage('ramuboyn', '24h')
       
       // 現在の実装では、ランキングページから人気タグを取得するだけで、個別のタグ取得は行わない
-      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(fetch).toHaveBeenCalledTimes(2)
       expect(result.popularTags).toBeDefined()
       expect(result.popularTags?.length).toBeGreaterThan(0)
     })

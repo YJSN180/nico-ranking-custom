@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* カスタムフォント定義 */
+@font-face {
+  font-family: 'Nicomoji Plus v2';
+  src: url('/fonts/nicomoji-plus-v2.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Comic Sans MS Bold';
+  src: url('/fonts/comic-sans-ms-bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ライトテーマ */
 :root,
 [data-theme="light"] {
@@ -26,6 +43,7 @@
   /* 追加の色 */
   --primary-color: #667eea;
   --primary-hover: #5567d8;
+  --primary-color-hover: #5567d8;
   --error-color: #dc3545;
   --error-bg: #fee;
   --success-color: #28a745;
@@ -64,6 +82,7 @@
   /* 追加の色 */
   --primary-color: #7c8eff;
   --primary-hover: #6b7df0;
+  --primary-color-hover: #6b7df0;
   --error-color: #ff6b6b;
   --error-bg: rgba(255, 107, 107, 0.2);
   --success-color: #4caf50;
@@ -80,34 +99,35 @@
   --button-text-active: #ffffff;
 }
 
-/* ダークブルーテーマ */
+/* ダークブルーテーマ (X/Twitter公式カラー) */
 [data-theme="darkblue"] {
-  --foreground-rgb: 240, 248, 255;
-  --background-start-rgb: 25, 39, 52;
-  --background-end-rgb: 13, 27, 42;
-  --background-color: #0d1b2a;
-  --surface-color: #1b3a5f;
-  --text-primary: #e0f2ff;
-  --text-secondary: #b3d9ff;
-  --text-muted: #7ab8f5;
-  --border-color: #2a5a8f;
-  --link-color: #66ccff;
-  --header-bg: linear-gradient(135deg, #004080 0%, #002855 100%);
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 21, 32, 43;
+  --background-end-rgb: 21, 32, 43;
+  --background-color: #15202b; /* X公式の最も濃い背景色 */
+  --surface-color: #192734; /* X公式のカード背景色 */
+  --text-primary: #ffffff;
+  --text-secondary: #e7e9ea; /* 少し明るめの白 */
+  --text-muted: #8899ac; /* X公式のミュートテキスト色 */
+  --border-color: #38444d; /* X公式のボーダー色 */
+  --link-color: #1d9bf0; /* X公式のブルー */
+  --header-bg: linear-gradient(135deg, #15202b 0%, #0f171e 100%);
   --header-text: #ffffff;
   
   /* シャドウ */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.7);
   
   /* 追加の色 */
-  --primary-color: #66ccff;
-  --primary-hover: #4db8ff;
-  --error-color: #ff8a8a;
-  --error-bg: rgba(255, 138, 138, 0.2);
-  --success-color: #66d9a8;
-  --warning-color: #ffcc66;
-  --surface-secondary: #0f2942;
-  --surface-hover: #1a3a5f;
+  --primary-color: #1d9bf0; /* X公式のブルー */
+  --primary-hover: #1a8cd8; /* ホバー時の少し暗いブルー */
+  --primary-color-hover: #1a8cd8;
+  --error-color: #f4212e; /* X公式のエラー/危険色 */
+  --error-bg: rgba(244, 33, 46, 0.1);
+  --success-color: #00ba7c; /* X公式の成功色 */
+  --warning-color: #ffd400; /* X公式の警告色 */
+  --surface-secondary: #22303c; /* X公式の三次背景色 */
+  --surface-hover: #283340; /* ホバー時の背景色 */
   
   /* ランク色 */
   --rank-gold: #FFD700;

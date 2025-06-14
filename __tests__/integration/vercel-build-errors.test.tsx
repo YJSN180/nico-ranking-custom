@@ -79,12 +79,12 @@ describe('Vercel Build Errors', () => {
   })
 
   it('should not have console statements in production code', async () => {
-    // test-300/page.tsx に console.error がないことを確認
-    const test300PageContent = await import('fs').then(fs => 
-      fs.readFileSync('./app/test-300/page.tsx', 'utf-8')
+    // test-500/page.tsx に console.error がないことを確認
+    const test500PageContent = await import('fs').then(fs => 
+      fs.readFileSync('./app/test-500/page.tsx', 'utf-8')
     )
     
-    expect(test300PageContent).not.toContain('console.error')
-    expect(test300PageContent).not.toContain('console.log')
+    expect(test500PageContent).not.toContain('console.error')
+    expect(test500PageContent).not.toContain('console.log')
   })
 })

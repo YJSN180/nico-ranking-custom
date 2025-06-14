@@ -39,7 +39,10 @@ export default {
       headers.set('X-XSS-Protection', '1; mode=block')
       headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
       headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-      headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;")
+      headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+      headers.set('Expect-CT', 'max-age=86400, enforce')
+      headers.set('Feature-Policy', "camera 'none'; microphone 'none'; geolocation 'none'; usb 'none'; payment 'none'; fullscreen 'self'")
+      headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.vercel-scripts.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp; media-src 'self' https://*.niconico.jp https://*.nicovideo.jp; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests")
       
       // CORS設定
       if (url.pathname.startsWith('/api/')) {

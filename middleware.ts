@@ -1,27 +1,38 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { KVRateLimit } from './lib/rate-limit-kv'
+import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 
-// シンプルなインメモリレート制限（本番ではRedisやCloudflareを使用）
+// フォールバック用のインメモリレート制限（KVが利用できない場合）
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
-function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): boolean {
-  const now = Date.now()
-  const entry = rateLimitStore.get(ip)
-  
-  if (!entry || now > entry.resetAt) {
-    rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs })
+async function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): Promise<boolean> {
+  try {
+    // Try CloudFlare KV first
+    const kvResult = await KVRateLimit.checkLimit(ip, limit, windowMs)
+    return kvResult
+  } catch (error) {
+    // Fallback to in-memory rate limiting
+    console.error('[RATE_LIMIT] KV failed, using in-memory:', error)
+    
+    const now = Date.now()
+    const entry = rateLimitStore.get(ip)
+    
+    if (!entry || now > entry.resetAt) {
+      rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs })
+      return true
+    }
+    
+    if (entry.count >= limit) {
+      return false
+    }
+    
+    entry.count++
     return true
   }
-  
-  if (entry.count >= limit) {
-    return false
-  }
-  
-  entry.count++
-  return true
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
   // development以外では認証チェックを行う
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
@@ -36,27 +47,29 @@ export function middleware(request: NextRequest) {
     // Workersからの認証がない場合はカスタムドメインにリダイレクト
     if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
       // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
-      if (host?.includes('vercel.app') && request.method !== 'OPTIONS') {
+      // ただし、プレビューデプロイメントは除外
+      if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
         return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
       }
     }
   }
   
-  // プレビューデプロイメントの保護
-  if (process.env.VERCEL_ENV === 'preview') {
-    const previewProtectionKey = request.headers.get('X-Preview-Protection')
-    const expectedPreviewKey = process.env.PREVIEW_PROTECTION_KEY
-    
-    // プレビュー保護キーが設定されていて、一致しない場合はアクセスを拒否
-    if (expectedPreviewKey && previewProtectionKey !== expectedPreviewKey) {
-      return new NextResponse('Preview deployment requires authentication', {
-        status: 401,
-        headers: {
-          'WWW-Authenticate': 'Basic realm="Preview Deployment"',
-        },
-      })
-    }
-  }
+  // プレビューデプロイメントの保護を無効化
+  // Vercelのスタンダードプロテクションに依存
+  // if (process.env.VERCEL_ENV === 'preview') {
+  //   const previewProtectionKey = request.headers.get('X-Preview-Protection')
+  //   const expectedPreviewKey = process.env.PREVIEW_PROTECTION_KEY
+  //   
+  //   // プレビュー保護キーが設定されていて、一致しない場合はアクセスを拒否
+  //   if (expectedPreviewKey && previewProtectionKey !== expectedPreviewKey) {
+  //     return new NextResponse('Preview deployment requires authentication', {
+  //       status: 401,
+  //       headers: {
+  //         'WWW-Authenticate': 'Basic realm="Preview Deployment"',
+  //       },
+  //     })
+  //   }
+  // }
   
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
              request.headers.get('x-real-ip') || 
@@ -80,14 +93,28 @@ export function middleware(request: NextRequest) {
     
     if (process.env.VERCEL_ENV === 'production' && 
         dangerousEndpoints.some(path => request.nextUrl.pathname.startsWith(path))) {
+      SecurityLogger.log({
+        event: SecurityEventType.DEBUG_ENDPOINT_ACCESS,
+        ip,
+        path: request.nextUrl.pathname,
+        userAgent: request.headers.get('user-agent') || undefined
+      })
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     }
     
-    // レート制限チェック
-    const limit = request.nextUrl.pathname.startsWith('/api/admin') ? 5 : 10
-    const windowMs = request.nextUrl.pathname.startsWith('/api/admin') ? 60000 : 10000
+    // レート制限チェック（管理画面はさらに厳しく）
+    const isAdminPath = request.nextUrl.pathname.startsWith('/api/admin') || request.nextUrl.pathname.startsWith('/admin')
+    const limit = isAdminPath ? 3 : 10  // 管理画面は3回/分に制限
+    const windowMs = isAdminPath ? 60000 : 10000
     
-    if (!checkRateLimit(ip, limit, windowMs)) {
+    if (!(await checkRateLimit(ip, limit, windowMs))) {
+      SecurityLogger.logRateLimit(
+        ip,
+        request.nextUrl.pathname,
+        request.headers.get('user-agent') || undefined,
+        limit,
+        windowMs
+      )
       return NextResponse.json(
         { error: 'Too many requests' },
         { 
@@ -133,6 +160,13 @@ export function middleware(request: NextRequest) {
       const validPassword = process.env.ADMIN_PASSWORD
       
       if (username !== validUsername || password !== validPassword) {
+        SecurityLogger.logAuthFailure(
+          'admin',
+          ip,
+          request.nextUrl.pathname,
+          request.headers.get('user-agent') || undefined,
+          username
+        )
         return new NextResponse('Invalid credentials', {
           status: 401,
           headers: {

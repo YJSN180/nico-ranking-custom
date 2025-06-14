@@ -150,6 +150,23 @@ export default function NGSettingsPage() {
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       <h1 style={{ marginBottom: '30px' }}>NG設定管理</h1>
       
+      {/* 自動NG機能の説明 */}
+      <div style={{ 
+        marginBottom: '30px', 
+        padding: '15px', 
+        background: '#e3f2fd', 
+        borderRadius: '8px', 
+        border: '1px solid #90caf9' 
+      }}>
+        <h3 style={{ marginBottom: '10px', color: '#1976d2' }}>🤖 自動NG機能について</h3>
+        <p style={{ margin: '0', color: '#424242', lineHeight: '1.5' }}>
+          手動NGリスト（タイトル・投稿者名）でフィルタリングされた動画のIDは、
+          自動的に「派生NGリスト」に追加され、以後確実に非表示になります。
+          この機能により、一度NGになった動画は動画IDが直接ブロックされるため、
+          タイトル変更などでも確実に除外され続けます。
+        </p>
+      </div>
+      
       {/* 手動NGリスト */}
       <div style={{ marginBottom: '40px' }}>
         <h2>手動NGリスト</h2>
@@ -271,7 +288,8 @@ export default function NGSettingsPage() {
       <div>
         <h2>派生NGリスト（自動追加）</h2>
         <p style={{ color: '#666', marginBottom: '10px' }}>
-          他の条件でNGされた動画IDが自動的に追加されます。
+          他の条件（タイトル・投稿者名）でNGされた動画IDが自動的に追加されます。
+          cron処理・動的API取得の両方で機能し、一度NGになった動画は確実に除外され続けます。
         </p>
         <p style={{ marginBottom: '20px' }}>
           登録数: {ngList.derivedVideoIds.length}件

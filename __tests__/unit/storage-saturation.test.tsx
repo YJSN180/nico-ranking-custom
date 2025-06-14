@@ -138,7 +138,6 @@ describe('Storage飽和問題', () => {
       throw new Error('QuotaExceededError')
     })
 
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await act(async () => {
@@ -164,13 +163,12 @@ describe('Storage飽和問題', () => {
     // エラーが適切にハンドリングされ、アプリがクラッシュしないことを確認
     expect(document.body).toBeInTheDocument()
     
-    // Storage関連のエラーログが出力されていないことを確認（静かに失敗）
-    const storageErrorCalls = consoleErrorSpy.mock.calls.filter(
-      (call: any[]) => call[0] && call[0].toString().includes('Storage')
+    // console.warnが呼ばれたことを確認（エラーハンドリングの証拠）
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'Could not save ranking config to localStorage:',
+      expect.any(Error)
     )
-    expect(storageErrorCalls.length).toBe(0)
 
-    consoleErrorSpy.mockRestore()
     consoleWarnSpy.mockRestore()
   })
 

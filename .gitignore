@@ -24,6 +24,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+dev.log
 
 # local env files
 .env*.local
@@ -41,6 +42,11 @@ vercel-env-vars.txt
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cloudflare Workers
+wrangler.toml
+.wrangler/
+.dev.vars
 
 # Documentation files (except README.md and CLAUDE.md)
 *.md
@@ -114,4 +120,4 @@ INSTRUCTIONS_*.md
 SETUP_*.md
 GUIDE_*.md
 MANUAL_*.md
-NOTES_*.md
+NOTES_*.mdOGP_IMAGE_INSTRUCTION.md

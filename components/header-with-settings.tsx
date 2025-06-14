@@ -30,12 +30,21 @@ export function HeaderWithSettings() {
             fontWeight: '700',
             textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
             letterSpacing: '0.02em',
-            fontFamily: '"Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
             userSelect: 'none',
             WebkitUserSelect: 'none',
             MozUserSelect: 'none',
             msUserSelect: 'none'
-          }}>ニコニコランキング(Re:turn)</h1>
+          }}>
+            <span style={{
+              fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
+              fontSize: '1em'
+            }}>ニコニコランキング</span>
+            <span style={{
+              fontFamily: '"Comic Sans MS Bold", "Comic Sans MS", cursive, sans-serif',
+              fontSize: '0.85em',
+              marginLeft: '0.2em'
+            }}>(Re:turn)</span>
+          </h1>
         </div>
         
         <button

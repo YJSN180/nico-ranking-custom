@@ -27,13 +27,13 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .closeButton {
@@ -41,19 +41,19 @@
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   padding: 4px 8px;
   border-radius: 4px;
   transition: background-color 0.2s;
 }
 
 .closeButton:hover {
-  background-color: #f0f0f0;
+  background-color: var(--surface-hover);
 }
 
 .tabs {
   display: flex;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color);
   padding: 0 20px;
 }
 
@@ -63,18 +63,18 @@
   padding: 12px 24px;
   font-size: 1rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-secondary);
   border-bottom: 2px solid transparent;
   transition: all 0.2s;
 }
 
 .tab:hover {
-  color: #333;
+  color: var(--text-primary);
 }
 
 .tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
 }
 
 .content {
@@ -84,7 +84,7 @@
 }
 
 .displaySettings {
-  color: #666;
+  color: var(--text-secondary);
   text-align: center;
   padding: 40px 0;
 }
@@ -96,7 +96,7 @@
 }
 
 .section {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 16px;
 }
@@ -104,7 +104,7 @@
 .section h3 {
   margin: 0 0 12px 0;
   font-size: 1.1rem;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .subsection {
@@ -114,7 +114,7 @@
 .subsection h4 {
   margin: 0 0 8px 0;
   font-size: 0.95rem;
-  color: #555;
+  color: var(--text-secondary);
 }
 
 .radioGroup {
@@ -128,7 +128,7 @@
   align-items: center;
   gap: 4px;
   font-size: 0.9rem;
-  color: #555;
+  color: var(--text-secondary);
 }
 
 .list {
@@ -145,15 +145,16 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #f8f8f8;
+  background: var(--surface-secondary);
   border-radius: 6px;
   font-size: 0.9rem;
+  color: var(--text-primary);
 }
 
 .listItem button {
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 1.2rem;
   padding: 2px 6px;
@@ -162,8 +163,8 @@
 }
 
 .listItem button:hover {
-  background: #e0e0e0;
-  color: #666;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
 }
 
 .inputRow {
@@ -174,20 +175,22 @@
 .inputRow input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   font-size: 0.9rem;
+  background: var(--surface-color);
+  color: var(--text-primary);
 }
 
 .inputRow input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--primary-color);
 }
 
 .inputRow button {
   padding: 8px 16px;
-  background: #667eea;
-  color: white;
+  background: var(--primary-color);
+  color: var(--button-text-active);
   border: none;
   border-radius: 6px;
   font-size: 0.9rem;
@@ -196,7 +199,7 @@
 }
 
 .inputRow button:hover {
-  background: #5567d8;
+  background: var(--primary-color-hover);
 }
 
 .footer {
@@ -204,22 +207,22 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color);
 }
 
 .stats {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 
 .footer .closeButton {
-  background: #667eea;
-  color: white;
+  background: var(--primary-color);
+  color: var(--button-text-active);
   padding: 8px 24px;
   border-radius: 6px;
   font-size: 1rem;
 }
 
 .footer .closeButton:hover {
-  background: #5567d8;
+  background: var(--primary-color-hover);
 }

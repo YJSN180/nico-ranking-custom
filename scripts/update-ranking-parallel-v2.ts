@@ -364,7 +364,7 @@ async function processGenre(
   
   // Try to fetch 24h data
   try {
-    data24h = await fetchWithNGFiltering(genre, '24h', ngList);
+    data24h = await fetchWithNGFiltering(genre, '24h', ngList, undefined, 1000);
     popularTags = data24h.popularTags;
   } catch (error) {
     console.error(`Failed to fetch ${genre}/24h:`, error);
@@ -376,7 +376,7 @@ async function processGenre(
   
   // Try to fetch hour data
   try {
-    dataHour = await fetchWithNGFiltering(genre, 'hour', ngList);
+    dataHour = await fetchWithNGFiltering(genre, 'hour', ngList, undefined, 1000);
     // If we didn't get popular tags from 24h, try from hour
     if (popularTags.length === 0) {
       popularTags = dataHour.popularTags;
@@ -410,7 +410,7 @@ async function processGenre(
       // 24h version
       try {
         console.log(`[${new Date().toISOString()}] Fetching tag ${genre}/24h/${tag}...`);
-        const { items: tagItems } = await fetchWithNGFiltering(genre, '24h', ngList, tag);
+        const { items: tagItems } = await fetchWithNGFiltering(genre, '24h', ngList, tag, 300);
         result.data['24h'].tags[tag] = tagItems;
       } catch (error) {
         console.error(`Failed to fetch tag ranking for ${genre}/24h/${tag}:`, error);
@@ -422,7 +422,7 @@ async function processGenre(
       // hour version
       try {
         console.log(`[${new Date().toISOString()}] Fetching tag ${genre}/hour/${tag}...`);
-        const { items: tagItems } = await fetchWithNGFiltering(genre, 'hour', ngList, tag);
+        const { items: tagItems } = await fetchWithNGFiltering(genre, 'hour', ngList, tag, 300);
         result.data['hour'].tags[tag] = tagItems;
       } catch (error) {
         console.error(`Failed to fetch tag ranking for ${genre}/hour/${tag}:`, error);

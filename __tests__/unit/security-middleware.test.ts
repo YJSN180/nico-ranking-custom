@@ -89,7 +89,7 @@ describe('Security Middleware', () => {
   })
   
   describe('Worker Authentication', () => {
-    it('should block API access without Worker auth in production', () => {
+    it('should block API access without Worker auth in production', async () => {
       process.env.VERCEL_ENV = 'production'
       process.env.WORKER_AUTH_KEY = 'secret-key'
       
@@ -99,14 +99,14 @@ describe('Security Middleware', () => {
         }
       })
       
-      const response = middleware(request as any)
+      const response = await middleware(request as any)
       
       // Should redirect to custom domain
       expect(response.status).toBe(307)
       expect(response.headers.get('Location')).toBe('https://nico-rank.com/api/ranking')
     })
     
-    it('should allow access from non-vercel domains even without Worker auth', () => {
+    it('should allow access from non-vercel domains even without Worker auth', async () => {
       process.env.VERCEL_ENV = 'production'
       process.env.WORKER_AUTH_KEY = 'secret-key'
       
@@ -116,14 +116,14 @@ describe('Security Middleware', () => {
         }
       })
       
-      const response = middleware(request as any)
+      const response = await middleware(request as any)
       
       // Should pass through (not redirect)
       expect(response.status).toBe(200)
       expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     })
     
-    it('should skip auth check in development', () => {
+    it('should skip auth check in development', async () => {
       process.env.VERCEL_ENV = 'development'
       
       const request = new NextRequest('https://localhost:3000/api/ranking', {
@@ -132,7 +132,7 @@ describe('Security Middleware', () => {
         }
       })
       
-      const response = middleware(request as any)
+      const response = await middleware(request as any)
       
       // Should pass through without auth
       expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
@@ -140,7 +140,7 @@ describe('Security Middleware', () => {
   })
   
   describe('Debug Endpoints', () => {
-    it('should block debug endpoints in production', () => {
+    it('should block debug endpoints in production', async () => {
       process.env.VERCEL_ENV = 'production'
       process.env.WORKER_AUTH_KEY = 'secret-key'
       
@@ -152,7 +152,7 @@ describe('Security Middleware', () => {
         '/api/test-scraping/test'
       ]
       
-      debugPaths.forEach(path => {
+      for (const path of debugPaths) {
         const request = new NextRequest(`https://nico-rank.com${path}`, {
           headers: {
             'host': 'nico-rank.com',
@@ -160,14 +160,14 @@ describe('Security Middleware', () => {
           }
         })
         
-        const response = middleware(request as any)
+        const response = await middleware(request as any)
         
         expect(response.status).toBe(404)
         expect(response.body).toEqual({ error: 'Not Found' })
-      })
+      }
     })
     
-    it('should allow debug endpoints in development', () => {
+    it('should allow debug endpoints in development', async () => {
       process.env.VERCEL_ENV = 'development'
       
       const request = new NextRequest('https://localhost:3000/api/debug/test', {
@@ -176,7 +176,7 @@ describe('Security Middleware', () => {
         }
       })
       
-      const response = middleware(request as any)
+      const response = await middleware(request as any)
       
       // Should pass through
       expect(response.status).toBe(200)
@@ -184,7 +184,7 @@ describe('Security Middleware', () => {
   })
   
   describe('Security Headers', () => {
-    it('should add security headers to all responses', () => {
+    it('should add security headers to all responses', async () => {
       process.env.VERCEL_ENV = 'production'
       
       const request = new NextRequest('https://nico-rank.com/', {
@@ -192,7 +192,7 @@ describe('Security Middleware', () => {
           'host': 'nico-rank.com'
         }
       })
-      const response = middleware(request as any)
+      const response = await middleware(request as any)
       
       expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
       expect(response.headers.get('X-Frame-Options')).toBe('DENY')
@@ -202,7 +202,7 @@ describe('Security Middleware', () => {
       expect(response.headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains; preload')
     })
     
-    it('should not add HSTS header in development', () => {
+    it('should not add HSTS header in development', async () => {
       process.env.VERCEL_ENV = 'development'
       
       const request = new NextRequest('https://localhost:3000/', {
@@ -210,7 +210,7 @@ describe('Security Middleware', () => {
           'host': 'localhost:3000'
         }
       })
-      const response = middleware(request as any)
+      const response = await middleware(request as any)
       
       // In development, HSTS should not be set
       expect(response.headers.get('Strict-Transport-Security')).toBeUndefined()

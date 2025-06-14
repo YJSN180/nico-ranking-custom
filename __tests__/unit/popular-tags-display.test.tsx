@@ -142,7 +142,7 @@ describe('人気タグの表示問題', () => {
     })
   })
 
-  it('allジャンルでも人気タグが表示される（集計タグ）', async () => {
+  it('allジャンルでは人気タグが表示されない', async () => {
     const user = userEvent.setup()
 
     render(
@@ -154,7 +154,7 @@ describe('人気タグの表示問題', () => {
       />
     )
 
-    // 初期状態の確認
+    // 初期状態の確認（ゲームジャンルでは人気タグが表示される）
     expect(screen.getByText('人気タグ')).toBeInTheDocument()
 
     // ゲームジャンルボタンを見つける
@@ -177,14 +177,9 @@ describe('人気タグの表示問題', () => {
       )
     })
 
-    // 人気タグが集計されて表示されることを確認
+    // 人気タグセクションが表示されないことを確認
     await waitFor(() => {
-      const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
-      const tagButtons = popularTagsSection?.querySelectorAll('button')
-      const tagTexts = Array.from(tagButtons || []).map(btn => btn.textContent)
-      expect(tagTexts).toContain('ゲーム')
-      expect(tagTexts).toContain('エンターテイメント')
-      expect(tagTexts).toContain('VOICEROID実況プレイ')
+      expect(screen.queryByText('人気タグ')).not.toBeInTheDocument()
     })
   })
 
