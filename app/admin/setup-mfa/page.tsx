@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import QRCode from 'qrcode'
 
 export default function SetupMFAPage() {
   const router = useRouter()
@@ -28,6 +27,7 @@ export default function SetupMFAPage() {
       setSecret(data.secret)
       
       // Generate QR code
+      const QRCode = await import('qrcode')
       const qrCodeURL = await QRCode.toDataURL(data.qrCodeURI)
       setQrCodeDataURL(qrCodeURL)
     } catch (err) {
