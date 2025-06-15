@@ -143,14 +143,12 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     niconicoLink.href = 'https://www.nicovideo.jp/watch/sm12345'
     document.body.appendChild(niconicoLink)
     
-    // クリックイベントを手動で発火（click() だけではイベントリスナーが動作しない）
-    act(() => {
-      const clickEvent = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window
-      })
-      niconicoLink.dispatchEvent(clickEvent)
+    // クリックイベントをdocumentレベルでキャプチャさせる
+    await act(async () => {
+      // リンクをクリック（バブリングでdocumentまで伝播）
+      fireEvent.click(niconicoLink)
+      // 少し待機
+      await new Promise(resolve => setTimeout(resolve, 10))
     })
     
     // sessionStorageにスクロール位置が保存されているか確認
