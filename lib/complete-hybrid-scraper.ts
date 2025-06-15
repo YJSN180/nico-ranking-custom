@@ -131,19 +131,6 @@ export async function fetchRanking(
       throw new Error('ランキングデータが見つかりません')
     }
     
-    // デバッグ：データ構造を確認
-    if (process.env.NODE_ENV !== 'production') {
-      // eslint-disable-next-line no-console
-      console.log('🔍 [DEBUG] Ranking data structure:', {
-        totalItems: rankingData.items?.length || 0,
-        firstItemKeys: rankingData.items?.[0] ? Object.keys(rankingData.items[0]) : [],
-        sampleThumbnails: rankingData.items?.slice(0, 3).map((item: any) => ({
-          id: item.id,
-          thumbnail: item.thumbnail,
-          thumbnailUrl: item.thumbnailUrl
-        })) || []
-      })
-    }
     
     // ラベルと人気タグを取得
     const label = rankingData.label || genre
@@ -157,33 +144,21 @@ export async function fetchRanking(
     
     // アイテムを整形（ランク番号はページを考慮して計算）
     const startRank = (page - 1) * 100 + 1
-    let items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => {
-      // デバッグ：サムネイル関連のフィールドを確認
-      if (index < 3 && process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-        console.log(`🔍 [DEBUG] Item ${index + 1} thumbnail fields:`, {
-          thumbnail: item.thumbnail,
-          thumbnailUrl: item.thumbnailUrl,
-          allKeys: Object.keys(item)
-        })
-      }
-      
-      return {
-        rank: startRank + index,
-        id: item.id,
-        title: item.title,
-        thumbURL: item.thumbnail?.url || item.thumbnail?.middleUrl || item.thumbnail?.largeUrl || item.thumbnailUrl || '',
-        views: item.count?.view || 0,
-        comments: item.count?.comment || 0,
-        mylists: item.count?.mylist || 0,
-        likes: item.count?.like || 0,
-        tags: item.tags || [],
-        authorId: item.owner?.id || item.user?.id,
-        authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
-        authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
-        registeredAt: item.registeredAt || item.startTime || item.createTime
-      }
-    })
+    let items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
+      rank: startRank + index,
+      id: item.id,
+      title: item.title,
+      thumbURL: item.thumbnail?.url || item.thumbnail?.middleUrl || item.thumbnail?.largeUrl || item.thumbnailUrl || '',
+      views: item.count?.view || 0,
+      comments: item.count?.comment || 0,
+      mylists: item.count?.mylist || 0,
+      likes: item.count?.like || 0,
+      tags: item.tags || [],
+      authorId: item.owner?.id || item.user?.id,
+      authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
+      authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
+      registeredAt: item.registeredAt || item.startTime || item.createTime
+    }))
     
     // HTMLからタグ情報を抽出して追加
     items = enrichRankingItemsWithTags(items, html)

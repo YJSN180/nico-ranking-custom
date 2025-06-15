@@ -60,24 +60,7 @@ export default function ClientPage({
     }
   })
   
-  const [rankingData, setRankingData] = useState<RankingData>(() => {
-    // デバッグ：初期データでthumbURLが存在するか確認
-    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-      // eslint-disable-next-line no-console
-      console.log('🔍 [DEBUG] Initial data thumb check:', {
-        totalItems: initialData.length,
-        firstItemThumb: initialData[0]?.thumbURL,
-        itemsWithThumb: initialData.filter(item => item.thumbURL).length,
-        itemsWithoutThumb: initialData.filter(item => !item.thumbURL).length,
-        sampleItems: initialData.slice(0, 3).map(item => ({
-          id: item.id,
-          title: item.title?.substring(0, 30) + '...',
-          thumbURL: item.thumbURL
-        }))
-      })
-    }
-    return initialData
-  })
+  const [rankingData, setRankingData] = useState<RankingData>(initialData)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
     // 人気タグをlocalStorageから復元（ブラウザバック対応）
     const storageKey = `popular-tags-${config.genre}-${config.period}`

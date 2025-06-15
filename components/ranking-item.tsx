@@ -113,27 +113,6 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                     }}
                     loading={item.rank <= 3 ? undefined : "lazy"}
                     priority={item.rank <= 3}
-                    onError={() => {
-                      if (process.env.NODE_ENV === 'development') {
-                        // eslint-disable-next-line no-console
-                        console.error('🚨 [DEBUG] Image load failed (mobile):', {
-                          rank: item.rank,
-                          id: item.id,
-                          thumbURL: item.thumbURL,
-                          title: item.title?.substring(0, 30) + '...'
-                        })
-                      }
-                    }}
-                    onLoad={() => {
-                      if (item.rank <= 5 && process.env.NODE_ENV === 'development') {
-                        // eslint-disable-next-line no-console
-                        console.log('✅ [DEBUG] Image loaded (mobile):', {
-                          rank: item.rank,
-                          id: item.id,
-                          thumbURL: item.thumbURL
-                        })
-                      }
-                    }}
                   />
                 </a>
               )}
@@ -303,27 +282,6 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   }}
                   loading={item.rank <= 3 ? undefined : "lazy"}
                   priority={item.rank <= 3}
-                  onError={() => {
-                    if (process.env.NODE_ENV === 'development') {
-                      // eslint-disable-next-line no-console
-                      console.error('🚨 [DEBUG] Image load failed (desktop):', {
-                        rank: item.rank,
-                        id: item.id,
-                        thumbURL: item.thumbURL,
-                        title: item.title?.substring(0, 30) + '...'
-                      })
-                    }
-                  }}
-                  onLoad={() => {
-                    if (item.rank <= 5 && process.env.NODE_ENV === 'development') {
-                      // eslint-disable-next-line no-console
-                      console.log('✅ [DEBUG] Image loaded (desktop):', {
-                        rank: item.rank,
-                        id: item.id,
-                        thumbURL: item.thumbURL
-                      })
-                    }
-                  }}
                 />
               </a>
             </div>

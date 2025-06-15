@@ -103,33 +103,21 @@ export async function scrapeRankingPageNvApiOnly(
     const rankingItems = data.data.items.slice(0, MAX_ITEMS)
     
     // nvapiレスポンスをパース
-    let items: Partial<RankingItem>[] = rankingItems.map((item: any, index: number) => {
-      // デバッグ：nvapi responseの構造確認
-      if (index < 3 && process.env.NODE_ENV !== 'production') {
-        // eslint-disable-next-line no-console
-        console.log(`🔍 [DEBUG] NVAPI Item ${index + 1} structure:`, {
-          id: item.id,
-          thumbnail: item.thumbnail,
-          allKeys: Object.keys(item)
-        })
-      }
-      
-      return {
-        rank: index + 1,
-        id: item.id,
-        title: item.title,
-        thumbURL: item.thumbnail?.largeUrl || item.thumbnail?.url || '',
-        views: item.count?.view || 0,
-        comments: item.count?.comment,
-        mylists: item.count?.mylist,
-        likes: item.count?.like,
-        authorId: item.owner?.id,
-        authorName: item.owner?.name,
-        authorIcon: item.owner?.iconUrl,
-        registeredAt: item.registeredAt,
-        tags: undefined,
-      }
-    })
+    let items: Partial<RankingItem>[] = rankingItems.map((item: any, index: number) => ({
+      rank: index + 1,
+      id: item.id,
+      title: item.title,
+      thumbURL: item.thumbnail?.largeUrl || item.thumbnail?.url || '',
+      views: item.count?.view || 0,
+      comments: item.count?.comment,
+      mylists: item.count?.mylist,
+      likes: item.count?.like,
+      authorId: item.owner?.id,
+      authorName: item.owner?.name,
+      authorIcon: item.owner?.iconUrl,
+      registeredAt: item.registeredAt,
+      tags: undefined,
+    }))
     
     // tagパラメータを使った場合は、すでにフィルタリング済みなので個別タグ取得は不要
     // ジャンルが'all'以外で、tagパラメータがない場合のみ人気タグ集計のためタグを取得
