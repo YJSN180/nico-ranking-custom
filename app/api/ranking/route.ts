@@ -109,21 +109,18 @@ export async function GET(request: NextRequest) {
         currentPage++
       }
       
-      // ランク番号を再割り当て（ページネーション対応）
-      const itemsPerPage = 100
-      const startIdx = (page - 1) * itemsPerPage
-      const endIdx = page * itemsPerPage
-      const pageItems = allItems.slice(startIdx, endIdx).map((item, index) => ({
+      // タグ別ランキングは300件すべてを返す（ページネーションなし）
+      const rerankedItems = allItems.map((item, index) => ({
         ...item,
-        rank: startIdx + index + 1
+        rank: index + 1
       }))
       
       // 動的取得の場合はキャッシュなし（Cloudflare KVのみ使用）
       
       const response = NextResponse.json({
-        items: pageItems,
-        hasMore: endIdx < allItems.length, // 次のページにアイテムがあるか
-        totalCached: allItems.length // 取得した総数
+        items: rerankedItems, // 全件返す（最大300件）
+        hasMore: false, // タグ別ランキングはページネーションなし
+        totalCached: rerankedItems.length // 取得した総数
       })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'MISS')
@@ -132,40 +129,25 @@ export async function GET(request: NextRequest) {
 
     // 通常のジャンル別ランキング
     
-    // Cloudflare KVからの取得を試みる（ページ1-10、1000件まで）
-    if (useCloudflareKV && page <= 10) {
+    // Cloudflare KVからの取得を試みる
+    if (useCloudflareKV) {
       try {
         const cfData = await getGenreRanking(genre, period as RankingPeriod)
         if (cfData && cfData.items && cfData.items.length > 0) {
-          // ページネーション処理
-          const startIdx = (page - 1) * 100
-          const endIdx = page * 100
-          const pageItems = cfData.items.slice(startIdx, endIdx)
+          // ジャンル別ランキングは500件まで返す
+          const maxItems = 500
+          const items = cfData.items.slice(0, maxItems)
           
-          // ページ1の場合は人気タグも含めて返す
-          if (page === 1) {
-            const response = NextResponse.json({
-              items: pageItems,
-              popularTags: cfData.popularTags || [],
-              hasMore: cfData.items.length > 100,
-              totalCached: cfData.items.length
-            })
-            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-            response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Max-Items', '1000')
-            return response
-          } else {
-            // ページ2以降も統一された形式で返す
-            const response = NextResponse.json({
-              items: pageItems,
-              hasMore: endIdx < cfData.items.length,
-              totalCached: cfData.items.length
-            })
-            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-            response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Max-Items', '1000')
-            return response
-          }
+          const response = NextResponse.json({
+            items: items,
+            popularTags: cfData.popularTags || [],
+            hasMore: false, // ページネーションなし
+            totalCached: cfData.items.length
+          })
+          response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+          response.headers.set('X-Cache-Status', 'CF-HIT')
+          response.headers.set('X-Max-Items', String(maxItems))
+          return response
         }
       } catch (error) {
         // Cloudflare KV error - silently fallback to dynamic fetch
@@ -173,71 +155,16 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // ページ番号が11以上の場合（1001位以降）は動的取得
-    if (page >= 11) {
-      // console.log(`[API] Fetching page ${page} for ${genre}/${period} (dynamic)`)
-      
-      // 100件単位で動的取得
-      const { items: pageItems } = await scrapeRankingPage(
-        genre,
-        period as RankingPeriod,
-        undefined,
-        100,
-        page
-      )
-      
-      // Convert Partial<RankingItem>[] to RankingItem[]
-      const completeItems: RankingItem[] = pageItems
-        .filter((item): item is RankingItem => 
-          item.rank !== undefined &&
-          item.id !== undefined &&
-          item.title !== undefined &&
-          item.thumbURL !== undefined &&
-          item.views !== undefined
-        )
-      
-      // NGフィルタリング（ページ6以降の動的取得）
-      const pageFilterResult = await filterRankingItemsServer(completeItems)
-      const filteredItems = pageFilterResult.filteredItems
-      
-      // 新しく見つかったNG動画IDを派生リストに追加
-      if (pageFilterResult.newDerivedIds.length > 0) {
-        try {
-          await addToServerDerivedNGList(pageFilterResult.newDerivedIds)
-          if (process.env.NODE_ENV === 'production') {
-            // eslint-disable-next-line no-console
-            console.log(`[NG] Added ${pageFilterResult.newDerivedIds.length} new derived NG IDs from page ${page} ranking ${genre}-${period}`)
-          }
-        } catch (error) {
-          console.error(`[NG] Failed to add derived NG IDs:`, error)
-        }
-      }
-      
-      // ランク番号はscraperで既に設定されているため、そのまま使用
-      // ページ6以降は実際のニコニコ動画のランク番号（501位〜）を保持
-      const adjustedItems = filteredItems
-      
-      // 統一された形式で返す
-      const response = NextResponse.json({
-        items: adjustedItems,
-        hasMore: adjustedItems.length === 100, // 100件取得できたら次のページがある可能性
-        totalCached: 0 // 動的取得の場合は未知
-      })
-      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-      response.headers.set('X-Cache-Status', 'DYNAMIC')
-      response.headers.set('X-Max-Items', '2000') // ニコニコ動画の最大20ページ（2000位）まで
-      return response
-    }
-    
-    // Cloudflare KVが利用できない場合、またはキャッシュミス時は動的取得
-    // console.log(`[API] Cache miss for ${cacheKey}, fetching fresh data...`)
-    const { items, popularTags } = await scrapeRankingPage(
+    // 動的取得にフォールバック
+    const { items: dynamicItems } = await scrapeRankingPage(
       genre,
-      period as RankingPeriod
+      period as RankingPeriod,
+      undefined,
+      500 // 最大500件取得
     )
     
     // Convert Partial<RankingItem>[] to RankingItem[]
-    const completeItems: RankingItem[] = items
+    const completeItems: RankingItem[] = dynamicItems
       .filter((item): item is RankingItem => 
         item.rank !== undefined &&
         item.id !== undefined &&
@@ -246,50 +173,31 @@ export async function GET(request: NextRequest) {
         item.views !== undefined
       )
     
-    // NGフィルタリング（動的取得フォールバック）
-    const fallbackFilterResult = await filterRankingItemsServer(completeItems)
-    const filteredItems = fallbackFilterResult.filteredItems
+    // NGフィルタリング
+    const filterResult = await filterRankingItemsServer(completeItems)
+    const filteredItems = filterResult.filteredItems
     
     // 新しく見つかったNG動画IDを派生リストに追加
-    if (fallbackFilterResult.newDerivedIds.length > 0) {
+    if (filterResult.newDerivedIds.length > 0) {
       try {
-        await addToServerDerivedNGList(fallbackFilterResult.newDerivedIds)
+        await addToServerDerivedNGList(filterResult.newDerivedIds)
         if (process.env.NODE_ENV === 'production') {
           // eslint-disable-next-line no-console
-          console.log(`[NG] Added ${fallbackFilterResult.newDerivedIds.length} new derived NG IDs from fallback ranking ${genre}-${period}`)
+          console.log(`[NG] Added ${filterResult.newDerivedIds.length} new derived NG IDs from dynamic fetch ${genre}-${period}`)
         }
       } catch (error) {
         console.error(`[NG] Failed to add derived NG IDs:`, error)
       }
     }
     
-    const data = { items: filteredItems, popularTags }
-    
-    // ページ1の場合
-    if (page === 1) {
-      const response = NextResponse.json({
-        items: filteredItems.slice(0, 100),
-        popularTags
-      })
-      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-      response.headers.set('X-Cache-Status', 'MISS')
-      response.headers.set('X-Max-Items', '2000') // ニコニコ動画の最大20ページ（2000位）まで
-      return response
-    }
-    
-    // ページ2-3の場合
-    const startIdx = (page - 1) * 100
-    const endIdx = page * 100
-    const pageItems = filteredItems.slice(startIdx, endIdx)
-    
-    // 統一された形式で返す
     const response = NextResponse.json({
-      items: pageItems,
-      hasMore: endIdx < filteredItems.length,
+      items: filteredItems,
+      popularTags: [],
+      hasMore: false,
       totalCached: filteredItems.length
     })
     response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
-    response.headers.set('X-Cache-Status', 'MISS')
+    response.headers.set('X-Cache-Status', 'DYNAMIC')
     response.headers.set('X-Max-Items', '500')
     return response
     
