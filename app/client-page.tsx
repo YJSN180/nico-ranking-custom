@@ -152,11 +152,11 @@ export default function ClientPage({
     }
   }, [config, STORAGE_CONFIG.MAX_KEYS, STORAGE_CONFIG.MAX_AGE_MS, STORAGE_CONFIG.USE_SESSION_STORAGE])
   
-  // リアルタイム統計更新を一時的に無効化（問題の切り分けのため）
+  // リアルタイム統計更新を使用（3分ごとに自動更新 - メモリ負荷軽減）
   const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
     rankingData,
-    false, // 一時的に無効化
+    true, // 有効
     REALTIME_UPDATE_INTERVAL
   )
   
@@ -175,21 +175,30 @@ export default function ClientPage({
   // データ読み込み後に表示件数を自動調整するためのフラグ
   const [shouldAutoExpand, setShouldAutoExpand] = useState(false)
 
+  // 前回のランキングデータ長を記録
+  const prevDataLengthRef = useRef(rankingData.length)
+
   // データが追加されたら自動的に表示件数を拡張
   useEffect(() => {
-    if (shouldAutoExpand && !loadingMore) {
-      // 目標は+100件表示
-      const currentTarget = Math.ceil(displayCount / 100) * 100 + 100
-      const newDisplayCount = Math.min(currentTarget, rerankedItems.length, MAX_RANKING_ITEMS)
+    // データが増えた場合（新しいデータが追加された）
+    if (rankingData.length > prevDataLengthRef.current) {
+      prevDataLengthRef.current = rankingData.length
       
-      if (newDisplayCount > displayCount) {
-        setDisplayCount(newDisplayCount)
-        updateURL(newDisplayCount)
+      // shouldAutoExpandフラグが立っている場合は表示件数を増やす
+      if (shouldAutoExpand) {
+        // 目標は+100件表示
+        const currentTarget = Math.ceil(displayCount / 100) * 100 + 100
+        const newDisplayCount = Math.min(currentTarget, rerankedItems.length, MAX_RANKING_ITEMS)
+        
+        if (newDisplayCount > displayCount) {
+          setDisplayCount(newDisplayCount)
+          updateURL(newDisplayCount)
+        }
+        
+        setShouldAutoExpand(false)
       }
-      
-      setShouldAutoExpand(false)
     }
-  }, [shouldAutoExpand, loadingMore, displayCount, rerankedItems.length, MAX_RANKING_ITEMS, updateURL])
+  }, [rankingData.length, shouldAutoExpand, displayCount, rerankedItems.length, MAX_RANKING_ITEMS, updateURL])
 
   // 動画ページから戻った時のみスクロール位置を復元
   useEffect(() => {
