@@ -157,6 +157,27 @@ export default function AdminPage() {
       <div style={{ marginTop: '40px', fontSize: '14px', color: '#6c757d' }}>
         <p>※ Vercelのcron設定により1時間ごとに自動更新されます</p>
       </div>
+
+      <div style={{ 
+        marginTop: '20px',
+        padding: '20px',
+        backgroundColor: '#f8f9fa',
+        border: '1px solid #dee2e6',
+        borderRadius: '4px'
+      }}>
+        <h2>管理機能</h2>
+        <a href="/admin/ng-management" style={{
+          display: 'inline-block',
+          padding: '10px 20px',
+          backgroundColor: '#28a745',
+          color: 'white',
+          textDecoration: 'none',
+          borderRadius: '4px',
+          marginTop: '10px'
+        }}>
+          NGリスト管理画面へ
+        </a>
+      </div>
     </main>
   )
 }

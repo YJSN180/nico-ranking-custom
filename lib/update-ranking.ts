@@ -1,5 +1,6 @@
 import { scrapeRankingPage, fetchPopularTags } from '@/lib/scraper'
-import { filterRankingData } from '@/lib/ng-filter'
+import { filterRankingDataServer } from '@/lib/ng-filter-server'
+import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
 import type { RankingGenre } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
@@ -99,11 +100,20 @@ export async function updateRankingData(): Promise<UpdateResult> {
         
         // NGフィルタリングを適用
         const beforeCount = convertedItems.length
-        const { items: filteredItems } = await filterRankingData({ items: convertedItems })
+        const filterResult = await filterRankingDataServer({ items: convertedItems })
+        const filteredItems = filterResult.filteredData.items
         const removedCount = beforeCount - filteredItems.length
         
-        // NGフィルタリング結果を記録（ログは出力しない - ESLintエラー回避）
-        // スキップ（ESLintエラー回避）
+        // 新しく見つかったNG動画IDを派生リストに追加
+        if (filterResult.newDerivedIds.length > 0) {
+          try {
+            await addToServerDerivedNGList(filterResult.newDerivedIds)
+            // eslint-disable-next-line no-console
+            console.log(`[NG] Added ${filterResult.newDerivedIds.length} new derived NG IDs from ${genre}-${period}`)
+          } catch (error) {
+            // エラーは無視して処理を継続
+          }
+        }
         
         allItems.push(...filteredItems)
         page++

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getNGListManual, setNGListManual } from '@/lib/ng-list-server'
+import { getServerDerivedNGList, clearServerDerivedNGList } from '@/lib/ng-list-server'
 
 export async function GET(request: NextRequest) {
   // Basic authentication check
@@ -11,14 +11,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const ngList = await getNGListManual()
-    return NextResponse.json(ngList)
+    const derivedList = await getServerDerivedNGList()
+    return NextResponse.json({
+      videoIds: derivedList,
+      lastUpdated: new Date().toISOString()
+    })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch derived NG list' }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
   // Basic authentication check
   const authHeader = request.headers.get('authorization')
   const cookie = request.cookies.get('admin-auth')
@@ -28,18 +31,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const ngList = await request.json()
-    
-    // Validate the structure
-    if (!ngList.videoIds || !ngList.authorIds || !ngList.videoTitles || !ngList.authorNames) {
-      return NextResponse.json({ error: 'Invalid NG list format' }, { status: 400 })
-    }
-
-    // Save to Cloudflare KV
-    await setNGListManual(ngList)
-    
+    await clearServerDerivedNGList()
     return NextResponse.json({ success: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update NG list' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to clear derived NG list' }, { status: 500 })
   }
 }
