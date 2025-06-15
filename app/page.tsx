@@ -4,6 +4,7 @@ import ClientPage from './client-page'
 import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
+import { Footer } from '@/components/footer'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
@@ -190,6 +191,7 @@ export default async function Home({ searchParams }: PageProps) {
             />
           </SuspenseWrapper>
         </div>
+        <Footer />
       </main>
     )
   } catch (error) {
@@ -243,6 +245,7 @@ export default async function Home({ searchParams }: PageProps) {
             </details>
           </div>
         </div>
+        <Footer />
       </main>
     )
   }
