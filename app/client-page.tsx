@@ -147,7 +147,7 @@ export default function ClientPage({
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
     
-    router.push(params.toString() ? `?${params.toString()}` : '/')
+    router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
     // ユーザー設定を更新
     updatePreferences({
@@ -189,8 +189,11 @@ export default function ClientPage({
   
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
+    // まずrank順にソート（重要！）
+    const sorted = [...realtimeItems].sort((a, b) => a.rank - b.rank)
+    
     // NGフィルタを適用
-    const filtered = filterItems(realtimeItems)
+    const filtered = filterItems(sorted)
     
     // 順位を再割り当て（連続番号）
     const reranked = filtered.map((item, index) => ({

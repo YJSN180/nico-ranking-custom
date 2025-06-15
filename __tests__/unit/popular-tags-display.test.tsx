@@ -24,6 +24,35 @@ vi.mock('@/lib/popular-tags', () => ({
   })
 }))
 
+// useRealtimeStatsのモック
+vi.mock('@/hooks/use-realtime-stats', () => ({
+  useRealtimeStats: (data: any[]) => ({
+    items: data,
+    isLoading: false,
+    lastUpdated: null,
+    hasRealtimeData: false
+  })
+}))
+
+// 他のフックのモック
+vi.mock('@/hooks/use-user-preferences', () => ({
+  useUserPreferences: () => ({
+    preferences: null,
+    updatePreferences: vi.fn(),
+    isLoading: false
+  })
+}))
+
+vi.mock('@/hooks/use-user-ng-list', () => ({
+  useUserNGList: () => ({
+    ngList: [],
+    addToNGList: vi.fn(),
+    removeFromNGList: vi.fn(),
+    filterItems: (items: any[]) => items,
+    isLoading: false
+  })
+}))
+
 // fetchのモック
 global.fetch = vi.fn()
 
@@ -57,6 +86,17 @@ describe('人気タグの表示問題', () => {
             popularTags: genre === 'game' ? ['ゲーム', '実況プレイ動画'] : 
                          genre === 'entertainment' ? ['エンターテイメント', '踊ってみた'] :
                          genre === 'other' ? ['その他', 'MMD'] : []
+          })
+        })
+      }
+      // video-stats APIの場合は空のレスポンスを返す
+      if (url.includes('/api/video-stats')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            stats: {},
+            timestamp: new Date().toISOString(),
+            count: 0
           })
         })
       }
