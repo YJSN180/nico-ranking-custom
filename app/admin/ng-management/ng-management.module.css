@@ -1,0 +1,261 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  min-height: 100vh;
+}
+
+.container.light {
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+.container.dark {
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
+.container.darkblue {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--border-color);
+}
+
+.tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+}
+
+.content {
+  background: var(--surface-color);
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: var(--shadow-md);
+}
+
+.addSection {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.select {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--background-color);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--background-color);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.addButton {
+  padding: 8px 20px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.addButton:hover {
+  background: var(--primary-hover-color);
+}
+
+.actionBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background: var(--background-color);
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.deleteButton {
+  padding: 6px 16px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.deleteButton:hover {
+  background: #c82333;
+}
+
+.listSections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.section {
+  background: var(--background-color);
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.section h3 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.itemList {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.item:hover {
+  background: var(--hover-color);
+}
+
+.item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.item span {
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.derivedInfo {
+  background: var(--background-color);
+  padding: 20px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+}
+
+.derivedInfo p {
+  margin: 0 0 10px 0;
+  color: var(--text-secondary);
+}
+
+.clearButton {
+  padding: 8px 20px;
+  background: #ffc107;
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.clearButton:hover {
+  background: #e0a800;
+}
+
+.derivedList {
+  background: var(--background-color);
+  padding: 20px;
+  border-radius: 6px;
+}
+
+.scrollableList {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.derivedItem {
+  padding: 4px 8px;
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-divider);
+}
+
+.derivedItem:last-child {
+  border-bottom: none;
+}
+
+/* Dark mode specific styles */
+.dark .content,
+.dark .section,
+.dark .actionBar,
+.dark .derivedInfo,
+.dark .derivedList {
+  background: #2a2a2a;
+}
+
+.dark .select,
+.dark .input {
+  background: #1a1a1a;
+  border-color: #444;
+}
+
+.dark .item:hover {
+  background: #333;
+}
+
+/* Dark blue mode specific styles */
+.darkblue .content,
+.darkblue .section,
+.darkblue .actionBar,
+.darkblue .derivedInfo,
+.darkblue .derivedList {
+  background: #1e293b;
+}
+
+.darkblue .select,
+.darkblue .input {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.darkblue .item:hover {
+  background: #334155;
+}

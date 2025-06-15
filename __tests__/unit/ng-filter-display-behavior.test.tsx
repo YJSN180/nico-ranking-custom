@@ -76,7 +76,7 @@ describe('NG設定反映後の表示挙動', () => {
     mockFilterItems = (items: any[]) => items
   })
 
-  it('通常時: 100件表示される', () => {
+  it('通常時: 200件すべて表示される', () => {
     const mockData = createMockData(200)
     
     render(
@@ -87,9 +87,9 @@ describe('NG設定反映後の表示挙動', () => {
       />
     )
 
-    // 100件表示されるはず
+    // 200件すべて表示される（500件未満なので全件表示）
     const items = screen.getAllByText(/テスト動画/)
-    expect(items).toHaveLength(100)
+    expect(items).toHaveLength(200)
   })
 
   it('NG設定後: 表示件数が減り、順位が繰り上がる', () => {
@@ -108,9 +108,11 @@ describe('NG設定反映後の表示挙動', () => {
       />
     )
 
-    // NGフィルタリング後も100件表示される（追加データが読み込まれる）
+    // NGフィルタリング後、残った項目が表示される
     const items = screen.getAllByText(/テスト動画/)
-    expect(items.length).toBe(100)
+    // 200件中、3件に1件が「実況」を含むので、約133件が残る
+    expect(items.length).toBeGreaterThan(100)
+    expect(items.length).toBeLessThan(200)
     
     // 順位は繰り上がる（1位の実況動画がNGなら、2位が1位として表示）
     // テスト動画 2 が最初に表示されるはず
@@ -154,7 +156,7 @@ describe('NG設定反映後の表示挙動', () => {
     expect(secondItem?.textContent).toContain('テスト動画 4') // タイトル
   })
 
-  it('もっと見るボタンの表示条件', () => {
+  it('もっと見るボタンは表示されない（ページネーション廃止）', () => {
     // 「実況」をNGワードに設定
     mockFilterItems = (items: any[]) => {
       return items.filter(item => !item.title.includes('実況'))
@@ -170,7 +172,7 @@ describe('NG設定反映後の表示挙動', () => {
       />
     )
 
-    // フィルタ後のデータがまだあるので、もっと見るボタンが表示される
-    expect(screen.getByText(/もっと見る/)).toBeInTheDocument()
+    // もっと見るボタンは存在しない（ページネーション廃止）
+    expect(screen.queryByText(/もっと見る/)).not.toBeInTheDocument()
   })
 })

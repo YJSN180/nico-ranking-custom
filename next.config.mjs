@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    // 外部画像の最適化を無効化
+    // 外部画像（ニコニコ動画サムネイル）の最適化を無効化
+    // ニコニコ動画のサムネイルAPIは特殊なCORSヘッダーが必要で最適化が困難
     unoptimized: true,
     remotePatterns: [
       {
@@ -27,7 +28,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com",
+              "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live",
               "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に必要
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",

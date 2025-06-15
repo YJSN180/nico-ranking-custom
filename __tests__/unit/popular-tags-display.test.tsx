@@ -24,6 +24,45 @@ vi.mock('@/lib/popular-tags', () => ({
   })
 }))
 
+// popular-tags-clientのモック
+vi.mock('@/lib/popular-tags-client', () => ({
+  getPopularTagsClient: vi.fn(async (genre: string) => {
+    if (genre === 'game') return ['ゲーム', '実況プレイ動画', 'VOICEROID実況プレイ']
+    if (genre === 'entertainment') return ['エンターテイメント', '踊ってみた', '歌ってみた']
+    if (genre === 'other') return ['その他', 'MMD', 'MikuMikuDance']
+    return []
+  })
+}))
+
+// useRealtimeStatsのモック
+vi.mock('@/hooks/use-realtime-stats', () => ({
+  useRealtimeStats: (data: any[]) => ({
+    items: data,
+    isLoading: false,
+    lastUpdated: null,
+    hasRealtimeData: false
+  })
+}))
+
+// 他のフックのモック
+vi.mock('@/hooks/use-user-preferences', () => ({
+  useUserPreferences: () => ({
+    preferences: null,
+    updatePreferences: vi.fn(),
+    isLoading: false
+  })
+}))
+
+vi.mock('@/hooks/use-user-ng-list', () => ({
+  useUserNGList: () => ({
+    ngList: [],
+    addToNGList: vi.fn(),
+    removeFromNGList: vi.fn(),
+    filterItems: (items: any[]) => items,
+    isLoading: false
+  })
+}))
+
 // fetchのモック
 global.fetch = vi.fn()
 
@@ -57,6 +96,17 @@ describe('人気タグの表示問題', () => {
             popularTags: genre === 'game' ? ['ゲーム', '実況プレイ動画'] : 
                          genre === 'entertainment' ? ['エンターテイメント', '踊ってみた'] :
                          genre === 'other' ? ['その他', 'MMD'] : []
+          })
+        })
+      }
+      // video-stats APIの場合は空のレスポンスを返す
+      if (url.includes('/api/video-stats')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            stats: {},
+            timestamp: new Date().toISOString(),
+            count: 0
           })
         })
       }
@@ -124,8 +174,7 @@ describe('人気タグの表示問題', () => {
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('genre=entertainment'),
-        expect.any(Object)
+        '/api/ranking?genre=entertainment&period=24h'
       )
     })
 
@@ -172,8 +221,7 @@ describe('人気タグの表示問題', () => {
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('genre=all'),
-        expect.any(Object)
+        '/api/ranking?genre=all&period=24h'
       )
     })
 
@@ -200,8 +248,9 @@ describe('人気タグの表示問題', () => {
       const tagTexts = Array.from(tagButtons || []).map(btn => btn.textContent)
       // タグが全体的に表示されていることを確認（順番は問わない）
       expect(tagTexts).toContain('すべて') // 「すべて」ボタンが最初に表示される
-      expect(tagTexts).toContain('その他')
-      expect(tagTexts).toContain('MMD')
+      expect(tagTexts.length).toBeGreaterThan(1) // 他のタグも取得されている
+      // getPopularTagsモックで「その他」ジャンルの場合は ['その他', 'MMD', 'MikuMikuDance'] を返すはず
+      expect(tagTexts).toEqual(expect.arrayContaining(['すべて', 'その他', 'MMD', 'MikuMikuDance']))
     })
   })
 
@@ -238,8 +287,7 @@ describe('人気タグの表示問題', () => {
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('period=hour'),
-        expect.any(Object)
+        '/api/ranking?genre=game&period=hour'
       )
     })
 

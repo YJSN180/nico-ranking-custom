@@ -66,7 +66,7 @@ describe('Ranking API Integration', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('application/json')
     expect(response.headers.get('Cache-Control')).toBe(
-      'public, s-maxage=30, stale-while-revalidate=60'
+      'public, s-maxage=300, stale-while-revalidate=600'
     )
 
     const data = await response.json()
@@ -114,10 +114,10 @@ describe('Ranking API Integration', () => {
     expect(response.status).toBe(200)
     
     const data = await response.json()
-    expect(data).toEqual({
-      items: mockScrapedData,
-      popularTags: []
-    })
+    expect(data.items).toEqual(mockScrapedData)
+    expect(data.popularTags).toEqual([])
+    expect(data).toHaveProperty('hasMore', false)
+    expect(data).toHaveProperty('totalCached')
   })
 
   it('should handle KV errors gracefully', async () => {

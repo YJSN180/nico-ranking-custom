@@ -46,6 +46,7 @@
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@vitejs/plugin-react": "^4.3.4",
@@ -57,8 +58,10 @@
     "miniflare": "^3.20250408.2",
     "prettier": "^3.4.2",
     "puppeteer": "^24.9.0",
+    "qrcode": "^1.5.4",
     "typescript": "^5",
     "vitest": "^3.2.3",
+    "web-vitals": "^5.0.3",
     "wrangler": "^4.19.1"
   }
 }

@@ -131,6 +131,7 @@ export async function fetchRanking(
       throw new Error('ランキングデータが見つかりません')
     }
     
+    
     // ラベルと人気タグを取得
     const label = rankingData.label || genre
     let popularTags: string[] = []
@@ -147,7 +148,7 @@ export async function fetchRanking(
       rank: startRank + index,
       id: item.id,
       title: item.title,
-      thumbURL: item.thumbnail?.url || item.thumbnail?.middleUrl || '',
+      thumbURL: item.thumbnail?.url || item.thumbnail?.middleUrl || item.thumbnail?.largeUrl || item.thumbnailUrl || '',
       views: item.count?.view || 0,
       comments: item.count?.comment || 0,
       mylists: item.count?.mylist || 0,

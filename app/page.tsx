@@ -4,6 +4,7 @@ import ClientPage from './client-page'
 import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
+import { Footer } from '@/components/footer'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
@@ -30,15 +31,20 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const genreName = genreInfo?.label || '総合'
   const periodName = period === '24h' ? '24時間' : '毎時'
   
-  let title = `${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
-  let description = `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
+  // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
+  const isDefault = genre === 'all' && period === '24h' && !tag
+  
+  let title = isDefault ? 'ニコニコランキング(Re:turn)' : `${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
+  let description = isDefault ? 'ニコニコ動画のランキングを今すぐチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
   
   if (tag) {
     title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
     description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
   }
   
-  description += '最新の人気動画をチェック！'
+  if (!isDefault) {
+    description += '最新の人気動画をチェック！'
+  }
   
   return {
     title,
@@ -46,11 +52,27 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     openGraph: {
       title,
       description,
+      siteName: 'ニコニコランキング(Re:turn)',
       url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      images: [{
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: title,
+        type: 'image/png',
+      }],
     },
     twitter: {
       title,
       description,
+      card: 'summary_large_image', // 大きなサムネイル表示
+      images: [{
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: title,
+        type: 'image/png',
+      }],
     },
   }
 }
@@ -67,7 +89,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       if (cfData && cfData.items && cfData.items.length > 0) {
         // NGフィルタリングを適用
         // 初期表示は100件だが、全データを保持してhasMoreの判定を正しく行えるようにする
-        const filteredData = await filterRankingDataServer({
+        const { filteredData } = await filterRankingDataServer({
           items: cfData.items, // 全データを渡す（最大500件）
           popularTags: cfData.popularTags
         })
@@ -112,7 +134,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     // Caching is now handled by Cloudflare KV in the scraper
     
     // NGフィルタリングを適用
-    const filteredData = await filterRankingDataServer({ items, popularTags })
+    const { filteredData } = await filterRankingDataServer({ items, popularTags })
     return filteredData
   } catch (error) {
     // スクレイピングエラーログはスキップ（ESLintエラー回避）
@@ -190,6 +212,7 @@ export default async function Home({ searchParams }: PageProps) {
             />
           </SuspenseWrapper>
         </div>
+        <Footer />
       </main>
     )
   } catch (error) {
@@ -243,6 +266,7 @@ export default async function Home({ searchParams }: PageProps) {
             </details>
           </div>
         </div>
+        <Footer />
       </main>
     )
   }

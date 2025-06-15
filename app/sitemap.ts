@@ -14,10 +14,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: `${baseUrl}/admin`,
-      lastModified: currentDate,
-      changeFrequency: 'monthly' as const,
-      priority: 0.1,
+      url: `${baseUrl}/privacy`,
+      lastModified: new Date('2025-06-15'),
+      changeFrequency: 'yearly' as const,
+      priority: 0.3,
     },
   ]
 

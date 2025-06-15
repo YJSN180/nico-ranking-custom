@@ -38,7 +38,7 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
   })
 }))
 
-describe('300件表示時のボタン表示', () => {
+describe('タグ別ランキング300件制限', () => {
   const createMockData = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({
       rank: i + 1,
@@ -48,11 +48,15 @@ describe('300件表示時のボタン表示', () => {
       views: 1000 - i,
       comments: 10,
       mylists: 5,
-      likes: 20
+      likes: 2,
+      tags: ['tag1', 'tag2'],
+      authorId: 'user123',
+      authorName: 'Test User',
+      authorIcon: 'https://example.com/icon.jpg'
     }))
   }
 
-  it('通常ランキングで300件表示時でもボタンが表示される', () => {
+  it('タグ別ランキングは300件すべて表示される', () => {
     const mockData = createMockData(300)
     
     render(
@@ -60,34 +64,44 @@ describe('300件表示時のボタン表示', () => {
         initialData={mockData}
         initialGenre="all"
         initialPeriod="24h"
+        initialTag="MMD"
+        popularTags={[]}
       />
     )
-
-    // 300件のデータがあっても、初期表示は100件なのでボタンは表示される
-    expect(screen.queryByText(/もっと見る/)).toBeInTheDocument()
+    
+    // 300件すべてが表示されることを確認
+    const items = screen.getAllByText(/Test Video \d+/)
+    expect(items).toHaveLength(300)
+    
+    // 「もっと見る」ボタンが表示されないことを確認
+    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    
+    // 表示件数情報を確認
+    expect(screen.getByText(/300件表示中/)).toBeInTheDocument()
+    expect(screen.getByText(/タグ別ランキング: 最大300件/)).toBeInTheDocument()
   })
 
-  it.skip('タグ別ランキングで初期表示時は「もっと見る」ボタンが表示される', () => {
-    const mockData = createMockData(300)
+  it('タグ別ランキングが300件未満の場合も正しく表示される', () => {
+    const mockData = createMockData(150)
     
     render(
       <ClientPage 
         initialData={mockData}
-        initialGenre="game"
+        initialGenre="all"
         initialPeriod="24h"
-        initialTag="ゲーム"
+        initialTag="ゲーム実況"
+        popularTags={[]}
       />
     )
-
-    // 初期表示は100件なので、300件のデータがあればボタンは表示される
-    expect(screen.getByText('もっと見る')).toBeInTheDocument()
-  })
-
-  it('実際の仕様：タグ別ランキングも最大300件が一般的', () => {
-    // ニコニコ動画の仕様では、タグ別ランキングも通常300件が上限
-    // ただし、APIの仕様によっては異なる可能性がある
     
-    // cronジョブではタグ別は事前生成されない
-    // オンデマンドで取得される際の上限は不明
+    // 150件すべてが表示されることを確認
+    const items = screen.getAllByText(/Test Video \d+/)
+    expect(items).toHaveLength(150)
+    
+    // 「もっと見る」ボタンが表示されないことを確認
+    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    
+    // 表示件数情報を確認
+    expect(screen.getByText(/150件表示中/)).toBeInTheDocument()
   })
 })
