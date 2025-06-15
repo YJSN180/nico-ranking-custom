@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
 import ClientPage from '@/app/client-page'
 
 // モックの設定
@@ -38,210 +38,68 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
   })
 }))
 
-describe('ジャンル別ランキング500件表示対応', () => {
+describe('ジャンル別ランキング500件表示', () => {
   const createMockData = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({
       rank: i + 1,
       id: `sm${i + 1}`,
       title: `Test Video ${i + 1}`,
       thumbURL: 'https://example.com/thumb.jpg',
-      views: 1000 - i,
-      comments: 10,
-      mylists: 5,
-      likes: 20
+      views: 10000 - i * 10,
+      comments: 100 - i,
+      mylists: 50 - Math.floor(i / 10),
+      likes: 10,
+      tags: ['tag1', 'tag2'],
+      authorId: `user${i % 100}`,
+      authorName: `Test User ${i % 100}`,
+      authorIcon: 'https://example.com/icon.jpg'
     }))
   }
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-    global.fetch = vi.fn()
-    // Clear storage to prevent state restoration
-    sessionStorage.clear()
-    localStorage.clear()
-  })
-
-  it('初期表示で100件、もっと見るで200件、300件と表示される', async () => {
-    const mockData = createMockData(300)
+  it('ジャンル別ランキングは500件まで表示される', () => {
+    const mockData = createMockData(1000)
     
     render(
       <ClientPage 
         initialData={mockData}
         initialGenre="game"
         initialPeriod="24h"
+        popularTags={['アクション', 'RPG', 'シミュレーション']}
       />
     )
-
-    // 最初は100件表示
-    expect(screen.getAllByText(/Test Video/)).toHaveLength(100)
-    expect(screen.getByText('Test Video 1')).toBeInTheDocument()
-    expect(screen.getByText('Test Video 100')).toBeInTheDocument()
-    expect(screen.queryByText('Test Video 101')).not.toBeInTheDocument()
-
-    // もっと見るボタンをクリック（200件表示）
-    const loadMoreButton = await screen.findByText('もっと見る')
-    fireEvent.click(loadMoreButton)
     
-    await waitFor(() => {
-      expect(screen.getAllByText(/Test Video/)).toHaveLength(200)
-      expect(screen.getByText('Test Video 200')).toBeInTheDocument()
-    })
-
-    // もう一度クリック（300件表示）
-    fireEvent.click(screen.getByText('もっと見る'))
+    // 500件が表示されることを確認
+    const items = screen.getAllByText(/Test Video \d+/)
+    expect(items).toHaveLength(500)
     
-    await waitFor(() => {
-      expect(screen.getAllByText(/Test Video/)).toHaveLength(300)
-      expect(screen.getByText('Test Video 300')).toBeInTheDocument()
-    })
+    // 「もっと見る」ボタンが表示されないことを確認
+    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    
+    // 表示件数情報を確認
+    expect(screen.getByText(/500件表示中/)).toBeInTheDocument()
+    expect(screen.getByText(/ジャンル別ランキング: 500件表示/)).toBeInTheDocument()
   })
 
-  it('301位以降はAPIから動的に取得される', async () => {
-    const mockData = createMockData(300)
+  it('ジャンル別ランキングが500件未満の場合も正しく表示される', () => {
+    const mockData = createMockData(250)
     
     render(
       <ClientPage 
         initialData={mockData}
-        initialGenre="game"
-        initialPeriod="24h"
+        initialGenre="entertainment"
+        initialPeriod="hour"
+        popularTags={['音楽', 'ダンス', 'お笑い']}
       />
     )
-
-    // 最初は100件まで表示
-    await waitFor(() => {
-      const items = screen.getAllByTestId('ranking-item')
-      expect(items).toHaveLength(100)
-    })
     
-    // 200件まで表示
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => {
-      const items = screen.getAllByTestId('ranking-item')
-      expect(items).toHaveLength(200)
-    })
+    // 250件すべてが表示されることを確認
+    const items = screen.getAllByText(/Test Video \d+/)
+    expect(items).toHaveLength(250)
     
-    // 300件まで表示
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => {
-      const items = screen.getAllByTestId('ranking-item')
-      expect(items).toHaveLength(300)
-    })
-
-    // 301件目以降のデータをモック
-    ;(global.fetch as any).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        items: createMockData(100).map((item, i) => ({
-          ...item,
-          rank: 301 + i,
-          id: `sm${301 + i}`,
-          title: `Test Video ${301 + i}`
-        })),
-        hasMore: true
-      })
-    })
-
-    // 301件目以降を取得
-    fireEvent.click(screen.getByText('もっと見る'))
+    // 「もっと見る」ボタンが表示されないことを確認
+    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
     
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled()
-      const items = screen.getAllByTestId('ranking-item')
-      expect(items).toHaveLength(400)
-    })
-  })
-
-  it.skip('500件で上限に達し、もっと見るボタンが消える', async () => {
-    const mockData = createMockData(300)
-    
-    // 301-400, 401-500のAPIレスポンスをモック
-    ;(global.fetch as any)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          items: Array.from({ length: 100 }, (_, i) => ({
-            rank: 301 + i,
-            id: `sm${301 + i}`,
-            title: `Test Video ${301 + i}`,
-            thumbURL: 'https://example.com/thumb.jpg',
-            views: 1000,
-            comments: 10,
-            mylists: 5,
-            likes: 20
-          })),
-          hasMore: true
-        })
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          items: Array.from({ length: 100 }, (_, i) => ({
-            rank: 401 + i,
-            id: `sm${401 + i}`,
-            title: `Test Video ${401 + i}`,
-            thumbURL: 'https://example.com/thumb.jpg',
-            views: 1000,
-            comments: 10,
-            mylists: 5,
-            likes: 20
-          })),
-          hasMore: false // 500件で上限なのでfalse
-        })
-      })
-    
-    render(
-      <ClientPage 
-        initialData={mockData}
-        initialGenre="game"
-        initialPeriod="24h"
-      />
-    )
-
-    // 最初は100件表示され、もっと見るボタンがある
-    await waitFor(() => {
-      expect(screen.getByText('Test Video 1')).toBeInTheDocument()
-      expect(screen.getByText('Test Video 100')).toBeInTheDocument()
-      expect(screen.queryByText('Test Video 101')).not.toBeInTheDocument()
-      expect(screen.getByText('もっと見る')).toBeInTheDocument()
-    })
-    
-    // 200件まで表示
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => {
-      expect(screen.getByText('Test Video 200')).toBeInTheDocument()
-      expect(screen.queryByText('Test Video 201')).not.toBeInTheDocument()
-    })
-    
-    // 300件まで表示
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => {
-      expect(screen.getByText('Test Video 300')).toBeInTheDocument()
-      // 300件まで表示した時点では、まだAPIから追加データを取得可能なのでボタンは表示される
-      expect(screen.queryByText('もっと見る')).toBeInTheDocument()
-    })
-
-    // 301件目以降を取得（APIから）
-    fireEvent.click(screen.getByText('もっと見る'))
-    
-    // APIが呼ばれるのを待つ
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/ranking')
-      )
-    })
-    
-    // 400件目が表示されることを確認
-    await waitFor(() => {
-      const allItems = screen.getAllByText(/Test Video/)
-      expect(allItems.length).toBe(400)
-      expect(screen.getByText('Test Video 400')).toBeInTheDocument()
-    }, { timeout: 10000 })
-
-    // 500件まで表示してボタンが消える
-    fireEvent.click(screen.getByText('もっと見る'))
-    await waitFor(() => {
-      expect(screen.getByText('Test Video 500')).toBeInTheDocument()
-      // もっと見るボタンが消える
-      expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
-    }, { timeout: 10000 })
+    // 表示件数情報を確認
+    expect(screen.getByText(/250件表示中/)).toBeInTheDocument()
   })
 })
