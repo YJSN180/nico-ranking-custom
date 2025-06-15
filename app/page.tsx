@@ -52,6 +52,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     openGraph: {
       title,
       description,
+      siteName: 'ニコニコランキング(Re:turn)',
       url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
       images: [{
         url: '/og-image.png',
