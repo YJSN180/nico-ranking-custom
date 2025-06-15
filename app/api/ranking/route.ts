@@ -9,8 +9,6 @@ import type { RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
 
-// Cloudflare KVのみ使用するため、getCacheKey関数は削除
-
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const genre = searchParams.get('genre') || 'all'
@@ -35,28 +33,24 @@ export async function GET(request: NextRequest) {
         try {
           const cfItems = await getTagRanking(genre, period as RankingPeriod, tag)
           if (cfItems && cfItems.length > 0) {
-            // タグ別ランキングは最大300件まで
-            const maxTagItems = 300
-            const items = cfItems.slice(0, maxTagItems)
+            // タグ別ランキングは全件返す（KVに保存されている分すべて）
             const response = NextResponse.json({
-              items: items,
-              hasMore: false,
+              items: cfItems, // 全件返す（239件など）
+              hasMore: false, // タグ別ランキングは常にfalse
               totalCached: cfItems.length
             })
             response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Total-Cached', cfItems.length.toString())
+            response.headers.set('X-API-Version', '2') // バージョン確認用
             return response
           }
         } catch (error) {
           // Cloudflare KV error - silently fallback to dynamic fetch
-          // Cloudflare KVが利用できない場合は動的取得にフォールバック
         }
       }
       
       // キャッシュミス時は動的取得
-      // console.log(`[API] Cache miss for ${cacheKey}, fetching...`)
-      
       // NGフィルタリング後に300件確保（タグ別ランキングの現実的な上限）
       const targetCount = 300
       let allItems: any[] = []
@@ -104,21 +98,20 @@ export async function GET(request: NextRequest) {
         currentPage++
       }
       
-      // タグ別ランキングは300件すべてを返す（ページネーションなし）
+      // タグ別ランキングは全件返す（最大300件）
       const rerankedItems = allItems.map((item, index) => ({
         ...item,
         rank: index + 1
       }))
       
-      // 動的取得の場合はキャッシュなし（Cloudflare KVのみ使用）
-      
       const response = NextResponse.json({
         items: rerankedItems, // 全件返す（最大300件）
-        hasMore: false, // タグ別ランキングはページネーションなし
+        hasMore: false, // タグ別ランキングは常にページネーションなし
         totalCached: rerankedItems.length // 取得した総数
       })
       response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
       response.headers.set('X-Cache-Status', 'MISS')
+      response.headers.set('X-API-Version', '2') // バージョン確認用
       return response
     }
 
@@ -142,11 +135,11 @@ export async function GET(request: NextRequest) {
           response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
           response.headers.set('X-Cache-Status', 'CF-HIT')
           response.headers.set('X-Max-Items', String(maxItems))
+          response.headers.set('X-API-Version', '2') // バージョン確認用
           return response
         }
       } catch (error) {
         // Cloudflare KV error - silently fallback to dynamic fetch
-        // Cloudflare KVが利用できない場合は動的取得にフォールバック
       }
     }
     
@@ -194,6 +187,7 @@ export async function GET(request: NextRequest) {
     response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
     response.headers.set('X-Cache-Status', 'DYNAMIC')
     response.headers.set('X-Max-Items', '500')
+    response.headers.set('X-API-Version', '2') // バージョン確認用
     return response
     
   } catch (error) {
