@@ -1,36 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerNGList, saveServerManualNGList } from '@/lib/ng-list-server'
-import type { NGList } from '@/types/ng-list'
+import { getNGListManual, setNGListManual } from '@/lib/ng-list-server'
 
-// Note: Authentication is handled by middleware.ts for /api/admin/* routes
-// This route will only be accessible if the user has already passed Basic auth
+export async function GET(request: NextRequest) {
+  // Basic authentication check
+  const authHeader = request.headers.get('authorization')
+  const cookie = request.cookies.get('admin-auth')
+  
+  if (!authHeader && !cookie?.value) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-// NGリストを取得
-export async function GET() {
   try {
-    const ngList = await getServerNGList()
+    const ngList = await getNGListManual()
     return NextResponse.json(ngList)
   } catch (error) {
-    console.error('Failed to get NG list:', error)
-    return NextResponse.json({ error: 'Failed to get NG list' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 })
   }
 }
 
-// NGリストを保存
 export async function POST(request: NextRequest) {
+  // Basic authentication check
+  const authHeader = request.headers.get('authorization')
+  const cookie = request.cookies.get('admin-auth')
+  
+  if (!authHeader && !cookie?.value) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
-    const data = await request.json()
-    const manualList: Omit<NGList, 'derivedVideoIds'> = {
-      videoIds: data.videoIds || [],
-      videoTitles: data.videoTitles || [],
-      authorIds: data.authorIds || [],
-      authorNames: data.authorNames || []
-    }
+    const ngList = await request.json()
     
-    await saveServerManualNGList(manualList)
+    // Validate the structure
+    if (!ngList.videoIds || !ngList.authorIds || !ngList.videoTitles || !ngList.authorNames) {
+      return NextResponse.json({ error: 'Invalid NG list format' }, { status: 400 })
+    }
+
+    // Save to Cloudflare KV
+    await setNGListManual(ngList)
+    
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Failed to save NG list:', error)
-    return NextResponse.json({ error: 'Failed to save NG list' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to update NG list' }, { status: 500 })
   }
 }

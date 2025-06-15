@@ -42,13 +42,13 @@ describe('/api/video-stats', () => {
   })
 
   test('動画IDが多すぎる場合は400エラー', async () => {
-    const ids = Array.from({ length: 51 }, (_, i) => `sm${i}`).join(',')
+    const ids = Array.from({ length: 501 }, (_, i) => `sm${i}`).join(',')
     const request = new NextRequest(`http://localhost/api/video-stats?ids=${ids}`)
     const response = await GET(request)
     const data = await response.json()
 
     expect(response.status).toBe(400)
-    expect(data.error).toBe('Too many video IDs (max 50)')
+    expect(data.error).toBe('Too many video IDs (max 500)')
   })
 
   test('空のIDは除外される', async () => {

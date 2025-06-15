@@ -182,12 +182,16 @@ export async function getTagRanking(
   period: '24h' | 'hour',
   tag: string
 ): Promise<any[] | null> {
-  const genreData = await getGenreRanking(genre, period)
+  // 単一キーから全データを取得
+  const allData = await getRankingFromKV()
+  if (!allData || !allData.genres) return null
   
+  // 該当するタグデータを抽出
+  const genreData = allData.genres[genre]?.[period]
   if (!genreData || !genreData.tags || !genreData.tags[tag]) {
     return null
   }
-
+  
   return genreData.tags[tag]
 }
 

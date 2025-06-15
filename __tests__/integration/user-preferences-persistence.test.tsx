@@ -77,8 +77,8 @@ describe('ユーザー設定の永続化', () => {
 
     // localStorageに保存されたことを確認
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'user-preferences',
-      expect.stringContaining('"lastGenre":"game"')
+      'ranking-config',
+      expect.stringContaining('"genre":"game"')
     )
   })
 
@@ -104,8 +104,8 @@ describe('ユーザー設定の永続化', () => {
 
     // localStorageに保存されたことを確認
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'user-preferences',
-      expect.stringContaining('"lastPeriod":"hour"')
+      'ranking-config',
+      expect.stringContaining('"period":"hour"')
     )
   })
 
@@ -127,8 +127,8 @@ describe('ユーザー設定の永続化', () => {
 
     // localStorageに保存されたことを確認
     expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'user-preferences',
-      expect.stringContaining('"lastTag":"ゲーム実況"')
+      'ranking-config',
+      expect.stringContaining('"tag":"ゲーム実況"')
     )
   })
 

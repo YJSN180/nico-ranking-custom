@@ -118,8 +118,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     vi.clearAllMocks()
   })
 
-  it('150位まで表示した後、ブラウザバックで同じ位置に戻る', async () => {
-    const mockData = createMockData(300)
+  it('300位まで表示した状態でブラウザバックで同じ位置に戻る', async () => {
+    const mockData = createMockData(500)
     
     // 初回レンダリング
     const { rerender } = render(
@@ -130,38 +130,33 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       />
     )
 
-    // 最初は100件表示されている
-    expect(screen.getAllByTestId('ranking-item')).toHaveLength(100)
+    // 500件表示されている（ジャンル別ランキングの最大表示数）
+    expect(screen.getAllByTestId('ranking-item')).toHaveLength(500)
 
-    // もっと見るボタンをクリック（150件表示）
-    const loadMoreButton = screen.getByText('もっと見る')
-    fireEvent.click(loadMoreButton)
-    
-    await waitFor(() => {
-      expect(screen.getAllByTestId('ranking-item')).toHaveLength(200)
-    })
-
-    // スクロール位置を設定（150位あたり）
+    // スクロール位置を設定（300位あたり）
     act(() => {
       window.scrollTo(0, 5000)
     })
 
-    // saveRankingStateイベントを発火してスクロール位置を保存
-    act(() => {
-      window.dispatchEvent(new Event('saveRankingState'))
+    // ニコニコ動画へのリンクをクリックしてスクロール位置を保存
+    const niconicoLink = document.createElement('a')
+    niconicoLink.href = 'https://www.nicovideo.jp/watch/sm12345'
+    document.body.appendChild(niconicoLink)
+    
+    // クリックイベントをdocumentレベルでキャプチャさせる
+    await act(async () => {
+      // リンクをクリック（バブリングでdocumentまで伝播）
+      fireEvent.click(niconicoLink)
+      // 少し待機
+      await new Promise(resolve => setTimeout(resolve, 10))
     })
-
+    
     // sessionStorageにスクロール位置が保存されているか確認
     const scrollKey = 'ranking-scroll-all-24h-none'
     const savedScrollPosition = sessionStorage.getItem(scrollKey)
     expect(savedScrollPosition).toBe('5000')
 
-    // URLにshowパラメータを付けて再レンダリング（ブラウザバックを模擬）
-    const nextNav = await import('next/navigation')
-    vi.mocked(nextNav.useSearchParams).mockReturnValue(
-      new URLSearchParams('show=200')
-    )
-    
+    // 再レンダリング（ブラウザバックを模擬）
     rerender(
       <ClientPage 
         initialData={mockData}
@@ -170,28 +165,14 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       />
     )
 
-    // displayCountが復元されて200件表示される
-    await waitFor(() => {
-      expect(screen.getAllByTestId('ranking-item')).toHaveLength(200)
-    })
-
     // スクロール位置が復元される
     await waitFor(() => {
       expect(window.scrollTo).toHaveBeenCalledWith(0, 5000)
     }, { timeout: 1000 })
   })
 
-  it.skip('タグ別ランキングでも位置が正しく復元される', async () => {
-    const mockData = createMockData(100)
-    
-    // タグ別ランキングの追加データをモック
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => createMockData(100).map((item, i) => ({
-        ...item,
-        rank: 101 + i
-      }))
-    })
+  it('タグ別ランキングでも位置が正しく復元される', async () => {
+    const mockData = createMockData(300)
     
     const { rerender } = render(
       <ClientPage 
@@ -202,13 +183,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       />
     )
 
-    // もっと見るボタンをクリック（追加データを読み込み）
-    const loadMoreButton = screen.getByText('もっと見る')
-    fireEvent.click(loadMoreButton)
-    
-    await waitFor(() => {
-      expect(screen.getAllByTestId('ranking-item')).toHaveLength(200)
-    })
+    // 300件表示されている（タグ別ランキングの最大表示数）
+    expect(screen.getAllByTestId('ranking-item')).toHaveLength(300)
 
     // スクロール位置を設定
     act(() => {
@@ -230,9 +206,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       />
     )
 
-    // データとスクロール位置が復元される
+    // スクロール位置が復元される
     await waitFor(() => {
-      expect(screen.getAllByTestId('ranking-item')).toHaveLength(200)
       expect(window.scrollTo).toHaveBeenCalledWith(0, 4000)
     })
   })

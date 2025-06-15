@@ -74,9 +74,9 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
       // Failed to fetch stats for batch - error handled silently
     }
     
-    // レート制限対策
+    // レート制限対策（50ms待機）
     if (i + batchSize < videoIds.length) {
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise(resolve => setTimeout(resolve, 50))
     }
   }
   

@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    // 外部画像の最適化を無効化
-    unoptimized: true,
+    // 画像最適化を有効化
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60 * 60 * 24, // 24時間
+    deviceSizes: [320, 420, 768, 1024, 1200],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
     remotePatterns: [
       {
         protocol: 'https',
@@ -27,7 +30,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com",
+              "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live",
               "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に必要
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
