@@ -16,7 +16,6 @@ export async function GET(request: NextRequest) {
   const genre = searchParams.get('genre') || 'all'
   const period = searchParams.get('period') || '24h'
   const tag = searchParams.get('tag') || undefined
-  const page = parseInt(searchParams.get('page') || '1', 10)
 
   // Validate inputs - period のみチェック（genreはすべて受け入れる）
   const validPeriods = ['24h', 'hour']
