@@ -53,11 +53,25 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
       title,
       description,
       url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      images: [{
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: title,
+        type: 'image/png',
+      }],
     },
     twitter: {
       title,
       description,
       card: 'summary_large_image', // 大きなサムネイル表示
+      images: [{
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: title,
+        type: 'image/png',
+      }],
     },
   }
 }

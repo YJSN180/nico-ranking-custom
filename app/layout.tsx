@@ -22,6 +22,7 @@ export const metadata: Metadata = {
         width: 1200,
         height: 630,
         alt: 'ニコニコランキング(Re:turn)',
+        type: 'image/png',
       }
     ],
     locale: 'ja_JP',
@@ -31,7 +32,13 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'ニコニコランキング(Re:turn)',
     description: 'ニコニコ動画のランキングを今すぐチェック！',
-    images: ['/og-image.png'],
+    images: [{
+      url: '/og-image.png',
+      width: 1200,
+      height: 630,
+      alt: 'ニコニコランキング(Re:turn)',
+      type: 'image/png',
+    }],
     creator: '@nico_rank', // 必要に応じてTwitterアカウントを設定
   },
 }
