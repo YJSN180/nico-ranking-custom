@@ -74,3 +74,9 @@ export interface RankingConfig {
   genre: RankingGenre
   tag?: string // 選択されたタグ（オプション）
 }
+
+// すべてのジャンルの配列（SEO用）
+export const RANKING_GENRES: Array<{ value: RankingGenre; label: string }> = Object.entries(GENRE_LABELS).map(([value, label]) => ({
+  value: value as RankingGenre,
+  label
+}))

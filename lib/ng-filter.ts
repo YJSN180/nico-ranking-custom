@@ -124,11 +124,9 @@ export async function filterRankingItems(items: RankingItem[]): Promise<NGFilter
     return true
   })
   
-  // 順位を詰める
-  const rerankedItems = filteredItems.map((item, index) => ({
-    ...item,
-    rank: index + 1
-  }))
+  // 順位は元のままにしておく（クライアント側で必要に応じて調整）
+  // NGフィルタリング後も元の順位情報を保持することで、正しい順序を維持
+  const rerankedItems = filteredItems
   
   // 非同期で派生NGリストを更新
   if (newDerivedIds.length > 0) {

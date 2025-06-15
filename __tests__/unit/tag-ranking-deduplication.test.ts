@@ -62,7 +62,7 @@ describe('タグ別ランキングの重複排除', () => {
     })
 
     // 実際のcronジョブのロジックを再現
-    const targetCount = 300
+    const targetCount = 500
     const allTagItems: any[] = []
     const seenVideoIds = new Set<string>()
     let tagPage = 1
@@ -98,13 +98,13 @@ describe('タグ別ランキングの重複排除', () => {
     }
   })
 
-  it('300件に到達するまで必要なページ数を取得する', async () => {
+  it('500件に到達するまで必要なページ数を取得する', async () => {
     const mockScrapeRankingPage = vi.mocked(scrapeRankingPage)
     const mockFilterRankingData = vi.mocked(filterRankingData)
     mockFilterRankingData.mockImplementation(async ({ items }) => Promise.resolve({ items, popularTags: [] }))
     
     // ページごとに85件のユニークデータを返す（NGフィルタリング後を想定）
-    for (let page = 1; page <= 4; page++) {
+    for (let page = 1; page <= 6; page++) {
       const startId = (page - 1) * 85 + 1
       mockScrapeRankingPage.mockResolvedValueOnce({
         items: Array.from({ length: 85 }, (_, i) => createMockItem(`video${startId + i}`, page)),
@@ -119,7 +119,7 @@ describe('タグ別ランキングの重複排除', () => {
     })
 
     // 実際のcronジョブのロジックを再現
-    const targetCount = 300
+    const targetCount = 500
     const allTagItems: any[] = []
     const seenVideoIds = new Set<string>()
     let tagPage = 1
@@ -141,12 +141,12 @@ describe('タグ別ランキングの重複排除', () => {
       tagPage++
     }
 
-    // 300件に切り詰める処理を追加（実際のcronジョブと同じ）
+    // 500件に切り詰める処理を追加（実際のcronジョブと同じ）
     const finalItems = allTagItems.slice(0, targetCount)
 
-    // 4ページ目で300件を超えるはず（85 * 4 = 340）
-    expect(tagPage).toBe(5) // 4ページ処理後、5になっている
-    expect(finalItems.length).toBe(300) // 300件に切り詰められている
+    // 6ページ目で500件を超えるはず（85 * 6 = 510）
+    expect(tagPage).toBe(7) // 6ページ処理後、7になっている
+    expect(finalItems.length).toBe(500) // 500件に切り詰められている
   })
 
   it('最大ページ数に達した場合は処理を停止する', async () => {
@@ -168,7 +168,7 @@ describe('タグ別ランキングの重複排除', () => {
     })
 
     // 実際のcronジョブのロジックを再現
-    const targetCount = 300
+    const targetCount = 500
     const allTagItems: any[] = []
     const seenVideoIds = new Set<string>()
     let tagPage = 1

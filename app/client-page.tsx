@@ -30,10 +30,26 @@ export default function ClientPage({
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  const [config, setConfig] = useState<RankingConfig>({
-    period: initialPeriod as '24h' | 'hour',
-    genre: initialGenre as RankingGenre,
-    tag: initialTag
+  const [config, setConfig] = useState<RankingConfig>(() => {
+    // ローカルストレージから前回の設定を復元
+    const savedConfig = localStorage.getItem('ranking-config')
+    if (savedConfig) {
+      try {
+        const parsed = JSON.parse(savedConfig)
+        return {
+          period: parsed.period || initialPeriod as '24h' | 'hour',
+          genre: parsed.genre || initialGenre as RankingGenre,
+          tag: parsed.tag || initialTag
+        }
+      } catch {
+        // パースエラーの場合はデフォルト値を使用
+      }
+    }
+    return {
+      period: initialPeriod as '24h' | 'hour',
+      genre: initialGenre as RankingGenre,
+      tag: initialTag
+    }
   })
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
@@ -62,6 +78,10 @@ export default function ClientPage({
   const [loadingMore, setLoadingMore] = useState(false) // 追加読み込み中か
   const [isRestoring, setIsRestoring] = useState(false) // 復元中か
   const [restoreProgress, setRestoreProgress] = useState(0) // 復元進捗（0-100）
+  
+  // ユーザーNGフィルタ後の順位管理
+  const [totalDisplayedCount, setTotalDisplayedCount] = useState(0) // これまでに表示した動画の総数
+  const [cumulativeFilteredCount, setCumulativeFilteredCount] = useState(0) // 累積でフィルタされた動画数
   
   // スクロール復元用のフラグ
   const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
@@ -247,7 +267,9 @@ export default function ClientPage({
     return () => clearInterval(interval)
   }, [cleanupOldStorage])
 
-  // ブラウザバック時などの自動復元
+  // ブラウザバック時などの自動復元（削除）
+  // この処理は不要なので削除
+  /*
   useEffect(() => {
     const restoreToPosition = async (targetCount: number) => {
       // すでに必要なデータがある場合はスキップ
@@ -333,8 +355,20 @@ export default function ClientPage({
       restoreToPosition(targetCount)
     }
   }, [initialDisplayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+  */
 
-  // 外部サイトから戻った時の状態復元
+  // 設定が変更されたときにlocalStorageに保存
+  useEffect(() => {
+    try {
+      localStorage.setItem('ranking-config', JSON.stringify(config))
+    } catch (error) {
+      // Storage quota exceeded - gracefully degrade
+      console.warn('Could not save ranking config to localStorage:', error)
+    }
+  }, [config])
+  
+  // 外部サイトから戻った時の状態復元（削除）
+  /*
   useEffect(() => {
     const storageKey = `ranking-state-${config.genre}-${config.period}-${config.tag || 'none'}`
     const savedState = localStorage.getItem(storageKey)
@@ -369,6 +403,7 @@ export default function ClientPage({
       }
     }
   }, [config.genre, config.period, config.tag])
+  */
   
   // initialDataが変更されたときに状態をリセット
   // ただし、localStorage/sessionStorageから復元したデータがある場合はスキップ
@@ -379,7 +414,7 @@ export default function ClientPage({
     
     if (!hasRestoredData) {
       // URLからの初期表示件数を保持する
-      setDisplayCount(Math.min(Math.max(100, initialDisplayCount), Math.min(500, initialData.length)))
+      setDisplayCount(Math.min(Math.max(100, initialDisplayCount), Math.min(1000, initialData.length)))
       setRankingData(initialData)
       setCurrentPage(1)
       // タグ別ランキングの場合、初期データが100件ちょうどなら潜在的にもっとあるかもしれない
@@ -420,6 +455,9 @@ export default function ClientPage({
       setCurrentPage(1) // ページ番号をリセット
       setHasMore(true) // 追加読み込み可能状態にリセット
       setShouldRestoreScroll(false) // 新しいデータ取得時はスクロール復元しない
+      // 累積数もリセット
+      setTotalDisplayedCount(0)
+      setCumulativeFilteredCount(0)
       
       // ジャンル/タグ切り替え時にストレージをクリーンアップ
       cleanupOldStorage()
@@ -448,8 +486,18 @@ export default function ClientPage({
         if (Array.isArray(data)) {
           setRankingData(data)
           // 配列形式の場合、人気タグは別のuseEffectで動的に取得される
+          // 初期データのフィルタ数を計算
+          const filtered = filterItems(data)
+          const filteredCount = data.length - filtered.length
+          setCumulativeFilteredCount(filteredCount)
+          setTotalDisplayedCount(filtered.length)
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
+          // 初期データのフィルタ数を計算
+          const filtered = filterItems(data.items)
+          const filteredCount = data.items.length - filtered.length
+          setCumulativeFilteredCount(filteredCount)
+          setTotalDisplayedCount(filtered.length)
           // APIレスポンスに人気タグが含まれている場合は更新
           // 空配列の場合は更新せず、現在の人気タグを維持
           if ('popularTags' in data && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
@@ -516,6 +564,14 @@ export default function ClientPage({
       router.push(newUrl, { scroll: false })
     }
   }, [config, previousGenre, updatePreferences, router, currentPopularTags, cleanupOldStorage])
+
+  // 初期データのフィルタ数を計算して累積数を初期化
+  useEffect(() => {
+    const filteredInitial = filterItems(initialData)
+    const filteredCount = initialData.length - filteredInitial.length
+    setCumulativeFilteredCount(filteredCount)
+    setTotalDisplayedCount(filteredInitial.length)
+  }, [initialData, filterItems]) // 初期データまたはフィルタ関数が変わったとき
 
   // ジャンルやperiod変更時に人気タグを動的に更新
   useEffect(() => {
@@ -640,6 +696,29 @@ export default function ClientPage({
     
     // ブラウザの戻るボタン検知
     const handlePopState = () => {
+      // ニコニコ動画からの戻りでない場合は何もしない
+      const isFromNiconico = document.referrer && 
+        (document.referrer.includes('nicovideo.jp') || document.referrer.includes('niconico.jp'))
+      
+      if (!isFromNiconico) {
+        return
+      }
+      
+      // ニコニコ動画から戻った場合のみ、保存されたスクロール位置を復元
+      const storageKey = `ranking-scroll-${config.genre}-${config.period}-${config.tag || 'none'}`
+      const savedScrollPosition = sessionStorage.getItem(storageKey)
+      
+      if (savedScrollPosition) {
+        const scrollPosition = parseInt(savedScrollPosition, 10)
+        // スクロール位置を復元
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollPosition)
+          sessionStorage.removeItem(storageKey)
+        })
+      }
+      
+      /*
+      // 以下の自動復元処理は削除
       const params = new URLSearchParams(window.location.search)
       const showCount = parseInt(params.get('show') || '100', 10)
       
@@ -761,6 +840,7 @@ export default function ClientPage({
         // URLにshowパラメータがない場合（通常のページ遷移）、100件表示に戻す
         setDisplayCount(100)
       }
+      */
     }
     
     window.addEventListener('beforeunload', handleBeforeUnload)
@@ -777,10 +857,10 @@ export default function ClientPage({
         window.history.scrollRestoration = 'auto'
       }
     }
-  }, [saveScrollPosition, displayCount, rankingData.length, hasMore, config, currentPage, isRestoring])
+  }, [saveScrollPosition, config])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
-  const MAX_RANKING_ITEMS = 500 // すべてのランキングで500件まで
+  const MAX_RANKING_ITEMS = 1000 // すべてのランキングで1000件まで
   
   const loadMoreItems = async () => {
     if (loadingMore || !hasMore) return
@@ -799,7 +879,7 @@ export default function ClientPage({
         // タグ別: currentPageを使用
         pageNumber = currentPage + 1
       } else {
-        // ジャンル別: データ長から計算（300件まではキャッシュ、301件目からpage=4）
+        // ジャンル別: データ長から計算（500件まではキャッシュ、501件目からpage=6）
         pageNumber = Math.floor(rankingData.length / 100) + 1
       }
       
@@ -837,33 +917,47 @@ export default function ClientPage({
       }
       
       if (items.length > 0) {
-        // 新しいデータをそのまま追加（順位はNGフィルタ後に再計算される）
-        const newRankingData = [...rankingData, ...items]
-        setRankingData(newRankingData)
+        // FIX: 重複を防ぐため、既存のIDセットを作成
+        const existingIds = new Set(rankingData.map(item => item.id))
         
-        // currentPageはタグ別の場合のみ更新
-        if (config.tag) {
-          setCurrentPage(currentPage + 1)
-        }
+        // 重複していない新しいアイテムのみを追加
+        const newItems = items.filter(item => !existingIds.has(item.id))
         
-        // 500件に達したらhasMoreをfalseに
-        if (newRankingData.length >= MAX_RANKING_ITEMS) {
-          setHasMore(false)
+        if (newItems.length > 0) {
+          // 新しいデータを追加してソート
+          const combinedData = [...rankingData, ...newItems]
+          const sortedData = combinedData.sort((a, b) => a.rank - b.rank)
+          setRankingData(sortedData)
+          
+          // currentPageはタグ別の場合のみ更新
+          if (config.tag) {
+            setCurrentPage(currentPage + 1)
+          }
+          
+          // 最大件数チェック
+          if (sortedData.length >= MAX_RANKING_ITEMS) {
+            setHasMore(false)
+          } else {
+            setHasMore(hasMoreData)
+          }
+          
+          // 新しく追加されたデータも表示するようdisplayCountを更新
+          // シンプルに100件増やす（NGフィルタは表示時に適用されるので考慮不要）
+          const newDisplayCount = Math.min(displayCount + 100, sortedData.length, MAX_RANKING_ITEMS)
+          setDisplayCount(newDisplayCount)
+          
+          // 新しいページのフィルタ数を計算して累積数を更新
+          const filteredNewItems = filterItems(newItems)
+          const newFilteredCount = newItems.length - filteredNewItems.length
+          setCumulativeFilteredCount(prev => prev + newFilteredCount)
+          setTotalDisplayedCount(prev => prev + filteredNewItems.length)
+          
+          // URLを更新
+          updateURL(newDisplayCount)
         } else {
-          setHasMore(hasMoreData)
+          // すべて重複していた場合は、それ以上データがない
+          setHasMore(false)
         }
-        // 新しく追加されたデータも表示するようdisplayCountを更新
-        // NGフィルタ適用後の実際の追加件数を計算
-        const prevFilteredCount = filterItems(rankingData).length
-        const newFilteredCount = filterItems(newRankingData).length
-        const actualAddedCount = newFilteredCount - prevFilteredCount
-        const newDisplayCount = Math.min(displayCount + actualAddedCount, MAX_RANKING_ITEMS)
-        setDisplayCount(newDisplayCount)
-        
-        // URLを更新
-        updateURL(newDisplayCount)
-        
-        // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
       } else {
         // データがない場合は、それ以上データがないだけなのでhasMoreをfalseに
         setHasMore(false)
@@ -885,14 +979,30 @@ export default function ClientPage({
   // カスタムNGフィルタを適用してから表示するアイテムを取得
   const filteredItems = filterItems(realtimeItems)
   
-  // フィルタリング後に順位を振り直す（メモ化）
-  const rerankedItems = React.useMemo(() => 
-    filteredItems.map((item, index) => ({
+  // フィルタリング後の順位調整
+  // ユーザーのカスタムNGフィルタ適用後の順位処理
+  const rerankedItems = React.useMemo(() => {
+    // 元のランク番号でソート（これは正しい順序を保持するために重要）
+    const sorted = [...filteredItems].sort((a, b) => a.rank - b.rank)
+    
+    // 現在のページに表示されているアイテムの開始順位を計算
+    // displayCountから逆算して、現在表示中のデータの開始位置を特定
+    const currentPageStartIndex = Math.max(0, displayCount - 100)
+    const itemsBeforeCurrentPage = sorted.slice(0, currentPageStartIndex)
+    const currentPageItems = sorted.slice(currentPageStartIndex)
+    
+    // 現在のページより前に表示されたアイテム数を計算
+    const previousPagesDisplayedCount = itemsBeforeCurrentPage.length
+    
+    // 元の順位を保持しつつ、表示用の連続順位も提供
+    return sorted.map((item, index) => ({
       ...item,
+      // 元の rank を originalRank として保存
+      originalRank: item.rank,
+      // 表示用の連続順位（累積表示数を考慮）
       rank: index + 1
-    })),
-    [filteredItems]
-  )
+    }))
+  }, [filteredItems, displayCount])
   
   // 表示アイテムの計算もメモ化
   const displayItems = React.useMemo(() => 
@@ -1039,13 +1149,13 @@ export default function ClientPage({
               <button
                 onClick={() => {
                   if (displayCount < rerankedItems.length) {
-                    // 既存データから追加表示（ジャンル別ランキングの1-300位）
+                    // 既存データから追加表示（ジャンル別ランキングの1-500位）
                     const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length, MAX_RANKING_ITEMS)
                     setDisplayCount(newDisplayCount)
                     updateURL(newDisplayCount)
                     // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
                   } else if (hasMore) {
-                    // 新規データを読み込み（タグ別 or ジャンル別301位以降）
+                    // 新規データを読み込み（タグ別 or ジャンル別501位以降）
                     loadMoreItems()
                   }
                 }}

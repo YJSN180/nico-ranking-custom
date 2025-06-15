@@ -81,7 +81,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     )
   }
 
-  // 総合ランキングでも人気タグが集計されて表示される
+  // 総合ジャンルの場合は人気タグセクションを表示しない
+  if (config.genre === 'all') {
+    return null
+  }
   
   // 常に表示（「すべて」タグを含める）
   return (

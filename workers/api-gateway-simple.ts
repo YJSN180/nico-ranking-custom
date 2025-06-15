@@ -18,6 +18,7 @@ export interface Env {
   PREVIEW_URL?: string
   VERCEL_PROTECTION_BYPASS_SECRET?: string
   WORKER_AUTH_KEY?: string
+  // PREVIEW_PROTECTION_KEY?: string  // 無効化
 }
 
 // レート制限関数は./rate-limiterからインポート
@@ -66,6 +67,7 @@ export default {
             hasRankingData: !!env.RANKING_DATA,
             hasWorkerAuthKey: !!env.WORKER_AUTH_KEY,
             hasVercelBypassSecret: !!env.VERCEL_PROTECTION_BYPASS_SECRET
+            // hasPreviewProtectionKey: !!env.PREVIEW_PROTECTION_KEY  // 無効化
           },
           request: {
             url: request.url,
@@ -74,7 +76,9 @@ export default {
           },
           authenticationStatus: {
             workerAuthConfigured: !!env.WORKER_AUTH_KEY,
-            vercelBypassConfigured: !!env.VERCEL_PROTECTION_BYPASS_SECRET
+            vercelBypassConfigured: !!env.VERCEL_PROTECTION_BYPASS_SECRET,
+            // previewProtectionConfigured: !!env.PREVIEW_PROTECTION_KEY,  // 無効化
+            isPreviewMode: env.USE_PREVIEW === 'true'
           }
         }, null, 2), {
           headers: { 'Content-Type': 'application/json' }
@@ -105,7 +109,13 @@ export default {
         console.warn('WORKER_AUTH_KEY is not configured')
       }
       
-      // Vercel Protection Bypassヘッダーを追加
+      // Preview Protection用のヘッダーを追加（プレビュー環境の場合）
+      // 無効化 - Vercelのスタンダードプロテクションに依存
+      // if (env.USE_PREVIEW === 'true' && env.PREVIEW_PROTECTION_KEY) {
+      //   proxyHeaders.set('X-Preview-Protection', env.PREVIEW_PROTECTION_KEY)
+      // }
+      
+      // Vercel Protection Bypassヘッダーを追加（標準のVercel認証）
       if (env.VERCEL_PROTECTION_BYPASS_SECRET) {
         proxyHeaders.set('x-vercel-protection-bypass', env.VERCEL_PROTECTION_BYPASS_SECRET)
         proxyHeaders.set('x-vercel-set-bypass-cookie', 'true')
@@ -124,6 +134,10 @@ export default {
       newHeaders.set('X-XSS-Protection', '1; mode=block')
       newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
       newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+      // COEP を削除 - ニコニコ動画のサムネイル画像がCORSヘッダーを提供していないため
+      // newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
+      newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+      newHeaders.set('X-DNS-Prefetch-Control', 'on')
       
       // Content Security Policy (CSP) ヘッダーを追加（unsafe-evalを削除）
       const cspDirectives = [

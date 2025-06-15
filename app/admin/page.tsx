@@ -155,7 +155,6 @@ export default function AdminPage() {
       )}
 
       <div style={{ marginTop: '40px', fontSize: '14px', color: '#6c757d' }}>
-        <p>※ 管理者キーのデフォルト: update-ranking-2025</p>
         <p>※ Vercelのcron設定により1時間ごとに自動更新されます</p>
       </div>
     </main>

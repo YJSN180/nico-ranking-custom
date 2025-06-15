@@ -1,13 +1,8 @@
 # =============================================================================
-# Cloudflare Workers Configuration - API Gateway Only
+# Cloudflare Workers Configuration Template
 # =============================================================================
-# IMPORTANT: This project uses a hybrid deployment strategy:
-# - Main Next.js application: Deployed to Vercel
-# - API Gateway & Rate Limiting: Deployed to Cloudflare Workers (this config)
-# - Storage: Cloudflare KV
-# 
-# This wrangler.toml is ONLY for deploying the Workers API Gateway.
-# The main application should NOT be deployed to Cloudflare Pages.
+# IMPORTANT: Copy this file to wrangler.toml and fill in your values
+# DO NOT commit wrangler.toml to version control!
 # =============================================================================
 
 name = "nico-ranking-api-gateway"
@@ -18,31 +13,31 @@ workers_dev = true
 # Environment variables
 [vars]
 NEXT_APP_URL = "YOUR_VERCEL_APP_URL"
-USE_PREVIEW = "false"  # "true" でプレビュー環境を使用
+USE_PREVIEW = "false"
 # WORKER_AUTH_KEY should be set as a secret using: wrangler secret put WORKER_AUTH_KEY
 
-# Account settings
+# Account settings - Get from Cloudflare dashboard
 account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
 
-# KV Namespaces
+# KV Namespaces - Create in Cloudflare dashboard
 [[kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "YOUR_RATE_LIMIT_KV_NAMESPACE_ID"
-preview_id = "YOUR_RATE_LIMIT_KV_NAMESPACE_ID"
+id = "YOUR_RATE_LIMIT_KV_ID"
+preview_id = "YOUR_RATE_LIMIT_KV_ID"
 
 [[kv_namespaces]]
-binding = "RANKING_DATA"
-id = "YOUR_RANKING_DATA_KV_NAMESPACE_ID"
-preview_id = "YOUR_RANKING_DATA_KV_NAMESPACE_ID"
+binding = "RANKING_KV"
+id = "YOUR_RANKING_KV_ID"
+preview_id = "YOUR_RANKING_KV_ID"
 
-# Routes
+# Routes - Update with your domain
 [[routes]]
-pattern = "nico-rank.com/*"
-zone_name = "nico-rank.com"
+pattern = "your-domain.com/*"
+zone_name = "your-domain.com"
 
 [[routes]]
-pattern = "www.nico-rank.com/*"
-zone_name = "nico-rank.com"
+pattern = "www.your-domain.com/*"
+zone_name = "your-domain.com"
 
 # Development settings
 [dev]
@@ -54,30 +49,43 @@ ip = "0.0.0.0"
 [build]
 command = ""
 
-# Performance settings
-# [limits]
-# cpu_ms = 50  # CPU limits require paid plan
-# memory_mb = 128
-
-# Compatibility settings
-# compatibility_flags = ["nodejs_compat"]
-
-# Preview environment for current branch
+# Preview environment
 [env.preview]
 name = "nico-ranking-api-gateway-preview"
 
 [env.preview.vars]
-NEXT_APP_URL = "YOUR_VERCEL_PREVIEW_URL"
-# WORKER_AUTH_KEY should be set as a secret using: wrangler secret put WORKER_AUTH_KEY
+NEXT_APP_URL = "YOUR_PREVIEW_VERCEL_URL"
 
 [[env.preview.routes]]
-pattern = "preview.nico-rank.com/*"
-zone_name = "nico-rank.com"
+pattern = "preview.your-domain.com/*"
+zone_name = "your-domain.com"
 
 [[env.preview.kv_namespaces]]
 binding = "RATE_LIMIT"
-id = "YOUR_RATE_LIMIT_KV_NAMESPACE_ID"
+id = "YOUR_RATE_LIMIT_KV_ID"
 
 [[env.preview.kv_namespaces]]
-binding = "RANKING_DATA"
-id = "YOUR_RANKING_DATA_KV_NAMESPACE_ID"
+binding = "RANKING_KV"
+id = "YOUR_RANKING_KV_ID"
+
+# =============================================================================
+# Cron Worker Configuration (Optional)
+# =============================================================================
+
+[env.cron]
+name = "nico-ranking-cron"
+main = "workers/cron-ranking-fetcher.ts"
+
+[[env.cron.triggers]]
+crons = ["*/10 * * * *"]
+
+[[env.cron.kv_namespaces]]
+binding = "RANKING_KV"
+id = "YOUR_RANKING_KV_ID"
+
+[[env.cron.kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "YOUR_RATE_LIMIT_KV_ID"
+
+[env.cron.vars]
+# CRON_SECRET should be set as a secret

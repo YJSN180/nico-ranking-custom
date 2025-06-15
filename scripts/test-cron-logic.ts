@@ -8,11 +8,11 @@ async function testCronLogic() {
   
   const genre = 'other'
   const period = 'hour' as const
-  const targetCount = 300
+  const targetCount = 500
   const allItems: RankingItem[] = []
   let popularTags: string[] = []
   let page = 1
-  const maxPages = 5
+  const maxPages = 7
   
   console.log(`目標: ${targetCount}件（NGフィルタリング後）\n`)
   
