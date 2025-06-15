@@ -79,6 +79,10 @@ export default function ClientPage({
   const [isRestoring, setIsRestoring] = useState(false) // 復元中か
   const [restoreProgress, setRestoreProgress] = useState(0) // 復元進捗（0-100）
   
+  // ユーザーNGフィルタ後の順位管理
+  const [totalDisplayedCount, setTotalDisplayedCount] = useState(0) // これまでに表示した動画の総数
+  const [cumulativeFilteredCount, setCumulativeFilteredCount] = useState(0) // 累積でフィルタされた動画数
+  
   // スクロール復元用のフラグ
   const [shouldRestoreScroll, setShouldRestoreScroll] = useState(false)
   const scrollPositionRef = useRef<number>(0)
@@ -451,6 +455,9 @@ export default function ClientPage({
       setCurrentPage(1) // ページ番号をリセット
       setHasMore(true) // 追加読み込み可能状態にリセット
       setShouldRestoreScroll(false) // 新しいデータ取得時はスクロール復元しない
+      // 累積数もリセット
+      setTotalDisplayedCount(0)
+      setCumulativeFilteredCount(0)
       
       // ジャンル/タグ切り替え時にストレージをクリーンアップ
       cleanupOldStorage()
@@ -479,8 +486,18 @@ export default function ClientPage({
         if (Array.isArray(data)) {
           setRankingData(data)
           // 配列形式の場合、人気タグは別のuseEffectで動的に取得される
+          // 初期データのフィルタ数を計算
+          const filtered = filterItems(data)
+          const filteredCount = data.length - filtered.length
+          setCumulativeFilteredCount(filteredCount)
+          setTotalDisplayedCount(filtered.length)
         } else if (data && typeof data === 'object' && 'items' in data) {
           setRankingData(data.items)
+          // 初期データのフィルタ数を計算
+          const filtered = filterItems(data.items)
+          const filteredCount = data.items.length - filtered.length
+          setCumulativeFilteredCount(filteredCount)
+          setTotalDisplayedCount(filtered.length)
           // APIレスポンスに人気タグが含まれている場合は更新
           // 空配列の場合は更新せず、現在の人気タグを維持
           if ('popularTags' in data && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
@@ -547,6 +564,14 @@ export default function ClientPage({
       router.push(newUrl, { scroll: false })
     }
   }, [config, previousGenre, updatePreferences, router, currentPopularTags, cleanupOldStorage])
+
+  // 初期データのフィルタ数を計算して累積数を初期化
+  useEffect(() => {
+    const filteredInitial = filterItems(initialData)
+    const filteredCount = initialData.length - filteredInitial.length
+    setCumulativeFilteredCount(filteredCount)
+    setTotalDisplayedCount(filteredInitial.length)
+  }, [initialData, filterItems]) // 初期データまたはフィルタ関数が変わったとき
 
   // ジャンルやperiod変更時に人気タグを動的に更新
   useEffect(() => {
@@ -921,6 +946,12 @@ export default function ClientPage({
           const newDisplayCount = Math.min(displayCount + 100, sortedData.length, MAX_RANKING_ITEMS)
           setDisplayCount(newDisplayCount)
           
+          // 新しいページのフィルタ数を計算して累積数を更新
+          const filteredNewItems = filterItems(newItems)
+          const newFilteredCount = newItems.length - filteredNewItems.length
+          setCumulativeFilteredCount(prev => prev + newFilteredCount)
+          setTotalDisplayedCount(prev => prev + filteredNewItems.length)
+          
           // URLを更新
           updateURL(newDisplayCount)
         } else {
@@ -954,16 +985,24 @@ export default function ClientPage({
     // 元のランク番号でソート（これは正しい順序を保持するために重要）
     const sorted = [...filteredItems].sort((a, b) => a.rank - b.rank)
     
+    // 現在のページに表示されているアイテムの開始順位を計算
+    // displayCountから逆算して、現在表示中のデータの開始位置を特定
+    const currentPageStartIndex = Math.max(0, displayCount - 100)
+    const itemsBeforeCurrentPage = sorted.slice(0, currentPageStartIndex)
+    const currentPageItems = sorted.slice(currentPageStartIndex)
+    
+    // 現在のページより前に表示されたアイテム数を計算
+    const previousPagesDisplayedCount = itemsBeforeCurrentPage.length
+    
     // 元の順位を保持しつつ、表示用の連続順位も提供
-    // 原則として元の順位を尊重し、フィルタされた項目があっても順序は保つ
     return sorted.map((item, index) => ({
       ...item,
       // 元の rank を originalRank として保存
       originalRank: item.rank,
-      // 表示用の連続順位（1, 2, 3, ...）
+      // 表示用の連続順位（累積表示数を考慮）
       rank: index + 1
     }))
-  }, [filteredItems])
+  }, [filteredItems, displayCount])
   
   // 表示アイテムの計算もメモ化
   const displayItems = React.useMemo(() => 
