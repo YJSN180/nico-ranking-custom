@@ -98,8 +98,9 @@ export async function GET(request: NextRequest) {
         currentPage++
       }
       
-      // タグ別ランキングは全件返す（最大300件）
-      const rerankedItems = allItems.map((item, index) => ({
+      // タグ別ランキングは最大300件まで
+      const limitedItems = allItems.slice(0, targetCount)
+      const rerankedItems = limitedItems.map((item, index) => ({
         ...item,
         rank: index + 1
       }))

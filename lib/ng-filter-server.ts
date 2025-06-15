@@ -75,13 +75,19 @@ export async function filterRankingDataServer(data: {
   items: RankingItem[]
   popularTags?: string[]
 }): Promise<{
-  items: RankingItem[]
-  popularTags?: string[]
+  filteredData: {
+    items: RankingItem[]
+    popularTags?: string[]
+  }
+  newDerivedIds: string[]
 }> {
-  const { filteredItems } = await filterRankingItemsServer(data.items)
+  const { filteredItems, newDerivedIds } = await filterRankingItemsServer(data.items)
   
   return {
-    items: filteredItems,
-    popularTags: data.popularTags
+    filteredData: {
+      items: filteredItems,
+      popularTags: data.popularTags
+    },
+    newDerivedIds
   }
 }

@@ -190,7 +190,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
                   registeredAt: item.registeredAt
                 })).filter((item: any) => item.id && item.title)
                 
-                const { items: filteredTagItems } = await filterRankingData({ items: convertedTagItems })
+                const { filteredData: { items: filteredTagItems } } = await filterRankingDataServer({ items: convertedTagItems })
                 
                 // 重複を除外しながら追加
                 for (const item of filteredTagItems) {

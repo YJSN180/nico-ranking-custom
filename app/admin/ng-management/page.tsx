@@ -18,7 +18,7 @@ interface DerivedNGList {
 }
 
 export default function NGManagementPage() {
-  const { theme } = useTheme()
+  const theme = useTheme()
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [manualList, setManualList] = useState<NGList>({
     videoIds: [],
@@ -235,7 +235,7 @@ export default function NGManagementPage() {
                    '投稿者名'} ({items.length}件)
                 </h3>
                 <div className={styles.itemList}>
-                  {items.map((item) => (
+                  {items.map((item: string) => (
                     <div key={`${key}-${item}`} className={styles.item}>
                       <input
                         type="checkbox"

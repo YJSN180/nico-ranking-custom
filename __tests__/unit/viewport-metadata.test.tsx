@@ -31,6 +31,6 @@ describe('Viewport Metadata', () => {
     const { metadata } = await import('@/app/layout')
     
     expect(metadata.title).toBe('ニコニコランキング(Re:turn)')
-    expect(metadata.description).toBe('ニコニコ動画のランキングサイト - 24時間・毎時ランキングを表示')
+    expect(metadata.description).toBe('ニコニコ動画のランキングを今すぐチェック！')
   })
 })

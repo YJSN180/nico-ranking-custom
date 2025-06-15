@@ -66,7 +66,7 @@ describe('Ranking API Integration', () => {
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe('application/json')
     expect(response.headers.get('Cache-Control')).toBe(
-      'public, s-maxage=30, stale-while-revalidate=60'
+      'public, s-maxage=300, stale-while-revalidate=600'
     )
 
     const data = await response.json()

@@ -24,6 +24,16 @@ vi.mock('@/lib/popular-tags', () => ({
   })
 }))
 
+// popular-tags-clientのモック
+vi.mock('@/lib/popular-tags-client', () => ({
+  getPopularTagsClient: vi.fn(async (genre: string) => {
+    if (genre === 'game') return ['ゲーム', '実況プレイ動画', 'VOICEROID実況プレイ']
+    if (genre === 'entertainment') return ['エンターテイメント', '踊ってみた', '歌ってみた']
+    if (genre === 'other') return ['その他', 'MMD', 'MikuMikuDance']
+    return []
+  })
+}))
+
 // useRealtimeStatsのモック
 vi.mock('@/hooks/use-realtime-stats', () => ({
   useRealtimeStats: (data: any[]) => ({
