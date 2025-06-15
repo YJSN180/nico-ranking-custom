@@ -9,7 +9,7 @@ import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
-import { getPopularTags } from '@/lib/popular-tags'
+import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -100,7 +100,7 @@ export default function ClientPage({
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
     if (!config.tag && config.genre !== 'all' && currentPopularTags.length === 0) {
-      getPopularTags(config.genre as any, config.period as '24h' | 'hour')
+      getPopularTagsClient(config.genre, config.period)
         .then(tags => {
           if (tags && tags.length > 0) {
             setCurrentPopularTags(tags)
@@ -111,6 +111,7 @@ export default function ClientPage({
           // エラー時は何もしない
         })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 初回のみ実行
   
   // リアルタイム統計更新を使用（3分ごとに自動更新）
@@ -221,7 +222,7 @@ export default function ClientPage({
           } else {
             // APIから人気タグが返ってこなかった場合、動的に取得
             try {
-              const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period)
               if (tags && tags.length > 0) {
                 setCurrentPopularTags(tags)
                 savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
@@ -245,11 +246,11 @@ export default function ClientPage({
         } else if (newConfig.genre === 'all') {
           // allジャンルの場合のみ空配列
           setCurrentPopularTags([])
-        } else if (newConfig.tag && newConfig.genre !== 'all') {
-          // タグ指定時でも人気タグが空の場合は取得を試みる
+        } else if (newConfig.tag) {
+          // タグ指定時でも人気タグが空の場合は取得を試みる（allジャンルは上で処理済み）
           if (currentPopularTags.length === 0) {
             try {
-              const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period)
               if (tags && tags.length > 0) {
                 setCurrentPopularTags(tags)
                 savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
@@ -279,7 +280,7 @@ export default function ClientPage({
           // タグ指定の有無に関わらず、人気タグが空の場合は取得
           if (currentPopularTags.length === 0) {
             try {
-              const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period)
               if (tags && tags.length > 0) {
                 setCurrentPopularTags(tags)
                 savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
@@ -298,6 +299,7 @@ export default function ClientPage({
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, router, updatePreferences, savePopularTagsToCache])
   
   // フィルタリングと順位再割り当て

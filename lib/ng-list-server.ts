@@ -18,7 +18,7 @@ export async function getServerNGList(): Promise<NGList> {
       derivedVideoIds: derived || []
     }
   } catch (error) {
-    console.error('Failed to get NG list from KV:', error)
+    // Failed to get NG list from KV - returning empty list
     return {
       videoIds: [],
       videoTitles: [],
@@ -34,7 +34,7 @@ export async function saveServerManualNGList(ngList: Omit<NGList, 'derivedVideoI
   try {
     await kv.set('ng-list-manual', ngList)
   } catch (error) {
-    console.error('Failed to save NG list to KV:', error)
+    // Failed to save NG list to KV
     throw error
   }
 }
@@ -48,7 +48,7 @@ export async function addToServerDerivedNGList(videoIds: string[]): Promise<void
     const newSet = new Set([...current, ...videoIds])
     await kv.set('ng-list-derived', Array.from(newSet))
   } catch (error) {
-    console.error('Failed to update derived NG list:', error)
+    // Failed to update derived NG list
     throw error
   }
 }
