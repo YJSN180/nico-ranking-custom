@@ -96,6 +96,26 @@ export default {
       
       const targetUrl = `${baseUrl}${url.pathname}${url.search}`
       
+      // Cloudflare Workers Cache APIを使用
+      const cache = caches.default
+      const cacheKey = new Request(targetUrl, request)
+      
+      // キャッシュをチェック（API rankingのみ）
+      let response: Response | undefined
+      if (url.pathname.startsWith('/api/ranking')) {
+        response = await cache.match(cacheKey)
+        if (response) {
+          // キャッシュヒット
+          const newHeaders = new Headers(response.headers)
+          newHeaders.set('X-CF-Cache', 'HIT')
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: newHeaders
+          })
+        }
+      }
+      
       // 認証ヘッダーを追加してプロキシ
       const proxyHeaders = new Headers(request.headers)
       // ホストヘッダーを正しく設定
@@ -121,11 +141,17 @@ export default {
         proxyHeaders.set('x-vercel-set-bypass-cookie', 'true')
       }
       
-      const response = await fetch(targetUrl, {
+      response = await fetch(targetUrl, {
         method: request.method,
         headers: proxyHeaders,
         body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body
       })
+      
+      // API rankingレスポンスをキャッシュ（成功時のみ）
+      if (response.ok && url.pathname.startsWith('/api/ranking')) {
+        // レスポンスをクローンしてキャッシュ
+        await cache.put(cacheKey, response.clone())
+      }
       
       // セキュリティヘッダーを追加
       const newHeaders = new Headers(response.headers)

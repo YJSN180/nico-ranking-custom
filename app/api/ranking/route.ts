@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
               hasMore: false,
               totalCached: cfItems.length
             })
-            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Total-Cached', cfItems.length.toString())
             return response
@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
         hasMore: false, // タグ別ランキングはページネーションなし
         totalCached: rerankedItems.length // 取得した総数
       })
-      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
       response.headers.set('X-Cache-Status', 'MISS')
       return response
     }
@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
             hasMore: false, // ページネーションなし
             totalCached: cfData.items.length
           })
-          response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+          response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
           response.headers.set('X-Cache-Status', 'CF-HIT')
           response.headers.set('X-Max-Items', String(maxItems))
           return response
@@ -191,7 +191,7 @@ export async function GET(request: NextRequest) {
       hasMore: false,
       totalCached: filteredItems.length
     })
-    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
     response.headers.set('X-Cache-Status', 'DYNAMIC')
     response.headers.set('X-Max-Items', '500')
     return response
