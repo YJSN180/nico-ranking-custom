@@ -115,6 +115,7 @@ export default function SetupMFAPage() {
         ) : (
           <div>
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={qrCodeDataURL}
                 alt="MFA QR Code"
