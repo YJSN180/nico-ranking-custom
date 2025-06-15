@@ -35,16 +35,12 @@ export async function GET(request: NextRequest) {
         try {
           const cfItems = await getTagRanking(genre, period as RankingPeriod, tag)
           if (cfItems && cfItems.length > 0) {
-            // ページネーション処理
-            const itemsPerPage = 100
-            const startIdx = (page - 1) * itemsPerPage
-            const endIdx = page * itemsPerPage
-            const pageItems = cfItems.slice(startIdx, endIdx)
-            const hasMore = endIdx < cfItems.length
-            
+            // タグ別ランキングは最大300件まで
+            const maxTagItems = 300
+            const items = cfItems.slice(0, maxTagItems)
             const response = NextResponse.json({
-              items: pageItems,
-              hasMore,
+              items: items,
+              hasMore: false,
               totalCached: cfItems.length
             })
             response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
@@ -64,10 +60,10 @@ export async function GET(request: NextRequest) {
       // NGフィルタリング後に300件確保（タグ別ランキングの現実的な上限）
       const targetCount = 300
       let allItems: any[] = []
-      let currentPage = page
+      let currentPage = 1
       const maxAttempts = 10
       
-      while (allItems.length < targetCount && currentPage < page + maxAttempts) {
+      while (allItems.length < targetCount && currentPage <= maxAttempts) {
         const { items: pageItems } = await scrapeRankingPage(
           genre,
           period as RankingPeriod,
