@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
@@ -9,6 +9,7 @@ import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
+import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -60,9 +61,32 @@ export default function ClientPage({
   })
   
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
-  const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
+  const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
+    // 人気タグをlocalStorageから復元（ブラウザバック対応）
+    const storageKey = `popular-tags-${config.genre}-${config.period}`
+    const cached = localStorage.getItem(storageKey)
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      } catch {
+        // パースエラーは無視
+      }
+    }
+    return popularTags
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // 人気タグのキャッシュ保存用
+  const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
+    if (tags && tags.length > 0) {
+      const storageKey = `popular-tags-${genre}-${period}`
+      localStorage.setItem(storageKey, JSON.stringify(tags))
+    }
+  }, [])
   
   // ユーザー設定の永続化
   const { updatePreferences } = useUserPreferences()
@@ -72,6 +96,22 @@ export default function ClientPage({
   
   // モバイル検出
   const isMobile = useMobileDetect()
+  
+  // 初期表示時に人気タグがない場合は動的に取得
+  useEffect(() => {
+    if (!config.tag && config.genre !== 'all' && currentPopularTags.length === 0) {
+      getPopularTags(config.genre as any, config.period as '24h' | 'hour')
+        .then(tags => {
+          if (tags && tags.length > 0) {
+            setCurrentPopularTags(tags)
+            savePopularTagsToCache(tags, config.genre, config.period)
+          }
+        })
+        .catch(() => {
+          // エラー時は何もしない
+        })
+    }
+  }, []) // 初回のみ実行
   
   // リアルタイム統計更新を使用（3分ごとに自動更新）
   const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
@@ -171,11 +211,55 @@ export default function ClientPage({
       
       if (data.items && Array.isArray(data.items)) {
         setRankingData(data.items)
-        if (data.popularTags && !newConfig.tag && newConfig.genre !== 'all') {
-          setCurrentPopularTags(data.popularTags)
+        
+        // 人気タグの処理
+        if (!newConfig.tag && newConfig.genre !== 'all') {
+          if (data.popularTags && data.popularTags.length > 0) {
+            // APIから人気タグが返ってきた場合
+            setCurrentPopularTags(data.popularTags)
+            savePopularTagsToCache(data.popularTags, newConfig.genre, newConfig.period)
+          } else {
+            // APIから人気タグが返ってこなかった場合、動的に取得
+            try {
+              const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+              if (tags && tags.length > 0) {
+                setCurrentPopularTags(tags)
+                savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+              }
+            } catch {
+              // エラー時はキャッシュから取得を試みる
+              const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
+              const cached = localStorage.getItem(storageKey)
+              if (cached) {
+                try {
+                  const parsed = JSON.parse(cached)
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setCurrentPopularTags(parsed)
+                  }
+                } catch {
+                  // パースエラーは無視
+                }
+              }
+            }
+          }
+        } else {
+          // タグ指定時またはallジャンルの場合は空配列
+          setCurrentPopularTags([])
         }
       } else if (Array.isArray(data)) {
         setRankingData(data)
+        // 配列形式のレスポンスの場合も人気タグを動的に取得
+        if (!newConfig.tag && newConfig.genre !== 'all') {
+          try {
+            const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+            if (tags && tags.length > 0) {
+              setCurrentPopularTags(tags)
+              savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+            }
+          } catch {
+            // エラー時は現在の値を維持
+          }
+        }
       } else {
         setRankingData([])
       }
@@ -185,7 +269,7 @@ export default function ClientPage({
     } finally {
       setLoading(false)
     }
-  }, [config, router, updatePreferences])
+  }, [config, router, updatePreferences, savePopularTagsToCache])
   
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
