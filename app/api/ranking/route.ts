@@ -36,21 +36,16 @@ export async function GET(request: NextRequest) {
         try {
           const cfItems = await getTagRanking(genre, period as RankingPeriod, tag)
           if (cfItems && cfItems.length > 0) {
-            // ページネーション処理
-            const itemsPerPage = 100
-            const startIdx = (page - 1) * itemsPerPage
-            const endIdx = page * itemsPerPage
-            const pageItems = cfItems.slice(startIdx, endIdx)
-            const hasMore = endIdx < cfItems.length
-            
+            // タグ別ランキングは全件返す（KVに保存されている分すべて）
             const response = NextResponse.json({
-              items: pageItems,
-              hasMore,
+              items: cfItems, // 全件返す（239件など）
+              hasMore: false, // タグ別ランキングは常にfalse
               totalCached: cfItems.length
             })
-            response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+            response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Total-Cached', cfItems.length.toString())
+            response.headers.set('X-API-Version', '2') // バージョン確認用
             return response
           }
         } catch (error) {
@@ -109,24 +104,20 @@ export async function GET(request: NextRequest) {
         currentPage++
       }
       
-      // ランク番号を再割り当て（ページネーション対応）
-      const itemsPerPage = 100
-      const startIdx = (page - 1) * itemsPerPage
-      const endIdx = page * itemsPerPage
-      const pageItems = allItems.slice(startIdx, endIdx).map((item, index) => ({
+      // タグ別ランキングは全件返す（最大300件）
+      const rerankedItems = allItems.map((item, index) => ({
         ...item,
-        rank: startIdx + index + 1
+        rank: index + 1
       }))
       
-      // 動的取得の場合はキャッシュなし（Cloudflare KVのみ使用）
-      
       const response = NextResponse.json({
-        items: pageItems,
-        hasMore: endIdx < allItems.length, // 次のページにアイテムがあるか
-        totalCached: allItems.length // 取得した総数
+        items: rerankedItems, // 全件返す（最大300件）
+        hasMore: false, // タグ別ランキングは常にページネーションなし
+        totalCached: rerankedItems.length // 取得した総数
       })
-      response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
       response.headers.set('X-Cache-Status', 'MISS')
+      response.headers.set('X-API-Version', '2') // バージョン確認用
       return response
     }
 
