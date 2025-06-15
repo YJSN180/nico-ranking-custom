@@ -43,10 +43,9 @@ export function useRealtimeStats(
       
       setIsLoading(true)
       try {
-        // 表示中のアイテムのみ統計を取得（最大50件）
-        const visibleItems = items.slice(0, 50)
+        // 表示中のすべてのアイテムの統計を取得
         const batchSize = 10
-        const videoIds = visibleItems.map(item => item.id)
+        const videoIds = items.map(item => item.id)
         
         const allStats: RealtimeStatsResponse['stats'] = {}
         
@@ -67,9 +66,9 @@ export function useRealtimeStats(
             setLastUpdated(data.timestamp)
           }
           
-          // レート制限対策（100ms待機）
+          // レート制限対策（50ms待機 - 大量更新時の負荷分散）
           if (i + batchSize < videoIds.length) {
-            await new Promise(resolve => setTimeout(resolve, 100))
+            await new Promise(resolve => setTimeout(resolve, 50))
           }
         }
         

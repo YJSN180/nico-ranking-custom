@@ -13,8 +13,9 @@ export async function GET(request: Request | NextRequest) {
       return NextResponse.json({ error: 'No video IDs provided' }, { status: 400 })
     }
     
-    if (videoIds.length > 50) {
-      return NextResponse.json({ error: 'Too many video IDs (max 50)' }, { status: 400 })
+    // 最大500件まで許可（ジャンル別ランキングの最大表示数）
+    if (videoIds.length > 500) {
+      return NextResponse.json({ error: 'Too many video IDs (max 500)' }, { status: 400 })
     }
     
     // Snapshot APIから統計情報を取得
