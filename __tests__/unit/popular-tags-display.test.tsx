@@ -238,8 +238,9 @@ describe('人気タグの表示問題', () => {
       const tagTexts = Array.from(tagButtons || []).map(btn => btn.textContent)
       // タグが全体的に表示されていることを確認（順番は問わない）
       expect(tagTexts).toContain('すべて') // 「すべて」ボタンが最初に表示される
-      expect(tagTexts).toContain('その他')
-      expect(tagTexts).toContain('MMD')
+      expect(tagTexts.length).toBeGreaterThan(1) // 他のタグも取得されている
+      // getPopularTagsモックで「その他」ジャンルの場合は ['その他', 'MMD', 'MikuMikuDance'] を返すはず
+      expect(tagTexts).toEqual(expect.arrayContaining(['すべて', 'その他', 'MMD', 'MikuMikuDance']))
     })
   })
 
