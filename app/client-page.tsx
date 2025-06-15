@@ -242,22 +242,51 @@ export default function ClientPage({
               }
             }
           }
-        } else {
-          // タグ指定時またはallジャンルの場合は空配列
+        } else if (newConfig.genre === 'all') {
+          // allジャンルの場合のみ空配列
           setCurrentPopularTags([])
+        } else if (newConfig.tag && newConfig.genre !== 'all') {
+          // タグ指定時でも人気タグが空の場合は取得を試みる
+          if (currentPopularTags.length === 0) {
+            try {
+              const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+              if (tags && tags.length > 0) {
+                setCurrentPopularTags(tags)
+                savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+              }
+            } catch {
+              // エラー時はキャッシュから取得
+              const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
+              const cached = localStorage.getItem(storageKey)
+              if (cached) {
+                try {
+                  const parsed = JSON.parse(cached)
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setCurrentPopularTags(parsed)
+                  }
+                } catch {
+                  // パースエラーは無視
+                }
+              }
+            }
+          }
+          // 人気タグが既にある場合は維持
         }
       } else if (Array.isArray(data)) {
         setRankingData(data)
         // 配列形式のレスポンスの場合も人気タグを動的に取得
-        if (!newConfig.tag && newConfig.genre !== 'all') {
-          try {
-            const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
-            if (tags && tags.length > 0) {
-              setCurrentPopularTags(tags)
-              savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+        if (newConfig.genre !== 'all') {
+          // タグ指定の有無に関わらず、人気タグが空の場合は取得
+          if (currentPopularTags.length === 0) {
+            try {
+              const tags = await getPopularTags(newConfig.genre as any, newConfig.period as '24h' | 'hour')
+              if (tags && tags.length > 0) {
+                setCurrentPopularTags(tags)
+                savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+              }
+            } catch {
+              // エラー時は現在の値を維持
             }
-          } catch {
-            // エラー時は現在の値を維持
           }
         }
       } else {
