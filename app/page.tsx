@@ -31,15 +31,20 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const genreName = genreInfo?.label || '総合'
   const periodName = period === '24h' ? '24時間' : '毎時'
   
-  let title = `${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
-  let description = `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
+  // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
+  const isDefault = genre === 'all' && period === '24h' && !tag
+  
+  let title = isDefault ? 'ニコニコランキング(Re:turn)' : `${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
+  let description = isDefault ? 'ニコニコ動画のランキングを今すぐチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
   
   if (tag) {
     title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
     description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
   }
   
-  description += '最新の人気動画をチェック！'
+  if (!isDefault) {
+    description += '最新の人気動画をチェック！'
+  }
   
   return {
     title,
@@ -52,6 +57,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     twitter: {
       title,
       description,
+      card: 'summary_large_image', // 大きなサムネイル表示
     },
   }
 }

@@ -9,11 +9,11 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'ニコニコランキング(Re:turn)',
-  description: 'ニコニコ動画のランキングサイト - 24時間・毎時ランキングを表示',
+  description: 'ニコニコ動画のランキングを今すぐチェック！',
   metadataBase: new URL('https://nico-rank.com'),
   openGraph: {
     title: 'ニコニコランキング(Re:turn)',
-    description: 'ニコニコ動画の24時間・毎時ランキングを高速表示。人気タグ別ランキング、NGフィルター機能搭載。',
+    description: 'ニコニコ動画のランキングを今すぐチェック！',
     url: 'https://nico-rank.com',
     siteName: 'ニコニコランキング(Re:turn)',
     images: [
@@ -30,8 +30,9 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ニコニコランキング(Re:turn)',
-    description: 'ニコニコ動画の24時間・毎時ランキングを高速表示',
+    description: 'ニコニコ動画のランキングを今すぐチェック！',
     images: ['/og-image.png'],
+    creator: '@nico_rank', // 必要に応じてTwitterアカウントを設定
   },
 }
 
