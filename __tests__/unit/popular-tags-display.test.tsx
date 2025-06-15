@@ -164,8 +164,7 @@ describe('人気タグの表示問題', () => {
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('genre=entertainment'),
-        expect.any(Object)
+        '/api/ranking?genre=entertainment&period=24h'
       )
     })
 
@@ -212,8 +211,7 @@ describe('人気タグの表示問題', () => {
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('genre=all'),
-        expect.any(Object)
+        '/api/ranking?genre=all&period=24h'
       )
     })
 
@@ -278,8 +276,7 @@ describe('人気タグの表示問題', () => {
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('period=hour'),
-        expect.any(Object)
+        '/api/ranking?genre=game&period=hour'
       )
     })
 
