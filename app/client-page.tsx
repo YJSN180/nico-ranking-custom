@@ -884,7 +884,7 @@ export default function ClientPage({
         // タグ別: currentPageを使用
         pageNumber = currentPage + 1
       } else {
-        // ジャンル別: データ長から計算（500件まではキャッシュ、501件目からpage=6）
+        // ジャンル別: データ長から計算（1000件まではキャッシュ、1001件目からpage=11）
         pageNumber = Math.floor(rankingData.length / 100) + 1
       }
       

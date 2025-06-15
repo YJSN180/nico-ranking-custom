@@ -225,7 +225,7 @@ export async function GET(request: NextRequest) {
       })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'DYNAMIC')
-      response.headers.set('X-Max-Items', '500')
+      response.headers.set('X-Max-Items', '2000') // ニコニコ動画の最大20ページ（2000位）まで
       return response
     }
     
@@ -273,7 +273,7 @@ export async function GET(request: NextRequest) {
       })
       response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
       response.headers.set('X-Cache-Status', 'MISS')
-      response.headers.set('X-Max-Items', '500')
+      response.headers.set('X-Max-Items', '2000') // ニコニコ動画の最大20ページ（2000位）まで
       return response
     }
     
