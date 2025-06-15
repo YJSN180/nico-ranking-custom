@@ -152,11 +152,11 @@ export default function ClientPage({
     }
   }, [config, STORAGE_CONFIG.MAX_KEYS, STORAGE_CONFIG.MAX_AGE_MS, STORAGE_CONFIG.USE_SESSION_STORAGE])
   
-  // リアルタイム統計更新を使用（3分ごとに自動更新 - メモリ負荷軽減）
+  // リアルタイム統計更新を一時的に無効化（問題の切り分けのため）
   const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
     rankingData,
-    true, // 常に有効
+    false, // 一時的に無効化
     REALTIME_UPDATE_INTERVAL
   )
   
@@ -171,6 +171,25 @@ export default function ClientPage({
     const newURL = params.toString() ? `?${params.toString()}` : window.location.pathname
     window.history.replaceState({}, '', newURL)
   }, [searchParams])
+
+  // データ読み込み後に表示件数を自動調整するためのフラグ
+  const [shouldAutoExpand, setShouldAutoExpand] = useState(false)
+
+  // データが追加されたら自動的に表示件数を拡張
+  useEffect(() => {
+    if (shouldAutoExpand && !loadingMore) {
+      // 目標は+100件表示
+      const currentTarget = Math.ceil(displayCount / 100) * 100 + 100
+      const newDisplayCount = Math.min(currentTarget, rerankedItems.length, MAX_RANKING_ITEMS)
+      
+      if (newDisplayCount > displayCount) {
+        setDisplayCount(newDisplayCount)
+        updateURL(newDisplayCount)
+      }
+      
+      setShouldAutoExpand(false)
+    }
+  }, [shouldAutoExpand, loadingMore, displayCount, rerankedItems.length, MAX_RANKING_ITEMS, updateURL])
 
   // 動画ページから戻った時のみスクロール位置を復元
   useEffect(() => {
@@ -837,7 +856,7 @@ export default function ClientPage({
   }, [saveScrollPosition, config])
 
   // ランキングの追加読み込み（タグ別、ジャンル別共通）
-  const MAX_RANKING_ITEMS = 1000 // すべてのランキングで1000件まで
+  const MAX_RANKING_ITEMS = config.tag ? 300 : 1000 // タグ別は300件、ジャンル別は1000件まで
   
   const loadMoreItems = async () => {
     if (loadingMore || !hasMore) return
@@ -917,14 +936,6 @@ export default function ClientPage({
           } else {
             setHasMore(hasMoreData)
           }
-          
-          // 新しく追加されたデータも表示するようdisplayCountを更新
-          // シンプルに100件増やす（NGフィルタは表示時に適用されるので考慮不要）
-          const newDisplayCount = Math.min(displayCount + 100, sortedData.length, MAX_RANKING_ITEMS)
-          setDisplayCount(newDisplayCount)
-          
-          // URLを更新
-          updateURL(newDisplayCount)
         } else {
           // すべて重複していた場合は、それ以上データがない
           setHasMore(false)
@@ -1109,16 +1120,32 @@ export default function ClientPage({
           {(displayCount < rerankedItems.length || hasMore) && displayCount < MAX_RANKING_ITEMS && (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <button
-                onClick={() => {
-                  if (displayCount < rerankedItems.length) {
-                    // 既存データから追加表示（ジャンル別ランキングの1-500位）
-                    const newDisplayCount = Math.min(displayCount + 100, rerankedItems.length, MAX_RANKING_ITEMS)
-                    setDisplayCount(newDisplayCount)
-                    updateURL(newDisplayCount)
-                    // 状態保存は削除（スクロール位置は動画クリック時のみ保存）
-                  } else if (hasMore) {
-                    // 新規データを読み込み（タグ別 or ジャンル別501位以降）
-                    loadMoreItems()
+                onClick={async () => {
+                  // 目標表示件数を計算
+                  const targetDisplayCount = Math.min(displayCount + 100, MAX_RANKING_ITEMS)
+                  
+                  // 既存データで表示可能な最大件数
+                  const maxAvailable = rerankedItems.length
+                  
+                  if (targetDisplayCount <= maxAvailable) {
+                    // 既存データで十分な場合は即座に表示
+                    setDisplayCount(targetDisplayCount)
+                    updateURL(targetDisplayCount)
+                  } else {
+                    // データが不足している場合
+                    if (hasMore) {
+                      // まず表示可能な分だけ表示
+                      setDisplayCount(maxAvailable)
+                      updateURL(maxAvailable)
+                      
+                      // 追加データを読み込み
+                      setShouldAutoExpand(true)
+                      await loadMoreItems()
+                    } else {
+                      // これ以上データがない場合は表示可能な分だけ表示
+                      setDisplayCount(maxAvailable)
+                      updateURL(maxAvailable)
+                    }
                   }
                 }}
                 disabled={loadingMore}
