@@ -1,4 +1,4 @@
-import { onCLS, onFCP, onFID, onLCP, onTTFB, onINP, type Metric } from 'web-vitals'
+import { onCLS, onFCP, onLCP, onTTFB, onINP, type Metric } from 'web-vitals'
 
 const vitalsUrl = 'https://vitals.vercel-analytics.com/v1/vitals'
 
@@ -14,8 +14,13 @@ function sendToAnalytics(metric: Metric, options: { params: { [key: string]: any
     window.location.pathname
   )
 
+  const dsn = process.env.NEXT_PUBLIC_ANALYTICS_ID || ''
+  if (!dsn || process.env.NODE_ENV !== 'production') {
+    return
+  }
+
   const body = {
-    dsn: process.env.NEXT_PUBLIC_ANALYTICS_ID, // Vercel Analytics ID
+    dsn,
     id: metric.id,
     page,
     href: window.location.href,
@@ -24,31 +29,34 @@ function sendToAnalytics(metric: Metric, options: { params: { [key: string]: any
     speed: getConnectionSpeed(),
   }
 
-  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_ANALYTICS_ID) {
-    const blob = new Blob([new URLSearchParams(body).toString()], {
-      type: 'application/x-www-form-urlencoded',
+  const params = new URLSearchParams()
+  Object.entries(body).forEach(([key, value]) => {
+    params.append(key, String(value))
+  })
+
+  const blob = new Blob([params.toString()], {
+    type: 'application/x-www-form-urlencoded',
+  })
+  
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon(vitalsUrl, blob)
+  } else {
+    fetch(vitalsUrl, {
+      body: blob,
+      method: 'POST',
+      credentials: 'omit',
+      keepalive: true,
     })
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon(vitalsUrl, blob)
-    } else {
-      fetch(vitalsUrl, {
-        body: blob,
-        method: 'POST',
-        credentials: 'omit',
-        keepalive: true,
-      })
-    }
   }
 }
 
 export function reportWebVitals() {
   try {
-    onFID((metric) => sendToAnalytics(metric, { params: {} }))
-    onTTFB((metric) => sendToAnalytics(metric, { params: {} }))
-    onLCP((metric) => sendToAnalytics(metric, { params: {} }))
-    onCLS((metric) => sendToAnalytics(metric, { params: {} }))
-    onFCP((metric) => sendToAnalytics(metric, { params: {} }))
-    onINP((metric) => sendToAnalytics(metric, { params: {} }))
+    onTTFB((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onLCP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onCLS((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onFCP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onINP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
   } catch (err) {
     // Fail silently
   }
