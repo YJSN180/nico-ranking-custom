@@ -34,7 +34,7 @@ export function Footer() {
             プライバシーポリシー
           </Link>
           <a 
-            href="https://github.com/YJSN180/nico-ranking-custom"
+            href="https://www.nicovideo.jp/"
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -45,14 +45,15 @@ export function Footer() {
             onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
             onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
           >
-            GitHub
+            ニコニコ動画
           </a>
         </div>
         <div style={{
           fontSize: '12px',
           color: 'var(--text-muted)',
         }}>
-          © 2025 ニコニコランキング(Re:turn). このサイトはニコニコ動画の非公式サイトです。
+          このサイトはニコニコ動画の非公式ファンサイトです。<br />
+          ニコニコ動画は株式会社ドワンゴの登録商標です。
         </div>
       </div>
     </footer>
