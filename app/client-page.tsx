@@ -84,7 +84,11 @@ export default function ClientPage({
   const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
     if (tags && tags.length > 0) {
       const storageKey = `popular-tags-${genre}-${period}`
-      localStorage.setItem(storageKey, JSON.stringify(tags))
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(tags))
+      } catch (error) {
+        // ストレージエラーは無視
+      }
     }
   }, [])
   
@@ -179,8 +183,13 @@ export default function ClientPage({
     setLoading(true)
     setError(null)
     
-    // ローカルストレージに保存
-    localStorage.setItem('ranking-config', JSON.stringify(newConfig))
+    // ローカルストレージに保存（エラーをキャッチ）
+    try {
+      localStorage.setItem('ranking-config', JSON.stringify(newConfig))
+    } catch (error) {
+      // ストレージエラーは無視（機能には影響しない）
+      console.error('Failed to save config to localStorage:', error)
+    }
     
     // URLを更新
     const params = new URLSearchParams()

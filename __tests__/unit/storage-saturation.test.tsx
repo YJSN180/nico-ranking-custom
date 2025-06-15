@@ -67,6 +67,8 @@ describe('Storage飽和問題', () => {
     }))
   }
 
+  const originalSetItem = Storage.prototype.setItem
+
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -131,9 +133,13 @@ describe('Storage飽和問題', () => {
   })
 
   it('Storage容量超過時にエラーハンドリングが行われる', async () => {
-    // localStorageの容量を模擬的に超過させる
-    localStorageSetItemSpy.mockImplementation(() => {
-      throw new Error('QuotaExceededError')
+    // localStorageの容量を模擬的に超過させる（特定のキーのみ）
+    localStorageSetItemSpy.mockImplementation((key: string) => {
+      if (key === 'ranking-config') {
+        throw new Error('QuotaExceededError')
+      }
+      // 他のキーは正常に動作
+      return originalSetItem.call(localStorage, key, arguments[1])
     })
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
