@@ -2,15 +2,10 @@
 // 現在はローカルストレージを使用（サーバーサイドでは無効）
 import type { NGList, NGFilterResult } from '@/types/ng-list'
 import type { RankingItem } from '@/types/ranking'
+import { createEmptyNGList, migrateLegacyNGList } from './ng-list-migration'
 
 // デフォルトの空のNGリスト
-const DEFAULT_NG_LIST: NGList = {
-  videoIds: [],
-  videoTitles: [],
-  authorIds: [],
-  authorNames: [],
-  derivedVideoIds: []
-}
+const DEFAULT_NG_LIST: NGList = createEmptyNGList()
 
 // NGリストのメモリキャッシュ
 let ngListCache: NGList | null = null
@@ -33,8 +28,9 @@ export async function getNGList(): Promise<NGList> {
     // クライアントサイドではローカルストレージから取得
     const stored = localStorage.getItem('ng-list')
     if (stored) {
-      const parsed = JSON.parse(stored) as NGList
-      ngListCache = { ...DEFAULT_NG_LIST, ...parsed }
+      const parsed = JSON.parse(stored)
+      // マイグレーション処理を適用
+      ngListCache = migrateLegacyNGList(parsed)
       ngListCacheTime = Date.now()
       return ngListCache
     }
@@ -72,7 +68,8 @@ export async function addToDerivedNGList(videoIds: string[]): Promise<void> {
   
   try {
     const current = await getNGList()
-    const newSet = new Set([...current.derivedVideoIds, ...videoIds])
+    const currentDerived = current.derivedVideoIds || []
+    const newSet = new Set([...currentDerived, ...videoIds])
     const updated = {
       ...current,
       derivedVideoIds: Array.from(newSet)
@@ -89,55 +86,21 @@ export async function addToDerivedNGList(videoIds: string[]): Promise<void> {
 // ランキングアイテムをフィルタリング
 export async function filterRankingItems(items: RankingItem[]): Promise<NGFilterResult> {
   const ngList = await getNGList()
-  const newDerivedIds: string[] = []
   
-  // 高速検索のためにSetを作成
-  const videoIdSet = new Set([...ngList.videoIds, ...ngList.derivedVideoIds])
-  const titleSet = new Set(ngList.videoTitles)
-  const authorIdSet = new Set(ngList.authorIds)
-  const authorNameSet = new Set(ngList.authorNames)
-  
-  const filteredItems = items.filter((item, index) => {
-    // 既にNGリストにある場合
-    if (videoIdSet.has(item.id)) {
-      return false
-    }
-    
-    // タイトルでチェック（完全一致）
-    if (titleSet.has(item.title)) {
-      newDerivedIds.push(item.id)
-      return false
-    }
-    
-    // 投稿者IDでチェック
-    if (item.authorId && authorIdSet.has(item.authorId)) {
-      newDerivedIds.push(item.id)
-      return false
-    }
-    
-    // 投稿者名でチェック（完全一致）
-    if (item.authorName && authorNameSet.has(item.authorName)) {
-      newDerivedIds.push(item.id)
-      return false
-    }
-    
-    return true
-  })
-  
-  // 順位は元のままにしておく（クライアント側で必要に応じて調整）
-  // NGフィルタリング後も元の順位情報を保持することで、正しい順序を維持
-  const rerankedItems = filteredItems
+  // 新しいfilterWithNGList関数を使用
+  const { filterWithNGList } = await import('./filter-with-ng-list')
+  const result = filterWithNGList(items, ngList)
   
   // 非同期で派生NGリストを更新
-  if (newDerivedIds.length > 0) {
-    addToDerivedNGList(newDerivedIds).catch(() => {
+  if (result.newDerivedIds.length > 0) {
+    addToDerivedNGList(result.newDerivedIds).catch(() => {
       // エラーは無視
     })
   }
   
   return {
-    filteredItems: rerankedItems,
-    newDerivedIds
+    filteredItems: result.filteredItems,
+    newDerivedIds: result.newDerivedIds
   }
 }
 

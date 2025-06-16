@@ -52,7 +52,7 @@ export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilter
     }
     
     // 投稿者名でチェック（部分一致）
-    if (item.authorName && ngList.authorNames.partial.some(partial => item.authorName.includes(partial))) {
+    if (item.authorName && ngList.authorNames.partial.some(partial => item.authorName!.includes(partial))) {
       newDerivedIds.push(item.id)
       return false
     }

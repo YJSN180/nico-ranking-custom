@@ -2,23 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import type { NGList } from '@/types/ng-list'
+import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
 
 export default function NGSettingsPage() {
-  const [ngList, setNgList] = useState<NGList>({
-    videoIds: [],
-    videoTitles: [],
-    authorIds: [],
-    authorNames: [],
-    derivedVideoIds: []
-  })
+  const [ngList, setNgList] = useState<NGList>(createEmptyNGList())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   
   // 入力フィールド用の状態
   const [newVideoId, setNewVideoId] = useState('')
   const [newVideoTitle, setNewVideoTitle] = useState('')
+  const [videoTitleMatchType, setVideoTitleMatchType] = useState<'exact' | 'partial'>('exact')
   const [newAuthorId, setNewAuthorId] = useState('')
   const [newAuthorName, setNewAuthorName] = useState('')
+  const [authorNameMatchType, setAuthorNameMatchType] = useState<'exact' | 'partial'>('exact')
 
   // NGリストを取得
   useEffect(() => {
@@ -37,7 +34,9 @@ export default function NGSettingsPage() {
         }
       } else {
         const data = await response.json()
-        setNgList(data)
+        // マイグレーション処理を適用
+        const migrated = migrateLegacyNGList(data)
+        setNgList(migrated)
       }
     } catch (error) {
       console.error('Error fetching NG list:', error)
@@ -83,13 +82,33 @@ export default function NGSettingsPage() {
   }
 
   // アイテムを追加
-  const addItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, value: string) => {
+  const addItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, value: string, matchType?: 'exact' | 'partial') => {
     if (!value.trim()) return
     
-    setNgList(prev => ({
-      ...prev,
-      [type]: [...prev[type], value.trim()]
-    }))
+    setNgList(prev => {
+      const trimmedValue = value.trim()
+      
+      switch (type) {
+        case 'videoIds':
+        case 'authorIds':
+          return {
+            ...prev,
+            [type]: [...prev[type], trimmedValue]
+          }
+        case 'videoTitles':
+        case 'authorNames':
+          const subType = matchType || 'exact'
+          return {
+            ...prev,
+            [type]: {
+              ...prev[type],
+              [subType]: [...prev[type][subType], trimmedValue]
+            }
+          }
+        default:
+          return prev
+      }
+    })
     
     // 入力フィールドをクリア
     switch (type) {
@@ -109,11 +128,29 @@ export default function NGSettingsPage() {
   }
 
   // アイテムを削除
-  const removeItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, index: number) => {
-    setNgList((prev: NGList) => ({
-      ...prev,
-      [type]: prev[type].filter((_: string, i: number) => i !== index)
-    }))
+  const removeItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, index: number, matchType?: 'exact' | 'partial') => {
+    setNgList(prev => {
+      switch (type) {
+        case 'videoIds':
+        case 'authorIds':
+          return {
+            ...prev,
+            [type]: prev[type].filter((_, i) => i !== index)
+          }
+        case 'videoTitles':
+        case 'authorNames':
+          const subType = matchType || 'exact'
+          return {
+            ...prev,
+            [type]: {
+              ...prev[type],
+              [subType]: prev[type][subType].filter((_, i) => i !== index)
+            }
+          }
+        default:
+          return prev
+      }
+    })
   }
 
   // 派生NGリストをクリア
@@ -197,26 +234,56 @@ export default function NGSettingsPage() {
 
         {/* 動画タイトル */}
         <section style={{ marginBottom: '30px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
-          <h3>動画タイトル（完全一致）</h3>
+          <h3>動画タイトル</h3>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
             <input
               type="text"
               value={newVideoTitle}
               onChange={(e) => setNewVideoTitle(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addItem('videoTitles', newVideoTitle)}
-              placeholder="完全一致するタイトル"
+              onKeyPress={(e) => e.key === 'Enter' && addItem('videoTitles', newVideoTitle, videoTitleMatchType)}
+              placeholder="NGにするタイトル"
               style={{ flex: 1, padding: '8px' }}
             />
-            <button onClick={() => addItem('videoTitles', newVideoTitle)}>追加</button>
+            <select 
+              value={videoTitleMatchType} 
+              onChange={(e) => setVideoTitleMatchType(e.target.value as 'exact' | 'partial')}
+              style={{ padding: '8px' }}
+            >
+              <option value="exact">完全一致</option>
+              <option value="partial">部分一致</option>
+            </select>
+            <button onClick={() => addItem('videoTitles', newVideoTitle, videoTitleMatchType)}>追加</button>
           </div>
-          <ul>
-            {ngList.videoTitles.map((title, index) => (
-              <li key={index} style={{ marginBottom: '5px' }}>
-                {title}
-                <button onClick={() => removeItem('videoTitles', index)} style={{ marginLeft: '10px' }}>削除</button>
-              </li>
-            ))}
-          </ul>
+          
+          {/* 完全一致リスト */}
+          {ngList.videoTitles.exact.length > 0 && (
+            <div style={{ marginBottom: '15px' }}>
+              <h4>完全一致</h4>
+              <ul>
+                {ngList.videoTitles.exact.map((title, index) => (
+                  <li key={index} style={{ marginBottom: '5px' }}>
+                    {title}
+                    <button onClick={() => removeItem('videoTitles', index, 'exact')} style={{ marginLeft: '10px' }}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* 部分一致リスト */}
+          {ngList.videoTitles.partial.length > 0 && (
+            <div>
+              <h4>部分一致</h4>
+              <ul>
+                {ngList.videoTitles.partial.map((title, index) => (
+                  <li key={index} style={{ marginBottom: '5px' }}>
+                    {title}
+                    <button onClick={() => removeItem('videoTitles', index, 'partial')} style={{ marginLeft: '10px' }}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
 
         {/* 投稿者ID */}
@@ -245,26 +312,56 @@ export default function NGSettingsPage() {
 
         {/* 投稿者名 */}
         <section style={{ marginBottom: '30px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
-          <h3>投稿者名（完全一致）</h3>
+          <h3>投稿者名</h3>
           <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
             <input
               type="text"
               value={newAuthorName}
               onChange={(e) => setNewAuthorName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addItem('authorNames', newAuthorName)}
-              placeholder="例: 蠍媛"
+              onKeyPress={(e) => e.key === 'Enter' && addItem('authorNames', newAuthorName, authorNameMatchType)}
+              placeholder="NGにする投稿者名"
               style={{ flex: 1, padding: '8px' }}
             />
-            <button onClick={() => addItem('authorNames', newAuthorName)}>追加</button>
+            <select 
+              value={authorNameMatchType} 
+              onChange={(e) => setAuthorNameMatchType(e.target.value as 'exact' | 'partial')}
+              style={{ padding: '8px' }}
+            >
+              <option value="exact">完全一致</option>
+              <option value="partial">部分一致</option>
+            </select>
+            <button onClick={() => addItem('authorNames', newAuthorName, authorNameMatchType)}>追加</button>
           </div>
-          <ul>
-            {ngList.authorNames.map((name, index) => (
-              <li key={index} style={{ marginBottom: '5px' }}>
-                {name}
-                <button onClick={() => removeItem('authorNames', index)} style={{ marginLeft: '10px' }}>削除</button>
-              </li>
-            ))}
-          </ul>
+          
+          {/* 完全一致リスト */}
+          {ngList.authorNames.exact.length > 0 && (
+            <div style={{ marginBottom: '15px' }}>
+              <h4>完全一致</h4>
+              <ul>
+                {ngList.authorNames.exact.map((name, index) => (
+                  <li key={index} style={{ marginBottom: '5px' }}>
+                    {name}
+                    <button onClick={() => removeItem('authorNames', index, 'exact')} style={{ marginLeft: '10px' }}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* 部分一致リスト */}
+          {ngList.authorNames.partial.length > 0 && (
+            <div>
+              <h4>部分一致</h4>
+              <ul>
+                {ngList.authorNames.partial.map((name, index) => (
+                  <li key={index} style={{ marginBottom: '5px' }}>
+                    {name}
+                    <button onClick={() => removeItem('authorNames', index, 'partial')} style={{ marginLeft: '10px' }}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </section>
 
         <button 
@@ -292,7 +389,7 @@ export default function NGSettingsPage() {
           cron処理・動的API取得の両方で機能し、一度NGになった動画は確実に除外され続けます。
         </p>
         <p style={{ marginBottom: '20px' }}>
-          登録数: {ngList.derivedVideoIds.length}件
+          登録数: {ngList.derivedVideoIds?.length || 0}件
         </p>
         <button 
           onClick={clearDerivedList}
@@ -308,7 +405,7 @@ export default function NGSettingsPage() {
           すべてクリア
         </button>
         
-        {ngList.derivedVideoIds.length > 0 && (
+        {ngList.derivedVideoIds && ngList.derivedVideoIds.length > 0 && (
           <details style={{ marginTop: '20px' }}>
             <summary style={{ cursor: 'pointer' }}>一覧を表示</summary>
             <ul style={{ maxHeight: '300px', overflow: 'auto', marginTop: '10px' }}>

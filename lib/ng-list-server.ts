@@ -1,31 +1,26 @@
 // Server-side NG list management using Cloudflare KV
 import { kv } from './simple-kv'
 import type { NGList } from '@/types/ng-list'
+import { migrateLegacyNGList, createEmptyNGList } from './ng-list-migration'
 
 // Get NG list from KV
 export async function getServerNGList(): Promise<NGList> {
   try {
     const [manual, derived] = await Promise.all([
-      kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual'),
+      kv.get<any>('ng-list-manual'),
       kv.get<string[]>('ng-list-derived')
     ])
     
+    // マイグレーション処理を適用
+    const migratedManual = migrateLegacyNGList(manual)
+    
     return {
-      videoIds: manual?.videoIds || [],
-      videoTitles: manual?.videoTitles || [],
-      authorIds: manual?.authorIds || [],
-      authorNames: manual?.authorNames || [],
+      ...migratedManual,
       derivedVideoIds: derived || []
     }
   } catch (error) {
     // Failed to get NG list from KV - returning empty list
-    return {
-      videoIds: [],
-      videoTitles: [],
-      authorIds: [],
-      authorNames: [],
-      derivedVideoIds: []
-    }
+    return createEmptyNGList()
   }
 }
 
@@ -56,21 +51,23 @@ export async function addToServerDerivedNGList(videoIds: string[]): Promise<void
 // Get manual NG list
 export async function getNGListManual(): Promise<Omit<NGList, 'derivedVideoIds'>> {
   try {
-    const manual = await kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual')
-    return manual || {
-      videoIds: [],
-      videoTitles: [],
-      authorIds: [],
-      authorNames: []
+    const manual = await kv.get<any>('ng-list-manual')
+    
+    if (!manual) {
+      const empty = createEmptyNGList()
+      const { derivedVideoIds, ...manualOnly } = empty
+      return manualOnly
     }
+    
+    // マイグレーション処理を適用
+    const migrated = migrateLegacyNGList(manual)
+    const { derivedVideoIds, ...manualOnly } = migrated
+    return manualOnly
   } catch (error) {
     console.error('Failed to get manual NG list:', error)
-    return {
-      videoIds: [],
-      videoTitles: [],
-      authorIds: [],
-      authorNames: []
-    }
+    const empty = createEmptyNGList()
+    const { derivedVideoIds, ...manualOnly } = empty
+    return manualOnly
   }
 }
 
