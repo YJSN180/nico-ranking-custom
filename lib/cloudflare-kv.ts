@@ -139,15 +139,30 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
     const data = await response.arrayBuffer()
     const uint8Array = new Uint8Array(data)
     
+    console.log(`[KV] Data received: ${data.byteLength} bytes`)
+    
     // データが圧縮されているかチェック（gzipマジックナンバー）
     if (uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
-      return await decompressData(uint8Array)
+      console.log('[KV] Decompressing gzipped data...')
+      try {
+        const decompressed = await decompressData(uint8Array)
+        console.log('[KV] Decompression successful')
+        return decompressed
+      } catch (decompressError) {
+        console.error('[KV] Decompression failed:', decompressError)
+        // メモリ不足の可能性がある
+        if (decompressError instanceof Error && decompressError.message.includes('buffer')) {
+          console.error('[KV] Possible memory issue with 8.4MB compressed data')
+        }
+        throw decompressError
+      }
     }
     
     // 非圧縮データ
     return JSON.parse(new TextDecoder().decode(uint8Array))
   } catch (error) {
     // Failed to read from Cloudflare KV - returning null
+    console.error('[KV] Failed to read RANKING_LATEST:', error)
     return null
   }
 }
@@ -159,9 +174,65 @@ export async function getGenreRanking(
   genre: string,
   period: '24h' | 'hour'
 ): Promise<{ items: any[], popularTags: string[], tags?: { [tag: string]: any[] }, metadata?: any } | null> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+  
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    return null
+  }
+  
+  try {
+    // 1. まず個別のジャンルキーから取得を試みる（新しい形式）
+    const genreKey = `ranking-genre-${genre}`
+    const genreUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${encodeURIComponent(genreKey)}`
+    
+    const response = await fetch(genreUrl, {
+      headers: {
+        'Authorization': `Bearer ${CF_API_TOKEN}`,
+      },
+    })
+    
+    if (response.ok) {
+      const data = await response.arrayBuffer()
+      const uint8Array = new Uint8Array(data)
+      
+      // データが圧縮されているかチェック
+      let genreData
+      if (uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
+        genreData = await decompressData(uint8Array)
+      } else {
+        genreData = JSON.parse(new TextDecoder().decode(uint8Array))
+      }
+      
+      // メタデータも取得
+      const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ranking-metadata`
+      const metadataResponse = await fetch(metadataUrl, {
+        headers: {
+          'Authorization': `Bearer ${CF_API_TOKEN}`,
+        },
+      })
+      
+      let metadata = null
+      if (metadataResponse.ok) {
+        const metadataText = await metadataResponse.text()
+        metadata = JSON.parse(metadataText)
+      }
+      
+      console.log(`[KV] Found individual genre data for: ${genre}`)
+      return {
+        ...genreData[period],
+        metadata
+      }
+    }
+  } catch (error) {
+    console.log('[KV] Individual genre fetch failed, trying full data')
+  }
+  
+  // 2. フォールバック: 全データから取得（8.4MBのため失敗する可能性が高い）
   const data = await getRankingFromKV()
   
-  if (!data || !data.genres[genre]) {
+  if (!data || !data.genres || !data.genres[genre]) {
     return null
   }
 
