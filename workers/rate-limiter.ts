@@ -18,6 +18,9 @@ export interface KVNamespace {
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
 }
 
+// メモリキャッシュ（Workers内でリクエスト間で共有）
+const memoryCache = new Map<string, { count: number; expires: number }>()
+
 /**
  * Check rate limit for a given request
  */
@@ -45,9 +48,27 @@ export async function checkRateLimit(
   const key = `ratelimit:${clientIP}:${windowStart}`
   
   try {
-    // 現在のカウントを取得
-    const currentCount = await kvNamespace.get(key)
-    const count = currentCount ? parseInt(currentCount, 10) : 0
+    // メモリキャッシュをチェック
+    const cached = memoryCache.get(key)
+    let count = 0
+    
+    if (cached && cached.expires > now) {
+      count = cached.count
+    } else {
+      // キャッシュミスの場合のみKVから取得
+      const currentCount = await kvNamespace.get(key)
+      count = currentCount ? parseInt(currentCount, 10) : 0
+      
+      // メモリキャッシュに保存（5秒間有効）
+      memoryCache.set(key, { count, expires: now + 5000 })
+      
+      // メモリキャッシュのクリーンアップ（100エントリを超えたら古いものを削除）
+      if (memoryCache.size > 100) {
+        const entries = Array.from(memoryCache.entries())
+        entries.sort((a, b) => a[1].expires - b[1].expires)
+        entries.slice(0, 50).forEach(([k]) => memoryCache.delete(k))
+      }
+    }
     
     if (count >= config.requests) {
       return {
@@ -57,20 +78,40 @@ export async function checkRateLimit(
       }
     }
     
-    // カウントを増やして保存（書き込み頻度を削減）
-    // 5リクエストごと、または制限値に近い場合のみ更新
+    // カウントを増やして保存（書き込み頻度を大幅に削減）
+    // 10リクエストごと、または制限値に近い場合のみ更新
     const newCount = count + 1
-    const shouldUpdate = newCount === 1 || newCount % 5 === 0 || newCount >= config.requests - 2
+    const shouldUpdate = newCount === 1 || newCount % 10 === 0 || newCount >= config.requests - 5
     
     if (shouldUpdate) {
-      await kvNamespace.put(
-        key, 
-        String(newCount), 
-        { 
-          expirationTtl: Math.ceil(config.window / 1000) + 60 // TTLは秒単位 + バッファ
+      // リトライロジックを追加して429エラーに対応
+      let retries = 3
+      while (retries > 0) {
+        try {
+          await kvNamespace.put(
+            key, 
+            String(newCount), 
+            { 
+              expirationTtl: Math.ceil(config.window / 1000) + 60 // TTLは秒単位 + バッファ
+            }
+          )
+          break // 成功したらループを抜ける
+        } catch (error: any) {
+          if (error.message?.includes('429') && retries > 1) {
+            // 429エラーの場合は少し待ってリトライ
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            retries--
+          } else {
+            // その他のエラーまたは最後のリトライ失敗
+            console.error('Rate limit KV write failed:', error)
+            break
+          }
         }
-      )
+      }
     }
+    
+    // メモリキャッシュを更新（実際のカウントを反映）
+    memoryCache.set(key, { count: newCount, expires: now + 5000 })
     
     return {
       allowed: true,
