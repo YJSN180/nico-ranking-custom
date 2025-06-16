@@ -6,7 +6,17 @@ import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 // フォールバック用のインメモリレート制限（KVが利用できない場合）
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
+// CloudflareのRate Limiting Rulesを使用する場合はtrue
+const USE_CLOUDFLARE_RATE_LIMITING = true;
+
 async function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): Promise<boolean> {
+  if (USE_CLOUDFLARE_RATE_LIMITING) {
+    // CloudflareのRate Limiting Rulesがレート制限を処理
+    // KVへの書き込みを完全に回避
+    return true;
+  }
+  
+  // 以下は旧実装（バックアップとして保持）
   try {
     // Use memory-based rate limiting with periodic KV sync
     const result = await MemoryRateLimit.checkLimit(ip, limit, windowMs)
