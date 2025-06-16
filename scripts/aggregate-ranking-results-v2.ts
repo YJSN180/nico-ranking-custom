@@ -29,7 +29,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
   // Step 1: Write to temporary key (less likely to conflict)
   const tempUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${tempKey}`;
 
-  const maxRetries = 5;
+  const maxRetries = 1; // 無料プラン制限を考慮して1回のみ
   let writeSuccessful = false;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -284,6 +284,11 @@ async function main() {
       console.error('No data to write!');
       process.exit(1);
     }
+
+    // Save aggregated data locally as backup
+    const backupPath = path.join(process.cwd(), 'tmp', 'latest-aggregated-data.json');
+    await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));
+    console.log(`\nSaved aggregated data to ${backupPath}`);
 
     // Write to Cloudflare KV with improved strategy
     console.log('\nWriting aggregated data to Cloudflare KV...');

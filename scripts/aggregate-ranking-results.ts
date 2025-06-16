@@ -53,7 +53,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
 
-  const maxRetries = 3;
+  const maxRetries = 1; // 無料プラン制限を考慮して1回のみ
   let lastError;
   let writeSuccessful = false;
   

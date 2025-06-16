@@ -2,9 +2,9 @@ name: Update Nico Ranking Data (Parallel)
 
 on:
   schedule:
-    # Run at 0 and 30 minutes past every hour (JST: 日本時間の毎時0分と30分)
+    # Run every 2 hours to reduce KV write operations (JST: 日本時間の0時、2時、4時...)
     # GitHub Actions uses UTC, so JST-9 hours
-    - cron: '0,30 * * * *'
+    - cron: '0 */2 * * *'
   workflow_dispatch: # Allow manual trigger
 
 # 同時実行を防ぐ

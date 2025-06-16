@@ -1,0 +1,59 @@
+name: KV Write Only
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run every 3 hours to avoid rate limits
+    - cron: '15 */3 * * *'
+
+jobs:
+  write-to-kv:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Download latest artifacts
+      uses: dawidd6/action-download-artifact@v3
+      with:
+        workflow: update-ranking-parallel.yml
+        workflow_conclusion: ''  # Get any conclusion
+        name: ranking-data-group-*
+        path: ./tmp
+        check_artifacts: true
+        search_artifacts: true
+        if_no_artifact_found: fail
+    
+    - name: List downloaded files
+      run: |
+        echo "Downloaded artifacts:"
+        find ./tmp -name "*.json" | sort
+    
+    - name: Aggregate and write to KV with retries
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+      run: |
+        # Wait random 0-60 seconds to avoid collision with other workflows
+        WAIT=$((RANDOM % 60))
+        echo "Waiting ${WAIT} seconds to avoid collisions..."
+        sleep $WAIT
+        
+        # Run aggregation with extended timeout
+        timeout 600 npx tsx scripts/aggregate-ranking-results-v2.ts || {
+          echo "First attempt failed, waiting 5 minutes..."
+          sleep 300
+          echo "Retrying..."
+          npx tsx scripts/aggregate-ranking-results-v2.ts
+        }

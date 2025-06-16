@@ -1,0 +1,58 @@
+name: Update Ranking (Artifact-based)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-ranking:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Fetch and aggregate rankings
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+      run: |
+        echo "Fetching rankings..."
+        npx tsx scripts/update-ranking-github-action.ts
+    
+    - name: Upload aggregated data as artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: aggregated-ranking-data
+        path: ./ranking-data.json
+        retention-days: 7
+    
+    - name: Create issue with download link
+      if: always()
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        RUN_ID=${{ github.run_id }}
+        ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${RUN_ID}"
+        
+        gh issue create \
+          --title "Ranking Data Update - $(date -u +%Y-%m-%d\ %H:%M\ UTC)" \
+          --body "The ranking data has been updated and is available as an artifact.
+          
+          Download the data from: ${ARTIFACT_URL}
+          
+          To manually update KV:
+          1. Download the artifact
+          2. Run: \`npx tsx scripts/upload-to-kv.ts ranking-data.json\`
+          
+          This issue was automatically created due to KV rate limiting issues."
