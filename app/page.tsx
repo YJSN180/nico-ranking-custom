@@ -87,6 +87,16 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     try {
       const cfData = await getGenreRanking(genre, period as RankingPeriod)
       if (cfData && cfData.items && cfData.items.length > 0) {
+        // metadataをログ出力（デバッグ用）
+        if (cfData.metadata?.updatedAt) {
+          const lastUpdate = new Date(cfData.metadata.updatedAt)
+          const now = new Date()
+          const diffMinutes = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000 / 60)
+          console.log(`[RANKING] KV data last updated: ${cfData.metadata.updatedAt} (${diffMinutes} minutes ago)`)
+          console.log(`[RANKING] Total items in KV: ${cfData.metadata.totalItems || 'unknown'}`)
+          console.log(`[RANKING] Genre: ${genre}, Period: ${period}, Items: ${cfData.items.length}`)
+        }
+        
         // NGフィルタリングを適用
         // 初期表示は100件だが、全データを保持してhasMoreの判定を正しく行えるようにする
         const { filteredData } = await filterRankingDataServer({
