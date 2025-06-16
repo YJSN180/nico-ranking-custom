@@ -403,14 +403,13 @@ async function processGenre(
     }
   };
   
-  // For "other" genre, fetch popular tag rankings
+  // For "other" genre, fetch ALL popular tag rankings
   if (genre === 'other' && popularTags.length > 0) {
-    console.log(`[${new Date().toISOString()}] Fetching popular tag rankings for "other" genre`);
+    console.log(`[${new Date().toISOString()}] Fetching ALL popular tag rankings for "other" genre (${popularTags.length} tags)`);
     
-    // Limit to top 5 tags to manage data size
-    const topTags = popularTags.slice(0, 5);
-    
-    for (const tag of topTags) {
+    // Process all popular tags
+    for (let i = 0; i < popularTags.length; i++) {
+      const tag = popularTags[i];
       try {
         // Add delay between tag fetches
         await new Promise(resolve => setTimeout(resolve, 1500));
@@ -422,7 +421,7 @@ async function processGenre(
         result.data['24h'].tags[tag] = tag24h.items;
         result.data['hour'].tags[tag] = tagHour.items;
         
-        console.log(`[${new Date().toISOString()}] Fetched tag "${tag}" (24h: ${tag24h.items.length}, hour: ${tagHour.items.length})`);
+        console.log(`[${new Date().toISOString()}] Fetched tag ${i + 1}/${popularTags.length} "${tag}" (24h: ${tag24h.items.length}, hour: ${tagHour.items.length})`);
       } catch (error) {
         console.error(`[${new Date().toISOString()}] Failed to fetch tag "${tag}":`, error);
         // Continue with other tags
