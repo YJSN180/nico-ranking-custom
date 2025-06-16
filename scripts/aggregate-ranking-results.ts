@@ -15,10 +15,54 @@ async function writeToCloudflareKV(data: any): Promise<void> {
 
   // Dynamic import for pako
   const pako = await import('pako');
+  const jsonString = JSON.stringify(data);
+  const compressed = pako.gzip(jsonString);
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
+
+  const maxRetries = 3;
+  let lastError;
   
-  // 1. Write metadata separately
-  const metadata = data.metadata;
-  const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ranking-metadata`;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          "Authorization": `Bearer ${CF_API_TOKEN}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: compressed,
+      });
+
+      if (response.status === 429) {
+        // Rate limited, wait with exponential backoff
+        const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+        console.log(`KV rate limited, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Cloudflare KV write failed: ${response.status} - ${error}`);
+      }
+      
+      // Success, break out of retry loop
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries - 1) {
+        throw error;
+      }
+      // Retry on other errors too
+      const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+      console.log(`KV write failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  // Set metadata
+  const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/RANKING_LATEST`;
   
   await fetch(metadataUrl, {
     method: "PUT",
@@ -26,85 +70,14 @@ async function writeToCloudflareKV(data: any): Promise<void> {
       "Authorization": `Bearer ${CF_API_TOKEN}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(metadata),
+    body: JSON.stringify({
+      compressed: true,
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      size: compressed.length,
+      ngFiltered: true,
+    }),
   });
-  
-  console.log('Metadata written successfully');
-  
-  // 2. Write each genre separately to avoid size limits
-  const genres = Object.keys(data.genres);
-  console.log(`Writing ${genres.length} genres individually...`);
-  
-  for (const genre of genres) {
-    const genreData = data.genres[genre];
-    const jsonString = JSON.stringify(genreData);
-    const compressed = pako.gzip(jsonString);
-    
-    console.log(`Writing ${genre}: ${Math.round(compressed.length / 1024)}KB compressed`);
-    
-    const genreUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ranking-genre-${genre}`;
-    
-    const maxRetries = 3;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const response = await fetch(genreUrl, {
-          method: "PUT",
-          headers: {
-            "Authorization": `Bearer ${CF_API_TOKEN}`,
-            "Content-Type": "application/octet-stream",
-          },
-          body: compressed,
-        });
-
-        if (response.status === 429) {
-          const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-          console.log(`Rate limited for ${genre}, retrying in ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          continue;
-        }
-
-        if (!response.ok) {
-          const error = await response.text();
-          throw new Error(`Failed to write ${genre}: ${response.status} - ${error}`);
-        }
-        
-        break; // Success
-      } catch (error) {
-        if (attempt === maxRetries - 1) {
-          throw error;
-        }
-        const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-        console.log(`Write failed for ${genre}, retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    
-    // Small delay between genres to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 200));
-  }
-  
-  // 3. Also write the full data as RANKING_LATEST for backward compatibility
-  // (This may fail due to size limits, but that's okay)
-  try {
-    const fullJsonString = JSON.stringify(data);
-    const fullCompressed = pako.gzip(fullJsonString);
-    const fullUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
-    
-    console.log(`Writing full data (backward compatibility): ${Math.round(fullCompressed.length / 1024 / 1024 * 10) / 10}MB compressed`);
-    
-    await fetch(fullUrl, {
-      method: "PUT",
-      headers: {
-        "Authorization": `Bearer ${CF_API_TOKEN}`,
-        "Content-Type": "application/octet-stream",
-      },
-      body: fullCompressed,
-    });
-    
-    console.log('Full data written successfully');
-  } catch (error) {
-    console.log('Failed to write full data (expected for large datasets):', error);
-  }
 }
 
 async function main() {

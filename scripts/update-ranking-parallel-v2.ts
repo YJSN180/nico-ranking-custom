@@ -403,35 +403,9 @@ async function processGenre(
     }
   };
   
-  // Fetch tag rankings for BOTH periods (but same set of tags)
-  if (popularTags.length > 0) {
-    // Process tags sequentially with delay to avoid rate limiting
-    for (const tag of popularTags) {
-      // 24h version
-      try {
-        console.log(`[${new Date().toISOString()}] Fetching tag ${genre}/24h/${tag}...`);
-        const { items: tagItems } = await fetchWithNGFiltering(genre, '24h', ngList, tag, 300);
-        result.data['24h'].tags[tag] = tagItems;
-      } catch (error) {
-        console.error(`Failed to fetch tag ranking for ${genre}/24h/${tag}:`, error);
-        result.data['24h'].tags[tag] = [];
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 500)); // Delay between tag fetches
-      
-      // hour version
-      try {
-        console.log(`[${new Date().toISOString()}] Fetching tag ${genre}/hour/${tag}...`);
-        const { items: tagItems } = await fetchWithNGFiltering(genre, 'hour', ngList, tag, 300);
-        result.data['hour'].tags[tag] = tagItems;
-      } catch (error) {
-        console.error(`Failed to fetch tag ranking for ${genre}/hour/${tag}:`, error);
-        result.data['hour'].tags[tag] = [];
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 500)); // Delay between tag fetches
-    }
-  }
+  // Skip tag rankings to reduce data size
+  // Tag rankings are now fetched on-demand via API
+  console.log(`[${new Date().toISOString()}] Skipping tag rankings for ${genre} to reduce data size`)
   
   console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
   
