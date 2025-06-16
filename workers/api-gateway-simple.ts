@@ -28,12 +28,41 @@ export default {
     try {
       const url = new URL(request.url)
       
-      // レート制限の適用
+      // レート制限の適用（一般ページも含む）
       if (shouldRateLimit(url.pathname)) {
         const limits = getRateLimitConfig(url.pathname)
         const rateLimit = await performRateLimit(request, env.RATE_LIMIT, limits)
         
         if (!rateLimit.allowed) {
+          // 一般ページの場合はチャレンジページを表示
+          if (!url.pathname.startsWith('/api/')) {
+            return new Response(`
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <title>アクセス制限中</title>
+                <meta charset="utf-8">
+                <style>
+                  body { font-family: sans-serif; text-align: center; padding: 50px; }
+                  h1 { color: #e74c3c; }
+                </style>
+              </head>
+              <body>
+                <h1>アクセス制限中</h1>
+                <p>短時間に多数のリクエストが検出されました。</p>
+                <p>${Math.ceil((rateLimit.resetAt - Date.now()) / 1000)}秒後に再度お試しください。</p>
+              </body>
+              </html>
+            `, {
+              status: 429,
+              headers: {
+                'Content-Type': 'text/html; charset=utf-8',
+                'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000))
+              }
+            })
+          }
+          
+          // APIの場合はJSON応答
           return new Response(JSON.stringify({
             error: 'Too Many Requests',
             message: 'Rate limit exceeded. Please try again later.',

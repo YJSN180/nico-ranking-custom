@@ -14,7 +14,7 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 
 // ISRを使用してFunction Invocationsを削減
-export const revalidate = 300 // 5分間キャッシュ（30秒から延長）
+export const revalidate = 1800 // 30分間キャッシュ（cronジョブと同期）
 // dynamicを削除してISRを有効化
 
 interface PageProps {
