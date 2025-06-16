@@ -92,9 +92,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
           const lastUpdate = new Date(cfData.metadata.updatedAt)
           const now = new Date()
           const diffMinutes = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000 / 60)
-          console.log(`[RANKING] KV data last updated: ${cfData.metadata.updatedAt} (${diffMinutes} minutes ago)`)
-          console.log(`[RANKING] Total items in KV: ${cfData.metadata.totalItems || 'unknown'}`)
-          console.log(`[RANKING] Genre: ${genre}, Period: ${period}, Items: ${cfData.items.length}`)
+          // console.log(`[RANKING] KV data last updated: ${cfData.metadata.updatedAt} (${diffMinutes} minutes ago)`)
+          // console.log(`[RANKING] Total items in KV: ${cfData.metadata.totalItems || 'unknown'}`)
+          // console.log(`[RANKING] Genre: ${genre}, Period: ${period}, Items: ${cfData.items.length}`)
         }
         
         // NGフィルタリングを適用

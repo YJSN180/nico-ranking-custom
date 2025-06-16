@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { KVRateLimit } from './lib/rate-limit-kv'
+import { MemoryRateLimit } from './lib/rate-limit-memory'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 
 // フォールバック用のインメモリレート制限（KVが利用できない場合）
@@ -8,12 +8,12 @@ const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
 
 async function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): Promise<boolean> {
   try {
-    // Try CloudFlare KV first
-    const kvResult = await KVRateLimit.checkLimit(ip, limit, windowMs)
-    return kvResult
+    // Use memory-based rate limiting with periodic KV sync
+    const result = await MemoryRateLimit.checkLimit(ip, limit, windowMs)
+    return result
   } catch (error) {
     // Fallback to in-memory rate limiting
-    console.error('[RATE_LIMIT] KV failed, using in-memory:', error)
+    // console.error('[RATE_LIMIT] Memory rate limit failed, using fallback:', error)
     
     const now = Date.now()
     const entry = rateLimitStore.get(ip)

@@ -57,14 +57,20 @@ export async function checkRateLimit(
       }
     }
     
-    // カウントを増やして保存
-    await kvNamespace.put(
-      key, 
-      String(count + 1), 
-      { 
-        expirationTtl: Math.ceil(config.window / 1000) + 60 // TTLは秒単位 + バッファ
-      }
-    )
+    // カウントを増やして保存（書き込み頻度を削減）
+    // 5リクエストごと、または制限値に近い場合のみ更新
+    const newCount = count + 1
+    const shouldUpdate = newCount === 1 || newCount % 5 === 0 || newCount >= config.requests - 2
+    
+    if (shouldUpdate) {
+      await kvNamespace.put(
+        key, 
+        String(newCount), 
+        { 
+          expirationTtl: Math.ceil(config.window / 1000) + 60 // TTLは秒単位 + バッファ
+        }
+      )
+    }
     
     return {
       allowed: true,

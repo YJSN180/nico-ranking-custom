@@ -51,16 +51,21 @@ export class KVRateLimit {
         return false
       }
 
-      // Increment count
-      await kv.set(key, {
-        ...data,
-        count: data.count + 1
-      }, { ex: this.TTL })
+      // 書き込み頻度を削減：5リクエストごと、またはカウントが制限値に近い場合のみ更新
+      const shouldUpdate = data.count % 5 === 0 || data.count >= limit - 2
+      
+      if (shouldUpdate) {
+        // Increment count
+        await kv.set(key, {
+          ...data,
+          count: data.count + 1
+        }, { ex: this.TTL })
+      }
       
       return true
     } catch (error) {
       // On error, allow the request but log
-      console.error('[RATE_LIMIT] KV error:', error)
+      // console.error('[RATE_LIMIT] KV error:', error)
       return true
     }
   }

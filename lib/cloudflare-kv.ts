@@ -139,20 +139,20 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
     const data = await response.arrayBuffer()
     const uint8Array = new Uint8Array(data)
     
-    console.log(`[KV] Data received: ${data.byteLength} bytes`)
+    // console.log(`[KV] Data received: ${data.byteLength} bytes`)
     
     // データが圧縮されているかチェック（gzipマジックナンバー）
     if (uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
-      console.log('[KV] Decompressing gzipped data...')
+      // console.log('[KV] Decompressing gzipped data...')
       try {
         const decompressed = await decompressData(uint8Array)
-        console.log('[KV] Decompression successful')
+        // console.log('[KV] Decompression successful')
         return decompressed
       } catch (decompressError) {
-        console.error('[KV] Decompression failed:', decompressError)
+        // console.error('[KV] Decompression failed:', decompressError)
         // メモリ不足の可能性がある
         if (decompressError instanceof Error && decompressError.message.includes('buffer')) {
-          console.error('[KV] Possible memory issue with 8.4MB compressed data')
+          // console.error('[KV] Possible memory issue with 8.4MB compressed data')
         }
         throw decompressError
       }

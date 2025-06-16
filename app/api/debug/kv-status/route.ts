@@ -20,7 +20,7 @@ export async function GET() {
       const { getRankingFromKV, getGenreRanking } = await import('@/lib/cloudflare-kv')
       
       // 1. 全体データの取得を試みる
-      console.log('[KV Debug] Attempting to fetch full ranking data...')
+      // console.log('[KV Debug] Attempting to fetch full ranking data...')
       const data = await getRankingFromKV()
       
       if (data) {
@@ -35,7 +35,7 @@ export async function GET() {
       }
       
       // 2. 個別ジャンルの取得を試みる（データサイズ問題の確認）
-      console.log('[KV Debug] Attempting to fetch single genre data...')
+      // console.log('[KV Debug] Attempting to fetch single genre data...')
       const genreData = await getGenreRanking('all', '24h')
       if (genreData) {
         genreTest = {
@@ -54,7 +54,7 @@ export async function GET() {
       
     } catch (error) {
       kvError = error instanceof Error ? error.message : 'Unknown error'
-      console.error('[KV Debug] Error:', error)
+      // console.error('[KV Debug] Error:', error)
     }
   } else {
     kvError = 'Missing required environment variables'
