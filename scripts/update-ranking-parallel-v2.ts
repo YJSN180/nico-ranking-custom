@@ -403,9 +403,35 @@ async function processGenre(
     }
   };
   
-  // Skip tag rankings to reduce data size
-  // Tag rankings are now fetched on-demand via API
-  console.log(`[${new Date().toISOString()}] Skipping tag rankings for ${genre} to reduce data size`)
+  // For "other" genre, fetch popular tag rankings
+  if (genre === 'other' && popularTags.length > 0) {
+    console.log(`[${new Date().toISOString()}] Fetching popular tag rankings for "other" genre`);
+    
+    // Limit to top 5 tags to manage data size
+    const topTags = popularTags.slice(0, 5);
+    
+    for (const tag of topTags) {
+      try {
+        // Add delay between tag fetches
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Fetch tag rankings (limit to 300 items to save space)
+        const tag24h = await fetchWithNGFiltering(genre, '24h', ngList, tag, 300);
+        const tagHour = await fetchWithNGFiltering(genre, 'hour', ngList, tag, 300);
+        
+        result.data['24h'].tags[tag] = tag24h.items;
+        result.data['hour'].tags[tag] = tagHour.items;
+        
+        console.log(`[${new Date().toISOString()}] Fetched tag "${tag}" (24h: ${tag24h.items.length}, hour: ${tagHour.items.length})`);
+      } catch (error) {
+        console.error(`[${new Date().toISOString()}] Failed to fetch tag "${tag}":`, error);
+        // Continue with other tags
+      }
+    }
+  } else {
+    // Skip tag rankings for other genres to reduce data size
+    console.log(`[${new Date().toISOString()}] Skipping tag rankings for ${genre} to reduce data size`);
+  }
   
   console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
   
