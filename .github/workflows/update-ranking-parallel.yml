@@ -149,7 +149,7 @@ jobs:
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
       run: |
         echo "Aggregating results and writing to KV..."
-        echo "Expected 8 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
+        echo "Expected 6 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
         npx tsx scripts/aggregate-ranking-results.ts
     
     - name: Report completion

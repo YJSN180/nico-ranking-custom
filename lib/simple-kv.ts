@@ -90,17 +90,40 @@ class SimpleKV {
 
     const body = typeof value === 'string' ? value : JSON.stringify(value)
 
-    const response = await fetch(url.toString(), {
-      method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${CF_API_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body,
-    })
+    // Retry logic for 429 errors
+    const maxRetries = 3
+    let lastError
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${CF_API_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body,
+        })
 
-    if (!response.ok) {
-      throw new Error(`KV set failed: ${response.status}`)
+        if (response.status === 429) {
+          // Rate limited - use exponential backoff
+          const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
+          await new Promise(resolve => setTimeout(resolve, delay))
+          continue
+        }
+
+        if (!response.ok) {
+          throw new Error(`KV set failed: ${response.status}`)
+        }
+        
+        // Success
+        return
+      } catch (error) {
+        lastError = error
+        if (attempt === maxRetries - 1) {
+          throw error
+        }
+      }
     }
   }
 

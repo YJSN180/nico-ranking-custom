@@ -36,8 +36,11 @@ async function writeToCloudflareKV(data: any): Promise<void> {
 
       if (response.status === 429) {
         // Rate limited, wait with exponential backoff
-        const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-        console.log(`KV rate limited, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+        // 最初のリトライは10秒待つ（大きなペイロードとCloudflare KVの1書き込み/秒制限のため）
+        const baseDelay = 10000; // 10秒
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), 60000); // 最大60秒
+        console.log(`KV rate limited (429), waiting ${delay/1000}s before retry... (attempt ${attempt + 1}/${maxRetries})`);
+        console.log(`Payload size: ${Math.round(compressed.length / 1024)}KB compressed`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -150,16 +153,17 @@ async function main() {
         // New structure: result.data contains both '24h' and 'hour'
         rankingData.genres[result.genre] = result.data;
         
-        // Count items - EXACTLY THE SAME AS ORIGINAL
+        // Count items - タグランキングはスキップされているので除外
         totalItemsCount += result.data['24h'].items.length;
         totalItemsCount += result.data['hour'].items.length;
         
-        for (const tagItems of Object.values(result.data['24h'].tags)) {
-          totalItemsCount += (tagItems as any[]).length;
-        }
-        for (const tagItems of Object.values(result.data['hour'].tags)) {
-          totalItemsCount += (tagItems as any[]).length;
-        }
+        // タグランキングはもう含まれていない（update-ranking-parallel-v2.tsでスキップ）
+        // for (const tagItems of Object.values(result.data['24h'].tags)) {
+        //   totalItemsCount += (tagItems as any[]).length;
+        // }
+        // for (const tagItems of Object.values(result.data['hour'].tags)) {
+        //   totalItemsCount += (tagItems as any[]).length;
+        // }
       }
     }
     
@@ -188,13 +192,15 @@ async function main() {
       console.log('Missing genres:', missingGenres.join(', '));
       
       // Check if missing genres correspond to specific groups
-      const groupSizes = [3, 3, 3, 3, 3, 3, 3, 2]; // Group distribution
-      let currentIndex = 0;
+      // Updated to match GitHub Actions workflow (6 groups instead of 8)
+      const totalGroups = 6;
+      const genresPerGroup = Math.ceil(ALL_GENRES.length / totalGroups);
       const missingGroups: number[] = [];
       
-      for (let group = 1; group <= 8; group++) {
-        const groupGenres = ALL_GENRES.slice(currentIndex, currentIndex + groupSizes[group - 1]);
-        currentIndex += groupSizes[group - 1];
+      for (let group = 1; group <= totalGroups; group++) {
+        const startIdx = (group - 1) * genresPerGroup;
+        const endIdx = Math.min(startIdx + genresPerGroup, ALL_GENRES.length);
+        const groupGenres = ALL_GENRES.slice(startIdx, endIdx);
         
         if (groupGenres.every(g => missingGenres.includes(g))) {
           missingGroups.push(group);
