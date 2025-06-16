@@ -1,12 +1,18 @@
 export interface NGList {
   // 手動で設定したNGリスト
   videoIds: string[]      // 動画ID（例: "sm12345"）
-  videoTitles: string[]   // 動画タイトル（完全一致）
+  videoTitles: {          // 動画タイトル
+    exact: string[]       // 完全一致
+    partial: string[]     // 部分一致
+  }
   authorIds: string[]     // 投稿者ID
-  authorNames: string[]   // 投稿者名（完全一致）
+  authorNames: {          // 投稿者名
+    exact: string[]       // 完全一致
+    partial: string[]     // 部分一致
+  }
   
-  // 自動追加されたNGリスト（派生NG）
-  derivedVideoIds: string[] // 他の条件でNGされた動画ID
+  // 自動追加されたNGリスト（派生NG）は別キーで管理
+  derivedVideoIds?: string[] // 互換性のため（オプショナル）
 }
 
 export interface NGFilterResult {

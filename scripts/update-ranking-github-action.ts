@@ -3,6 +3,7 @@ import 'dotenv/config'
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
+import { filterWithNGList, type NGFilterResult } from '../lib/filter-with-ng-list'
 
 // All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
@@ -40,13 +41,18 @@ const GENRE_ID_MAP: Record<RankingGenre, string> = {
   other: 'ramuboyn'
 };
 
-// NG list interface
+// NG list interface (compatible with filter-with-ng-list)
 interface NGList {
   videoIds: string[]
-  videoTitles: string[]
+  videoTitles: {
+    exact: string[]
+    partial: string[]
+  }
   authorIds: string[]
-  authorNames: string[]
-  derivedVideoIds: string[]
+  authorNames: {
+    exact: string[]
+    partial: string[]
+  }
 }
 
 // Helper to fetch with Googlebot UA
@@ -111,43 +117,45 @@ function convertThumbnailUrl(url: string): string {
 async function getNGList(): Promise<NGList> {
   try {
     const [manual, derived] = await Promise.all([
-      kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual'),
+      kv.get<NGList>('ng-list-manual'),
       kv.get<string[]>('ng-list-derived')
     ]);
     
+    // Combine manual and derived video IDs
+    const combinedVideoIds = [
+      ...(manual?.videoIds || []),
+      ...(derived || [])
+    ];
+    
     return {
-      videoIds: manual?.videoIds || [],
-      videoTitles: manual?.videoTitles || [],
+      videoIds: combinedVideoIds,
+      videoTitles: manual?.videoTitles || { exact: [], partial: [] },
       authorIds: manual?.authorIds || [],
-      authorNames: manual?.authorNames || [],
-      derivedVideoIds: derived || []
+      authorNames: manual?.authorNames || { exact: [], partial: [] }
     };
   } catch (error) {
     console.error('Failed to fetch NG list:', error);
     return {
       videoIds: [],
-      videoTitles: [],
+      videoTitles: { exact: [], partial: [] },
       authorIds: [],
-      authorNames: [],
-      derivedVideoIds: []
+      authorNames: { exact: [], partial: [] }
     };
   }
 }
 
-// Filter items with NG list
-function filterWithNGList(items: RankingItem[], ngList: NGList): RankingItem[] {
-  const videoIdSet = new Set([...ngList.videoIds, ...ngList.derivedVideoIds]);
-  const titleSet = new Set(ngList.videoTitles);
-  const authorIdSet = new Set(ngList.authorIds);
-  const authorNameSet = new Set(ngList.authorNames);
+// Update derived NG list
+async function updateDerivedNGList(newDerivedIds: string[]): Promise<void> {
+  if (newDerivedIds.length === 0) return;
   
-  return items.filter(item => {
-    if (videoIdSet.has(item.id)) return false;
-    if (titleSet.has(item.title)) return false;
-    if (item.authorId && authorIdSet.has(item.authorId)) return false;
-    if (item.authorName && authorNameSet.has(item.authorName)) return false;
-    return true;
-  });
+  try {
+    const existingDerived = await kv.get<string[]>('ng-list-derived') || [];
+    const newSet = new Set([...existingDerived, ...newDerivedIds]);
+    await kv.set('ng-list-derived', Array.from(newSet));
+    console.log(`Added ${newDerivedIds.length} new items to derived NG list`);
+  } catch (error) {
+    console.error('Failed to update derived NG list:', error);
+  }
 }
 
 // Fetch ranking page
@@ -205,8 +213,9 @@ async function fetchWithNGFiltering(
   ngList: NGList,
   tag?: string,
   targetItems: number = 500
-): Promise<{ items: RankingItem[], popularTags: string[] }> {
+): Promise<{ items: RankingItem[], popularTags: string[], newDerivedIds: string[] }> {
   const allItems: RankingItem[] = [];
+  const allNewDerivedIds: string[] = [];
   let popularTags: string[] = [];
   let page = 1;
   const maxPages = 10;
@@ -219,8 +228,13 @@ async function fetchWithNGFiltering(
         popularTags = pageTags;
       }
 
-      const filteredItems = filterWithNGList(items, ngList);
+      const { filteredItems, newDerivedIds } = filterWithNGList(items, ngList);
       allItems.push(...filteredItems);
+      
+      // Collect new derived IDs for batch update
+      if (newDerivedIds.length > 0) {
+        allNewDerivedIds.push(...newDerivedIds);
+      }
 
       if (items.length < 100) break;
       page++;
@@ -239,7 +253,7 @@ async function fetchWithNGFiltering(
     rank: index + 1
   }));
 
-  return { items: limitedItems, popularTags };
+  return { items: limitedItems, popularTags, newDerivedIds: allNewDerivedIds };
 }
 
 // Write to Cloudflare KV via REST API
@@ -301,7 +315,7 @@ async function main() {
     
     // Get NG list
     const ngList = await getNGList();
-    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.length} titles`);
+    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length} exact titles, ${ngList.videoTitles.partial.length} partial titles`);
 
     // Data structure
     const rankingData: any = {
@@ -317,6 +331,7 @@ async function main() {
     const periods: ('24h' | 'hour')[] = ['24h', 'hour'];
     let totalGenresUpdated = 0;
     let totalItemsCount = 0;
+    const allNewDerivedIds: string[] = [];
 
     // Fetch all genres
     for (const genre of ALL_GENRES) {
@@ -325,7 +340,8 @@ async function main() {
       for (const period of periods) {
         try {
           console.log(`Fetching ${genre}/${period} with NG filtering...`);
-          const { items, popularTags } = await fetchWithNGFiltering(genre, period, ngList);
+          const { items, popularTags, newDerivedIds } = await fetchWithNGFiltering(genre, period, ngList);
+          allNewDerivedIds.push(...newDerivedIds);
           
           rankingData.genres[genre][period] = {
             items,
@@ -340,7 +356,8 @@ async function main() {
             for (const tag of popularTags) {
               try {
                 console.log(`Fetching tag ranking for ${genre}/${period}/${tag}...`);
-                const { items: tagItems } = await fetchWithNGFiltering(genre, period, ngList, tag);
+                const { items: tagItems, newDerivedIds: tagDerivedIds } = await fetchWithNGFiltering(genre, period, ngList, tag);
+                allNewDerivedIds.push(...tagDerivedIds);
                 rankingData.genres[genre][period].tags[tag] = tagItems;
                 totalItemsCount += tagItems.length;
                 
@@ -360,6 +377,12 @@ async function main() {
     }
 
     rankingData.metadata.totalItems = totalItemsCount;
+
+    // Update derived NG list
+    if (allNewDerivedIds.length > 0) {
+      console.log(`Updating derived NG list with ${allNewDerivedIds.length} new items...`);
+      await updateDerivedNGList(allNewDerivedIds);
+    }
 
     // Write to Cloudflare KV
     console.log('Writing to Cloudflare KV...');
