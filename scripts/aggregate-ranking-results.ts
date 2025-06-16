@@ -70,6 +70,14 @@ async function writeToCloudflareKV(data: any): Promise<void> {
 
       if (response.status === 429) {
         // Rate limited, wait with exponential backoff
+        lastError = new Error(`KV write failed: Rate limited (429) after ${attempt + 1} attempts`);
+        
+        // 最後の試行の場合はエラーを投げる
+        if (attempt === maxRetries - 1) {
+          console.error(`KV write failed after ${maxRetries} attempts with 429 rate limit`);
+          throw lastError;
+        }
+        
         // 最初のリトライは30秒待つ（大きなペイロードとCloudflare KVの1書き込み/秒制限のため）
         const baseDelay = 30000; // 30秒
         const exponentialDelay = baseDelay * Math.pow(2, attempt);
@@ -77,7 +85,6 @@ async function writeToCloudflareKV(data: any): Promise<void> {
         const delay = Math.min(jitteredDelay, 120000); // 最大120秒
         console.log(`KV rate limited (429), waiting ${Math.round(delay/1000)}s before retry... (attempt ${attempt + 1}/${maxRetries})`);
         console.log(`Payload size: ${Math.round(compressed.length / 1024)}KB compressed`);
-        lastError = new Error(`KV write failed: Rate limited (429) after ${attempt + 1} attempts`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }

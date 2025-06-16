@@ -6,6 +6,11 @@ on:
     # GitHub Actions uses UTC, so JST-9 hours
     - cron: '0,30 * * * *'
   workflow_dispatch: # Allow manual trigger
+
+# 同時実行を防ぐ
+concurrency:
+  group: update-ranking
+  cancel-in-progress: false
   
 jobs:
   # Step 0: Fetch NG list once to avoid rate limiting
