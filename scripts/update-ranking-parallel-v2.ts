@@ -403,18 +403,18 @@ async function processGenre(
     }
   };
   
-  // For "other" genre, fetch ALL popular tag rankings
-  if (genre === 'other' && popularTags.length > 0) {
-    console.log(`[${new Date().toISOString()}] Fetching ALL popular tag rankings for "other" genre (${popularTags.length} tags)`);
+  // Fetch popular tag rankings for ALL genres
+  if (popularTags.length > 0) {
+    console.log(`[${new Date().toISOString()}] Fetching popular tag rankings for ${genre} (${popularTags.length} tags)`);
     
     // Process all popular tags
     for (let i = 0; i < popularTags.length; i++) {
       const tag = popularTags[i];
       try {
-        // Add delay between tag fetches
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Add delay between tag fetches to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Fetch tag rankings (limit to 300 items to save space)
+        // Fetch tag rankings (limit to 300 items)
         const tag24h = await fetchWithNGFiltering(genre, '24h', ngList, tag, 300);
         const tagHour = await fetchWithNGFiltering(genre, 'hour', ngList, tag, 300);
         
@@ -428,8 +428,7 @@ async function processGenre(
       }
     }
   } else {
-    // Skip tag rankings for other genres to reduce data size
-    console.log(`[${new Date().toISOString()}] Skipping tag rankings for ${genre} to reduce data size`);
+    console.log(`[${new Date().toISOString()}] No popular tags found for ${genre}`);
   }
   
   console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);

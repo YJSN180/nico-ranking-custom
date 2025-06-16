@@ -95,15 +95,20 @@ function getNextRunTimes(): string[] {
       }
     } else {
       // Second next run
-      if (runs[0].includes(':30:')) {
+      const firstRunTime = runs[0]
+      if (!firstRunTime) {
+        continue
+      }
+      
+      if (firstRunTime.includes(':30:')) {
         // If first run is at :30, next is at :00 of next hour
-        const firstRun = new Date(runs[0])
+        const firstRun = new Date(firstRunTime)
         firstRun.setHours(firstRun.getHours() + 1, 0, 0, 0)
         runs.push(firstRun.toISOString())
         continue
       } else {
         // If first run is at :00, next is at :30 of same hour
-        const firstRun = new Date(runs[0])
+        const firstRun = new Date(firstRunTime)
         firstRun.setMinutes(30, 0, 0)
         runs.push(firstRun.toISOString())
         continue

@@ -203,17 +203,21 @@ async function main() {
         // New structure: result.data contains both '24h' and 'hour'
         rankingData.genres[result.genre] = result.data;
         
-        // Count items - タグランキングはスキップされているので除外
+        // Count items
         totalItemsCount += result.data['24h'].items.length;
         totalItemsCount += result.data['hour'].items.length;
         
-        // タグランキングはもう含まれていない（update-ranking-parallel-v2.tsでスキップ）
-        // for (const tagItems of Object.values(result.data['24h'].tags)) {
-        //   totalItemsCount += (tagItems as any[]).length;
-        // }
-        // for (const tagItems of Object.values(result.data['hour'].tags)) {
-        //   totalItemsCount += (tagItems as any[]).length;
-        // }
+        // タグランキングも含める（全ジャンルで取得するようになったため）
+        if (result.data['24h'].tags) {
+          for (const tagItems of Object.values(result.data['24h'].tags)) {
+            totalItemsCount += (tagItems as any[]).length;
+          }
+        }
+        if (result.data['hour'].tags) {
+          for (const tagItems of Object.values(result.data['hour'].tags)) {
+            totalItemsCount += (tagItems as any[]).length;
+          }
+        }
       }
     }
     

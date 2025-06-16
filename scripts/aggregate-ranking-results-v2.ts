@@ -29,7 +29,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
   // Step 1: Write to temporary key (less likely to conflict)
   const tempUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${tempKey}`;
 
-  const maxRetries = 1; // 無料プラン制限を考慮して1回のみ
+  const maxRetries = 3; // レート制限エラーに対応するため3回に増やす
   let writeSuccessful = false;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -48,11 +48,11 @@ async function writeToCloudflareKV(data: any): Promise<void> {
           throw new Error(`KV write failed: Rate limited (429) after ${maxRetries} attempts`);
         }
         
-        // Use shorter initial delay for temp key
-        const baseDelay = 5000; // 5 seconds for temp key
+        // Use longer initial delay to avoid rate limits
+        const baseDelay = 15000; // 15 seconds initial delay
         const exponentialDelay = baseDelay * Math.pow(2, attempt);
-        const jitteredDelay = exponentialDelay + Math.random() * 5000;
-        const delay = Math.min(jitteredDelay, 60000); // Max 60s
+        const jitteredDelay = exponentialDelay + Math.random() * 10000;
+        const delay = Math.min(jitteredDelay, 120000); // Max 120s
         
         console.log(`Rate limited on temp key, waiting ${Math.round(delay/1000)}s... (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -272,6 +272,18 @@ async function main() {
         // Count items
         totalItemsCount += result.data['24h'].items.length;
         totalItemsCount += result.data['hour'].items.length;
+        
+        // タグランキングも含める
+        if (result.data['24h'].tags) {
+          for (const tagItems of Object.values(result.data['24h'].tags)) {
+            totalItemsCount += (tagItems as any[]).length;
+          }
+        }
+        if (result.data['hour'].tags) {
+          for (const tagItems of Object.values(result.data['hour'].tags)) {
+            totalItemsCount += (tagItems as any[]).length;
+          }
+        }
       }
     }
     
