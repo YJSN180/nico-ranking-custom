@@ -39,20 +39,30 @@ export default function ClientPage({
   
   // 設定の管理
   const [config, setConfig] = useState<RankingConfig>(() => {
+    // サーバーサイドでは localStorage を使用しない
+    if (typeof window === 'undefined') {
+      return {
+        period: initialPeriod as '24h' | 'hour',
+        genre: initialGenre as RankingGenre,
+        tag: initialTag
+      }
+    }
+    
     // ローカルストレージから前回の設定を復元
-    const savedConfig = localStorage.getItem('ranking-config')
-    if (savedConfig) {
-      try {
+    try {
+      const savedConfig = localStorage.getItem('ranking-config')
+      if (savedConfig) {
         const parsed = JSON.parse(savedConfig)
         return {
           period: parsed.period || initialPeriod as '24h' | 'hour',
           genre: parsed.genre || initialGenre as RankingGenre,
           tag: parsed.tag || initialTag
         }
-      } catch {
-        // パースエラーの場合はデフォルト値を使用
       }
+    } catch {
+      // パースエラーの場合はデフォルト値を使用
     }
+    
     return {
       period: initialPeriod as '24h' | 'hour',
       genre: initialGenre as RankingGenre,
@@ -62,18 +72,23 @@ export default function ClientPage({
   
   const [rankingData, setRankingData] = useState<RankingData>(initialData)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
+    // サーバーサイドでは localStorage を使用しない
+    if (typeof window === 'undefined') {
+      return popularTags
+    }
+    
     // 人気タグをlocalStorageから復元（ブラウザバック対応）
-    const storageKey = `popular-tags-${config.genre}-${config.period}`
-    const cached = localStorage.getItem(storageKey)
-    if (cached) {
-      try {
+    const storageKey = `popular-tags-${initialGenre}-${initialPeriod}`
+    try {
+      const cached = localStorage.getItem(storageKey)
+      if (cached) {
         const parsed = JSON.parse(cached)
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed
         }
-      } catch {
-        // パースエラーは無視
       }
+    } catch {
+      // パースエラーは無視
     }
     return popularTags
   })
@@ -184,11 +199,13 @@ export default function ClientPage({
     setError(null)
     
     // ローカルストレージに保存（エラーをキャッチ）
-    try {
-      localStorage.setItem('ranking-config', JSON.stringify(newConfig))
-    } catch (error) {
-      // ストレージエラーは無視（機能には影響しない）
-      console.error('Failed to save config to localStorage:', error)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ranking-config', JSON.stringify(newConfig))
+      } catch (error) {
+        // ストレージエラーは無視（機能には影響しない）
+        // console.error は使用しない（ESLintエラーを避けるため）
+      }
     }
     
     // URLを更新
@@ -238,16 +255,18 @@ export default function ClientPage({
               }
             } catch {
               // エラー時はキャッシュから取得を試みる
-              const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
-              const cached = localStorage.getItem(storageKey)
-              if (cached) {
-                try {
-                  const parsed = JSON.parse(cached)
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setCurrentPopularTags(parsed)
+              if (typeof window !== 'undefined') {
+                const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
+                const cached = localStorage.getItem(storageKey)
+                if (cached) {
+                  try {
+                    const parsed = JSON.parse(cached)
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      setCurrentPopularTags(parsed)
+                    }
+                  } catch {
+                    // パースエラーは無視
                   }
-                } catch {
-                  // パースエラーは無視
                 }
               }
             }
@@ -266,16 +285,18 @@ export default function ClientPage({
               }
             } catch {
               // エラー時はキャッシュから取得
-              const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
-              const cached = localStorage.getItem(storageKey)
-              if (cached) {
-                try {
-                  const parsed = JSON.parse(cached)
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setCurrentPopularTags(parsed)
+              if (typeof window !== 'undefined') {
+                const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
+                const cached = localStorage.getItem(storageKey)
+                if (cached) {
+                  try {
+                    const parsed = JSON.parse(cached)
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                      setCurrentPopularTags(parsed)
+                    }
+                  } catch {
+                    // パースエラーは無視
                   }
-                } catch {
-                  // パースエラーは無視
                 }
               }
             }
