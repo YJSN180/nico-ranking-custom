@@ -29,10 +29,8 @@ const DISPLAY_LIMITS = {
 
 // 段階的表示の定数
 const PROGRESSIVE_DISPLAY = {
-  INITIAL_DESKTOP: 30,    // デスクトップ初期表示件数
-  INITIAL_MOBILE: 20,     // モバイル初期表示件数
-  INCREMENT_DESKTOP: 20,  // デスクトップ増分
-  INCREMENT_MOBILE: 15,   // モバイル増分
+  BATCH_SIZE: 10,        // 一度に表示する件数
+  BATCH_DELAY: 100,      // バッチ間の遅延（ms）
 }
 
 export default function ClientPage({ 
@@ -89,25 +87,8 @@ export default function ClientPage({
   const [error, setError] = useState<string | null>(null)
   
   // 段階的表示の状態管理
-  const [displayCount, setDisplayCount] = useState(() => {
-    // URL パラメータから表示件数を復元
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const show = params.get('show')
-      if (show) {
-        const count = parseInt(show, 10)
-        if (!isNaN(count) && count > 0) {
-          return count
-        }
-      }
-    }
-    // デフォルト初期表示件数
-    return typeof window !== 'undefined' && window.innerWidth <= 768 
-      ? PROGRESSIVE_DISPLAY.INITIAL_MOBILE 
-      : PROGRESSIVE_DISPLAY.INITIAL_DESKTOP
-  })
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [previousDisplayCount, setPreviousDisplayCount] = useState(displayCount)
+  const [visibleCount, setVisibleCount] = useState(0)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
   
   // 人気タグのキャッシュ保存用
   const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
@@ -129,46 +110,6 @@ export default function ClientPage({
   
   // モバイル検出
   const isMobile = useMobileDetect()
-  
-  // 段階的表示のコールバック
-  const showMoreItems = useCallback(() => {
-    setIsLoadingMore(true)
-    
-    // 現在の表示数を記録
-    setPreviousDisplayCount(displayCount)
-    
-    // スムーズなアニメーション効果
-    setTimeout(() => {
-      setDisplayCount(prevCount => {
-        const increment = isMobile ? PROGRESSIVE_DISPLAY.INCREMENT_MOBILE : PROGRESSIVE_DISPLAY.INCREMENT_DESKTOP
-        const newCount = prevCount + increment
-        
-        // URL状態を更新（ブラウザバック対応）
-        if (typeof window !== 'undefined') {
-          const url = new URL(window.location.href)
-          url.searchParams.set('show', newCount.toString())
-          window.history.replaceState({}, '', url.toString())
-        }
-        
-        return newCount
-      })
-      setIsLoadingMore(false)
-    }, 300) // 300msのアニメーション時間
-  }, [isMobile, displayCount])
-  
-  // 設定変更時に表示件数をリセット
-  const resetDisplayCount = useCallback(() => {
-    const initialCount = isMobile ? PROGRESSIVE_DISPLAY.INITIAL_MOBILE : PROGRESSIVE_DISPLAY.INITIAL_DESKTOP
-    setDisplayCount(initialCount)
-    setPreviousDisplayCount(initialCount)
-    
-    // URLからshow parameterを削除
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href)
-      url.searchParams.delete('show')
-      window.history.replaceState({}, '', url.toString())
-    }
-  }, [isMobile])
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -252,8 +193,11 @@ export default function ClientPage({
     setLoading(true)
     setError(null)
     
-    // 段階的表示の件数をリセット
-    resetDisplayCount()
+    // 段階的表示をリセット
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
     
     // ローカルストレージに保存（エラーをキャッチ）
     try {
@@ -263,12 +207,11 @@ export default function ClientPage({
       console.error('Failed to save config to localStorage:', error)
     }
     
-    // URLを更新（showパラメータはリセット時に削除される）
+    // URLを更新
     const params = new URLSearchParams()
     if (newConfig.genre !== 'all') params.set('genre', newConfig.genre)
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
-    // 注意：showパラメータは意図的に追加しない（resetDisplayCountで削除される）
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
@@ -406,19 +349,58 @@ export default function ClientPage({
   
   // 段階的表示用のアイテム（実際に表示されるもの）
   const displayItems = useMemo(() => {
-    return allFilteredItems.slice(0, displayCount)
-  }, [allFilteredItems, displayCount])
+    return allFilteredItems.slice(0, visibleCount)
+  }, [allFilteredItems, visibleCount])
   
-  // アニメーション制御
+  // 段階的表示の制御
   useEffect(() => {
-    if (!isLoadingMore && displayItems.length > previousDisplayCount) {
-      // 新しいアイテムのアニメーションを開始
-      const timer = setTimeout(() => {
-        setPreviousDisplayCount(displayItems.length)
-      }, 100)
-      return () => clearTimeout(timer)
+    // データがない場合は何もしない
+    if (allFilteredItems.length === 0) {
+      setVisibleCount(0)
+      return
     }
-  }, [displayItems.length, isLoadingMore, previousDisplayCount])
+    
+    // 既存のインターバルをクリア
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    
+    // 初期表示件数を設定
+    let currentCount = Math.min(PROGRESSIVE_DISPLAY.BATCH_SIZE, allFilteredItems.length)
+    setVisibleCount(currentCount)
+    
+    // 全件表示済みの場合は何もしない
+    if (currentCount >= allFilteredItems.length) {
+      return
+    }
+    
+    // 段階的に表示を増やす
+    intervalRef.current = setInterval(() => {
+      setVisibleCount(prev => {
+        const nextCount = prev + PROGRESSIVE_DISPLAY.BATCH_SIZE
+        if (nextCount >= allFilteredItems.length) {
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current)
+            intervalRef.current = null
+          }
+          return allFilteredItems.length
+        }
+        return nextCount
+      })
+    }, PROGRESSIVE_DISPLAY.BATCH_DELAY)
+    
+    // クリーンアップ
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
+  }, [allFilteredItems.length])
+  
+  // プログレッシブローディング中かどうか
+  const isProgressiveLoading = visibleCount < allFilteredItems.length && allFilteredItems.length > 0
   
   // レンダリング
   return (
@@ -452,7 +434,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && displayItems.length === 0 && (
+      {!loading && !error && allFilteredItems.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
@@ -463,7 +445,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && displayItems.length > 0 && (
+      {!loading && !error && allFilteredItems.length > 0 && (
         <>
           {/* リアルタイム更新インジケーター */}
           <div style={{
@@ -492,126 +474,86 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 表示件数情報 */}
-          <div style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            color: 'var(--text-secondary)',
-            textAlign: 'right'
-          }}>
-            {displayItems.length}件表示中 / 全{allFilteredItems.length}件
-            {displayItems.length < allFilteredItems.length && (
-              <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '8px' }}>
-                ({allFilteredItems.length - displayItems.length}件未表示)
-              </span>
-            )}
-          </div>
-          
           {/* ランキングリスト */}
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {displayItems.map((item, index) => {
-              // 新しく追加されたアイテムかどうかを判定
-              const isNewItem = index >= previousDisplayCount
-              return (
-                <li
-                  key={item.id}
-                  style={{
-                    opacity: isNewItem && isLoadingMore ? 0 : 1,
-                    transform: isNewItem && isLoadingMore ? 'translateY(20px)' : 'translateY(0)',
-                    transition: 'opacity 0.4s ease, transform 0.4s ease',
-                    transitionDelay: isNewItem ? `${(index - previousDisplayCount) * 50}ms` : '0ms'
-                  }}
-                >
-                  <RankingItemComponent 
-                    item={item} 
-                    isMobile={isMobile} 
-                  />
-                </li>
-              )
-            })}
-          </ul>
-          
-          {/* もっと見るボタン */}
-          {displayItems.length < allFilteredItems.length && (
-            <div style={{
-              textAlign: 'center',
-              padding: '24px 16px',
-              marginTop: '16px'
-            }}>
-              <button
-                onClick={showMoreItems}
-                disabled={isLoadingMore}
+            {displayItems.map((item, index) => (
+              <li
+                key={item.id}
                 style={{
-                  background: isLoadingMore ? 'var(--surface-secondary)' : 'var(--accent-color)',
-                  color: isLoadingMore ? 'var(--text-secondary)' : '#ffffff',
-                  border: 'none',
-                  borderRadius: isMobile ? '6px' : '8px',
-                  padding: isMobile ? '10px 24px' : '12px 32px',
-                  fontSize: isMobile ? '15px' : '16px',
-                  fontWeight: '600',
-                  cursor: isLoadingMore ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s ease',
-                  minWidth: isMobile ? '140px' : '160px',
-                  opacity: isLoadingMore ? 0.7 : 1,
-                  // モバイルでのタップ反応改善
-                  WebkitTapHighlightColor: 'transparent'
-                }}
-                onMouseEnter={(e) => {
-                  if (!isLoadingMore && !isMobile) {
-                    e.currentTarget.style.transform = 'translateY(-1px)'
-                    e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isLoadingMore && !isMobile) {
-                    e.currentTarget.style.transform = 'translateY(0)'
-                    e.currentTarget.style.boxShadow = 'var(--shadow-md)'
-                  }
-                }}
-                onTouchStart={(e) => {
-                  if (!isLoadingMore && isMobile) {
-                    e.currentTarget.style.transform = 'scale(0.98)'
-                  }
-                }}
-                onTouchEnd={(e) => {
-                  if (!isLoadingMore && isMobile) {
-                    e.currentTarget.style.transform = 'scale(1)'
-                  }
+                  opacity: 0,
+                  animation: `fadeInUp 0.4s ease ${index * 30}ms forwards`
                 }}
               >
-                {isLoadingMore ? (
-                  <>
-                    <span style={{ marginRight: '8px' }}>⏳</span>
-                    読み込み中...
-                  </>
-                ) : (
-                  <>
-                    <span style={{ marginRight: '8px' }}>📊</span>
-                    もっと見る ({Math.min(
-                      isMobile ? PROGRESSIVE_DISPLAY.INCREMENT_MOBILE : PROGRESSIVE_DISPLAY.INCREMENT_DESKTOP,
-                      allFilteredItems.length - displayItems.length
-                    )}件)
-                  </>
-                )}
-              </button>
-              
-              {/* 進捗表示 */}
+                <RankingItemComponent 
+                  item={item} 
+                  isMobile={isMobile} 
+                />
+              </li>
+            ))}
+          </ul>
+          
+          {/* プログレッシブローディング中の表示 */}
+          {isProgressiveLoading && (
+            <div style={{
+              textAlign: 'center',
+              padding: '24px',
+              opacity: 0.6
+            }}>
+              <div style={{
+                display: 'inline-block',
+                width: '40px',
+                height: '40px',
+                border: '3px solid var(--border-color)',
+                borderTopColor: 'var(--accent-color)',
+                borderRadius: '50%',
+                animation: 'spin 1s linear infinite'
+              }} />
               <div style={{
                 marginTop: '12px',
-                fontSize: isMobile ? '11px' : '12px',
-                color: 'var(--text-muted)'
+                fontSize: '14px',
+                color: 'var(--text-secondary)'
               }}>
-                {Math.round((displayItems.length / allFilteredItems.length) * 100)}% 表示済み
-                {isMobile && (
-                  <div style={{ marginTop: '4px', fontSize: '10px' }}>
-                    残り {allFilteredItems.length - displayItems.length} 件
-                  </div>
-                )}
+                ランキングを読み込み中... ({visibleCount}/{allFilteredItems.length})
               </div>
+            </div>
+          )}
+          
+          {/* すべて表示完了時 */}
+          {!isProgressiveLoading && visibleCount === allFilteredItems.length && (
+            <div style={{
+              textAlign: 'center',
+              padding: '16px',
+              fontSize: '14px',
+              color: 'var(--text-muted)'
+            }}>
+              全{allFilteredItems.length}件表示完了
             </div>
           )}
         </>
       )}
+      
+      {/* アニメーション用CSS */}
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </>
   )
 }
