@@ -156,7 +156,7 @@ jobs:
       run: |
         echo "Aggregating results and writing to KV..."
         echo "Expected 6 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
-        npx tsx scripts/aggregate-ranking-results.ts
+        npx tsx scripts/aggregate-ranking-results-v2.ts
     
     - name: Report completion
       run: |

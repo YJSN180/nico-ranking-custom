@@ -4,6 +4,8 @@ import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
 import { filterWithNGList, type NGFilterResult } from '../lib/filter-with-ng-list'
+import { migrateLegacyNGList } from '../lib/ng-list-migration'
+import type { NGList } from '../types/ng-list'
 
 // All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
@@ -116,10 +118,13 @@ function convertThumbnailUrl(url: string): string {
 // Get NG list from Vercel KV
 async function getNGList(): Promise<NGList> {
   try {
-    const [manual, derived] = await Promise.all([
-      kv.get<NGList>('ng-list-manual'),
+    const [manualRaw, derived] = await Promise.all([
+      kv.get<NGList | any>('ng-list-manual'),
       kv.get<string[]>('ng-list-derived')
     ]);
+    
+    // Migrate manual list if needed
+    const manual = manualRaw ? migrateLegacyNGList(manualRaw) : null;
     
     // Combine manual and derived video IDs
     const combinedVideoIds = [
