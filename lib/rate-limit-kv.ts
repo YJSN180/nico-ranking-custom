@@ -51,8 +51,8 @@ export class KVRateLimit {
         return false
       }
 
-      // 書き込み頻度を削減：5リクエストごと、またはカウントが制限値に近い場合のみ更新
-      const shouldUpdate = data.count % 5 === 0 || data.count >= limit - 2
+      // 書き込み頻度を削減：10リクエストごと、またはカウントが制限値に近い場合のみ更新
+      const shouldUpdate = data.count % 10 === 0 || data.count >= limit - 5
       
       if (shouldUpdate) {
         // Increment count
