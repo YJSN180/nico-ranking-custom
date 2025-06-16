@@ -13,15 +13,49 @@ async function writeToCloudflareKV(data: any): Promise<void> {
     throw new Error("Cloudflare KV credentials not configured");
   }
 
+  // Check if another process recently wrote data (within last 5 minutes)
+  try {
+    const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/RANKING_LATEST`;
+    const metadataResponse = await fetch(metadataUrl, {
+      headers: {
+        "Authorization": `Bearer ${CF_API_TOKEN}`,
+      },
+    });
+    
+    if (metadataResponse.ok) {
+      const metadata = await metadataResponse.json();
+      if (metadata.result && metadata.result.updatedAt) {
+        const lastUpdate = new Date(metadata.result.updatedAt);
+        const now = new Date();
+        const diffMinutes = (now.getTime() - lastUpdate.getTime()) / 1000 / 60;
+        
+        if (diffMinutes < 5) {
+          console.log(`Skipping KV write - data was updated ${Math.round(diffMinutes)} minutes ago`);
+          console.log(`Last update: ${metadata.result.updatedAt}`);
+          return;
+        }
+      }
+    }
+  } catch (error) {
+    // Ignore metadata check errors
+    console.log('Could not check existing data metadata, proceeding with write');
+  }
+
   // Dynamic import for pako
   const pako = await import('pako');
   const jsonString = JSON.stringify(data);
   const compressed = pako.gzip(jsonString);
 
+  // Add a small random delay to prevent concurrent writes from different workflow runs
+  const jitter = Math.random() * 5000; // 0-5 seconds
+  console.log(`Adding ${Math.round(jitter)}ms jitter before KV write to prevent concurrent access`);
+  await new Promise(resolve => setTimeout(resolve, jitter));
+
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
 
   const maxRetries = 3;
   let lastError;
+  let writeSuccessful = false;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -36,11 +70,14 @@ async function writeToCloudflareKV(data: any): Promise<void> {
 
       if (response.status === 429) {
         // Rate limited, wait with exponential backoff
-        // 最初のリトライは10秒待つ（大きなペイロードとCloudflare KVの1書き込み/秒制限のため）
-        const baseDelay = 10000; // 10秒
-        const delay = Math.min(baseDelay * Math.pow(2, attempt), 60000); // 最大60秒
-        console.log(`KV rate limited (429), waiting ${delay/1000}s before retry... (attempt ${attempt + 1}/${maxRetries})`);
+        // 最初のリトライは30秒待つ（大きなペイロードとCloudflare KVの1書き込み/秒制限のため）
+        const baseDelay = 30000; // 30秒
+        const exponentialDelay = baseDelay * Math.pow(2, attempt);
+        const jitteredDelay = exponentialDelay + Math.random() * 10000; // Add 0-10s jitter
+        const delay = Math.min(jitteredDelay, 120000); // 最大120秒
+        console.log(`KV rate limited (429), waiting ${Math.round(delay/1000)}s before retry... (attempt ${attempt + 1}/${maxRetries})`);
         console.log(`Payload size: ${Math.round(compressed.length / 1024)}KB compressed`);
+        lastError = new Error(`KV write failed: Rate limited (429) after ${attempt + 1} attempts`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -51,6 +88,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
       }
       
       // Success, break out of retry loop
+      writeSuccessful = true;
       break;
     } catch (error) {
       lastError = error;
@@ -62,6 +100,11 @@ async function writeToCloudflareKV(data: any): Promise<void> {
       console.log(`KV write failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
+  }
+
+  // Check if write was successful
+  if (!writeSuccessful) {
+    throw lastError || new Error('KV write failed after all retry attempts');
   }
 
   // Set metadata
