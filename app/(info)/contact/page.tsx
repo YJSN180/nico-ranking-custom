@@ -59,91 +59,11 @@ export default function ContactPage() {
           marginBottom: '20px',
           color: 'var(--text-secondary)',
         }}>
-          ニコラン(Re:turn)に関するご意見・ご要望・バグ報告は、GitHubリポジトリのIssueまたはDiscussionsにてお寄せください。
-        </p>
-        
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '16px',
-        }}>
-          <a
-            href="https://github.com/YJSN180/nico-ranking-custom/issues"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="contact-link"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 20px',
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.2s',
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                GitHub Issues
-              </div>
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                バグ報告・不具合の報告はこちら
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="https://github.com/YJSN180/nico-ranking-custom/discussions"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="contact-link"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 20px',
-              background: 'var(--card-bg)',
-              border: '1px solid var(--border)',
-              borderRadius: '8px',
-              color: 'var(--text-primary)',
-              textDecoration: 'none',
-              transition: 'all 0.2s',
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                GitHub Discussions
-              </div>
-              <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                機能リクエスト・アイデアの共有はこちら
-              </div>
-            </div>
-          </a>
-        </div>
-      </section>
-
-      <section style={{ marginBottom: '40px' }}>
-        <h2 style={{
-          fontSize: '1.5rem',
-          marginBottom: '16px',
-          color: 'var(--text-primary)',
-          fontWeight: 'bold',
-        }}>
-          開発・貢献
-        </h2>
-        <p style={{
-          lineHeight: '1.8',
-          marginBottom: '20px',
-          color: 'var(--text-secondary)',
-        }}>
-          ニコラン(Re:turn)はオープンソースプロジェクトです。プルリクエストによる貢献を歓迎します。
+          ニコラン(Re:turn)に関するご意見・ご要望・バグ報告は、管理者のXアカウント(@yjmnpi)にてお寄せください。
         </p>
         
         <a
-          href="https://github.com/YJSN180/nico-ranking-custom"
+          href="https://twitter.com/yjmnpi"
           target="_blank"
           rel="noopener noreferrer"
           className="contact-link"
@@ -162,10 +82,10 @@ export default function ContactPage() {
         >
           <div>
             <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-              GitHub Repository
+              @yjmnpi
             </div>
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              ソースコード・開発への参加
+              管理者のXアカウント
             </div>
           </div>
         </a>
@@ -190,6 +110,7 @@ export default function ContactPage() {
           <li>動画の著作権は各投稿者に帰属します</li>
           <li>ランキングデータはニコニコ動画から取得しています</li>
           <li>サービスの改善のため、予告なく仕様を変更する場合があります</li>
+          <li>ユーザー側のテーマやNGリストの設定は定期的にリセットされる可能性があります</li>
         </ul>
       </section>
 
@@ -210,7 +131,7 @@ export default function ContactPage() {
         <div style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
           <p style={{ marginBottom: '12px' }}>
             <strong>Q: ランキングはどのくらいの頻度で更新されますか？</strong><br />
-            A: 10分ごとに自動更新されます。
+            A: 30分ごとに自動更新されます。
           </p>
           <p style={{ marginBottom: '12px' }}>
             <strong>Q: 特定の動画が表示されません</strong><br />

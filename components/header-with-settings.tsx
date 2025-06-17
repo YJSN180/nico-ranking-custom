@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { SettingsModal } from './settings-modal'
 import { Navigation } from './navigation'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -36,8 +37,30 @@ export function HeaderWithSettings() {
             userSelect: 'none',
             WebkitUserSelect: 'none',
             MozUserSelect: 'none',
-            msUserSelect: 'none'
+            msUserSelect: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
           }}>
+            <div style={{
+              position: 'relative',
+              width: isMobile ? '32px' : '40px',
+              height: isMobile ? '32px' : '40px',
+              filter: 'brightness(0) invert(1)', // 白色に変換
+              opacity: 0.95
+            }}>
+              <Image
+                src="/icon.png"
+                alt="ニコラン(Re:turn) ロゴ"
+                fill
+                sizes={isMobile ? "32px" : "40px"}
+                style={{
+                  objectFit: 'contain'
+                }}
+                priority
+              />
+            </div>
             <span style={{
               fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
               fontSize: '1em'

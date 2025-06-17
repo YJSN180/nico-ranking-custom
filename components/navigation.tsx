@@ -4,11 +4,26 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
 
-const NAV_ITEMS = [
+type NavItem = {
+  href: string
+  label: string
+  external?: boolean
+  subItems?: NavItem[]
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'ホーム' },
   { href: '/about', label: 'このサイトについて' },
   { href: '/changelog', label: '更新履歴' },
   { href: '/contact', label: 'お問い合わせ' },
+  { 
+    href: 'https://www.nicovideo.jp/', 
+    label: 'ニコニコ動画',
+    external: true,
+    subItems: [
+      { href: 'https://www.nicovideo.jp/ranking', label: 'ランキング(公式)', external: true }
+    ]
+  },
   { href: '/privacy', label: 'プライバシーポリシー' },
 ]
 
@@ -213,22 +228,72 @@ export function Navigation() {
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {NAV_ITEMS.map((item) => (
                     <li key={item.href} style={{ marginBottom: '8px' }}>
-                      <Link
-                        href={item.href}
-                        onClick={() => setIsOpen(false)}
-                        className="nav-link-mobile"
-                        style={{
-                          display: 'block',
-                          padding: '12px 16px',
-                          color: 'var(--text-primary)',
-                          textDecoration: 'none',
-                          borderRadius: '8px',
-                          transition: 'background-color 0.2s',
-                          background: 'var(--bg-secondary)',
-                        }}
-                      >
-                        {item.label}
-                      </Link>
+                      {item.external ? (
+                        <>
+                          <a
+                            href={item.href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => setIsOpen(false)}
+                            className="nav-link-mobile"
+                            style={{
+                              display: 'block',
+                              padding: '12px 16px',
+                              color: 'var(--text-primary)',
+                              textDecoration: 'none',
+                              borderRadius: '8px',
+                              transition: 'background-color 0.2s',
+                              background: 'var(--bg-secondary)',
+                            }}
+                          >
+                            {item.label} ↗
+                          </a>
+                          {item.subItems && (
+                            <ul style={{ listStyle: 'none', padding: 0, margin: '4px 0 0 16px' }}>
+                              {item.subItems.map((subItem) => (
+                                <li key={subItem.href} style={{ marginBottom: '4px' }}>
+                                  <a
+                                    href={subItem.href}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => setIsOpen(false)}
+                                    className="nav-link-mobile"
+                                    style={{
+                                      display: 'block',
+                                      padding: '10px 14px',
+                                      color: 'var(--text-secondary)',
+                                      textDecoration: 'none',
+                                      borderRadius: '6px',
+                                      transition: 'background-color 0.2s',
+                                      background: 'var(--bg-secondary)',
+                                      fontSize: '14px',
+                                    }}
+                                  >
+                                    ↳ {subItem.label} ↗
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </>
+                      ) : (
+                        <Link
+                          href={item.href}
+                          onClick={() => setIsOpen(false)}
+                          className="nav-link-mobile"
+                          style={{
+                            display: 'block',
+                            padding: '12px 16px',
+                            color: 'var(--text-primary)',
+                            textDecoration: 'none',
+                            borderRadius: '8px',
+                            transition: 'background-color 0.2s',
+                            background: 'var(--bg-secondary)',
+                          }}
+                        >
+                          {item.label}
+                        </Link>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -301,29 +366,78 @@ export function Navigation() {
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {NAV_ITEMS.map((item, index) => (
               <li key={item.href}>
-                {index === 4 && (
+                {index === 5 && (
                   <hr style={{
                     margin: '8px 0',
                     border: 'none',
                     borderTop: '1px solid var(--border)',
                   }} />
                 )}
-                <Link
-                  href={item.href}
-                  onClick={() => setIsOpen(false)}
-                  className="nav-link-desktop"
-                  style={{
-                    display: 'block',
-                    padding: '8px 12px',
-                    color: 'var(--text-primary)',
-                    textDecoration: 'none',
-                    borderRadius: '4px',
-                    transition: 'background-color 0.2s',
-                    fontSize: '14px',
-                  }}
-                >
-                  {item.label}
-                </Link>
+                {item.external ? (
+                  <>
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setIsOpen(false)}
+                      className="nav-link-desktop"
+                      style={{
+                        display: 'block',
+                        padding: '8px 12px',
+                        color: 'var(--text-primary)',
+                        textDecoration: 'none',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {item.label} ↗
+                    </a>
+                    {item.subItems && (
+                      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0 12px' }}>
+                        {item.subItems.map((subItem) => (
+                          <li key={subItem.href}>
+                            <a
+                              href={subItem.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => setIsOpen(false)}
+                              className="nav-link-desktop"
+                              style={{
+                                display: 'block',
+                                padding: '6px 10px',
+                                color: 'var(--text-secondary)',
+                                textDecoration: 'none',
+                                borderRadius: '4px',
+                                transition: 'background-color 0.2s',
+                                fontSize: '13px',
+                              }}
+                            >
+                              ↳ {subItem.label} ↗
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                ) : (
+                  <Link
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    className="nav-link-desktop"
+                    style={{
+                      display: 'block',
+                      padding: '8px 12px',
+                      color: 'var(--text-primary)',
+                      textDecoration: 'none',
+                      borderRadius: '4px',
+                      transition: 'background-color 0.2s',
+                      fontSize: '14px',
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                )}
               </li>
             ))}
           </ul>
