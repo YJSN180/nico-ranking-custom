@@ -10,6 +10,7 @@ import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
+import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -37,9 +38,12 @@ export default function ClientPage({
   const router = useRouter()
   const searchParams = useSearchParams()
   
-  // 設定の管理
+  // ユーザー設定の永続化
+  const { preferences, updatePreferences } = useUserPreferences()
+  
+  // 設定の管理（useUserPreferencesから初期化）
   const [config, setConfig] = useState<RankingConfig>(() => {
-    // サーバーサイドでは localStorage を使用しない
+    // サーバーサイドでは初期値を使用
     if (typeof window === 'undefined') {
       return {
         period: initialPeriod as '24h' | 'hour',
@@ -48,25 +52,20 @@ export default function ClientPage({
       }
     }
     
-    // ローカルストレージから前回の設定を復元
-    try {
-      const savedConfig = localStorage.getItem('ranking-config')
-      if (savedConfig) {
-        const parsed = JSON.parse(savedConfig)
-        return {
-          period: parsed.period || initialPeriod as '24h' | 'hour',
-          genre: parsed.genre || initialGenre as RankingGenre,
-          tag: parsed.tag || initialTag
-        }
+    // URLパラメータがある場合は優先
+    if (initialTag || initialGenre !== 'all' || initialPeriod !== '24h') {
+      return {
+        period: initialPeriod as '24h' | 'hour',
+        genre: initialGenre as RankingGenre,
+        tag: initialTag
       }
-    } catch {
-      // パースエラーの場合はデフォルト値を使用
     }
     
+    // URLパラメータがない場合はユーザー設定から復元
     return {
-      period: initialPeriod as '24h' | 'hour',
-      genre: initialGenre as RankingGenre,
-      tag: initialTag
+      period: preferences.lastPeriod || '24h',
+      genre: preferences.lastGenre || 'all',
+      tag: preferences.lastTag
     }
   })
   
@@ -107,14 +106,17 @@ export default function ClientPage({
     }
   }, [])
   
-  // ユーザー設定の永続化
-  const { updatePreferences } = useUserPreferences()
   
   // カスタムNGリスト
   const { filterItems } = useUserNGList()
   
   // モバイル検出
   const isMobile = useMobileDetect()
+  
+  // 初回マウント時にデータ移行を実行
+  useEffect(() => {
+    migrateLocalStorageData()
+  }, [])
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -198,15 +200,12 @@ export default function ClientPage({
     setLoading(true)
     setError(null)
     
-    // ローカルストレージに保存（エラーをキャッチ）
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('ranking-config', JSON.stringify(newConfig))
-      } catch (error) {
-        // ストレージエラーは無視（機能には影響しない）
-        // console.error は使用しない（ESLintエラーを避けるため）
-      }
-    }
+    // ユーザー設定を更新（useUserPreferencesで自動的にlocalStorageに保存される）
+    updatePreferences({
+      lastGenre: newConfig.genre,
+      lastPeriod: newConfig.period,
+      lastTag: newConfig.tag
+    })
     
     // URLを更新
     const params = new URLSearchParams()
@@ -215,12 +214,6 @@ export default function ClientPage({
     if (newConfig.tag) params.set('tag', newConfig.tag)
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
-    
-    // ユーザー設定を更新
-    updatePreferences({
-      lastGenre: newConfig.genre,
-      lastPeriod: newConfig.period,
-    })
     
     try {
       const apiParams = new URLSearchParams({

@@ -1,5 +1,5 @@
 // NGリストのフィルタリング機能
-// 現在はローカルストレージを使用（サーバーサイドでは無効）
+// user-ng-listのみを使用（サーバー側のng-listは削除済み）
 import type { NGList, NGFilterResult } from '@/types/ng-list'
 import type { RankingItem } from '@/types/ranking'
 import { createEmptyNGList, migrateLegacyNGList } from './ng-list-migration'
@@ -12,7 +12,7 @@ let ngListCache: NGList | null = null
 let ngListCacheTime = 0
 const CACHE_DURATION = 60000 // 1分間キャッシュ
 
-// NGリストを取得（サーバーサイドでは常にデフォルト値を返す）
+// NGリストを取得（user-ng-listのみを使用）
 export async function getNGList(): Promise<NGList> {
   // サーバーサイドでは常にデフォルト値を返す
   if (typeof window === 'undefined') {
@@ -25,8 +25,8 @@ export async function getNGList(): Promise<NGList> {
   }
   
   try {
-    // クライアントサイドではローカルストレージから取得
-    const stored = localStorage.getItem('ng-list')
+    // user-ng-listから取得（ng-listは使用しない）
+    const stored = localStorage.getItem('user-ng-list')
     if (stored) {
       const parsed = JSON.parse(stored)
       // マイグレーション処理を適用
@@ -41,7 +41,7 @@ export async function getNGList(): Promise<NGList> {
   return DEFAULT_NG_LIST
 }
 
-// 手動NGリストを保存（クライアントサイドのみ）
+// 手動NGリストを保存（user-ng-listに保存）
 export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>): Promise<void> {
   if (typeof window === 'undefined') {
     return
@@ -53,7 +53,7 @@ export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>):
       ...current,
       ...ngList
     }
-    localStorage.setItem('ng-list', JSON.stringify(updated))
+    localStorage.setItem('user-ng-list', JSON.stringify(updated))
     // キャッシュを無効化
     ngListCache = null
     ngListCacheTime = 0
@@ -62,7 +62,7 @@ export async function saveManualNGList(ngList: Omit<NGList, 'derivedVideoIds'>):
   }
 }
 
-// 派生NGリストに追加（クライアントサイドのみ）
+// 派生NGリストに追加（user-ng-listに保存）
 export async function addToDerivedNGList(videoIds: string[]): Promise<void> {
   if (videoIds.length === 0 || typeof window === 'undefined') return
   
@@ -74,7 +74,7 @@ export async function addToDerivedNGList(videoIds: string[]): Promise<void> {
       ...current,
       derivedVideoIds: Array.from(newSet)
     }
-    localStorage.setItem('ng-list', JSON.stringify(updated))
+    localStorage.setItem('user-ng-list', JSON.stringify(updated))
     // キャッシュを無効化
     ngListCache = null
     ngListCacheTime = 0
