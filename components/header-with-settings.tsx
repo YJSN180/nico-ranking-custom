@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { SettingsModal } from './settings-modal'
 import { Navigation } from './navigation'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -26,51 +27,80 @@ export function HeaderWithSettings() {
           margin: '0 auto',
           padding: isMobile ? '0 60px' : '0 120px' // 両サイドのボタンのスペースを確保
         }}>
-          <h1 style={{ 
-            color: '#ffffff', 
-            margin: 0,
-            textAlign: 'center',
-            fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
-            fontWeight: '700',
-            textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-            letterSpacing: '0.02em',
-            userSelect: 'none',
-            WebkitUserSelect: 'none',
-            MozUserSelect: 'none',
-            msUserSelect: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px'
-          }}>
-            <div style={{
-              position: 'relative',
-              width: isMobile ? '64px' : '80px',
-              height: isMobile ? '64px' : '80px',
-              filter: 'brightness(0) invert(1)', // 白色に変換
-              opacity: 0.95
-            }}>
-              <Image
-                src="/icon.png"
-                alt="ニコラン(Re:turn) ロゴ"
-                fill
-                sizes={isMobile ? "64px" : "80px"}
-                style={{
-                  objectFit: 'contain'
-                }}
-                priority
-              />
-            </div>
-            <span style={{
-              fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
-              fontSize: '1.05em'
-            }}>ニコラン</span>
-            <span style={{
-              fontFamily: '"Comic Sans MS Bold", "Comic Sans MS", cursive, sans-serif',
-              fontSize: '0.9em',
-              marginLeft: '0.05em'
-            }}>(Re:turn)</span>
-          </h1>
+          <Link 
+            href="/" 
+            style={{ 
+              textDecoration: 'none',
+              display: 'block'
+            }}
+          >
+            <h1 style={{ 
+              color: '#ffffff', 
+              margin: 0,
+              textAlign: 'center',
+              fontSize: isMobile ? 'clamp(1.2rem, 3.5vw, 1.8rem)' : 'clamp(1.5rem, 4vw, 2.5rem)',
+              fontWeight: '700',
+              textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              letterSpacing: '0.02em',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: isMobile ? '4px' : '12px',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              if (!isMobile) {
+                e.currentTarget.style.opacity = '0.9'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isMobile) {
+                e.currentTarget.style.opacity = '1'
+              }
+            }}
+            >
+              <div style={{
+                position: 'relative',
+                width: isMobile ? '80px' : '160px',
+                height: isMobile ? '80px' : '160px',
+                filter: 'brightness(0) invert(1)', // 白色に変換
+                opacity: 0.95,
+                marginRight: isMobile ? '-15px' : '-30px', // タイトルとやや重なるように
+              }}>
+                <Image
+                  src="/icon.png"
+                  alt="ニコラン(Re:turn) ロゴ"
+                  fill
+                  sizes={isMobile ? "80px" : "160px"}
+                  style={{
+                    objectFit: 'contain'
+                  }}
+                  priority
+                />
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                flexWrap: 'nowrap',
+                whiteSpace: 'nowrap'
+              }}>
+                <span style={{
+                  fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
+                  fontSize: isMobile ? '1em' : '1em'
+                }}>ニコラン</span>
+                <span style={{
+                  fontFamily: '"Comic Sans MS Bold", "Comic Sans MS", cursive, sans-serif',
+                  fontSize: isMobile ? '0.85em' : '0.85em',
+                  marginLeft: '0.05em'
+                }}>(Re:turn)</span>
+              </div>
+            </h1>
+          </Link>
         </div>
         
         <button
