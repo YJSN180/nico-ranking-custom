@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
+import { getUserPreferencesCookieClient, setUserPreferencesCookieClient } from '@/lib/user-preferences-cookie'
 
 export type ThemeType = 'light' | 'dark' | 'darkblue'
 
@@ -26,14 +27,25 @@ const defaultPreferences: UserPreferences = {
 
 export function useUserPreferences() {
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
-    // 初期化時にlocalStorageから読み込み
+    // 初期化時にCookie/localStorageから読み込み
     if (typeof window !== 'undefined') {
+      // まずCookieから読み込みを試みる
+      const cookiePrefs = getUserPreferencesCookieClient()
+      if (cookiePrefs && cookiePrefs.version === CURRENT_VERSION) {
+        return { ...defaultPreferences, ...cookiePrefs }
+      }
+      
+      // Cookieがない場合、localStorageから移行を試みる（後方互換性）
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
           const parsed = JSON.parse(stored)
           // バージョンチェック
           if (parsed.version === CURRENT_VERSION) {
+            // Cookieに移行
+            setUserPreferencesCookieClient(parsed)
+            // localStorageからは削除
+            localStorage.removeItem(STORAGE_KEY)
             return parsed
           }
         }
@@ -53,11 +65,11 @@ export function useUserPreferences() {
         updatedAt: new Date().toISOString(),
       }
       
-      // localStorageに保存
+      // Cookieに保存
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
+        setUserPreferencesCookieClient(newPrefs)
       } catch (error) {
-        // ストレージエラーは無視
+        // エラーは無視
       }
       
       return newPrefs
@@ -73,9 +85,9 @@ export function useUserPreferences() {
     setPreferences(newPrefs)
     
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
+      setUserPreferencesCookieClient(newPrefs)
     } catch (error) {
-      // ストレージエラーは無視
+      // エラーは無視
     }
   }, [])
 
@@ -86,18 +98,28 @@ export function useUserPreferences() {
   }
 }
 
-// サーバーサイドで使用する関数
+// クライアントサイドで使用する関数（Cookieから取得）
 export function getStoredPreferences(): Partial<UserPreferences> | null {
-  // サーバーサイドではlocalStorageが使えないのでnullを返す
+  // サーバーサイドではCookieが使えないのでnullを返す
   if (typeof window === 'undefined') {
     return null
   }
 
+  // Cookieから読み込み
+  const cookiePrefs = getUserPreferencesCookieClient()
+  if (cookiePrefs && cookiePrefs.version === CURRENT_VERSION) {
+    return cookiePrefs
+  }
+  
+  // 後方互換性のためlocalStorageもチェック
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
       if (parsed.version === CURRENT_VERSION) {
+        // Cookieに移行
+        setUserPreferencesCookieClient(parsed)
+        localStorage.removeItem(STORAGE_KEY)
         return parsed
       }
     }

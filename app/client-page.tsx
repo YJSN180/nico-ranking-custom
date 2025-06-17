@@ -74,8 +74,6 @@ export default function ClientPage({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
-  const hasRestoredRef = useRef(false)
   
   // 人気タグのキャッシュ保存用
   const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
@@ -101,119 +99,8 @@ export default function ClientPage({
     migrateLocalStorageData()
   }, [])
   
-  // 初期表示時の処理（ユーザー設定の復元とデータ取得）
+  // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
-    // SSR中はスキップ
-    if (typeof window === 'undefined') return;
-    const initializeFromPreferences = async () => {
-      // 既に復元済みの場合はスキップ
-      if (hasRestoredRef.current) return;
-      
-      // URLパラメータがある場合はスキップ
-      if (initialTag || initialGenre !== 'all' || initialPeriod !== '24h') {
-        setIsInitialLoad(false);
-        return;
-      }
-      
-      // 直接アクセスでない場合はスキップ
-      const referrer = document.referrer;
-      const currentOrigin = window.location.origin;
-      const isDirectAccess = !referrer || referrer === '' || referrer === currentOrigin || referrer === currentOrigin + '/';
-      
-      if (!isDirectAccess) {
-        setIsInitialLoad(false);
-        return;
-      }
-      
-      // ユーザー設定から復元
-      const storedPrefs = preferences;
-      
-      if (storedPrefs.lastGenre && (storedPrefs.lastGenre !== 'all' || storedPrefs.lastPeriod !== '24h' || storedPrefs.lastTag)) {
-        hasRestoredRef.current = true;
-        
-        // 保存されたタグが現在のジャンル・期間の人気タグに存在するか確認
-        let validTag = storedPrefs.lastTag;
-        if (validTag && storedPrefs.lastGenre !== 'all') {
-          try {
-            const tags = await getPopularTagsClient(storedPrefs.lastGenre, storedPrefs.lastPeriod || '24h');
-            if (tags && tags.length > 0) {
-              setCurrentPopularTags(tags);
-              savePopularTagsToCache(tags, storedPrefs.lastGenre, storedPrefs.lastPeriod || '24h');
-              
-              // タグの有効性チェック
-              if (!tags.includes(validTag)) {
-                validTag = undefined; // 無効なタグはクリア
-              }
-            }
-          } catch {
-            validTag = undefined; // エラー時はタグをクリア
-          }
-        }
-        
-        const restoredConfig = {
-          period: storedPrefs.lastPeriod || '24h',
-          genre: storedPrefs.lastGenre || 'all',
-          tag: validTag
-        };
-        
-        // 初期データと異なる場合のみ新しいデータを取得
-        if (restoredConfig.genre !== initialGenre || restoredConfig.period !== initialPeriod || restoredConfig.tag) {
-          // URLを更新
-          const params = new URLSearchParams();
-          if (restoredConfig.genre !== 'all') params.set('genre', restoredConfig.genre);
-          if (restoredConfig.period !== '24h') params.set('period', restoredConfig.period);
-          if (restoredConfig.tag) params.set('tag', restoredConfig.tag);
-          
-          router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false });
-          
-          // 設定を更新してデータを取得
-          setConfig(restoredConfig);
-          setLoading(true);
-          setError(null);
-          
-          try {
-            const apiParams = new URLSearchParams({
-              genre: restoredConfig.genre,
-              period: restoredConfig.period,
-            });
-            if (restoredConfig.tag) {
-              apiParams.append('tag', restoredConfig.tag);
-            }
-            
-            const response = await fetch(`/api/ranking?${apiParams.toString()}`);
-            if (!response.ok) throw new Error('Failed to fetch data');
-            
-            const data = await response.json();
-            
-            if (data.items && Array.isArray(data.items)) {
-              setRankingData(data.items);
-              
-              // 人気タグの処理
-              if (!restoredConfig.tag && restoredConfig.genre !== 'all' && data.popularTags && data.popularTags.length > 0) {
-                setCurrentPopularTags(data.popularTags);
-                savePopularTagsToCache(data.popularTags, restoredConfig.genre, restoredConfig.period);
-              }
-            } else if (Array.isArray(data)) {
-              setRankingData(data);
-            } else {
-              setRankingData([]);
-            }
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'データの取得に失敗しました');
-            setRankingData([]);
-          } finally {
-            setLoading(false);
-          }
-        } else {
-          // 設定が同じ場合でも config を更新（タグの有効性チェックが行われた後の値を反映）
-          setConfig(restoredConfig);
-        }
-      }
-      
-      setIsInitialLoad(false);
-    };
-    
-    // 人気タグがない場合は動的に取得
     if (!config.tag && config.genre !== 'all' && currentPopularTags.length === 0) {
       getPopularTagsClient(config.genre, config.period)
         .then(tags => {
@@ -226,9 +113,6 @@ export default function ClientPage({
           // エラー時は何もしない
         })
     }
-    
-    // 初回マウント時のみ実行
-    initializeFromPreferences();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 初回のみ実行
   
@@ -452,7 +336,7 @@ export default function ClientPage({
         popularTags={currentPopularTags} 
       />
       
-      {(loading && !isInitialLoad) && (
+      {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 

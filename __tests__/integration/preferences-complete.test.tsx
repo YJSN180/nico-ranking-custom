@@ -2,10 +2,46 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 
+// document.cookieのモック
+const cookieMock = {
+  get: vi.fn(() => ''),
+  set: vi.fn((value: string) => {
+    cookieMock._value = value
+  }),
+  _value: '',
+}
+
+Object.defineProperty(document, 'cookie', {
+  get: () => cookieMock._value,
+  set: (value: string) => {
+    cookieMock.set(value)
+    cookieMock._value = value
+  },
+  configurable: true,
+})
+
+// localStorageのモック
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+  length: 0,
+  key: vi.fn(),
+}
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+  writable: true,
+})
+
 describe('ユーザー設定の完全な永続化テスト', () => {
   beforeEach(() => {
-    // localStorageをクリア
-    localStorage.clear()
+    // cookieとlocalStorageをクリア
+    cookieMock._value = ''
+    cookieMock.set.mockClear()
+    localStorageMock.clear()
+    localStorageMock.getItem.mockReturnValue(null)
     vi.clearAllMocks()
   })
 
@@ -22,11 +58,19 @@ describe('ユーザー設定の完全な永続化テスト', () => {
         })
       })
       
-      // localStorageに保存されているか確認
-      const stored = JSON.parse(localStorage.getItem('user-preferences') || '{}')
-      expect(stored.lastGenre).toBe('other')
-      expect(stored.lastPeriod).toBe('hour')
-      expect(stored.lastTag).toBe('AIのべりすと')
+      // Cookieに保存されているか確認
+      expect(cookieMock.set).toHaveBeenCalled()
+      const setCookieCall = cookieMock.set.mock.calls[0][0]
+      expect(setCookieCall).toContain('user-preferences=')
+      
+      // Cookieの値をデコードして確認
+      const cookieValue = setCookieCall.match(/user-preferences=([^;]+)/)?.[1]
+      if (cookieValue) {
+        const stored = JSON.parse(decodeURIComponent(cookieValue))
+        expect(stored.lastGenre).toBe('other')
+        expect(stored.lastPeriod).toBe('hour')
+        expect(stored.lastTag).toBe('AIのべりすと')
+      }
     })
 
     it('保存された設定が次回マウント時に復元される', () => {
@@ -41,6 +85,10 @@ describe('ユーザー設定の完全な永続化テスト', () => {
         })
       })
       
+      // Cookieから値を取得して設定
+      const setCookieCall = cookieMock.set.mock.calls[0][0]
+      cookieMock._value = setCookieCall
+      
       // 新しいフックインスタンス（ページリロードを模擬）
       const { result: result2 } = renderHook(() => useUserPreferences())
       
@@ -54,17 +102,22 @@ describe('ユーザー設定の完全な永続化テスト', () => {
     it('人気タグから選択したタグも通常のタグと同じように保存される', () => {
       const { result } = renderHook(() => useUserPreferences())
       
-      // 人気タグ「クッキー☆音MADリンク」を選択した場合
+      // 人気タグ「クッキー☆音MADリンク」を選択
       act(() => {
         result.current.updatePreferences({
           lastGenre: 'other',
-          lastPeriod: 'hour',
-          lastTag: 'クッキー☆音MADリンク' // 人気タグ
+          lastPeriod: '24h',
+          lastTag: 'クッキー☆音MADリンク'
         })
       })
       
-      const stored = JSON.parse(localStorage.getItem('user-preferences') || '{}')
-      expect(stored.lastTag).toBe('クッキー☆音MADリンク')
+      expect(cookieMock.set).toHaveBeenCalled()
+      const setCookieCall = cookieMock.set.mock.calls[0][0]
+      const cookieValue = setCookieCall.match(/user-preferences=([^;]+)/)?.[1]
+      if (cookieValue) {
+        const stored = JSON.parse(decodeURIComponent(cookieValue))
+        expect(stored.lastTag).toBe('クッキー☆音MADリンク')
+      }
     })
 
     it('タグをクリアした場合はundefinedが保存される', () => {
@@ -73,7 +126,7 @@ describe('ユーザー設定の完全な永続化テスト', () => {
       // まずタグを設定
       act(() => {
         result.current.updatePreferences({
-          lastTag: 'AIのべりすと'
+          lastTag: 'MMD艦これ'
         })
       })
       
@@ -84,8 +137,12 @@ describe('ユーザー設定の完全な永続化テスト', () => {
         })
       })
       
-      const stored = JSON.parse(localStorage.getItem('user-preferences') || '{}')
-      expect(stored.lastTag).toBeUndefined()
+      const lastCall = cookieMock.set.mock.calls[cookieMock.set.mock.calls.length - 1][0]
+      const cookieValue = lastCall.match(/user-preferences=([^;]+)/)?.[1]
+      if (cookieValue) {
+        const stored = JSON.parse(decodeURIComponent(cookieValue))
+        expect(stored.lastTag).toBeUndefined()
+      }
     })
   })
 
@@ -96,22 +153,22 @@ describe('ユーザー設定の完全な永続化テスト', () => {
       // 初期設定
       act(() => {
         result.current.updatePreferences({
-          lastGenre: 'entertainment',
-          lastPeriod: '24h',
-          lastTag: 'バーチャル'
+          lastGenre: 'game',
+          lastPeriod: 'hour',
+          lastTag: 'ゲーム'
         })
       })
       
       // ジャンルのみ更新
       act(() => {
         result.current.updatePreferences({
-          lastGenre: 'technology'
+          lastGenre: 'anime'
         })
       })
       
-      expect(result.current.preferences.lastGenre).toBe('technology')
-      expect(result.current.preferences.lastPeriod).toBe('24h')
-      expect(result.current.preferences.lastTag).toBe('バーチャル')
+      expect(result.current.preferences.lastGenre).toBe('anime')
+      expect(result.current.preferences.lastPeriod).toBe('hour')
+      expect(result.current.preferences.lastTag).toBe('ゲーム')
     })
   })
 
@@ -119,12 +176,12 @@ describe('ユーザー設定の完全な永続化テスト', () => {
     it('resetPreferencesでデフォルト値に戻る', () => {
       const { result } = renderHook(() => useUserPreferences())
       
-      // カスタム設定
+      // 設定を変更
       act(() => {
         result.current.updatePreferences({
-          lastGenre: 'anime',
+          lastGenre: 'technology',
           lastPeriod: 'hour',
-          lastTag: 'アニメ'
+          lastTag: '技術・工作'
         })
       })
       

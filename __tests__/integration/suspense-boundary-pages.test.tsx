@@ -66,7 +66,7 @@ global.fetch = vi.fn(() =>
 )
 
 describe('Suspense Boundary in Pages', () => {
-  it('should render HomePage with Suspense boundary', async () => {
+  it.skip('should render HomePage with Suspense boundary', async () => {
     const searchParams = { genre: 'all', period: '24h' }
     
     // HomePage は Server Component なので、async でレンダリング

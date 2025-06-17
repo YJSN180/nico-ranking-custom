@@ -4,7 +4,8 @@ import ClientPage from './client-page'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
-import { PreferenceRedirector } from './preference-redirector'
+import { cookies } from 'next/headers'
+import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
@@ -156,9 +157,31 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
 export default async function Home({ searchParams }: PageProps) {
   const params = await searchParams
-  const genre = (params.genre as string) || 'all'
-  const period = (params.period as string) || '24h'
-  const tag = params.tag as string | undefined
+  const cookieStore = await cookies()
+  
+  // URLパラメータが優先、なければCookieから、それもなければデフォルト値
+  let genre = params.genre as string
+  let period = params.period as string
+  let tag = params.tag as string | undefined
+  
+  // URLパラメータがない場合はCookieから読み取る
+  if (!genre && !period && !tag) {
+    const preferenceCookie = cookieStore.get(COOKIE_NAME)
+    if (preferenceCookie?.value) {
+      try {
+        const preferences = JSON.parse(preferenceCookie.value)
+        genre = genre || preferences.lastGenre || 'all'
+        period = period || preferences.lastPeriod || '24h'
+        tag = tag || preferences.lastTag
+      } catch {
+        // パースエラーは無視
+      }
+    }
+  }
+  
+  // デフォルト値を設定
+  genre = genre || 'all'
+  period = period || '24h'
   
   try {
     
@@ -211,7 +234,6 @@ export default async function Home({ searchParams }: PageProps) {
           margin: '0 auto',
           padding: '20px'
         }}>
-          <PreferenceRedirector />
           <SuspenseWrapper>
             <ClientPage 
               initialData={rankingData} 

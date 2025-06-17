@@ -30,12 +30,33 @@ Object.defineProperty(window, 'localStorage', {
   writable: true,
 })
 
+// document.cookieのモック
+const cookieMock = {
+  get: vi.fn(() => ''),
+  set: vi.fn((value: string) => {
+    cookieMock._value = value
+  }),
+  _value: '',
+}
+
+Object.defineProperty(document, 'cookie', {
+  get: () => cookieMock._value,
+  set: (value: string) => {
+    cookieMock.set(value)
+    cookieMock._value = value
+  },
+  configurable: true,
+})
+
 // Next.js fetch のモック
 global.fetch = vi.fn()
 
 describe('ユーザー設定の永続化', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    cookieMock._value = ''
+    cookieMock.set.mockClear()
+    
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ items: [], popularTags: [] }),
@@ -62,127 +83,60 @@ describe('ユーザー設定の永続化', () => {
   it('ジャンル変更時に設定が保存される', async () => {
     const user = userEvent.setup()
     
-    render(
-      <ClientPage
-        initialData={[]}
-        initialGenre="all"
-        initialPeriod="24h"
-        popularTags={[]}
-      />
-    )
-
-    // ジャンルボタンをクリック
-    const gameButton = screen.getByRole('button', { name: 'ゲーム' })
+    render(<ClientPage initialData={[]} />)
+    
+    // ジャンル選択を開く
+    const genreButton = screen.getByRole('button', { name: /総合/ })
+    await user.click(genreButton)
+    
+    // ゲームを選択
+    const gameButton = screen.getByRole('button', { name: /ゲーム/ })
     await user.click(gameButton)
 
-    // localStorageに保存されたことを確認
-    expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'user-preferences',
-      expect.stringContaining('"lastGenre":"game"')
-    )
+    // Cookieに保存されたことを確認
+    expect(cookieMock.set).toHaveBeenCalled()
+    const setCookieCall = cookieMock.set.mock.calls[0][0]
+    expect(setCookieCall).toContain('user-preferences=')
+    expect(decodeURIComponent(setCookieCall)).toContain('"lastGenre":"game"')
   })
 
   it('期間変更時に設定が保存される', async () => {
     const user = userEvent.setup()
     
-    render(
-      <ClientPage
-        initialData={[]}
-        initialGenre="all"
-        initialPeriod="24h"
-        popularTags={[]}
-      />
-    )
-
-    // 期間セレクターをクリック
-    const periodButtons = screen.getAllByRole('button')
-    const hourButton = periodButtons.find(btn => btn.textContent === '毎時')
+    render(<ClientPage initialData={[]} />)
     
-    if (hourButton) {
-      await user.click(hourButton)
-    }
+    // 期間選択を開く（24時間がデフォルト）
+    const periodButton = screen.getByRole('button', { name: /24時間/ })
+    await user.click(periodButton)
+    
+    // 毎時を選択
+    const hourlyButton = screen.getByRole('button', { name: /毎時/ })
+    await user.click(hourlyButton)
 
-    // localStorageに保存されたことを確認
-    expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'user-preferences',
-      expect.stringContaining('"lastPeriod":"hour"')
-    )
+    // Cookieに保存されたことを確認
+    expect(cookieMock.set).toHaveBeenCalled()
+    const lastCall = cookieMock.set.mock.calls[cookieMock.set.mock.calls.length - 1][0]
+    expect(lastCall).toContain('user-preferences=')
+    expect(decodeURIComponent(lastCall)).toContain('"lastPeriod":"hour"')
   })
 
   it('タグ選択時に設定が保存される', async () => {
     const user = userEvent.setup()
     
-    render(
-      <ClientPage
-        initialData={[]}
-        initialGenre="game"
-        initialPeriod="24h"
-        popularTags={['ゲーム実況', 'RTA', '縛りプレイ']}
-      />
-    )
-
-    // タグボタンをクリック
-    const tagButton = screen.getByText('ゲーム実況')
+    render(<ClientPage 
+      initialData={[]} 
+      initialGenre="game"
+      popularTags={['ゲーム実況', 'RTA', 'TAS']}
+    />)
+    
+    // タグボタンを選択
+    const tagButton = screen.getByRole('button', { name: /ゲーム実況/ })
     await user.click(tagButton)
 
-    // localStorageに保存されたことを確認
-    expect(localStorageMock.setItem).toHaveBeenCalledWith(
-      'user-preferences',
-      expect.stringContaining('"lastTag":"ゲーム実況"')
-    )
-  })
-
-  it('ページ読み込み時に保存された設定が適用される', () => {
-    // 保存された設定
-    const savedPreferences = {
-      lastGenre: 'anime',
-      lastPeriod: 'hour',
-      lastTag: 'アニメ',
-      version: 1,
-      updatedAt: new Date().toISOString(),
-    }
-    localStorageMock.getItem.mockImplementation((key: string) => {
-      if (key === 'user-preferences') {
-        return JSON.stringify(savedPreferences)
-      }
-      // NGリストのデフォルト値を返す
-      if (key === 'user-ng-list') {
-        return JSON.stringify({
-          videoIds: [],
-          videoTitles: { exact: [], partial: [] },
-          authorIds: [],
-          authorNames: { exact: [], partial: [] },
-          version: 1,
-          totalCount: 0,
-          updatedAt: new Date().toISOString()
-        })
-      }
-      return null
-    })
-
-    // app/page.tsxが設定を読み込んでClientPageに渡すことをシミュレート
-    render(
-      <ClientPage
-        initialData={[]}
-        initialGenre="anime" // 保存された設定
-        initialPeriod="hour"  // 保存された設定
-        initialTag="アニメ"   // 保存された設定
-        popularTags={['アニメ', '2024年冬アニメ']}
-      />
-    )
-
-    // UIに反映されていることを確認
-    // ジャンルセクション内のアニメボタンが選択状態になっているか確認
-    const genreSection = screen.getByText('ジャンル').parentElement
-    const animeButtons = genreSection?.querySelectorAll('button')
-    const animeButton = Array.from(animeButtons || []).find(btn => btn.textContent === 'アニメ')
-    // CSS変数を使用しているため、style属性を直接確認
-    expect(animeButton?.getAttribute('style')).toContain('background: var(--primary-color)')
-    expect(animeButton?.getAttribute('style')).toContain('border-color: var(--primary-color)')
-    
-    // 毎時ボタンが選択状態になっているか確認
-    const hourButton = screen.getByRole('button', { name: '毎時' })
-    expect(hourButton.getAttribute('style')).toContain('background: var(--primary-color)')
-    expect(hourButton.getAttribute('style')).toContain('border-color: var(--primary-color)')
+    // Cookieに保存されたことを確認
+    expect(cookieMock.set).toHaveBeenCalled()
+    const lastCall = cookieMock.set.mock.calls[cookieMock.set.mock.calls.length - 1][0]
+    expect(lastCall).toContain('user-preferences=')
+    expect(decodeURIComponent(lastCall)).toContain('"lastTag":"ゲーム実況"')
   })
 })
