@@ -243,3 +243,8 @@ button,
   -moz-user-select: text;
   -ms-user-select: text;
 }
+
+/* ホバー効果用のユーティリティクラス */
+.hover-underline:hover {
+  text-decoration: underline !important;
+}

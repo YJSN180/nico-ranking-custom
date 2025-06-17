@@ -178,13 +178,9 @@ export default function AboutPage() {
             color: 'var(--link)',
             textDecoration: 'none',
             fontSize: '16px',
+            transition: 'text-decoration 0.2s',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.textDecoration = 'underline'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.textDecoration = 'none'
-          }}
+          className="hover-underline"
         >
           ← トップページに戻る
         </Link>

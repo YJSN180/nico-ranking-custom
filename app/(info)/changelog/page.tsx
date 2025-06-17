@@ -151,7 +151,7 @@ export default function ChangelogPage() {
         更新履歴
       </h1>
 
-      <div style={{ marginBottom: '40px' }}>
+      <div>
         {CHANGELOG.map((entry, index) => (
           <section
             key={index}
@@ -240,13 +240,9 @@ export default function ChangelogPage() {
             color: 'var(--link)',
             textDecoration: 'none',
             fontSize: '16px',
+            transition: 'text-decoration 0.2s',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.textDecoration = 'underline'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.textDecoration = 'none'
-          }}
+          className="hover-underline"
         >
           ← トップページに戻る
         </Link>

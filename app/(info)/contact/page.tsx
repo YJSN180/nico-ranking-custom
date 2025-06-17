@@ -3,10 +3,10 @@ import Link from 'next/link'
 
 export const metadata: Metadata = {
   title: 'お問い合わせ | ニコラン(Re:turn)',
-  description: 'ニコラン(Re:turn)へのお問い合わせ・フィードバック方法について',
+  description: 'ニコラン(Re:turn)への要望・バグ報告・お問い合わせ',
   openGraph: {
     title: 'お問い合わせ | ニコラン(Re:turn)',
-    description: 'ニコラン(Re:turn)へのお問い合わせ・フィードバック方法について',
+    description: 'ニコラン(Re:turn)への要望・バグ報告・お問い合わせ',
   },
 }
 
@@ -52,6 +52,7 @@ export default function ContactPage() {
             href="https://github.com/YJSN180/nico-ranking-custom/issues"
             target="_blank"
             rel="noopener noreferrer"
+            className="contact-link"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -64,18 +65,11 @@ export default function ContactPage() {
               textDecoration: 'none',
               transition: 'all 0.2s',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)'
-              e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
           >
-            <span style={{ fontSize: '20px' }}>🐛</span>
             <div>
-              <div style={{ fontWeight: 'bold' }}>GitHub Issues</div>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                GitHub Issues
+              </div>
               <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                 バグ報告・不具合の報告はこちら
               </div>
@@ -86,6 +80,7 @@ export default function ContactPage() {
             href="https://github.com/YJSN180/nico-ranking-custom/discussions"
             target="_blank"
             rel="noopener noreferrer"
+            className="contact-link"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -98,18 +93,11 @@ export default function ContactPage() {
               textDecoration: 'none',
               transition: 'all 0.2s',
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-2px)'
-              e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = 'none'
-            }}
           >
-            <span style={{ fontSize: '20px' }}>💬</span>
             <div>
-              <div style={{ fontWeight: 'bold' }}>GitHub Discussions</div>
+              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                GitHub Discussions
+              </div>
               <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                 機能リクエスト・アイデアの共有はこちら
               </div>
@@ -139,6 +127,7 @@ export default function ContactPage() {
           href="https://github.com/YJSN180/nico-ranking-custom"
           target="_blank"
           rel="noopener noreferrer"
+          className="contact-link"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -151,18 +140,11 @@ export default function ContactPage() {
             textDecoration: 'none',
             transition: 'all 0.2s',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-2px)'
-            e.currentTarget.style.boxShadow = 'var(--shadow-lg)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)'
-            e.currentTarget.style.boxShadow = 'none'
-          }}
         >
-          <span style={{ fontSize: '20px' }}>📦</span>
           <div>
-            <div style={{ fontWeight: 'bold' }}>GitHub Repository</div>
+            <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+              GitHub Repository
+            </div>
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
               ソースコード・開発への参加
             </div>
@@ -234,13 +216,9 @@ export default function ContactPage() {
             color: 'var(--link)',
             textDecoration: 'none',
             fontSize: '16px',
+            transition: 'text-decoration 0.2s',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.textDecoration = 'underline'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.textDecoration = 'none'
-          }}
+          className="hover-underline"
         >
           ← トップページに戻る
         </Link>

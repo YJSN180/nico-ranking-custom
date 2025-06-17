@@ -170,6 +170,7 @@ export function Navigation() {
                       <Link
                         href={item.href}
                         onClick={() => setIsOpen(false)}
+                        className="nav-link-mobile"
                         style={{
                           display: 'block',
                           padding: '12px 16px',
@@ -178,12 +179,6 @@ export function Navigation() {
                           borderRadius: '8px',
                           transition: 'background-color 0.2s',
                           background: 'var(--bg-secondary)',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'
                         }}
                       >
                         {item.label}
@@ -270,6 +265,7 @@ export function Navigation() {
                 <Link
                   href={item.href}
                   onClick={() => setIsOpen(false)}
+                  className="nav-link-desktop"
                   style={{
                     display: 'block',
                     padding: '8px 12px',
@@ -278,12 +274,6 @@ export function Navigation() {
                     borderRadius: '4px',
                     transition: 'background-color 0.2s',
                     fontSize: '14px',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-hover)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent'
                   }}
                 >
                   {item.label}
@@ -315,6 +305,14 @@ export function Navigation() {
             opacity: 1;
             transform: translateY(0);
           }
+        }
+        
+        .nav-link-mobile:hover {
+          background-color: var(--bg-hover) !important;
+        }
+        
+        .nav-link-desktop:hover {
+          background-color: var(--bg-hover) !important;
         }
       `}</style>
     </div>
