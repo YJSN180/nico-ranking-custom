@@ -4,6 +4,7 @@ import ClientPage from './client-page'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
+import { PreferenceRedirector } from './preference-redirector'
 // import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
@@ -210,6 +211,7 @@ export default async function Home({ searchParams }: PageProps) {
           margin: '0 auto',
           padding: '20px'
         }}>
+          <PreferenceRedirector />
           <SuspenseWrapper>
             <ClientPage 
               initialData={rankingData} 
