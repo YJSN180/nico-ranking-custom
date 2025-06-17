@@ -403,13 +403,13 @@ async function processGenre(
     }
   };
   
-  // Fetch popular tag rankings for ALL genres
+  // Fetch popular tag rankings with limit
   if (popularTags.length > 0) {
-    // Fetch ALL popular tags as requested
-    const tagsToFetch = popularTags;
-    console.log(`[${new Date().toISOString()}] Fetching ALL ${tagsToFetch.length} popular tag rankings for ${genre}`);
+    // LIMIT TO TOP 5 TAGS to reduce KV writes
+    const tagsToFetch = popularTags.slice(0, 5);
+    console.log(`[${new Date().toISOString()}] Fetching top ${tagsToFetch.length} popular tag rankings for ${genre} (limited from ${popularTags.length} total)`);
     
-    // Process ALL popular tags
+    // Process limited popular tags
     for (let i = 0; i < tagsToFetch.length; i++) {
       const tag = tagsToFetch[i];
       try {
