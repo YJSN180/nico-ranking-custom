@@ -405,11 +405,11 @@ async function processGenre(
   
   // Fetch popular tag rankings for ALL genres
   if (popularTags.length > 0) {
-    // Limit to top 5 popular tags per genre to manage data size
-    const tagsToFetch = popularTags.slice(0, 5);
-    console.log(`[${new Date().toISOString()}] Fetching top ${tagsToFetch.length} popular tag rankings for ${genre}`);
+    // Fetch ALL popular tags as requested
+    const tagsToFetch = popularTags;
+    console.log(`[${new Date().toISOString()}] Fetching ALL ${tagsToFetch.length} popular tag rankings for ${genre}`);
     
-    // Process limited popular tags
+    // Process ALL popular tags
     for (let i = 0; i < tagsToFetch.length; i++) {
       const tag = tagsToFetch[i];
       try {
