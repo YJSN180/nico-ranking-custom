@@ -45,8 +45,8 @@ export function HeaderWithSettings() {
           }}>
             <div style={{
               position: 'relative',
-              width: isMobile ? '32px' : '40px',
-              height: isMobile ? '32px' : '40px',
+              width: isMobile ? '64px' : '80px',
+              height: isMobile ? '64px' : '80px',
               filter: 'brightness(0) invert(1)', // 白色に変換
               opacity: 0.95
             }}>
@@ -54,7 +54,7 @@ export function HeaderWithSettings() {
                 src="/icon.png"
                 alt="ニコラン(Re:turn) ロゴ"
                 fill
-                sizes={isMobile ? "32px" : "40px"}
+                sizes={isMobile ? "64px" : "80px"}
                 style={{
                   objectFit: 'contain'
                 }}
