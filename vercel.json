@@ -5,6 +5,9 @@
     },
     "app/api/cron/fetch/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/video-stats/route.ts": {
+      "maxDuration": 10
     }
   },
   "github": {

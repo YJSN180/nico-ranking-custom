@@ -14,6 +14,15 @@ interface RealtimeStatsResponse {
   count: number
 }
 
+// Cache duration for video stats (2 minutes)
+const CACHE_DURATION = 2 * 60 * 1000
+
+interface CachedStats {
+  stats: RealtimeStatsResponse['stats']
+  timestamp: number
+  videoIds: string[]
+}
+
 export function useRealtimeStats(
   items: RankingItem[], 
   enabled: boolean = false,
@@ -25,6 +34,42 @@ export function useRealtimeStats(
   
   // AbortControllerのref
   const abortControllerRef = useRef<AbortController | null>(null)
+  
+  // Pending requests map to prevent duplicate requests
+  const pendingRequestsRef = useRef<Map<string, Promise<any>>>(new Map())
+  
+  // Get cached stats from sessionStorage
+  const getCachedStats = (videoIds: string[]): CachedStats | null => {
+    try {
+      const cacheKey = `video-stats-${videoIds.slice(0, 10).join('-')}`
+      const cached = sessionStorage.getItem(cacheKey)
+      if (cached) {
+        const data: CachedStats = JSON.parse(cached)
+        // Check if cache is still valid
+        if (Date.now() - data.timestamp < CACHE_DURATION) {
+          return data
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return null
+  }
+  
+  // Save stats to sessionStorage
+  const setCachedStats = (videoIds: string[], statsData: RealtimeStatsResponse['stats']) => {
+    try {
+      const cacheKey = `video-stats-${videoIds.slice(0, 10).join('-')}`
+      const data: CachedStats = {
+        stats: statsData,
+        timestamp: Date.now(),
+        videoIds: videoIds
+      }
+      sessionStorage.setItem(cacheKey, JSON.stringify(data))
+    } catch {
+      // Ignore storage errors
+    }
+  }
   
   useEffect(() => {
     if (!enabled || items.length === 0) {
@@ -47,6 +92,15 @@ export function useRealtimeStats(
         const batchSize = 10
         const videoIds = items.map(item => item.id)
         
+        // Check cache first
+        const cached = getCachedStats(videoIds)
+        if (cached && cached.videoIds.length === videoIds.length) {
+          setStats(cached.stats)
+          setLastUpdated(new Date(cached.timestamp).toISOString())
+          setIsLoading(false)
+          return
+        }
+        
         const allStats: RealtimeStatsResponse['stats'] = {}
         
         for (let i = 0; i < videoIds.length; i += batchSize) {
@@ -56,14 +110,29 @@ export function useRealtimeStats(
           }
           
           const batch = videoIds.slice(i, i + batchSize)
-          const response = await fetch(`/api/video-stats?ids=${batch.join(',')}`, {
-            signal: controller.signal
-          })
+          const batchKey = batch.join(',')
           
-          if (response.ok) {
-            const data: RealtimeStatsResponse = await response.json()
-            Object.assign(allStats, data.stats)
-            setLastUpdated(data.timestamp)
+          // Check if request is already pending
+          let responsePromise = pendingRequestsRef.current.get(batchKey)
+          
+          if (!responsePromise) {
+            // Create new request
+            responsePromise = fetch(`/api/video-stats?ids=${batchKey}`, {
+              signal: controller.signal
+            })
+            pendingRequestsRef.current.set(batchKey, responsePromise)
+          }
+          
+          try {
+            const response = await responsePromise
+            if (response.ok) {
+              const data: RealtimeStatsResponse = await response.json()
+              Object.assign(allStats, data.stats)
+              setLastUpdated(data.timestamp)
+            }
+          } finally {
+            // Clean up pending request
+            pendingRequestsRef.current.delete(batchKey)
           }
           
           // レート制限対策（50ms待機 - 大量更新時の負荷分散）
@@ -73,6 +142,8 @@ export function useRealtimeStats(
         }
         
         setStats(allStats)
+        // Cache the results
+        setCachedStats(videoIds, allStats)
       } catch (error: any) {
         // AbortErrorは無視
         if (error.name !== 'AbortError') {

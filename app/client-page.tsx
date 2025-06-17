@@ -116,13 +116,21 @@ export default function ClientPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 初回のみ実行
   
-  // リアルタイム統計更新を使用（3分ごとに自動更新）
-  const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
+  // リアルタイム統計更新を使用（動的な更新間隔）
+  // 初回は1分後、その後は3分ごとに更新
+  const [updateInterval, setUpdateInterval] = useState(60 * 1000) // 初回1分
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
     rankingData,
     true,
-    REALTIME_UPDATE_INTERVAL
+    updateInterval
   )
+  
+  // 初回更新後は間隔を延ばす
+  useEffect(() => {
+    if (lastUpdated && updateInterval === 60 * 1000) {
+      setUpdateInterval(3 * 60 * 1000) // 3分に延長
+    }
+  }, [lastUpdated, updateInterval])
   
   // スクロール位置の保存（動画ページ遷移時）
   const saveScrollPosition = useCallback(() => {
