@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { SettingsModal } from './settings-modal'
+import { Navigation } from './navigation'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
 
 export function HeaderWithSettings() {
@@ -17,10 +18,12 @@ export function HeaderWithSettings() {
         marginBottom: '24px',
         position: 'relative'
       }}>
+        <Navigation />
+        
         <div style={{ 
           maxWidth: '1200px', 
           margin: '0 auto',
-          paddingRight: isMobile ? '48px' : '0' // モバイルで設定ボタンのスペースを確保
+          padding: isMobile ? '0 60px' : '0 120px' // 両サイドのボタンのスペースを確保
         }}>
           <h1 style={{ 
             color: '#ffffff', 

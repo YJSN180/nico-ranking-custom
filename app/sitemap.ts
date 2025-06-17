@@ -14,6 +14,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
+      url: `${baseUrl}/about`,
+      lastModified: new Date('2025-06-17'),
+      changeFrequency: 'monthly' as const,
+      priority: 0.5,
+    },
+    {
+      url: `${baseUrl}/changelog`,
+      lastModified: new Date('2025-06-17'),
+      changeFrequency: 'weekly' as const,
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/contact`,
+      lastModified: new Date('2025-06-17'),
+      changeFrequency: 'monthly' as const,
+      priority: 0.4,
+    },
+    {
       url: `${baseUrl}/privacy`,
       lastModified: new Date('2025-06-15'),
       changeFrequency: 'yearly' as const,
