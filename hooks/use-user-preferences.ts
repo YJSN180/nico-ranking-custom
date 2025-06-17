@@ -25,23 +25,24 @@ const defaultPreferences: UserPreferences = {
 }
 
 export function useUserPreferences() {
-  const [preferences, setPreferences] = useState<UserPreferences>(defaultPreferences)
-
-  // 初回読み込み
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        // バージョンチェック
-        if (parsed.version === CURRENT_VERSION) {
-          setPreferences(parsed)
+  const [preferences, setPreferences] = useState<UserPreferences>(() => {
+    // 初期化時にlocalStorageから読み込み
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          // バージョンチェック
+          if (parsed.version === CURRENT_VERSION) {
+            return parsed
+          }
         }
+      } catch (error) {
+        // エラーは無視してデフォルト値を使用
       }
-    } catch (error) {
-      // エラーは無視してデフォルト値を使用
     }
-  }, [])
+    return defaultPreferences
+  })
 
   // 設定を更新
   const updatePreferences = useCallback((updates: Partial<UserPreferences>) => {

@@ -15,7 +15,20 @@ vi.mock('next/image', () => ({
 
 vi.mock('@/hooks/use-user-preferences', () => ({
   useUserPreferences: () => ({
-    updatePreferences: vi.fn()
+    preferences: {
+      lastGenre: 'all',
+      lastPeriod: '24h',
+      theme: 'light',
+      version: 1,
+      updatedAt: new Date().toISOString()
+    },
+    updatePreferences: vi.fn((updates) => {
+      // localStorageに保存する動作をシミュレート
+      const current = JSON.parse(localStorage.getItem('user-preferences') || '{}')
+      const newPrefs = { ...current, ...updates, updatedAt: new Date().toISOString() }
+      localStorage.setItem('user-preferences', JSON.stringify(newPrefs))
+    }),
+    resetPreferences: vi.fn()
   })
 }))
 
@@ -134,12 +147,12 @@ describe('Storage飽和問題', () => {
 
   it('Storage容量超過時にエラーハンドリングが行われる', async () => {
     // localStorageの容量を模擬的に超過させる（特定のキーのみ）
-    localStorageSetItemSpy.mockImplementation((key: string) => {
-      if (key === 'ranking-config') {
+    localStorageSetItemSpy.mockImplementation((key: string, value: string) => {
+      if (key === 'user-preferences') {
         throw new Error('QuotaExceededError')
       }
       // 他のキーは正常に動作
-      return originalSetItem.call(localStorage, key, arguments[1])
+      return originalSetItem.call(localStorage, key, value)
     })
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -173,8 +186,14 @@ describe('Storage飽和問題', () => {
     // エラーが適切にハンドリングされ、アプリがクラッシュしないことを確認
     expect(document.body).toBeInTheDocument()
     
-    // localStorageへの保存が試みられたことを確認（ranking-config）
+    // localStorageへの保存が試みられたことを確認（user-preferences）
     expect(localStorageSetItemSpy).toHaveBeenCalled()
+    
+    // user-preferences キーへの保存が試みられたことを確認
+    const userPrefsCall = localStorageSetItemSpy.mock.calls.find(
+      (call: any[]) => call[0] === 'user-preferences'
+    )
+    expect(userPrefsCall).toBeDefined()
 
     consoleErrorSpy.mockRestore()
   })

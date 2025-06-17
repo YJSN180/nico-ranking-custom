@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import type { RankingData } from '@/types/ranking'
 import ClientPage from './client-page'
-import { PreferenceLoader } from '@/components/preference-loader'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
@@ -211,7 +210,6 @@ export default async function Home({ searchParams }: PageProps) {
           margin: '0 auto',
           padding: '20px'
         }}>
-          <PreferenceLoader />
           <SuspenseWrapper>
             <ClientPage 
               initialData={rankingData} 

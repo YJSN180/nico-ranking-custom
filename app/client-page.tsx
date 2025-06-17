@@ -41,41 +41,12 @@ export default function ClientPage({
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
   
-  // 設定の管理（useUserPreferencesから初期化）
+  // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
-    // サーバーサイドでは初期値を使用
-    if (typeof window === 'undefined') {
-      return {
-        period: initialPeriod as '24h' | 'hour',
-        genre: initialGenre as RankingGenre,
-        tag: initialTag
-      }
-    }
-    
-    // URLパラメータがある場合は優先
-    if (initialTag || initialGenre !== 'all' || initialPeriod !== '24h') {
-      return {
-        period: initialPeriod as '24h' | 'hour',
-        genre: initialGenre as RankingGenre,
-        tag: initialTag
-      }
-    }
-    
-    // URLパラメータがない場合、かつ直接アクセス（referrerなし）の場合のみユーザー設定から復元
-    const isDirectAccess = !document.referrer || document.referrer === window.location.origin + '/';
-    if (isDirectAccess && preferences && preferences.lastGenre) {
-      return {
-        period: preferences.lastPeriod || '24h',
-        genre: preferences.lastGenre || 'all',
-        tag: preferences.lastTag
-      }
-    }
-    
-    // それ以外はデフォルト値
     return {
-      period: '24h',
-      genre: 'all',
-      tag: undefined
+      period: initialPeriod as '24h' | 'hour',
+      genre: initialGenre as RankingGenre,
+      tag: initialTag
     }
   })
   
@@ -151,6 +122,7 @@ export default function ClientPage({
       
       // ユーザー設定から復元
       const storedPrefs = preferences;
+      
       if (storedPrefs.lastGenre && (storedPrefs.lastGenre !== 'all' || storedPrefs.lastPeriod !== '24h' || storedPrefs.lastTag)) {
         hasRestoredRef.current = true;
         
@@ -250,10 +222,12 @@ export default function ClientPage({
         })
     }
     
-    // ユーザー設定の復元を実行
-    initializeFromPreferences();
+    // preferencesが読み込まれたら復元処理を実行
+    if (preferences && preferences.version && !hasRestoredRef.current) {  // preferencesが読み込まれたかどうかのチェック
+      initializeFromPreferences();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []) // 初回のみ実行
+  }, [preferences?.version]) // preferencesが読み込まれたら実行
   
   // リアルタイム統計更新を使用（3分ごとに自動更新）
   const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
