@@ -3,7 +3,7 @@ import 'dotenv/config'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-// Write to Cloudflare KV via REST API with improved retry logic
+// Write to Cloudflare KV directly (no temp keys)
 async function writeToCloudflareKV(data: any): Promise<void> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
@@ -13,28 +13,20 @@ async function writeToCloudflareKV(data: any): Promise<void> {
     throw new Error("Cloudflare KV credentials not configured");
   }
 
-  // Use timestamped key to avoid conflicts
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const tempKey = `RANKING_TEMP_${timestamp}`;
-  
-  console.log(`Writing to temporary key: ${tempKey}`);
-
   // Dynamic import for pako
   const pako = await import('pako');
   const jsonString = JSON.stringify(data);
   const compressed = pako.gzip(jsonString);
+
+  console.log(`Compressed data size: ${(compressed.length / 1024).toFixed(2)} KB`);
+
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
   
-  console.log(`Compressed data size: ${Math.round(compressed.length / 1024)}KB`);
-
-  // Step 1: Write to temporary key (less likely to conflict)
-  const tempUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${tempKey}`;
-
-  const maxRetries = 3; // レート制限エラーに対応するため3回に増やす
-  let writeSuccessful = false;
+  const maxRetries = 5;
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const response = await fetch(tempUrl, {
+      const response = await fetch(url, {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${CF_API_TOKEN}`,
@@ -48,13 +40,12 @@ async function writeToCloudflareKV(data: any): Promise<void> {
           throw new Error(`KV write failed: Rate limited (429) after ${maxRetries} attempts`);
         }
         
-        // Use longer initial delay to avoid rate limits
         const baseDelay = 15000; // 15 seconds initial delay
         const exponentialDelay = baseDelay * Math.pow(2, attempt);
         const jitteredDelay = exponentialDelay + Math.random() * 10000;
         const delay = Math.min(jitteredDelay, 120000); // Max 120s
         
-        console.log(`Rate limited on temp key, waiting ${Math.round(delay/1000)}s... (attempt ${attempt + 1}/${maxRetries})`);
+        console.log(`Rate limited, waiting ${Math.round(delay/1000)}s... (attempt ${attempt + 1}/${maxRetries})`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -64,67 +55,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
         throw new Error(`Cloudflare KV write failed: ${response.status} - ${error}`);
       }
       
-      writeSuccessful = true;
-      break;
-    } catch (error) {
-      if (attempt === maxRetries - 1) {
-        throw error;
-      }
-      const delay = Math.min(2000 * Math.pow(2, attempt), 10000);
-      console.log(`Write failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  if (!writeSuccessful) {
-    throw new Error('Failed to write to temporary key after all attempts');
-  }
-
-  console.log(`Successfully wrote to temporary key: ${tempKey}`);
-  
-  // Step 2: Wait a bit to avoid rate limits
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // Step 3: Copy from temp key to RANKING_LATEST
-  console.log('Copying to RANKING_LATEST...');
-  
-  const copyUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(copyUrl, {
-        method: "PUT",
-        headers: {
-          "Authorization": `Bearer ${CF_API_TOKEN}`,
-          "Content-Type": "application/octet-stream",
-        },
-        body: compressed,
-      });
-
-      if (response.status === 429) {
-        if (attempt === maxRetries - 1) {
-          // Don't fail completely - temp key has the data
-          console.error('Failed to copy to RANKING_LATEST due to rate limits, but data is in temp key');
-          console.error(`Data available at key: ${tempKey}`);
-          return; // Consider this a partial success
-        }
-        
-        const baseDelay = 10000; // 10 seconds for main key
-        const exponentialDelay = baseDelay * Math.pow(2, attempt);
-        const jitteredDelay = exponentialDelay + Math.random() * 10000;
-        const delay = Math.min(jitteredDelay, 120000);
-        
-        console.log(`Rate limited on RANKING_LATEST, waiting ${Math.round(delay/1000)}s... (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Failed to copy to RANKING_LATEST: ${response.status} - ${error}`);
-      }
-      
-      console.log('Successfully copied to RANKING_LATEST');
+      console.log('✅ Successfully wrote to RANKING_LATEST');
       
       // Set metadata
       const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/RANKING_LATEST`;
@@ -141,84 +72,18 @@ async function writeToCloudflareKV(data: any): Promise<void> {
           updatedAt: data.metadata?.updatedAt || new Date().toISOString(),
           totalItems: data.metadata?.totalItems || 0,
           ngFiltered: true,
-          tempKey: tempKey, // Reference to temp key
         }),
       });
       
-      // Delete the current temp key after successful copy
-      try {
-        const deleteUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${tempKey}`;
-        const deleteResponse = await fetch(deleteUrl, {
-          method: "DELETE",
-          headers: {
-            "Authorization": `Bearer ${CF_API_TOKEN}`,
-          },
-        });
-        
-        if (deleteResponse.ok) {
-          console.log(`✅ Deleted temp key: ${tempKey}`);
-        }
-      } catch (deleteError) {
-        console.log('Failed to delete current temp key:', deleteError);
-      }
-      
-      // Step 4: Clean up old temp keys (best effort)
-      try {
-        await cleanupOldTempKeys(CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN);
-      } catch (cleanupError) {
-        console.log('Failed to cleanup old temp keys:', cleanupError);
-      }
-      
-      return;
+      return; // Success
     } catch (error) {
       if (attempt === maxRetries - 1) {
-        console.error('Failed to copy to RANKING_LATEST, but data is in temp key');
-        console.error(`Data available at key: ${tempKey}`);
-        return; // Consider this a partial success
+        throw error;
       }
       const delay = Math.min(5000 * Math.pow(2, attempt), 30000);
-      console.log(`Copy failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
+      console.log(`Write failed, retrying in ${delay}ms... (attempt ${attempt + 1}/${maxRetries})`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
-  }
-}
-
-// Clean up old temporary keys
-async function cleanupOldTempKeys(accountId: string, namespaceId: string, apiToken: string): Promise<void> {
-  const listUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/keys?prefix=RANKING_TEMP_`;
-  
-  try {
-    const response = await fetch(listUrl, {
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-      },
-    });
-    
-    if (!response.ok) {
-      return;
-    }
-    
-    const data = await response.json();
-    const keys = data.result || [];
-    
-    // Delete ALL old temp keys (we already have the data in RANKING_LATEST)
-    if (keys.length > 0) {
-      for (const key of keys) {
-        try {
-          await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${namespaceId}/values/${key.name}`, {
-            method: "DELETE",
-            headers: {
-              "Authorization": `Bearer ${apiToken}`,
-            },
-          });
-          console.log(`Deleted old temp key: ${key.name}`);
-        } catch (e) {
-          // Ignore cleanup errors
-        }
-      }
-    }
-  } catch (e) {
-    // Ignore cleanup errors
   }
 }
 
@@ -318,7 +183,7 @@ async function main() {
     await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));
     console.log(`\nSaved aggregated data to ${backupPath}`);
 
-    // Write to Cloudflare KV with improved strategy
+    // Write to Cloudflare KV directly
     console.log('\nWriting aggregated data to Cloudflare KV...');
     await writeToCloudflareKV(rankingData);
     

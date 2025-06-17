@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Claude Code (claude.ai/code) がこのリポジトリで作業する際のガイドライン。
 
-role:あなたは天才プログラマーであり、コーディングに関するすべての問題を完璧に解決します。
+役割：天才プログラマーとしてコーディングに関するすべての問題を完璧に解決する。
 
 ## 🔒 誠実性の原則
 - **確認せずに推測で回答しない**: 実際にコードやログを確認してから回答する
@@ -85,37 +85,37 @@ git ls-files | grep -E "\.env"
 # .env.localが表示されなければ正常
 ```
 
-## 🏗️ DEPLOYMENT ARCHITECTURE
+## 🏗️ デプロイメントアーキテクチャ
 
-### Hybrid Deployment Strategy
+### ハイブリッドデプロイメント戦略
 
-This project uses a **hybrid deployment architecture** with clear separation of concerns:
+明確な責任分離を持つ**ハイブリッドデプロイメントアーキテクチャ**を採用：
 
-#### 🚀 Vercel (Main Application)
-- **Purpose**: Hosts the Next.js frontend application
-- **Domain**: `nico-ranking-custom-yjsns-projects.vercel.app`
-- **Configuration**: `vercel.json`, `next.config.mjs`
-- **Auto-deployment**: Triggered on push to `main` branch
+#### 🚀 Vercel (メインアプリケーション)
+- **目的**: Next.jsフロントエンドアプリケーションのホスティング
+- **ドメイン**: `nico-ranking-custom-yjsns-projects.vercel.app`
+- **設定**: `vercel.json`, `next.config.mjs`
+- **自動デプロイ**: `main`ブランチへのpush時に実行
 
-#### ⚡ Cloudflare Workers (API Gateway)
-- **Purpose**: API Gateway with rate limiting and DDoS protection
-- **Configuration**: `wrangler.toml`, `workers/` directory
-- **Manual deployment**: `npm run deploy:worker`
-- **Domain**: `nico-rank.com/*` (proxies to Vercel)
+#### ⚡ Cloudflare Workers (APIゲートウェイ)
+- **目的**: レート制限とDDoS保護を備えたAPIゲートウェイ
+- **設定**: `wrangler.toml`, `workers/`ディレクトリ
+- **手動デプロイ**: `npm run deploy:worker`
+- **ドメイン**: `nico-rank.com/*` (Vercelへプロキシ)
 
-#### 💾 Cloudflare KV (Storage)
-- **Purpose**: Caches ranking data and rate limiting
-- **Bindings**: `RANKING_DATA`, `RATE_LIMIT`
-- **Updated by**: GitHub Actions cron job every 10 minutes
+#### 💾 Cloudflare KV (ストレージ)
+- **目的**: ランキングデータとレート制限のキャッシュ
+- **バインディング**: `RANKING_DATA`, `RATE_LIMIT`
+- **更新**: GitHub Actions cronジョブが10分ごとに実行
 
-### ⚠️ IMPORTANT: Cloudflare Pages Configuration
+### ⚠️ 重要: Cloudflare Pages設定
 
-**Cloudflare Pages should NOT build this project.**
+**Cloudflare Pagesはこのプロジェクトをビルドしてはいけないⱘ**
 
-- This is a Next.js app designed for Vercel
-- `.cfignore` file prevents Pages from building the app
-- Only Workers should be deployed to Cloudflare
-- Main app deployment happens via Vercel
+- Vercel用に設計されたNext.jsアプリ
+- `.cfignore`ファイルがPagesビルドを防止
+- CloudflareにはWorkersのみデプロイ
+- メインアプリはVercel経由でデプロイ
 
 #### Cloudflare Pages Build Failures
 **Status**: ❌ Expected failures (can be ignored)
@@ -130,9 +130,9 @@ The Cloudflare Pages builds will continue to fail because:
 - Keep only Cloudflare Workers integration active
 - This requires access to the Cloudflare account settings
 
-## Commands
+## コマンド一覧
 
-### Development
+### 開発
 ```bash
 npm run dev          # Start Next.js development server
 npm run build        # Build for production
@@ -141,7 +141,7 @@ npm run lint         # Run ESLint
 npm run typecheck    # TypeScript type checking
 ```
 
-### Testing
+### テスト
 ```bash
 npm test             # Run Vitest unit/integration tests (watch mode)
 npm test -- --run    # Run tests once without watch mode
@@ -309,33 +309,33 @@ logSecurityEvent('DEBUG_ENDPOINT_ACCESS_BLOCKED', ip, details)
 3. 必要に応じた緊急メンテナンス
 4. 事後対策の実施
 
-### Cloudflare Pages Configuration
+### Cloudflare Pages設定
 
-### ❌ Pages Deployment Disabled
-This project includes multiple safeguards to prevent accidental Cloudflare Pages deployment:
+### ❌ Pagesデプロイメント無効化
+誤ったCloudflare Pagesデプロイメントを防ぐ複数の安全装置：
 
-1. **`.cfpagesignore`**: Ignores all files to force Pages build failures
-2. **`pages-build-blocker.js`**: Script that detects and blocks Pages environments
-3. **Build script integration**: Automatically runs the blocker before builds
-4. **Documentation**: `DISABLE_CLOUDFLARE_PAGES.md` provides detailed removal instructions
+1. **`.cfpagesignore`**: 全ファイルを無視してPagesビルドを強制失敗
+2. **`pages-build-blocker.js`**: Pages環境を検出してブロックするスクリプト
+3. **ビルドスクリプト統合**: ビルド前に自動的にブロッカーを実行
+4. **ドキュメント**: `docs/DISABLE_CLOUDFLARE_PAGES.md`に詳細な削除手順
 
-**If Pages builds are still occurring:**
-- Check Cloudflare Dashboard → Pages for active projects
-- Delete any Pages projects connected to this repository
-- Verify that only Workers and KV services are configured
+**Pagesビルドがまだ発生している場合**:
+- CloudflareダッシュボードでPagesプロジェクトを確認
+- このリポジトリに接続されたPagesプロジェクトを削除
+- WorkersとKVサービスのみが設定されていることを確認
 
-### Correct Architecture
+### 正しいアーキテクチャ
 ```
-GitHub Repository
-├── Vercel (Next.js App) ← Primary deployment ✅
-├── Cloudflare Workers (API Gateway) ← Manual deployment ✅
-├── Cloudflare KV (Storage) ← Active ✅
-└── Cloudflare Pages ← DISABLED ❌
+GitHubリポジトリ
+├── Vercel (Next.jsアプリ) ← プライマリデプロイメント ✅
+├── Cloudflare Workers (APIゲートウェイ) ← 手動デプロイメント ✅
+├── Cloudflare KV (ストレージ) ← アクティブ ✅
+└── Cloudflare Pages ← 無効化 ❌
 ```
 
-## Architecture
+## アーキテクチャ
 
-### Data Flow
+### データフロー
 1. **Cron Job** (`/api/cron/fetch`) runs every 10 minutes
    - Fetches ranking data for 9 genres × 2 periods (24h/hour) = 18 datasets
    - Uses hybrid scraping: HTML parsing + Snapshot API + Tag extraction
@@ -358,20 +358,20 @@ GitHub Repository
    - Uses Snapshot API for live view/comment/mylist counts
    - Non-blocking updates preserve UI responsiveness
 
-### Multi-Period Support
-The system caches both 24-hour and hourly rankings:
-- Cache keys: `ranking-{genre}-24h` and `ranking-{genre}-hour`
-- Backward compatibility maintained with `ranking-{genre}` keys
-- Client-side period switching triggers new API calls
+### 複数期間サポート
+システムは24時間と1時間のランキングをキャッシュ：
+- キャッシュキー: `ranking-{genre}-24h`と`ranking-{genre}-hour`
+- `ranking-{genre}`キーとの後方互換性を維持
+- クライアント側の期間切り替えが新しいAPI呼び出しをトリガー
 
-### Scraping Architecture
-The hybrid scraper (`complete-hybrid-scraper.ts`) combines:
-- **HTML Parsing**: Genre-specific ranking pages with meta tag extraction
-- **Tag Enrichment**: Individual video page scraping for tag data
-- **Popular Tags**: Server-response JSON extraction for trending tags
-- **Geo-blocking Bypass**: Googlebot User-Agent for all requests
+### スクレイピングアーキテクチャ
+ハイブリッドスクレイパー(`complete-hybrid-scraper.ts`)の構成：
+- **HTMLパース**: ジャンル別ランキングページとメタタグ抽出
+- **タグ強化**: 個別動画ページからのタグデータスクレイピング
+- **人気タグ**: サーバーレスポンスJSONからのトレンドタグ抽出
+- **ジオブロック回避**: 全リクエストでGooglebot User-Agent使用
 
-### Key Technical Constraints
+### 主要な技術的制約
 
 1. **Geo-blocking**: Nico Nico returns 403 from non-Japanese IPs. Googlebot UA bypass is essential for all ranking requests.
 
@@ -398,9 +398,9 @@ The hybrid scraper (`complete-hybrid-scraper.ts`) combines:
    - Cron jobs use Node.js runtime for scraping capabilities
    - API routes use Node.js runtime (changed from Edge for compatibility)
 
-## Genre and Period Management
+## ジャンルと期間の管理
 
-### Supported Genres
+### サポート対象ジャンル
 **事前キャッシュされるジャンル（7個）:**
 ```typescript
 const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
@@ -409,44 +409,44 @@ const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'a
 **全ジャンル（オンデマンド対応）:**
 すべての`RankingGenre`型で定義されたジャンルがAPIで利用可能。キャッシュされていないジャンルはオンデマンドで取得。
 
-### Period Types
-- `'24h'` - 24-hour ranking (default)
-- `'hour'` - Hourly ranking
+### 期間タイプ
+- `'24h'` - 24時間ランキング（デフォルト）
+- `'hour'` - 毎時ランキング
 
-### Tag Support
-- Popular tags extracted from server response data
+### タグサポート
+- サーバーレスポンスから人気タグを抽出
 - **「その他」ジャンルの人気タグ**: 事前キャッシュ（最初の300件）
 - **他のジャンルのタグ**: 動的取得のみ
 - タグ別ランキングも最大500件まで取得可能（ページネーション対応）
 - キャッシュキー: `ranking-${genre}-${period}-tag-${tag}`（300件の配列）
 
-## Testing Philosophy
+## テスト哲学
 
-This project follows strict Test-Driven Development (TDD) principles. **Always write tests before implementing features.**
+厳格なテスト駆動開発(TDD)原則に従う。**機能実装前に必ずテストを作成する**
 
-### TDD Process:
-1. **Red**: Write a failing test that defines the desired behavior
-2. **Green**: Write the minimal code to make the test pass
-3. **Refactor**: Improve the code while keeping tests green
+### TDDプロセス:
+1. **Red**: 期待する動作を定義する失敗するテストを作成
+2. **Green**: テストを通すための最小限のコードを作成
+3. **Refactor**: テストを維持しながらコードを改善
 
-### TDD Best Practices:
-- **Test First**: Never write production code without a failing test
-- **One Test at a Time**: Write one test, make it pass, then write the next
-- **Minimal Implementation**: Write only enough code to make the test pass
-- **Refactor with Confidence**: Clean up code after tests are green
-- **Test Behavior, Not Implementation**: Focus on what the code does, not how
+### TDDベストプラクティス:
+- **テストファースト**: 失敗するテストなしに本番コードを書かない
+- **一度に1つのテスト**: 1つのテストを書き、通してから次へ
+- **最小限の実装**: テストを通すのに必要十分なコードのみ作成
+- **自信を持ってリファクタリング**: テストが通った後にコードをクリーンアップ
+- **実装ではなく振る舞いをテスト**: どう動くかではなく、何をするかに焦点
 
-### Coverage Requirements:
-- Current threshold: 42% (temporarily lowered from 90% during refactoring)
-- Goal: Return to 90% coverage across all metrics
-- Run `npm run test:coverage` to check coverage
+### カバレッジ要件:
+- 現在の閾値: 42%（リファクタリング中に90%から一時的に引き下げ）
+- 目標: 全メトリクスで90%カバレッジへの復帰
+- `npm run test:coverage`でカバレッジ確認
 
-### Test Organization:
-- `__tests__/unit/` - Component and utility tests
-- `__tests__/integration/` - API and data flow tests
-- `__tests__/e2e/` - Full user journey tests (Playwright)
+### テスト構成:
+- `__tests__/unit/` - コンポーネントとユーティリティのテスト
+- `__tests__/integration/` - APIとデータフローのテスト
+- `__tests__/e2e/` - 完全なユーザージャーニーテスト（Playwright）
 
-### Running Tests:
+### テスト実行:
 ```bash
 npm test                    # Watch mode
 npm test -- --run          # Single run
@@ -454,7 +454,7 @@ npm run test:coverage      # With coverage report
 npx vitest run <file>      # Run specific test file
 ```
 
-### Example TDD Workflow:
+### TDDワークフローの例:
 ```bash
 # 1. Create a test file
 touch __tests__/unit/new-feature.test.tsx
@@ -470,7 +470,7 @@ npx vitest run __tests__/unit/new-feature.test.tsx
 npm test -- --run
 ```
 
-## Common Pitfalls
+## よくある落とし穴
 
 1. **Console Statements**: ESLint forbids console.log. Remove all console statements before committing.
 
@@ -522,15 +522,15 @@ npm test -- --run
 
 15. **Scroll Restoration**: Custom scroll restoration with `history.scrollRestoration = 'manual'` to prevent conflicts with browser defaults.
 
-## GitHub Access
+## GitHubアクセス
 
-### Repository Information
+### リポジトリ情報
 - Repository: `YJSN180/nico-ranking-custom`
 - Main branch: `main`
 - PR workflow: Create feature branches, submit PRs, merge after CI passes
 
-### GitHub Authentication
-When working with GitHub CLI, ensure the correct account is active:
+### GitHub認証
+GitHub CLIで作業する際は、正しいアカウントがアクティブであることを確認：
 ```bash
 # Check current authentication status
 gh auth status
@@ -542,7 +542,7 @@ gh auth switch -u YJSN180
 gh auth login
 ```
 
-### GitHub CLI Commands
+### GitHub CLIコマンド
 ```bash
 # View PR status
 gh pr view <PR_NUMBER> --json state,statusCheckRollup,mergeable
@@ -562,7 +562,7 @@ gh run view <RUN_ID> --log
 gh run view <RUN_ID> --log-failed
 ```
 
-### Working with Branches
+### ブランチ操作
 ```bash
 # Create and checkout new feature branch
 git checkout -b feat/feature-name
@@ -577,7 +577,7 @@ git branch -D feat/feature-name
 git remote prune origin
 ```
 
-### CI/CD Pipeline
+### CI/CDパイプライン
 1. **On Push/PR**:
    - Security checks
    - Unit/Integration tests (Vitest)
@@ -590,78 +590,79 @@ git remote prune origin
    - Update Nico Ranking Data (every 10 minutes)
    - Fetches and caches ranking data for all genres/periods
 
-### Deployment
-- Automatic deployment to Vercel on push to `main`
-- Preview deployments for all PRs
-- Environment variables managed in Vercel dashboard
+### デプロイメント
+- `main`へのpush時にVercelへ自動デプロイ
+- 全PRに対してプレビューデプロイメント
+- 環境変数はVercelダッシュボードで管理
 
-## Documentation Management Policy
+## ドキュメント管理ポリシー
 
-### File Commitment Rules
+### ファイルコミットルール
 
-**Files that CAN be committed (allowlist):**
-- `README.md` - Project overview and setup instructions
-- `CLAUDE.md` - This instruction file for AI assistants
-- Source code files (`.ts`, `.tsx`, `.js`, `.jsx`, `.css`, etc.)
-- Configuration files (`package.json`, `tsconfig.json`, `.eslintrc`, etc.)
-- Test files (`*.test.ts`, `*.spec.ts`)
-- Build configuration (`next.config.js`, `playwright.config.ts`, etc.)
-- CI/CD configuration (`.github/workflows/`, `vercel.json`)
+**コミット可能なファイル（許可リスト）:**
+- `README.md` - プロジェクト概要とセットアップ手順
+- `CLAUDE.md` - AIアシスタント用の指示ファイル（このファイル）
+- ソースコードファイル（`.ts`, `.tsx`, `.js`, `.jsx`, `.css`など）
+- 設定ファイル（`package.json`, `tsconfig.json`, `.eslintrc`など）
+- テストファイル（`*.test.ts`, `*.spec.ts`）
+- ビルド設定（`next.config.js`, `playwright.config.ts`など）
+- CI/CD設定（`.github/workflows/`, `vercel.json`）
 
-**Files that must be gitignored (blocklist):**
-- All other `.md` files (documentation, notes, guides, etc.)
-- Documentation directories (`docs/`, `documentation/`, `doc/`)
-- Alternative documentation formats (`.rst`, `.txt`, `.adoc`, `.markdown`, etc.)
-- Temporary files (`.tmp`, `.bak`, `.log`)
-- Environment files (`.env*`)
-- Generated files (build outputs, coverage reports)
-- Tool-specific files (`.tools/`, `.claude/`, `.wrangler/`)
+**gitignore必須ファイル（ブロックリスト）:**
+- その他すべての`.md`ファイル（ドキュメント、ノート、ガイドなど）
+- ドキュメントディレクトリ（`docs/`, `documentation/`, `doc/`）
+- その他のドキュメント形式（`.rst`, `.txt`, `.adoc`, `.markdown`など）
+- 一時ファイル（`.tmp`, `.bak`, `.log`）
+- 環境ファイル（`.env*`）
+- 生成ファイル（ビルド出力、カバレッジレポート）
+- ツール固有ファイル（`.tools/`, `.claude/`, `.wrangler/`）
 
-### Documentation Creation Guidelines
+### ドキュメント作成ガイドライン
 
-1. **Never create documentation files automatically** - Only create when explicitly requested
-2. **Use appropriate gitignore patterns** - Ensure new documentation types are properly excluded
-3. **Maintain clean repository** - Keep only essential files in version control
-4. **Security first** - Never commit sensitive information in any documentation
+1. **ドキュメントファイルを自動作成しない** - 明示的に要求された場合のみ作成
+2. **適切なgitignoreパターンを使用** - 新しいドキュメントタイプが適切に除外されることを確認
+3. **クリーンなリポジトリを維持** - バージョン管理には必須ファイルのみを保持
+4. **セキュリティ第一** - いかなるドキュメントにも機密情報をコミットしない
 
-### Project Structure Organization
+### プロジェクト構造の整理
 
-**All technical documentation has been moved to `/docs` directory (gitignored)**:
-- Deployment guides
-- Security documentation
-- Performance reports
-- Configuration guides
+**すべての技術ドキュメントは`/docs`ディレクトリに移動（gitignore対象）**:
+- デプロイメントガイド
+- セキュリティドキュメント
+- パフォーマンスレポート
+- 設定ガイド
 
-This keeps the project root clean and focused on essential files only. The `/docs` folder contains:
-- Cloudflare setup guides
-- Security configurations
-- Performance optimization reports
-- Deployment checklists
+プロジェクトルートをクリーンに保ち、必須ファイルのみに集中。`/docs`フォルダには以下を含む：
+- Cloudflareセットアップガイド
+- セキュリティ設定
+- パフォーマンス最適化レポート
+- デプロイメントチェックリスト
 
-Only `README.md` and `CLAUDE.md` remain in the project root for immediate visibility.
+**重要**: 新規作成するMDファイルは必ず`/docs`ディレクトリに配置すること。
+プロジェクトルートには`README.md`と`CLAUDE.md`のみを配置。
 
-## Multi-Agent Task Management
+## マルチエージェントタスク管理
 
-### When to Use Multiple Sub-Agents
+### 複数サブエージェントを使用する場合
 
-Use multiple sub-agents for complex tasks that involve:
+以下を含む複雑なタスクには複数のサブエージェントを使用：
 
-1. **Parallel Processing Requirements**:
-   - Multiple independent API calls
-   - Concurrent file operations
-   - Simultaneous test runs across different modules
+1. **並列処理要件**:
+   - 複数の独立したAPI呼び出し
+   - 並行ファイル操作
+   - 異なるモジュール間での同時テスト実行
 
-2. **Specialized Domain Knowledge**:
-   - Frontend UI components + Backend API logic
-   - Testing strategy + Implementation
-   - Security analysis + Performance optimization
+2. **専門領域知識**:
+   - フロントエンドUIコンポーネント + バックエンドAPIロジック
+   - テスト戦略 + 実装
+   - セキュリティ分析 + パフォーマンス最適化
 
-3. **Large-Scale Refactoring**:
-   - Database schema changes + API updates + Frontend adjustments
-   - Multi-service deployments
-   - Cross-cutting architectural changes
+3. **大規模リファクタリング**:
+   - データベーススキーマ変更 + API更新 + フロントエンド調整
+   - マルチサービスデプロイメント
+   - 横断的なアーキテクチャ変更
 
-### Sub-Agent Coordination Guidelines
+### サブエージェント調整ガイドライン
 
 1. **Clear Task Boundaries**:
    - Define specific responsibilities for each sub-agent
@@ -683,7 +684,7 @@ Use multiple sub-agents for complex tasks that involve:
    - Report sub-agent completion status
    - Provide unified status updates to users
 
-### Example Multi-Agent Scenarios
+### マルチエージェントシナリオの例
 
 **Scenario 1: Full-Stack Feature Implementation**
 - Agent A: Database schema and API endpoints
