@@ -35,11 +35,11 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
   const isDefault = genre === 'all' && period === '24h' && !tag
   
-  let title = isDefault ? 'ニコニコランキング(Re:turn)' : `${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
+  let title = isDefault ? 'ニコラン(Re:turn)' : `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
   let description = isDefault ? 'ニコニコ動画のランキングを今すぐチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
   
   if (tag) {
-    title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコニコランキング(Re:turn)`
+    title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
     description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
   }
   
@@ -53,7 +53,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     openGraph: {
       title,
       description,
-      siteName: 'ニコニコランキング(Re:turn)',
+      siteName: 'ニコラン(Re:turn)',
       url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
       images: [{
         url: '/og-image.png',

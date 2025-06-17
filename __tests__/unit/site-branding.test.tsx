@@ -3,10 +3,10 @@ import { render, screen } from '@testing-library/react'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 
 describe('サイトブランディング', () => {
-  it('サイト名が「ニコニコランキング(Re:turn)」と表示される', () => {
+  it('サイト名が「ニコラン(Re:turn)」と表示される', () => {
     render(<HeaderWithSettings />)
     
-    expect(screen.getByText('ニコニコランキング')).toBeInTheDocument()
+    expect(screen.getByText('ニコラン')).toBeInTheDocument()
     expect(screen.getByText('(Re:turn)')).toBeInTheDocument()
   })
 

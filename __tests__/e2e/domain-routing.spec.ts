@@ -93,7 +93,7 @@ describe('Domain Routing Tests', () => {
       expect(response.headers.get('content-type')).toContain('text/html')
       
       const html = await response.text()
-      expect(html).toContain('ニコニコランキング')
+      expect(html).toContain('ニコラン')
     })
   })
 })

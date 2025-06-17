@@ -38,7 +38,7 @@ export function HeaderWithSettings() {
             <span style={{
               fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
               fontSize: '1em'
-            }}>ニコニコランキング</span>
+            }}>ニコラン</span>
             <span style={{
               fontFamily: '"Comic Sans MS Bold", "Comic Sans MS", cursive, sans-serif',
               fontSize: '0.85em',

@@ -2,8 +2,8 @@ import { HeaderWithSettings } from '@/components/header-with-settings'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'プライバシーポリシー | ニコニコランキング(Re:turn)',
-  description: 'ニコニコランキング(Re:turn)のプライバシーポリシー',
+  title: 'プライバシーポリシー | ニコラン(Re:turn)',
+  description: 'ニコラン(Re:turn)のプライバシーポリシー',
 }
 
 export default function PrivacyPage() {
@@ -50,7 +50,7 @@ export default function PrivacyPage() {
               marginBottom: '16px'
             }
           } as any}>
-            <p>ニコニコランキング(Re:turn)（以下「当サイト」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めています。</p>
+            <p>ニコラン(Re:turn)（以下「当サイト」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めています。</p>
             
             <h2>1. 収集する情報</h2>
             <p>当サイトは、以下の情報を収集する場合があります：</p>
@@ -82,11 +82,8 @@ export default function PrivacyPage() {
             <h2>5. 外部サービスとの連携</h2>
             <p>当サイトは、ニコニコ動画のコンテンツを表示していますが、ニコニコ動画への個人情報の送信は行いません。</p>
             
-            <h2>6. お問い合わせ</h2>
-            <p>プライバシーポリシーに関するお問い合わせは、GitHubのIssueよりお願いいたします。</p>
-            
             <p style={{ marginTop: '40px', fontSize: '0.9rem' }}>
-              最終更新日: 2025年6月15日
+              最終更新日: 2025年6月17日
             </p>
           </div>
         </div>

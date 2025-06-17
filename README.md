@@ -1,4 +1,4 @@
-# ニコニコランキング (Re:turn)
+# ニコラン (Re:turn)
 
 [![CI](https://github.com/YJSN180/nico-ranking-custom/actions/workflows/ci.yml/badge.svg)](https://github.com/YJSN180/nico-ranking-custom/actions/workflows/ci.yml)
 [![Update Nico Ranking Data](https://github.com/YJSN180/nico-ranking-custom/actions/workflows/update-ranking-parallel.yml/badge.svg)](https://github.com/YJSN180/nico-ranking-custom/actions/workflows/update-ranking-parallel.yml)

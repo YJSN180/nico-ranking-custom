@@ -8,20 +8,20 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ニコニコランキング(Re:turn)',
+  title: 'ニコラン(Re:turn)',
   description: 'ニコニコ動画のランキングを今すぐチェック！',
   metadataBase: new URL('https://nico-rank.com'),
   openGraph: {
-    title: 'ニコニコランキング(Re:turn)',
+    title: 'ニコラン(Re:turn)',
     description: 'ニコニコ動画のランキングを今すぐチェック！',
     url: 'https://nico-rank.com',
-    siteName: 'ニコニコランキング(Re:turn)',
+    siteName: 'ニコラン(Re:turn)',
     images: [
       {
         url: '/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'ニコニコランキング(Re:turn)',
+        alt: 'ニコラン(Re:turn)',
         type: 'image/png',
       }
     ],
@@ -30,13 +30,13 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ニコニコランキング(Re:turn)',
+    title: 'ニコラン(Re:turn)',
     description: 'ニコニコ動画のランキングを今すぐチェック！',
     images: [{
       url: '/og-image.png',
       width: 1200,
       height: 630,
-      alt: 'ニコニコランキング(Re:turn)',
+      alt: 'ニコラン(Re:turn)',
       type: 'image/png',
     }],
     creator: '@nico_rank', // 必要に応じてTwitterアカウントを設定
@@ -57,13 +57,13 @@ export default function RootLayout({
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'ニコニコランキング(Re:turn)',
-    alternateName: 'ニコランキング',
+    name: 'ニコラン(Re:turn)',
+    alternateName: 'ニコラン',
     url: 'https://nico-rank.com',
     description: 'ニコニコ動画の24時間・毎時ランキングを高速表示。人気タグ別ランキング、NGフィルター機能搭載。',
     publisher: {
       '@type': 'Organization',
-      name: 'ニコニコランキング(Re:turn)',
+      name: 'ニコラン(Re:turn)',
     },
     potentialAction: {
       '@type': 'SearchAction',

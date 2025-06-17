@@ -1,6 +1,6 @@
 {
-  "name": "ニコニコランキング(Re:turn)",
-  "short_name": "ニコランキング",
+  "name": "ニコラン(Re:turn)",
+  "short_name": "ニコラン",
   "description": "ニコニコ動画の24時間・毎時ランキングを高速表示",
   "start_url": "/",
   "display": "standalone",

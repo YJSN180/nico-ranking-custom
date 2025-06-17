@@ -8,7 +8,7 @@ export async function POST() {
     
     // Generate QR code URI
     const accountName = process.env.ADMIN_USERNAME || 'admin'
-    const issuer = 'ニコニコランキング(Re:turn)'
+    const issuer = 'ニコラン(Re:turn)'
     const qrCodeURI = TOTP.generateQRCodeURI(secret, accountName, issuer)
     
     return NextResponse.json({
