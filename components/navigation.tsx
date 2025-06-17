@@ -121,15 +121,26 @@ export function Navigation() {
             {/* 背景オーバーレイ */}
             <div
               onClick={() => setIsOpen(false)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                  setIsOpen(false)
+                }
+              }}
+              aria-label="メニューを閉じる（背景をタップ）"
               style={{
                 position: 'fixed',
                 top: 0,
                 left: 0,
                 right: 0,
                 bottom: 0,
-                background: 'rgba(0, 0, 0, 0.5)',
+                background: 'rgba(0, 0, 0, 0.7)',
                 zIndex: 30,
                 animation: 'fadeIn 0.2s ease-in-out',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(2px)',
+                cursor: 'pointer',
               }}
             />
 
@@ -155,14 +166,49 @@ export function Navigation() {
               }}
             >
               <div style={{ padding: '20px' }}>
-                <h2 style={{
-                  color: 'var(--text-primary)',
-                  fontSize: '20px',
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
                   marginBottom: '20px',
-                  fontWeight: 'bold',
                 }}>
-                  メニュー
-                </h2>
+                  <h2 style={{
+                    color: 'var(--text-primary)',
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    margin: 0,
+                  }}>
+                    メニュー
+                  </h2>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    aria-label="メニューを閉じる"
+                    style={{
+                      background: 'transparent',
+                      border: '2px solid var(--text-secondary)',
+                      borderRadius: '50%',
+                      width: '40px',
+                      height: '40px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      fontSize: '24px',
+                      color: 'var(--text-primary)',
+                      transition: 'all 0.2s',
+                    }}
+                    onTouchStart={(e) => {
+                      e.currentTarget.style.background = 'var(--bg-secondary)'
+                      e.currentTarget.style.transform = 'scale(0.95)'
+                    }}
+                    onTouchEnd={(e) => {
+                      e.currentTarget.style.background = 'transparent'
+                      e.currentTarget.style.transform = 'scale(1)'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
                 
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {NAV_ITEMS.map((item) => (
