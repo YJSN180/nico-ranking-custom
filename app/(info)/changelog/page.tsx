@@ -22,95 +22,16 @@ type ChangelogEntry = {
 const CHANGELOG: ChangelogEntry[] = [
   {
     date: '2025-06-17',
-    version: 'v2.3.0',
-    changes: [
-      { type: 'feature', description: 'サイト情報ページとナビゲーションシステムを追加' },
-      { type: 'feature', description: 'モバイル対応のハンバーガーメニューを実装' },
-      { type: 'improvement', description: 'ヘッダーレイアウトを最適化' },
-    ],
-  },
-  {
-    date: '2025-06-16',
-    version: 'v2.2.0',
-    changes: [
-      { type: 'feature', description: 'テーマ切り替え機能（ライト/ダーク/ダークブルー）を追加' },
-      { type: 'improvement', description: 'モバイル表示でのジャンル・タグ選択をスクロール可能に改善' },
-      { type: 'fix', description: 'ヘッダータイトルが重なる問題を修正' },
-    ],
-  },
-  {
-    date: '2025-06-15',
-    version: 'v2.1.0',
-    changes: [
-      { type: 'feature', description: 'ページネーション機能（最大500件表示）を追加' },
-      { type: 'feature', description: 'URLパラメータによる表示件数の保存' },
-      { type: 'improvement', description: 'ブラウザの戻るボタンでの状態復元を改善' },
-      { type: 'fix', description: 'スクロール位置の復元を修正' },
-    ],
-  },
-  {
-    date: '2025-06-14',
-    version: 'v2.0.0',
-    changes: [
-      { type: 'feature', description: '人気タグ別ランキング機能を追加' },
-      { type: 'feature', description: '投稿日時の表示機能を追加' },
-      { type: 'improvement', description: 'タグランキングのパフォーマンスを最適化' },
-      { type: 'fix', description: 'NGフィルター適用時のランク番号を修正' },
-    ],
-  },
-  {
-    date: '2025-06-13',
-    version: 'v1.5.0',
-    changes: [
-      { type: 'feature', description: '高度なセキュリティヘッダーを実装' },
-      { type: 'security', description: 'CSP（Content Security Policy）を強化' },
-      { type: 'security', description: 'レート制限を多層防御システムに更新' },
-      { type: 'improvement', description: 'Cloudflare Workersを最適化' },
-    ],
-  },
-  {
-    date: '2025-06-12',
-    version: 'v1.4.0',
-    changes: [
-      { type: 'feature', description: '24時間・毎時ランキングの切り替え機能を追加' },
-      { type: 'feature', description: 'リアルタイム統計更新（1分ごと）を実装' },
-      { type: 'improvement', description: 'キャッシュ戦略を最適化' },
-    ],
-  },
-  {
-    date: '2025-06-11',
-    version: 'v1.3.0',
-    changes: [
-      { type: 'feature', description: 'NGフィルター機能（動画・投稿者ブロック）を追加' },
-      { type: 'feature', description: '設定のインポート・エクスポート機能を追加' },
-      { type: 'improvement', description: 'LocalStorageによる設定の永続化' },
-    ],
-  },
-  {
-    date: '2025-06-10',
-    version: 'v1.2.0',
-    changes: [
-      { type: 'improvement', description: '10分ごとの自動更新システムを実装' },
-      { type: 'improvement', description: 'Cloudflare KVによる高速キャッシュを導入' },
-      { type: 'fix', description: 'ジオブロッキング回避の改善' },
-    ],
-  },
-  {
-    date: '2025-06-09',
-    version: 'v1.1.0',
-    changes: [
-      { type: 'feature', description: '全ジャンル対応（ゲーム、エンタメ、その他など）' },
-      { type: 'feature', description: 'モバイル対応レスポンシブデザイン' },
-      { type: 'improvement', description: 'TypeScript化による型安全性の向上' },
-    ],
-  },
-  {
-    date: '2025-06-08',
     version: 'v1.0.0',
     changes: [
       { type: 'feature', description: 'ニコニコ動画ランキングの基本表示機能' },
       { type: 'feature', description: 'サムネイル・再生数・コメント数の表示' },
-      { type: 'feature', description: 'Next.js 14 App Routerによる高速レンダリング' },
+      { type: 'feature', description: 'NGフィルター機能（動画・投稿者ブロック）' },
+      { type: 'feature', description: '24時間・毎時ランキングの切り替え機能' },
+      { type: 'feature', description: '人気タグ別ランキング機能' },
+      { type: 'feature', description: 'テーマ切り替え機能（ライト/ダーク/ダークブルー）' },
+      { type: 'feature', description: 'モバイル対応レスポンシブデザイン' },
+      { type: 'feature', description: 'リアルタイム統計更新（1分ごと）' },
     ],
   },
 ]

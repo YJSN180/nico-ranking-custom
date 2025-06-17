@@ -90,40 +90,6 @@ export default function PrivacyPage() {
           color: 'var(--text-primary)',
           fontWeight: 'bold'
         }}>
-          外部サービスの利用
-        </h2>
-        <p style={{
-          lineHeight: '1.8',
-          color: 'var(--text-secondary)',
-          marginBottom: '16px'
-        }}>
-          本サービスは以下の外部サービスを利用しています：
-        </p>
-        <ul style={{
-          listStyle: 'disc',
-          paddingLeft: '20px',
-          color: 'var(--text-secondary)',
-          lineHeight: '1.8'
-        }}>
-          <li>Cloudflare（CDN、セキュリティ、アクセス解析）</li>
-          <li>Vercel（ホスティング、パフォーマンス分析）</li>
-        </ul>
-        <p style={{
-          lineHeight: '1.8',
-          color: 'var(--text-secondary)',
-          marginTop: '16px'
-        }}>
-          これらのサービスは独自のプライバシーポリシーに従って情報を収集・利用する場合があります。
-        </p>
-      </section>
-      
-      <section style={{ marginBottom: '32px' }}>
-        <h2 style={{
-          fontSize: '1.5rem',
-          marginBottom: '16px',
-          color: 'var(--text-primary)',
-          fontWeight: 'bold'
-        }}>
           Cookie（クッキー）の使用
         </h2>
         <p style={{
