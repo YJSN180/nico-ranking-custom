@@ -103,6 +103,8 @@ export default function ClientPage({
   
   // 初期表示時の処理（ユーザー設定の復元とデータ取得）
   useEffect(() => {
+    // SSR中はスキップ
+    if (typeof window === 'undefined') return;
     const initializeFromPreferences = async () => {
       // 既に復元済みの場合はスキップ
       if (hasRestoredRef.current) return;
@@ -114,7 +116,10 @@ export default function ClientPage({
       }
       
       // 直接アクセスでない場合はスキップ
-      const isDirectAccess = !document.referrer || document.referrer === window.location.origin + '/';
+      const referrer = document.referrer;
+      const currentOrigin = window.location.origin;
+      const isDirectAccess = !referrer || referrer === '' || referrer === currentOrigin || referrer === currentOrigin + '/';
+      
       if (!isDirectAccess) {
         setIsInitialLoad(false);
         return;
@@ -222,12 +227,10 @@ export default function ClientPage({
         })
     }
     
-    // preferencesが読み込まれたら復元処理を実行
-    if (preferences && preferences.version && !hasRestoredRef.current) {  // preferencesが読み込まれたかどうかのチェック
-      initializeFromPreferences();
-    }
+    // 初回マウント時のみ実行
+    initializeFromPreferences();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [preferences?.version]) // preferencesが読み込まれたら実行
+  }, []) // 初回のみ実行
   
   // リアルタイム統計更新を使用（3分ごとに自動更新）
   const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
