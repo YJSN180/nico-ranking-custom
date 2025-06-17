@@ -19,9 +19,8 @@
   font-display: swap;
 }
 
-/* ライトテーマ */
-:root,
-[data-theme="light"] {
+/* デフォルトとライトテーマ */
+:root {
   /* 基本色 */
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -58,6 +57,11 @@
   
   /* ボタンテキスト */
   --button-text-active: #ffffff;
+}
+
+/* ライトテーマ（明示的）*/
+[data-theme="light"] {
+  /* ルートと同じ値を継承 */
 }
 
 /* ダークテーマ */

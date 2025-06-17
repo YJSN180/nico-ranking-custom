@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Script from 'next/script'
+import { cookies } from 'next/headers'
 import { ThemeProvider } from '@/components/theme-provider'
 import { WebVitalsReporter } from '@/components/web-vitals-reporter'
 import './globals.css'
@@ -49,7 +50,7 @@ export const viewport = {
   maximumScale: 5,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
@@ -76,8 +77,22 @@ export default function RootLayout({
     inLanguage: 'ja',
   }
 
+  // サーバーサイドでテーマを取得
+  const cookieStore = await cookies()
+  const preferenceCookie = cookieStore.get('user-preferences')
+  let theme = 'light'
+  
+  if (preferenceCookie?.value) {
+    try {
+      const preferences = JSON.parse(preferenceCookie.value)
+      theme = preferences.theme || 'light'
+    } catch {
+      // デフォルトのテーマを使用
+    }
+  }
+
   return (
-    <html lang="ja">
+    <html lang="ja" data-theme={theme}>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0080ff" />
