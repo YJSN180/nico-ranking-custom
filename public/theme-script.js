@@ -5,7 +5,11 @@
     const saved = localStorage.getItem('user-preferences');
     if (saved) {
       const prefs = JSON.parse(saved);
-      const theme = prefs.theme || 'light';
+      let theme = prefs.theme || 'light';
+      // Handle 'darkblue' to 'dark-blue' conversion
+      if (theme === 'darkblue') {
+        theme = 'dark-blue';
+      }
       document.documentElement.setAttribute('data-theme', theme);
     }
   } catch (e) {
