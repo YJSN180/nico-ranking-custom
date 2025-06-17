@@ -13,6 +13,25 @@ export default function PrivacyPage() {
       margin: '0 auto',
       padding: '20px'
     }}>
+      <div style={{
+        marginBottom: '24px',
+      }}>
+        <Link
+          href="/"
+          style={{
+            color: 'var(--link)',
+            textDecoration: 'none',
+            fontSize: '14px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+          className="hover-underline"
+        >
+          ← トップページに戻る
+        </Link>
+      </div>
+      
       <h1 style={{ 
         color: 'var(--text-primary)', 
         fontSize: '2rem', 
@@ -139,25 +158,6 @@ export default function PrivacyPage() {
       }}>
         最終更新日: 2025年6月17日
       </p>
-
-      <div style={{
-        marginTop: '48px',
-        paddingTop: '24px',
-        borderTop: '1px solid var(--border)',
-        textAlign: 'center'
-      }}>
-        <Link
-          href="/"
-          style={{
-            color: 'var(--link)',
-            textDecoration: 'none',
-            fontSize: '16px',
-          }}
-          className="hover-underline"
-        >
-          ← トップページに戻る
-        </Link>
-      </div>
     </div>
   )
 }

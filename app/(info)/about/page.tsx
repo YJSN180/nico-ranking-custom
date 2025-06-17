@@ -17,6 +17,25 @@ export default function AboutPage() {
       margin: '0 auto',
       padding: '20px',
     }}>
+      <div style={{
+        marginBottom: '24px',
+      }}>
+        <Link
+          href="/"
+          style={{
+            color: 'var(--link)',
+            textDecoration: 'none',
+            fontSize: '14px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+          className="hover-underline"
+        >
+          ← トップページに戻る
+        </Link>
+      </div>
+      
       <h1 style={{
         fontSize: '2rem',
         marginBottom: '32px',
@@ -138,25 +157,6 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <div style={{
-        marginTop: '48px',
-        paddingTop: '24px',
-        borderTop: '1px solid var(--border)',
-        textAlign: 'center',
-      }}>
-        <Link
-          href="/"
-          style={{
-            color: 'var(--link)',
-            textDecoration: 'none',
-            fontSize: '16px',
-            transition: 'text-decoration 0.2s',
-          }}
-          className="hover-underline"
-        >
-          ← トップページに戻る
-        </Link>
-      </div>
     </div>
   )
 }
