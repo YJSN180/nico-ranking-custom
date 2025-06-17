@@ -1,4 +1,21 @@
-// 完全なランキング取得システムのテスト
+/**
+ * 完全なランキング取得システムのテスト
+ * 
+ * 目的：
+ * - complete-hybrid-scraperの統合テスト
+ * - 各ジャンル、各期間、タグ別ランキングの取得動作確認
+ * - エラーハンドリングとフォールバック機能のテスト
+ * 
+ * テスト内容：
+ * 1. 単一ランキング取得（総合24時間）
+ * 2. ジャンル別ランキング（ゲーム24時間）
+ * 3. エラーケース（例のソレジャンル）
+ * 4. タグ別ランキング
+ * 5. 複数ランキングの同時取得
+ * 
+ * 使用例：
+ * npx tsx scripts/archive/test-complete-system.ts
+ */
 
 import { fetchRanking, fetchMultipleRankings, DEFAULT_COMBINATIONS } from '../lib/complete-hybrid-scraper'
 

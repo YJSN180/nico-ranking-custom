@@ -42,9 +42,15 @@ describe('NG List Server Functions', () => {
 
       expect(result).toEqual({
         videoIds: ['sm123'],
-        videoTitles: ['Test Video'],
+        videoTitles: {
+          exact: ['Test Video'],
+          partial: []
+        },
         authorIds: ['author1'],
-        authorNames: ['Test Author'],
+        authorNames: {
+          exact: ['Test Author'],
+          partial: []
+        },
         derivedVideoIds: ['sm456', 'sm789']
       })
     })
@@ -56,9 +62,15 @@ describe('NG List Server Functions', () => {
 
       expect(result).toEqual({
         videoIds: [],
-        videoTitles: [],
+        videoTitles: {
+          exact: [],
+          partial: []
+        },
         authorIds: [],
-        authorNames: [],
+        authorNames: {
+          exact: [],
+          partial: []
+        },
         derivedVideoIds: []
       })
     })
@@ -129,7 +141,18 @@ describe('NG List Server Functions', () => {
 
       const result = await getNGListManual()
 
-      expect(result).toEqual(mockManual)
+      expect(result).toEqual({
+        videoIds: ['sm123'],
+        videoTitles: {
+          exact: ['Test Video'],
+          partial: []
+        },
+        authorIds: ['author1'],
+        authorNames: {
+          exact: ['Test Author'],
+          partial: []
+        }
+      })
     })
 
     it('should return empty list on error', async () => {
@@ -139,9 +162,15 @@ describe('NG List Server Functions', () => {
 
       expect(result).toEqual({
         videoIds: [],
-        videoTitles: [],
+        videoTitles: {
+          exact: [],
+          partial: []
+        },
         authorIds: [],
-        authorNames: []
+        authorNames: {
+          exact: [],
+          partial: []
+        }
       })
     })
   })
@@ -150,9 +179,15 @@ describe('NG List Server Functions', () => {
     it('should save manual NG list', async () => {
       const ngList = {
         videoIds: ['sm123'],
-        videoTitles: ['Test Video'],
+        videoTitles: {
+          exact: ['Test Video'],
+          partial: []
+        },
         authorIds: ['author1'],
-        authorNames: ['Test Author']
+        authorNames: {
+          exact: ['Test Author'],
+          partial: []
+        }
       }
 
       ;(kv.set as any).mockResolvedValueOnce(undefined)

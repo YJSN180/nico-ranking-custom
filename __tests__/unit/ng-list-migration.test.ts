@@ -59,7 +59,7 @@ describe('NG List Migration', () => {
           exact: [],
           partial: []
         },
-        derivedVideoIds: undefined
+        derivedVideoIds: []
       })
     })
 
@@ -103,7 +103,7 @@ describe('NG List Migration', () => {
           exact: [],
           partial: []
         },
-        derivedVideoIds: undefined
+        derivedVideoIds: []
       })
     })
   })
@@ -160,7 +160,8 @@ describe('NG List Migration', () => {
         authorNames: {
           exact: [],
           partial: []
-        }
+        },
+        derivedVideoIds: []
       })
     })
   })

@@ -52,6 +52,7 @@ wrangler.toml
 *.md
 !README.md
 !CLAUDE.md
+!scripts/archive/README.md
 
 # Documentation directories and common documentation formats
 docs/

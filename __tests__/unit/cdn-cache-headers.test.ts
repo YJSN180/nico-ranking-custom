@@ -24,7 +24,7 @@ describe('CDN Cache Headers', () => {
   })
 
   describe('Ranking API', () => {
-    it('should set 5-minute cache headers for genre rankings', async () => {
+    it('should set 30-minute cache headers for genre rankings from KV', async () => {
       // Arrange
       const mockData = {
         items: [{ rank: 1, id: 'sm12345', title: 'Test', thumbURL: 'test.jpg', views: 1000 }],
@@ -38,11 +38,11 @@ describe('CDN Cache Headers', () => {
       const response = await rankingGET(request)
 
       // Assert
-      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=600')
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=1800, stale-while-revalidate=3600')
       expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
     })
 
-    it('should set 5-minute cache headers for tag rankings', async () => {
+    it('should set 30-minute cache headers for tag rankings from KV', async () => {
       // Arrange
       const mockItems = [
         { rank: 1, id: 'sm12345', title: 'Test', thumbURL: 'test.jpg', views: 1000 }
@@ -55,11 +55,11 @@ describe('CDN Cache Headers', () => {
       const response = await rankingGET(request)
 
       // Assert
-      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=600')
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=1800, stale-while-revalidate=3600')
       expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
     })
 
-    it('should set cache headers even for dynamic fetch', async () => {
+    it('should set 5-minute cache headers for dynamic fetch', async () => {
       // Arrange
       vi.mocked(getGenreRanking).mockResolvedValue(null)
       vi.mocked(scrapeRankingPage).mockResolvedValue({

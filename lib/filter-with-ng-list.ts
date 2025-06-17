@@ -17,6 +17,7 @@ export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilter
   
   // 高速検索のためにSetを作成
   const videoIdSet = new Set(ngList.videoIds)
+  const derivedVideoIdSet = new Set(ngList.derivedVideoIds || [])
   const videoTitleExactSet = new Set(ngList.videoTitles.exact)
   const authorIdSet = new Set(ngList.authorIds)
   const authorNameExactSet = new Set(ngList.authorNames.exact)
@@ -24,6 +25,11 @@ export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilter
   const filteredItems = items.filter((item) => {
     // 既にNGリストにある場合
     if (videoIdSet.has(item.id)) {
+      return false
+    }
+    
+    // 派生NGリストにある場合
+    if (derivedVideoIdSet.has(item.id)) {
       return false
     }
     

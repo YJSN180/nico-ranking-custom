@@ -8,8 +8,14 @@ describe('NG Filter Simple Test', () => {
     const mockNGList = {
       videoIds: ['sm456'],
       authorIds: ['author2'],
-      videoTitles: [],
-      authorNames: [],
+      videoTitles: {
+        exact: [],
+        partial: []
+      },
+      authorNames: {
+        exact: [],
+        partial: []
+      },
       derivedVideoIds: ['sm789']
     }
     

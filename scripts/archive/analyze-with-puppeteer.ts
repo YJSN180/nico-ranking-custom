@@ -1,4 +1,20 @@
-// Puppeteerを使って例のソレジャンルのネットワークリクエストを解析
+/**
+ * Puppeteerを使って例のソレジャンルのネットワークリクエストを解析
+ * 
+ * 目的：
+ * - ブラウザ環境でのみ取得可能なデータの調査
+ * - 動的に読み込まれるコンテンツの分析
+ * - APIリクエストの詳細なトラッキング
+ * 
+ * 注意事項：
+ * - puppeteerパッケージのインストールが必要
+ * - ヘッドレスブラウザの起動に時間がかかる
+ * - 実行にはより多くのリソースが必要
+ * 
+ * 使用例：
+ * npm install puppeteer
+ * npx tsx scripts/archive/analyze-with-puppeteer.ts
+ */
 
 import puppeteer from 'puppeteer'
 

@@ -35,7 +35,7 @@ export function migrateLegacyNGList(data: any): NGList {
       exact: Array.isArray(data.authorNames) ? data.authorNames : [],
       partial: []  // 古い形式には部分一致がないので空配列
     },
-    derivedVideoIds: Array.isArray(data.derivedVideoIds) ? data.derivedVideoIds : undefined
+    derivedVideoIds: Array.isArray(data.derivedVideoIds) ? data.derivedVideoIds : []
   }
 }
 
@@ -75,7 +75,8 @@ export function createEmptyNGList(): NGList {
     authorNames: {
       exact: [],
       partial: []
-    }
+    },
+    derivedVideoIds: []
   }
 }
 

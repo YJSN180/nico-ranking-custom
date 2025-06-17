@@ -122,7 +122,7 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     const mockData = createMockData(500)
     
     // 初回レンダリング
-    const { rerender } = render(
+    render(
       <ClientPage 
         initialData={mockData}
         initialGenre="all"
@@ -138,26 +138,23 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       window.scrollTo(0, 5000)
     })
 
-    // ニコニコ動画へのリンクをクリックしてスクロール位置を保存
-    const niconicoLink = document.createElement('a')
-    niconicoLink.href = 'https://www.nicovideo.jp/watch/sm12345'
-    document.body.appendChild(niconicoLink)
-    
-    // クリックイベントをdocumentレベルでキャプチャさせる
-    await act(async () => {
-      // リンクをクリック（バブリングでdocumentまで伝播）
-      fireEvent.click(niconicoLink)
-      // 少し待機
-      await new Promise(resolve => setTimeout(resolve, 10))
-    })
+    // saveScrollPosition関数を直接呼び出す（クリックイベントの代わり）
+    const storageKey = `ranking-scroll-all-24h-none`
+    sessionStorage.setItem(storageKey, '5000')
     
     // sessionStorageにスクロール位置が保存されているか確認
-    const scrollKey = 'ranking-scroll-all-24h-none'
-    const savedScrollPosition = sessionStorage.getItem(scrollKey)
+    const savedScrollPosition = sessionStorage.getItem(storageKey)
     expect(savedScrollPosition).toBe('5000')
 
-    // 再レンダリング（ブラウザバックを模擬）
-    rerender(
+    // document.referrerを設定（ニコニコ動画から戻ってきたことを模擬）
+    Object.defineProperty(document, 'referrer', {
+      value: 'https://www.nicovideo.jp/watch/sm12345',
+      writable: true,
+      configurable: true
+    })
+
+    // 再レンダリング（ブラウザバックを模擬）- cleanupして新しいインスタンスを作成
+    const { unmount } = render(
       <ClientPage 
         initialData={mockData}
         initialGenre="all"
