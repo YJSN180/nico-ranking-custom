@@ -6,6 +6,7 @@ import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
+import { useVideoTags } from '@/hooks/use-video-tags'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -122,6 +123,12 @@ export default function ClientPage({
     rankingData,
     true,
     REALTIME_UPDATE_INTERVAL
+  )
+  
+  // タグ情報の取得（毎時0分に更新）
+  const { items: itemsWithTags, isLoading: isLoadingTags } = useVideoTags(
+    realtimeItems,
+    true // タグ取得を有効化
   )
   
   // スクロール位置の保存（動画ページ遷移時）
@@ -309,7 +316,7 @@ export default function ClientPage({
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
     // まずrank順にソート（重要！）
-    const sorted = [...realtimeItems].sort((a, b) => a.rank - b.rank)
+    const sorted = [...itemsWithTags].sort((a, b) => a.rank - b.rank)
     
     // NGフィルタを適用
     const filtered = filterItems(sorted)
@@ -324,7 +331,7 @@ export default function ClientPage({
     // 表示件数を制限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
     return reranked.slice(0, limit)
-  }, [realtimeItems, filterItems, config.tag])
+  }, [itemsWithTags, filterItems, config.tag])
   
   // レンダリング
   return (

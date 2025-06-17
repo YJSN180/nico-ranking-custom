@@ -56,7 +56,7 @@ export function useRealtimeStats(
           }
           
           const batch = videoIds.slice(i, i + batchSize)
-          const response = await fetch(`/api/video-stats?ids=${batch.join(',')}`, {
+          const response = await fetch(`/api/edge/video-stats?ids=${batch.join(',')}`, {
             signal: controller.signal
           })
           
