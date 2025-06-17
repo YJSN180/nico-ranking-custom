@@ -32,13 +32,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // 期間別ページ（24h/hour）
   const periodPages = RANKING_GENRES.flatMap((genre) => [
     {
-      url: `${baseUrl}?genre=${genre.value}&period=24h`,
+      url: `${baseUrl}?genre=${genre.value}&amp;period=24h`,
       lastModified: currentDate,
       changeFrequency: 'hourly' as const,
       priority: 0.7,
     },
     {
-      url: `${baseUrl}?genre=${genre.value}&period=hour`,
+      url: `${baseUrl}?genre=${genre.value}&amp;period=hour`,
       lastModified: currentDate,
       changeFrequency: 'hourly' as const,
       priority: 0.7,
