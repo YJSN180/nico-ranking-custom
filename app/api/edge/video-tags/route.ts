@@ -38,10 +38,20 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    // Failed to fetch video tags - returning error response
+    // エラー時は空のタグオブジェクトを返す（クライアントのエラーハンドリングのため）
     return NextResponse.json(
-      { error: 'Failed to fetch video tags' },
-      { status: 500 }
+      { 
+        tags: {},
+        timestamp: new Date().toISOString(),
+        count: 0,
+        error: 'Failed to fetch video tags'
+      },
+      { 
+        status: 200,
+        headers: {
+          'Cache-Control': 'public, s-maxage=300, max-age=300',
+        }
+      }
     )
   }
 }

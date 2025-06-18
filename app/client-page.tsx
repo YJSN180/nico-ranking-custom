@@ -128,7 +128,7 @@ export default function ClientPage({
   // タグ情報の取得（毎時0分に更新）
   const { items: itemsWithTags, isLoading: isLoadingTags } = useVideoTags(
     realtimeItems,
-    true // タグ取得を有効化
+    !isMobile // モバイルではタグ取得を無効化
   )
   
   // スクロール位置の保存（動画ページ遷移時）

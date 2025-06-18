@@ -63,9 +63,17 @@ export function useVideoTags(
           })
           
           if (response.ok) {
-            const data: VideoTagsResponse = await response.json()
-            Object.assign(allTags, data.tags)
-            setLastUpdated(data.timestamp)
+            try {
+              const data: VideoTagsResponse = await response.json()
+              if (data.tags) {
+                Object.assign(allTags, data.tags)
+              }
+              if (data.timestamp) {
+                setLastUpdated(data.timestamp)
+              }
+            } catch (jsonError) {
+              console.error('Failed to parse video tags response:', jsonError)
+            }
           }
           
           // レート制限対策（100ms待機）
