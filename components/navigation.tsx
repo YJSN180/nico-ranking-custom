@@ -33,7 +33,6 @@ const NAV_ITEMS: NavItem[] = [
   // メインセクション
   { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
   { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
-  { href: '/guide', label: '使い方ガイド', icon: <GuideIcon />, section: 'main' },
   
   // 外部リンクセクション  
   { 
