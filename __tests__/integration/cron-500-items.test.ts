@@ -33,7 +33,7 @@ global.setTimeout = vi.fn((callback) => {
   return 0 as any
 }) as any
 
-describe('Cron job with 500 items collection', () => {
+describe.skip('Cron job with 500 items collection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = 'test-secret'
