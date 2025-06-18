@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { SettingsModal } from './settings-modal'
@@ -10,6 +10,16 @@ import { useMobileDetect } from '@/hooks/use-mobile-detect'
 export function HeaderWithSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const isMobile = useMobileDetect()
+  
+  // Listen for openSettings event from Navigation
+  useEffect(() => {
+    const handleOpenSettings = () => {
+      setIsSettingsOpen(true)
+    }
+    
+    window.addEventListener('openSettings', handleOpenSettings)
+    return () => window.removeEventListener('openSettings', handleOpenSettings)
+  }, [])
 
   return (
     <>
