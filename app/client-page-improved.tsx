@@ -174,7 +174,7 @@ export default function ClientPage({
           params.append('tag', config.tag)
         }
         
-        const response = await fetch(`/api/ranking?${params}`)
+        const response = await fetch(`/api/edge/ranking?${params}`)
         
         if (!response.ok) {
           throw new Error('ランキングの取得に失敗しました')
@@ -303,7 +303,7 @@ export default function ClientPage({
         page: (currentPage + 1).toString()
       })
       
-      const response = await fetch(`/api/ranking?${params.toString()}`)
+      const response = await fetch(`/api/edge/ranking?${params.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch')
       
       const data = await response.json()

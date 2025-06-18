@@ -398,6 +398,41 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 </span>
               )}
             </div>
+            
+            {/* タグ表示 (デスクトップのみ) */}
+            {!isMobile && item.tags && item.tags.length > 0 && (
+              <div style={{ 
+                display: 'flex', 
+                gap: '6px', 
+                marginTop: '8px',
+                flexWrap: 'wrap',
+                fontSize: '12px'
+              }}>
+                {item.tags.slice(0, 5).map((tag, index) => (
+                  <span 
+                    key={index}
+                    style={{
+                      padding: '2px 8px',
+                      backgroundColor: 'var(--bg-secondary)',
+                      color: 'var(--text-secondary)',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+                {item.tags.length > 5 && (
+                  <span style={{
+                    color: 'var(--text-muted)',
+                    alignSelf: 'center'
+                  }}>
+                    +{item.tags.length - 5}
+                  </span>
+                )}
+              </div>
+            )}
             </div>
           </div>
         </div>

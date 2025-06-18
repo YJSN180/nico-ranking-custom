@@ -212,7 +212,7 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const response = await fetch(`/api/ranking?${apiParams.toString()}`)
+      const response = await fetch(`/api/edge/ranking?${apiParams.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch data')
       
       const data = await response.json()
