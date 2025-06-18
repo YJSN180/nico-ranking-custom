@@ -76,17 +76,17 @@ export function HeaderWithSettings() {
             >
               <div style={{
                 position: 'relative',
-                width: isMobile ? '54px' : '106px',
-                height: isMobile ? '54px' : '106px',
+                width: isMobile ? '80px' : '106px',
+                height: isMobile ? '80px' : '106px',
                 filter: 'brightness(0) invert(1)', // 白色に変換
                 opacity: 0.95,
-                marginRight: isMobile ? '-10px' : '-20px', // タイトルとやや重なるように
+                marginRight: isMobile ? '-20px' : '-20px', // タイトルとやや重なるように
               }}>
                 <Image
                   src="/icon.png"
                   alt="ニコラン(Re:turn) ロゴ"
                   fill
-                  sizes={isMobile ? "54px" : "106px"}
+                  sizes={isMobile ? "80px" : "106px"}
                   style={{
                     objectFit: 'contain'
                   }}
