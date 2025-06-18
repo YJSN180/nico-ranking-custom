@@ -6,7 +6,6 @@ import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
-import { useVideoTags } from '@/hooks/use-video-tags'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -125,11 +124,8 @@ export default function ClientPage({
     REALTIME_UPDATE_INTERVAL
   )
   
-  // タグ情報の取得（毎時0分に更新）
-  const { items: itemsWithTags, isLoading: isLoadingTags } = useVideoTags(
-    realtimeItems,
-    !isMobile // モバイルではタグ取得を無効化
-  )
+  // タグ機能は削除されました
+  const itemsWithTags = realtimeItems
   
   // スクロール位置の保存（動画ページ遷移時）
   const saveScrollPosition = useCallback(() => {

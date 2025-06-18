@@ -6,7 +6,6 @@ import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact } from '@/lib/format-utils'
 import { useMobileLayout } from '@/hooks/use-mobile-layout'
 import type { RankingItem } from '@/types/ranking'
-import VideoTags from './video-tags'
 
 interface RankingItemProps {
   item: RankingItem
@@ -399,9 +398,6 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 </span>
               )}
             </div>
-            
-            {/* タグ表示 (デスクトップのみ) */}
-            <VideoTags tags={item.tags} isMobile={isMobile} />
             </div>
           </div>
         </div>
