@@ -49,7 +49,7 @@ describe('/api/edge/ranking', () => {
         hasMore: false,
         totalCached: 2
       })
-      expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
+      expect(response.headers.get('X-Cache-Status')).toBe('HIT')
       expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=1800, stale-while-revalidate=3600')
     })
 
@@ -67,7 +67,7 @@ describe('/api/edge/ranking', () => {
         hasMore: false,
         totalCached: 0
       })
-      expect(response.headers.get('X-Cache-Status')).toBe('CF-MISS')
+      expect(response.headers.get('X-Cache-Status')).toBe('MISS')
     })
 
     it('should limit items to 500 for genre ranking', async () => {
@@ -108,7 +108,7 @@ describe('/api/edge/ranking', () => {
         hasMore: false,
         totalCached: 2
       })
-      expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
+      expect(response.headers.get('X-Cache-Status')).toBe('HIT')
       expect(getTagRanking).toHaveBeenCalledWith('game', '24h', 'RPG')
     })
 
@@ -125,7 +125,7 @@ describe('/api/edge/ranking', () => {
         hasMore: false,
         totalCached: 0
       })
-      expect(response.headers.get('X-Cache-Status')).toBe('CF-MISS')
+      expect(response.headers.get('X-Cache-Status')).toBe('MISS')
     })
   })
 
