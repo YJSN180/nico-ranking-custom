@@ -104,8 +104,8 @@ git ls-files | grep -E "\.env"
 - **ドメイン**: `nico-rank.com/*` (Vercelへプロキシ)
 
 #### 💾 Cloudflare KV (ストレージ)
-- **目的**: ランキングデータとレート制限のキャッシュ
-- **バインディング**: `RANKING_DATA`, `RATE_LIMIT`
+- **目的**: ランキングデータのキャッシュ
+- **バインディング**: `RANKING_DATA` のみ（RATE_LIMIT は削除済み）
 - **更新**: GitHub Actions cronジョブが10分ごとに実行
 
 ### ⚠️ 重要: Cloudflare Pages設定
@@ -236,20 +236,14 @@ Refused to execute inline script because it violates the following Content Secur
 - `next.config.mjs`: Next.jsアプリケーション用
 - `workers/api-gateway-simple.ts`: Cloudflare Workers用
 
-### 🚨 レート制限実装
+### 🚨 DDoS防御
 
-**多層防御システム**:
-1. **Cloudflare Workers（第1防御線）**:
-   - Admin API: 20 requests/min
-   - 一般API: 50 requests/min
-   - ページアクセス: 200 requests/min
-
-2. **Next.js Middleware（第2防御線）**:
-   - Admin API: 5 requests/min
-   - 一般API: 10 requests/10sec
+**Cloudflareの組み込み保護を使用**:
+- カスタムレート制限コードは削除済み
+- CloudflareのDDoS保護とWAFに依存
+- KV書き込み制限を回避するためのRATE_LIMIT削除
 
 **セキュリティイベントログ**:
-- レート制限超過
 - 不正な管理画面ログイン試行
 - デバッグエンドポイントへの不正アクセス
 
@@ -258,7 +252,7 @@ Refused to execute inline script because it violates the following Content Secur
 **管理画面保護**:
 - Basic認証（HTTP認証）
 - セッション管理（HTTP-only cookie）
-- IP別レート制限
+- CloudflareのIP別保護に依存
 
 **API保護**:
 - Worker Auth Key（内部通信）
@@ -284,14 +278,13 @@ Refused to execute inline script because it violates the following Content Secur
 **ログ記録対象**:
 ```typescript
 // middleware.tsで実装
-logSecurityEvent('RATE_LIMIT_EXCEEDED', ip, details)
 logSecurityEvent('INVALID_ADMIN_CREDENTIALS', ip, details)  
 logSecurityEvent('DEBUG_ENDPOINT_ACCESS_BLOCKED', ip, details)
 ```
 
 **推奨監視項目**:
 - Security Events（Cloudflareダッシュボード）
-- Rate limiting triggers
+- Cloudflare Rate Limitingトリガー
 - 異常なトラフィックパターン
 - SSL証明書有効期限
 
@@ -299,7 +292,7 @@ logSecurityEvent('DEBUG_ENDPOINT_ACCESS_BLOCKED', ip, details)
 
 **DDoS攻撃時**:
 1. Cloudflare Security Level を "I'm Under Attack" に変更
-2. Rate Limiting を一時的に厳格化
+2. CloudflareのRate Limiting Rulesを調整
 3. 攻撃元IPのブロック
 4. 攻撃終了後の設定復旧
 
@@ -336,53 +329,67 @@ GitHubリポジトリ
 ## アーキテクチャ
 
 ### データフロー
-1. **Cron Job** (`/api/cron/fetch`) runs every 10 minutes
-   - Fetches ranking data for 9 genres × 2 periods (24h/hour) = 18 datasets
-   - Uses hybrid scraping: HTML parsing + Snapshot API + Tag extraction
-   - Googlebot User-Agent bypasses geo-blocking
-   - Stores in Cloudflare KV with keys `ranking-{genre}-{period}` (1h TTL)
-   - Supports both sensitive and non-sensitive video content
+1. **GitHub Actions Cron Job** (`update-ranking-parallel.yml`) runs every 30 minutes
+   - Executes Node.js scripts that scrape Nico Nico rankings
+   - Fetches ranking data for 23 genres × 2 periods (24h/hour) = 46 datasets
+   - Uses Googlebot User-Agent to bypass geo-blocking from GitHub's US servers
+   - Applies NG filtering during scraping to remove blocked content
+   - Compresses all data with gzip and stores as single blob in Cloudflare KV
+   - Key: `RANKING_LATEST` contains all genre/period/tag data (~8.4MB compressed)
 
-2. **API Route** (`/api/ranking`) serves cached data
-   - Reads from KV using period-specific cache keys
-   - Falls back to on-demand scraping if cache miss
-   - Returns 30s cache headers for browser caching
+2. **Cloudflare Workers** (`api-gateway-simple.ts`) acts as API Gateway
+   - Provides rate limiting and DDoS protection
+   - Adds security headers (CSP, HSTS, etc.)
+   - Caches API responses using Cloudflare Cache API
+   - Proxies all requests to Vercel-hosted Next.js app
+   - Does NOT perform any data scraping or processing
 
-3. **Homepage** (`/app/page.tsx`) displays rankings
-   - Direct KV access in Server Component (primary)
-   - Falls back to API fetch if KV fails
-   - ISR with 30s revalidation
+3. **API Route** (`/api/ranking`) serves data from KV
+   - Reads compressed data from Cloudflare KV via REST API
+   - Decompresses and extracts requested genre/period/tag data
+   - Falls back to on-demand scraping if KV unavailable
+   - Returns appropriate cache headers for CDN caching
 
-4. **Real-time Updates** (`useRealtimeStats` hook)
+4. **Homepage** (`/app/page.tsx`) displays rankings
+   - Server Component fetches data via internal API
+   - Client-side period/genre switching
+   - Responsive design with mobile optimizations
+
+5. **Real-time Updates** (`useRealtimeStats` hook)
    - Client-side hook updates video statistics every minute
    - Uses Snapshot API for live view/comment/mylist counts
    - Non-blocking updates preserve UI responsiveness
 
 ### 複数期間サポート
-システムは24時間と1時間のランキングをキャッシュ：
-- キャッシュキー: `ranking-{genre}-24h`と`ranking-{genre}-hour`
-- `ranking-{genre}`キーとの後方互換性を維持
+システムは24時間と1時間のランキングを単一のKVエントリに保存：
+- 全データは`RANKING_LATEST`キーに圧縮保存
+- データ構造: `{ genres: { [genre]: { '24h': {...}, 'hour': {...} } } }`
 - クライアント側の期間切り替えが新しいAPI呼び出しをトリガー
 
 ### スクレイピングアーキテクチャ
-ハイブリッドスクレイパー(`complete-hybrid-scraper.ts`)の構成：
-- **HTMLパース**: ジャンル別ランキングページとメタタグ抽出
-- **タグ強化**: 個別動画ページからのタグデータスクレイピング
-- **人気タグ**: サーバーレスポンスJSONからのトレンドタグ抽出
+GitHub Actionsで実行されるスクレイパー(`update-ranking-parallel-v2.ts`)：
+- **並列処理**: 6つのグループに分けて並列スクレイピング
+- **HTMLパース**: ニコニコ動画のserver-responseメタタグからJSON抽出
+- **人気タグ**: トレンドタグをserver-responseから抽出
+- **NGフィルタリング**: スクレイピング時に適用（表示時ではない）
 - **ジオブロック回避**: 全リクエストでGooglebot User-Agent使用
 
 ### 主要な技術的制約
 
 1. **Geo-blocking**: Nico Nico returns 403 from non-Japanese IPs. Googlebot UA bypass is essential for all ranking requests.
 
-2. **KV Cache Strategy**: 
+2. **KV Storage Strategy**: 
    ```typescript
-   // New format (current)
-   ranking-${genre}-${period}: { items: RankingData, popularTags: string[] }
-   
-   // Legacy format (backward compatibility)
-   ranking-${genre}: { items: RankingData, popularTags: string[] }
-   ranking-data: RankingData (for 'all' genre only)
+   // Single compressed blob containing all data
+   RANKING_LATEST: {
+     genres: {
+       [genre: string]: {
+         '24h': { items: RankingItem[], popularTags: string[], tags?: {...} },
+         'hour': { items: RankingItem[], popularTags: string[], tags?: {...} }
+       }
+     },
+     metadata: { version: 1, updatedAt: string, totalItems: number }
+   }
    ```
 
 3. **Environment Variables**:
@@ -401,13 +408,19 @@ GitHubリポジトリ
 ## ジャンルと期間の管理
 
 ### サポート対象ジャンル
-**事前キャッシュされるジャンル（7個）:**
+**事前キャッシュされるジャンル（23個）:**
 ```typescript
-const CACHED_GENRES = ['all', 'game', 'entertainment', 'other', 'technology', 'anime', 'voicesynthesis']
+const ALL_GENRES = [
+  'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
+  'entertainment', 'music', 'sing', 'dance', 'play',
+  'commentary', 'cooking', 'travel', 'nature', 'vehicle',
+  'technology', 'society', 'mmd', 'vtuber', 'radio',
+  'sports', 'animal', 'other'
+]
 ```
 
-**全ジャンル（オンデマンド対応）:**
-すべての`RankingGenre`型で定義されたジャンルがAPIで利用可能。キャッシュされていないジャンルはオンデマンドで取得。
+**全ジャンル:**
+GitHub Actionsが30分ごとに全23ジャンル×2期間のデータを更新。
 
 ### 期間タイプ
 - `'24h'` - 24時間ランキング（デフォルト）
@@ -587,8 +600,8 @@ git remote prune origin
    - CodeQL analysis
 
 2. **On Schedule**:
-   - Update Nico Ranking Data (every 10 minutes)
-   - Fetches and caches ranking data for all genres/periods
+   - Update Nico Ranking Data (every 30 minutes)
+   - Fetches and caches ranking data for all genres/periods in GitHub Actions
 
 ### デプロイメント
 - `main`へのpush時にVercelへ自動デプロイ

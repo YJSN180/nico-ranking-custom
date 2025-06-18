@@ -1,46 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { MemoryRateLimit } from './lib/rate-limit-memory'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 
-// フォールバック用のインメモリレート制限（KVが利用できない場合）
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>()
-
-// CloudflareのRate Limiting Rulesを使用する場合はtrue
-const USE_CLOUDFLARE_RATE_LIMITING = true;
-
-async function checkRateLimit(ip: string, limit: number = 10, windowMs: number = 10000): Promise<boolean> {
-  if (USE_CLOUDFLARE_RATE_LIMITING) {
-    // CloudflareのRate Limiting Rulesがレート制限を処理
-    // KVへの書き込みを完全に回避
-    return true;
-  }
-  
-  // 以下は旧実装（バックアップとして保持）
-  try {
-    // Use memory-based rate limiting with periodic KV sync
-    const result = await MemoryRateLimit.checkLimit(ip, limit, windowMs)
-    return result
-  } catch (error) {
-    // Fallback to in-memory rate limiting
-    // console.error('[RATE_LIMIT] Memory rate limit failed, using fallback:', error)
-    
-    const now = Date.now()
-    const entry = rateLimitStore.get(ip)
-    
-    if (!entry || now > entry.resetAt) {
-      rateLimitStore.set(ip, { count: 1, resetAt: now + windowMs })
-      return true
-    }
-    
-    if (entry.count >= limit) {
-      return false
-    }
-    
-    entry.count++
-    return true
-  }
-}
+// Rate limiting completely removed - relying on Cloudflare's built-in protection
 
 export async function middleware(request: NextRequest) {
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
@@ -112,31 +74,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: 'Not Found' }, { status: 404 })
     }
     
-    // レート制限チェック（管理画面はさらに厳しく）
-    const isAdminPath = request.nextUrl.pathname.startsWith('/api/admin') || request.nextUrl.pathname.startsWith('/admin')
-    const limit = isAdminPath ? 3 : 10  // 管理画面は3回/分に制限
-    const windowMs = isAdminPath ? 60000 : 10000
-    
-    if (!(await checkRateLimit(ip, limit, windowMs))) {
-      SecurityLogger.logRateLimit(
-        ip,
-        request.nextUrl.pathname,
-        request.headers.get('user-agent') || undefined,
-        limit,
-        windowMs
-      )
-      return NextResponse.json(
-        { error: 'Too many requests' },
-        { 
-          status: 429,
-          headers: {
-            'Retry-After': '10',
-            'X-RateLimit-Limit': limit.toString(),
-            'X-RateLimit-Remaining': '0'
-          }
-        }
-      )
-    }
+    // Rate limiting removed - rely on Cloudflare's DDoS protection
   }
   // /admin配下のすべてのパスで認証を要求
   if (request.nextUrl.pathname.startsWith('/admin')) {
