@@ -1,12 +1,18 @@
 // getthumbinfo APIを使用してタグを取得
 
+// Validate video ID format (sm/nm/so + numbers)
+const VIDEO_ID_REGEX = /^(sm|nm|so)\d+$/
+
 export async function fetchVideoTags(videoIds: string[]): Promise<Record<string, string[]>> {
   const tags: Record<string, string[]> = {}
   
+  // Validate and filter video IDs to prevent SSRF
+  const validVideoIds = videoIds.filter(id => VIDEO_ID_REGEX.test(id))
+  
   // バッチ処理（一度に最大5個）
   const batchSize = 5
-  for (let i = 0; i < videoIds.length; i += batchSize) {
-    const batch = videoIds.slice(i, i + batchSize)
+  for (let i = 0; i < validVideoIds.length; i += batchSize) {
+    const batch = validVideoIds.slice(i, i + batchSize)
     
     try {
       // 各動画のタグを並行取得
@@ -35,7 +41,8 @@ export async function fetchVideoTags(videoIds: string[]): Promise<Record<string,
           
           return null
         } catch (error) {
-          // 個別のエラーは無視
+          // 個別のエラーは無視（ログは記録）
+          console.error(`Failed to fetch tags for video ${videoId}:`, error)
           return null
         }
       })
@@ -50,11 +57,12 @@ export async function fetchVideoTags(videoIds: string[]): Promise<Record<string,
       })
       
     } catch (error) {
-      // バッチエラーは静かに処理
+      // バッチエラーは静かに処理（ログは記録）
+      console.error(`Failed to process batch starting at index ${i}:`, error)
     }
     
     // レート制限対策（100ms待機）
-    if (i + batchSize < videoIds.length) {
+    if (i + batchSize < validVideoIds.length) {
       await new Promise(resolve => setTimeout(resolve, 100))
     }
   }

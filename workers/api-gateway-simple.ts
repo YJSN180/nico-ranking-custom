@@ -80,7 +80,7 @@ export default {
       
       // キャッシュをチェック（API rankingのみ）
       let response: Response | undefined
-      if (url.pathname.startsWith('/api/ranking')) {
+      if (url.pathname.startsWith('/api/edge/ranking')) {
         response = await cache.match(cacheKey)
         if (response) {
           // キャッシュヒット
@@ -126,7 +126,7 @@ export default {
       })
       
       // API rankingレスポンスをキャッシュ（成功時のみ）
-      if (response.ok && url.pathname.startsWith('/api/ranking')) {
+      if (response.ok && url.pathname.startsWith('/api/edge/ranking')) {
         // レスポンスをクローンしてキャッシュ
         await cache.put(cacheKey, response.clone())
       }

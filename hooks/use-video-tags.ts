@@ -114,7 +114,7 @@ export function useVideoTags(
       const cleanup = (window as any).__videoTagsCleanup
       if (cleanup) {
         cleanup()
-        delete (window as any).__videoTagsCleanup
+        ;(window as any).__videoTagsCleanup = undefined
       }
       // 現在のリクエストをキャンセル
       if (abortControllerRef.current) {

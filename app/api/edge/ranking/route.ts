@@ -22,27 +22,23 @@ export async function GET(request: NextRequest) {
     if (tag) {
       const items = await getTagRanking(genre, period as RankingPeriod, tag)
       
-      if (items && items.length > 0) {
-        const response = NextResponse.json({
-          items: items,
-          hasMore: false,
-          totalCached: items.length
-        })
+      const isCacheHit = items && items.length > 0
+      
+      const response = NextResponse.json({
+        items: items || [],
+        hasMore: false,
+        totalCached: items?.length || 0
+      })
+      
+      if (isCacheHit) {
         response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
-        response.headers.set('X-Cache-Status', 'CF-HIT')
+        response.headers.set('X-Cache-Status', 'HIT')
         response.headers.set('X-Total-Cached', items.length.toString())
-        response.headers.set('X-API-Version', '2')
-        return response
+      } else {
+        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+        response.headers.set('X-Cache-Status', 'MISS')
       }
       
-      // Cache miss
-      const response = NextResponse.json({
-        items: [],
-        hasMore: false,
-        totalCached: 0
-      })
-      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
-      response.headers.set('X-Cache-Status', 'CF-MISS')
       response.headers.set('X-API-Version', '2')
       return response
     }
@@ -50,33 +46,25 @@ export async function GET(request: NextRequest) {
     // Genre ranking
     const data = await getGenreRanking(genre, period as RankingPeriod)
     
-    if (data && data.items && data.items.length > 0) {
-      // Limit to 500 items maximum
-      const maxItems = 500
-      const items = data.items.slice(0, maxItems)
-      
-      const response = NextResponse.json({
-        items: items,
-        popularTags: data.popularTags || [],
-        hasMore: false,
-        totalCached: data.items.length
-      })
+    const isCacheHit = data && data.items && data.items.length > 0
+    const maxItems = 500
+    
+    const response = NextResponse.json({
+      items: isCacheHit ? data.items.slice(0, maxItems) : [],
+      popularTags: data?.popularTags || [],
+      hasMore: false,
+      totalCached: data?.items?.length || 0
+    })
+    
+    if (isCacheHit) {
       response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
-      response.headers.set('X-Cache-Status', 'CF-HIT')
+      response.headers.set('X-Cache-Status', 'HIT')
       response.headers.set('X-Max-Items', String(maxItems))
-      response.headers.set('X-API-Version', '2')
-      return response
+    } else {
+      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+      response.headers.set('X-Cache-Status', 'MISS')
     }
     
-    // Cache miss
-    const response = NextResponse.json({
-      items: [],
-      popularTags: [],
-      hasMore: false,
-      totalCached: 0
-    })
-    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
-    response.headers.set('X-Cache-Status', 'CF-MISS')
     response.headers.set('X-API-Version', '2')
     return response
     
