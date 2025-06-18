@@ -48,7 +48,7 @@ export function HeaderWithSettings() {
               color: '#ffffff', 
               margin: 0,
               textAlign: 'center',
-              fontSize: isMobile ? 'clamp(1.8rem, 5.25vw, 2.7rem)' : 'clamp(2.25rem, 6vw, 3.75rem)',
+              fontSize: isMobile ? '28px' : '36px',
               fontWeight: '700',
               textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
               letterSpacing: '0.02em',
