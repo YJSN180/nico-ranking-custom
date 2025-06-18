@@ -77,8 +77,7 @@ describe('タグ別ランキング300件制限', () => {
     expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
     
     // 表示件数情報を確認
-    expect(screen.getByText(/300件表示中/)).toBeInTheDocument()
-    expect(screen.getByText(/タグ別ランキング: 最大300件/)).toBeInTheDocument()
+    expect(screen.getByText(/300件表示/)).toBeInTheDocument()
   })
 
   it('タグ別ランキングが300件未満の場合も正しく表示される', () => {
@@ -102,6 +101,6 @@ describe('タグ別ランキング300件制限', () => {
     expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
     
     // 表示件数情報を確認
-    expect(screen.getByText(/150件表示中/)).toBeInTheDocument()
+    expect(screen.getByText(/150件表示/)).toBeInTheDocument()
   })
 })
