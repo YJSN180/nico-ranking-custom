@@ -27,6 +27,31 @@ export async function POST(request: Request) {
 
   // 重複実行防止機能は削除（Cloudflare KVで管理）
 
+  // キルスイッチのチェック
+  try {
+    const killSwitchResponse = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/monitor/kv-kill-switch`, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (killSwitchResponse.ok) {
+      const killSwitchData = await killSwitchResponse.json()
+      if (killSwitchData.active) {
+        console.error(`[KV Kill Switch] Writes suspended: ${killSwitchData.reason}`)
+        return NextResponse.json({
+          success: false,
+          error: 'KV_WRITES_SUSPENDED',
+          message: `KV writes are suspended: ${killSwitchData.reason}`,
+          suspendedAt: killSwitchData.activatedAt
+        }, { status: 503 })
+      }
+    }
+  } catch (error) {
+    console.error('[KV Kill Switch] Failed to check kill switch status:', error)
+    // キルスイッチチェックが失敗しても処理は続行
+  }
+
   try {
     // 人気ジャンルのデータを取得してキャッシュ
     const genres = CACHED_GENRES
@@ -244,6 +269,34 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
+    
+    // KV書き込み数をチェック
+    try {
+      const monitorResponse = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/monitor/kv-writes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cronSecret}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!monitorResponse.ok) {
+        const monitorData = await monitorResponse.json()
+        if (monitorData.error === 'WRITE_LIMIT_EXCEEDED') {
+          console.error(`[KV Monitor] Write limit exceeded: ${monitorData.count} writes today`)
+          return NextResponse.json({
+            success: false,
+            error: 'KV_WRITE_LIMIT_EXCEEDED',
+            message: `KV write limit exceeded: ${monitorData.count} writes today. Stopping to prevent quota exhaustion.`,
+            itemsCount: totalItems,
+            timestamp: new Date().toISOString()
+          }, { status: 429 })
+        }
+      }
+    } catch (monitorError) {
+      console.error('[KV Monitor] Failed to check write count:', monitorError)
+      // モニタリングが失敗しても処理は続行（安全のため）
     }
     
     // すべてのジャンルの更新が完了したら、Cloudflare KVに一括保存
