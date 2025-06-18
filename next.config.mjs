@@ -87,6 +87,26 @@ const nextConfig = {
             value: "camera 'none'; microphone 'none'; geolocation 'none'; usb 'none'; payment 'none'; fullscreen 'self'"
           }
         ]
+      },
+      // Cache headers for API routes
+      {
+        source: '/api/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, s-maxage=180, stale-while-revalidate=300'
+          }
+        ]
+      },
+      // Cache headers for static assets
+      {
+        source: '/(.*\\.(png|jpg|jpeg|gif|ico|svg|webp))',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, immutable'
+          }
+        ]
       }
     ]
   },
