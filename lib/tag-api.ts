@@ -18,7 +18,7 @@ export async function fetchVideoTags(videoIds: string[]): Promise<Record<string,
       // 各動画のタグを並行取得
       const promises = batch.map(async (videoId) => {
         try {
-          const response = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`, {
+          const response = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${encodeURIComponent(videoId)}`, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
             }
@@ -42,7 +42,7 @@ export async function fetchVideoTags(videoIds: string[]): Promise<Record<string,
           return null
         } catch (error) {
           // 個別のエラーは無視（ログは記録）
-          console.error(`Failed to fetch tags for video ${videoId}:`, error)
+          console.error('Failed to fetch tags for video %s:', videoId, error)
           return null
         }
       })
@@ -58,7 +58,7 @@ export async function fetchVideoTags(videoIds: string[]): Promise<Record<string,
       
     } catch (error) {
       // バッチエラーは静かに処理（ログは記録）
-      console.error(`Failed to process batch starting at index ${i}:`, error)
+      console.error('Failed to process batch starting at index %d:', i, error)
     }
     
     // レート制限対策（100ms待機）
