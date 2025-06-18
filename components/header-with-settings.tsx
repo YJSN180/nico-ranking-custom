@@ -25,7 +25,7 @@ export function HeaderWithSettings() {
     <>
       <header role="banner" style={{
         background: 'var(--header-bg)',
-        padding: isMobile ? '6px 12px' : '8px 20px',
+        padding: isMobile ? '5px 12px' : '8px 20px',
         boxShadow: 'var(--shadow-md)',
         marginBottom: '20px',
         position: 'relative'
@@ -48,7 +48,7 @@ export function HeaderWithSettings() {
               color: '#ffffff', 
               margin: 0,
               textAlign: 'center',
-              fontSize: isMobile ? '21px' : '48px',
+              fontSize: isMobile ? '22px' : '48px',
               fontWeight: '700',
               textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
               letterSpacing: '0.02em',
@@ -80,7 +80,7 @@ export function HeaderWithSettings() {
                 height: isMobile ? '48px' : '106px',
                 filter: 'brightness(0) invert(1)', // 白色に変換
                 opacity: 0.95,
-                marginRight: isMobile ? '-20px' : '-20px', // タイトルとやや重なるように
+                marginRight: isMobile ? '-5px' : '-20px', // タイトルとやや重なるように
               }}>
                 <Image
                   src="/icon.png"
