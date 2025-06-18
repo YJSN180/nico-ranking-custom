@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(response, {
       headers: {
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        // Cache for 1 minute with stale-while-revalidate for 30 seconds
+        // This reduces load on Functions while keeping data relatively fresh
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
       },
     })
   } catch (error) {

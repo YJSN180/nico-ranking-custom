@@ -22,6 +22,43 @@ export interface Env {
 
 // Rate limiting completely removed to avoid exceeding KV write limits
 
+// Helper function to apply security headers to any response
+function applySecurityHeaders(response: Response, url: URL): Response {
+  const newHeaders = new Headers(response.headers)
+  
+  // Security headers
+  newHeaders.set('X-Content-Type-Options', 'nosniff')
+  newHeaders.set('X-Frame-Options', 'DENY')
+  newHeaders.set('X-XSS-Protection', '1; mode=block')
+  newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
+  newHeaders.set('X-DNS-Prefetch-Control', 'on')
+  
+  // Content Security Policy (CSP)
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+    "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "upgrade-insecure-requests"
+  ]
+  newHeaders.set('Content-Security-Policy', cspDirectives.join('; '))
+  
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders
+  })
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
@@ -78,19 +115,15 @@ export default {
       const cache = caches.default
       const cacheKey = new Request(targetUrl, request)
       
-      // キャッシュをチェック（API rankingのみ）
+      // キャッシュをチェック（API ranking and video-stats）
       let response: Response | undefined
-      if (url.pathname.startsWith('/api/edge/ranking')) {
+      if (url.pathname.startsWith('/api/edge/ranking') || url.pathname.startsWith('/api/edge/video-stats')) {
         response = await cache.match(cacheKey)
         if (response) {
-          // キャッシュヒット
-          const newHeaders = new Headers(response.headers)
-          newHeaders.set('X-CF-Cache', 'HIT')
-          return new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: newHeaders
-          })
+          // キャッシュヒット - Apply security headers and cache status
+          const secureResponse = applySecurityHeaders(response, url)
+          secureResponse.headers.set('X-CF-Cache', 'HIT')
+          return secureResponse
         }
       }
       
@@ -128,46 +161,21 @@ export default {
         body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body
       })
       
-      // API rankingレスポンスをキャッシュ（成功時のみ）
-      if (response.ok && url.pathname.startsWith('/api/edge/ranking')) {
+      // API ranking and video-stats レスポンスをキャッシュ（成功時のみ）
+      if (response.ok && (url.pathname.startsWith('/api/edge/ranking') || url.pathname.startsWith('/api/edge/video-stats'))) {
         // レスポンスをクローンしてキャッシュ
         await cache.put(cacheKey, response.clone())
       }
       
-      // セキュリティヘッダーを追加
-      const newHeaders = new Headers(response.headers)
-      newHeaders.set('X-Content-Type-Options', 'nosniff')
-      newHeaders.set('X-Frame-Options', 'DENY')
-      newHeaders.set('X-XSS-Protection', '1; mode=block')
-      newHeaders.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-      newHeaders.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-      // COEP を削除 - ニコニコ動画のサムネイル画像がCORSヘッダーを提供していないため
-      // newHeaders.set('Cross-Origin-Embedder-Policy', 'require-corp')
-      newHeaders.set('Cross-Origin-Opener-Policy', 'same-origin')
-      newHeaders.set('X-DNS-Prefetch-Control', 'on')
+      // Apply security headers to all responses
+      const secureResponse = applySecurityHeaders(response, url)
       
-      // Content Security Policy (CSP) ヘッダーを追加（unsafe-evalを削除）
-      const cspDirectives = [
-        "default-src 'self'",
-        "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live",
-        "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: https: blob:",
-        "font-src 'self' data:",
-        "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
-        "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "upgrade-insecure-requests"
-      ]
-      newHeaders.set('Content-Security-Policy', cspDirectives.join('; '))
+      // Add cache status header for cacheable endpoints
+      if (url.pathname.startsWith('/api/edge/ranking') || url.pathname.startsWith('/api/edge/video-stats')) {
+        secureResponse.headers.set('X-CF-Cache', 'MISS')
+      }
       
-      return new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: newHeaders
-      })
+      return secureResponse
     } catch (error) {
       return new Response(JSON.stringify({
         error: 'Internal Server Error',
