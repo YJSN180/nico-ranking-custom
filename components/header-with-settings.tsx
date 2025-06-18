@@ -25,7 +25,7 @@ export function HeaderWithSettings() {
     <>
       <header role="banner" style={{
         background: 'var(--header-bg)',
-        padding: isMobile ? '8px 12px' : '8px 20px',
+        padding: isMobile ? '6px 12px' : '8px 20px',
         boxShadow: 'var(--shadow-md)',
         marginBottom: '20px',
         position: 'relative'
@@ -48,7 +48,7 @@ export function HeaderWithSettings() {
               color: '#ffffff', 
               margin: 0,
               textAlign: 'center',
-              fontSize: isMobile ? '32px' : '48px',
+              fontSize: isMobile ? '21px' : '48px',
               fontWeight: '700',
               textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
               letterSpacing: '0.02em',
@@ -76,8 +76,8 @@ export function HeaderWithSettings() {
             >
               <div style={{
                 position: 'relative',
-                width: isMobile ? '80px' : '106px',
-                height: isMobile ? '80px' : '106px',
+                width: isMobile ? '48px' : '106px',
+                height: isMobile ? '48px' : '106px',
                 filter: 'brightness(0) invert(1)', // 白色に変換
                 opacity: 0.95,
                 marginRight: isMobile ? '-20px' : '-20px', // タイトルとやや重なるように
@@ -86,7 +86,7 @@ export function HeaderWithSettings() {
                   src="/icon.png"
                   alt="ニコラン(Re:turn) ロゴ"
                   fill
-                  sizes={isMobile ? "80px" : "106px"}
+                  sizes={isMobile ? "48px" : "106px"}
                   style={{
                     objectFit: 'contain'
                   }}
