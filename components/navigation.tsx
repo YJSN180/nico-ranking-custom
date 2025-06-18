@@ -249,7 +249,7 @@ export function Navigation() {
                       transition: 'all 0.2s',
                     }}
                     onTouchStart={(e) => {
-                      e.currentTarget.style.background = 'var(--bg-secondary)'
+                      e.currentTarget.style.background = 'var(--menu-item-bg)'
                       e.currentTarget.style.transform = 'scale(0.95)'
                     }}
                     onTouchEnd={(e) => {
