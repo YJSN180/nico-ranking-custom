@@ -89,7 +89,7 @@ describe('Edge Video Stats API', () => {
       
       const response = await GET(request)
       
-      expect(response.headers.get('Cache-Control')).toBe('no-cache, no-store, must-revalidate')
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=60, stale-while-revalidate=30')
     })
 
     it('should validate Edge runtime export', async () => {

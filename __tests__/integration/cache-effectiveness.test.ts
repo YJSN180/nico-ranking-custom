@@ -57,8 +57,8 @@ describe('Cache Effectiveness', () => {
     expect(staticCacheControl.value).toMatch(/max-age=86400/) // 24 hours
   })
 
-  test('page ISR configuration should match data update frequency', () => {
-    const pageModule = require('../../app/page.tsx')
+  test('page ISR configuration should match data update frequency', async () => {
+    const pageModule = await import('../../app/page.tsx')
     
     // Cron job runs every 30 minutes (1800 seconds)
     // Page revalidation should match this interval
@@ -67,8 +67,8 @@ describe('Cache Effectiveness', () => {
 
   test('cache configuration should minimize resource consumption', async () => {
     // Test that cache settings are optimized for free tier limits
-    const pageModule = require('../../app/page.tsx')
-    const nextConfig = require('../../next.config.mjs').default
+    const pageModule = await import('../../app/page.tsx')
+    const nextConfig = (await import('../../next.config.mjs')).default
     const headers = await nextConfig.headers()
     
     // ISR should reduce function invocations

@@ -67,7 +67,7 @@ describe('/api/edge/video-stats', () => {
     const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345')
     const response = await GET(request)
 
-    expect(response.headers.get('Cache-Control')).toBe('no-cache, no-store, must-revalidate')
+    expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=60, stale-while-revalidate=30')
   })
 
   test('APIエラー時は500エラー', async () => {

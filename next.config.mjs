@@ -100,7 +100,7 @@ const nextConfig = {
       },
       // Cache headers for static assets
       {
-        source: '/(.*\\.(png|jpg|jpeg|gif|ico|svg|webp))',
+        source: '/(.*)\\.(png|jpg|jpeg|gif|ico|svg|webp)',
         headers: [
           {
             key: 'Cache-Control',

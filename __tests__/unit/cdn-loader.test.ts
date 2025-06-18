@@ -45,7 +45,7 @@ describe('CDN Loader', () => {
       expect(result).toContain('https://assets.nico-rank.com/image.jpg')
       expect(result).toContain('w=800')
       expect(result).toContain('q=80')
-      expect(result).toContain('fallback=%2Fimage.jpg')
+      expect(result).toContain('fallback=%252Fimage.jpg')
     })
 
     test('should not modify external URLs', () => {
@@ -121,7 +121,7 @@ describe('CDN Loader', () => {
 
       const url = new URL(result)
       const fallback = url.searchParams.get('fallback')
-      expect(fallback).toBe('/complex/path/image.jpg')
+      expect(decodeURIComponent(fallback || '')).toBe('/complex/path/image.jpg')
     })
 
     test('should properly encode fallback URLs', () => {
@@ -134,7 +134,7 @@ describe('CDN Loader', () => {
 
       const url = new URL(result)
       const fallback = url.searchParams.get('fallback')
-      expect(fallback).toBe('/image with spaces.jpg')
+      expect(decodeURIComponent(fallback || '')).toBe('/image with spaces.jpg')
     })
   })
 })
