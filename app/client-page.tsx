@@ -424,9 +424,7 @@ export default function ClientPage({
             color: 'var(--text-secondary)',
             textAlign: 'right'
           }}>
-            {displayItems.length}件表示中
-            {config.tag && ` (タグ別ランキング: 最大${DISPLAY_LIMITS.TAG}件)`}
-            {!config.tag && ` (ジャンル別ランキング: ${DISPLAY_LIMITS.GENRE}件表示)`}
+            {displayItems.length}件表示
           </div>
           
           {/* ランキングリスト */}
