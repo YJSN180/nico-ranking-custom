@@ -130,7 +130,8 @@ export function Navigation() {
           aria-controls="navigation-menu"
           style={{
             position: 'absolute',
-            top: isMobile ? '12px' : '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
             left: isMobile ? '12px' : '16px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -152,13 +153,13 @@ export function Navigation() {
           onMouseEnter={(e) => {
             if (!isMobile) {
               e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-              e.currentTarget.style.transform = 'scale(1.05)'
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
             }
           }}
           onMouseLeave={(e) => {
             if (!isMobile) {
               e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
             }
           }}
         >
@@ -504,7 +505,7 @@ export function Navigation() {
 
   // デスクトップ版（ドロップダウンメニュー）
   return (
-    <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 20 }}>
+    <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px', zIndex: 20 }}>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
@@ -528,11 +529,11 @@ export function Navigation() {
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-          e.currentTarget.style.transform = 'scale(1.05)'
+          e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1.05)'
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1)'
         }}
       >
         <HamburgerIcon size={18} />

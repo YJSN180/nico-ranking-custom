@@ -25,7 +25,7 @@ export function HeaderWithSettings() {
     <>
       <header role="banner" style={{
         background: 'var(--header-bg)',
-        padding: isMobile ? '12px 12px' : '16px 20px',
+        padding: isMobile ? '8px 12px' : '8px 20px',
         boxShadow: 'var(--shadow-md)',
         marginBottom: '20px',
         position: 'relative'
@@ -48,7 +48,7 @@ export function HeaderWithSettings() {
               color: '#ffffff', 
               margin: 0,
               textAlign: 'center',
-              fontSize: isMobile ? 'clamp(1.2rem, 3.5vw, 1.8rem)' : 'clamp(1.5rem, 4vw, 2.5rem)',
+              fontSize: isMobile ? 'clamp(1.8rem, 5.25vw, 2.7rem)' : 'clamp(2.25rem, 6vw, 3.75rem)',
               fontWeight: '700',
               textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
               letterSpacing: '0.02em',
@@ -101,11 +101,11 @@ export function HeaderWithSettings() {
               }}>
                 <span style={{
                   fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
-                  fontSize: isMobile ? '1em' : '1em'
+                  fontSize: '1em'
                 }}>ニコラン</span>
                 <span style={{
                   fontFamily: '"Comic Sans MS Bold", "Comic Sans MS", cursive, sans-serif',
-                  fontSize: isMobile ? '0.85em' : '0.85em',
+                  fontSize: '0.85em',
                   marginLeft: '0.05em'
                 }}>(Re:turn)</span>
               </div>
@@ -117,7 +117,8 @@ export function HeaderWithSettings() {
           onClick={() => setIsSettingsOpen(true)}
           style={{
             position: 'absolute',
-            top: isMobile ? '12px' : '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
             right: isMobile ? '12px' : '16px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -133,11 +134,11 @@ export function HeaderWithSettings() {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-            e.currentTarget.style.transform = 'scale(1.05)'
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-            e.currentTarget.style.transform = 'scale(1)'
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
           }}
           aria-label="設定"
         >
