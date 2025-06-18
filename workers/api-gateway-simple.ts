@@ -96,8 +96,6 @@ export default {
       
       // 認証ヘッダーを追加してプロキシ
       const proxyHeaders = new Headers(request.headers)
-      // ホストヘッダーを正しく設定
-      proxyHeaders.set('host', new URL(baseUrl).host)
       
       // 重要: Vercel middleware bypass用の認証ヘッダー
       if (env.WORKER_AUTH_KEY) {
@@ -118,6 +116,11 @@ export default {
         proxyHeaders.set('x-vercel-protection-bypass', env.VERCEL_PROTECTION_BYPASS_SECRET)
         proxyHeaders.set('x-vercel-set-bypass-cookie', 'true')
       }
+      
+      // Add Host header to prevent Vercel from redirecting
+      proxyHeaders.set('Host', new URL(targetUrl).host)
+      proxyHeaders.set('X-Forwarded-Host', 'nico-rank.com')
+      proxyHeaders.set('X-Forwarded-Proto', 'https')
       
       response = await fetch(targetUrl, {
         method: request.method,
