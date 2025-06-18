@@ -16,11 +16,15 @@ export async function middleware(request: NextRequest) {
     const host = request.headers.get('host')
     
     
-    // Workersからの認証がない場合はカスタムドメインにリダイレクト
+    // Workersからの認証がない場合の処理
     if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
       // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
       // ただし、プレビューデプロイメントは除外
-      if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
+      // 重要: nico-rank.comドメインからのアクセスは許可する（無限ループ防止）
+      if (host?.includes('vercel.app') && 
+          request.method !== 'OPTIONS' && 
+          process.env.VERCEL_ENV !== 'preview' &&
+          !request.headers.get('x-forwarded-host')?.includes('nico-rank.com')) {
         return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
       }
     }
