@@ -99,6 +99,69 @@ export default function ClientPage({
     migrateLocalStorageData()
   }, [])
   
+  // ページ離脱時に現在の設定をsessionStorageに保存
+  useEffect(() => {
+    const saveCurrentState = () => {
+      const stateToSave = {
+        genre: config.genre,
+        period: config.period,
+        tag: config.tag,
+        popularTags: currentPopularTags,
+        savedAt: Date.now()
+      }
+      sessionStorage.setItem('ranking-navigation-state', JSON.stringify(stateToSave))
+    }
+    
+    // ページ離脱時に保存
+    window.addEventListener('beforeunload', saveCurrentState)
+    
+    // 内部リンククリック時にも保存
+    const handleInternalNavigation = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      const link = target.closest('a')
+      
+      // 内部リンク（メニューページ）の場合のみ状態を保存
+      if (link && link.href && !link.href.includes('nicovideo.jp') && !link.href.includes('niconico.jp')) {
+        const url = new URL(link.href)
+        if (url.origin === window.location.origin && url.pathname !== '/') {
+          saveCurrentState()
+        }
+      }
+    }
+    
+    document.addEventListener('click', handleInternalNavigation)
+    
+    return () => {
+      window.removeEventListener('beforeunload', saveCurrentState)
+      document.removeEventListener('click', handleInternalNavigation)
+    }
+  }, [config, currentPopularTags])
+  
+  // sessionStorageから復元する設定を管理
+  const [shouldRestore, setShouldRestore] = useState(() => {
+    // URLパラメータがない場合のみ、sessionStorageから復元を試みる
+    const hasUrlParams = new URLSearchParams(window.location.search).has('genre') || 
+                        new URLSearchParams(window.location.search).has('period') || 
+                        new URLSearchParams(window.location.search).has('tag')
+    
+    if (!hasUrlParams && typeof window !== 'undefined') {
+      try {
+        const savedState = sessionStorage.getItem('ranking-navigation-state')
+        if (savedState) {
+          const parsed = JSON.parse(savedState)
+          // 30分以内のデータのみ復元（古いデータは無視）
+          const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000)
+          if (parsed.savedAt && parsed.savedAt > thirtyMinutesAgo) {
+            return parsed
+          }
+        }
+      } catch {
+        // エラーは無視
+      }
+    }
+    return null
+  })
+  
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
     if (!config.tag && config.genre !== 'all' && currentPopularTags.length === 0) {
@@ -308,6 +371,45 @@ export default function ClientPage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, router, updatePreferences, savePopularTagsToCache])
+  
+  // sessionStorageから設定を復元
+  useEffect(() => {
+    if (shouldRestore) {
+      const restoredConfig: RankingConfig = {
+        genre: shouldRestore.genre || 'all',
+        period: shouldRestore.period || '24h',
+        tag: shouldRestore.tag
+      }
+      
+      // 保存された設定が現在の設定と異なる場合のみ更新
+      if (
+        restoredConfig.genre !== config.genre ||
+        restoredConfig.period !== config.period ||
+        restoredConfig.tag !== config.tag
+      ) {
+        // 人気タグも復元
+        if (shouldRestore.popularTags && Array.isArray(shouldRestore.popularTags)) {
+          setCurrentPopularTags(shouldRestore.popularTags)
+        }
+        
+        // URLを更新（ブラウザの履歴に追加しない）
+        const params = new URLSearchParams()
+        if (restoredConfig.genre !== 'all') params.set('genre', restoredConfig.genre)
+        if (restoredConfig.period !== '24h') params.set('period', restoredConfig.period)
+        if (restoredConfig.tag) params.set('tag', restoredConfig.tag)
+        
+        const newUrl = params.toString() ? `?${params.toString()}` : '/'
+        window.history.replaceState(null, '', newUrl)
+        
+        // handleConfigChangeを使用してデータも取得
+        handleConfigChange(restoredConfig)
+        
+        // 復元後は削除
+        sessionStorage.removeItem('ranking-navigation-state')
+        setShouldRestore(null)
+      }
+    }
+  }, [shouldRestore, config, handleConfigChange])
   
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {

@@ -37,7 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   // 外部リンクセクション  
   { 
     href: 'https://www.nicovideo.jp/', 
-    label: 'ニコニコ動画（公式）',
+    label: 'ニコニコ動画',
     icon: <VideoIcon />,
     external: true,
     section: 'external',

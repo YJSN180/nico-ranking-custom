@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 // KV書き込み数を追跡するためのメモリストレージ（簡易版）
 // 本番環境では別のKVまたは外部DBを使用することを推奨
 let writeCount: { [key: string]: number } = {}
-let lastReset: string = new Date().toISOString().split('T')[0]
+let lastReset: string = new Date().toISOString().split('T')[0]!
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0]!
   
   // 日付が変わったらカウントをリセット
   if (today !== lastReset) {
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       date: today,
       manualCount: writeCount[today] || 0,
       cloudflareData: data,
-      warning: writeCount[today] > 100 ? 'HIGH_WRITE_COUNT_DETECTED' : null,
+      warning: (writeCount[today] || 0) > 100 ? 'HIGH_WRITE_COUNT_DETECTED' : null,
       message: 'KV write monitoring active'
     })
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0]!
   
   // 日付が変わったらカウントをリセット
   if (today !== lastReset) {
