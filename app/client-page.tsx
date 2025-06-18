@@ -315,22 +315,38 @@ export default function ClientPage({
   
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
-    // まずrank順にソート（重要！）
-    const sorted = [...itemsWithTags].sort((a, b) => a.rank - b.rank)
-    
-    // NGフィルタを適用
-    const filtered = filterItems(sorted)
-    
-    // 順位を再割り当て（連続番号）
-    const reranked = filtered.map((item, index) => ({
-      ...item,
-      originalRank: item.rank,
-      rank: index + 1
-    }))
-    
-    // 表示件数を制限
+    // 表示件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
-    return reranked.slice(0, limit)
+    
+    // ソート済みの配列を作成しながらフィルタリングと再割り当てを同時に行う
+    const result: Array<RankingItem & { originalRank: number }> = []
+    let displayRank = 1
+    
+    // itemsWithTagsが既にrank順であることを前提とする（APIからの順序を維持）
+    // もしソートが必要な場合は、元の配列をソートせずに処理
+    const needsSort = itemsWithTags.length > 0 && 
+      itemsWithTags.some((item, i) => i > 0 && item.rank < itemsWithTags[i - 1].rank)
+    
+    const processedItems = needsSort 
+      ? [...itemsWithTags].sort((a, b) => a.rank - b.rank)
+      : itemsWithTags
+    
+    // フィルタリングと再割り当てを1パスで実行
+    for (const item of processedItems) {
+      // NGフィルタチェック（filterItemsの内部ロジックを参照）
+      if (filterItems([item]).length > 0) {
+        result.push({
+          ...item,
+          originalRank: item.rank,
+          rank: displayRank++
+        })
+        
+        // 上限に達したら終了
+        if (result.length >= limit) break
+      }
+    }
+    
+    return result
   }, [itemsWithTags, filterItems, config.tag])
   
   // レンダリング
