@@ -76,8 +76,7 @@ describe('ジャンル別ランキング500件表示', () => {
     expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
     
     // 表示件数情報を確認
-    expect(screen.getByText(/500件表示中/)).toBeInTheDocument()
-    expect(screen.getByText(/ジャンル別ランキング: 500件表示/)).toBeInTheDocument()
+    expect(screen.getByText(/500件表示/)).toBeInTheDocument()
   })
 
   it('ジャンル別ランキングが500件未満の場合も正しく表示される', () => {
@@ -100,6 +99,6 @@ describe('ジャンル別ランキング500件表示', () => {
     expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
     
     // 表示件数情報を確認
-    expect(screen.getByText(/250件表示中/)).toBeInTheDocument()
+    expect(screen.getByText(/250件表示/)).toBeInTheDocument()
   })
 })

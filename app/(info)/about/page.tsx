@@ -54,14 +54,15 @@ export default function AboutPage() {
         }}>
           ニコラン(Re:turn)とは
         </h2>
-        <p style={{
-          lineHeight: '1.8',
-          marginBottom: '16px',
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
           color: 'var(--text-secondary)',
+          lineHeight: '1.8',
         }}>
-          ニコラン(Re:turn)は、ニコニコ動画のランキングを快適に表示するためのサイトです。
-          nico-rank.comからいつでもアクセスできます。
-        </p>
+          <li>ニコラン(Re:turn)は、ニコニコ動画のランキングを快適に表示するためのサイトです。</li>
+          <li>nico-rank.comからいつでもアクセスできます。</li>
+        </ul>
       </section>
 
       <section style={{ marginBottom: '40px' }}>
@@ -83,15 +84,17 @@ export default function AboutPage() {
         }}>
           デザイン
         </h3>
-        <p style={{
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
           lineHeight: '1.8',
           marginBottom: '20px',
-          color: 'var(--text-secondary)',
         }}>
-          2025年4月7日に行われたニコニコ動画のランキング変更前のデザインをベースにしています。
-          ランキングに載っている動画一覧を俯瞰したい人におすすめです。
-          本サイトに広告は一切ありません。
-        </p>
+          <li>2025年4月7日に行われたニコニコ動画のランキング変更前のデザインをベースにしています。</li>
+          <li>ランキングに載っている動画一覧を俯瞰したい人におすすめです。</li>
+          <li>本サイトに広告は一切ありません。</li>
+        </ul>
 
         <h3 style={{
           fontSize: '1.2rem',
@@ -102,14 +105,16 @@ export default function AboutPage() {
         }}>
           ランキング動画一覧表示
         </h3>
-        <p style={{
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
           lineHeight: '1.8',
           marginBottom: '20px',
-          color: 'var(--text-secondary)',
         }}>
-          毎時0分・30分更新。現在のニコニコ動画は毎時20分頃にランキングが更新されるため、
-          毎時30分に実際の更新が反映される可能性が高いです。
-        </p>
+          <li>毎時0分・30分更新。</li>
+          <li>現在のニコニコ動画は毎時20分頃にランキングが更新されるため、毎時30分に実際の更新が反映される可能性が高いです。</li>
+        </ul>
 
         <h3 style={{
           fontSize: '1.2rem',
@@ -120,14 +125,16 @@ export default function AboutPage() {
         }}>
           テーマ切り替え
         </h3>
-        <p style={{
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
           lineHeight: '1.8',
           marginBottom: '20px',
-          color: 'var(--text-secondary)',
         }}>
-          サイト右上の設定ボタンから「表示設定」を開いてください。
-          ライトモード・ダークモード・ダークブルーの3テーマに対応しています。
-        </p>
+          <li>サイト右上の設定ボタンから「表示設定」を開いてください。</li>
+          <li>ライトモード・ダークモード・ダークブルーの3テーマに対応しています。</li>
+        </ul>
 
         <h3 style={{
           fontSize: '1.2rem',
@@ -138,23 +145,17 @@ export default function AboutPage() {
         }}>
           NGフィルター機能
         </h3>
-        <p style={{
-          lineHeight: '1.8',
-          marginBottom: '12px',
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
           color: 'var(--text-secondary)',
-        }}>
-          明確に「荒らし」と判定される動画は、管理者側で常にフィルタリングしています。
-          要望がある場合はお問い合わせください。
-        </p>
-        <p style={{
           lineHeight: '1.8',
           marginBottom: '20px',
-          color: 'var(--text-secondary)',
         }}>
-          サイト右上の設定ボタンから「NGリスト管理」を開いてください。
-          ここから見たくない動画をブロックすると、ランキングからその動画が消えるようになり、
-          順位もそれに合わせて変更されます。
-        </p>
+          <li>明確に「荒らし」と判定される動画は、管理者側で常にフィルタリングしています。要望がある場合はお問い合わせください。</li>
+          <li>サイト右上の設定ボタンから「NGリスト管理」を開いてください。</li>
+          <li>ここから見たくない動画をブロックすると、ランキングからその動画が消えるようになり、順位もそれに合わせて変更されます。</li>
+        </ul>
       </section>
 
     </div>

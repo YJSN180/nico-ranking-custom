@@ -2,36 +2,71 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
+import { useUserPreferences } from '@/hooks/use-user-preferences'
+import { 
+  HamburgerIcon, 
+  CloseIcon, 
+  HomeIcon, 
+  SettingsIcon, 
+  InfoIcon, 
+  MailIcon, 
+  HistoryIcon, 
+  ShieldIcon, 
+  VideoIcon,
+  ExternalLinkIcon,
+  ThemeIcon,
+  GuideIcon
+} from './icons'
 
 type NavItem = {
   href: string
   label: string
+  icon?: React.ReactNode
   external?: boolean
   subItems?: NavItem[]
+  section?: 'main' | 'info' | 'external'
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/', label: 'ホーム' },
-  { href: '/about', label: 'このサイトについて' },
-  { href: '/changelog', label: '更新履歴' },
-  { href: '/contact', label: 'お問い合わせ' },
+  // メインセクション
+  { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
+  { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
+  
+  // 外部リンクセクション  
   { 
     href: 'https://www.nicovideo.jp/', 
-    label: 'ニコニコ動画',
+    label: 'ニコニコ動画（公式）',
+    icon: <VideoIcon />,
     external: true,
+    section: 'external',
     subItems: [
-      { href: 'https://www.nicovideo.jp/ranking', label: 'ランキング(公式)', external: true }
+      { href: 'https://www.nicovideo.jp/ranking', label: 'ランキング（公式）', external: true }
     ]
   },
-  { href: '/privacy', label: 'プライバシーポリシー' },
+  
+  // 情報セクション
+  { href: '/about', label: 'このサイトについて', icon: <InfoIcon />, section: 'info' },
+  { href: '/contact', label: 'お問い合わせ', icon: <MailIcon />, section: 'info' },
+  { href: '/privacy', label: 'プライバシーポリシー', icon: <ShieldIcon />, section: 'info' },
+  { href: '/changelog', label: '更新履歴', icon: <HistoryIcon />, section: 'info' },
 ]
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const isMobile = useMobileDetect()
+  const pathname = usePathname()
+  const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+  
+  // 設定モーダルを開く関数
+  const openSettings = () => {
+    setIsOpen(false)
+    // 設定モーダルを開くイベントを発火
+    window.dispatchEvent(new Event('openSettings'))
+  }
 
   // モバイルメニューの外側クリックで閉じる
   useEffect(() => {
@@ -95,7 +130,8 @@ export function Navigation() {
           aria-controls="navigation-menu"
           style={{
             position: 'absolute',
-            top: isMobile ? '12px' : '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
             left: isMobile ? '12px' : '16px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -117,17 +153,17 @@ export function Navigation() {
           onMouseEnter={(e) => {
             if (!isMobile) {
               e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-              e.currentTarget.style.transform = 'scale(1.05)'
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
             }
           }}
           onMouseLeave={(e) => {
             if (!isMobile) {
               e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-              e.currentTarget.style.transform = 'scale(1)'
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
             }
           }}
         >
-          <span style={{ fontSize: '20px' }}>☰</span>
+          <HamburgerIcon size={20} color="white" />
         </button>
 
         {/* モバイルメニュー（サイドドロワー） */}
@@ -172,7 +208,7 @@ export function Navigation() {
                 bottom: 0,
                 width: '280px',
                 maxWidth: '80vw',
-                background: 'var(--card-bg)',
+                background: 'var(--menu-bg)',
                 boxShadow: '2px 0 10px rgba(0, 0, 0, 0.2)',
                 zIndex: 40,
                 transform: 'translateX(0)',
@@ -213,7 +249,7 @@ export function Navigation() {
                       transition: 'all 0.2s',
                     }}
                     onTouchStart={(e) => {
-                      e.currentTarget.style.background = 'var(--bg-secondary)'
+                      e.currentTarget.style.background = 'var(--menu-item-bg)'
                       e.currentTarget.style.transform = 'scale(0.95)'
                     }}
                     onTouchEnd={(e) => {
@@ -221,15 +257,150 @@ export function Navigation() {
                       e.currentTarget.style.transform = 'scale(1)'
                     }}
                   >
-                    ✕
+                    <CloseIcon size={20} />
                   </button>
                 </div>
                 
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {NAV_ITEMS.map((item) => (
-                    <li key={item.href} style={{ marginBottom: '8px' }}>
-                      {item.external ? (
-                        <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  {/* メインセクション */}
+                  <section>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {NAV_ITEMS.filter(item => item.section === 'main').map((item) => (
+                        <li key={item.href} style={{ marginBottom: '8px' }}>
+                          {item.href === '#settings' ? (
+                            <button
+                              onClick={openSettings}
+                              className="nav-link-mobile"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                width: '100%',
+                                padding: '12px 16px',
+                                color: 'var(--text-primary)',
+                                textDecoration: 'none',
+                                borderRadius: '8px',
+                                transition: 'background-color 0.2s',
+                                background: pathname === item.href ? 'var(--bg-hover)' : 'var(--bg-secondary)',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '16px',
+                                textAlign: 'left',
+                              }}
+                            >
+                              <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                              <span>{item.label}</span>
+                            </button>
+                          ) : (
+                            <Link
+                              href={item.href}
+                              onClick={() => setIsOpen(false)}
+                              className="nav-link-mobile"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '12px',
+                                padding: '12px 16px',
+                                color: 'var(--text-primary)',
+                                textDecoration: 'none',
+                                borderRadius: '8px',
+                                transition: 'background-color 0.2s',
+                                background: pathname === item.href ? 'var(--bg-hover)' : 'var(--bg-secondary)',
+                              }}
+                            >
+                              <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                              <span>{item.label}</span>
+                            </Link>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+
+                  {/* テーマ切り替えセクション */}
+                  <section style={{ 
+                    padding: '16px', 
+                    background: 'var(--bg-secondary)', 
+                    borderRadius: '8px' 
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      marginBottom: '12px',
+                      color: 'var(--text-secondary)',
+                      fontSize: '14px',
+                      fontWeight: '600'
+                    }}>
+                      <ThemeIcon size={16} />
+                      <span>テーマ</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => {
+                          updatePreferences({ theme: 'light' })
+                          document.documentElement.setAttribute('data-theme', 'light')
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          background: preferences.theme === 'light' ? 'var(--bg-hover)' : 'transparent',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        ☀️
+                      </button>
+                      <button
+                        onClick={() => {
+                          updatePreferences({ theme: 'dark' })
+                          document.documentElement.setAttribute('data-theme', 'dark')
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          background: preferences.theme === 'dark' ? 'var(--bg-hover)' : 'transparent',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        🌙
+                      </button>
+                      <button
+                        onClick={() => {
+                          updatePreferences({ theme: 'darkblue' })
+                          document.documentElement.setAttribute('data-theme', 'darkblue')
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: '8px 12px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          background: preferences.theme === 'darkblue' ? 'var(--bg-hover)' : 'transparent',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        🌌
+                      </button>
+                    </div>
+                  </section>
+
+                  {/* 外部リンクセクション */}
+                  <section>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {NAV_ITEMS.filter(item => item.section === 'external').map((item) => (
+                        <li key={item.href} style={{ marginBottom: '8px' }}>
                           <a
                             href={item.href}
                             target="_blank"
@@ -237,7 +408,9 @@ export function Navigation() {
                             onClick={() => setIsOpen(false)}
                             className="nav-link-mobile"
                             style={{
-                              display: 'block',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
                               padding: '12px 16px',
                               color: 'var(--text-primary)',
                               textDecoration: 'none',
@@ -246,10 +419,12 @@ export function Navigation() {
                               background: 'var(--bg-secondary)',
                             }}
                           >
-                            {item.label} ↗
+                            <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                            <span style={{ flex: 1 }}>{item.label}</span>
+                            <ExternalLinkIcon size={16} />
                           </a>
                           {item.subItems && (
-                            <ul style={{ listStyle: 'none', padding: 0, margin: '4px 0 0 16px' }}>
+                            <ul style={{ listStyle: 'none', padding: 0, margin: '4px 0 0 20px' }}>
                               {item.subItems.map((subItem) => (
                                 <li key={subItem.href} style={{ marginBottom: '4px' }}>
                                   <a
@@ -259,7 +434,9 @@ export function Navigation() {
                                     onClick={() => setIsOpen(false)}
                                     className="nav-link-mobile"
                                     style={{
-                                      display: 'block',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '8px',
                                       padding: '10px 14px',
                                       color: 'var(--text-secondary)',
                                       textDecoration: 'none',
@@ -269,34 +446,55 @@ export function Navigation() {
                                       fontSize: '14px',
                                     }}
                                   >
-                                    ↳ {subItem.label} ↗
+                                    <span style={{ marginLeft: '20px' }}>↳</span>
+                                    <span style={{ flex: 1 }}>{subItem.label}</span>
+                                    <ExternalLinkIcon size={14} />
                                   </a>
                                 </li>
                               ))}
                             </ul>
                           )}
-                        </>
-                      ) : (
-                        <Link
-                          href={item.href}
-                          onClick={() => setIsOpen(false)}
-                          className="nav-link-mobile"
-                          style={{
-                            display: 'block',
-                            padding: '12px 16px',
-                            color: 'var(--text-primary)',
-                            textDecoration: 'none',
-                            borderRadius: '8px',
-                            transition: 'background-color 0.2s',
-                            background: 'var(--bg-secondary)',
-                          }}
-                        >
-                          {item.label}
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+
+                  {/* 区切り線 */}
+                  <hr style={{ 
+                    border: 'none', 
+                    borderTop: '1px solid var(--border-color)', 
+                    margin: '0' 
+                  }} />
+
+                  {/* 情報セクション */}
+                  <section>
+                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                      {NAV_ITEMS.filter(item => item.section === 'info').map((item) => (
+                        <li key={item.href} style={{ marginBottom: '8px' }}>
+                          <Link
+                            href={item.href}
+                            onClick={() => setIsOpen(false)}
+                            className="nav-link-mobile"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              padding: '12px 16px',
+                              color: 'var(--text-primary)',
+                              textDecoration: 'none',
+                              borderRadius: '8px',
+                              transition: 'background-color 0.2s',
+                              background: pathname === item.href ? 'var(--bg-hover)' : 'var(--bg-secondary)',
+                            }}
+                          >
+                            <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                            <span>{item.label}</span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </div>
               </div>
             </nav>
           </>
@@ -307,7 +505,7 @@ export function Navigation() {
 
   // デスクトップ版（ドロップダウンメニュー）
   return (
-    <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 20 }}>
+    <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px', zIndex: 20 }}>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
@@ -331,14 +529,18 @@ export function Navigation() {
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-          e.currentTarget.style.transform = 'scale(1.05)'
+          if (e.currentTarget.parentElement) {
+            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1.05)'
+          }
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-          e.currentTarget.style.transform = 'scale(1)'
+          if (e.currentTarget.parentElement) {
+            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1)'
+          }
         }}
       >
-        <span style={{ fontSize: '18px' }}>☰</span>
+        <HamburgerIcon size={18} />
         <span>メニュー</span>
       </button>
 
@@ -354,7 +556,7 @@ export function Navigation() {
             top: '100%',
             left: 0,
             marginTop: '8px',
-            background: 'var(--card-bg)',
+            background: 'var(--menu-bg)',
             border: '1px solid var(--border)',
             borderRadius: '8px',
             boxShadow: 'var(--shadow-lg)',
@@ -363,18 +565,68 @@ export function Navigation() {
             animation: 'dropIn 0.15s ease-out',
           }}
         >
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {NAV_ITEMS.map((item, index) => (
-              <li key={item.href}>
-                {index === 5 && (
-                  <hr style={{
-                    margin: '8px 0',
-                    border: 'none',
-                    borderTop: '1px solid var(--border)',
-                  }} />
-                )}
-                {item.external ? (
-                  <>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* メインセクション */}
+            <section>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {NAV_ITEMS.filter(item => item.section === 'main').map((item) => (
+                  <li key={item.href}>
+                    {item.href === '#settings' ? (
+                      <button
+                        onClick={openSettings}
+                        className="nav-link-desktop"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '8px 12px',
+                          color: 'var(--text-primary)',
+                          textDecoration: 'none',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s',
+                          fontSize: '14px',
+                          background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
+                        <span>{item.label}</span>
+                      </button>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        onClick={() => setIsOpen(false)}
+                        className="nav-link-desktop"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 12px',
+                          color: 'var(--text-primary)',
+                          textDecoration: 'none',
+                          borderRadius: '4px',
+                          transition: 'background-color 0.2s',
+                          fontSize: '14px',
+                          background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
+                        }}
+                      >
+                        <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
+                        <span>{item.label}</span>
+                      </Link>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* 外部リンクセクション */}
+            <section>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {NAV_ITEMS.filter(item => item.section === 'external').map((item) => (
+                  <li key={item.href}>
                     <a
                       href={item.href}
                       target="_blank"
@@ -382,7 +634,9 @@ export function Navigation() {
                       onClick={() => setIsOpen(false)}
                       className="nav-link-desktop"
                       style={{
-                        display: 'block',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
                         padding: '8px 12px',
                         color: 'var(--text-primary)',
                         textDecoration: 'none',
@@ -391,10 +645,12 @@ export function Navigation() {
                         fontSize: '14px',
                       }}
                     >
-                      {item.label} ↗
+                      <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      <ExternalLinkIcon size={14} />
                     </a>
                     {item.subItems && (
-                      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0 12px' }}>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0 16px' }}>
                         {item.subItems.map((subItem) => (
                           <li key={subItem.href}>
                             <a
@@ -404,7 +660,9 @@ export function Navigation() {
                               onClick={() => setIsOpen(false)}
                               className="nav-link-desktop"
                               style={{
-                                display: 'block',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
                                 padding: '6px 10px',
                                 color: 'var(--text-secondary)',
                                 textDecoration: 'none',
@@ -413,34 +671,56 @@ export function Navigation() {
                                 fontSize: '13px',
                               }}
                             >
-                              ↳ {subItem.label} ↗
+                              <span>↳</span>
+                              <span style={{ flex: 1 }}>{subItem.label}</span>
+                              <ExternalLinkIcon size={12} />
                             </a>
                           </li>
                         ))}
                       </ul>
                     )}
-                  </>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={() => setIsOpen(false)}
-                    className="nav-link-desktop"
-                    style={{
-                      display: 'block',
-                      padding: '8px 12px',
-                      color: 'var(--text-primary)',
-                      textDecoration: 'none',
-                      borderRadius: '4px',
-                      transition: 'background-color 0.2s',
-                      fontSize: '14px',
-                    }}
-                  >
-                    {item.label}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* 区切り線 */}
+            <hr style={{ 
+              border: 'none', 
+              borderTop: '1px solid var(--border-color)', 
+              margin: '0' 
+            }} />
+
+            {/* 情報セクション */}
+            <section>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {NAV_ITEMS.filter(item => item.section === 'info').map((item) => (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      onClick={() => setIsOpen(false)}
+                      className="nav-link-desktop"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 12px',
+                        color: 'var(--text-primary)',
+                        textDecoration: 'none',
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s',
+                        fontSize: '14px',
+                        background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
+                      }}
+                    >
+                      <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </div>
         </nav>
       )}
 

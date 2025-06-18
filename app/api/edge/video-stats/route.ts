@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchVideoStats } from '@/lib/snapshot-api'
 
-export const runtime = 'nodejs'
+// Edge Runtime指定
+export const runtime = 'edge'
 
-// 動画の最新統計情報を取得するAPI
-export async function GET(request: Request | NextRequest) {
+// 動画の最新統計情報を取得するAPI (Edge Function版)
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const videoIds = searchParams.get('ids')?.split(',').filter(Boolean) || []
@@ -18,6 +18,10 @@ export async function GET(request: Request | NextRequest) {
       return NextResponse.json({ error: 'Too many video IDs (max 500)' }, { status: 400 })
     }
     
+    // Edge RuntimeではNode.js特有のモジュールが使えないため、
+    // fetchVideoStatsをEdge対応版に変更する必要がある
+    const { fetchVideoStats } = await import('@/lib/snapshot-api')
+    
     // Snapshot APIから統計情報を取得
     const stats = await fetchVideoStats(videoIds)
     
@@ -30,11 +34,7 @@ export async function GET(request: Request | NextRequest) {
     
     return NextResponse.json(response, {
       headers: {
-        // Cache for 2 minutes on CDN and 1 minute in browser
-        // This significantly reduces function invocations while keeping data fresh
-        'Cache-Control': 'public, s-maxage=120, max-age=60, stale-while-revalidate=30',
-        'Vary': 'Accept-Encoding',
-        'X-Cache-Key': `video-stats-${videoIds.join('-')}`,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     })
   } catch (error) {

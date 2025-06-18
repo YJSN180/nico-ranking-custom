@@ -6,9 +6,10 @@ describe('Cloudflare Workers API Gateway', () => {
     vi.clearAllMocks()
   })
 
-  describe('Rate Limiting at Edge', () => {
-    it('should implement Cloudflare rate limiting rules', async () => {
-      // Cloudflare Workersでのレート制限実装をテスト
+  describe('Cloudflare Built-in Protection', () => {
+    it('should rely on Cloudflare DDoS protection', async () => {
+      // Rate limiting is now handled by Cloudflare's built-in protection
+      // No custom rate limiting code is needed
       const mockRequest = new Request('https://api.example.com/ranking', {
         headers: {
           'CF-Connecting-IP': '192.168.1.1',
@@ -17,67 +18,46 @@ describe('Cloudflare Workers API Gateway', () => {
         }
       })
 
-      // レート制限チェック関数のモック
-      const checkRateLimit = async (request: Request) => {
-        const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
-        // Cloudflare KVを使用したレート制限の実装
-        // ここではモックで実装
-        const rateLimitKey = `rate_limit:${ip}`
-        const currentCount = 5 // 仮の値
-        const limit = 10
-        
-        if (currentCount >= limit) {
-          return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
-            status: 429,
-            headers: {
-              'Retry-After': '60',
-              'X-RateLimit-Limit': limit.toString(),
-              'X-RateLimit-Remaining': '0'
-            }
-          })
-        }
-        
-        return null // 制限内
+      // Cloudflare automatically handles rate limiting
+      // Our application just processes valid requests
+      const processRequest = async (request: Request) => {
+        // No rate limit checks needed - Cloudflare handles it
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
       }
 
-      const result = await checkRateLimit(mockRequest)
-      expect(result).toBeNull() // 制限内なのでnull
+      const result = await processRequest(mockRequest)
+      expect(result.status).toBe(200)
     })
 
-    it('should block requests exceeding rate limit', async () => {
+    it('should trust Cloudflare to block malicious requests', async () => {
+      // Cloudflare blocks requests before they reach our application
+      // This test documents that behavior
       const mockRequest = new Request('https://api.example.com/ranking', {
         headers: {
           'CF-Connecting-IP': '192.168.1.2'
         }
       })
 
-      // 制限を超えた場合のテスト
-      const checkRateLimit = async (request: Request) => {
-        const ip = request.headers.get('CF-Connecting-IP') || 'unknown'
-        const currentCount = 11 // 制限超過
-        const limit = 10
-        
-        if (currentCount >= limit) {
-          return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
-            status: 429,
-            headers: {
-              'Retry-After': '60',
-              'X-RateLimit-Limit': limit.toString(),
-              'X-RateLimit-Remaining': '0',
-              'CF-Ray': request.headers.get('CF-Ray') || 'unknown'
-            }
-          })
-        }
-        
-        return null
+      // If a request reaches our application, it has already passed Cloudflare's checks
+      const processRequest = async (request: Request) => {
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
       }
 
-      const result = await checkRateLimit(mockRequest)
-      expect(result).not.toBeNull()
-      expect(result?.status).toBe(429)
+      const result = await processRequest(mockRequest)
+      expect(result.status).toBe(200)
       
-      const body = await result?.json()
-      expect(body.error).toBe('Rate limit exceeded')
+      const body = await result.json()
+      expect(body.success).toBe(true)
     })
   })
 

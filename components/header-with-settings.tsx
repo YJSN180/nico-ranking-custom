@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { SettingsModal } from './settings-modal'
@@ -10,12 +10,22 @@ import { useMobileDetect } from '@/hooks/use-mobile-detect'
 export function HeaderWithSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const isMobile = useMobileDetect()
+  
+  // Listen for openSettings event from Navigation
+  useEffect(() => {
+    const handleOpenSettings = () => {
+      setIsSettingsOpen(true)
+    }
+    
+    window.addEventListener('openSettings', handleOpenSettings)
+    return () => window.removeEventListener('openSettings', handleOpenSettings)
+  }, [])
 
   return (
     <>
       <header role="banner" style={{
         background: 'var(--header-bg)',
-        padding: isMobile ? '12px 12px' : '16px 20px',
+        padding: isMobile ? '5px 12px' : '8px 20px',
         boxShadow: 'var(--shadow-md)',
         marginBottom: '20px',
         position: 'relative'
@@ -38,7 +48,7 @@ export function HeaderWithSettings() {
               color: '#ffffff', 
               margin: 0,
               textAlign: 'center',
-              fontSize: isMobile ? 'clamp(1.2rem, 3.5vw, 1.8rem)' : 'clamp(1.5rem, 4vw, 2.5rem)',
+              fontSize: isMobile ? '22px' : '48px',
               fontWeight: '700',
               textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
               letterSpacing: '0.02em',
@@ -66,17 +76,17 @@ export function HeaderWithSettings() {
             >
               <div style={{
                 position: 'relative',
-                width: isMobile ? '54px' : '106px',
-                height: isMobile ? '54px' : '106px',
+                width: isMobile ? '48px' : '106px',
+                height: isMobile ? '48px' : '106px',
                 filter: 'brightness(0) invert(1)', // 白色に変換
                 opacity: 0.95,
-                marginRight: isMobile ? '-10px' : '-20px', // タイトルとやや重なるように
+                marginRight: isMobile ? '-5px' : '-20px', // タイトルとやや重なるように
               }}>
                 <Image
                   src="/icon.png"
                   alt="ニコラン(Re:turn) ロゴ"
                   fill
-                  sizes={isMobile ? "54px" : "106px"}
+                  sizes={isMobile ? "48px" : "106px"}
                   style={{
                     objectFit: 'contain'
                   }}
@@ -90,12 +100,12 @@ export function HeaderWithSettings() {
                 whiteSpace: 'nowrap'
               }}>
                 <span style={{
-                  fontFamily: '"Nicomoji Plus v2", "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif',
-                  fontSize: isMobile ? '1em' : '1em'
+                  fontFamily: '"Nicomoji Plus v2"',
+                  fontSize: 'inherit'
                 }}>ニコラン</span>
                 <span style={{
-                  fontFamily: '"Comic Sans MS Bold", "Comic Sans MS", cursive, sans-serif',
-                  fontSize: isMobile ? '0.85em' : '0.85em',
+                  fontFamily: '"Comic Sans MS Bold"',
+                  fontSize: '85%',
                   marginLeft: '0.05em'
                 }}>(Re:turn)</span>
               </div>
@@ -107,7 +117,8 @@ export function HeaderWithSettings() {
           onClick={() => setIsSettingsOpen(true)}
           style={{
             position: 'absolute',
-            top: isMobile ? '12px' : '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
             right: isMobile ? '12px' : '16px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -123,11 +134,11 @@ export function HeaderWithSettings() {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-            e.currentTarget.style.transform = 'scale(1.05)'
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-            e.currentTarget.style.transform = 'scale(1)'
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
           }}
           aria-label="設定"
         >

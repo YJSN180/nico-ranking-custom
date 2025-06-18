@@ -8,7 +8,7 @@
   src: url('/fonts/nicomoji-plus-v2.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
-  font-display: swap;
+  font-display: block;
 }
 
 @font-face {
@@ -57,6 +57,13 @@
   
   /* ボタンテキスト */
   --button-text-active: #ffffff;
+  
+  /* メニュー専用変数（完全不透明） */
+  --menu-bg: #ffffff;
+  --menu-item-bg: #f8f9fa;
+  --menu-item-hover: #e9ecef;
+  --menu-text: #333333;
+  --menu-border: #dee2e6;
 }
 
 /* ライトテーマ（明示的）*/
@@ -101,6 +108,13 @@
   
   /* ボタンテキスト */
   --button-text-active: #ffffff;
+  
+  /* メニュー専用変数（完全不透明） */
+  --menu-bg: #1e1e1e;
+  --menu-item-bg: #2a2a2a;
+  --menu-item-hover: #3a3a3a;
+  --menu-text: #ffffff;
+  --menu-border: #444444;
 }
 
 /* ダークブルーテーマ (X/Twitter公式カラー) */
@@ -140,6 +154,13 @@
   
   /* ボタンテキスト */
   --button-text-active: #ffffff;
+  
+  /* メニュー専用変数（完全不透明） */
+  --menu-bg: #192734;
+  --menu-item-bg: #22303c;
+  --menu-item-hover: #2d3b47;
+  --menu-text: #ffffff;
+  --menu-border: #38444d;
 }
 
 /* システムの設定に従う場合 */
@@ -177,6 +198,13 @@
     
     /* ボタンテキスト */
     --button-text-active: #ffffff;
+    
+    /* メニュー専用変数（完全不透明） */
+    --menu-bg: #1e1e1e;
+    --menu-item-bg: #2a2a2a;
+    --menu-item-hover: #3a3a3a;
+    --menu-text: #ffffff;
+    --menu-border: #444444;
   }
 }
 

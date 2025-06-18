@@ -44,6 +44,14 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
   })
 }))
 
+// useVideoTagsのモック
+vi.mock('@/hooks/use-video-tags', () => ({
+  useVideoTags: (data: any[]) => ({
+    items: data,
+    isLoading: false
+  })
+}))
+
 // 他のフックのモック
 vi.mock('@/hooks/use-user-preferences', () => ({
   useUserPreferences: () => ({
@@ -74,7 +82,7 @@ describe('人気タグの表示問題', () => {
     
     // デフォルトのfetchレスポンス
     ;(global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/ranking')) {
+      if (url.includes('/api/edge/ranking')) {
         const urlObj = new URL(url, 'http://localhost')
         const genre = urlObj.searchParams.get('genre') || 'all'
         
@@ -100,7 +108,7 @@ describe('人気タグの表示問題', () => {
         })
       }
       // video-stats APIの場合は空のレスポンスを返す
-      if (url.includes('/api/video-stats')) {
+      if (url.includes('/api/edge/video-stats')) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
@@ -108,6 +116,13 @@ describe('人気タグの表示問題', () => {
             timestamp: new Date().toISOString(),
             count: 0
           })
+        })
+      }
+      // video-tags APIの場合は空のレスポンスを返す
+      if (url.includes('/api/edge/video-tags')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({})
         })
       }
       return Promise.reject(new Error('Not found'))
@@ -173,9 +188,12 @@ describe('人気タグの表示問題', () => {
 
     // APIコールを待つ
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/ranking?genre=entertainment&period=24h'
+      const fetchSpy = global.fetch as any
+      const calls = fetchSpy.mock.calls
+      const rankingCall = calls.find((call: any[]) => 
+        call[0] && call[0].includes('/api/edge/ranking?genre=entertainment&period=24h')
       )
+      expect(rankingCall).toBeTruthy()
     })
 
     // 人気タグが更新されることを確認
@@ -220,9 +238,12 @@ describe('人気タグの表示問題', () => {
 
     // APIコールを待つ
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/ranking?genre=all&period=24h'
+      const fetchSpy = global.fetch as any
+      const calls = fetchSpy.mock.calls
+      const rankingCall = calls.find((call: any[]) => 
+        call[0] && call[0].includes('/api/edge/ranking?genre=all&period=24h')
       )
+      expect(rankingCall).toBeTruthy()
     })
 
     // 人気タグセクションが表示されないことを確認
@@ -286,9 +307,12 @@ describe('人気タグの表示問題', () => {
 
     // APIコールを待つ
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/api/ranking?genre=game&period=hour'
+      const fetchSpy = global.fetch as any
+      const calls = fetchSpy.mock.calls
+      const rankingCall = calls.find((call: any[]) => 
+        call[0] && call[0].includes('/api/edge/ranking?genre=game&period=hour')
       )
+      expect(rankingCall).toBeTruthy()
     })
 
     // getPopularTagsで新しいタグが取得される
@@ -304,7 +328,7 @@ describe('人気タグの表示問題', () => {
   it('配列形式のAPIレスポンスでも人気タグが維持される', async () => {
     // 配列形式のレスポンスを返すようモック
     ;(global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/ranking')) {
+      if (url.includes('/api/edge/ranking')) {
         return Promise.resolve({
           ok: true,
           json: async () => [

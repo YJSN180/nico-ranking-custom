@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
-import { GET } from '@/app/api/video-stats/route'
+import { GET } from '@/app/api/edge/video-stats/route'
 import { NextRequest } from 'next/server'
 import * as snapshotApi from '@/lib/snapshot-api'
 
@@ -8,7 +8,7 @@ vi.mock('@/lib/snapshot-api', () => ({
   fetchVideoStats: vi.fn()
 }))
 
-describe('/api/video-stats', () => {
+describe('/api/edge/video-stats', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
@@ -21,7 +21,7 @@ describe('/api/video-stats', () => {
 
     vi.mocked(snapshotApi.fetchVideoStats).mockResolvedValueOnce(mockStats)
 
-    const request = new NextRequest('http://localhost/api/video-stats?ids=sm12345,sm67890')
+    const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345,sm67890')
     const response = await GET(request)
     const data = await response.json()
 
@@ -33,7 +33,7 @@ describe('/api/video-stats', () => {
   })
 
   test('動画IDが指定されていない場合は400エラー', async () => {
-    const request = new NextRequest('http://localhost/api/video-stats')
+    const request = new NextRequest('http://localhost/api/edge/video-stats')
     const response = await GET(request)
     const data = await response.json()
 
@@ -43,7 +43,7 @@ describe('/api/video-stats', () => {
 
   test('動画IDが多すぎる場合は400エラー', async () => {
     const ids = Array.from({ length: 501 }, (_, i) => `sm${i}`).join(',')
-    const request = new NextRequest(`http://localhost/api/video-stats?ids=${ids}`)
+    const request = new NextRequest(`http://localhost/api/edge/video-stats?ids=${ids}`)
     const response = await GET(request)
     const data = await response.json()
 
@@ -54,7 +54,7 @@ describe('/api/video-stats', () => {
   test('空のIDは除外される', async () => {
     vi.mocked(snapshotApi.fetchVideoStats).mockResolvedValueOnce({})
 
-    const request = new NextRequest('http://localhost/api/video-stats?ids=sm12345,,sm67890,')
+    const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345,,sm67890,')
     const response = await GET(request)
 
     expect(response.status).toBe(200)
@@ -64,7 +64,7 @@ describe('/api/video-stats', () => {
   test('キャッシュヘッダーが正しく設定される', async () => {
     vi.mocked(snapshotApi.fetchVideoStats).mockResolvedValueOnce({})
 
-    const request = new NextRequest('http://localhost/api/video-stats?ids=sm12345')
+    const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345')
     const response = await GET(request)
 
     expect(response.headers.get('Cache-Control')).toBe('no-cache, no-store, must-revalidate')
@@ -73,7 +73,7 @@ describe('/api/video-stats', () => {
   test('APIエラー時は500エラー', async () => {
     vi.mocked(snapshotApi.fetchVideoStats).mockRejectedValueOnce(new Error('API Error'))
 
-    const request = new NextRequest('http://localhost/api/video-stats?ids=sm12345')
+    const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345')
     const response = await GET(request)
     const data = await response.json()
 

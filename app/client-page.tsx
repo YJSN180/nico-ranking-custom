@@ -116,21 +116,16 @@ export default function ClientPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 初回のみ実行
   
-  // リアルタイム統計更新を使用（動的な更新間隔）
-  // 初回は1分後、その後は3分ごとに更新
-  const [updateInterval, setUpdateInterval] = useState(60 * 1000) // 初回1分
+  // リアルタイム統計更新を使用（3分ごとに自動更新）
+  const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
   const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
     rankingData,
     true,
-    updateInterval
+    REALTIME_UPDATE_INTERVAL
   )
   
-  // 初回更新後は間隔を延ばす
-  useEffect(() => {
-    if (lastUpdated && updateInterval === 60 * 1000) {
-      setUpdateInterval(3 * 60 * 1000) // 3分に延長
-    }
-  }, [lastUpdated, updateInterval])
+  // タグ機能は削除されました
+  const itemsWithTags = realtimeItems
   
   // スクロール位置の保存（動画ページ遷移時）
   const saveScrollPosition = useCallback(() => {
@@ -213,7 +208,7 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const response = await fetch(`/api/ranking?${apiParams.toString()}`)
+      const response = await fetch(`/api/edge/ranking?${apiParams.toString()}`)
       if (!response.ok) throw new Error('Failed to fetch data')
       
       const data = await response.json()
@@ -316,23 +311,39 @@ export default function ClientPage({
   
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
-    // まずrank順にソート（重要！）
-    const sorted = [...realtimeItems].sort((a, b) => a.rank - b.rank)
-    
-    // NGフィルタを適用
-    const filtered = filterItems(sorted)
-    
-    // 順位を再割り当て（連続番号）
-    const reranked = filtered.map((item, index) => ({
-      ...item,
-      originalRank: item.rank,
-      rank: index + 1
-    }))
-    
-    // 表示件数を制限
+    // 表示件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
-    return reranked.slice(0, limit)
-  }, [realtimeItems, filterItems, config.tag])
+    
+    // ソート済みの配列を作成しながらフィルタリングと再割り当てを同時に行う
+    const result: Array<RankingItem & { originalRank: number }> = []
+    let displayRank = 1
+    
+    // itemsWithTagsが既にrank順であることを前提とする（APIからの順序を維持）
+    // もしソートが必要な場合は、元の配列をソートせずに処理
+    const needsSort = itemsWithTags.length > 0 && 
+      itemsWithTags.some((item, i) => i > 0 && item.rank < itemsWithTags[i - 1]!.rank)
+    
+    const processedItems = needsSort 
+      ? [...itemsWithTags].sort((a, b) => a.rank - b.rank)
+      : itemsWithTags
+    
+    // フィルタリングと再割り当てを1パスで実行
+    for (const item of processedItems) {
+      // NGフィルタチェック（filterItemsの内部ロジックを参照）
+      if (filterItems([item]).length > 0) {
+        result.push({
+          ...item,
+          originalRank: item.rank,
+          rank: displayRank++
+        })
+        
+        // 上限に達したら終了
+        if (result.length >= limit) break
+      }
+    }
+    
+    return result
+  }, [itemsWithTags, filterItems, config.tag])
   
   // レンダリング
   return (
@@ -413,9 +424,7 @@ export default function ClientPage({
             color: 'var(--text-secondary)',
             textAlign: 'right'
           }}>
-            {displayItems.length}件表示中
-            {config.tag && ` (タグ別ランキング: 最大${DISPLAY_LIMITS.TAG}件)`}
-            {!config.tag && ` (ジャンル別ランキング: ${DISPLAY_LIMITS.GENRE}件表示)`}
+            {displayItems.length}件表示
           </div>
           
           {/* ランキングリスト */}

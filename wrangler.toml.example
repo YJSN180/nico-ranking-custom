@@ -20,10 +20,7 @@ USE_PREVIEW = "false"
 account_id = "YOUR_CLOUDFLARE_ACCOUNT_ID"
 
 # KV Namespaces - Create in Cloudflare dashboard
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "YOUR_RATE_LIMIT_KV_ID"
-preview_id = "YOUR_RATE_LIMIT_KV_ID"
+# RATE_LIMIT namespace removed - no longer needed
 
 [[kv_namespaces]]
 binding = "RANKING_KV"
@@ -60,9 +57,7 @@ NEXT_APP_URL = "YOUR_PREVIEW_VERCEL_URL"
 pattern = "preview.your-domain.com/*"
 zone_name = "your-domain.com"
 
-[[env.preview.kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "YOUR_RATE_LIMIT_KV_ID"
+# RATE_LIMIT namespace removed from preview
 
 [[env.preview.kv_namespaces]]
 binding = "RANKING_KV"
@@ -83,9 +78,7 @@ crons = ["*/10 * * * *"]
 binding = "RANKING_KV"
 id = "YOUR_RANKING_KV_ID"
 
-[[env.cron.kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "YOUR_RATE_LIMIT_KV_ID"
+# RATE_LIMIT namespace removed from cron
 
 [env.cron.vars]
 # CRON_SECRET should be set as a secret

@@ -31,7 +31,7 @@ export function useUserPreferences() {
     if (typeof window !== 'undefined') {
       // まずCookieから読み込みを試みる
       const cookiePrefs = getUserPreferencesCookieClient()
-      if (cookiePrefs && cookiePrefs.version === CURRENT_VERSION) {
+      if (cookiePrefs?.version === CURRENT_VERSION) {
         return { ...defaultPreferences, ...cookiePrefs }
       }
       
@@ -107,7 +107,7 @@ export function getStoredPreferences(): Partial<UserPreferences> | null {
 
   // Cookieから読み込み
   const cookiePrefs = getUserPreferencesCookieClient()
-  if (cookiePrefs && cookiePrefs.version === CURRENT_VERSION) {
+  if (cookiePrefs?.version === CURRENT_VERSION) {
     return cookiePrefs
   }
   

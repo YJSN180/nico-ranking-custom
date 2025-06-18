@@ -15,7 +15,7 @@ export async function getPopularTagsClient(
       period
     })
     
-    const response = await fetch(`/api/popular-tags?${params.toString()}`)
+    const response = await fetch(`/api/edge/popular-tags?${params.toString()}`)
     if (!response.ok) {
       return []
     }
