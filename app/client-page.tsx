@@ -325,7 +325,7 @@ export default function ClientPage({
     // itemsWithTagsが既にrank順であることを前提とする（APIからの順序を維持）
     // もしソートが必要な場合は、元の配列をソートせずに処理
     const needsSort = itemsWithTags.length > 0 && 
-      itemsWithTags.some((item, i) => i > 0 && item.rank < itemsWithTags[i - 1].rank)
+      itemsWithTags.some((item, i) => i > 0 && item.rank < itemsWithTags[i - 1]!.rank)
     
     const processedItems = needsSort 
       ? [...itemsWithTags].sort((a, b) => a.rank - b.rank)
