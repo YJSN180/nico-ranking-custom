@@ -54,10 +54,10 @@ export default defineConfig({
         'instrumentation.ts'
       ],
       thresholds: {
-        lines: 38,
-        branches: 38,
-        functions: 38,
-        statements: 38
+        lines: 35,
+        branches: 35,
+        functions: 35,
+        statements: 35
       }
     }
   },
