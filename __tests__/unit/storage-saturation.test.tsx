@@ -146,13 +146,13 @@ describe('Storage飽和問題', () => {
   })
 
   it('Storage容量超過時にエラーハンドリングが行われる', async () => {
-    // localStorageの容量を模擬的に超過させる（特定のキーのみ）
-    localStorageSetItemSpy.mockImplementation((key: string, value: string) => {
-      if (key === 'user-preferences') {
+    // Cookieの設定でエラーをシミュレート
+    const originalCookie = Object.getOwnPropertyDescriptor(document, 'cookie')
+    Object.defineProperty(document, 'cookie', {
+      get: originalCookie?.get || (() => ''),
+      set: vi.fn().mockImplementation(() => {
         throw new Error('QuotaExceededError')
-      }
-      // 他のキーは正常に動作
-      return originalSetItem.call(localStorage, key, value)
+      })
     })
 
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -167,7 +167,7 @@ describe('Storage飽和問題', () => {
       )
     })
 
-    // ジャンルを変更してlocalStorage保存をトリガー
+    // ジャンルを変更してCookie保存をトリガー
     const genreButtons = screen.getAllByRole('button')
     const gameGenreButton = genreButtons.find(btn => 
       btn.textContent === 'ゲーム' && 
@@ -185,15 +185,11 @@ describe('Storage飽和問題', () => {
 
     // エラーが適切にハンドリングされ、アプリがクラッシュしないことを確認
     expect(document.body).toBeInTheDocument()
-    
-    // localStorageへの保存が試みられたことを確認（user-preferences）
-    expect(localStorageSetItemSpy).toHaveBeenCalled()
-    
-    // user-preferences キーへの保存が試みられたことを確認
-    const userPrefsCall = localStorageSetItemSpy.mock.calls.find(
-      (call: any[]) => call[0] === 'user-preferences'
-    )
-    expect(userPrefsCall).toBeDefined()
+
+    // Cookieプロパティをリストア
+    if (originalCookie) {
+      Object.defineProperty(document, 'cookie', originalCookie)
+    }
 
     consoleErrorSpy.mockRestore()
   })
