@@ -39,10 +39,7 @@ jobs:
         run: npm run lint
 
       - name: Run unit and integration tests with coverage
-        run: npm run test:coverage
-
-      - name: Check coverage thresholds
-        run: npx vitest --coverage --run
+        run: npm run test:coverage -- --run
 
       # Codecov upload disabled - requires token configuration
       # - name: Upload coverage reports
@@ -51,22 +48,22 @@ jobs:
       #     file: ./coverage/coverage-final.json
       #     fail_ci_if_error: true
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
       # E2E tests disabled - requires KV environment variables
+      # - name: Install Playwright Browsers
+      #   run: npx playwright install --with-deps
+      #
       # - name: Run E2E tests
       #   run: npm run test:e2e
       #   env:
       #     PLAYWRIGHT_BASE_URL: http://localhost:3000
-
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
+      #
+      # - name: Upload Playwright report
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: playwright-report
+      #     path: playwright-report/
+      #     retention-days: 30
 
   build:
     runs-on: ubuntu-latest
