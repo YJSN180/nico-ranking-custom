@@ -158,8 +158,8 @@ export default function NGSettingsPage() {
     if (!confirm('派生NGリストをすべてクリアしますか？')) return
     
     try {
-      const response = await fetch('/api/admin/ng-list/clear-derived', { 
-        method: 'POST',
+      const response = await fetch('/api/admin/ng-list/derived', { 
+        method: 'DELETE',
         credentials: 'same-origin'
       })
       if (!response.ok) {

@@ -11,13 +11,20 @@ describe('Derived NG List API', () => {
   })
 
   describe('GET /api/admin/ng-list/derived', () => {
-    it('should return derived NG list with valid auth', async () => {
+    it('should forward to Edge Function and return derived NG list', async () => {
       const mockDerivedList = ['sm123', 'sm456', 'sm789']
+      const mockResponse = {
+        videoIds: mockDerivedList,
+        count: 3,
+        lastUpdated: new Date().toISOString(),
+        totalVideosProcessed: 0
+      }
 
-      // Mock KV API response
+      // Mock the internal fetch to Edge Function
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: true,
-        json: async () => mockDerivedList
+        status: 200,
+        json: async () => mockResponse
       } as Response)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived', {
@@ -35,7 +42,14 @@ describe('Derived NG List API', () => {
       expect(data).toHaveProperty('lastUpdated')
     })
 
-    it('should return 401 without auth', async () => {
+    it('should forward 401 status from Edge Function', async () => {
+      // Mock the internal fetch to Edge Function
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'Unauthorized' })
+      } as Response)
+
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived')
 
       const response = await GET(request)
@@ -45,11 +59,19 @@ describe('Derived NG List API', () => {
       expect(data).toEqual({ error: 'Unauthorized' })
     })
 
-    it('should handle KV not found gracefully', async () => {
-      // Mock KV API response - not found
+    it('should handle empty list response from Edge Function', async () => {
+      const mockResponse = {
+        videoIds: [],
+        count: 0,
+        lastUpdated: null,
+        totalVideosProcessed: 0
+      }
+
+      // Mock the internal fetch to Edge Function
       vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: false,
-        status: 404
+        ok: true,
+        status: 200,
+        json: async () => mockResponse
       } as Response)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived', {
@@ -68,7 +90,19 @@ describe('Derived NG List API', () => {
   })
 
   describe('DELETE /api/admin/ng-list/derived', () => {
-    it('should clear derived NG list with valid auth', async () => {
+    it('should forward to Edge Function and clear derived NG list', async () => {
+      const mockResponse = {
+        success: true,
+        message: 'Derived NG list cleared successfully'
+      }
+
+      // Mock the internal fetch to Edge Function
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockResponse
+      } as Response)
+
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived', {
         method: 'DELETE',
         headers: {
@@ -80,10 +114,17 @@ describe('Derived NG List API', () => {
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data).toEqual({ success: true, message: 'Derived NG list clearing not implemented - data is embedded in ranking data' })
+      expect(data).toEqual(mockResponse)
     })
 
-    it('should return 401 without auth', async () => {
+    it('should forward 401 status from Edge Function for DELETE', async () => {
+      // Mock the internal fetch to Edge Function
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: 'Unauthorized' })
+      } as Response)
+
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived', {
         method: 'DELETE'
       })
@@ -94,7 +135,5 @@ describe('Derived NG List API', () => {
       expect(response.status).toBe(401)
       expect(data).toEqual({ error: 'Unauthorized' })
     })
-
-    // Remove this test as the DELETE endpoint doesn't actually make any external calls that can fail
   })
 })

@@ -5,7 +5,7 @@ export const runtime = 'edge'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { videoId: string } }
+  { params }: { params: Promise<{ videoId: string }> }
 ) {
   // Basic authentication check
   const authHeader = request.headers.get('authorization')
@@ -15,7 +15,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { videoId } = params
+  const { videoId } = await params
 
   // Validate video ID format (sm followed by numbers)
   if (!videoId || !/^sm\d+$/.test(videoId)) {
