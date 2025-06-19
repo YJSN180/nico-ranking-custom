@@ -1,6 +1,8 @@
 import type { NGList } from '@/types/ng-list'
 
-// 古い形式のNGList型定義
+/**
+ * レガシーNGリスト形式から新しい形式への移行
+ */
 interface LegacyNGList {
   videoIds: string[]
   videoTitles: string[]
@@ -9,56 +11,50 @@ interface LegacyNGList {
   derivedVideoIds?: string[]
 }
 
-/**
- * 古い形式のNGListを新しい形式に変換
- */
-export function migrateLegacyNGList(data: any): NGList {
-  // null/undefinedの場合はデフォルト値を返す
-  if (!data) {
-    return createEmptyNGList()
+export function migrateLegacyNGList(legacyData: any): NGList {
+  // null/undefinedの場合は空のNGListを返す
+  if (!legacyData) {
+    return {
+      videoIds: [],
+      videoTitles: { exact: [], partial: [] },
+      authorIds: [],
+      authorNames: { exact: [], partial: [] },
+      derivedVideoIds: []
+    }
   }
 
-  // すでに新しい形式の場合はそのまま返す
-  if (isNewFormatNGList(data)) {
-    return data
+  // 既に新しい形式の場合はそのまま返す
+  if (legacyData?.videoTitles?.exact && legacyData?.authorNames?.exact) {
+    return legacyData as NGList
   }
 
-  // 古い形式から新しい形式に変換
+  // レガシー形式から新しい形式に変換
+  const legacy = legacyData as LegacyNGList
+  
   return {
-    videoIds: Array.isArray(data.videoIds) ? data.videoIds : [],
+    videoIds: legacy.videoIds || [],
     videoTitles: {
-      exact: Array.isArray(data.videoTitles) ? data.videoTitles : [],
-      partial: []  // 古い形式には部分一致がないので空配列
+      exact: legacy.videoTitles || [],
+      partial: []
     },
-    authorIds: Array.isArray(data.authorIds) ? data.authorIds : [],
+    authorIds: legacy.authorIds || [],
     authorNames: {
-      exact: Array.isArray(data.authorNames) ? data.authorNames : [],
-      partial: []  // 古い形式には部分一致がないので空配列
+      exact: legacy.authorNames || [],
+      partial: []
     },
-    derivedVideoIds: Array.isArray(data.derivedVideoIds) ? data.derivedVideoIds : []
+    derivedVideoIds: legacy.derivedVideoIds || []
   }
 }
 
 /**
- * 新しい形式のNGListかどうかを判定
+ * NGリストの形式を検証
  */
-export function isNewFormatNGList(data: any): data is NGList {
-  if (!data || typeof data !== 'object') {
-    return false
-  }
-  
-  return (
-    Array.isArray(data.videoIds) &&
-    data.videoTitles &&
-    typeof data.videoTitles === 'object' &&
-    Array.isArray(data.videoTitles.exact) &&
-    Array.isArray(data.videoTitles.partial) &&
-    Array.isArray(data.authorIds) &&
-    data.authorNames &&
-    typeof data.authorNames === 'object' &&
-    Array.isArray(data.authorNames.exact) &&
-    Array.isArray(data.authorNames.partial)
-  )
+export function isLegacyFormat(data: any): boolean {
+  return data && 
+         Array.isArray(data.videoTitles) && 
+         Array.isArray(data.authorNames) &&
+         !data.videoTitles.exact &&
+         !data.authorNames.exact
 }
 
 /**
@@ -67,23 +63,28 @@ export function isNewFormatNGList(data: any): data is NGList {
 export function createEmptyNGList(): NGList {
   return {
     videoIds: [],
-    videoTitles: {
-      exact: [],
-      partial: []
-    },
+    videoTitles: { exact: [], partial: [] },
     authorIds: [],
-    authorNames: {
-      exact: [],
-      partial: []
-    },
+    authorNames: { exact: [], partial: [] },
     derivedVideoIds: []
   }
 }
 
 /**
- * NGListを保存用の形式に変換（derivedVideoIdsを除外）
+ * NGリストの統計情報を取得
  */
-export function ngListToSaveFormat(ngList: NGList): Omit<NGList, 'derivedVideoIds'> {
-  const { derivedVideoIds, ...saveData } = ngList
-  return saveData
+export function getNGListStats(ngList: NGList): {
+  manualVideoIds: number
+  manualVideoTitles: number
+  manualAuthorIds: number
+  manualAuthorNames: number
+  derivedVideoIds: number
+} {
+  return {
+    manualVideoIds: ngList.videoIds.length,
+    manualVideoTitles: ngList.videoTitles.exact.length + ngList.videoTitles.partial.length,
+    manualAuthorIds: ngList.authorIds.length,
+    manualAuthorNames: ngList.authorNames.exact.length + ngList.authorNames.partial.length,
+    derivedVideoIds: ngList.derivedVideoIds?.length || 0
+  }
 }

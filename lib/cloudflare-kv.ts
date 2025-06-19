@@ -38,6 +38,15 @@ export interface KVRankingData {
     updatedAt: string
     totalItems: number
   }
+  derivativeNGData?: {
+    blockedVideoIds: string[]
+    blockedAuthorIds: string[]
+    statsSnapshot: {
+      totalVideosProcessed: number
+      totalBlocked: number
+      lastUpdated: string
+    }
+  }
 }
 
 // Single key for all ranking data

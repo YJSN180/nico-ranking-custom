@@ -18,3 +18,39 @@ export interface RankingItem {
 }
 
 export type RankingData = RankingItem[]
+
+// 派生NGリストデータ構造
+export interface DerivativeNGData {
+  blockedVideoIds: string[]
+  blockedAuthorIds: string[]
+  statsSnapshot: {
+    totalVideosProcessed: number
+    totalBlocked: number
+    lastUpdated: string
+  }
+}
+
+// KVに保存されるランキングデータ構造
+export interface KVRankingData {
+  genres: {
+    [genre: string]: {
+      '24h': {
+        items: RankingItem[]
+        popularTags: string[]
+        tags?: Record<string, RankingItem[]>
+      }
+      'hour': {
+        items: RankingItem[]
+        popularTags: string[]
+        tags?: Record<string, RankingItem[]>
+      }
+    }
+  }
+  metadata: {
+    version: number
+    updatedAt: string
+    totalItems: number
+    ngFiltered: boolean
+  }
+  derivativeNGData?: DerivativeNGData
+}

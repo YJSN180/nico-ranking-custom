@@ -600,19 +600,23 @@ async function main() {
     
     rankingData.metadata.totalItems = totalItemsCount;
 
-    // Update derived NG list if new entries were found
+    // Add derived NG data to ranking data to avoid additional KV writes
     const newDerivedCount = ngList.derivedVideoIds.length;
-    if (newDerivedCount > originalDerivedCount) {
-      const newlyAdded = newDerivedCount - originalDerivedCount;
-      console.log(`\nUpdating derived NG list: added ${newlyAdded} new entries (${originalDerivedCount} → ${newDerivedCount})`);
-      
-      try {
-        await kv.put('ng-list-derived', ngList.derivedVideoIds);
-        console.log('✅ Derived NG list updated successfully');
-      } catch (error) {
-        console.error('❌ Failed to update derived NG list:', error);
-        // Continue with ranking data update even if NG list update fails
+    const newlyAdded = newDerivedCount - originalDerivedCount;
+    
+    rankingData.derivativeNGData = {
+      blockedVideoIds: [...ngList.derivedVideoIds], // Copy array
+      blockedAuthorIds: [], // Currently not tracking blocked authors separately
+      statsSnapshot: {
+        totalVideosProcessed: totalItemsCount,
+        totalBlocked: newDerivedCount,
+        lastUpdated: new Date().toISOString()
       }
+    };
+
+    if (newlyAdded > 0) {
+      console.log(`\nAdded ${newlyAdded} new derived NG entries (${originalDerivedCount} → ${newDerivedCount})`);
+      console.log('Derived NG data will be included in ranking data (no additional KV writes needed)');
     } else {
       console.log('\nNo new derived NG entries found');
     }

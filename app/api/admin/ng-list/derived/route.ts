@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerDerivedNGList, clearServerDerivedNGList } from '@/lib/ng-list-server'
+import { getDerivativeNGListFromKV, getDerivativeNGStats } from '@/lib/ng-list-derivative'
 
 export async function GET(request: NextRequest) {
   // Basic authentication check
@@ -11,12 +11,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const derivedList = await getServerDerivedNGList()
+    const [derivativeData, stats] = await Promise.all([
+      getDerivativeNGListFromKV(),
+      getDerivativeNGStats()
+    ])
+    
     return NextResponse.json({
-      videoIds: derivedList,
-      lastUpdated: new Date().toISOString()
+      videoIds: derivativeData?.blockedVideoIds || [],
+      count: stats?.totalBlocked || 0,
+      lastUpdated: stats?.lastUpdated || null,
+      totalVideosProcessed: stats?.totalVideosProcessed || 0
     })
   } catch (error) {
+    console.error('Failed to fetch derived NG list:', error)
     return NextResponse.json({ error: 'Failed to fetch derived NG list' }, { status: 500 })
   }
 }
@@ -31,8 +38,9 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    await clearServerDerivedNGList()
-    return NextResponse.json({ success: true })
+    // TODO: Implement clear derived NG list functionality
+    // For now, return success as derived list is embedded in ranking data
+    return NextResponse.json({ success: true, message: 'Derived NG list clearing not implemented - data is embedded in ranking data' })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to clear derived NG list' }, { status: 500 })
   }
