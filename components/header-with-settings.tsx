@@ -150,8 +150,8 @@ export function HeaderWithSettings() {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
         onApply={() => {
-          // NGリストが適用されたことを通知
-          window.dispatchEvent(new CustomEvent('ngListApplied'))
+          // ローカルでのNGフィルタリング再計算を通知
+          window.dispatchEvent(new CustomEvent('ngListAppliedLocal'))
         }}
       />
     </>

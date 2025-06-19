@@ -151,13 +151,13 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   }
   
   // 適用処理
-  const handleApply = async () => {
+  const handleApply = () => {
     // NGリストを保存
     saveNGListDirectly(tempNGList)
     
-    // コールバックを実行（ランキング再取得など）
+    // ローカルでのフィルタリングと順位再計算をトリガー
     if (onApply) {
-      await onApply()
+      onApply()
     }
     
     // モーダルを閉じる
