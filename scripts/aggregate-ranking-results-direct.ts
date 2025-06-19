@@ -288,6 +288,39 @@ async function main() {
       }
     }
 
+    // Get current derived list from KV to include in ranking data
+    console.log('\nFetching complete derived NG list from KV...');
+    let allDerivedVideoIds: string[] = [];
+    try {
+      const getUrl = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/ng-list-derived`;
+      
+      const response = await fetch(getUrl, {
+        headers: {
+          "Authorization": `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`,
+        },
+      });
+      
+      if (response.ok) {
+        allDerivedVideoIds = await response.json();
+        console.log(`Found ${allDerivedVideoIds.length} total derived video IDs in KV`);
+      }
+    } catch (error) {
+      console.log('Could not fetch derived list from KV:', error);
+    }
+
+    // Add derivativeNGData to ranking data for consistency
+    rankingData.derivativeNGData = {
+      blockedVideoIds: allDerivedVideoIds,
+      blockedAuthorIds: [], // Currently not tracking blocked authors separately
+      statsSnapshot: {
+        totalVideosProcessed: totalItemsCount,
+        totalBlocked: allDerivedVideoIds.length,
+        lastUpdated: new Date().toISOString()
+      }
+    };
+
+    console.log('Added derivativeNGData to ranking data');
+
     // Save aggregated data locally as backup
     const backupPath = path.join(process.cwd(), 'tmp', 'latest-aggregated-data.json');
     await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));

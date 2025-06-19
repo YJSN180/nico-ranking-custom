@@ -11,7 +11,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // First try to get from the old KV structure (ng-list-derived key)
+    // Try to get from ranking data first (new structure)
+    const derivativeData = await getDerivativeNGListFromKV()
+    const derivativeStats = await getDerivativeNGStats()
+    
+    if (derivativeData && derivativeData.blockedVideoIds.length > 0) {
+      console.log('Found derivative NG data in ranking data')
+      return NextResponse.json({
+        videoIds: derivativeData.blockedVideoIds,
+        count: derivativeData.blockedVideoIds.length,
+        lastUpdated: derivativeStats?.lastUpdated || null,
+        totalVideosProcessed: derivativeStats?.totalVideosProcessed || 0
+      })
+    }
+    
+    // Fallback to old KV structure (ng-list-derived key)
+    console.log('Checking ng-list-derived key as fallback')
     let derivedVideoIds: string[] = []
     let lastUpdated: string | null = null
     let totalBlocked = 0
@@ -32,6 +47,7 @@ export async function GET(request: NextRequest) {
           derivedVideoIds = await response.json()
           totalBlocked = derivedVideoIds.length
           lastUpdated = new Date().toISOString() // Approximate
+          console.log(`Found ${totalBlocked} entries in ng-list-derived key`)
         }
       } catch (error) {
         console.warn('Failed to fetch from ng-list-derived key:', error)
