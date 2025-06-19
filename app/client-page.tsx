@@ -508,18 +508,6 @@ export default function ClientPage({
     }
   }, [shouldRestore, config, handleConfigChange])
   
-  // ローカルNGリスト適用時の強制再計算
-  const [forceRecalculation, setForceRecalculation] = useState(0)
-  
-  useEffect(() => {
-    const handleNGListAppliedLocal = () => {
-      // ローカルでの再計算を強制的にトリガー
-      setForceRecalculation(prev => prev + 1)
-    }
-    
-    window.addEventListener('ngListAppliedLocal', handleNGListAppliedLocal)
-    return () => window.removeEventListener('ngListAppliedLocal', handleNGListAppliedLocal)
-  }, [])
 
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
@@ -555,7 +543,7 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, filterItems, config.tag, ngList, forceRecalculation])
+  }, [itemsWithTags, filterItems, config.tag, ngList])
   
   // レンダリング
   return (

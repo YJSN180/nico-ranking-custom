@@ -35,17 +35,10 @@ const defaultNGList: UserNGList = {
   updatedAt: new Date().toISOString(),
 }
 
-// カスタムイベントの型定義
-declare global {
-  interface WindowEventMap {
-    'ngListUpdated': CustomEvent<{ ngList: UserNGList }>
-  }
-}
-
 export function useUserNGList() {
   const [ngList, setNGList] = useState<UserNGList>(defaultNGList)
 
-  // 初回読み込み
+  // 初回読み込みのみ
   useEffect(() => {
     const loadNGList = () => {
       try {
@@ -61,32 +54,7 @@ export function useUserNGList() {
       }
     }
     
-    // 初回読み込み
     loadNGList()
-    
-    // 他のタブやコンポーネントからの変更を監視
-    const handleNGListUpdate = (event: CustomEvent<{ ngList: UserNGList }>) => {
-      setNGList(event.detail.ngList)
-    }
-    
-    window.addEventListener('ngListUpdated', handleNGListUpdate)
-    
-    return () => {
-      window.removeEventListener('ngListUpdated', handleNGListUpdate)
-    }
-  }, [])
-
-  // NGリストを保存
-  const saveNGList = useCallback((list: UserNGList) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-      // 変更を他のコンポーネントに通知
-      window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-        detail: { ngList: list } 
-      }))
-    } catch (error) {
-      // ストレージエラーは無視
-    }
   }, [])
 
   // 総数を再計算
@@ -101,147 +69,22 @@ export function useUserNGList() {
     )
   }, [])
 
-  // 動画ID追加
-  const addVideoId = useCallback((videoId: string) => {
-    setNGList(prev => {
-      if (prev.videoIds.includes(videoId)) return prev
-      
-      const newList = {
-        ...prev,
-        videoIds: [...prev.videoIds, videoId],
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 動画ID削除
-  const removeVideoId = useCallback((videoId: string) => {
-    setNGList(prev => {
-      const newList = {
-        ...prev,
-        videoIds: prev.videoIds.filter(id => id !== videoId),
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 動画タイトル追加
-  const addVideoTitle = useCallback((title: string, type: 'exact' | 'partial') => {
-    setNGList(prev => {
-      if (prev.videoTitles[type].includes(title)) return prev
-      
-      const newList = {
-        ...prev,
-        videoTitles: {
-          ...prev.videoTitles,
-          [type]: [...prev.videoTitles[type], title],
-        },
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 動画タイトル削除
-  const removeVideoTitle = useCallback((title: string, type: 'exact' | 'partial') => {
-    setNGList(prev => {
-      const newList = {
-        ...prev,
-        videoTitles: {
-          ...prev.videoTitles,
-          [type]: prev.videoTitles[type].filter(t => t !== title),
-        },
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 投稿者ID追加
-  const addAuthorId = useCallback((authorId: string) => {
-    setNGList(prev => {
-      if (prev.authorIds.includes(authorId)) return prev
-      
-      const newList = {
-        ...prev,
-        authorIds: [...prev.authorIds, authorId],
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 投稿者ID削除
-  const removeAuthorId = useCallback((authorId: string) => {
-    setNGList(prev => {
-      const newList = {
-        ...prev,
-        authorIds: prev.authorIds.filter(id => id !== authorId),
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 投稿者名追加
-  const addAuthorName = useCallback((name: string, type: 'exact' | 'partial') => {
-    setNGList(prev => {
-      if (prev.authorNames[type].includes(name)) return prev
-      
-      const newList = {
-        ...prev,
-        authorNames: {
-          ...prev.authorNames,
-          [type]: [...prev.authorNames[type], name],
-        },
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // 投稿者名削除
-  const removeAuthorName = useCallback((name: string, type: 'exact' | 'partial') => {
-    setNGList(prev => {
-      const newList = {
-        ...prev,
-        authorNames: {
-          ...prev.authorNames,
-          [type]: prev.authorNames[type].filter(n => n !== name),
-        },
-        updatedAt: new Date().toISOString(),
-      }
-      newList.totalCount = recalculateTotalCount(newList)
-      saveNGList(newList)
-      return newList
-    })
-  }, [saveNGList, recalculateTotalCount])
-
-  // NGリストをリセット
-  const resetNGList = useCallback(() => {
-    const newList = {
-      ...defaultNGList,
+  // 適用ボタン用：NGリストを直接保存（イベントなし）
+  const saveNGListDirectly = useCallback((newList: UserNGList) => {
+    const updatedList = {
+      ...newList,
       updatedAt: new Date().toISOString(),
+      totalCount: recalculateTotalCount(newList)
     }
-    setNGList(newList)
-    saveNGList(newList)
-  }, [saveNGList])
+    setNGList(updatedList)
+    
+    // localStorageに保存（イベント発生なし）
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
+    } catch (error) {
+      // ストレージエラーは無視
+    }
+  }, [recalculateTotalCount])
 
   // フィルタリング関数
   const filterItems = useCallback((items: any[]) => {
@@ -278,28 +121,8 @@ export function useUserNGList() {
     })
   }, [ngList])
 
-  // 直接NGリストを保存（適用ボタン用）
-  const saveNGListDirectly = useCallback((newList: UserNGList) => {
-    const updatedList = {
-      ...newList,
-      updatedAt: new Date().toISOString(),
-      totalCount: recalculateTotalCount(newList)
-    }
-    setNGList(updatedList)
-    saveNGList(updatedList)
-  }, [saveNGList, recalculateTotalCount])
-
   return {
     ngList,
-    addVideoId,
-    removeVideoId,
-    addVideoTitle,
-    removeVideoTitle,
-    addAuthorId,
-    removeAuthorId,
-    addAuthorName,
-    removeAuthorName,
-    resetNGList,
     filterItems,
     saveNGListDirectly,
   }

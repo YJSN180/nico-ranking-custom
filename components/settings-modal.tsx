@@ -8,10 +8,9 @@ import styles from './settings-modal.module.css'
 interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
-  onApply?: () => void  // 適用時のコールバック
 }
 
-export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'display' | 'nglist'>('nglist')
   const [inputVideoId, setInputVideoId] = useState('')
   const [inputVideoTitle, setInputVideoTitle] = useState('')
@@ -152,13 +151,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存
+    // NGリストを保存（これによりuseUserNGListのngListが更新され、displayItemsが自動再計算される）
     saveNGListDirectly(tempNGList)
-    
-    // ローカルでのフィルタリングと順位再計算をトリガー
-    if (onApply) {
-      onApply()
-    }
     
     // モーダルを閉じる
     onClose()

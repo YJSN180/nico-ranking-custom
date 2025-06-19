@@ -149,10 +149,6 @@ export function HeaderWithSettings() {
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
-        onApply={() => {
-          // ローカルでのNGフィルタリング再計算を通知
-          window.dispatchEvent(new CustomEvent('ngListAppliedLocal'))
-        }}
       />
     </>
   )
