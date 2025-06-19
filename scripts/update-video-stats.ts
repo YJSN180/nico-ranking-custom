@@ -95,11 +95,16 @@ async function getRankingFromKV(): Promise<RankingData | null> {
     )
     
     if (!response.ok) {
+      console.log(`KV response status: ${response.status}`)
       return null
     }
     
+    // KV stores compressed binary data, so we need to read it as ArrayBuffer
     const arrayBuffer = await response.arrayBuffer()
-    const decompressed = await decompressData(new Uint8Array(arrayBuffer))
+    const compressedData = new Uint8Array(arrayBuffer)
+    
+    // Decompress the data
+    const decompressed = await decompressData(compressedData)
     return JSON.parse(decompressed)
   } catch (error) {
     console.error('Failed to fetch ranking data:', error)

@@ -11,16 +11,38 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const [derivativeData, stats] = await Promise.all([
-      getDerivativeNGListFromKV(),
-      getDerivativeNGStats()
-    ])
+    // First try to get from the old KV structure (ng-list-derived key)
+    let derivedVideoIds: string[] = []
+    let lastUpdated: string | null = null
+    let totalBlocked = 0
+    
+    const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+    const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+    const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+    
+    if (CF_ACCOUNT_ID && CF_NAMESPACE_ID && CF_API_TOKEN) {
+      try {
+        const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ng-list-derived`, {
+          headers: {
+            "Authorization": `Bearer ${CF_API_TOKEN}`
+          }
+        })
+        
+        if (response.ok) {
+          derivedVideoIds = await response.json()
+          totalBlocked = derivedVideoIds.length
+          lastUpdated = new Date().toISOString() // Approximate
+        }
+      } catch (error) {
+        console.warn('Failed to fetch from ng-list-derived key:', error)
+      }
+    }
     
     return NextResponse.json({
-      videoIds: derivativeData?.blockedVideoIds || [],
-      count: stats?.totalBlocked || 0,
-      lastUpdated: stats?.lastUpdated || null,
-      totalVideosProcessed: stats?.totalVideosProcessed || 0
+      videoIds: derivedVideoIds,
+      count: totalBlocked,
+      lastUpdated: lastUpdated,
+      totalVideosProcessed: 0 // Not available in old structure
     })
   } catch (error) {
     console.error('Failed to fetch derived NG list:', error)
