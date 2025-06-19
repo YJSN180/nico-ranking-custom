@@ -1,0 +1,46 @@
+name: Update Video Stats
+
+on:
+  schedule:
+    # Run every 3 minutes (offset from ranking updates which run at 0,30)
+    # 2,5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59
+    - cron: '2,5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+# Prevent concurrent runs
+concurrency:
+  group: update-video-stats
+  cancel-in-progress: false
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Update Video Stats in KV
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
+      run: |
+        echo "Starting video stats update..."
+        npx tsx scripts/update-video-stats.ts
+        echo "Video stats update completed"
+        
+    - name: Report failure
+      if: failure()
+      run: |
+        echo "::error::Video stats update failed. Check logs for details."

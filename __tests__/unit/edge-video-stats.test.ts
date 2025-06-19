@@ -3,9 +3,14 @@ import { NextRequest } from 'next/server'
 
 // Edge Runtime環境をモック
 const fetchVideoStatsMock = vi.fn()
+const getVideoStatsFromKVMock = vi.fn()
 
 vi.mock('@/lib/snapshot-api', () => ({
   fetchVideoStats: fetchVideoStatsMock
+}))
+
+vi.mock('@/lib/video-stats-kv', () => ({
+  getVideoStatsFromKV: getVideoStatsFromKVMock
 }))
 
 describe('Edge Video Stats API', () => {
@@ -53,6 +58,8 @@ describe('Edge Video Stats API', () => {
         }
       }
       
+      // Mock KV to return empty (fallback to Snapshot API)
+      getVideoStatsFromKVMock.mockResolvedValue({})
       fetchVideoStatsMock.mockResolvedValue(mockStats)
       
       const { GET } = await import('@/app/api/edge/video-stats/route')
@@ -69,6 +76,7 @@ describe('Edge Video Stats API', () => {
     })
 
     it('should handle fetch errors gracefully', async () => {
+      getVideoStatsFromKVMock.mockResolvedValue({})
       fetchVideoStatsMock.mockRejectedValue(new Error('Network error'))
       
       const { GET } = await import('@/app/api/edge/video-stats/route')
@@ -82,6 +90,7 @@ describe('Edge Video Stats API', () => {
     })
 
     it('should set proper cache headers', async () => {
+      getVideoStatsFromKVMock.mockResolvedValue({})
       fetchVideoStatsMock.mockResolvedValue({})
       
       const { GET } = await import('@/app/api/edge/video-stats/route')
@@ -89,12 +98,98 @@ describe('Edge Video Stats API', () => {
       
       const response = await GET(request)
       
-      expect(response.headers.get('Cache-Control')).toBe('no-cache, no-store, must-revalidate')
+      // Now uses 3-minute cache with KV integration
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, stale-while-revalidate=60')
     })
 
     it('should validate Edge runtime export', async () => {
       const module = await import('@/app/api/edge/video-stats/route')
       expect(module.runtime).toBe('edge')
+    })
+
+    it('should fetch stats from KV first and fallback to Snapshot API for missing videos', async () => {
+      const kvStats = {
+        'sm123': {
+          viewCounter: 1000,
+          commentCounter: 50,
+          mylistCounter: 10,
+          likeCounter: 100
+        }
+      }
+      
+      const freshStats = {
+        'sm456': {
+          viewCounter: 2000,
+          commentCounter: 100,
+          mylistCounter: 20,
+          likeCounter: 200
+        }
+      }
+      
+      getVideoStatsFromKVMock.mockResolvedValue(kvStats)
+      fetchVideoStatsMock.mockResolvedValue(freshStats)
+      
+      const { GET } = await import('@/app/api/edge/video-stats/route')
+      const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm123,sm456')
+      
+      const response = await GET(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(200)
+      expect(getVideoStatsFromKVMock).toHaveBeenCalledWith(['sm123', 'sm456'])
+      expect(fetchVideoStatsMock).toHaveBeenCalledWith(['sm456']) // Only missing video
+      expect(data.stats).toEqual({
+        'sm123': kvStats['sm123'],
+        'sm456': freshStats['sm456']
+      })
+      expect(data.kvHitRate).toBe(0.5) // 1 out of 2 from KV
+    })
+
+    it('should handle KV errors gracefully and fallback to Snapshot API', async () => {
+      const freshStats = {
+        'sm123': {
+          viewCounter: 1000,
+          commentCounter: 50,
+          mylistCounter: 10,
+          likeCounter: 100
+        }
+      }
+      
+      getVideoStatsFromKVMock.mockResolvedValue({}) // KV returns empty
+      fetchVideoStatsMock.mockResolvedValue(freshStats)
+      
+      const { GET } = await import('@/app/api/edge/video-stats/route')
+      const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm123')
+      
+      const response = await GET(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(200)
+      expect(fetchVideoStatsMock).toHaveBeenCalledWith(['sm123'])
+      expect(data.stats).toEqual(freshStats)
+      expect(data.kvHitRate).toBe(0) // 0 out of 1 from KV
+    })
+
+    it('should set longer cache headers when using KV data', async () => {
+      const kvStats = {
+        'sm123': {
+          viewCounter: 1000,
+          commentCounter: 50,
+          mylistCounter: 10,
+          likeCounter: 100
+        }
+      }
+      
+      getVideoStatsFromKVMock.mockResolvedValue(kvStats)
+      fetchVideoStatsMock.mockResolvedValue({})
+      
+      const { GET } = await import('@/app/api/edge/video-stats/route')
+      const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm123')
+      
+      const response = await GET(request)
+      
+      // Should use 3-minute cache when data is from KV
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, stale-while-revalidate=60')
     })
   })
 })

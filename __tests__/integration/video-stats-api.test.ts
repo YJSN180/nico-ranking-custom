@@ -2,10 +2,15 @@ import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { GET } from '@/app/api/edge/video-stats/route'
 import { NextRequest } from 'next/server'
 import * as snapshotApi from '@/lib/snapshot-api'
+import * as videoStatsKv from '@/lib/video-stats-kv'
 
 // モジュールのモック
 vi.mock('@/lib/snapshot-api', () => ({
   fetchVideoStats: vi.fn()
+}))
+
+vi.mock('@/lib/video-stats-kv', () => ({
+  getVideoStatsFromKV: vi.fn()
 }))
 
 describe('/api/edge/video-stats', () => {
@@ -19,6 +24,7 @@ describe('/api/edge/video-stats', () => {
       sm67890: { viewCounter: 2000, commentCounter: 100 }
     }
 
+    vi.mocked(videoStatsKv.getVideoStatsFromKV).mockResolvedValueOnce({})
     vi.mocked(snapshotApi.fetchVideoStats).mockResolvedValueOnce(mockStats)
 
     const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345,sm67890')
@@ -52,6 +58,7 @@ describe('/api/edge/video-stats', () => {
   })
 
   test('空のIDは除外される', async () => {
+    vi.mocked(videoStatsKv.getVideoStatsFromKV).mockResolvedValueOnce({})
     vi.mocked(snapshotApi.fetchVideoStats).mockResolvedValueOnce({})
 
     const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345,,sm67890,')
@@ -62,15 +69,18 @@ describe('/api/edge/video-stats', () => {
   })
 
   test('キャッシュヘッダーが正しく設定される', async () => {
+    vi.mocked(videoStatsKv.getVideoStatsFromKV).mockResolvedValueOnce({})
     vi.mocked(snapshotApi.fetchVideoStats).mockResolvedValueOnce({})
 
     const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345')
     const response = await GET(request)
 
-    expect(response.headers.get('Cache-Control')).toBe('no-cache, no-store, must-revalidate')
+    // Now uses 3-minute cache with KV integration
+    expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, stale-while-revalidate=60')
   })
 
   test('APIエラー時は500エラー', async () => {
+    vi.mocked(videoStatsKv.getVideoStatsFromKV).mockResolvedValueOnce({})
     vi.mocked(snapshotApi.fetchVideoStats).mockRejectedValueOnce(new Error('API Error'))
 
     const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345')
