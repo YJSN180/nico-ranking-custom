@@ -96,7 +96,7 @@ export default function ClientPage({
   
   
   // カスタムNGリスト
-  const { filterItems } = useUserNGList()
+  const { filterItems, ngList } = useUserNGList()
   
   // モバイル検出
   const isMobile = useMobileDetect()
@@ -542,7 +542,7 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, filterItems, config.tag])
+  }, [itemsWithTags, filterItems, config.tag, ngList])
   
   // レンダリング
   return (
