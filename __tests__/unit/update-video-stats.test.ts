@@ -1,11 +1,27 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import type { RankingData } from '@/types/ranking'
 
 // Mock modules before importing the script
 vi.mock('@/lib/snapshot-api')
 vi.mock('@/lib/cloudflare-kv', () => ({
-  compressData: vi.fn(),
-  decompressData: vi.fn()
+  compressData: vi.fn(async (data) => {
+    // Simple mock compression - just convert to Uint8Array with gzip header
+    const jsonString = JSON.stringify(data)
+    const encoder = new TextEncoder()
+    const compressed = encoder.encode(jsonString)
+    // Add gzip magic numbers at the beginning
+    const result = new Uint8Array(compressed.length + 2)
+    result[0] = 0x1f
+    result[1] = 0x8b
+    result.set(compressed, 2)
+    return result
+  }),
+  decompressData: vi.fn(async (compressed) => {
+    // Simple mock decompression - skip the gzip header and parse JSON
+    const decoder = new TextDecoder()
+    const jsonString = decoder.decode(compressed.slice(2))
+    return JSON.parse(jsonString)
+  })
 }))
 
 // Mock fetch globally
@@ -91,19 +107,15 @@ describe('update-video-stats script', () => {
 
     const { fetchVideoStats } = await import('@/lib/snapshot-api')
 
-    // Mock cloudflare-kv functions
-    const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
-    // Create properly compressed data
-    const compressedRankingData = await compressData(mockRankingData)
-    vi.mocked(decompressData).mockResolvedValue(mockRankingData)
-
     // Mock KV fetch for ranking data
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('RANKING_LATEST')) {
-        // Return compressed data as the real KV would
-        return new Response(compressedRankingData, { status: 200 })
+        // Return mock compressed data (our mock will handle compression/decompression)
+        const { compressData } = await import('@/lib/cloudflare-kv')
+        const compressedData = await compressData(mockRankingData)
+        return new Response(compressedData, { status: 200 })
       }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
@@ -177,18 +189,14 @@ describe('update-video-stats script', () => {
       metadata: { version: 1, updatedAt: '2024-01-01T00:00:00Z', totalItems: 0 }
     }
 
-    const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
-    // Create properly compressed data
-    const compressedRankingData = await compressData(emptyRankingData)
-    
-    vi.mocked(decompressData).mockResolvedValue(emptyRankingData)
-    
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('RANKING_LATEST')) {
-        // Return compressed data as the real KV would
-        return new Response(compressedRankingData, { status: 200 })
+        // Return mock compressed data
+        const { compressData } = await import('@/lib/cloudflare-kv')
+        const compressedData = await compressData(emptyRankingData)
+        return new Response(compressedData, { status: 200 })
       }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
@@ -224,19 +232,16 @@ describe('update-video-stats script', () => {
       metadata: { version: 1, updatedAt: '2024-01-01T00:00:00Z', totalItems: 1 }
     }
 
-    const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
     const { fetchVideoStats } = await import('@/lib/snapshot-api')
-    
-    // Create properly compressed data
-    const compressedRankingData = await compressData(mockRankingData)
-    vi.mocked(decompressData).mockResolvedValue(mockRankingData)
 
     vi.mocked(global.fetch).mockImplementation(async (url) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('RANKING_LATEST')) {
-        // Return compressed data as the real KV would
-        return new Response(compressedRankingData, { status: 200 })
+        // Return mock compressed data
+        const { compressData } = await import('@/lib/cloudflare-kv')
+        const compressedData = await compressData(mockRankingData)
+        return new Response(compressedData, { status: 200 })
       }
       
       return new Response(null, { status: 404 })
