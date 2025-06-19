@@ -39,7 +39,7 @@ jobs:
         run: npm run lint
 
       - name: Run unit and integration tests with coverage
-        run: NODE_OPTIONS="--max-old-space-size=8192" npm run test:coverage -- --run
+        run: NODE_OPTIONS="--max-old-space-size=8192" npm run test:coverage -- --run --reporter=verbose --maxConcurrency=1
 
       # Codecov upload disabled - requires token configuration
       # - name: Upload coverage reports
