@@ -73,10 +73,29 @@ async function getRankingDataFromKV(env: Env): Promise<any> {
 
     // Decompress if needed
     let data: any
-    if (result.metadata?.compressed) {
-      data = await decompressData(new Uint8Array(result.value))
-    } else {
+    
+    // Check if data is gzipped by looking at magic bytes
+    const bytes = new Uint8Array(result.value)
+    const isGzipped = bytes[0] === 0x1f && bytes[1] === 0x8b
+    
+    if (isGzipped) {
+      // Data has gzip magic bytes - always decompress
+      data = await decompressData(bytes)
+    } else if (result.metadata?.compressed === true) {
+      // Metadata explicitly says compressed (but no gzip magic bytes - shouldn't happen)
+      data = await decompressData(bytes)
+    } else if (result.metadata?.compressed === false) {
+      // Metadata explicitly says uncompressed
       data = JSON.parse(new TextDecoder().decode(result.value))
+    } else {
+      // No metadata and no gzip magic bytes - try to parse as JSON
+      try {
+        data = JSON.parse(new TextDecoder().decode(result.value))
+      } catch (jsonError) {
+        // If JSON parsing fails, assume it's compressed
+        console.log('[HYBRID] JSON parse failed, trying decompression')
+        data = await decompressData(bytes)
+      }
     }
     
     // Generate ETag
