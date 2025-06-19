@@ -11,8 +11,30 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const ngList = await getNGListManual()
-    return NextResponse.json(ngList)
+    // Get manual NG list
+    const manualNGList = await getNGListManual()
+    
+    // Get derived NG list from Edge Function
+    const derivedResponse = await fetch(new URL('/api/edge/admin/ng-list-derived', request.url).toString(), {
+      headers: {
+        'authorization': authHeader || '',
+        'cookie': request.headers.get('cookie') || ''
+      }
+    })
+    
+    let derivedVideoIds: string[] = []
+    if (derivedResponse.ok) {
+      const derivedData = await derivedResponse.json()
+      derivedVideoIds = derivedData.videoIds || []
+    }
+    
+    // Combine manual and derived lists
+    const fullNGList = {
+      ...manualNGList,
+      derivedVideoIds
+    }
+    
+    return NextResponse.json(fullNGList)
   } catch (error) {
     return NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 })
   }

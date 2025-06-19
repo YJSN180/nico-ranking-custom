@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET, POST } from '@/app/api/admin/ng-list/route'
 import { NextRequest } from 'next/server'
 
+// Mock fetch for Edge Function calls
+global.fetch = vi.fn()
+
 // Mock the ng-list-server module
 vi.mock('@/lib/ng-list-server', () => ({
   getNGListManual: vi.fn(),
@@ -17,14 +20,27 @@ describe('NG List API', () => {
 
   describe('GET /api/admin/ng-list', () => {
     it('should return NG list with valid auth', async () => {
-      const mockNGList = {
+      const mockManualNGList = {
         videoIds: ['sm123'],
-        videoTitles: ['Test Video'],
+        videoTitles: { exact: ['Test Video'], partial: [] },
         authorIds: ['author1'],
-        authorNames: ['Test Author']
+        authorNames: { exact: ['Test Author'], partial: [] }
+      }
+      
+      const mockDerivedList = {
+        videoIds: ['sm456', 'sm789'],
+        count: 2,
+        lastUpdated: new Date().toISOString(),
+        totalVideosProcessed: 100
       }
 
-      ;(getNGListManual as any).mockResolvedValueOnce(mockNGList)
+      ;(getNGListManual as any).mockResolvedValueOnce(mockManualNGList)
+      
+      // Mock the Edge Function response
+      vi.mocked(global.fetch).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockDerivedList
+      } as Response)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list', {
         headers: {
@@ -36,7 +52,10 @@ describe('NG List API', () => {
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data).toEqual(mockNGList)
+      expect(data).toEqual({
+        ...mockManualNGList,
+        derivedVideoIds: mockDerivedList.videoIds
+      })
     })
 
     it('should return 401 without auth', async () => {
