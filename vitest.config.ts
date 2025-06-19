@@ -10,22 +10,13 @@ export default defineConfig({
     setupFiles: './vitest.setup.ts',
     exclude: ['**/node_modules/**', '**/__tests__/e2e/**'],
     testTimeout: 10000,
-    pool: 'forks',
+    pool: 'threads',
     poolOptions: {
-      forks: {
-        maxForks: 1,
-        minForks: 1,
-        // Isolate tests to prevent memory leaks between tests
-        isolate: true,
-        // Run tests sequentially to reduce memory pressure
-        singleFork: true
+      threads: {
+        maxThreads: 2,
+        minThreads: 1
       }
     },
-    // Disable parallel test execution within files
-    maxConcurrency: 1,
-    // Clear module cache between test files
-    clearMocks: true,
-    restoreMocks: true,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

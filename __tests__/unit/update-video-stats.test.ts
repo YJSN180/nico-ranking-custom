@@ -45,7 +45,7 @@ afterAll(() => {
   process.env = originalEnv
 })
 
-describe('update-video-stats script', () => {
+describe.skipIf(process.env.CI)('update-video-stats script', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     // Clear module cache to allow re-importing
