@@ -93,7 +93,8 @@ describe('update-video-stats script', () => {
 
     // Mock cloudflare-kv functions
     const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
-    vi.mocked(compressData).mockResolvedValue(new TextEncoder().encode(JSON.stringify(mockRankingData)))
+    // Create properly compressed data
+    const compressedRankingData = await compressData(mockRankingData)
     vi.mocked(decompressData).mockResolvedValue(mockRankingData)
 
     // Mock KV fetch for ranking data
@@ -101,8 +102,8 @@ describe('update-video-stats script', () => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('RANKING_LATEST')) {
-        const data = new TextEncoder().encode(JSON.stringify(mockRankingData))
-        return new Response(data, { status: 200 })
+        // Return compressed data as the real KV would
+        return new Response(compressedRankingData, { status: 200 })
       }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
@@ -177,15 +178,17 @@ describe('update-video-stats script', () => {
     }
 
     const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
-    vi.mocked(compressData).mockResolvedValue(new TextEncoder().encode(JSON.stringify(emptyRankingData)))
+    // Create properly compressed data
+    const compressedRankingData = await compressData(emptyRankingData)
+    
     vi.mocked(decompressData).mockResolvedValue(emptyRankingData)
     
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('RANKING_LATEST')) {
-        const data = new TextEncoder().encode(JSON.stringify(emptyRankingData))
-        return new Response(data, { status: 200 })
+        // Return compressed data as the real KV would
+        return new Response(compressedRankingData, { status: 200 })
       }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
@@ -223,15 +226,17 @@ describe('update-video-stats script', () => {
 
     const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
     const { fetchVideoStats } = await import('@/lib/snapshot-api')
-    vi.mocked(compressData).mockResolvedValue(new TextEncoder().encode(JSON.stringify(mockRankingData)))
+    
+    // Create properly compressed data
+    const compressedRankingData = await compressData(mockRankingData)
     vi.mocked(decompressData).mockResolvedValue(mockRankingData)
 
     vi.mocked(global.fetch).mockImplementation(async (url) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('RANKING_LATEST')) {
-        const data = new TextEncoder().encode(JSON.stringify(mockRankingData))
-        return new Response(data, { status: 200 })
+        // Return compressed data as the real KV would
+        return new Response(compressedRankingData, { status: 200 })
       }
       
       return new Response(null, { status: 404 })
