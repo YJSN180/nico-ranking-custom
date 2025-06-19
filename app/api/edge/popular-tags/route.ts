@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking } from '@/lib/cloudflare-kv'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 
 const GENRE_POPULARITY_ORDER: RankingGenre[] = [
   'all', 'game', 'entertainment', 'anime', 'music', 

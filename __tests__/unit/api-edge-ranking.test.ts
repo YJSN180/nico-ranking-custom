@@ -149,17 +149,17 @@ describe('/api/edge/ranking', () => {
     })
   })
 
-  describe('Edge runtime compatibility', () => {
-    it('should have edge runtime export', async () => {
+  describe('Node.js runtime compatibility', () => {
+    it('should have nodejs runtime export', async () => {
       const module = await import('@/app/api/edge/ranking/route')
-      expect(module.runtime).toBe('edge')
+      expect(module.runtime).toBe('nodejs')
     })
 
-    it('should be Edge runtime compatible', async () => {
-      // Edge runtime compatibility is ensured by the runtime export
+    it('should be Node.js runtime compatible', async () => {
+      // Node.js runtime compatibility is ensured by the runtime export
       // and the fact that the module loads without errors
       const module = await import('@/app/api/edge/ranking/route')
-      expect(module.runtime).toBe('edge')
+      expect(module.runtime).toBe('nodejs')
       expect(module.GET).toBeDefined()
     })
   })

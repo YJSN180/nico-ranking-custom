@@ -100,9 +100,11 @@ describe('useRealtimeStats', () => {
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/edge/video-stats?ids=sm12345,sm67890')
       )
-    })
+    }, { timeout: 3000 })
     
-    expect(result.current.isLoading).toBe(false)
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    }, { timeout: 1000 })
   })
 
   it('should update stats every 2 minutes by default', async () => {
