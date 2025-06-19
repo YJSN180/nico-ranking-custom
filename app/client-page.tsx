@@ -75,6 +75,9 @@ export default function ClientPage({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
+  // リクエストキャンセル用のAbortController
+  const abortControllerRef = useRef<AbortController | null>(null)
+  
   // 人気タグのキャッシュ保存用
   const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
     if (tags && tags.length > 0) {
@@ -190,6 +193,15 @@ export default function ClientPage({
   // タグ機能は削除されました
   const itemsWithTags = realtimeItems
   
+  // コンポーネントのアンマウント時にリクエストをキャンセル
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+  
   // スクロール位置の保存（動画ページ遷移時）
   const saveScrollPosition = useCallback(() => {
     const storageKey = `ranking-scroll-${config.genre}-${config.period}-${config.tag || 'none'}`
@@ -262,6 +274,15 @@ export default function ClientPage({
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
+    // 前のリクエストをキャンセル
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    // 新しいAbortControllerを作成
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    
     try {
       const apiParams = new URLSearchParams({
         genre: newConfig.genre,
@@ -271,8 +292,20 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const response = await fetch(`/api/edge/ranking?${apiParams.toString()}`)
-      if (!response.ok) throw new Error('Failed to fetch data')
+      const response = await fetch(`/api/edge/ranking?${apiParams.toString()}`, {
+        signal: controller.signal
+      })
+      
+      if (!response.ok) {
+        // より詳細なエラーメッセージ
+        if (response.status === 429) {
+          throw new Error('リクエストが多すぎます。少し待ってから再度お試しください。')
+        } else if (response.status >= 500) {
+          throw new Error('サーバーエラーが発生しました。しばらくしてから再度お試しください。')
+        } else {
+          throw new Error(`データの取得に失敗しました (${response.status})`)
+        }
+      }
       
       const data = await response.json()
       
@@ -363,11 +396,19 @@ export default function ClientPage({
       } else {
         setRankingData([])
       }
-    } catch (err) {
+    } catch (err: any) {
+      // AbortErrorは無視（前のリクエストがキャンセルされた場合）
+      if (err.name === 'AbortError') {
+        return
+      }
+      
       setError(err instanceof Error ? err.message : 'データの取得に失敗しました')
       setRankingData([])
     } finally {
-      setLoading(false)
+      // AbortErrorの場合はローディング状態を維持
+      if (abortControllerRef.current?.signal.aborted !== true) {
+        setLoading(false)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, router, updatePreferences, savePopularTagsToCache])
