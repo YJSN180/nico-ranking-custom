@@ -177,6 +177,6 @@ export const config = {
     '/admin/:path*',
     '/api/admin/:path*',
     // より厳密なマッチングで不要なリクエストを除外
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|.*\\.(png|jpg|jpeg|gif|ico|svg|webp|css|js)$).*)'
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json).*)'
   ]
 }

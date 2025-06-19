@@ -3,8 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingItem } from '@/types/ranking'
 
-// Mock fetch
-global.fetch = vi.fn()
+// Mock fetch with immediate resolution
+const mockFetch = vi.fn()
+global.fetch = mockFetch
 
 // Mock document.visibilityState
 let mockVisibilityState: 'visible' | 'hidden' = 'visible'
@@ -59,8 +60,8 @@ describe('useRealtimeStats', () => {
     mockVisibilityState = 'visible'
     visibilityChangeListeners.length = 0
     
-    // Mock successful fetch response
-    vi.mocked(global.fetch).mockResolvedValue({
+    // Mock successful fetch response with immediate resolution
+    mockFetch.mockResolvedValue({
       ok: true,
       json: async () => ({
         stats: {
@@ -90,53 +91,70 @@ describe('useRealtimeStats', () => {
   it('should not fetch stats when disabled', () => {
     renderHook(() => useRealtimeStats(mockItems, false))
     
-    expect(fetch).not.toHaveBeenCalled()
+    // Advance timers to trigger any potential calls
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+    
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 
   it('should fetch stats immediately when enabled and visible', async () => {
     const { result } = renderHook(() => useRealtimeStats(mockItems, true))
     
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/edge/video-stats?ids=sm12345,sm67890')
-      )
-    }, { timeout: 3000 })
+    // Wait for the initial fetch to be called
+    await act(async () => {
+      await Promise.resolve() // Allow microtasks to complete
+    })
     
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false)
-    }, { timeout: 1000 })
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/edge/video-stats?ids=sm12345,sm67890'),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal)
+      })
+    )
+    
+    expect(result.current.isLoading).toBe(false)
   })
 
   it('should update stats every 2 minutes by default', async () => {
     renderHook(() => useRealtimeStats(mockItems, true))
     
-    // Initial fetch
-    expect(fetch).toHaveBeenCalledTimes(1)
+    // Wait for initial call
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
     
     // Advance 2 minutes
     act(() => {
       vi.advanceTimersByTime(120000)
     })
     
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await Promise.resolve()
     })
+    expect(mockFetch).toHaveBeenCalledTimes(2)
     
     // Advance another 2 minutes
     act(() => {
       vi.advanceTimersByTime(120000)
     })
     
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(3)
+    await act(async () => {
+      await Promise.resolve()
     })
+    expect(mockFetch).toHaveBeenCalledTimes(3)
   })
 
   it('should stop updates when tab becomes hidden', async () => {
     renderHook(() => useRealtimeStats(mockItems, true))
     
-    // Initial fetch
-    expect(fetch).toHaveBeenCalledTimes(1)
+    // Wait for initial call
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
     
     // Simulate tab becoming hidden
     act(() => {
@@ -150,14 +168,17 @@ describe('useRealtimeStats', () => {
     })
     
     // Should not have made additional fetches
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 
   it('should resume updates when tab becomes visible again', async () => {
     renderHook(() => useRealtimeStats(mockItems, true))
     
-    // Initial fetch
-    expect(fetch).toHaveBeenCalledTimes(1)
+    // Wait for initial call
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
     
     // Simulate tab becoming hidden
     act(() => {
@@ -171,7 +192,7 @@ describe('useRealtimeStats', () => {
     })
     
     // Should still be 1 fetch
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
     
     // Simulate tab becoming visible
     act(() => {
@@ -180,16 +201,17 @@ describe('useRealtimeStats', () => {
     })
     
     // Should immediately fetch when becoming visible
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await Promise.resolve()
     })
+    expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 
   it('should merge realtime stats with original items', async () => {
     const { result } = renderHook(() => useRealtimeStats(mockItems, true))
     
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false)
+    await act(async () => {
+      await Promise.resolve()
     })
     
     // Check that stats are merged
@@ -203,26 +225,34 @@ describe('useRealtimeStats', () => {
     const customInterval = 60000 // 1 minute
     renderHook(() => useRealtimeStats(mockItems, true, customInterval))
     
-    // Initial fetch
-    expect(fetch).toHaveBeenCalledTimes(1)
+    // Wait for initial call
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mockFetch).toHaveBeenCalledTimes(1)
     
     // Advance 1 minute
     act(() => {
       vi.advanceTimersByTime(60000)
     })
     
-    await waitFor(() => {
-      expect(fetch).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await Promise.resolve()
     })
+    expect(mockFetch).toHaveBeenCalledTimes(2)
   })
 
-  it('should not start updates if initially hidden', () => {
+  it('should not start updates if initially hidden', async () => {
     mockVisibilityState = 'hidden'
     
     renderHook(() => useRealtimeStats(mockItems, true))
     
+    await act(async () => {
+      await Promise.resolve()
+    })
+    
     // Should not fetch when hidden
-    expect(fetch).not.toHaveBeenCalled()
+    expect(mockFetch).not.toHaveBeenCalled()
     
     // Simulate becoming visible
     act(() => {
@@ -230,8 +260,12 @@ describe('useRealtimeStats', () => {
       visibilityChangeListeners.forEach(listener => listener())
     })
     
+    await act(async () => {
+      await Promise.resolve()
+    })
+    
     // Should fetch after becoming visible
-    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
   })
 
   it('should clean up properly on unmount', () => {
@@ -249,12 +283,12 @@ describe('useRealtimeStats', () => {
   })
 
   it('should handle fetch errors gracefully', async () => {
-    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network error'))
+    mockFetch.mockRejectedValueOnce(new Error('Network error'))
     
     const { result } = renderHook(() => useRealtimeStats(mockItems, true))
     
-    await waitFor(() => {
-      expect(result.current.isLoading).toBe(false)
+    await act(async () => {
+      await Promise.resolve()
     })
     
     // Should return original items on error
