@@ -15,7 +15,9 @@ class RequestThrottle {
   private getKey(url: string): string {
     // Extract API endpoint from URL
     try {
-      const urlObj = new URL(url, window.location.origin)
+      // Check if window is available (client-side)
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+      const urlObj = new URL(url, origin)
       return urlObj.pathname
     } catch {
       return url
