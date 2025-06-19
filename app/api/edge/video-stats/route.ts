@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       headers: {
         // Use longer cache when most data is from KV (5 minutes)
         // This matches the KV update interval
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
+        'Cache-Control': 'public, s-maxage=180, max-age=60, stale-while-revalidate=120',
       },
     })
   } catch (error) {

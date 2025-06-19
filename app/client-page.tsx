@@ -11,6 +11,8 @@ import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
+import { rankingCache } from '@/lib/ranking-cache'
+import { requestThrottle } from '@/lib/request-throttle'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 
@@ -77,6 +79,8 @@ export default function ClientPage({
   
   // リクエストキャンセル用のAbortController
   const abortControllerRef = useRef<AbortController | null>(null)
+  // 人気タグ取得用のAbortController
+  const tagsAbortControllerRef = useRef<AbortController | null>(null)
   
   // 人気タグのキャッシュ保存用
   const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
@@ -167,17 +171,24 @@ export default function ClientPage({
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
+    // 人気タグ取得用のAbortController
+    const controller = new AbortController()
+    
     if (!config.tag && config.genre !== 'all' && currentPopularTags.length === 0) {
-      getPopularTagsClient(config.genre, config.period)
+      getPopularTagsClient(config.genre, config.period, controller.signal)
         .then(tags => {
-          if (tags && tags.length > 0) {
+          if (!controller.signal.aborted && tags && tags.length > 0) {
             setCurrentPopularTags(tags)
             savePopularTagsToCache(tags, config.genre, config.period)
           }
         })
         .catch(() => {
-          // エラー時は何もしない
+          // エラー時は何もしない（AbortErrorも含む）
         })
+    }
+    
+    return () => {
+      controller.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 初回のみ実行
@@ -198,6 +209,9 @@ export default function ClientPage({
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
+      }
+      if (tagsAbortControllerRef.current) {
+        tagsAbortControllerRef.current.abort()
       }
     }
   }, [])
@@ -278,10 +292,28 @@ export default function ClientPage({
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
+    if (tagsAbortControllerRef.current) {
+      tagsAbortControllerRef.current.abort()
+    }
     
     // 新しいAbortControllerを作成
     const controller = new AbortController()
     abortControllerRef.current = controller
+    
+    // 人気タグ取得用のAbortControllerも新規作成
+    const tagsController = new AbortController()
+    tagsAbortControllerRef.current = tagsController
+    
+    // Check client-side cache first
+    const cached = rankingCache.get(newConfig.genre, newConfig.period, newConfig.tag)
+    if (cached) {
+      setRankingData(cached.data)
+      if (cached.popularTags && !newConfig.tag && newConfig.genre !== 'all') {
+        setCurrentPopularTags(cached.popularTags)
+      }
+      setLoading(false)
+      return
+    }
     
     try {
       const apiParams = new URLSearchParams({
@@ -292,7 +324,12 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const response = await fetch(`/api/edge/ranking?${apiParams.toString()}`, {
+      const apiUrl = `/api/edge/ranking?${apiParams.toString()}`
+      
+      // Apply client-side rate limiting
+      await requestThrottle.throttle(apiUrl)
+      
+      const response = await fetch(apiUrl, {
         signal: controller.signal
       })
       
@@ -312,6 +349,15 @@ export default function ClientPage({
       if (data.items && Array.isArray(data.items)) {
         setRankingData(data.items)
         
+        // Cache the data
+        rankingCache.set(
+          newConfig.genre, 
+          newConfig.period, 
+          data.items, 
+          data.popularTags || currentPopularTags,
+          newConfig.tag
+        )
+        
         // 人気タグの処理
         if (!newConfig.tag && newConfig.genre !== 'all') {
           if (data.popularTags && data.popularTags.length > 0) {
@@ -321,8 +367,8 @@ export default function ClientPage({
           } else {
             // APIから人気タグが返ってこなかった場合、動的に取得
             try {
-              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period)
-              if (tags && tags.length > 0) {
+              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
+              if (!tagsController.signal.aborted && tags && tags.length > 0) {
                 setCurrentPopularTags(tags)
                 savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
               }
@@ -351,8 +397,8 @@ export default function ClientPage({
           // タグ指定時でも人気タグが空の場合は取得を試みる（allジャンルは上で処理済み）
           if (currentPopularTags.length === 0) {
             try {
-              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period)
-              if (tags && tags.length > 0) {
+              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
+              if (!tagsController.signal.aborted && tags && tags.length > 0) {
                 setCurrentPopularTags(tags)
                 savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
               }
@@ -378,13 +424,23 @@ export default function ClientPage({
         }
       } else if (Array.isArray(data)) {
         setRankingData(data)
+        
+        // Cache the data (array format)
+        rankingCache.set(
+          newConfig.genre, 
+          newConfig.period, 
+          data,
+          currentPopularTags,
+          newConfig.tag
+        )
+        
         // 配列形式のレスポンスの場合も人気タグを動的に取得
         if (newConfig.genre !== 'all') {
           // タグ指定の有無に関わらず、人気タグが空の場合は取得
           if (currentPopularTags.length === 0) {
             try {
-              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period)
-              if (tags && tags.length > 0) {
+              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
+              if (!tagsController.signal.aborted && tags && tags.length > 0) {
                 setCurrentPopularTags(tags)
                 savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
               }

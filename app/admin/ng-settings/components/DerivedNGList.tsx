@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useVideoInfo } from '../hooks/useVideoInfo'
 
 interface DerivedNGListProps {
@@ -15,8 +15,24 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [isDeleting, setIsDeleting] = useState(false)
   
+  // AbortController refs
+  const deleteAbortControllerRef = useRef<AbortController | null>(null)
+  const bulkDeleteAbortControllerRef = useRef<AbortController | null>(null)
+  
   const itemsPerPage = 50
   const { videoInfo, isLoading } = useVideoInfo(videoIds, currentPage, itemsPerPage)
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (deleteAbortControllerRef.current) {
+        deleteAbortControllerRef.current.abort()
+      }
+      if (bulkDeleteAbortControllerRef.current) {
+        bulkDeleteAbortControllerRef.current.abort()
+      }
+    }
+  }, [])
 
   // Filter videos based on search query
   const filteredVideoIds = useMemo(() => {
@@ -42,6 +58,15 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
       return
     }
 
+    // Cancel previous delete
+    if (deleteAbortControllerRef.current) {
+      deleteAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    deleteAbortControllerRef.current = controller
+
     setIsDeleting(true)
     
     // Optimistic update
@@ -56,7 +81,8 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
     try {
       const response = await fetch(`/api/edge/admin/ng-list-derived/${videoId}`, {
         method: 'DELETE',
-        credentials: 'same-origin'
+        credentials: 'same-origin',
+        signal: controller.signal
       })
 
       if (!response.ok) {
@@ -64,12 +90,18 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
       }
 
       onUpdate?.(newList)
-    } catch (error) {
-      // Rollback on error
-      setVideoIds(videoIds)
-      alert('削除に失敗しました。もう一度お試しください。')
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        // Rollback on error
+        setVideoIds(videoIds)
+        alert('削除に失敗しました。もう一度お試しください。')
+      }
     } finally {
-      setIsDeleting(false)
+      // Only update state if not aborted
+      if (controller.signal.aborted !== true) {
+        setIsDeleting(false)
+      }
     }
   }
 
@@ -79,6 +111,15 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
     if (!confirm(`${idsToDelete.length}件の動画をNGリストから削除しますか？`)) {
       return
     }
+
+    // Cancel previous bulk delete
+    if (bulkDeleteAbortControllerRef.current) {
+      bulkDeleteAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    bulkDeleteAbortControllerRef.current = controller
 
     setIsDeleting(true)
     
@@ -94,18 +135,25 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
         idsToDelete.map(id =>
           fetch(`/api/edge/admin/ng-list-derived/${id}`, {
             method: 'DELETE',
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            signal: controller.signal
           })
         )
       )
 
       onUpdate?.(newList)
-    } catch (error) {
-      // Rollback on error
-      setVideoIds(videoIds)
-      alert('削除に失敗しました。もう一度お試しください。')
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        // Rollback on error
+        setVideoIds(videoIds)
+        alert('削除に失敗しました。もう一度お試しください。')
+      }
     } finally {
-      setIsDeleting(false)
+      // Only update state if not aborted
+      if (controller.signal.aborted !== true) {
+        setIsDeleting(false)
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface UpdateStatus {
   lastUpdate?: {
@@ -17,19 +17,47 @@ export default function AdminPage() {
   const [updating, setUpdating] = useState(false)
   const [adminKey, setAdminKey] = useState('')
   const [updateResult, setUpdateResult] = useState<any>(null)
+  
+  // AbortController refs
+  const fetchAbortControllerRef = useRef<AbortController | null>(null)
+  const updateAbortControllerRef = useRef<AbortController | null>(null)
 
   const fetchStatus = async () => {
+    // Cancel previous fetch
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    fetchAbortControllerRef.current = controller
+    
     try {
-      const response = await fetch('/api/admin/update')
+      const response = await fetch('/api/admin/update', {
+        signal: controller.signal
+      })
       const data = await response.json()
       setStatus(data)
-    } catch (error) {
-      // Failed to fetch status
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        // Failed to fetch status
+      }
     }
   }
 
   useEffect(() => {
     fetchStatus()
+    
+    // Cleanup
+    return () => {
+      if (fetchAbortControllerRef.current) {
+        fetchAbortControllerRef.current.abort()
+      }
+      if (updateAbortControllerRef.current) {
+        updateAbortControllerRef.current.abort()
+      }
+    }
   }, [])
 
   const handleUpdate = async () => {
@@ -38,12 +66,22 @@ export default function AdminPage() {
       return
     }
 
+    // Cancel previous update
+    if (updateAbortControllerRef.current) {
+      updateAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    updateAbortControllerRef.current = controller
+
     setUpdating(true)
     setUpdateResult(null)
 
     try {
       const response = await fetch(`/api/admin/update?key=${adminKey}`, {
         method: 'POST',
+        signal: controller.signal
       })
       const data = await response.json()
       
@@ -53,10 +91,16 @@ export default function AdminPage() {
       } else {
         alert(`エラー: ${data.error}`)
       }
-    } catch (error) {
-      alert('更新中にエラーが発生しました')
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        alert('更新中にエラーが発生しました')
+      }
     } finally {
-      setUpdating(false)
+      // Only update state if not aborted
+      if (controller.signal.aborted !== true) {
+        setUpdating(false)
+      }
     }
   }
 

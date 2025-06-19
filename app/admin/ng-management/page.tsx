@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTheme } from '@/hooks/use-theme'
 import styles from './ng-management.module.css'
 
@@ -35,29 +35,78 @@ export default function NGManagementPage() {
   const [loading, setLoading] = useState(false)
   const [newItem, setNewItem] = useState('')
   const [itemType, setItemType] = useState<keyof NGList>('videoIds')
+  
+  // AbortController refs
+  const authAbortControllerRef = useRef<AbortController | null>(null)
+  const fetchAbortControllerRef = useRef<AbortController | null>(null)
+  const saveAbortControllerRef = useRef<AbortController | null>(null)
+  const deleteAbortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    // Cancel previous auth check
+    if (authAbortControllerRef.current) {
+      authAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    authAbortControllerRef.current = controller
+    
     // Check authentication
     const checkAuth = async () => {
       try {
-        const response = await fetch('/api/admin/ng-list')
+        const response = await fetch('/api/admin/ng-list', {
+          signal: controller.signal
+        })
         if (response.ok) {
           setIsAuthenticated(true)
           fetchNGLists()
         }
-      } catch (error) {
-        // Not authenticated
+      } catch (error: any) {
+        // Ignore AbortError
+        if (error.name !== 'AbortError') {
+          // Not authenticated
+        }
       }
     }
     checkAuth()
+    
+    // Cleanup
+    return () => {
+      if (authAbortControllerRef.current) {
+        authAbortControllerRef.current.abort()
+      }
+      if (fetchAbortControllerRef.current) {
+        fetchAbortControllerRef.current.abort()
+      }
+      if (saveAbortControllerRef.current) {
+        saveAbortControllerRef.current.abort()
+      }
+      if (deleteAbortControllerRef.current) {
+        deleteAbortControllerRef.current.abort()
+      }
+    }
   }, [])
 
   const fetchNGLists = async () => {
+    // Cancel previous fetch
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    fetchAbortControllerRef.current = controller
+    
     setLoading(true)
     try {
       const [manualRes, derivedRes] = await Promise.all([
-        fetch('/api/admin/ng-list'),
-        fetch('/api/admin/ng-list/derived')
+        fetch('/api/admin/ng-list', {
+          signal: controller.signal
+        }),
+        fetch('/api/admin/ng-list/derived', {
+          signal: controller.signal
+        })
       ])
       
       if (manualRes.ok) {
@@ -73,10 +122,16 @@ export default function NGManagementPage() {
           lastUpdated: data.lastUpdated
         })
       }
-    } catch (error) {
-      console.error('Failed to fetch NG lists:', error)
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        console.error('Failed to fetch NG lists:', error)
+      }
     } finally {
-      setLoading(false)
+      // Only update loading state if not aborted
+      if (controller.signal.aborted !== true) {
+        setLoading(false)
+      }
     }
   }
 
@@ -88,10 +143,20 @@ export default function NGManagementPage() {
       [itemType]: [...manualList[itemType], newItem.trim()]
     }
 
+    // Cancel previous save
+    if (saveAbortControllerRef.current) {
+      saveAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    saveAbortControllerRef.current = controller
+
     try {
       const response = await fetch('/api/admin/ng-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify(updatedList)
       })
 
@@ -99,8 +164,11 @@ export default function NGManagementPage() {
         setManualList(updatedList)
         setNewItem('')
       }
-    } catch (error) {
-      alert('追加に失敗しました')
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        alert('追加に失敗しました')
+      }
     }
   }
 
@@ -116,10 +184,20 @@ export default function NGManagementPage() {
       updatedList[k] = updatedList[k].filter(item => !selectedItems.has(`${k}-${item}`))
     })
 
+    // Cancel previous save
+    if (saveAbortControllerRef.current) {
+      saveAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    saveAbortControllerRef.current = controller
+
     try {
       const response = await fetch('/api/admin/ng-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify(updatedList)
       })
 
@@ -127,24 +205,40 @@ export default function NGManagementPage() {
         setManualList(updatedList)
         setSelectedItems(new Set())
       }
-    } catch (error) {
-      alert('削除に失敗しました')
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        alert('削除に失敗しました')
+      }
     }
   }
 
   const handleClearDerived = async () => {
     if (!confirm('派生NGリストをクリアしますか？')) return
 
+    // Cancel previous delete
+    if (deleteAbortControllerRef.current) {
+      deleteAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    deleteAbortControllerRef.current = controller
+
     try {
       const response = await fetch('/api/admin/ng-list/derived', {
-        method: 'DELETE'
+        method: 'DELETE',
+        signal: controller.signal
       })
 
       if (response.ok) {
         setDerivedList({ videoIds: [], count: 0 })
       }
-    } catch (error) {
-      alert('クリアに失敗しました')
+    } catch (error: any) {
+      // Ignore AbortError
+      if (error.name !== 'AbortError') {
+        alert('クリアに失敗しました')
+      }
     }
   }
 

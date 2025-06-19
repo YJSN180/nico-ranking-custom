@@ -14,8 +14,18 @@ export function useVideoInfo(
   const [videoInfo, setVideoInfo] = useState<Record<string, VideoInfo>>({})
   const [isLoading, setIsLoading] = useState(false)
   const cacheRef = useRef(new Map<string, VideoInfo>())
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+    
     const fetchVideoInfo = async () => {
       // Get video IDs for current page
       const startIndex = (page - 1) * itemsPerPage
@@ -44,6 +54,7 @@ export function useVideoInfo(
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
+          signal: controller.signal,
           body: JSON.stringify({ videoIds: idsToFetch })
         })
 
@@ -78,14 +89,27 @@ export function useVideoInfo(
           })
           setVideoInfo(pageInfo)
         }
-      } catch (error) {
-        console.error('Failed to fetch video info:', error)
+      } catch (error: any) {
+        // Ignore AbortError
+        if (error.name !== 'AbortError') {
+          console.error('Failed to fetch video info:', error)
+        }
       } finally {
-        setIsLoading(false)
+        // Only update loading state if not aborted
+        if (controller.signal.aborted !== true) {
+          setIsLoading(false)
+        }
       }
     }
 
     fetchVideoInfo()
+    
+    // Cleanup
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
   }, [videoIds, page, itemsPerPage])
 
   return { videoInfo, isLoading }

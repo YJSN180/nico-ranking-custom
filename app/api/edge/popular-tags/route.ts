@@ -29,14 +29,14 @@ export async function GET(request: NextRequest) {
     
     if (data && data.popularTags && data.popularTags.length > 0) {
       const response = NextResponse.json({ tags: data.popularTags })
-      response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
+      response.headers.set('Cache-Control', 'public, s-maxage=1500, max-age=300, stale-while-revalidate=600')
       response.headers.set('X-Cache-Status', 'CF-HIT')
       return response
     }
     
     // Cache miss - return empty array
     const response = NextResponse.json({ tags: [] })
-    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    response.headers.set('Cache-Control', 'public, s-maxage=1500, max-age=300, stale-while-revalidate=600')
     response.headers.set('X-Cache-Status', 'CF-MISS')
     return response
     

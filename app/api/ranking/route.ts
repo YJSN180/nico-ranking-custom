@@ -185,7 +185,7 @@ export async function GET(request: NextRequest) {
       hasMore: false,
       totalCached: filteredItems.length
     })
-    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    response.headers.set('Cache-Control', 'public, s-maxage=1500, max-age=300, stale-while-revalidate=600')
     response.headers.set('X-Cache-Status', 'DYNAMIC')
     response.headers.set('X-Max-Items', '500')
     response.headers.set('X-API-Version', '2') // バージョン確認用

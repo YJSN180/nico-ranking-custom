@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { NGList } from '@/types/ng-list'
 import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
 import { DerivedNGList } from './components/DerivedNGList'
@@ -9,6 +9,10 @@ export default function NGSettingsPage() {
   const [ngList, setNgList] = useState<NGList>(createEmptyNGList())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  
+  // AbortController用のref
+  const fetchAbortControllerRef = useRef<AbortController | null>(null)
+  const saveAbortControllerRef = useRef<AbortController | null>(null)
   
   // 入力フィールド用の状態
   const [newVideoId, setNewVideoId] = useState('')
@@ -21,12 +25,32 @@ export default function NGSettingsPage() {
   // NGリストを取得
   useEffect(() => {
     fetchNGList()
+    
+    // クリーンアップ
+    return () => {
+      if (fetchAbortControllerRef.current) {
+        fetchAbortControllerRef.current.abort()
+      }
+      if (saveAbortControllerRef.current) {
+        saveAbortControllerRef.current.abort()
+      }
+    }
   }, [])
 
   const fetchNGList = async () => {
+    // 前のリクエストをキャンセル
+    if (fetchAbortControllerRef.current) {
+      fetchAbortControllerRef.current.abort()
+    }
+    
+    // 新しいAbortControllerを作成
+    const controller = new AbortController()
+    fetchAbortControllerRef.current = controller
+    
     try {
       const response = await fetch('/api/admin/ng-list', {
-        credentials: 'same-origin'
+        credentials: 'same-origin',
+        signal: controller.signal
       })
       if (!response.ok) {
         console.error('Failed to fetch NG list:', response.status, response.statusText)
@@ -39,22 +63,39 @@ export default function NGSettingsPage() {
         const migrated = migrateLegacyNGList(data)
         setNgList(migrated)
       }
-    } catch (error) {
+    } catch (error: any) {
+      // AbortErrorは無視
+      if (error.name === 'AbortError') {
+        return
+      }
       console.error('Error fetching NG list:', error)
       alert('NGリストの取得に失敗しました')
     } finally {
-      setLoading(false)
+      // AbortErrorの場合はローディング状態を維持
+      if (controller.signal.aborted !== true) {
+        setLoading(false)
+      }
     }
   }
 
   // NGリストを保存
   const saveNGList = async () => {
+    // 前のリクエストをキャンセル
+    if (saveAbortControllerRef.current) {
+      saveAbortControllerRef.current.abort()
+    }
+    
+    // 新しいAbortControllerを作成
+    const controller = new AbortController()
+    saveAbortControllerRef.current = controller
+    
     setSaving(true)
     try {
       const response = await fetch('/api/admin/ng-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
+        signal: controller.signal,
         body: JSON.stringify({
           videoIds: ngList.videoIds,
           videoTitles: ngList.videoTitles,
@@ -74,11 +115,18 @@ export default function NGSettingsPage() {
         // 保存後に再取得して最新の状態を反映
         await fetchNGList()
       }
-    } catch (error) {
+    } catch (error: any) {
+      // AbortErrorは無視
+      if (error.name === 'AbortError') {
+        return
+      }
       console.error('Error saving NG list:', error)
       alert('保存に失敗しました')
     } finally {
-      setSaving(false)
+      // AbortErrorの場合は保存中状態を維持
+      if (controller.signal.aborted !== true) {
+        setSaving(false)
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 export default function SetupMFAPage() {
@@ -11,12 +11,26 @@ export default function SetupMFAPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   
+  // AbortController refs
+  const generateAbortControllerRef = useRef<AbortController | null>(null)
+  const verifyAbortControllerRef = useRef<AbortController | null>(null)
+  
   // Generate QR code
   const generateQRCode = async () => {
+    // Cancel previous request
+    if (generateAbortControllerRef.current) {
+      generateAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    generateAbortControllerRef.current = controller
+    
     setIsLoading(true)
     try {
       const response = await fetch('/api/admin/mfa/setup', {
         method: 'POST',
+        signal: controller.signal
       })
       
       if (!response.ok) {
@@ -30,16 +44,32 @@ export default function SetupMFAPage() {
       const QRCode = await import('qrcode')
       const qrCodeURL = await QRCode.toDataURL(data.qrCodeURI)
       setQrCodeDataURL(qrCodeURL)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'エラーが発生しました')
+    } catch (err: any) {
+      // Ignore AbortError
+      if (err.name !== 'AbortError') {
+        setError(err instanceof Error ? err.message : 'エラーが発生しました')
+      }
     } finally {
-      setIsLoading(false)
+      // Only update loading state if not aborted
+      if (controller.signal.aborted !== true) {
+        setIsLoading(false)
+      }
     }
   }
   
   // Verify and enable MFA
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Cancel previous request
+    if (verifyAbortControllerRef.current) {
+      verifyAbortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    verifyAbortControllerRef.current = controller
+    
     setIsLoading(true)
     setError('')
     
@@ -47,6 +77,7 @@ export default function SetupMFAPage() {
       const response = await fetch('/api/admin/mfa/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({ secret, code: verificationCode }),
       })
       
@@ -56,10 +87,16 @@ export default function SetupMFAPage() {
       }
       
       router.push('/admin')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '認証コードが正しくありません')
+    } catch (err: any) {
+      // Ignore AbortError
+      if (err.name !== 'AbortError') {
+        setError(err instanceof Error ? err.message : '認証コードが正しくありません')
+      }
     } finally {
-      setIsLoading(false)
+      // Only update loading state if not aborted
+      if (controller.signal.aborted !== true) {
+        setIsLoading(false)
+      }
     }
   }
   

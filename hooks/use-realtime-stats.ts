@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { requestThrottle } from '@/lib/request-throttle'
 import type { RankingItem } from '@/types/ranking'
 
 interface RealtimeStatsResponse {
@@ -56,7 +57,12 @@ export function useRealtimeStats(
           }
           
           const batch = videoIds.slice(i, i + batchSize)
-          const response = await fetch(`/api/edge/video-stats?ids=${batch.join(',')}`, {
+          const apiUrl = `/api/edge/video-stats?ids=${batch.join(',')}`
+          
+          // Apply client-side rate limiting
+          await requestThrottle.throttle(apiUrl)
+          
+          const response = await fetch(apiUrl, {
             signal: controller.signal
           })
           
