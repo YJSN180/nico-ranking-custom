@@ -31,7 +31,6 @@ export default defineConfig({
         'app/api/admin/**',
         'app/api/debug/**',
         'app/api/test-scraping/**',
-        'app/api/edge/popular-tags/**',
         'app/layout.tsx',
         'app/privacy/**',
         'app/admin/setup-mfa/**',

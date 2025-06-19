@@ -24,7 +24,11 @@
     "test:domain-config": "./scripts/test-domain-config.sh",
     "info:architecture": "echo 'Deployment Architecture: Vercel (Main App) + Cloudflare Workers (API) + KV (Storage)'",
     "kv:kill-switch": "tsx scripts/kv-kill-switch.ts",
-    "kv:monitor": "tsx scripts/kv-kill-switch.ts status"
+    "kv:monitor": "tsx scripts/kv-kill-switch.ts status",
+    "deploy:kv-optimization": "tsx scripts/deploy-kv-optimization.ts",
+    "deploy:worker:optimized": "wrangler deploy -c wrangler-optimized.toml",
+    "deploy:worker:hybrid": "wrangler deploy -c wrangler-hybrid.toml",
+    "test:kv-optimization": "vitest run __tests__/integration/workers-kv-optimization.test.ts"
   },
   "dependencies": {
     "@types/jsdom": "^21.1.7",

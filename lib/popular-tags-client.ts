@@ -20,7 +20,7 @@ export async function getPopularTagsClient(
       period
     })
     
-    const apiUrl = `/api/edge/popular-tags?${params.toString()}`
+    const apiUrl = `/api/popular-tags?${params.toString()}`
     
     // Apply client-side rate limiting
     await requestThrottle.throttle(apiUrl)
