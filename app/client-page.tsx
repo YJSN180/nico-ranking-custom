@@ -95,10 +95,6 @@ export default function ClientPage({
     }
   }, [])
   
-  
-  // カスタムNGリスト
-  const { filterItems, ngList } = useUserNGList()
-  
   // モバイル検出
   const isMobile = useMobileDetect()
   
