@@ -162,12 +162,18 @@ async function main() {
     
     const groupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
     // Look for NG derived files in both main tmp and subdirectories
-    const ngDerivedFiles = [];
+    const ngDerivedFiles: string[] = [];
     const allNgFiles = await new Promise<string[]>((resolve) => {
       const { exec } = require('child_process');
-      exec('find ./tmp -name "ng-derived-group-*.json" 2>/dev/null || true', (error: any, stdout: string) => {
+      exec('find ./tmp -name "ng-derived-group-*.json" -type f 2>/dev/null || true', (error: any, stdout: string) => {
+        if (error) {
+          console.log('No ng-derived files found via find command');
+          resolve([]);
+          return;
+        }
         const found = stdout.trim().split('\n').filter(f => f && f.includes('ng-derived-group-'));
-        resolve(found.map(f => f.replace('./tmp/', '')));
+        console.log(`Found ng-derived files via find: ${found.join(', ')}`);
+        resolve(found); // Return full paths for direct use
       });
     });
     ngDerivedFiles.push(...allNgFiles);
@@ -257,7 +263,8 @@ async function main() {
       
       for (const file of ngDerivedFiles) {
         console.log(`Processing ${file}...`);
-        const content = await fs.readFile(path.join(tmpDir, file), 'utf-8');
+        // Use the full path directly since find returns complete paths
+        const content = await fs.readFile(file, 'utf-8');
         
         try {
           const derivedData = JSON.parse(content);
@@ -296,7 +303,7 @@ async function main() {
       await fs.unlink(path.join(tmpDir, file));
     }
     for (const file of ngDerivedFiles) {
-      await fs.unlink(path.join(tmpDir, file));
+      await fs.unlink(file); // Use full path directly
     }
     
     console.log('\nAggregation and KV write completed successfully!');

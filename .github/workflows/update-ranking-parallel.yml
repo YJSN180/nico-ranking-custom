@@ -140,6 +140,8 @@ jobs:
       run: |
         echo "Downloaded artifacts:"
         ls -la ./tmp/
+        echo "Complete directory structure:"
+        find ./tmp -type f -name "*.json" | sort
         echo "Ranking files:"
         find ./tmp -name "ranking-group-*.json" | sort
         echo "NG derived files:"
@@ -165,6 +167,8 @@ jobs:
         echo ""
         echo "Total ranking group files found: $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
         echo "Total NG derived files found: $(ls ./tmp/ng-derived-group-*.json 2>/dev/null | wc -l)"
+        echo "NG derived files after moving:"
+        ls -la ./tmp/ng-derived-group-*.json 2>/dev/null || echo "No NG derived files found after moving"
     
     - name: Aggregate and write to KV
       env:

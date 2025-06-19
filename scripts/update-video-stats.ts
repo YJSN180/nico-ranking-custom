@@ -40,23 +40,15 @@ async function updateVideoStats() {
       return
     }
     
-    // 4. Fetch stats in batches
-    const allStats: Record<string, any> = {}
-    const batchSize = 10 // Snapshot API limitation
+    // 4. Fetch stats using optimized batch processing
+    console.log('Fetching video statistics using jsonFilter batch method...')
+    const startTime = Date.now()
     
-    for (let i = 0; i < videoIds.length; i += batchSize) {
-      const batch = videoIds.slice(i, i + batchSize)
-      const stats = await fetchVideoStats(batch)
-      Object.assign(allStats, stats)
-      
-      // Progress logging
-      console.log(`Progress: ${Math.min(i + batchSize, videoIds.length)}/${videoIds.length}`)
-      
-      // Rate limiting
-      if (i + batchSize < videoIds.length) {
-        await new Promise(resolve => setTimeout(resolve, 50))
-      }
-    }
+    // fetchVideoStats now handles batching internally with jsonFilter
+    const allStats = await fetchVideoStats(videoIds)
+    
+    const fetchTime = Date.now() - startTime
+    console.log(`Fetched stats for ${Object.keys(allStats).length} videos in ${(fetchTime / 1000).toFixed(1)}s`)
     
     // 5. Create data structure
     const statsData = {

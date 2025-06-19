@@ -48,9 +48,9 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json(response, {
       headers: {
-        // Use longer cache when most data is from KV (3 minutes)
+        // Use longer cache when most data is from KV (5 minutes)
         // This matches the KV update interval
-        'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=60',
+        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
       },
     })
   } catch (error) {

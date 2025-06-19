@@ -25,50 +25,54 @@ async function fetchWithGooglebot(url: string): Promise<Response> {
 export async function fetchVideoStats(videoIds: string[]): Promise<Record<string, VideoStats>> {
   const stats: Record<string, VideoStats> = {}
   
-  // バッチ処理（一度に最大10個）
-  const batchSize = 10
+  // 空の配列の場合は即座に返す
+  if (videoIds.length === 0) {
+    return stats
+  }
+  
+  // バッチ処理（一度に最大100個 - Snapshot APIの推奨値）
+  const batchSize = 100
   for (let i = 0; i < videoIds.length; i += batchSize) {
     const batch = videoIds.slice(i, i + batchSize)
     
     try {
-      // 動画IDで検索（各IDを個別に検索）
-      const allStats: Record<string, VideoStats> = {}
+      // jsonFilterを使用してバッチでクエリ
+      const jsonFilter = JSON.stringify({
+        type: 'or',
+        filters: batch.map(id => ({
+          type: 'equal',
+          field: 'contentId',
+          value: id
+        }))
+      })
       
-      for (const videoId of batch) {
-        try {
-          const params = new URLSearchParams({
-            q: videoId,
-            targets: 'title,description', // 複数のフィールドで検索
-            fields: 'contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags',
-            _limit: '10'
-          })
-          
-          const response = await fetchWithGooglebot(`${SNAPSHOT_API_URL}?${params}`)
-          
-          if (response.ok) {
-            const data = await response.json()
-            
-            if (data.data && Array.isArray(data.data)) {
-              // 正確なIDの動画を見つける
-              const video = data.data.find((v: any) => v.contentId === videoId)
-              if (video) {
-                allStats[video.contentId] = {
-                  viewCounter: video.viewCounter,
-                  commentCounter: video.commentCounter,
-                  mylistCounter: video.mylistCounter,
-                  likeCounter: video.likeCounter,
-                  tags: video.tags ? video.tags.split(' ').filter((tag: string) => tag.length > 0) : undefined
-                }
-              }
+      const params = new URLSearchParams({
+        q: '',  // jsonFilter使用時はqは空
+        targets: 'title',
+        fields: 'contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags',
+        _sort: '-viewCounter',
+        _limit: String(batchSize + 10),  // バッファを持たせる
+        jsonFilter: jsonFilter
+      })
+      
+      const response = await fetchWithGooglebot(`${SNAPSHOT_API_URL}?${params}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        
+        if (data.data && Array.isArray(data.data)) {
+          // 結果をマップに変換
+          data.data.forEach((video: any) => {
+            stats[video.contentId] = {
+              viewCounter: video.viewCounter,
+              commentCounter: video.commentCounter,
+              mylistCounter: video.mylistCounter,
+              likeCounter: video.likeCounter,
+              tags: video.tags ? video.tags.split(' ').filter((tag: string) => tag.length > 0) : undefined
             }
-          }
-        } catch (error) {
-          // 個別のエラーは無視
+          })
         }
       }
-      
-      // バッチの結果をマージ
-      Object.assign(stats, allStats)
     } catch (error) {
       // エラーは静かに処理（部分的な失敗を許容）
       // Failed to fetch stats for batch - error handled silently

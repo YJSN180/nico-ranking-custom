@@ -45,15 +45,16 @@ async function checkNgListDerived() {
     if (Array.isArray(data) && typeof data[0] === 'string') {
       console.log('\n=== NG List Derived Summary ===')
       console.log(`Total video IDs: ${data.length}`)
-      console.log('\nFirst 10 video IDs:')
-      data.slice(0, 10).forEach((videoId, index) => {
-        console.log(`${index + 1}. ${videoId}`)
-      })
-      console.log(`\nUnique video IDs: ${new Set(data).size}`)
+      console.log(`Unique video IDs: ${new Set(data).size}`)
       
       if (new Set(data).size < data.length) {
         console.log(`Note: Found ${data.length - new Set(data).size} duplicate entries`)
       }
+      
+      console.log('\n=== All 398 Derived Video IDs ===')
+      data.forEach((videoId, index) => {
+        console.log(`${(index + 1).toString().padStart(3, ' ')}. ${videoId}`)
+      })
       return
     }
     

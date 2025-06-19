@@ -2,9 +2,9 @@ name: Update Video Stats
 
 on:
   schedule:
-    # Run every 3 minutes (offset from ranking updates which run at 0,30)
-    # 2,5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59
-    - cron: '2,5,8,11,14,17,20,23,26,29,32,35,38,41,44,47,50,53,56,59 * * * *'
+    # Run every 5 minutes (offset from ranking updates which run at 0,30)
+    # This reduces KV write operations from 20/hour to 12/hour
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 # Prevent concurrent runs
