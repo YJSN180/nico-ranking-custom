@@ -51,7 +51,7 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
         targets: 'title',
         fields: 'contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags',
         _sort: '-viewCounter',
-        _limit: String(batchSize + 10),  // バッファを持たせる
+        _limit: String(Math.min(batchSize, 100)),  // APIの最大値は100
         jsonFilter: jsonFilter
       })
       

@@ -197,6 +197,6 @@ describe('Snapshot API Batch Fetching', () => {
     expect(urlObj.searchParams.get('targets')).toBe('title')
     expect(urlObj.searchParams.get('fields')).toBe('contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags')
     expect(urlObj.searchParams.get('_sort')).toBe('-viewCounter')
-    expect(urlObj.searchParams.get('_limit')).toBe('110') // batchSize(100) + 10
+    expect(urlObj.searchParams.get('_limit')).toBe('100') // API maximum
   })
 })
