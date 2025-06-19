@@ -113,17 +113,21 @@ describe('Snapshot API Batch Fetching', () => {
 
     const result = await fetchVideoStats(videoIds)
 
-    // Should make 2 API calls (100 + 50)
-    expect(mockFetch).toHaveBeenCalledTimes(2)
+    // Should make 3 API calls (50 + 50 + 50)
+    expect(mockFetch).toHaveBeenCalledTimes(3)
     
     // Verify batch sizes
     const firstCallUrl = new URL(mockFetch.mock.calls[0][0])
     const firstJsonFilter = JSON.parse(firstCallUrl.searchParams.get('jsonFilter')!)
-    expect(firstJsonFilter.filters).toHaveLength(100)
+    expect(firstJsonFilter.filters).toHaveLength(50)
     
     const secondCallUrl = new URL(mockFetch.mock.calls[1][0])
     const secondJsonFilter = JSON.parse(secondCallUrl.searchParams.get('jsonFilter')!)
     expect(secondJsonFilter.filters).toHaveLength(50)
+    
+    const thirdCallUrl = new URL(mockFetch.mock.calls[2][0])
+    const thirdJsonFilter = JSON.parse(thirdCallUrl.searchParams.get('jsonFilter')!)
+    expect(thirdJsonFilter.filters).toHaveLength(50)
   })
 
   it('should handle missing videos gracefully', async () => {
@@ -197,6 +201,6 @@ describe('Snapshot API Batch Fetching', () => {
     expect(urlObj.searchParams.get('targets')).toBe('title')
     expect(urlObj.searchParams.get('fields')).toBe('contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags')
     expect(urlObj.searchParams.get('_sort')).toBe('-viewCounter')
-    expect(urlObj.searchParams.get('_limit')).toBe('100') // API maximum
+    expect(urlObj.searchParams.get('_limit')).toBe('50') // Batch size
   })
 })

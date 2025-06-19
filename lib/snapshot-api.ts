@@ -76,16 +76,6 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
               tags: video.tags ? video.tags.split(' ').filter((tag: string) => tag.length > 0) : undefined
             }
           })
-          
-          // Debug logging for production
-          if (process.env.DEBUG_SNAPSHOT_API === 'true') {
-            console.log(`Batch ${batchNumber}/${totalBatches}: Retrieved ${data.data.length} videos`)
-          }
-        }
-      } else {
-        // Log non-OK responses in production
-        if (process.env.DEBUG_SNAPSHOT_API === 'true') {
-          console.log(`Batch ${batchNumber}/${totalBatches}: API returned ${response.status}`)
         }
       }
     } catch (error) {

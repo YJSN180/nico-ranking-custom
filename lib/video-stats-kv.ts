@@ -31,10 +31,7 @@ export async function getVideoStatsFromKV(
     
     // Decompress the data
     const arrayBuffer = await response.arrayBuffer()
-    const decompressed = await decompressData(new Uint8Array(arrayBuffer))
-    
-    // Parse JSON
-    const data = JSON.parse(decompressed)
+    const data = await decompressData(new Uint8Array(arrayBuffer))
     
     // Extract only requested video IDs
     const result: Record<string, VideoStats> = {}

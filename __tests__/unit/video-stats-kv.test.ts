@@ -22,11 +22,16 @@ afterAll(() => {
   process.env = originalEnv
 })
 
-// Mock cloudflare-kv decompression
+// Mock cloudflare-kv compression/decompression
 vi.mock('@/lib/cloudflare-kv', () => ({
+  compressData: vi.fn((data: string) => {
+    // Simulate compression by converting to Uint8Array
+    return Promise.resolve(new TextEncoder().encode(data))
+  }),
   decompressData: vi.fn((data: Uint8Array) => {
-    // Simulate decompression by converting directly to string
-    return Promise.resolve(new TextDecoder().decode(data))
+    // Simulate decompression by parsing JSON
+    const jsonString = new TextDecoder().decode(data)
+    return Promise.resolve(JSON.parse(jsonString))
   })
 }))
 
@@ -86,9 +91,11 @@ describe('getVideoStatsFromKV', () => {
       }
     }
 
-    const encodedData = new TextEncoder().encode(JSON.stringify(kvData))
+    // Mock compressed data
+    const { compressData } = await import('@/lib/cloudflare-kv')
+    const compressedData = await compressData(JSON.stringify(kvData))
     vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(encodedData, { status: 200 })
+      new Response(compressedData, { status: 200 })
     )
 
     // Act
@@ -129,9 +136,11 @@ describe('getVideoStatsFromKV', () => {
       }
     }
 
-    const encodedData = new TextEncoder().encode(JSON.stringify(kvData))
+    // Mock compressed data
+    const { compressData } = await import('@/lib/cloudflare-kv')
+    const compressedData = await compressData(JSON.stringify(kvData))
     vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(encodedData, { status: 200 })
+      new Response(compressedData, { status: 200 })
     )
 
     // Act
