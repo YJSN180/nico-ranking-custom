@@ -20,50 +20,27 @@ declare global {
  */
 export async function decompressData(compressed: Uint8Array): Promise<any> {
   try {
-    // Use DecompressionStream API in Workers
-    const stream = new DecompressionStream('gzip')
-    const writer = stream.writable.getWriter()
-    const reader = stream.readable.getReader()
-    
-    // Write compressed data
-    await writer.write(compressed)
-    await writer.close()
-    
-    // Read decompressed data
-    const chunks: Uint8Array[] = []
-    let done = false
-    
-    while (!done) {
-      const { value, done: readerDone } = await reader.read()
-      done = readerDone
-      if (value) {
-        chunks.push(value)
-      }
+    // Check if the data has gzip magic numbers
+    if (compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
+      const jsonString = new TextDecoder().decode(compressed)
+      return JSON.parse(jsonString)
     }
     
-    // Combine chunks
-    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
-    const result = new Uint8Array(totalLength)
-    let offset = 0
+    // Use DecompressionStream API in Workers - simplified approach
+    const stream = new Response(compressed).body!.pipeThrough(new DecompressionStream('gzip'))
+    const decompressedArrayBuffer = await new Response(stream).arrayBuffer()
+    const jsonString = new TextDecoder().decode(decompressedArrayBuffer)
     
-    for (const chunk of chunks) {
-      result.set(chunk, offset)
-      offset += chunk.length
-    }
-    
-    // Convert to string and parse JSON
-    const jsonString = new TextDecoder().decode(result)
     return JSON.parse(jsonString)
     
   } catch (error) {
-    console.error('Workers decompression failed:', error)
+    console.error('[DecompressionStream] Decompression failed:', error)
     
     // Fallback: try to parse as uncompressed JSON
     try {
       const jsonString = new TextDecoder().decode(compressed)
       return JSON.parse(jsonString)
     } catch (fallbackError) {
-      console.error('Fallback JSON parsing failed:', fallbackError)
       throw new Error(`Decompression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
@@ -78,37 +55,11 @@ export async function compressData(data: any): Promise<Uint8Array> {
     const encoder = new TextEncoder()
     const input = encoder.encode(jsonString)
     
-    const stream = new CompressionStream('gzip')
-    const writer = stream.writable.getWriter()
-    const reader = stream.readable.getReader()
+    // Use CompressionStream API in Workers - simplified approach
+    const stream = new Response(input).body!.pipeThrough(new CompressionStream('gzip'))
+    const compressedArrayBuffer = await new Response(stream).arrayBuffer()
     
-    // Write data to compression stream
-    await writer.write(input)
-    await writer.close()
-    
-    // Read compressed data
-    const chunks: Uint8Array[] = []
-    let done = false
-    
-    while (!done) {
-      const { value, done: readerDone } = await reader.read()
-      done = readerDone
-      if (value) {
-        chunks.push(value)
-      }
-    }
-    
-    // Combine chunks
-    const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0)
-    const result = new Uint8Array(totalLength)
-    let offset = 0
-    
-    for (const chunk of chunks) {
-      result.set(chunk, offset)
-      offset += chunk.length
-    }
-    
-    return result
+    return new Uint8Array(compressedArrayBuffer)
     
   } catch (error) {
     console.error('Workers compression failed:', error)

@@ -3,8 +3,8 @@
  * KVバインディングを直接使用してKV読み取り回数を大幅削減
  */
 
-// Dynamic import for compression support
-let pako: any
+// Import compression utilities from cloudflare-kv-worker
+import { decompressData as decompressDataWorker } from '../lib/cloudflare-kv-worker'
 
 // Import crypto for ETag generation
 const crypto = globalThis.crypto
@@ -32,28 +32,24 @@ async function generateETag(content: string): Promise<string> {
   return `"${hashHex.substring(0, 16)}"`
 }
 
-// Decompress gzipped data
-async function decompressData(compressed: Uint8Array): Promise<any> {
-  if (!pako) {
-    pako = await import('pako')
-  }
-  const jsonString = pako.ungzip(compressed, { to: 'string' })
-  return JSON.parse(jsonString)
-}
+// Use decompressData from cloudflare-kv-worker
+const decompressData = decompressDataWorker
 
 // Get ranking data directly from KV binding
-async function getRankingDataFromKV(env: Env): Promise<any> {
+async function getRankingDataFromKV(env: Env, bypassCache = false): Promise<any> {
   const cacheKey = 'RANKING_LATEST'
   const now = Date.now()
   
-  // Check memory cache
-  const cached = memoryCache.get(cacheKey)
-  if (cached && (now - cached.timestamp) < CACHE_TTL) {
-    return { data: cached.data, etag: cached.etag }
+  // Check memory cache (unless bypassed)
+  if (!bypassCache) {
+    const cached = memoryCache.get(cacheKey)
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      return { data: cached.data, etag: cached.etag }
+    }
   }
   
   try {
-    const result = await env.RANKING_DATA.getWithMetadata<Uint8Array>(
+    const result = await env.RANKING_DATA.getWithMetadata(
       'RANKING_LATEST',
       { type: 'arrayBuffer' }
     )
@@ -62,12 +58,16 @@ async function getRankingDataFromKV(env: Env): Promise<any> {
       return { data: null, etag: null }
     }
 
-    // Decompress if needed
+    // Decompress data - all data in KV is gzipped
     let data: any
-    if (result.metadata?.compressed) {
+    
+    if (result.value instanceof ArrayBuffer) {
       data = await decompressData(new Uint8Array(result.value))
+    } else if (result.value instanceof Uint8Array) {
+      data = await decompressData(result.value)
     } else {
-      data = JSON.parse(new TextDecoder().decode(result.value))
+      // This shouldn't happen with arrayBuffer type, but handle it anyway
+      throw new Error('[KV-OPT] Unexpected data type from KV')
     }
     
     // Generate ETag
@@ -79,23 +79,29 @@ async function getRankingDataFromKV(env: Env): Promise<any> {
     return { data, etag }
   } catch (error) {
     console.error('[KV-OPT] Failed to read RANKING_LATEST:', error)
-    return { data: null, etag: null }
+    console.error('[KV-OPT] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    throw error  // Re-throw to let handleRankingAPI handle it
   }
 }
 
 // Get video stats directly from KV binding
-async function getVideoStatsFromKV(env: Env): Promise<any> {
+async function getVideoStatsFromKV(env: Env, bypassCache = false): Promise<any> {
   const cacheKey = 'VIDEO_STATS_LATEST'
   const now = Date.now()
   
-  // Check memory cache
-  const cached = memoryCache.get(cacheKey)
-  if (cached && (now - cached.timestamp) < CACHE_TTL) {
-    return { data: cached.data, etag: cached.etag }
+  // Check memory cache (unless bypassed)
+  if (!bypassCache) {
+    const cached = memoryCache.get(cacheKey)
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      return { data: cached.data, etag: cached.etag }
+    }
   }
   
   try {
-    const result = await env.RANKING_DATA.getWithMetadata<Uint8Array>(
+    const result = await env.RANKING_DATA.getWithMetadata(
       'VIDEO_STATS_LATEST',
       { type: 'arrayBuffer' }
     )
@@ -104,12 +110,16 @@ async function getVideoStatsFromKV(env: Env): Promise<any> {
       return { data: null, etag: null }
     }
 
-    // Decompress if needed
+    // Decompress data - all data in KV is gzipped
     let data: any
-    if (result.metadata?.compressed) {
+    
+    if (result.value instanceof ArrayBuffer) {
       data = await decompressData(new Uint8Array(result.value))
+    } else if (result.value instanceof Uint8Array) {
+      data = await decompressData(result.value)
     } else {
-      data = JSON.parse(new TextDecoder().decode(result.value))
+      // This shouldn't happen with arrayBuffer type, but handle it anyway
+      throw new Error('[KV-OPT] Unexpected data type from KV for video stats')
     }
     
     // Generate ETag
@@ -121,7 +131,7 @@ async function getVideoStatsFromKV(env: Env): Promise<any> {
     return { data, etag }
   } catch (error) {
     console.error('[KV-OPT] Failed to read VIDEO_STATS_LATEST:', error)
-    return { data: null, etag: null }
+    throw error  // Re-throw to let handleVideoStatsAPI handle it
   }
 }
 
@@ -132,6 +142,9 @@ async function handleRankingAPI(request: Request, env: Env): Promise<Response> {
   const period = url.searchParams.get('period') || '24h'
   const tag = url.searchParams.get('tag')
   
+  // Check for cache bypass header (for testing)
+  const bypassCache = request.headers.get('X-Bypass-Cache') === 'true'
+  
   // Validate period
   if (!['24h', 'hour'].includes(period)) {
     return new Response(JSON.stringify({ error: 'Invalid period' }), {
@@ -141,7 +154,7 @@ async function handleRankingAPI(request: Request, env: Env): Promise<Response> {
   }
   
   try {
-    const { data: allData, etag } = await getRankingDataFromKV(env)
+    const { data: allData, etag } = await getRankingDataFromKV(env, bypassCache)
     
     if (!allData || !allData.genres) {
       return new Response(JSON.stringify({ error: 'No ranking data available' }), {
@@ -195,7 +208,13 @@ async function handleRankingAPI(request: Request, env: Env): Promise<Response> {
     return response
   } catch (error) {
     console.error('[KV-OPT] Ranking API error:', error)
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    // Return 500 for actual errors (KV failures, etc.)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      details: errorMessage,
+      mode: 'KV_OPTIMIZED'
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     })
@@ -222,7 +241,9 @@ async function handleVideoStatsAPI(request: Request, env: Env): Promise<Response
   }
   
   try {
-    const { data: statsData, etag } = await getVideoStatsFromKV(env)
+    // Check for cache bypass header (for testing)
+    const bypassCache = request.headers.get('X-Bypass-Cache') === 'true'
+    const { data: statsData, etag } = await getVideoStatsFromKV(env, bypassCache)
     
     if (!statsData || !statsData.stats) {
       return new Response(JSON.stringify({ stats: {}, timestamp: new Date().toISOString(), count: 0, kvHitRate: 0 }), {
@@ -309,6 +330,12 @@ function applySecurityHeaders(response: Response): Response {
   })
 }
 
+// Export for testing purposes
+// Export function to clear memory cache (for testing)
+export function clearMemoryCache() {
+  memoryCache.clear()
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
@@ -363,7 +390,10 @@ export default {
         : env.NEXT_APP_URL
         
       if (!baseUrl) {
-        return new Response('Target URL not configured', { status: 500 })
+        return new Response('Target URL not configured', { 
+          status: 500,
+          headers: { 'Content-Type': 'text/plain' }
+        })
       }
       
       const targetUrl = `${baseUrl}${url.pathname}${url.search}`

@@ -1,4 +1,4 @@
-name = "nico-ranking-api-gateway-optimized"
+name = "nico-ranking-api-gateway"
 main = "workers/api-gateway-optimized.ts"
 compatibility_date = "2024-06-13"
 
@@ -12,8 +12,9 @@ id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 NEXT_APP_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 
 # Custom domain (test subdomain first)
+# Note: Using main domain since kv-test subdomain may not be configured
 [[routes]]
-pattern = "kv-test.nico-rank.com/*"
+pattern = "nico-rank.com/*"
 zone_name = "nico-rank.com"
 
 # TypeScript configuration
