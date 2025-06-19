@@ -73,16 +73,22 @@ async function writeToCloudflareKV(data: any): Promise<void> {
   }
 
   const jsonString = JSON.stringify(data);
-  console.log(`Data size: ${(jsonString.length / 1024 / 1024).toFixed(2)} MB (${(jsonString.length / 1024).toFixed(2)} KB)`);
+  const uncompressedSize = jsonString.length / 1024 / 1024;
+  console.log(`Uncompressed data size: ${uncompressedSize.toFixed(2)} MB`);
   
-  // Check if data size is within reasonable limits for uncompressed storage
-  // Cloudflare KV free tier: 1 GB storage
-  const maxSizeInMB = 100; // Conservative limit of 100 MB per key
-  const sizeInMB = jsonString.length / 1024 / 1024;
+  // Import pako for compression
+  const pako = await import('pako');
   
-  if (sizeInMB > maxSizeInMB) {
-    console.warn(`Data size (${sizeInMB.toFixed(2)} MB) exceeds recommended limit of ${maxSizeInMB} MB`);
-    console.warn(`Consider enabling compression if data continues to grow`);
+  // Compress the data with gzip
+  const compressed = pako.gzip(jsonString);
+  const compressedSize = compressed.length / 1024 / 1024;
+  const compressionRatio = ((1 - compressed.length / jsonString.length) * 100).toFixed(1);
+  
+  console.log(`Compressed data size: ${compressedSize.toFixed(2)} MB (${compressionRatio}% reduction)`);
+  
+  // Check if compressed size is within KV limits (25MB)
+  if (compressedSize > 25) {
+    throw new Error(`Compressed data (${compressedSize.toFixed(2)} MB) exceeds KV limit of 25MB`);
   }
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
@@ -95,9 +101,9 @@ async function writeToCloudflareKV(data: any): Promise<void> {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${CF_API_TOKEN}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/octet-stream",
         },
-        body: jsonString,
+        body: compressed,
       });
 
       if (response.status === 429) {
@@ -132,7 +138,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          compressed: false,
+          compressed: true,
           version: 1,
           updatedAt: data.metadata?.updatedAt || new Date().toISOString(),
           totalItems: data.metadata?.totalItems || 0,
