@@ -63,6 +63,14 @@ async function checkKVData() {
           console.log('\nData structure:')
           console.log(`- Genres: ${Object.keys(parsed.genres || {}).length}`)
           console.log(`- Metadata: ${JSON.stringify(parsed.metadata, null, 2)}`)
+          console.log(`- Has derivativeNGData: ${!!parsed.derivativeNGData}`)
+          
+          if (parsed.derivativeNGData) {
+            console.log(`\nDerivative NG Data:`)
+            console.log(`- Blocked video IDs: ${parsed.derivativeNGData.blockedVideoIds?.length || 0}`)
+            console.log(`- Blocked author IDs: ${parsed.derivativeNGData.blockedAuthorIds?.length || 0}`)
+            console.log(`- Stats: ${JSON.stringify(parsed.derivativeNGData.statsSnapshot, null, 2)}`)
+          }
           
           // Check a sample genre
           const sampleGenre = Object.keys(parsed.genres || {})[0]

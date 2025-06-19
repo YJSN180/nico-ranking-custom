@@ -92,6 +92,14 @@ jobs:
         path: ./tmp/ranking-group-${{ matrix.group }}.json
         retention-days: 1
         if-no-files-found: error
+    
+    - name: Upload NG derived results (if exists)
+      uses: actions/upload-artifact@v4
+      with:
+        name: ng-derived-group-${{ matrix.group }}
+        path: ./tmp/ng-derived-group-${{ matrix.group }}.json
+        retention-days: 1
+        if-no-files-found: ignore
 
   # Step 2: Aggregate results and write to KV
   aggregate-and-write:
@@ -115,17 +123,27 @@ jobs:
     - name: Create temp directory
       run: mkdir -p ./tmp
     
-    - name: Download all artifacts
+    - name: Download ranking artifacts
       uses: actions/download-artifact@v4
       with:
         path: ./tmp
         pattern: ranking-data-group-*
     
+    - name: Download NG derived artifacts (if exists)
+      uses: actions/download-artifact@v4
+      with:
+        path: ./tmp
+        pattern: ng-derived-group-*
+      continue-on-error: true
+    
     - name: List downloaded files
       run: |
         echo "Downloaded artifacts:"
         ls -la ./tmp/
-        find ./tmp -name "*.json" -exec basename {} \; | sort
+        echo "Ranking files:"
+        find ./tmp -name "ranking-group-*.json" | sort
+        echo "NG derived files:"
+        find ./tmp -name "ng-derived-group-*.json" | sort
     
     - name: Move files to correct location
       run: |
@@ -145,7 +163,8 @@ jobs:
         echo "Files after moving:"
         ls -la ./tmp/ranking-group-*.json 2>/dev/null || echo "No ranking group files found"
         echo ""
-        echo "Total group files found: $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
+        echo "Total ranking group files found: $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
+        echo "Total NG derived files found: $(ls ./tmp/ng-derived-group-*.json 2>/dev/null | wc -l)"
     
     - name: Aggregate and write to KV
       env:

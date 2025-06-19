@@ -695,7 +695,21 @@ if (process.argv[2] === '--group') {
     if (newDerivedCount > originalDerivedCount) {
       const newlyAdded = newDerivedCount - originalDerivedCount;
       console.log(`Group ${groupId} found ${newlyAdded} new derived NG entries (${originalDerivedCount} → ${newDerivedCount})`);
-      // Note: Group mode doesn't update KV directly, this will be handled in final aggregation
+      
+      // Save the new derived entries for aggregation
+      const derivedData = {
+        originalCount: originalDerivedCount,
+        newCount: newDerivedCount,
+        newEntries: ngList.derivedVideoIds.slice(originalDerivedCount), // Only the new ones
+        allEntries: ngList.derivedVideoIds // Complete list for safety
+      };
+      
+      await fs.writeFile(
+        path.join(tmpDir, `ng-derived-group-${groupId}.json`),
+        JSON.stringify(derivedData, null, 2)
+      );
+      
+      console.log(`Saved ${newlyAdded} new derived entries to ng-derived-group-${groupId}.json`);
     }
     
     const duration = Date.now() - startTime;

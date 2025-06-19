@@ -3,6 +3,65 @@ import 'dotenv/config'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
+// Save derived NG entries to KV
+async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN;
+
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    throw new Error("Cloudflare KV credentials not configured");
+  }
+
+  console.log(`Fetching current derived NG list from KV...`);
+  
+  // Get current derived list
+  const getUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ng-list-derived`;
+  
+  let currentDerived: string[] = [];
+  try {
+    const response = await fetch(getUrl, {
+      headers: {
+        "Authorization": `Bearer ${CF_API_TOKEN}`,
+      },
+    });
+    
+    if (response.ok) {
+      currentDerived = await response.json();
+      if (!Array.isArray(currentDerived)) currentDerived = [];
+    }
+  } catch (error) {
+    console.log('No existing derived list found, starting fresh');
+  }
+  
+  // Merge with new entries
+  const mergedSet = new Set([...currentDerived, ...newEntries]);
+  const mergedList = Array.from(mergedSet);
+  
+  console.log(`Current derived entries: ${currentDerived.length}`);
+  console.log(`New entries to add: ${newEntries.length}`);
+  console.log(`Final merged entries: ${mergedList.length}`);
+  
+  // Save merged list back to KV
+  const putUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ng-list-derived`;
+  
+  const response = await fetch(putUrl, {
+    method: "PUT",
+    headers: {
+      "Authorization": `Bearer ${CF_API_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(mergedList),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Failed to save derived NG list to KV: ${response.status} - ${error}`);
+  }
+  
+  console.log('✅ Successfully updated derived NG list in KV');
+}
+
 // Write to Cloudflare KV directly (no temp keys)
 async function writeToCloudflareKV(data: any): Promise<void> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -102,6 +161,16 @@ async function main() {
     }
     
     const groupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
+    // Look for NG derived files in both main tmp and subdirectories
+    const ngDerivedFiles = [];
+    const allNgFiles = await new Promise<string[]>((resolve) => {
+      const { exec } = require('child_process');
+      exec('find ./tmp -name "ng-derived-group-*.json" 2>/dev/null || true', (error: any, stdout: string) => {
+        const found = stdout.trim().split('\n').filter(f => f && f.includes('ng-derived-group-'));
+        resolve(found.map(f => f.replace('./tmp/', '')));
+      });
+    });
+    ngDerivedFiles.push(...allNgFiles);
     
     if (groupFiles.length === 0) {
       console.error('No group result files found in tmp directory');
@@ -110,6 +179,7 @@ async function main() {
     }
     
     console.log(`Found ${groupFiles.length} group result files`);
+    console.log(`Found ${ngDerivedFiles.length} NG derived files`);
     
     // Build final data structure
     const rankingData: any = {
@@ -177,6 +247,39 @@ async function main() {
       console.error('No data to write!');
       process.exit(1);
     }
+    
+    // Aggregate derived NG entries
+    let totalNewDerived = 0;
+    const allNewDerivedEntries = new Set<string>();
+    
+    if (ngDerivedFiles.length > 0) {
+      console.log('\nProcessing derived NG entries...');
+      
+      for (const file of ngDerivedFiles) {
+        console.log(`Processing ${file}...`);
+        const content = await fs.readFile(path.join(tmpDir, file), 'utf-8');
+        
+        try {
+          const derivedData = JSON.parse(content);
+          if (derivedData.newEntries && Array.isArray(derivedData.newEntries)) {
+            const newCount = derivedData.newEntries.length;
+            totalNewDerived += newCount;
+            derivedData.newEntries.forEach((id: string) => allNewDerivedEntries.add(id));
+            console.log(`  - ${newCount} new derived entries from ${file}`);
+          }
+        } catch (error) {
+          console.error(`Failed to parse derived NG file ${file}:`, error);
+        }
+      }
+      
+      console.log(`Total new derived entries across all groups: ${totalNewDerived}`);
+      console.log(`Unique new derived entries: ${allNewDerivedEntries.size}`);
+      
+      // Save derived entries to KV if any were found
+      if (allNewDerivedEntries.size > 0) {
+        await saveDerivedNGEntriesToKV(Array.from(allNewDerivedEntries));
+      }
+    }
 
     // Save aggregated data locally as backup
     const backupPath = path.join(process.cwd(), 'tmp', 'latest-aggregated-data.json');
@@ -190,6 +293,9 @@ async function main() {
     // Clean up temp files
     console.log('\nCleaning up temporary files...');
     for (const file of groupFiles) {
+      await fs.unlink(path.join(tmpDir, file));
+    }
+    for (const file of ngDerivedFiles) {
       await fs.unlink(path.join(tmpDir, file));
     }
     
