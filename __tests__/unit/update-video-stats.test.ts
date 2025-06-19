@@ -94,7 +94,7 @@ describe('update-video-stats script', () => {
     // Mock cloudflare-kv functions
     const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
     vi.mocked(compressData).mockResolvedValue(new TextEncoder().encode(JSON.stringify(mockRankingData)))
-    vi.mocked(decompressData).mockResolvedValue(JSON.stringify(mockRankingData))
+    vi.mocked(decompressData).mockResolvedValue(mockRankingData)
 
     // Mock KV fetch for ranking data
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
@@ -178,7 +178,7 @@ describe('update-video-stats script', () => {
 
     const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
     vi.mocked(compressData).mockResolvedValue(new TextEncoder().encode(JSON.stringify(emptyRankingData)))
-    vi.mocked(decompressData).mockResolvedValue(JSON.stringify(emptyRankingData))
+    vi.mocked(decompressData).mockResolvedValue(emptyRankingData)
     
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
@@ -224,7 +224,7 @@ describe('update-video-stats script', () => {
     const { compressData, decompressData } = await import('@/lib/cloudflare-kv')
     const { fetchVideoStats } = await import('@/lib/snapshot-api')
     vi.mocked(compressData).mockResolvedValue(new TextEncoder().encode(JSON.stringify(mockRankingData)))
-    vi.mocked(decompressData).mockResolvedValue(JSON.stringify(mockRankingData))
+    vi.mocked(decompressData).mockResolvedValue(mockRankingData)
 
     vi.mocked(global.fetch).mockImplementation(async (url) => {
       const urlStr = typeof url === 'string' ? url : url.toString()

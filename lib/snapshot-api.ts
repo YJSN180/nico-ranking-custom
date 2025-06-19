@@ -30,8 +30,10 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
     return stats
   }
   
-  // バッチ処理（一度に最大100個 - Snapshot APIの推奨値）
-  const batchSize = 100
+  // バッチ処理（一度に最大50個 - URL長制限を考慮）
+  // Testing shows 100 IDs results in 10KB+ URLs which get rejected by CloudFront (413 error)
+  // 50 IDs per batch provides ~90% success rate with reasonable performance
+  const batchSize = 50
   for (let i = 0; i < videoIds.length; i += batchSize) {
     const batch = videoIds.slice(i, i + batchSize)
     
@@ -51,7 +53,7 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
         targets: 'title',
         fields: 'contentId,viewCounter,commentCounter,mylistCounter,likeCounter,tags',
         _sort: '-viewCounter',
-        _limit: String(Math.min(batchSize, 100)),  // APIの最大値は100
+        _limit: String(batchSize),  // Match the batch size
         jsonFilter: jsonFilter
       })
       
