@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getDerivativeNGListFromKV, getDerivativeNGStats } from '@/lib/ng-list-derivative'
 
 export async function GET(request: NextRequest) {
   // Basic authentication check
@@ -11,22 +10,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Try to get from ranking data first (new structure)
-    const derivativeData = await getDerivativeNGListFromKV()
-    const derivativeStats = await getDerivativeNGStats()
-    
-    if (derivativeData && derivativeData.blockedVideoIds.length > 0) {
-      console.log('Found derivative NG data in ranking data')
-      return NextResponse.json({
-        videoIds: derivativeData.blockedVideoIds,
-        count: derivativeData.blockedVideoIds.length,
-        lastUpdated: derivativeStats?.lastUpdated || null,
-        totalVideosProcessed: derivativeStats?.totalVideosProcessed || 0
-      })
-    }
-    
-    // Fallback to old KV structure (ng-list-derived key)
-    console.log('Checking ng-list-derived key as fallback')
+    // Only use the secure ng-list-derived key
+    // DO NOT include NG data in public ranking data for security reasons
     let derivedVideoIds: string[] = []
     let lastUpdated: string | null = null
     let totalBlocked = 0
@@ -35,33 +20,40 @@ export async function GET(request: NextRequest) {
     const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
     const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
     
-    if (CF_ACCOUNT_ID && CF_NAMESPACE_ID && CF_API_TOKEN) {
-      try {
-        const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ng-list-derived`, {
-          headers: {
-            "Authorization": `Bearer ${CF_API_TOKEN}`
-          }
-        })
-        
-        if (response.ok) {
-          derivedVideoIds = await response.json()
-          totalBlocked = derivedVideoIds.length
-          lastUpdated = new Date().toISOString() // Approximate
-          console.log(`Found ${totalBlocked} entries in ng-list-derived key`)
+    if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+      // Missing Cloudflare credentials
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+    
+    try {
+      const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ng-list-derived`, {
+        headers: {
+          "Authorization": `Bearer ${CF_API_TOKEN}`
         }
-      } catch (error) {
-        console.warn('Failed to fetch from ng-list-derived key:', error)
+      })
+      
+      if (response.ok) {
+        derivedVideoIds = await response.json()
+        totalBlocked = derivedVideoIds.length
+        lastUpdated = new Date().toISOString() // Approximate
+        // Found entries in ng-list-derived key
+      } else if (response.status === 404) {
+        // ng-list-derived key not found, returning empty list
+      } else {
+        // Failed to fetch ng-list-derived
       }
+    } catch (error) {
+      // Failed to fetch from ng-list-derived key
     }
     
     return NextResponse.json({
       videoIds: derivedVideoIds,
       count: totalBlocked,
       lastUpdated: lastUpdated,
-      totalVideosProcessed: 0 // Not available in old structure
+      totalVideosProcessed: 0 // Not available in current structure
     })
   } catch (error) {
-    console.error('Failed to fetch derived NG list:', error)
+    // Failed to fetch derived NG list
     return NextResponse.json({ error: 'Failed to fetch derived NG list' }, { status: 500 })
   }
 }
@@ -76,10 +68,33 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    // TODO: Implement clear derived NG list functionality
-    // For now, return success as derived list is embedded in ranking data
-    return NextResponse.json({ success: true, message: 'Derived NG list clearing not implemented - data is embedded in ranking data' })
+    const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+    const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+    const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+    
+    if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
+    }
+    
+    // Clear the ng-list-derived key
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/ng-list-derived`,
+      {
+        method: 'DELETE',
+        headers: {
+          "Authorization": `Bearer ${CF_API_TOKEN}`
+        }
+      }
+    )
+    
+    if (response.ok || response.status === 404) {
+      return NextResponse.json({ success: true, message: 'Derived NG list cleared successfully' })
+    } else {
+      // Failed to delete ng-list-derived
+      return NextResponse.json({ error: 'Failed to clear derived NG list' }, { status: 500 })
+    }
   } catch (error) {
+    // Failed to clear derived NG list
     return NextResponse.json({ error: 'Failed to clear derived NG list' }, { status: 500 })
   }
 }
