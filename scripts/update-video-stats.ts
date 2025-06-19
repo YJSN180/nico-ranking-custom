@@ -42,13 +42,26 @@ async function updateVideoStats() {
     
     // 4. Fetch stats using optimized batch processing
     console.log('Fetching video statistics using jsonFilter batch method...')
+    console.log(`Processing ${videoIds.length} videos in batches of 50...`)
     const startTime = Date.now()
+    
+    // Enable debug logging for production
+    process.env.DEBUG_SNAPSHOT_API = 'true'
     
     // fetchVideoStats now handles batching internally with jsonFilter
     const allStats = await fetchVideoStats(videoIds)
     
     const fetchTime = Date.now() - startTime
     console.log(`Fetched stats for ${Object.keys(allStats).length} videos in ${(fetchTime / 1000).toFixed(1)}s`)
+    
+    // Log sample of retrieved stats for debugging
+    const sampleIds = Object.keys(allStats).slice(0, 5)
+    if (sampleIds.length > 0) {
+      console.log('Sample stats retrieved:')
+      sampleIds.forEach(id => {
+        console.log(`  ${id}: ${allStats[id].viewCounter} views`)
+      })
+    }
     
     // 5. Create data structure
     const statsData = {

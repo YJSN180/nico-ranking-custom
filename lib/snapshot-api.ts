@@ -34,8 +34,11 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
   // Testing shows 100 IDs results in 10KB+ URLs which get rejected by CloudFront (413 error)
   // 50 IDs per batch provides ~90% success rate with reasonable performance
   const batchSize = 50
+  const totalBatches = Math.ceil(videoIds.length / batchSize)
+  
   for (let i = 0; i < videoIds.length; i += batchSize) {
     const batch = videoIds.slice(i, i + batchSize)
+    const batchNumber = Math.floor(i / batchSize) + 1
     
     try {
       // jsonFilterを使用してバッチでクエリ
@@ -73,6 +76,16 @@ export async function fetchVideoStats(videoIds: string[]): Promise<Record<string
               tags: video.tags ? video.tags.split(' ').filter((tag: string) => tag.length > 0) : undefined
             }
           })
+          
+          // Debug logging for production
+          if (process.env.DEBUG_SNAPSHOT_API === 'true') {
+            console.log(`Batch ${batchNumber}/${totalBatches}: Retrieved ${data.data.length} videos`)
+          }
+        }
+      } else {
+        // Log non-OK responses in production
+        if (process.env.DEBUG_SNAPSHOT_API === 'true') {
+          console.log(`Batch ${batchNumber}/${totalBatches}: API returned ${response.status}`)
         }
       }
     } catch (error) {
