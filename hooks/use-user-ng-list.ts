@@ -35,21 +35,44 @@ const defaultNGList: UserNGList = {
   updatedAt: new Date().toISOString(),
 }
 
+// カスタムイベントの型定義
+declare global {
+  interface WindowEventMap {
+    'ngListUpdated': CustomEvent<{ ngList: UserNGList }>
+  }
+}
+
 export function useUserNGList() {
   const [ngList, setNGList] = useState<UserNGList>(defaultNGList)
 
   // 初回読み込み
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY)
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (parsed.version === CURRENT_VERSION) {
-          setNGList(parsed)
+    const loadNGList = () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY)
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (parsed.version === CURRENT_VERSION) {
+            setNGList(parsed)
+          }
         }
+      } catch (error) {
+        // エラーは無視してデフォルト値を使用
       }
-    } catch (error) {
-      // エラーは無視してデフォルト値を使用
+    }
+    
+    // 初回読み込み
+    loadNGList()
+    
+    // 他のタブやコンポーネントからの変更を監視
+    const handleNGListUpdate = (event: CustomEvent<{ ngList: UserNGList }>) => {
+      setNGList(event.detail.ngList)
+    }
+    
+    window.addEventListener('ngListUpdated', handleNGListUpdate)
+    
+    return () => {
+      window.removeEventListener('ngListUpdated', handleNGListUpdate)
     }
   }, [])
 
@@ -57,6 +80,10 @@ export function useUserNGList() {
   const saveNGList = useCallback((list: UserNGList) => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+      // 変更を他のコンポーネントに通知
+      window.dispatchEvent(new CustomEvent('ngListUpdated', { 
+        detail: { ngList: list } 
+      }))
     } catch (error) {
       // ストレージエラーは無視
     }
