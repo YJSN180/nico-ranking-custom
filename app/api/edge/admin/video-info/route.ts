@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
     const params = new URLSearchParams({
       q: '',
       targets: 'title',
-      fields: 'contentId,title,userId,channelId',
+      fields: 'contentId,title,userId,channelId,tags,genre',
       _sort: '-viewCounter',
       _limit: String(Math.min(videoIds.length, 50)),
       jsonFilter: jsonFilter

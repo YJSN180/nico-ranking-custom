@@ -17,7 +17,7 @@ interface RealtimeStatsResponse {
 export function useRealtimeStats(
   items: RankingItem[], 
   enabled: boolean = false,
-  updateInterval: number = 60000 // 1分ごと（デフォルト）
+  updateInterval: number = 120000 // 2分ごと（デフォルト）
 ) {
   const [stats, setStats] = useState<RealtimeStatsResponse['stats']>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -83,14 +83,49 @@ export function useRealtimeStats(
       }
     }
     
-    // 初回読み込み
-    fetchStats()
+    // Page Visibility API用の変数
+    let interval: NodeJS.Timeout | null = null
     
-    // 定期更新
-    const interval = setInterval(fetchStats, updateInterval)
+    const startUpdates = () => {
+      // 既に動作中の場合は何もしない
+      if (interval) return
+      
+      // 可視状態の時のみ更新を開始
+      if (document.visibilityState === 'visible') {
+        fetchStats() // 即座に更新
+        interval = setInterval(fetchStats, updateInterval)
+      }
+    }
+    
+    const stopUpdates = () => {
+      if (interval) {
+        clearInterval(interval)
+        interval = null
+      }
+    }
+    
+    // 可視性の変更を監視
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // タブがアクティブになったら更新を再開
+        startUpdates()
+      } else {
+        // タブが非アクティブになったら更新を停止
+        stopUpdates()
+      }
+    }
+    
+    // イベントリスナーを登録
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    // 初期状態の確認と開始
+    if (document.visibilityState === 'visible') {
+      startUpdates()
+    }
     
     return () => {
-      clearInterval(interval)
+      stopUpdates()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       // クリーンアップ時にリクエストをキャンセル
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
