@@ -11,40 +11,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get manual NG list
-    const manualNGList = await getNGListManual()
+    // Dynamic import to ensure environment variables are loaded at runtime
+    const { getServerNGList } = await import('@/lib/ng-list-server')
+    const ngList = await getServerNGList()
     
-    // Get derived NG list from Edge Function
-    // Use absolute URL for internal API call
-    const protocol = request.headers.get('x-forwarded-proto') || 'https'
-    const host = request.headers.get('host') || request.headers.get('x-forwarded-host') || 'localhost:3000'
-    const baseUrl = `${protocol}://${host}`
-    
-    const derivedResponse = await fetch(`${baseUrl}/api/edge/admin/ng-list-derived`, {
-      headers: {
-        'authorization': authHeader || '',
-        'cookie': request.headers.get('cookie') || ''
-      }
-    })
-    
-    let derivedVideoIds: string[] = []
-    if (derivedResponse.ok) {
-      const derivedData = await derivedResponse.json()
-      derivedVideoIds = derivedData.videoIds || []
-    } else {
-      // Log error for debugging but don't fail the whole request
-      console.error(`Failed to fetch derived NG list: ${derivedResponse.status} ${derivedResponse.statusText}`)
-      // Continue with empty derived list
-    }
-    
-    // Combine manual and derived lists
-    const fullNGList = {
-      ...manualNGList,
-      derivedVideoIds
-    }
-    
-    return NextResponse.json(fullNGList)
+    return NextResponse.json(ngList)
   } catch (error) {
+    console.error('Failed to fetch NG list:', error)
     return NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 })
   }
 }

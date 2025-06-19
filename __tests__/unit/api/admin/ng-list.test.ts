@@ -20,27 +20,18 @@ describe('NG List API', () => {
 
   describe('GET /api/admin/ng-list', () => {
     it('should return NG list with valid auth', async () => {
-      const mockManualNGList = {
+      const mockNGList = {
         videoIds: ['sm123'],
         videoTitles: { exact: ['Test Video'], partial: [] },
         authorIds: ['author1'],
-        authorNames: { exact: ['Test Author'], partial: [] }
-      }
-      
-      const mockDerivedList = {
-        videoIds: ['sm456', 'sm789'],
-        count: 2,
-        lastUpdated: new Date().toISOString(),
-        totalVideosProcessed: 100
+        authorNames: { exact: ['Test Author'], partial: [] },
+        derivedVideoIds: ['sm456', 'sm789']
       }
 
-      ;(getNGListManual as any).mockResolvedValueOnce(mockManualNGList)
-      
-      // Mock the Edge Function response
-      vi.mocked(global.fetch).mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockDerivedList
-      } as Response)
+      // Mock dynamic import
+      vi.doMock('@/lib/ng-list-server', () => ({
+        getServerNGList: vi.fn().mockResolvedValue(mockNGList)
+      }))
 
       const request = new NextRequest('http://localhost/api/admin/ng-list', {
         headers: {
@@ -52,10 +43,7 @@ describe('NG List API', () => {
       const data = await response.json()
 
       expect(response.status).toBe(200)
-      expect(data).toEqual({
-        ...mockManualNGList,
-        derivedVideoIds: mockDerivedList.videoIds
-      })
+      expect(data).toEqual(mockNGList)
     })
 
     it('should return 401 without auth', async () => {
@@ -69,7 +57,10 @@ describe('NG List API', () => {
     })
 
     it('should handle errors gracefully', async () => {
-      ;(getNGListManual as any).mockRejectedValueOnce(new Error('KV error'))
+      // Mock dynamic import to throw error
+      vi.doMock('@/lib/ng-list-server', () => ({
+        getServerNGList: vi.fn().mockRejectedValue(new Error('KV error'))
+      }))
 
       const request = new NextRequest('http://localhost/api/admin/ng-list', {
         headers: {

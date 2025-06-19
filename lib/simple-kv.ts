@@ -1,21 +1,29 @@
 // Simple KV utility using Cloudflare KV REST API
 // Provides a unified interface for key-value storage operations
 
-const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
-const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
-const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
-
-if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
-  // Cloudflare KV credentials not configured - will throw error when used
+// Get environment variables dynamically at runtime
+function getEnvVars() {
+  return {
+    CF_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
+    CF_NAMESPACE_ID: process.env.CLOUDFLARE_KV_NAMESPACE_ID,
+    CF_API_TOKEN: process.env.CLOUDFLARE_KV_API_TOKEN
+  }
 }
 
-const BASE_URL = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}`
+function getBaseUrl() {
+  const { CF_ACCOUNT_ID, CF_NAMESPACE_ID } = getEnvVars()
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID) {
+    throw new Error('Cloudflare KV credentials not configured')
+  }
+  return `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}`
+}
 
 class SimpleKV {
   /**
    * Get a value from KV
    */
   async get<T = any>(key: string): Promise<T | null> {
+    const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = getEnvVars()
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       throw new Error('Cloudflare KV credentials not configured')
     }
@@ -25,7 +33,7 @@ class SimpleKV {
     
     while (attempt < maxRetries) {
       try {
-        const response = await fetch(`${BASE_URL}/values/${encodeURIComponent(key)}`, {
+        const response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
           headers: {
             'Authorization': `Bearer ${CF_API_TOKEN}`,
           },
@@ -77,11 +85,12 @@ class SimpleKV {
    * Set a value in KV
    */
   async set(key: string, value: any, options?: { ex?: number }): Promise<void> {
+    const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = getEnvVars()
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       throw new Error('Cloudflare KV credentials not configured')
     }
 
-    const url = new URL(`${BASE_URL}/values/${encodeURIComponent(key)}`)
+    const url = new URL(`${getBaseUrl()}/values/${encodeURIComponent(key)}`)
     
     // Add TTL if specified
     if (options?.ex) {
@@ -131,11 +140,12 @@ class SimpleKV {
    * Delete a key from KV
    */
   async del(key: string): Promise<void> {
+    const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = getEnvVars()
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       throw new Error('Cloudflare KV credentials not configured')
     }
 
-    const response = await fetch(`${BASE_URL}/values/${encodeURIComponent(key)}`, {
+    const response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${CF_API_TOKEN}`,
