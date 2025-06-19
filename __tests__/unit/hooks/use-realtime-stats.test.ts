@@ -3,6 +3,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingItem } from '@/types/ranking'
 
+// Mock request throttle
+vi.mock('@/lib/request-throttle', () => ({
+  requestThrottle: {
+    throttle: vi.fn().mockResolvedValue(undefined)
+  }
+}))
+
 // Mock fetch with immediate resolution
 const mockFetch = vi.fn()
 global.fetch = mockFetch

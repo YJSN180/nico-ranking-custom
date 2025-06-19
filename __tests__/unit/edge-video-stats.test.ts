@@ -98,8 +98,8 @@ describe('Edge Video Stats API', () => {
       
       const response = await GET(request)
       
-      // Now uses 5-minute cache with KV integration
-      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=60')
+      // Now uses 3-minute cache with KV integration for real-time stats
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, max-age=60, stale-while-revalidate=120')
     })
 
     it('should validate Node.js runtime export', async () => {
@@ -189,7 +189,7 @@ describe('Edge Video Stats API', () => {
       const response = await GET(request)
       
       // Should use 5-minute cache when data is from KV
-      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=60')
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, max-age=60, stale-while-revalidate=120')
     })
   })
 })

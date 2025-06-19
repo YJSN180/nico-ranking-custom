@@ -3,6 +3,21 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import ClientPage from '@/app/client-page'
 
+// Request throttle のモック
+vi.mock('@/lib/request-throttle', () => ({
+  requestThrottle: {
+    throttle: vi.fn().mockResolvedValue(undefined)
+  }
+}))
+
+// Ranking cache のモック
+vi.mock('@/lib/ranking-cache', () => ({
+  rankingCache: {
+    get: vi.fn().mockReturnValue(null),
+    set: vi.fn()
+  }
+}))
+
 // Next.js のモック
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
