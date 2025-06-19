@@ -10,6 +10,13 @@ export default defineConfig({
     setupFiles: './vitest.setup.ts',
     exclude: ['**/node_modules/**', '**/__tests__/e2e/**'],
     testTimeout: 10000,
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        maxThreads: 2,
+        minThreads: 1
+      }
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
