@@ -15,7 +15,12 @@ export async function GET(request: NextRequest) {
     const manualNGList = await getNGListManual()
     
     // Get derived NG list from Edge Function
-    const derivedResponse = await fetch(new URL('/api/edge/admin/ng-list-derived', request.url).toString(), {
+    // Use absolute URL for internal API call
+    const protocol = request.headers.get('x-forwarded-proto') || 'https'
+    const host = request.headers.get('host') || request.headers.get('x-forwarded-host') || 'localhost:3000'
+    const baseUrl = `${protocol}://${host}`
+    
+    const derivedResponse = await fetch(`${baseUrl}/api/edge/admin/ng-list-derived`, {
       headers: {
         'authorization': authHeader || '',
         'cookie': request.headers.get('cookie') || ''
@@ -26,6 +31,10 @@ export async function GET(request: NextRequest) {
     if (derivedResponse.ok) {
       const derivedData = await derivedResponse.json()
       derivedVideoIds = derivedData.videoIds || []
+    } else {
+      // Log error for debugging but don't fail the whole request
+      console.error(`Failed to fetch derived NG list: ${derivedResponse.status} ${derivedResponse.statusText}`)
+      // Continue with empty derived list
     }
     
     // Combine manual and derived lists
