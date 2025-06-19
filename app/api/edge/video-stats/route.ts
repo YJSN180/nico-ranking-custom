@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getVideoStatsFromKV } from '@/lib/video-stats-kv'
+import { fetchVideoStats } from '@/lib/snapshot-api'
 
 // Edge Runtime指定
 export const runtime = 'edge'
@@ -18,25 +20,37 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Too many video IDs (max 500)' }, { status: 400 })
     }
     
-    // Edge RuntimeではNode.js特有のモジュールが使えないため、
-    // fetchVideoStatsをEdge対応版に変更する必要がある
-    const { fetchVideoStats } = await import('@/lib/snapshot-api')
+    // 1. First try to get stats from KV
+    const kvStats = await getVideoStatsFromKV(videoIds)
+    const kvHitIds = Object.keys(kvStats)
     
-    // Snapshot APIから統計情報を取得
-    const stats = await fetchVideoStats(videoIds)
+    // 2. Identify missing video IDs
+    const missingIds = videoIds.filter(id => !kvHitIds.includes(id))
+    
+    // 3. Fetch only missing stats from Snapshot API
+    const freshStats = missingIds.length > 0 
+      ? await fetchVideoStats(missingIds)
+      : {}
+    
+    // 4. Merge results
+    const allStats = { ...kvStats, ...freshStats }
+    
+    // 5. Calculate KV hit rate for monitoring
+    const kvHitRate = videoIds.length > 0 ? kvHitIds.length / videoIds.length : 0
     
     // レスポンスにタイムスタンプを追加
     const response = {
-      stats,
+      stats: allStats,
       timestamp: new Date().toISOString(),
-      count: Object.keys(stats).length
+      count: Object.keys(allStats).length,
+      kvHitRate // For debugging/monitoring
     }
     
     return NextResponse.json(response, {
       headers: {
-        // Cache for 1 minute with stale-while-revalidate for 30 seconds
-        // This reduces load on Functions while keeping data relatively fresh
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=30',
+        // Use longer cache when most data is from KV (3 minutes)
+        // This matches the KV update interval
+        'Cache-Control': 'public, s-maxage=180, stale-while-revalidate=60',
       },
     })
   } catch (error) {

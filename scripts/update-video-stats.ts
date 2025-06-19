@@ -1,0 +1,149 @@
+#!/usr/bin/env npx tsx
+import 'dotenv/config'
+import { fetchVideoStats } from '../lib/snapshot-api'
+import { compressData, decompressData } from '../lib/cloudflare-kv'
+import type { RankingData } from '../types/ranking'
+
+const STATS_KEY = 'VIDEO_STATS_LATEST'
+
+async function updateVideoStats() {
+  console.log('Starting video stats update...')
+  
+  try {
+    // 1. Fetch current ranking data from KV
+    const rankingData = await getRankingFromKV()
+    if (!rankingData) {
+      console.error('No ranking data found in KV')
+      if (import.meta.url === `file://${process.argv[1]}`) {
+        process.exit(1)
+      }
+      throw new Error('No ranking data found in KV')
+    }
+    
+    // 2. Extract all unique video IDs
+    const videoIds = extractUniqueVideoIds(rankingData)
+    console.log(`Found ${videoIds.length} unique videos to update`)
+    
+    // 3. If no videos found, still write empty stats to KV
+    if (videoIds.length === 0) {
+      const emptyStats = {
+        stats: {},
+        metadata: {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          totalVideos: 0
+        }
+      }
+      const compressed = await compressData(JSON.stringify(emptyStats))
+      await writeToKV(STATS_KEY, compressed)
+      console.log('Successfully updated stats for 0 videos')
+      return
+    }
+    
+    // 4. Fetch stats in batches
+    const allStats: Record<string, any> = {}
+    const batchSize = 10 // Snapshot API limitation
+    
+    for (let i = 0; i < videoIds.length; i += batchSize) {
+      const batch = videoIds.slice(i, i + batchSize)
+      const stats = await fetchVideoStats(batch)
+      Object.assign(allStats, stats)
+      
+      // Progress logging
+      console.log(`Progress: ${Math.min(i + batchSize, videoIds.length)}/${videoIds.length}`)
+      
+      // Rate limiting
+      if (i + batchSize < videoIds.length) {
+        await new Promise(resolve => setTimeout(resolve, 50))
+      }
+    }
+    
+    // 5. Create data structure
+    const statsData = {
+      stats: allStats,
+      metadata: {
+        version: 1,
+        updatedAt: new Date().toISOString(),
+        totalVideos: Object.keys(allStats).length
+      }
+    }
+    
+    // 6. Compress and write to KV
+    const compressed = await compressData(JSON.stringify(statsData))
+    await writeToKV(STATS_KEY, compressed)
+    
+    console.log(`Successfully updated stats for ${Object.keys(allStats).length} videos`)
+  } catch (error) {
+    console.error('Failed to update video stats:', error)
+    if (import.meta.url === `file://${process.argv[1]}`) {
+      process.exit(1)
+    }
+    throw error
+  }
+}
+
+// Fetch ranking data from KV
+async function getRankingFromKV(): Promise<RankingData | null> {
+  try {
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/RANKING_LATEST`,
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`
+        }
+      }
+    )
+    
+    if (!response.ok) {
+      return null
+    }
+    
+    const arrayBuffer = await response.arrayBuffer()
+    const decompressed = await decompressData(new Uint8Array(arrayBuffer))
+    return JSON.parse(decompressed)
+  } catch (error) {
+    console.error('Failed to fetch ranking data:', error)
+    return null
+  }
+}
+
+// Extract unique video IDs from ranking data
+function extractUniqueVideoIds(rankingData: RankingData): string[] {
+  const videoIds = new Set<string>()
+  
+  for (const genre of Object.keys(rankingData.genres)) {
+    for (const period of ['24h', 'hour'] as const) {
+      const items = rankingData.genres[genre]?.[period]?.items || []
+      items.forEach((item) => videoIds.add(item.id))
+    }
+  }
+  
+  return Array.from(videoIds)
+}
+
+// Write data to KV
+async function writeToKV(key: string, data: Uint8Array): Promise<void> {
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/${key}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`,
+        'Content-Type': 'application/octet-stream'
+      },
+      body: data
+    }
+  )
+  
+  if (!response.ok) {
+    throw new Error(`KV write failed: ${response.status} ${response.statusText}`)
+  }
+}
+
+// Export for testing
+export { updateVideoStats, getRankingFromKV, extractUniqueVideoIds, writeToKV }
+
+// Run the update only if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  updateVideoStats()
+}
