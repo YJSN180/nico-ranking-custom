@@ -103,9 +103,9 @@ async function getRankingFromKV(): Promise<RankingData | null> {
     const arrayBuffer = await response.arrayBuffer()
     const compressedData = new Uint8Array(arrayBuffer)
     
-    // Decompress the data
+    // Decompress the data (decompressData already returns a JavaScript object)
     const decompressed = await decompressData(compressedData)
-    return JSON.parse(decompressed)
+    return decompressed
   } catch (error) {
     console.error('Failed to fetch ranking data:', error)
     return null
@@ -115,6 +115,10 @@ async function getRankingFromKV(): Promise<RankingData | null> {
 // Extract unique video IDs from ranking data
 function extractUniqueVideoIds(rankingData: RankingData): string[] {
   const videoIds = new Set<string>()
+  
+  if (!rankingData?.genres) {
+    return []
+  }
   
   for (const genre of Object.keys(rankingData.genres)) {
     for (const period of ['24h', 'hour'] as const) {
