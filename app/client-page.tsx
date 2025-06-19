@@ -533,7 +533,7 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, config.tag, filterItems, ngList])  // ngListの変更を直接監視
+  }, [itemsWithTags, config.tag, filterItems])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決

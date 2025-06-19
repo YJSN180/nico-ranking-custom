@@ -92,7 +92,7 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang="ja" data-theme={theme}>
+    <html lang="ja" data-theme={theme} suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0080ff" />
@@ -102,7 +102,7 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <Script src="/theme-script.js" strategy="beforeInteractive" />
         <ThemeProvider>
           <WebVitalsReporter />

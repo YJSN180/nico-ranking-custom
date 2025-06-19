@@ -264,7 +264,7 @@ function applySecurityHeaders(response: Response): Response {
   // Content Security Policy (CSP)
   const cspDirectives = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live",
+    "script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live https://static.cloudflareinsights.com",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
