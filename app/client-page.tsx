@@ -42,6 +42,7 @@ export default function ClientPage({
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
+  const { ngList, filterItems } = useUserNGList()
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
@@ -324,7 +325,7 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const apiUrl = `/api/edge/ranking?${apiParams.toString()}`
+      const apiUrl = `/api/ranking?${apiParams.toString()}`
       
       // Apply client-side rate limiting
       await requestThrottle.throttle(apiUrl)
@@ -555,7 +556,7 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, filterItems, config.tag, ngList])
+  }, [itemsWithTags, config.tag, filterItems, ngList])
   
   // レンダリング
   return (
