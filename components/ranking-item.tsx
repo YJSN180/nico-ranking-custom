@@ -96,6 +96,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               {item.thumbURL && (
                 <a
                   href={`https://www.nicovideo.jp/watch/${item.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onClick={(e) => {
                     const event = new CustomEvent('saveRankingState')
                     window.dispatchEvent(event)
@@ -130,6 +132,8 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               {/* タイトル */}
               <a
                 href={`https://www.nicovideo.jp/watch/${item.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={(e) => {
                   // スクロール位置を保存する（動画ページから戻った時のため）
                   const event = new CustomEvent('saveRankingState')
