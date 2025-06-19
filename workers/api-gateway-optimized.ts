@@ -1,10 +1,8 @@
 /**
  * Cloudflare Workers API Gateway - KV Optimized Version
  * KVバインディングを直接使用してKV読み取り回数を大幅削減
+ * 圧縮なしのJSON形式でデータを直接読み取り
  */
-
-// Import compression utilities from cloudflare-kv-worker
-import { decompressData as decompressDataWorker } from '../lib/cloudflare-kv-worker'
 
 // Import crypto for ETag generation
 const crypto = globalThis.crypto
@@ -18,7 +16,7 @@ export interface Env {
   WORKER_AUTH_KEY?: string
 }
 
-// Cache for decompressed data
+// Cache for data
 const memoryCache = new Map<string, { data: any; timestamp: number; etag: string }>()
 const CACHE_TTL = 60 * 1000 // 1 minute
 
@@ -31,9 +29,6 @@ async function generateETag(content: string): Promise<string> {
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
   return `"${hashHex.substring(0, 16)}"`
 }
-
-// Use decompressData from cloudflare-kv-worker
-const decompressData = decompressDataWorker
 
 // Get ranking data directly from KV binding
 async function getRankingDataFromKV(env: Env, bypassCache = false): Promise<any> {
@@ -51,24 +46,15 @@ async function getRankingDataFromKV(env: Env, bypassCache = false): Promise<any>
   try {
     const result = await env.RANKING_DATA.getWithMetadata(
       'RANKING_LATEST',
-      { type: 'arrayBuffer' }
+      { type: 'json' }
     )
     
     if (!result.value) {
       return { data: null, etag: null }
     }
 
-    // Decompress data - all data in KV is gzipped
-    let data: any
-    
-    if (result.value instanceof ArrayBuffer) {
-      data = await decompressData(new Uint8Array(result.value))
-    } else if (result.value instanceof Uint8Array) {
-      data = await decompressData(result.value)
-    } else {
-      // This shouldn't happen with arrayBuffer type, but handle it anyway
-      throw new Error('[KV-OPT] Unexpected data type from KV')
-    }
+    // Data is now stored uncompressed as JSON
+    const data = result.value
     
     // Generate ETag
     const etag = await generateETag(JSON.stringify(data))
@@ -103,24 +89,15 @@ async function getVideoStatsFromKV(env: Env, bypassCache = false): Promise<any> 
   try {
     const result = await env.RANKING_DATA.getWithMetadata(
       'VIDEO_STATS_LATEST',
-      { type: 'arrayBuffer' }
+      { type: 'json' }
     )
     
     if (!result.value) {
       return { data: null, etag: null }
     }
 
-    // Decompress data - all data in KV is gzipped
-    let data: any
-    
-    if (result.value instanceof ArrayBuffer) {
-      data = await decompressData(new Uint8Array(result.value))
-    } else if (result.value instanceof Uint8Array) {
-      data = await decompressData(result.value)
-    } else {
-      // This shouldn't happen with arrayBuffer type, but handle it anyway
-      throw new Error('[KV-OPT] Unexpected data type from KV for video stats')
-    }
+    // Data is now stored uncompressed as JSON
+    const data = result.value
     
     // Generate ETag
     const etag = await generateETag(JSON.stringify(data))
@@ -201,7 +178,7 @@ async function handleRankingAPI(request: Request, env: Env): Promise<Response> {
         'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600',
         'ETag': etag || '',
         'X-Cache-Status': 'KV-OPTIMIZED',
-        'X-API-Version': 'kv-optimized'
+        'X-API-Version': 'kv-optimized-uncompressed'
       }
     })
     
@@ -359,7 +336,7 @@ export default {
           : env.NEXT_APP_URL
           
         return new Response(JSON.stringify({
-          mode: 'KV_OPTIMIZED',
+          mode: 'KV_OPTIMIZED_UNCOMPRESSED',
           env: {
             NEXT_APP_URL: env.NEXT_APP_URL || 'NOT SET',
             USE_PREVIEW: env.USE_PREVIEW || 'false',
@@ -373,7 +350,8 @@ export default {
             kvOptimized: true,
             memoryCache: true,
             etagSupport: true,
-            directKVAccess: true
+            directKVAccess: true,
+            compression: false
           },
           cacheInfo: {
             memoryCacheEntries: memoryCache.size,
@@ -446,7 +424,7 @@ export default {
       return new Response(JSON.stringify({
         error: 'Internal Server Error',
         message: error instanceof Error ? error.message : 'Unknown error',
-        mode: 'KV_OPTIMIZED'
+        mode: 'KV_OPTIMIZED_UNCOMPRESSED'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }

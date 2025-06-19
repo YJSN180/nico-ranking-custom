@@ -72,12 +72,18 @@ async function writeToCloudflareKV(data: any): Promise<void> {
     throw new Error("Cloudflare KV credentials not configured");
   }
 
-  // Dynamic import for pako
-  const pako = await import('pako');
   const jsonString = JSON.stringify(data);
-  const compressed = pako.gzip(jsonString);
-
-  console.log(`Compressed data size: ${(compressed.length / 1024).toFixed(2)} KB`);
+  console.log(`Data size: ${(jsonString.length / 1024 / 1024).toFixed(2)} MB (${(jsonString.length / 1024).toFixed(2)} KB)`);
+  
+  // Check if data size is within reasonable limits for uncompressed storage
+  // Cloudflare KV free tier: 1 GB storage
+  const maxSizeInMB = 100; // Conservative limit of 100 MB per key
+  const sizeInMB = jsonString.length / 1024 / 1024;
+  
+  if (sizeInMB > maxSizeInMB) {
+    console.warn(`Data size (${sizeInMB.toFixed(2)} MB) exceeds recommended limit of ${maxSizeInMB} MB`);
+    console.warn(`Consider enabling compression if data continues to grow`);
+  }
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
   
@@ -89,9 +95,9 @@ async function writeToCloudflareKV(data: any): Promise<void> {
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${CF_API_TOKEN}`,
-          "Content-Type": "application/octet-stream",
+          "Content-Type": "application/json",
         },
-        body: compressed,
+        body: jsonString,
       });
 
       if (response.status === 429) {
@@ -126,7 +132,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          compressed: true,
+          compressed: false,
           version: 1,
           updatedAt: data.metadata?.updatedAt || new Date().toISOString(),
           totalItems: data.metadata?.totalItems || 0,

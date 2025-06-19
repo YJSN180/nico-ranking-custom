@@ -58,7 +58,7 @@ describe('Full KV Optimization Mode', () => {
       }
 
       mockEnv.RANKING_DATA.getWithMetadata.mockResolvedValue({
-        value: new TextEncoder().encode(JSON.stringify(mockRankingData)),
+        value: mockRankingData,
         metadata: { compressed: false }
       })
 
@@ -73,7 +73,7 @@ describe('Full KV Optimization Mode', () => {
       expect(response.status).toBe(200)
       expect(responseTime).toBeLessThan(500)
       expect(response.headers.get('X-Cache-Status')).toBe('KV-OPTIMIZED')
-      expect(response.headers.get('X-API-Version')).toBe('kv-optimized')
+      expect(response.headers.get('X-API-Version')).toBe('kv-optimized-uncompressed')
     })
 
     it('should handle cache efficiently with ETag support', async () => {
@@ -82,7 +82,7 @@ describe('Full KV Optimization Mode', () => {
       }
 
       mockEnv.RANKING_DATA.getWithMetadata.mockResolvedValue({
-        value: new TextEncoder().encode(JSON.stringify(mockData)),
+        value: mockData,
         metadata: { compressed: false }
       })
 
@@ -144,7 +144,7 @@ describe('Full KV Optimization Mode', () => {
   describe('Security Headers', () => {
     it('should apply all security headers', async () => {
       mockEnv.RANKING_DATA.getWithMetadata.mockResolvedValue({
-        value: new TextEncoder().encode(JSON.stringify({ genres: {} })),
+        value: { genres: {} },
         metadata: {}
       })
 
@@ -168,7 +168,7 @@ describe('Full KV Optimization Mode', () => {
       }
 
       mockEnv.RANKING_DATA.getWithMetadata.mockResolvedValue({
-        value: new TextEncoder().encode(JSON.stringify(mockStatsData)),
+        value: mockStatsData,
         metadata: { compressed: false }
       })
 
