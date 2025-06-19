@@ -149,6 +149,10 @@ export function HeaderWithSettings() {
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
+        onApply={() => {
+          // NG適用時に再取得を通知
+          window.dispatchEvent(new CustomEvent('ngListApplied'))
+        }}
       />
     </>
   )

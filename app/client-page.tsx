@@ -508,6 +508,18 @@ export default function ClientPage({
     }
   }, [shouldRestore, config, handleConfigChange])
   
+  // NG適用時にAPIから再取得
+  useEffect(() => {
+    const handleNGListApplied = () => {
+      // キャッシュをクリアして強制的に再取得
+      rankingCache.clear()
+      // 現在の設定で再取得
+      handleConfigChange(config)
+    }
+    
+    window.addEventListener('ngListApplied', handleNGListApplied)
+    return () => window.removeEventListener('ngListApplied', handleNGListApplied)
+  }, [config, handleConfigChange])
 
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
