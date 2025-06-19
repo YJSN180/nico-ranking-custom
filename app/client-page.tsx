@@ -325,7 +325,7 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const apiUrl = `/api/ranking?${apiParams.toString()}`
+      const apiUrl = `/api/edge/ranking?${apiParams.toString()}`
       
       // Apply client-side rate limiting
       await requestThrottle.throttle(apiUrl)
