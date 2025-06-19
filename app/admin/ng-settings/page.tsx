@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import type { NGList } from '@/types/ng-list'
 import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
+import { DerivedNGList } from './components/DerivedNGList'
 
 export default function NGSettingsPage() {
   const [ngList, setNgList] = useState<NGList>(createEmptyNGList())
@@ -153,31 +154,6 @@ export default function NGSettingsPage() {
     })
   }
 
-  // 派生NGリストをクリア
-  const clearDerivedList = async () => {
-    if (!confirm('派生NGリストをすべてクリアしますか？')) return
-    
-    try {
-      const response = await fetch('/api/admin/ng-list/derived', { 
-        method: 'DELETE',
-        credentials: 'same-origin'
-      })
-      if (!response.ok) {
-        console.error('Failed to clear derived list:', response.status, response.statusText)
-        if (response.status === 401) {
-          alert('認証エラー: ページをリロードして再度ログインしてください')
-        } else {
-          alert('クリアに失敗しました')
-        }
-      } else {
-        setNgList((prev: NGList) => ({ ...prev, derivedVideoIds: [] }))
-        alert('クリアしました')
-      }
-    } catch (error) {
-      console.error('Error clearing derived list:', error)
-      alert('クリアに失敗しました')
-    }
-  }
 
   if (loading) {
     return <div style={{ padding: '20px' }}>読み込み中...</div>
@@ -382,40 +358,12 @@ export default function NGSettingsPage() {
       </div>
 
       {/* 派生NGリスト */}
-      <div>
-        <h2>派生NGリスト（自動追加）</h2>
-        <p style={{ color: '#666', marginBottom: '10px' }}>
-          他の条件（タイトル・投稿者名）でNGされた動画IDが自動的に追加されます。
-          cron処理・動的API取得の両方で機能し、一度NGになった動画は確実に除外され続けます。
-        </p>
-        <p style={{ marginBottom: '20px' }}>
-          登録数: {ngList.derivedVideoIds?.length || 0}件
-        </p>
-        <button 
-          onClick={clearDerivedList}
-          style={{
-            padding: '10px 20px',
-            background: '#dc3545',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          すべてクリア
-        </button>
-        
-        {ngList.derivedVideoIds && ngList.derivedVideoIds.length > 0 && (
-          <details style={{ marginTop: '20px' }}>
-            <summary style={{ cursor: 'pointer' }}>一覧を表示</summary>
-            <ul style={{ maxHeight: '300px', overflow: 'auto', marginTop: '10px' }}>
-              {ngList.derivedVideoIds.map((id, index) => (
-                <li key={index}>{id}</li>
-              ))}
-            </ul>
-          </details>
-        )}
-      </div>
+      <DerivedNGList
+        initialData={ngList.derivedVideoIds || []}
+        onUpdate={(newList) => {
+          setNgList(prev => ({ ...prev, derivedVideoIds: newList }))
+        }}
+      />
     </div>
   )
 }
