@@ -150,8 +150,8 @@ export function HeaderWithSettings() {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
         onApply={() => {
-          // NG適用時に再取得を通知
-          window.dispatchEvent(new CustomEvent('ngListApplied'))
+          // NGリストの適用は、useUserNGListフックのngListUpdatedイベントで
+          // 自動的に処理されるため、追加のイベント発火は不要
         }}
       />
     </>

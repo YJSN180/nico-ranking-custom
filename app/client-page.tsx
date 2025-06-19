@@ -190,16 +190,8 @@ export default function ClientPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // 初回のみ実行
   
-  // リアルタイム統計更新を使用（3分ごとに自動更新）
-  const REALTIME_UPDATE_INTERVAL = 3 * 60 * 1000 // 3分
-  const { items: realtimeItems, isLoading: isUpdating, lastUpdated } = useRealtimeStats(
-    rankingData,
-    true,
-    REALTIME_UPDATE_INTERVAL
-  )
-  
-  // タグ機能は削除されました
-  const itemsWithTags = realtimeItems
+  // NGフィルタリング前のアイテム（リアルタイム統計は後で適用）
+  const itemsWithTags = rankingData
   
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
@@ -505,18 +497,7 @@ export default function ClientPage({
     }
   }, [shouldRestore, config, handleConfigChange])
   
-  // NG適用時にAPIから再取得
-  useEffect(() => {
-    const handleNGListApplied = () => {
-      // キャッシュをクリアして強制的に再取得
-      rankingCache.clear()
-      // 現在の設定で再取得
-      handleConfigChange(config)
-    }
-    
-    window.addEventListener('ngListApplied', handleNGListApplied)
-    return () => window.removeEventListener('ngListApplied', handleNGListApplied)
-  }, [config, handleConfigChange])
+  // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
@@ -552,7 +533,13 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, config.tag, filterItems, ngList])
+  }, [itemsWithTags, config.tag, filterItems, ngList])  // ngListの変更を直接監視
+  
+  // リアルタイム統計更新を無効化（KVの5分更新で十分）
+  // 429エラーを回避し、NGフィルタリング時の問題を解決
+  const finalDisplayItems = displayItems
+  const isUpdating = false
+  const lastUpdated = null
   
   // レンダリング
   return (
@@ -586,7 +573,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && displayItems.length === 0 && (
+      {!loading && !error && finalDisplayItems.length === 0 && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
@@ -597,7 +584,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && displayItems.length > 0 && (
+      {!loading && !error && finalDisplayItems.length > 0 && (
         <>
           {/* リアルタイム更新インジケーター */}
           <div style={{
@@ -633,12 +620,12 @@ export default function ClientPage({
             color: 'var(--text-secondary)',
             textAlign: 'right'
           }}>
-            {displayItems.length}件表示
+            {finalDisplayItems.length}件表示
           </div>
           
           {/* ランキングリスト */}
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {displayItems.map((item) => (
+            {finalDisplayItems.map((item) => (
               <RankingItemComponent 
                 key={item.id} 
                 item={item} 
