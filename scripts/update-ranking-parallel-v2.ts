@@ -42,8 +42,23 @@ const GENRE_ID_MAP: Record<RankingGenre, string> = {
   other: 'ramuboyn'
 };
 
-// NG list interface
+// NG list interface (matching frontend structure)
 interface NGList {
+  videoIds: string[]
+  videoTitles: {
+    exact: string[]
+    partial: string[]
+  }
+  authorIds: string[]
+  authorNames: {
+    exact: string[]
+    partial: string[]
+  }
+  derivedVideoIds: string[]
+}
+
+// Legacy NG list for backwards compatibility
+interface LegacyNGList {
   videoIds: string[]
   videoTitles: string[]
   authorIds: string[]
@@ -109,6 +124,30 @@ function convertThumbnailUrl(url: string): string {
   return url.replace(/\.M$/, '.L');
 }
 
+// Migrate legacy NG list to new structure
+function migrateLegacyNGList(data: any): NGList {
+  // If already in new format, return as-is
+  if (data.videoTitles && typeof data.videoTitles === 'object' && Array.isArray(data.videoTitles.exact)) {
+    return data as NGList;
+  }
+  
+  // Convert legacy format to new structure
+  const legacy = data as LegacyNGList;
+  return {
+    videoIds: legacy.videoIds || [],
+    videoTitles: {
+      exact: legacy.videoTitles || [],
+      partial: []
+    },
+    authorIds: legacy.authorIds || [],
+    authorNames: {
+      exact: legacy.authorNames || [],
+      partial: []
+    },
+    derivedVideoIds: legacy.derivedVideoIds || []
+  };
+}
+
 // Get NG list from artifact file (CI) or Vercel KV (fallback)
 async function getNGList(): Promise<NGList> {
   try {
@@ -118,7 +157,7 @@ async function getNGList(): Promise<NGList> {
       await fs.access(ngListPath);
       console.log('Loading NG list from artifact file');
       const data = JSON.parse(await fs.readFile(ngListPath, 'utf-8'));
-      return data;
+      return migrateLegacyNGList(data);
     } catch {
       // File doesn't exist, continue to KV fetch
     }
@@ -126,43 +165,81 @@ async function getNGList(): Promise<NGList> {
     // Fallback to fetching from KV (for local development or manual runs)
     console.log('Fetching NG list from KV');
     const [manual, derived] = await Promise.all([
-      kv.get<Omit<NGList, 'derivedVideoIds'>>('ng-list-manual'),
+      kv.get<any>('ng-list-manual'),
       kv.get<string[]>('ng-list-derived')
     ]);
     
-    return {
+    const legacyData = {
       videoIds: manual?.videoIds || [],
       videoTitles: manual?.videoTitles || [],
       authorIds: manual?.authorIds || [],
       authorNames: manual?.authorNames || [],
       derivedVideoIds: derived || []
     };
+    
+    return migrateLegacyNGList(legacyData);
   } catch (error) {
     console.error('Failed to fetch NG list:', error);
     return {
       videoIds: [],
-      videoTitles: [],
+      videoTitles: { exact: [], partial: [] },
       authorIds: [],
-      authorNames: [],
+      authorNames: { exact: [], partial: [] },
       derivedVideoIds: []
     };
   }
 }
 
-// Filter items with NG list
-function filterWithNGList(items: RankingItem[], ngList: NGList): RankingItem[] {
-  const videoIdSet = new Set([...ngList.videoIds, ...ngList.derivedVideoIds]);
-  const titleSet = new Set(ngList.videoTitles);
-  const authorIdSet = new Set(ngList.authorIds);
-  const authorNameSet = new Set(ngList.authorNames);
+// Filter items with NG list and track new derived IDs
+function filterWithNGList(items: RankingItem[], ngList: NGList): { filteredItems: RankingItem[], newDerivedIds: string[] } {
+  const newDerivedIds: string[] = [];
   
-  return items.filter(item => {
+  // High-speed lookups
+  const videoIdSet = new Set(ngList.videoIds);
+  const derivedVideoIdSet = new Set(ngList.derivedVideoIds);
+  const videoTitleExactSet = new Set(ngList.videoTitles.exact);
+  const authorIdSet = new Set(ngList.authorIds);
+  const authorNameExactSet = new Set(ngList.authorNames.exact);
+  
+  const filteredItems = items.filter(item => {
+    // Already in manual NG list
     if (videoIdSet.has(item.id)) return false;
-    if (titleSet.has(item.title)) return false;
-    if (item.authorId && authorIdSet.has(item.authorId)) return false;
-    if (item.authorName && authorNameSet.has(item.authorName)) return false;
+    
+    // Already in derived NG list
+    if (derivedVideoIdSet.has(item.id)) return false;
+    
+    // Title checks
+    if (videoTitleExactSet.has(item.title)) {
+      newDerivedIds.push(item.id);
+      return false;
+    }
+    
+    if (ngList.videoTitles.partial.some(partial => item.title.includes(partial))) {
+      newDerivedIds.push(item.id);
+      return false;
+    }
+    
+    // Author ID check
+    if (item.authorId && authorIdSet.has(item.authorId)) {
+      newDerivedIds.push(item.id);
+      return false;
+    }
+    
+    // Author name checks
+    if (item.authorName && authorNameExactSet.has(item.authorName)) {
+      newDerivedIds.push(item.id);
+      return false;
+    }
+    
+    if (item.authorName && ngList.authorNames.partial.some(partial => item.authorName!.includes(partial))) {
+      newDerivedIds.push(item.id);
+      return false;
+    }
+    
     return true;
   });
+  
+  return { filteredItems, newDerivedIds };
 }
 
 // Fetch ranking page with retry logic
@@ -257,8 +334,15 @@ async function fetchWithNGFiltering(
         popularTags = pageTags;
       }
 
-      const filteredItems = filterWithNGList(items, ngList);
+      const { filteredItems, newDerivedIds } = filterWithNGList(items, ngList);
       allItems.push(...filteredItems);
+      
+      // Track new derived IDs for later update
+      if (newDerivedIds.length > 0) {
+        // Add to ngList for subsequent filtering in same session
+        ngList.derivedVideoIds.push(...newDerivedIds);
+        console.log(`Found ${newDerivedIds.length} new derived IDs for ${genre}/${period} page ${page}`);
+      }
 
       if (items.length < 100) break;
       page++;
@@ -448,7 +532,8 @@ async function main() {
     
     // Get NG list
     const ngList = await getNGList();
-    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.length} titles, ${ngList.authorIds.length} authors, ${ngList.derivedVideoIds.length} derived`);
+    const originalDerivedCount = ngList.derivedVideoIds.length;
+    console.log(`NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived`);
 
     // Build final data structure
     const rankingData: any = {
@@ -515,8 +600,25 @@ async function main() {
     
     rankingData.metadata.totalItems = totalItemsCount;
 
+    // Update derived NG list if new entries were found
+    const newDerivedCount = ngList.derivedVideoIds.length;
+    if (newDerivedCount > originalDerivedCount) {
+      const newlyAdded = newDerivedCount - originalDerivedCount;
+      console.log(`\nUpdating derived NG list: added ${newlyAdded} new entries (${originalDerivedCount} → ${newDerivedCount})`);
+      
+      try {
+        await kv.put('ng-list-derived', ngList.derivedVideoIds);
+        console.log('✅ Derived NG list updated successfully');
+      } catch (error) {
+        console.error('❌ Failed to update derived NG list:', error);
+        // Continue with ranking data update even if NG list update fails
+      }
+    } else {
+      console.log('\nNo new derived NG entries found');
+    }
+    
     // Write to Cloudflare KV
-    console.log('\nWriting to Cloudflare KV...');
+    console.log('\nWriting ranking data to Cloudflare KV...');
     await writeToCloudflareKV(rankingData);
 
     const duration = Date.now() - startTime;
@@ -561,6 +663,8 @@ if (process.argv[2] === '--group') {
   (async () => {
     const startTime = Date.now();
     const ngList = await getNGList();
+    const originalDerivedCount = ngList.derivedVideoIds.length;
+    console.log(`Group ${groupId} NG list: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived`);
     
     // Process each genre sequentially within group
     const results = [];
@@ -581,6 +685,14 @@ if (process.argv[2] === '--group') {
       path.join(tmpDir, `ranking-group-${groupId}.json`),
       JSON.stringify(results, null, 2)
     );
+    
+    // Check if new derived entries were found
+    const newDerivedCount = ngList.derivedVideoIds.length;
+    if (newDerivedCount > originalDerivedCount) {
+      const newlyAdded = newDerivedCount - originalDerivedCount;
+      console.log(`Group ${groupId} found ${newlyAdded} new derived NG entries (${originalDerivedCount} → ${newDerivedCount})`);
+      // Note: Group mode doesn't update KV directly, this will be handled in final aggregation
+    }
     
     const duration = Date.now() - startTime;
     console.log(`Group ${groupId} completed in ${Math.round(duration / 1000)}s with ${results.length} genres`);
