@@ -59,7 +59,7 @@ describe('CDN Cache Headers', () => {
       expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
     })
 
-    it('should set 5-minute cache headers for dynamic fetch', async () => {
+    it('should set 25-minute cache headers for dynamic fetch', async () => {
       // Arrange
       vi.mocked(getGenreRanking).mockResolvedValue(null)
       vi.mocked(scrapeRankingPage).mockResolvedValue({
@@ -73,7 +73,7 @@ describe('CDN Cache Headers', () => {
       const response = await rankingGET(request)
 
       // Assert
-      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=600')
+      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=1500, max-age=300, stale-while-revalidate=600')
       expect(response.headers.get('X-Cache-Status')).toBe('DYNAMIC')
     })
   })

@@ -1,16 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useState, useEffect } from 'react'
+import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
   isOpen: boolean
   onClose: () => void
+  onApply?: () => void  // 適用時のコールバック
 }
 
-export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'display' | 'nglist'>('nglist')
   const [inputVideoId, setInputVideoId] = useState('')
   const [inputVideoTitle, setInputVideoTitle] = useState('')
@@ -19,47 +20,159 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [inputAuthorName, setInputAuthorName] = useState('')
   const [authorNameType, setAuthorNameType] = useState<'exact' | 'partial'>('exact')
 
-  const {
-    ngList,
-    addVideoId,
-    removeVideoId,
-    addVideoTitle,
-    removeVideoTitle,
-    addAuthorId,
-    removeAuthorId,
-    addAuthorName,
-    removeAuthorName,
-  } = useUserNGList()
+  const { ngList, saveNGListDirectly } = useUserNGList()
+  
+  // 一時的なNGリストの状態
+  const [tempNGList, setTempNGList] = useState<UserNGList>(ngList)
+  const [hasChanges, setHasChanges] = useState(false)
+  
+  // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
+  useEffect(() => {
+    if (isOpen) {
+      setTempNGList(ngList)
+      setHasChanges(false)
+    }
+  }, [isOpen, ngList])
+  
+  // 変更検知
+  useEffect(() => {
+    const isChanged = JSON.stringify(tempNGList) !== JSON.stringify(ngList)
+    setHasChanges(isChanged)
+  }, [tempNGList, ngList])
 
   const { preferences, updatePreferences } = useUserPreferences()
 
   if (!isOpen) return null
 
+  // 一時リストへの操作メソッド
   const handleAddVideoId = () => {
-    if (inputVideoId.trim()) {
-      addVideoId(inputVideoId.trim())
+    const id = inputVideoId.trim()
+    if (id && !tempNGList.videoIds.includes(id)) {
+      setTempNGList(prev => ({
+        ...prev,
+        videoIds: [...prev.videoIds, id],
+        totalCount: prev.totalCount + 1
+      }))
       setInputVideoId('')
     }
   }
 
   const handleAddVideoTitle = () => {
-    if (inputVideoTitle.trim()) {
-      addVideoTitle(inputVideoTitle.trim(), videoTitleType)
-      setInputVideoTitle('')
+    const title = inputVideoTitle.trim()
+    if (title) {
+      const list = videoTitleType === 'exact' 
+        ? tempNGList.videoTitles.exact 
+        : tempNGList.videoTitles.partial
+      
+      if (!list.includes(title)) {
+        setTempNGList(prev => ({
+          ...prev,
+          videoTitles: {
+            ...prev.videoTitles,
+            [videoTitleType]: [...prev.videoTitles[videoTitleType], title]
+          },
+          totalCount: prev.totalCount + 1
+        }))
+        setInputVideoTitle('')
+      }
     }
   }
 
   const handleAddAuthorId = () => {
-    if (inputAuthorId.trim()) {
-      addAuthorId(inputAuthorId.trim())
+    const id = inputAuthorId.trim()
+    if (id && !tempNGList.authorIds.includes(id)) {
+      setTempNGList(prev => ({
+        ...prev,
+        authorIds: [...prev.authorIds, id],
+        totalCount: prev.totalCount + 1
+      }))
       setInputAuthorId('')
     }
   }
 
   const handleAddAuthorName = () => {
-    if (inputAuthorName.trim()) {
-      addAuthorName(inputAuthorName.trim(), authorNameType)
-      setInputAuthorName('')
+    const name = inputAuthorName.trim()
+    if (name) {
+      const list = authorNameType === 'exact' 
+        ? tempNGList.authorNames.exact 
+        : tempNGList.authorNames.partial
+      
+      if (!list.includes(name)) {
+        setTempNGList(prev => ({
+          ...prev,
+          authorNames: {
+            ...prev.authorNames,
+            [authorNameType]: [...prev.authorNames[authorNameType], name]
+          },
+          totalCount: prev.totalCount + 1
+        }))
+        setInputAuthorName('')
+      }
+    }
+  }
+  
+  // 削除メソッド
+  const removeVideoId = (id: string) => {
+    setTempNGList(prev => ({
+      ...prev,
+      videoIds: prev.videoIds.filter(v => v !== id),
+      totalCount: prev.totalCount - 1
+    }))
+  }
+  
+  const removeVideoTitle = (title: string, type: 'exact' | 'partial') => {
+    setTempNGList(prev => ({
+      ...prev,
+      videoTitles: {
+        ...prev.videoTitles,
+        [type]: prev.videoTitles[type].filter(t => t !== title)
+      },
+      totalCount: prev.totalCount - 1
+    }))
+  }
+  
+  const removeAuthorId = (id: string) => {
+    setTempNGList(prev => ({
+      ...prev,
+      authorIds: prev.authorIds.filter(a => a !== id),
+      totalCount: prev.totalCount - 1
+    }))
+  }
+  
+  const removeAuthorName = (name: string, type: 'exact' | 'partial') => {
+    setTempNGList(prev => ({
+      ...prev,
+      authorNames: {
+        ...prev.authorNames,
+        [type]: prev.authorNames[type].filter(n => n !== name)
+      },
+      totalCount: prev.totalCount - 1
+    }))
+  }
+  
+  // 適用処理
+  const handleApply = async () => {
+    // NGリストを保存
+    saveNGListDirectly(tempNGList)
+    
+    // コールバックを実行（ランキング再取得など）
+    if (onApply) {
+      await onApply()
+    }
+    
+    // モーダルを閉じる
+    onClose()
+  }
+  
+  // 閉じる処理
+  const handleClose = () => {
+    if (hasChanges) {
+      if (confirm('変更を破棄してもよろしいですか？')) {
+        setTempNGList(ngList)  // 元に戻す
+        onClose()
+      }
+    } else {
+      onClose()
     }
   }
 
@@ -176,7 +289,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               <section className={styles.section}>
                 <h3>🚫 動画ID</h3>
                 <div className={styles.list}>
-                  {ngList.videoIds.map((id) => (
+                  {tempNGList.videoIds.map((id) => (
                     <div key={id} className={styles.listItem}>
                       <span>{id}</span>
                       <button onClick={() => removeVideoId(id)}>×</button>
@@ -219,13 +332,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                   </label>
                 </div>
                 <div className={styles.list}>
-                  {ngList.videoTitles.exact.map((title) => (
+                  {tempNGList.videoTitles.exact.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (完全)</span>
                       <button onClick={() => removeVideoTitle(title, 'exact')}>×</button>
                     </div>
                   ))}
-                  {ngList.videoTitles.partial.map((title) => (
+                  {tempNGList.videoTitles.partial.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (部分)</span>
                       <button onClick={() => removeVideoTitle(title, 'partial')}>×</button>
@@ -250,7 +363,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 <div className={styles.subsection}>
                   <h4>ID</h4>
                   <div className={styles.list}>
-                    {ngList.authorIds.map((id) => (
+                    {tempNGList.authorIds.map((id) => (
                       <div key={id} className={styles.listItem}>
                         <span>ID: {id}</span>
                         <button onClick={() => removeAuthorId(id)}>×</button>
@@ -292,13 +405,13 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     </label>
                   </div>
                   <div className={styles.list}>
-                    {ngList.authorNames.exact.map((name) => (
+                    {tempNGList.authorNames.exact.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (完全)</span>
                         <button onClick={() => removeAuthorName(name, 'exact')}>×</button>
                       </div>
                     ))}
-                    {ngList.authorNames.partial.map((name) => (
+                    {tempNGList.authorNames.partial.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (部分)</span>
                         <button onClick={() => removeAuthorName(name, 'partial')}>×</button>
@@ -323,11 +436,31 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
 
         <div className={styles.footer}>
           <div className={styles.stats}>
-            NGリスト: {ngList.totalCount}件
+            NGリスト: {tempNGList.totalCount}件
+            {hasChanges && <span style={{ color: 'var(--warning-color)', marginLeft: '8px' }}>(未保存)</span>}
           </div>
-          <button className={styles.closeButton} onClick={onClose}>
-            閉じる
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {hasChanges && (
+              <button 
+                className={styles.applyButton} 
+                onClick={handleApply}
+                style={{
+                  padding: '8px 16px',
+                  background: 'var(--primary-color)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                適用
+              </button>
+            )}
+            <button className={styles.closeButton} onClick={handleClose}>
+              閉じる
+            </button>
+          </div>
         </div>
       </div>
     </div>

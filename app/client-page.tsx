@@ -508,6 +508,17 @@ export default function ClientPage({
     }
   }, [shouldRestore, config, handleConfigChange])
   
+  // NGリスト適用時にランキングを再取得
+  useEffect(() => {
+    const handleNGListApplied = () => {
+      // 現在の設定でランキングを再取得
+      handleConfigChange(config)
+    }
+    
+    window.addEventListener('ngListApplied', handleNGListApplied)
+    return () => window.removeEventListener('ngListApplied', handleNGListApplied)
+  }, [config, handleConfigChange])
+
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
     // 表示件数の上限

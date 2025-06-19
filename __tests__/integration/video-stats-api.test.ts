@@ -75,8 +75,8 @@ describe('/api/edge/video-stats', () => {
     const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm12345')
     const response = await GET(request)
 
-    // Now uses 5-minute cache with KV integration
-    expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=300, stale-while-revalidate=60')
+    // Now uses 3-minute cache with KV integration
+    expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, max-age=60, stale-while-revalidate=120')
   })
 
   test('APIエラー時は500エラー', async () => {

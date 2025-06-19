@@ -278,6 +278,17 @@ export function useUserNGList() {
     })
   }, [ngList])
 
+  // 直接NGリストを保存（適用ボタン用）
+  const saveNGListDirectly = useCallback((newList: UserNGList) => {
+    const updatedList = {
+      ...newList,
+      updatedAt: new Date().toISOString(),
+      totalCount: recalculateTotalCount(newList)
+    }
+    setNGList(updatedList)
+    saveNGList(updatedList)
+  }, [saveNGList, recalculateTotalCount])
+
   return {
     ngList,
     addVideoId,
@@ -290,5 +301,6 @@ export function useUserNGList() {
     removeAuthorName,
     resetNGList,
     filterItems,
+    saveNGListDirectly,
   }
 }
