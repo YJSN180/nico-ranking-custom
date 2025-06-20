@@ -85,8 +85,18 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   try {
     if (tag) {
       // タグ別ランキングの場合
-      const { getTagRanking } = await import('@/lib/cloudflare-kv')
+      const { getTagRanking, getRankingFromKV } = await import('@/lib/cloudflare-kv')
+      
+      // デバッグ用：全データを確認
+      const allData = await getRankingFromKV()
+      if (allData?.genres?.[genre]?.[period as RankingPeriod]) {
+        const genreData = allData.genres[genre][period as RankingPeriod]
+        console.log(`[SSR Debug] Genre data exists: items=${genreData.items?.length}, tags=${Object.keys(genreData.tags || {}).length}`)
+        console.log(`[SSR Debug] Available tags:`, Object.keys(genreData.tags || {}).slice(0, 5))
+      }
+      
       const tagItems = await getTagRanking(genre, period as RankingPeriod, tag)
+      console.log(`[SSR] Tag ranking fetch: genre=${genre}, period=${period}, tag=${tag}, items=${tagItems?.length || 0}`)
       if (tagItems && tagItems.length > 0) {
         // NGフィルタリングを適用
         const { filteredData } = await filterRankingDataServer({
