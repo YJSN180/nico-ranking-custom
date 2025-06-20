@@ -20,7 +20,11 @@ export async function GET(request: NextRequest) {
   try {
     // Tag-specific ranking
     if (tag) {
+      // eslint-disable-next-line no-console
+      console.log(`[Edge API] Fetching tag ranking: genre=${genre}, period=${period}, tag=${tag}`)
       const items = await getTagRanking(genre, period as RankingPeriod, tag)
+      // eslint-disable-next-line no-console
+      console.log(`[Edge API] Tag ranking result: ${items?.length || 0} items`)
       
       const isCacheHit = items && items.length > 0
       
@@ -68,10 +72,17 @@ export async function GET(request: NextRequest) {
     response.headers.set('X-API-Version', '2')
     return response
     
-  } catch (error) {
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
     console.error('Edge ranking API error:', error)
+    // eslint-disable-next-line no-console
+    console.error('Error details:', {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name
+    })
     return NextResponse.json(
-      { error: 'Failed to fetch ranking data' },
+      { error: 'Failed to fetch ranking data', details: error?.message },
       { status: 500 }
     )
   }
