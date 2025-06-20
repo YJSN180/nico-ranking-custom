@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
-import { fetchRanking } from '@/lib/complete-hybrid-scraper'
-import { filterRankingDataServer, filterRankingItemsServer } from '@/lib/ng-filter-server'
-import { addToServerDerivedNGList } from '@/lib/ng-list-server'
-import { scrapeRankingPage } from '@/lib/scraper'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
 
@@ -50,70 +46,11 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      // キャッシュミス時は動的取得
-      // NGフィルタリング後に300件確保（タグ別ランキングの現実的な上限）
-      const targetCount = 300
-      let allItems: any[] = []
-      let currentPage = 1
-      const maxAttempts = 10
-      
-      while (allItems.length < targetCount && currentPage <= maxAttempts) {
-        const { items: pageItems } = await scrapeRankingPage(
-          genre,
-          period as RankingPeriod,
-          tag,
-          100,
-          currentPage
-        )
-        
-        if (!pageItems || pageItems.length === 0) break
-        
-        // Convert Partial<RankingItem>[] to RankingItem[]
-        const completeItems: RankingItem[] = pageItems
-          .filter((item): item is RankingItem => 
-            item.rank !== undefined &&
-            item.id !== undefined &&
-            item.title !== undefined &&
-            item.thumbURL !== undefined &&
-            item.views !== undefined
-          )
-        
-        // NGフィルタリング（タグ別ランキング）
-        const tagFilterResult = await filterRankingItemsServer(completeItems)
-        const filteredItems = tagFilterResult.filteredItems
-        
-        // 新しく見つかったNG動画IDを派生リストに追加
-        if (tagFilterResult.newDerivedIds.length > 0) {
-          try {
-            await addToServerDerivedNGList(tagFilterResult.newDerivedIds)
-            if (process.env.NODE_ENV === 'production') {
-              // eslint-disable-next-line no-console
-              console.log(`[NG] Added ${tagFilterResult.newDerivedIds.length} new derived NG IDs from tag ranking ${genre}-${period}-${tag}`)
-            }
-          } catch (error) {
-            console.error(`[NG] Failed to add derived NG IDs:`, error)
-          }
-        }
-        allItems = allItems.concat(filteredItems)
-        currentPage++
-      }
-      
-      // タグ別ランキングは最大300件まで
-      const limitedItems = allItems.slice(0, targetCount)
-      const rerankedItems = limitedItems.map((item, index) => ({
-        ...item,
-        rank: index + 1
-      }))
-      
-      const response = NextResponse.json({
-        items: rerankedItems, // 全件返す（最大300件）
-        hasMore: false, // タグ別ランキングは常にページネーションなし
-        totalCached: rerankedItems.length // 取得した総数
-      })
-      response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
-      response.headers.set('X-Cache-Status', 'MISS')
-      response.headers.set('X-API-Version', '2') // バージョン確認用
-      return response
+      // KVにデータがない場合はエラーを返す
+      return NextResponse.json(
+        { error: 'Failed to fetch ranking data' },
+        { status: 500 }
+      )
     }
 
     // 通常のジャンル別ランキング
@@ -144,52 +81,11 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // 動的取得にフォールバック
-    const { items: dynamicItems, popularTags: dynamicPopularTags } = await scrapeRankingPage(
-      genre,
-      period as RankingPeriod,
-      undefined,
-      500 // 最大500件取得
+    // KVにデータがない場合はエラーを返す
+    return NextResponse.json(
+      { error: 'Failed to fetch ranking data' },
+      { status: 500 }
     )
-    
-    // Convert Partial<RankingItem>[] to RankingItem[]
-    const completeItems: RankingItem[] = dynamicItems
-      .filter((item): item is RankingItem => 
-        item.rank !== undefined &&
-        item.id !== undefined &&
-        item.title !== undefined &&
-        item.thumbURL !== undefined &&
-        item.views !== undefined
-      )
-    
-    // NGフィルタリング
-    const filterResult = await filterRankingItemsServer(completeItems)
-    const filteredItems = filterResult.filteredItems
-    
-    // 新しく見つかったNG動画IDを派生リストに追加
-    if (filterResult.newDerivedIds.length > 0) {
-      try {
-        await addToServerDerivedNGList(filterResult.newDerivedIds)
-        if (process.env.NODE_ENV === 'production') {
-          // eslint-disable-next-line no-console
-          console.log(`[NG] Added ${filterResult.newDerivedIds.length} new derived NG IDs from dynamic fetch ${genre}-${period}`)
-        }
-      } catch (error) {
-        console.error(`[NG] Failed to add derived NG IDs:`, error)
-      }
-    }
-    
-    const response = NextResponse.json({
-      items: filteredItems,
-      popularTags: dynamicPopularTags || [],
-      hasMore: false,
-      totalCached: filteredItems.length
-    })
-    response.headers.set('Cache-Control', 'public, s-maxage=1500, max-age=300, stale-while-revalidate=600')
-    response.headers.set('X-Cache-Status', 'DYNAMIC')
-    response.headers.set('X-Max-Items', '500')
-    response.headers.set('X-API-Version', '2') // バージョン確認用
-    return response
     
   } catch (error) {
     // API error - return error response

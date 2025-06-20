@@ -6,8 +6,6 @@ import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
 import { cookies } from 'next/headers'
 import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
-// import { getMockRankingData } from '@/lib/mock-data' // モックデータは使用しない
-import { scrapeRankingPage } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import { getGenreRanking } from '@/lib/cloudflare-kv'
@@ -111,47 +109,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     }
   }
 
-  // 2. Fallback: Generate data on demand
-  try {
-    const { items: scrapedItems } = await scrapeRankingPage(genre, period as '24h' | 'hour', tag)
-    
-    // 人気タグを取得（タグ指定なし、かつallジャンル以外の場合）
-    let popularTags: string[] = []
-    if (!tag && genre !== 'all') {
-      try {
-        // popular-tags.tsのgetPopularTagsを使用（KVやバックアップから取得）
-        popularTags = await getPopularTags(genre as any, period as '24h' | 'hour')
-      } catch (error) {
-        // エラー時は空配列のまま
-      }
-    }
-    
-    const items: RankingData = scrapedItems.map((item) => ({
-      rank: item.rank || 0,
-      id: item.id || '',
-      title: item.title || '',
-      thumbURL: item.thumbURL || '',
-      views: item.views || 0,
-      comments: item.comments,
-      mylists: item.mylists,
-      likes: item.likes,
-      tags: item.tags,
-      authorId: item.authorId,
-      authorName: item.authorName,
-      authorIcon: item.authorIcon,
-      registeredAt: item.registeredAt,
-    })).filter(item => item.id && item.title)
-    
-    // Caching is now handled by Cloudflare KV in the scraper
-    
-    // NGフィルタリングを適用
-    const { filteredData } = await filterRankingDataServer({ items, popularTags })
-    return filteredData
-  } catch (error) {
-    // スクレイピングエラーログはスキップ（ESLintエラー回避）
-    
-    // 3. エラー時は空のデータを返す（モックデータは使用しない）
-    return { items: [], popularTags: [] }
+  // 2. KVにデータがない場合は空のデータを返す
+  return {
+    items: [],
+    popularTags: []
   }
 }
 
