@@ -329,6 +329,19 @@ export default function ClientPage({
         } else if (response.status >= 500) {
           // 500エラーでも続行を試みる
           console.error(`[Client] Server error ${response.status}, attempting to parse response`)
+          // レスポンスボディを確認
+          try {
+            const errorText = await response.text()
+            console.error(`[Client] Error response body:`, errorText)
+            // JSONとしてパースを試みる
+            const errorData = JSON.parse(errorText)
+            if (errorData.error) {
+              throw new Error(errorData.error)
+            }
+          } catch (e) {
+            // パースエラーの場合はデフォルトメッセージ
+            throw new Error(`サーバーエラーが発生しました (${response.status})`)
+          }
         } else if (response.status >= 400) {
           throw new Error(`データの取得に失敗しました (${response.status})`)
         }

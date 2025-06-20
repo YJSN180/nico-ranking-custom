@@ -1,11 +1,6 @@
 // Cloudflare KV integration for ranking data storage
 // This module handles reading and writing ranking data to Cloudflare KV
 
-import { promisify } from 'util'
-import { gunzip } from 'zlib'
-
-const gunzipAsync = promisify(gunzip)
-
 import { getGroupIdForGenre, GENRE_GROUPS } from '../types/ranking-config'
 
 // KV namespace binding (will be injected by Cloudflare Workers)
@@ -96,14 +91,8 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
  * Read ranking data from Cloudflare KV (supports both single-key and 3-key split)
  */
 export async function getRankingFromKV(): Promise<KVRankingData | null> {
-  // First, try to read from 3-key split structure
-  const mergedData = await getRankingFromKV3Keys()
-  if (mergedData) {
-    return mergedData
-  }
-  
-  // Fallback to single key for backward compatibility
-  return getRankingFromKVSingleKey()
+  // 3-key split structureのみ使用
+  return getRankingFromKV3Keys()
 }
 
 /**
@@ -146,21 +135,12 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       
       const data = await response.arrayBuffer()
       
-      // Try to decompress if it's compressed
+      const jsonString = new TextDecoder().decode(new Uint8Array(data))
       try {
-        // First try to decompress (for compressed data)
-        const decompressed = await gunzipAsync(Buffer.from(data))
-        const jsonString = new TextDecoder().decode(decompressed)
         return JSON.parse(jsonString) as KVRankingData
-      } catch (gzipError) {
-        // If decompression fails, try parsing as plain JSON (backward compatibility)
-        try {
-          const jsonString = new TextDecoder().decode(new Uint8Array(data))
-          return JSON.parse(jsonString) as KVRankingData
-        } catch (parseError) {
-          console.error(`[KV] Failed to parse ${keyName}:`, parseError)
-          return null
-        }
+      } catch (parseError) {
+        console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
+        return null
       }
     })
     
@@ -171,6 +151,15 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       .filter(result => result.status === 'fulfilled' && result.value !== null)
       .map(result => (result as PromiseFulfilledResult<KVRankingData | null>).value)
       .filter((value): value is KVRankingData => value !== null)
+    
+    // Log detailed errors for failed groups
+    groupResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(`[KV] Group ${index + 1} failed:`, result.reason)
+      } else if (result.status === 'fulfilled' && result.value === null) {
+        console.error(`[KV] Group ${index + 1} returned null`)
+      }
+    })
     
     // If no groups were successfully read, return null
     if (successfulResults.length === 0) {
@@ -250,16 +239,9 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
     
     // console.log(`[KV] Data received: ${data.byteLength} bytes`)
     
-    // Try to decompress first (for RANKING_LATEST which should be compressed)
-    try {
-      const decompressed = await gunzipAsync(Buffer.from(uint8Array))
-      const jsonString = new TextDecoder().decode(decompressed)
-      return JSON.parse(jsonString)
-    } catch (gzipError) {
-      // If decompression fails, try parsing as plain JSON (backward compatibility)
-      const jsonString = new TextDecoder().decode(uint8Array)
-      return JSON.parse(jsonString)
-    }
+    // 非圧縮JSONデータとして処理
+    const jsonString = new TextDecoder().decode(uint8Array)
+    return JSON.parse(jsonString)
   } catch (error) {
     // Failed to read from Cloudflare KV - returning null
     console.error('[KV] Failed to read RANKING_LATEST:', error)
@@ -274,30 +256,44 @@ export async function getGenreRanking(
   genre: string,
   period: '24h' | 'hour'
 ): Promise<{ items: any[], popularTags: string[], tags?: { [tag: string]: any[] }, metadata?: any } | null> {
-  // For 3-key split, only fetch the specific group containing this genre
-  const groupId = getGroupIdForGenre(genre as any)
-  const groupData = await getRankingGroupFromKV(groupId)
-  
-  if (!groupData || !groupData.genres || !groupData.genres[genre]) {
-    // Fallback to fetching all data (backward compatibility)
-    const data = await getRankingFromKV()
-    if (!data || !data.genres || !data.genres[genre]) {
+  try {
+    // For 3-key split, only fetch the specific group containing this genre
+    const groupId = getGroupIdForGenre(genre as any)
+    console.log(`[KV] Fetching genre '${genre}' from group ${groupId}`)
+    
+    const groupData = await getRankingGroupFromKV(groupId)
+    
+    if (!groupData || !groupData.genres || !groupData.genres[genre]) {
+      console.warn(`[KV] Genre '${genre}' not found in group ${groupId}, trying full data fetch`)
+      // Fallback to fetching all data (backward compatibility)
+      const data = await getRankingFromKV()
+      if (!data || !data.genres || !data.genres[genre]) {
+        console.error(`[KV] Genre '${genre}' not found in any data source`)
+        return null
+      }
+      const result = data.genres[genre][period]
+      if (data.metadata) {
+        return { ...result, metadata: data.metadata }
+      }
+      return result
+    }
+
+    const result = groupData.genres[genre][period]
+    if (!result) {
+      console.error(`[KV] Period '${period}' not found for genre '${genre}'`)
       return null
     }
-    const result = data.genres[genre][period]
-    if (data.metadata) {
-      return { ...result, metadata: data.metadata }
+    
+    // Add metadata if available
+    if (groupData.metadata) {
+      return { ...result, metadata: groupData.metadata }
     }
+    
     return result
+  } catch (error) {
+    console.error(`[KV] Error in getGenreRanking for genre='${genre}', period='${period}':`, error)
+    return null
   }
-
-  const result = groupData.genres[genre][period]
-  // Add metadata if available
-  if (groupData.metadata) {
-    return { ...result, metadata: groupData.metadata }
-  }
-  
-  return result
 }
 
 /**
@@ -338,21 +334,12 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     
     const data = await response.arrayBuffer()
     
-    // Try to decompress if it's compressed
+    const jsonString = new TextDecoder().decode(new Uint8Array(data))
     try {
-      // First try to decompress (for compressed data)
-      const decompressed = await gunzipAsync(Buffer.from(data))
-      const jsonString = new TextDecoder().decode(decompressed)
       return JSON.parse(jsonString) as KVRankingData
-    } catch (gzipError) {
-      // If decompression fails, try parsing as plain JSON (backward compatibility)
-      try {
-        const jsonString = new TextDecoder().decode(new Uint8Array(data))
-        return JSON.parse(jsonString) as KVRankingData
-      } catch (parseError) {
-        console.error(`[KV] Failed to parse ${keyName}:`, parseError)
-        return null
-      }
+    } catch (parseError) {
+      console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
+      return null
     }
     
   } catch (error) {

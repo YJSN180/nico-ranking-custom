@@ -2,11 +2,7 @@
 import 'dotenv/config'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { promisify } from 'util'
-import { gzip } from 'zlib'
 import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
-
-const gzipAsync = promisify(gzip)
 
 // Save derived NG entries to KV
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
@@ -79,22 +75,10 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
 
   const jsonString = JSON.stringify(data);
   const dataSize = jsonString.length / 1024 / 1024;
-  console.log(`Data size: ${dataSize.toFixed(2)} MB (uncompressed)`);
+  console.log(`Data size: ${dataSize.toFixed(2)} MB`);
   
-  // Compress the data to reduce size
-  let body: Buffer | string;
-  let isCompressed = false;
-  
-  if (keyName.startsWith('RANKING_GROUP_') || keyName === 'RANKING_LATEST') {
-    // Compress ranking data to reduce size
-    console.log(`🗜️  Compressing ${keyName}...`);
-    body = await gzipAsync(jsonString);
-    const compressedSize = body.length / 1024 / 1024;
-    console.log(`    Compressed to: ${compressedSize.toFixed(2)} MB (${((1 - compressedSize/dataSize) * 100).toFixed(1)}% reduction)`);
-    isCompressed = true;
-  } else {
-    body = jsonString;
-  }
+  // Log data size but don't enforce 25MB limit (actual KV limit is higher)
+  console.log(`Note: KV value size limit is 25MB, current size is ${dataSize.toFixed(2)} MB`)
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
   
@@ -106,9 +90,9 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${CF_API_TOKEN}`,
-          "Content-Type": "application/octet-stream",
+          "Content-Type": "application/json",
         },
-        body: body,
+        body: jsonString,
       });
 
       if (response.status === 429) {
@@ -143,7 +127,7 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          compressed: isCompressed,
+          compressed: false,
           version: 1,
           updatedAt: data.metadata?.updatedAt || new Date().toISOString(),
           totalItems: data.metadata?.totalItems || 0,
@@ -359,14 +343,7 @@ async function main() {
     console.log('\nWriting aggregated data to Cloudflare KV...');
     await writeToCloudflareKVGroups(rankingData);
     
-    // Also write to single RANKING_LATEST key for backward compatibility
-    console.log('\nWriting to RANKING_LATEST for backward compatibility...');
-    try {
-      await writeToCloudflareKV(rankingData, 'RANKING_LATEST');
-    } catch (error) {
-      console.error('Failed to write RANKING_LATEST (non-critical):', error);
-      // Continue even if this fails - the 3-key split is the primary storage
-    }
+    // RANKING_LATEST への書き込みは不要（3-key分割のみ使用）
     
     // Clean up temp files
     console.log('\nCleaning up temporary files...');
