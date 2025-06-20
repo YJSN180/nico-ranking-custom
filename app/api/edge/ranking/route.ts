@@ -26,20 +26,19 @@ export async function GET(request: NextRequest) {
       // eslint-disable-next-line no-console
       console.log(`[Edge API] Tag ranking result: ${items?.length || 0} items`)
       
-      const isCacheHit = items && items.length > 0
-      
+      // タグランキングが見つからない場合でも空の配列を返す（エラーにしない）
       const response = NextResponse.json({
         items: items || [],
         hasMore: false,
         totalCached: items?.length || 0
       })
       
-      if (isCacheHit) {
+      if (items && items.length > 0) {
         response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
         response.headers.set('X-Cache-Status', 'HIT')
         response.headers.set('X-Total-Cached', items.length.toString())
       } else {
-        response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
         response.headers.set('X-Cache-Status', 'MISS')
       }
       
@@ -50,23 +49,26 @@ export async function GET(request: NextRequest) {
     // Genre ranking
     const data = await getGenreRanking(genre, period as RankingPeriod)
     
-    const isCacheHit = data && data.items && data.items.length > 0
+    // データが見つからない場合でも空のレスポンスを返す（エラーにしない）
     const maxItems = 500
     
     const response = NextResponse.json({
-      items: isCacheHit ? data.items.slice(0, maxItems) : [],
+      items: data?.items?.slice(0, maxItems) || [],
       popularTags: data?.popularTags || [],
       hasMore: false,
       totalCached: data?.items?.length || 0
     })
     
-    if (isCacheHit) {
+    if (data && data.items && data.items.length > 0) {
       response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
       response.headers.set('X-Cache-Status', 'HIT')
       response.headers.set('X-Max-Items', String(maxItems))
     } else {
-      response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+      // データがない場合は短いキャッシュ時間
+      response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
       response.headers.set('X-Cache-Status', 'MISS')
+      // eslint-disable-next-line no-console
+      console.warn(`[Edge API] No data found for genre=${genre}, period=${period}`)
     }
     
     response.headers.set('X-API-Version', '2')
@@ -81,9 +83,20 @@ export async function GET(request: NextRequest) {
       stack: error?.stack,
       name: error?.name
     })
-    return NextResponse.json(
-      { error: 'Failed to fetch ranking data', details: error?.message },
-      { status: 500 }
-    )
+    
+    // エラーが発生しても空のデータを返す（サーバーエラーを避ける）
+    const response = NextResponse.json({
+      items: [],
+      popularTags: [],
+      hasMore: false,
+      totalCached: 0,
+      error: 'データの取得に一時的な問題が発生しています'
+    })
+    
+    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+    response.headers.set('X-Cache-Status', 'ERROR')
+    response.headers.set('X-API-Version', '2')
+    
+    return response
   }
 }

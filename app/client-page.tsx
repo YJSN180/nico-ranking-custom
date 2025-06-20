@@ -327,8 +327,9 @@ export default function ClientPage({
         if (response.status === 429) {
           throw new Error('リクエストが多すぎます。少し待ってから再度お試しください。')
         } else if (response.status >= 500) {
-          throw new Error('サーバーエラーが発生しました。しばらくしてから再度お試しください。')
-        } else {
+          // 500エラーでも続行を試みる
+          console.error(`[Client] Server error ${response.status}, attempting to parse response`)
+        } else if (response.status >= 400) {
           throw new Error(`データの取得に失敗しました (${response.status})`)
         }
       }

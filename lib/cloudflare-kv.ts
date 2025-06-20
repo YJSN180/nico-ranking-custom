@@ -129,7 +129,12 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
           console.log(`[KV] ${keyName} not found (404)`)
           return null
         }
-        console.error(`[KV] Failed to read ${keyName}: ${response.status}`)
+        console.error(`[KV] Failed to read ${keyName}: ${response.status} ${response.statusText}`)
+        // Try to get error details
+        try {
+          const errorText = await response.text()
+          console.error(`[KV] Error details for ${keyName}:`, errorText)
+        } catch {}
         // Return null instead of throwing to allow partial reads
         return null
       }
