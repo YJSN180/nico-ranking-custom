@@ -4,7 +4,7 @@ export const runtime = 'nodejs'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { videoId: string } }
+  context: { params: Promise<{ videoId: string }> }
 ) {
   // Basic authentication check
   const authHeader = request.headers.get('authorization')
@@ -15,7 +15,7 @@ export async function DELETE(
   }
 
   try {
-    const videoId = params.videoId
+    const { videoId } = await context.params
     
     if (!videoId) {
       return NextResponse.json({ error: 'Video ID required' }, { status: 400 })
