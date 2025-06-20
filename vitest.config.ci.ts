@@ -28,8 +28,8 @@ export default defineConfig({
         maxForks: 1,
         minForks: 1
       }
-    },
-    coverage: undefined, // カバレッジを完全に無効化
+    }
+    // coverage removed to disable it completely
   },
   resolve: {
     alias: {
