@@ -2,7 +2,11 @@
 import 'dotenv/config'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { promisify } from 'util'
+import { gzip } from 'zlib'
 import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
+
+const gzipAsync = promisify(gzip)
 
 // Save derived NG entries to KV
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
@@ -75,10 +79,13 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
 
   const jsonString = JSON.stringify(data);
   const dataSize = jsonString.length / 1024 / 1024;
-  console.log(`Data size: ${dataSize.toFixed(2)} MB`);
+  console.log(`Data size: ${dataSize.toFixed(2)} MB (uncompressed)`);
   
-  // Log data size but don't enforce 25MB limit (actual KV limit is higher)
-  console.log(`Note: KV value size limit is 25MB, current size is ${dataSize.toFixed(2)} MB`)
+  // Compress to reduce size and improve Worker performance
+  console.log(`Compressing data...`);
+  const compressed = await gzipAsync(jsonString);
+  const compressedSize = compressed.length / 1024 / 1024;
+  console.log(`Compressed size: ${compressedSize.toFixed(2)} MB (${((1 - compressedSize/dataSize) * 100).toFixed(1)}% reduction)`)
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
   
@@ -90,9 +97,9 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
         method: "PUT",
         headers: {
           "Authorization": `Bearer ${CF_API_TOKEN}`,
-          "Content-Type": "application/json",
+          "Content-Type": "application/octet-stream",
         },
-        body: jsonString,
+        body: compressed,
       });
 
       if (response.status === 429) {
@@ -127,7 +134,7 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          compressed: false,
+          compressed: true,
           version: 1,
           updatedAt: data.metadata?.updatedAt || new Date().toISOString(),
           totalItems: data.metadata?.totalItems || 0,
