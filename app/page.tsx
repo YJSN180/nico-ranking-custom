@@ -82,8 +82,21 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 }> {
   
   // 1. Primary: Cloudflare KVから読み取りを試みる
-  if (!tag) {
-    try {
+  try {
+    if (tag) {
+      // タグ別ランキングの場合
+      const { getTagRanking } = await import('@/lib/cloudflare-kv')
+      const tagItems = await getTagRanking(genre, period as RankingPeriod, tag)
+      if (tagItems && tagItems.length > 0) {
+        // NGフィルタリングを適用
+        const { filteredData } = await filterRankingDataServer({
+          items: tagItems,
+          popularTags: []
+        })
+        return filteredData
+      }
+    } else {
+      // 通常のジャンル別ランキングの場合
       const cfData = await getGenreRanking(genre, period as RankingPeriod)
       if (cfData && cfData.items && cfData.items.length > 0) {
         // metadataをログ出力（デバッグ用）
@@ -104,9 +117,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
         })
         return filteredData
       }
-    } catch (cfError) {
-      // Cloudflare KVエラーは無視してスクレイピングにフォールバック
     }
+  } catch (cfError) {
+    // Cloudflare KVエラーは無視して空のデータを返す
   }
 
   // 2. KVにデータがない場合は空のデータを返す
