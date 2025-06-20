@@ -38,8 +38,10 @@ jobs:
       - name: Run lint
         run: npm run lint
 
-      - name: Run unit and integration tests with coverage
-        run: NODE_OPTIONS="--max-old-space-size=8192" npm run test:coverage -- --run
+      - name: Run unit and integration tests
+        run: |
+          echo "Running tests without coverage in CI to avoid OOM"
+          NODE_OPTIONS="--max-old-space-size=4096" npm run test:ci
 
       # Codecov upload disabled - requires token configuration
       # - name: Upload coverage reports

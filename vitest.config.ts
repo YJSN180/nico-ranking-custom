@@ -29,7 +29,7 @@ export default defineConfig({
     },
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: process.env.CI ? ['text'] : ['text', 'json', 'html'],
       exclude: [
         'node_modules/**',
         'coverage/**',
