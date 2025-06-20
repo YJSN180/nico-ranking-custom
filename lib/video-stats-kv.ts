@@ -1,4 +1,3 @@
-import { decompressData } from './cloudflare-kv'
 import type { VideoStats } from './snapshot-api'
 
 /**
@@ -29,9 +28,9 @@ export async function getVideoStatsFromKV(
       return {}
     }
     
-    // Decompress the data
-    const arrayBuffer = await response.arrayBuffer()
-    const data = await decompressData(new Uint8Array(arrayBuffer))
+    // Parse uncompressed JSON data
+    const text = await response.text()
+    const data = JSON.parse(text)
     
     // Extract only requested video IDs
     const result: Record<string, VideoStats> = {}

@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 import 'dotenv/config'
 import { fetchVideoStats } from '../lib/snapshot-api'
-import { compressData, decompressData } from '../lib/cloudflare-kv'
+import { getRankingFromKV as getRankingFromKVLib } from '../lib/cloudflare-kv'
 import type { RankingData } from '../types/ranking'
 
 const STATS_KEY = 'VIDEO_STATS_LATEST'
@@ -37,8 +37,7 @@ async function updateVideoStats() {
           totalVideos: 0
         }
       }
-      const compressed = await compressData(JSON.stringify(emptyStats))
-      await writeToKV(STATS_KEY, compressed)
+      await writeToKV(STATS_KEY, JSON.stringify(emptyStats))
       // eslint-disable-next-line no-console
       console.log('Successfully updated stats for 0 videos')
       return
@@ -81,9 +80,8 @@ async function updateVideoStats() {
       }
     }
     
-    // 6. Compress and write to KV
-    const compressed = await compressData(JSON.stringify(statsData))
-    await writeToKV(STATS_KEY, compressed)
+    // 6. Write to KV (no compression)
+    await writeToKV(STATS_KEY, JSON.stringify(statsData))
     
     // eslint-disable-next-line no-console
     console.log(`Successfully updated stats for ${Object.keys(allStats).length} videos`)
@@ -97,31 +95,11 @@ async function updateVideoStats() {
   }
 }
 
-// Fetch ranking data from KV
+// Fetch ranking data from KV (uses 3-key split)
 async function getRankingFromKV(): Promise<RankingData | null> {
   try {
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/RANKING_LATEST`,
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`
-        }
-      }
-    )
-    
-    if (!response.ok) {
-      // eslint-disable-next-line no-console
-      console.log(`KV response status: ${response.status}`)
-      return null
-    }
-    
-    // KV stores compressed binary data, so we need to read it as ArrayBuffer
-    const arrayBuffer = await response.arrayBuffer()
-    const compressedData = new Uint8Array(arrayBuffer)
-    
-    // Decompress the data (decompressData already returns a JavaScript object)
-    const decompressed = await decompressData(compressedData)
-    return decompressed
+    const data = await getRankingFromKVLib()
+    return data as RankingData
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Failed to fetch ranking data:', error)
@@ -148,14 +126,14 @@ function extractUniqueVideoIds(rankingData: RankingData): string[] {
 }
 
 // Write data to KV
-async function writeToKV(key: string, data: Uint8Array): Promise<void> {
+async function writeToKV(key: string, data: string): Promise<void> {
   const response = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/${key}`,
     {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`,
-        'Content-Type': 'application/octet-stream'
+        'Content-Type': 'application/json'
       },
       body: data
     }
