@@ -89,7 +89,7 @@ export async function getCachedResponse(
   cacheKey: string,
   getter: () => Promise<Response>
 ): Promise<Response> {
-  const cache = caches.default
+  const cache = (caches as any).default
   
   // Check cache
   const cachedResponse = await cache.match(cacheKey)
