@@ -6,15 +6,6 @@ on:
     # GitHub Actions uses UTC, so JST-9 hours
     - cron: '0,30 * * * *'
   workflow_dispatch: # Allow manual trigger
-    inputs:
-      test_3key_split:
-        description: 'Test 3-key split writing'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
 
 # 同時実行を防ぐ
 concurrency:
@@ -185,11 +176,9 @@ jobs:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_KV_API_TOKEN: ${{ secrets.CLOUDFLARE_KV_API_TOKEN }}
-        TEST_3KEY_SPLIT: ${{ github.event.inputs.test_3key_split || 'false' }}
       run: |
         echo "Aggregating results and writing to KV..."
         echo "Expected 6 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
-        echo "TEST_3KEY_SPLIT: $TEST_3KEY_SPLIT"
         npx tsx scripts/aggregate-ranking-results-direct.ts
     
     - name: Report completion

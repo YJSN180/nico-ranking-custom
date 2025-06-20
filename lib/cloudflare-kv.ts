@@ -1,6 +1,8 @@
 // Cloudflare KV integration for ranking data storage
 // This module handles reading and writing ranking data to Cloudflare KV
 
+import { getGroupIdForGenre, GENRE_GROUPS } from '../types/ranking-config'
+
 // KV namespace binding (will be injected by Cloudflare Workers)
 declare global {
   const RANKING_KV: KVNamespace | undefined
@@ -46,8 +48,15 @@ export interface KVRankingData {
   }
 }
 
-// Single key for all ranking data
+// Single key for all ranking data (deprecated, use 3-key split)
 const RANKING_DATA_KEY = 'RANKING_LATEST'
+
+// 3-key split keys
+const RANKING_GROUP_KEYS = {
+  1: 'RANKING_GROUP_1',
+  2: 'RANKING_GROUP_2',
+  3: 'RANKING_GROUP_3'
+} as const
 
 /**
  * Write ranking data to Cloudflare KV (single write)
@@ -68,9 +77,86 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
 }
 
 /**
- * Read ranking data from Cloudflare KV
+ * Read ranking data from Cloudflare KV (supports both single-key and 3-key split)
  */
 export async function getRankingFromKV(): Promise<KVRankingData | null> {
+  // First, try to read from 3-key split structure
+  const mergedData = await getRankingFromKV3Keys()
+  if (mergedData) {
+    return mergedData
+  }
+  
+  // Fallback to single key for backward compatibility
+  return getRankingFromKVSingleKey()
+}
+
+/**
+ * Read ranking data from 3-key split structure
+ */
+async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+  
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    return null
+  }
+  
+  try {
+    // Fetch all 3 groups in parallel
+    const groupPromises = Object.entries(RANKING_GROUP_KEYS).map(async ([groupId, keyName]) => {
+      const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${CF_API_TOKEN}`,
+        },
+      })
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null
+        }
+        throw new Error(`Cloudflare KV read failed for ${keyName}: ${response.status}`)
+      }
+      
+      const data = await response.arrayBuffer()
+      const jsonString = new TextDecoder().decode(new Uint8Array(data))
+      return JSON.parse(jsonString) as KVRankingData
+    })
+    
+    const groupResults = await Promise.all(groupPromises)
+    
+    // Check if all groups exist
+    if (groupResults.some(result => result === null)) {
+      return null
+    }
+    
+    // Merge all groups into single data structure
+    const mergedData: KVRankingData = {
+      genres: {},
+      metadata: groupResults[0]?.metadata // Use metadata from first group
+    }
+    
+    // Merge genres from all groups
+    for (const groupData of groupResults) {
+      if (groupData && groupData.genres) {
+        Object.assign(mergedData.genres, groupData.genres)
+      }
+    }
+    
+    return mergedData
+    
+  } catch (error) {
+    console.error('[KV] Failed to read 3-key split data:', error)
+    return null
+  }
+}
+
+/**
+ * Read ranking data from single key (backward compatibility)
+ */
+async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
   // Worker環境の場合
   if (typeof RANKING_KV !== 'undefined') {
     const result = await RANKING_KV.get(RANKING_DATA_KEY, 'json')
@@ -124,25 +210,75 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
 }
 
 /**
- * Get specific genre/period data from KV
+ * Get specific genre/period data from KV (optimized for 3-key split)
  */
 export async function getGenreRanking(
   genre: string,
   period: '24h' | 'hour'
 ): Promise<{ items: any[], popularTags: string[], tags?: { [tag: string]: any[] }, metadata?: any } | null> {
-  const data = await getRankingFromKV()
+  // For 3-key split, only fetch the specific group containing this genre
+  const groupId = getGroupIdForGenre(genre as any)
+  const groupData = await getRankingGroupFromKV(groupId)
   
-  if (!data || !data.genres || !data.genres[genre]) {
-    return null
+  if (!groupData || !groupData.genres || !groupData.genres[genre]) {
+    // Fallback to fetching all data (backward compatibility)
+    const data = await getRankingFromKV()
+    if (!data || !data.genres || !data.genres[genre]) {
+      return null
+    }
+    const result = data.genres[genre][period]
+    if (data.metadata) {
+      return { ...result, metadata: data.metadata }
+    }
+    return result
   }
 
-  const result = data.genres[genre][period]
+  const result = groupData.genres[genre][period]
   // Add metadata if available
-  if (data.metadata) {
-    return { ...result, metadata: data.metadata }
+  if (groupData.metadata) {
+    return { ...result, metadata: groupData.metadata }
   }
   
   return result
+}
+
+/**
+ * Read specific group from KV (optimized for single genre requests)
+ */
+async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData | null> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+  
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    return null
+  }
+  
+  try {
+    const keyName = RANKING_GROUP_KEYS[groupId]
+    const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${CF_API_TOKEN}`,
+      },
+    })
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return null
+      }
+      throw new Error(`Cloudflare KV read failed for ${keyName}: ${response.status}`)
+    }
+    
+    const data = await response.arrayBuffer()
+    const jsonString = new TextDecoder().decode(new Uint8Array(data))
+    return JSON.parse(jsonString) as KVRankingData
+    
+  } catch (error) {
+    console.error(`[KV] Failed to read group ${groupId}:`, error)
+    return null
+  }
 }
 
 /**

@@ -339,23 +339,9 @@ async function main() {
     await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));
     console.log(`\nSaved aggregated data to ${backupPath}`);
 
-    // Write to Cloudflare KV directly
+    // Write to Cloudflare KV using 3-key split
     console.log('\nWriting aggregated data to Cloudflare KV...');
-    
-    // Check if we should test 3-key split
-    if (process.env.TEST_3KEY_SPLIT === 'true') {
-      console.log('\n🧪 Testing 3-key split writing...');
-      try {
-        await writeToCloudflareKVGroups(rankingData);
-        console.log('✅ 3-key split test successful!');
-      } catch (error) {
-        console.error('❌ 3-key split test failed:', error);
-        // Don't fail the entire process for test
-      }
-    }
-    
-    // Always write to the main key for now
-    await writeToCloudflareKV(rankingData);
+    await writeToCloudflareKVGroups(rankingData);
     
     // Clean up temp files
     console.log('\nCleaning up temporary files...');
