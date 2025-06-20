@@ -3,7 +3,7 @@ import { kv } from '@/lib/simple-kv'
 import type { RankingItem } from '@/types/ranking'
 import type { RankingGenre } from '@/types/ranking-config'
 
-export const runtime = 'edge'
+export const runtime = 'nodejs'
 
 interface UpdateData {
   genre: RankingGenre
