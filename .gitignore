@@ -48,11 +48,9 @@ wrangler.toml
 .wrangler/
 .dev.vars
 
-# Documentation files (except README.md and CLAUDE.md)
+# Documentation files (except README.md)
 *.md
 !README.md
-!CLAUDE.md
-!scripts/archive/README.md
 
 # Documentation directories and common documentation formats
 docs/
@@ -102,7 +100,8 @@ Thumbs.db
 .env.cloudflare
 wrangler.toml
 
-# test scripts
+# scripts folder (all scripts)
+scripts/
 test-ng-persistence.js
 
 # Documentation and temporary files
