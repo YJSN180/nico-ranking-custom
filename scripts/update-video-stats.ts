@@ -1,12 +1,11 @@
 #!/usr/bin/env npx tsx
-import 'dotenv/config'
 import { fetchVideoStats } from '../lib/snapshot-api'
 import { getRankingFromKV as getRankingFromKVLib } from '../lib/cloudflare-kv'
 import type { RankingData } from '../types/ranking'
 
 const STATS_KEY = 'VIDEO_STATS_LATEST'
 
-async function updateVideoStats() {
+export async function updateVideoStats() {
   // eslint-disable-next-line no-console
   console.log('Starting video stats update...')
   
@@ -145,7 +144,7 @@ async function writeToKV(key: string, data: string): Promise<void> {
 }
 
 // Export for testing
-export { updateVideoStats, getRankingFromKV, extractUniqueVideoIds, writeToKV }
+export { getRankingFromKV, extractUniqueVideoIds, writeToKV }
 
 // Run the update only if this file is executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {

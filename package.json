@@ -10,7 +10,6 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "typecheck:ci": "tsc --noEmit -p tsconfig.test.json",
-    "postinstall": "tsx scripts/post-install.ts",
     "deploy:worker": "wrangler deploy",
     "update-ranking": "tsx scripts/update-ranking-parallel-v2.ts",
     "aggregate-ranking": "tsx scripts/aggregate-ranking-results-direct.ts",
