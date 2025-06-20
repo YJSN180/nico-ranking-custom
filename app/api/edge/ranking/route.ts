@@ -49,6 +49,12 @@ export async function GET(request: NextRequest) {
     // Genre ranking
     const data = await getGenreRanking(genre, period as RankingPeriod)
     
+    // Log metadata for debugging
+    if (data?.metadata) {
+      // eslint-disable-next-line no-console
+      console.log(`[Edge API] Metadata: updatedAt=${data.metadata.updatedAt}, groupId=${data.metadata.groupId}, genres=${data.metadata.genresInGroup?.join(',')}`)
+    }
+    
     // データが見つからない場合でも空のレスポンスを返す（エラーにしない）
     const maxItems = 500
     
@@ -56,7 +62,8 @@ export async function GET(request: NextRequest) {
       items: data?.items?.slice(0, maxItems) || [],
       popularTags: data?.popularTags || [],
       hasMore: false,
-      totalCached: data?.items?.length || 0
+      totalCached: data?.items?.length || 0,
+      metadata: data?.metadata || null
     })
     
     if (data && data.items && data.items.length > 0) {
