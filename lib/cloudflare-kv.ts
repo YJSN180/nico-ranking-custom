@@ -126,31 +126,51 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       
       if (!response.ok) {
         if (response.status === 404) {
+          console.log(`[KV] ${keyName} not found (404)`)
           return null
         }
-        throw new Error(`Cloudflare KV read failed for ${keyName}: ${response.status}`)
+        console.error(`[KV] Failed to read ${keyName}: ${response.status}`)
+        // Return null instead of throwing to allow partial reads
+        return null
       }
       
       const data = await response.arrayBuffer()
       const jsonString = new TextDecoder().decode(new Uint8Array(data))
-      return JSON.parse(jsonString) as KVRankingData
+      try {
+        return JSON.parse(jsonString) as KVRankingData
+      } catch (parseError) {
+        console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
+        return null
+      }
     })
     
-    const groupResults = await Promise.all(groupPromises)
+    const groupResults = await Promise.allSettled(groupPromises)
     
-    // Check if all groups exist
-    if (groupResults.some(result => result === null)) {
+    // Extract successful results
+    const successfulResults = groupResults
+      .filter(result => result.status === 'fulfilled' && result.value !== null)
+      .map(result => (result as PromiseFulfilledResult<KVRankingData | null>).value)
+      .filter((value): value is KVRankingData => value !== null)
+    
+    // If no groups were successfully read, return null
+    if (successfulResults.length === 0) {
+      console.error('[KV] No groups could be read successfully')
       return null
+    }
+    
+    // Log warning if some groups failed
+    if (successfulResults.length < 3) {
+      console.warn(`[KV] Only ${successfulResults.length}/3 groups were read successfully`)
     }
     
     // Merge all groups into single data structure
     const mergedData: KVRankingData = {
       genres: {},
-      metadata: groupResults[0]?.metadata // Use metadata from first group
+      metadata: successfulResults[0]?.metadata // Use metadata from first successful group
     }
     
-    // Merge genres from all groups
-    for (const groupData of groupResults) {
+    // Merge genres from all successful groups
+    for (const groupData of successfulResults) {
       if (groupData && groupData.genres) {
         Object.assign(mergedData.genres, groupData.genres)
       }
@@ -277,14 +297,26 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     
     if (!response.ok) {
       if (response.status === 404) {
+        console.log(`[KV] ${keyName} not found (404)`)
         return null
       }
-      throw new Error(`Cloudflare KV read failed for ${keyName}: ${response.status}`)
+      console.error(`[KV] Failed to read ${keyName}: ${response.status}`)
+      // Log response body for debugging
+      try {
+        const errorText = await response.text()
+        console.error(`[KV] Error response: ${errorText}`)
+      } catch {}
+      return null
     }
     
     const data = await response.arrayBuffer()
     const jsonString = new TextDecoder().decode(new Uint8Array(data))
-    return JSON.parse(jsonString) as KVRankingData
+    try {
+      return JSON.parse(jsonString) as KVRankingData
+    } catch (parseError) {
+      console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
+      return null
+    }
     
   } catch (error) {
     console.error(`[KV] Failed to read group ${groupId}:`, error)

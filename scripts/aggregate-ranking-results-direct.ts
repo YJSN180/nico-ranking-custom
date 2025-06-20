@@ -343,6 +343,15 @@ async function main() {
     console.log('\nWriting aggregated data to Cloudflare KV...');
     await writeToCloudflareKVGroups(rankingData);
     
+    // Also write to single RANKING_LATEST key for backward compatibility
+    console.log('\nWriting to RANKING_LATEST for backward compatibility...');
+    try {
+      await writeToCloudflareKV(rankingData, 'RANKING_LATEST');
+    } catch (error) {
+      console.error('Failed to write RANKING_LATEST (non-critical):', error);
+      // Continue even if this fails - the 3-key split is the primary storage
+    }
+    
     // Clean up temp files
     console.log('\nCleaning up temporary files...');
     for (const file of groupFiles) {
