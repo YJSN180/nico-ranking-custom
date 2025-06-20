@@ -20,11 +20,11 @@ export default defineConfig({
       ] : [])
     ],
     testTimeout: 10000,
-    pool: 'threads',
+    pool: 'forks',
     poolOptions: {
-      threads: {
-        maxThreads: 2,
-        minThreads: 1
+      forks: {
+        maxForks: process.env.CI ? 1 : 4,
+        minForks: 1
       }
     },
     coverage: {
