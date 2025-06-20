@@ -55,20 +55,20 @@ export class APIFallback {
   private static shouldUseEdgeFunctions(): boolean {
     // Clean up old failures
     const now = Date.now()
-    if (now - this.lastFailureTime > this.FAILURE_WINDOW) {
-      this.failureCount = 0
+    if (now - APIFallback.lastFailureTime > APIFallback.FAILURE_WINDOW) {
+      APIFallback.failureCount = 0
     }
     
     // Use Edge Functions if we've had multiple failures recently
-    return this.failureCount >= this.FAILURE_THRESHOLD
+    return APIFallback.failureCount >= APIFallback.FAILURE_THRESHOLD
   }
   
   private static recordFailure(): void {
-    this.failureCount++
-    this.lastFailureTime = Date.now()
+    APIFallback.failureCount++
+    APIFallback.lastFailureTime = Date.now()
     
     // Log when switching to Edge Functions
-    if (this.failureCount === this.FAILURE_THRESHOLD) {
+    if (APIFallback.failureCount === APIFallback.FAILURE_THRESHOLD) {
       console.warn('[APIFallback] Switching to Edge Functions due to rate limits')
     }
   }
@@ -79,9 +79,9 @@ export class APIFallback {
     lastFailureTime: number
   } {
     return {
-      usingEdge: this.shouldUseEdgeFunctions(),
-      failureCount: this.failureCount,
-      lastFailureTime: this.lastFailureTime
+      usingEdge: APIFallback.shouldUseEdgeFunctions(),
+      failureCount: APIFallback.failureCount,
+      lastFailureTime: APIFallback.lastFailureTime
     }
   }
 }

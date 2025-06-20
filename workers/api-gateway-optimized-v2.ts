@@ -173,7 +173,6 @@ async function handleOptimizedRankingAPI(
         }
       })
     } catch (error) {
-      console.error('[KV-OPT-V2] Error:', error)
       // Fallback to proxy on any error
       return proxyToVercel(request, env)
     }

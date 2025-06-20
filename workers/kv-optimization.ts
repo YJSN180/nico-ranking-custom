@@ -74,7 +74,7 @@ export async function extractGenreData(
       metadata: data.metadata
     }
   } catch (error) {
-    console.error('[KV-OPT] Failed to extract genre data:', error)
+    // Return empty data on error
     return {
       items: [],
       popularTags: []

@@ -160,21 +160,17 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
     it('単一キーへのフォールバックが機能する', async () => {
       ;(global as any).RANKING_KV = undefined
 
-      // 3-keyが404を返す
+      // 3-keyが404を返す (no fallback to single key anymore)
       mockFetch
         .mockResolvedValueOnce({ ok: false, status: 404 })
         .mockResolvedValueOnce({ ok: false, status: 404 })
         .mockResolvedValueOnce({ ok: false, status: 404 })
-        .mockResolvedValueOnce({
-          ok: true,
-          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(mockRankingData)).buffer
-        })
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getRankingFromKV()
 
-      expect(result).toEqual(mockRankingData)
-      expect(mockFetch).toHaveBeenCalledTimes(4) // 3-key試行 + fallback
+      expect(result).toBeNull() // No data should return null
+      expect(mockFetch).toHaveBeenCalledTimes(3) // Only 3-key attempts
     })
 
     it('Worker環境でKVから正しく読み込む（フォールバック）', async () => {
@@ -183,14 +179,22 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
       }
       ;(global as any).RANKING_KV = mockKV
 
+      // Still uses REST API even with RANKING_KV available
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(mockRankingData)).buffer
+        })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getRankingFromKV()
 
-      expect(mockKV.get).toHaveBeenCalledWith(
-        'RANKING_LATEST',
-        'json'
-      )
-      expect(result).toEqual(mockRankingData)
+      // Should not use the Worker KV API anymore
+      expect(mockKV.get).not.toHaveBeenCalled()
+      expect(mockFetch).toHaveBeenCalledTimes(3)
+      expect(result).not.toBeNull()
     })
 
     it('データが存在しない場合nullを返す', async () => {
@@ -274,8 +278,9 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
     })
 
     it('タグ指定時のデータも取得できる', async () => {
+      ;(global as any).RANKING_KV = undefined
+      
       const dataWithTags = {
-        ...mockRankingData,
         genres: {
           all: {
             '24h': {
@@ -288,36 +293,38 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
             },
             hour: mockRankingData.genres.all.hour
           }
-        }
+        },
+        metadata: mockRankingData.metadata
       }
 
-      const mockKV = {
-        get: vi.fn().mockResolvedValue(dataWithTags)
-      }
-      ;(global as any).RANKING_KV = mockKV
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(dataWithTags)).buffer
+      })
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getGenreRanking('all', '24h')
 
       expect(result).toEqual(expect.objectContaining({
         items: expect.any(Array),
-        popularTags: expect.any(Array)
+        popularTags: expect.any(Array),
+        tags: expect.objectContaining({
+          'tag1': expect.any(Array)
+        })
       }))
     })
 
     it('エラー時はエラーをスローせずnullを返す', async () => {
-      const mockKV = {
-        get: vi.fn().mockImplementation(() => {
-          throw new Error('KV Error')
-        })
-      }
-      ;(global as any).RANKING_KV = mockKV
+      ;(global as any).RANKING_KV = undefined
+
+      // Mock fetch to throw an error
+      mockFetch.mockRejectedValueOnce(new Error('Network Error'))
 
       const module = await import('@/lib/cloudflare-kv')
       
-      await expect(async () => {
-        await module.getGenreRanking('all', '24h')
-      }).rejects.toThrow('KV Error')
+      const result = await module.getGenreRanking('all', '24h')
+      
+      expect(result).toBeNull()
     })
   })
 
@@ -333,8 +340,7 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
       }
 
       const mockKV = {
-        put: vi.fn(),
-        get: vi.fn().mockResolvedValue(emptyData)
+        put: vi.fn()
       }
       ;(global as any).RANKING_KV = mockKV
 
@@ -354,7 +360,18 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
         }
       )
 
-      // 読み込み
+      // 読み込み - uses REST API with 3-key split
+      ;(global as any).RANKING_KV = undefined
+      
+      // Mock all 3 groups to return empty data
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(emptyData)).buffer
+        })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+      
       const result = await module.getRankingFromKV()
       expect(result).toEqual(emptyData)
     })
