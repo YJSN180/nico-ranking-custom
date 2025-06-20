@@ -14,7 +14,7 @@ export async function GET() {
   let kvData = null
   let kvError = null
   let genreTest = null
-  let groupTests = {}
+  let groupTests: Record<string, any> = {}
   
   if (envStatus.CLOUDFLARE_ACCOUNT_ID && envStatus.CLOUDFLARE_KV_NAMESPACE_ID && envStatus.CLOUDFLARE_KV_API_TOKEN) {
     try {
@@ -80,7 +80,7 @@ export async function GET() {
               groupTests[key].genres = parsed.genres ? Object.keys(parsed.genres) : []
               groupTests[key].metadata = parsed.metadata
             } catch (e) {
-              groupTests[key].parseError = e.message
+              groupTests[key].parseError = e instanceof Error ? e.message : String(e)
             }
           } else {
             // Get error details
@@ -90,7 +90,7 @@ export async function GET() {
             } catch {}
           }
         } catch (error) {
-          groupTests[key] = { error: error.message }
+          groupTests[key] = { error: error instanceof Error ? error.message : String(error) }
         }
       }
       
