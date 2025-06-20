@@ -100,8 +100,11 @@ Thumbs.db
 .env.cloudflare
 wrangler.toml
 
-# scripts folder (all scripts)
-scripts/
+# scripts folder - only allow specific required scripts
+scripts/*
+!scripts/aggregate-ranking-results-direct.ts
+!scripts/update-ranking-parallel-v2.ts
+!scripts/fetch-ng-list.ts
 test-ng-persistence.js
 
 # Documentation and temporary files
