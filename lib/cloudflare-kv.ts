@@ -1,6 +1,11 @@
 // Cloudflare KV integration for ranking data storage
 // This module handles reading and writing ranking data to Cloudflare KV
 
+import { promisify } from 'util'
+import { gunzip } from 'zlib'
+
+const gunzipAsync = promisify(gunzip)
+
 import { getGroupIdForGenre, GENRE_GROUPS } from '../types/ranking-config'
 
 // KV namespace binding (will be injected by Cloudflare Workers)
@@ -140,12 +145,22 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       }
       
       const data = await response.arrayBuffer()
-      const jsonString = new TextDecoder().decode(new Uint8Array(data))
+      
+      // Try to decompress if it's compressed
       try {
+        // First try to decompress (for compressed data)
+        const decompressed = await gunzipAsync(Buffer.from(data))
+        const jsonString = new TextDecoder().decode(decompressed)
         return JSON.parse(jsonString) as KVRankingData
-      } catch (parseError) {
-        console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
-        return null
+      } catch (gzipError) {
+        // If decompression fails, try parsing as plain JSON (backward compatibility)
+        try {
+          const jsonString = new TextDecoder().decode(new Uint8Array(data))
+          return JSON.parse(jsonString) as KVRankingData
+        } catch (parseError) {
+          console.error(`[KV] Failed to parse ${keyName}:`, parseError)
+          return null
+        }
       }
     })
     
@@ -235,9 +250,16 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
     
     // console.log(`[KV] Data received: ${data.byteLength} bytes`)
     
-    // 非圧縮JSONデータとして処理
-    const jsonString = new TextDecoder().decode(uint8Array)
-    return JSON.parse(jsonString)
+    // Try to decompress first (for RANKING_LATEST which should be compressed)
+    try {
+      const decompressed = await gunzipAsync(Buffer.from(uint8Array))
+      const jsonString = new TextDecoder().decode(decompressed)
+      return JSON.parse(jsonString)
+    } catch (gzipError) {
+      // If decompression fails, try parsing as plain JSON (backward compatibility)
+      const jsonString = new TextDecoder().decode(uint8Array)
+      return JSON.parse(jsonString)
+    }
   } catch (error) {
     // Failed to read from Cloudflare KV - returning null
     console.error('[KV] Failed to read RANKING_LATEST:', error)
@@ -315,12 +337,22 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     }
     
     const data = await response.arrayBuffer()
-    const jsonString = new TextDecoder().decode(new Uint8Array(data))
+    
+    // Try to decompress if it's compressed
     try {
+      // First try to decompress (for compressed data)
+      const decompressed = await gunzipAsync(Buffer.from(data))
+      const jsonString = new TextDecoder().decode(decompressed)
       return JSON.parse(jsonString) as KVRankingData
-    } catch (parseError) {
-      console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
-      return null
+    } catch (gzipError) {
+      // If decompression fails, try parsing as plain JSON (backward compatibility)
+      try {
+        const jsonString = new TextDecoder().decode(new Uint8Array(data))
+        return JSON.parse(jsonString) as KVRankingData
+      } catch (parseError) {
+        console.error(`[KV] Failed to parse ${keyName}:`, parseError)
+        return null
+      }
     }
     
   } catch (error) {
