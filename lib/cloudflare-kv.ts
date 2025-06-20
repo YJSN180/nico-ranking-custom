@@ -48,7 +48,7 @@ export interface KVRankingData {
   }
 }
 
-// Single key for all ranking data (deprecated, use 3-key split)
+// Single key for all ranking data (deprecated, kept for backward compatibility)
 const RANKING_DATA_KEY = 'RANKING_LATEST'
 
 // 3-key split keys
@@ -59,7 +59,8 @@ const RANKING_GROUP_KEYS = {
 } as const
 
 /**
- * Write ranking data to Cloudflare KV (single write)
+ * Write ranking data to Cloudflare KV (deprecated - single key write)
+ * New code should split data into 3 groups and write separately
  */
 export async function setRankingToKV(data: KVRankingData): Promise<void> {
   if (typeof RANKING_KV === 'undefined') {

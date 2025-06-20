@@ -50,9 +50,9 @@ async function decompressData(compressed: Uint8Array): Promise<any> {
   return JSON.parse(jsonString)
 }
 
-// Get ranking data directly from KV binding (optimized version)
+// Get ranking data directly from KV binding (supports 3-key split)
 async function getRankingDataFromKV(env: Env): Promise<any> {
-  const cacheKey = 'RANKING_LATEST'
+  const cacheKey = 'RANKING_ALL'
   const now = Date.now()
   
   // Check memory cache
@@ -62,6 +62,39 @@ async function getRankingDataFromKV(env: Env): Promise<any> {
   }
   
   try {
+    // Try to read from 3-key structure first
+    const groupKeys = ['RANKING_GROUP_1', 'RANKING_GROUP_2', 'RANKING_GROUP_3']
+    const groupPromises = groupKeys.map(key => 
+      env.RANKING_DATA.getWithMetadata(key, { type: 'json' })
+    )
+    
+    const groupResults = await Promise.all(groupPromises)
+    
+    // Check if all groups exist
+    if (groupResults.every(result => result.value)) {
+      // Merge all groups into single data structure
+      const mergedData: any = {
+        genres: {},
+        metadata: groupResults[0].value.metadata // Use metadata from first group
+      }
+      
+      // Merge genres from all groups
+      for (const result of groupResults) {
+        if (result.value && result.value.genres) {
+          Object.assign(mergedData.genres, result.value.genres)
+        }
+      }
+      
+      // Generate ETag for merged data
+      const etag = await generateETag(JSON.stringify(mergedData))
+      
+      // Update memory cache
+      memoryCache.set(cacheKey, { data: mergedData, timestamp: now, etag })
+      
+      return { data: mergedData, etag }
+    }
+    
+    // Fallback to single key if 3-key structure not found
     const result = await env.RANKING_DATA.getWithMetadata<Uint8Array>(
       'RANKING_LATEST',
       { type: 'arrayBuffer' }
@@ -106,7 +139,7 @@ async function getRankingDataFromKV(env: Env): Promise<any> {
     
     return { data, etag }
   } catch (error) {
-    console.error('[HYBRID] Failed to read RANKING_LATEST:', error)
+    console.error('[HYBRID] Failed to read ranking data:', error)
     return { data: null, etag: null }
   }
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 import 'dotenv/config'
-import { decompressData } from '../lib/cloudflare-kv'
+import { getRankingFromKV } from '../lib/cloudflare-kv'
 import { fetchVideoStats } from '../lib/snapshot-api'
 
 async function analyzeMissingStats() {
@@ -11,26 +11,18 @@ async function analyzeMissingStats() {
   console.log('Analyzing missing video stats...\n')
   
   try {
-    // 1. Fetch ranking data
-    console.log('1. Fetching ranking data from KV...')
-    const rankingResponse = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`,
-      {
-        headers: {
-          'Authorization': `Bearer ${CF_API_TOKEN}`
-        }
-      }
-    )
+    // 1. Fetch ranking data using the cloudflare-kv module (supports 3-key structure)
+    console.log('1. Fetching ranking data from KV (3-key structure)...')
+    const rankingData = await getRankingFromKV()
     
-    if (!rankingResponse.ok) {
+    if (!rankingData) {
       console.error('Failed to fetch ranking data')
       return
     }
     
-    const compressedData = new Uint8Array(await rankingResponse.arrayBuffer())
-    const rankingData = await decompressData(compressedData)
+    console.log(`Found ${Object.keys(rankingData.genres).length} genres in ranking data`)
     
-    // 2. Fetch video stats
+    // 2. Fetch video stats (VIDEO_STATS_LATEST is still a single key)
     console.log('2. Fetching video stats from KV...')
     const statsResponse = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/VIDEO_STATS_LATEST`,
@@ -46,8 +38,21 @@ async function analyzeMissingStats() {
       return
     }
     
-    const compressedStats = new Uint8Array(await statsResponse.arrayBuffer())
-    const statsData = await decompressData(compressedStats)
+    // Check if data is compressed
+    const buffer = await statsResponse.arrayBuffer()
+    const uint8Array = new Uint8Array(buffer)
+    let statsData: any
+    
+    if (uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
+      // Gzipped data
+      const pako = await import('pako')
+      const decompressed = pako.ungzip(uint8Array, { to: 'string' })
+      statsData = JSON.parse(decompressed)
+    } else {
+      // Plain JSON
+      const jsonString = new TextDecoder().decode(uint8Array)
+      statsData = JSON.parse(jsonString)
+    }
     
     // 3. Extract all video IDs from ranking
     const allVideoIds = new Set<string>()
