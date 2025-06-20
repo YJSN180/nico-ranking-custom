@@ -115,17 +115,9 @@ export default {
       const cache = caches.default
       const cacheKey = new Request(targetUrl, request)
       
-      // キャッシュをチェック（API ranking and video-stats）
+      // Disable Worker cache for large responses
+      // Use Cloudflare's edge cache instead
       let response: Response | undefined
-      if (url.pathname.startsWith('/api/edge/ranking') || url.pathname.startsWith('/api/edge/video-stats')) {
-        response = await cache.match(cacheKey)
-        if (response) {
-          // キャッシュヒット - Apply security headers and cache status
-          const secureResponse = applySecurityHeaders(response, url)
-          secureResponse.headers.set('X-CF-Cache', 'HIT')
-          return secureResponse
-        }
-      }
       
       // 認証ヘッダーを追加してプロキシ
       const proxyHeaders = new Headers(request.headers)
@@ -133,9 +125,6 @@ export default {
       // 重要: Vercel middleware bypass用の認証ヘッダー
       if (env.WORKER_AUTH_KEY) {
         proxyHeaders.set('X-Worker-Auth', env.WORKER_AUTH_KEY)
-      } else {
-        // デバッグ用：認証キーが設定されていない場合の警告
-        console.warn('WORKER_AUTH_KEY is not configured')
       }
       
       // Preview Protection用のヘッダーを追加（プレビュー環境の場合）
@@ -155,17 +144,21 @@ export default {
       proxyHeaders.set('X-Forwarded-Host', 'nico-rank.com')
       proxyHeaders.set('X-Forwarded-Proto', 'https')
       
+      // Stream response to avoid memory issues with large responses
       response = await fetch(targetUrl, {
         method: request.method,
         headers: proxyHeaders,
-        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body
+        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+        // Important: don't buffer the entire response
+        cf: {
+          cacheTtl: 0,
+          cacheEverything: false
+        }
       })
       
-      // API ranking and video-stats レスポンスをキャッシュ（成功時のみ）
-      if (response.ok && (url.pathname.startsWith('/api/edge/ranking') || url.pathname.startsWith('/api/edge/video-stats'))) {
-        // レスポンスをクローンしてキャッシュ
-        await cache.put(cacheKey, response.clone())
-      }
+      // Disable caching for large responses to avoid memory issues
+      // Large ranking responses (16MB+) can exceed Worker memory limits
+      // Let Cloudflare's edge cache handle it instead
       
       // Apply security headers to all responses
       const secureResponse = applySecurityHeaders(response, url)
