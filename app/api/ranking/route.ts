@@ -145,7 +145,7 @@ export async function GET(request: NextRequest) {
     }
     
     // 動的取得にフォールバック
-    const { items: dynamicItems } = await scrapeRankingPage(
+    const { items: dynamicItems, popularTags: dynamicPopularTags } = await scrapeRankingPage(
       genre,
       period as RankingPeriod,
       undefined,
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
     
     const response = NextResponse.json({
       items: filteredItems,
-      popularTags: [],
+      popularTags: dynamicPopularTags || [],
       hasMore: false,
       totalCached: filteredItems.length
     })
