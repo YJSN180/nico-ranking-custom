@@ -91,45 +91,28 @@ describe('Ranking API Integration', () => {
     expect(data[0]).toHaveProperty('title', '【初音ミク】テストソング【オリジナル】')
   })
 
-  it('should fetch from scraper when KV returns invalid data', async () => {
-    const mockScrapedData = [
-      {
-        rank: 1,
-        id: 'sm789',
-        title: 'Scraped Video',
-        thumbURL: 'https://example.com/scraped.jpg',
-        views: 15000,
-      },
-    ]
-    
-    vi.mocked(kv.get).mockResolvedValueOnce('invalid json')
-    vi.mocked(scrapeRankingPage).mockResolvedValueOnce({
-      items: mockScrapedData,
-      popularTags: [],
-    })
+  it('should return error when KV has no data', async () => {
+    vi.mocked(kv.get).mockResolvedValueOnce(null)
+    vi.mocked(getGenreRanking).mockResolvedValueOnce(null)
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
-    expect(response.status).toBe(200)
+    expect(response.status).toBe(503)
     
     const data = await response.json()
-    expect(data.items).toEqual(mockScrapedData)
-    expect(data.popularTags).toEqual([])
-    expect(data).toHaveProperty('hasMore', false)
-    expect(data).toHaveProperty('totalCached')
+    expect(data.error).toContain('ランキングデータが見つかりません')
   })
 
   it('should handle KV errors gracefully', async () => {
-    vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV error'))
-    vi.mocked(scrapeRankingPage).mockRejectedValueOnce(new Error('Scraping also failed'))
+    vi.mocked(getGenreRanking).mockRejectedValueOnce(new Error('KV error'))
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
 
-    expect(response.status).toBe(500)
+    expect(response.status).toBe(503)
     
     const data = await response.json()
-    expect(data.error).toBe('Failed to fetch ranking data')
+    expect(data.error).toContain('ランキングデータ')
   })
 })

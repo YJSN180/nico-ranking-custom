@@ -83,15 +83,15 @@ export async function GET(request: NextRequest) {
     
     // KVにデータがない場合はエラーを返す
     return NextResponse.json(
-      { error: 'Failed to fetch ranking data' },
-      { status: 500 }
+      { error: 'ランキングデータが見つかりません。しばらくしてから再度お試しください。' },
+      { status: 503 }
     )
     
   } catch (error) {
     // API error - return error response
     return NextResponse.json(
-      { error: 'Failed to fetch ranking data' },
-      { status: 500 }
+      { error: 'ランキングデータの取得に失敗しました。' },
+      { status: 503 }
     )
   }
 }

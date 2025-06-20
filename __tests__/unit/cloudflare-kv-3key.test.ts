@@ -1,25 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { KVRankingData } from '@/lib/cloudflare-kv'
 
-// pako モック
-vi.mock('pako', () => ({
-  gzip: vi.fn((data) => {
-    const buffer = Buffer.from(data)
-    return new Uint8Array(buffer)
-  }),
-  ungzip: vi.fn((data, options) => {
-    if (options?.to === 'string') {
-      return Buffer.from(data).toString()
-    }
-    return new Uint8Array(data)
-  })
-}))
-
 // fetch モック
 const mockFetch = vi.fn()
 global.fetch = mockFetch
 
-describe('cloudflare-kv.ts - Extended Coverage', () => {
+describe('cloudflare-kv.ts - 3-key split implementation', () => {
   const mockRankingData: KVRankingData = {
     genres: {
       all: {
@@ -61,39 +47,8 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
     delete process.env.CLOUDFLARE_KV_API_TOKEN
   })
 
-  describe('compressData / decompressData', () => {
-    it('データを正しく圧縮・解凍できる', async () => {
-      const module = await import('@/lib/cloudflare-kv')
-      
-      const testData = { test: 'data', nested: { value: 123 } }
-      const compressed = await module.compressData(testData)
-      
-      expect(compressed).toBeInstanceOf(Uint8Array)
-      
-      const decompressed = await module.decompressData(compressed)
-      expect(decompressed).toEqual(testData)
-    })
-
-    it('大きなデータも正しく処理できる', async () => {
-      const module = await import('@/lib/cloudflare-kv')
-      
-      const largeData = {
-        items: Array.from({ length: 1000 }, (_, i) => ({
-          id: `sm${i}`,
-          title: `Video ${i}`,
-          views: i * 100
-        }))
-      }
-      
-      const compressed = await module.compressData(largeData)
-      const decompressed = await module.decompressData(compressed)
-      
-      expect(decompressed).toEqual(largeData)
-    })
-  })
-
   describe('setRankingToKV', () => {
-    it('Worker環境でKVに正しく書き込む', async () => {
+    it('Worker環境でKVに非圧縮JSONを書き込む', async () => {
       const mockKV = {
         put: vi.fn()
       }
@@ -104,12 +59,10 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
 
       expect(mockKV.put).toHaveBeenCalledWith(
         'RANKING_LATEST',
-        expect.objectContaining({
-          length: expect.any(Number)
-        }),
+        JSON.stringify(mockRankingData),
         {
           metadata: {
-            compressed: true,
+            compressed: false,
             version: 1,
             updatedAt: '2024-01-01T00:00:00Z'
           }
@@ -140,53 +93,109 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
       const module = await import('@/lib/cloudflare-kv')
       await module.setRankingToKV(dataWithoutMetadata)
 
-      expect(mockKV.put).toHaveBeenCalledWith(
-        'RANKING_LATEST',
-        expect.objectContaining({
-          length: expect.any(Number)
-        }),
-        {
-          metadata: {
-            compressed: true,
-            version: 1,
-            updatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/)
-          }
+      const firstCallArgs = mockKV.put.mock.calls[0]
+      const actualData = JSON.parse(firstCallArgs[1])
+      
+      expect(mockKV.put).toHaveBeenCalledTimes(1)
+      expect(firstCallArgs[0]).toBe('RANKING_LATEST')
+      expect(actualData).toMatchObject({
+        genres: mockRankingData.genres,
+        metadata: {
+          version: 1,
+          totalItems: 0
         }
-      )
+      })
+      expect(actualData.metadata.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+      expect(firstCallArgs[2]).toMatchObject({
+        metadata: {
+          compressed: false,
+          version: 1
+        }
+      })
+      expect(firstCallArgs[2].metadata.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     })
   })
 
-  describe('getRankingFromKV', () => {
-    it('Worker環境でKVから正しく読み込む', async () => {
-      const compressedData = new TextEncoder().encode(JSON.stringify(mockRankingData))
-      
-      const mockKV = {
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: compressedData,
-          metadata: {
-            compressed: true,
-            version: 1
-          }
+  describe('getRankingFromKV - 3-key split', () => {
+    it('3つのキーからデータを正しく読み取る', async () => {
+      ;(global as any).RANKING_KV = undefined
+
+      const group1Data = {
+        genres: { all: mockRankingData.genres.all },
+        metadata: mockRankingData.metadata
+      }
+      const group2Data = {
+        genres: { game: { '24h': { items: [], popularTags: [] } } },
+        metadata: mockRankingData.metadata
+      }
+      const group3Data = {
+        genres: { anime: { '24h': { items: [], popularTags: [] } } },
+        metadata: mockRankingData.metadata
+      }
+
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(group1Data)).buffer
         })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(group2Data)).buffer
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(group3Data)).buffer
+        })
+
+      const module = await import('@/lib/cloudflare-kv')
+      const result = await module.getRankingFromKV()
+
+      expect(result).not.toBeNull()
+      expect(result?.genres.all).toBeDefined()
+      expect(result?.genres.game).toBeDefined()
+      expect(result?.genres.anime).toBeDefined()
+      expect(mockFetch).toHaveBeenCalledTimes(3)
+    })
+
+    it('単一キーへのフォールバックが機能する', async () => {
+      ;(global as any).RANKING_KV = undefined
+
+      // 3-keyが404を返す
+      mockFetch
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({ ok: false, status: 404 })
+        .mockResolvedValueOnce({
+          ok: true,
+          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(mockRankingData)).buffer
+        })
+
+      const module = await import('@/lib/cloudflare-kv')
+      const result = await module.getRankingFromKV()
+
+      expect(result).toEqual(mockRankingData)
+      expect(mockFetch).toHaveBeenCalledTimes(4) // 3-key試行 + fallback
+    })
+
+    it('Worker環境でKVから正しく読み込む（フォールバック）', async () => {
+      const mockKV = {
+        get: vi.fn().mockResolvedValue(mockRankingData)
       }
       ;(global as any).RANKING_KV = mockKV
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getRankingFromKV()
 
-      expect(mockKV.getWithMetadata).toHaveBeenCalledWith(
+      expect(mockKV.get).toHaveBeenCalledWith(
         'RANKING_LATEST',
-        { type: 'arrayBuffer' }
+        'json'
       )
       expect(result).toEqual(mockRankingData)
     })
 
     it('データが存在しない場合nullを返す', async () => {
       const mockKV = {
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: null,
-          metadata: null
-        })
+        get: vi.fn().mockResolvedValue(null)
       }
       ;(global as any).RANKING_KV = mockKV
 
@@ -194,36 +203,6 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
       const result = await module.getRankingFromKV()
 
       expect(result).toBeNull()
-    })
-
-    it('REST API経由でデータを取得（Worker環境外）', async () => {
-      ;(global as any).RANKING_KV = undefined
-
-      const compressedData = new TextEncoder().encode(JSON.stringify(mockRankingData))
-      
-      mockFetch.mockResolvedValue({
-        ok: true,
-        headers: new Headers({
-          'cf-kv-metadata': JSON.stringify({
-            compressed: true,
-            version: 1
-          })
-        }),
-        arrayBuffer: async () => compressedData.buffer
-      })
-
-      const module = await import('@/lib/cloudflare-kv')
-      const result = await module.getRankingFromKV()
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.cloudflare.com/client/v4/accounts/test-account/storage/kv/namespaces/test-namespace/values/RANKING_LATEST',
-        {
-          headers: {
-            'Authorization': 'Bearer test-token'
-          }
-        }
-      )
-      expect(result).toEqual(mockRankingData)
     })
 
     it('REST APIで認証情報がない場合nullを返す', async () => {
@@ -249,34 +228,21 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
 
       expect(result).toBeNull()
     })
-
-    it('圧縮されていないデータも処理できる', async () => {
-      const mockKV = {
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: new TextEncoder().encode(JSON.stringify(mockRankingData)),
-          metadata: {
-            compressed: false
-          }
-        })
-      }
-      ;(global as any).RANKING_KV = mockKV
-
-      const module = await import('@/lib/cloudflare-kv')
-      const result = await module.getRankingFromKV()
-
-      expect(result).toEqual(mockRankingData)
-    })
   })
 
   describe('getGenreRanking', () => {
-    it('特定ジャンルのランキングデータを取得', async () => {
-      const mockKV = {
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: new TextEncoder().encode(JSON.stringify(mockRankingData)),
-          metadata: { compressed: true }
-        })
+    it('特定ジャンルのランキングデータを取得（グループ最適化）', async () => {
+      ;(global as any).RANKING_KV = undefined
+
+      const groupData = {
+        genres: { all: mockRankingData.genres.all },
+        metadata: mockRankingData.metadata
       }
-      ;(global as any).RANKING_KV = mockKV
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(groupData)).buffer
+      })
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getGenreRanking('all', '24h')
@@ -285,16 +251,21 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
         items: mockRankingData.genres.all['24h'].items,
         popularTags: mockRankingData.genres.all['24h'].popularTags
       }))
+      expect(mockFetch).toHaveBeenCalledTimes(1) // 1グループのみ
     })
 
     it('存在しないジャンルの場合nullを返す', async () => {
-      const mockKV = {
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: new TextEncoder().encode(JSON.stringify(mockRankingData)),
-          metadata: { compressed: true }
-        })
+      ;(global as any).RANKING_KV = undefined
+
+      const groupData = {
+        genres: { all: mockRankingData.genres.all },
+        metadata: mockRankingData.metadata
       }
-      ;(global as any).RANKING_KV = mockKV
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(groupData)).buffer
+      })
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getGenreRanking('nonexistent', '24h')
@@ -321,10 +292,7 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
       }
 
       const mockKV = {
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: new TextEncoder().encode(JSON.stringify(dataWithTags)),
-          metadata: { compressed: true }
-        })
+        get: vi.fn().mockResolvedValue(dataWithTags)
       }
       ;(global as any).RANKING_KV = mockKV
 
@@ -339,7 +307,7 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
 
     it('エラー時はエラーをスローせずnullを返す', async () => {
       const mockKV = {
-        getWithMetadata: vi.fn().mockImplementation(() => {
+        get: vi.fn().mockImplementation(() => {
           throw new Error('KV Error')
         })
       }
@@ -366,10 +334,7 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
 
       const mockKV = {
         put: vi.fn(),
-        getWithMetadata: vi.fn().mockResolvedValue({
-          value: new TextEncoder().encode(JSON.stringify(emptyData)),
-          metadata: { compressed: true }
-        })
+        get: vi.fn().mockResolvedValue(emptyData)
       }
       ;(global as any).RANKING_KV = mockKV
 
@@ -377,29 +342,21 @@ describe('cloudflare-kv.ts - Extended Coverage', () => {
       
       // 書き込み
       await module.setRankingToKV(emptyData)
-      expect(mockKV.put).toHaveBeenCalled()
+      expect(mockKV.put).toHaveBeenCalledWith(
+        'RANKING_LATEST',
+        JSON.stringify(emptyData),
+        {
+          metadata: {
+            compressed: false,
+            version: 1,
+            updatedAt: '2024-01-01T00:00:00Z'
+          }
+        }
+      )
 
       // 読み込み
       const result = await module.getRankingFromKV()
       expect(result).toEqual(emptyData)
-    })
-
-    it('メタデータの型変換を正しく処理', async () => {
-      const compressedData = new TextEncoder().encode(JSON.stringify(mockRankingData))
-      
-      // REST API経由でメタデータが文字列として返される場合
-      mockFetch.mockResolvedValue({
-        ok: true,
-        headers: new Headers({
-          'cf-kv-metadata': '{"compressed":true,"version":1}'
-        }),
-        arrayBuffer: async () => compressedData.buffer
-      })
-
-      const module = await import('@/lib/cloudflare-kv')
-      const result = await module.getRankingFromKV()
-
-      expect(result).toEqual(mockRankingData)
     })
   })
 })

@@ -67,12 +67,22 @@ export async function setRankingToKV(data: KVRankingData): Promise<void> {
     throw new Error('Cloudflare KV namespace not available')
   }
 
+  // Ensure metadata exists with default values
+  const dataToStore = {
+    ...data,
+    metadata: {
+      version: data.metadata?.version || 1,
+      updatedAt: data.metadata?.updatedAt || new Date().toISOString(),
+      totalItems: data.metadata?.totalItems || 0
+    }
+  }
+
   // Store JSON data directly without compression
-  await RANKING_KV.put(RANKING_DATA_KEY, JSON.stringify(data), {
+  await RANKING_KV.put(RANKING_DATA_KEY, JSON.stringify(dataToStore), {
     metadata: {
       compressed: false,
-      version: data.metadata?.version || 1,
-      updatedAt: data.metadata?.updatedAt || new Date().toISOString()
+      version: dataToStore.metadata.version,
+      updatedAt: dataToStore.metadata.updatedAt
     }
   })
 }

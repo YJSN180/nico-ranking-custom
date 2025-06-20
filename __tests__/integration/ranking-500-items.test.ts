@@ -91,23 +91,9 @@ describe('Ranking API - 500 items display', () => {
     expect(data.hasMore).toBe(false)
   })
 
-  it('should fallback to scraper when Cloudflare KV fails', async () => {
+  it('should return error when Cloudflare KV fails', async () => {
     // Cloudflare KVエラー
     vi.mocked(getGenreRanking).mockRejectedValue(new Error('KV Error'))
-    
-    // スクレイパーのモック
-    const mockItems: RankingData = Array.from({ length: 500 }, (_, i) => ({
-      rank: i + 1,
-      id: `sm${3000 + i}`,
-      title: `スクレイプ動画 ${i + 1}`,
-      thumbURL: `https://example.com/scraped${i + 1}.jpg`,
-      views: 3000 + i * 30
-    }))
-    
-    vi.mocked(scrapeRankingPage).mockResolvedValue({
-      items: mockItems,
-      popularTags: []
-    })
 
     const request = new NextRequest('http://localhost:3000/api/ranking?genre=entertainment', {
       method: 'GET'
@@ -115,8 +101,7 @@ describe('Ranking API - 500 items display', () => {
     const response = await GET(request)
     const data = await response.json()
 
-    expect(response.status).toBe(200)
-    expect(data.items).toHaveLength(500)
-    expect(scrapeRankingPage).toHaveBeenCalledWith('entertainment', '24h', undefined, 500)
+    expect(response.status).toBe(503)
+    expect(data.error).toContain('ランキングデータ')
   })
 })

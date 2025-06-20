@@ -102,9 +102,9 @@ describe('Edge Video Stats API', () => {
       expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=180, max-age=60, stale-while-revalidate=120')
     })
 
-    it('should validate Node.js runtime export', async () => {
+    it('should validate Edge runtime export', async () => {
       const module = await import('@/app/api/edge/video-stats/route')
-      expect(module.runtime).toBe('nodejs')
+      expect(module.runtime).toBe('edge')
     })
 
     it('should fetch stats from KV first and fallback to Snapshot API for missing videos', async () => {

@@ -59,13 +59,9 @@ describe('CDN Cache Headers', () => {
       expect(response.headers.get('X-Cache-Status')).toBe('CF-HIT')
     })
 
-    it('should set 25-minute cache headers for dynamic fetch', async () => {
+    it('should return error when KV has no data', async () => {
       // Arrange
       vi.mocked(getGenreRanking).mockResolvedValue(null)
-      vi.mocked(scrapeRankingPage).mockResolvedValue({
-        items: [{ rank: 1, id: 'sm12345', title: 'Test', thumbURL: 'test.jpg', views: 1000 }],
-        totalPages: 1
-      })
 
       const request = new NextRequest('http://localhost:3000/api/ranking?genre=all&period=24h')
 
@@ -73,8 +69,9 @@ describe('CDN Cache Headers', () => {
       const response = await rankingGET(request)
 
       // Assert
-      expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=1500, max-age=300, stale-while-revalidate=600')
-      expect(response.headers.get('X-Cache-Status')).toBe('DYNAMIC')
+      expect(response.status).toBe(503)
+      const data = await response.json()
+      expect(data.error).toContain('ランキングデータが見つかりません')
     })
   })
 

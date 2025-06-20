@@ -19,10 +19,7 @@ afterAll(() => {
 
 // Mock modules
 vi.mock('@/lib/snapshot-api')
-vi.mock('@/lib/cloudflare-kv', () => ({
-  compressData: vi.fn(async (data: string) => new TextEncoder().encode(data)),
-  decompressData: vi.fn(async (data: Uint8Array) => JSON.parse(new TextDecoder().decode(data)))
-}))
+vi.mock('@/lib/cloudflare-kv')
 
 // Mock fetch
 global.fetch = vi.fn()
@@ -33,8 +30,8 @@ describe('Video Stats KV Integration Flow', () => {
   })
 
   it('should complete full flow: update script → KV storage → API read', async () => {
-    // 1. Setup: Mock ranking data in KV
-    const mockRankingData: RankingData = {
+    // 1. Setup: Mock ranking data with 3-key structure
+    const mockGroup1Data = {
       genres: {
         all: {
           '24h': {
@@ -75,23 +72,24 @@ describe('Video Stats KV Integration Flow', () => {
 
     let storedStatsData: any = null
 
-    // Mock KV operations
+    // Mock KV operations with 3-key structure
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
-      if (urlStr.includes('RANKING_LATEST') && !options?.method) {
-        // Return compressed ranking data (the actual KV returns compressed data)
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressed = await compressData(JSON.stringify(mockRankingData))
-        return new Response(compressed, { status: 200 })
+      // Return group 1 data for 3-key structure
+      if (urlStr.includes('RANKING_GROUP_1') && !options?.method) {
+        return new Response(JSON.stringify(mockGroup1Data), { status: 200 })
+      }
+      
+      // Return empty for other groups
+      if ((urlStr.includes('RANKING_GROUP_2') || urlStr.includes('RANKING_GROUP_3')) && !options?.method) {
+        return new Response(JSON.stringify({ genres: {}, metadata: mockGroup1Data.metadata }), { status: 200 })
       }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
-        // Store stats data - the body is already compressed
-        const body = options.body as Uint8Array
-        // Decompress to verify the data
-        const { decompressData } = await import('@/lib/cloudflare-kv')
-        storedStatsData = await decompressData(body)
+        // Store stats data - no compression
+        const body = options.body as string
+        storedStatsData = JSON.parse(body)
         return new Response(null, { status: 200 })
       }
       
@@ -100,24 +98,28 @@ describe('Video Stats KV Integration Flow', () => {
         if (!storedStatsData) {
           return new Response(null, { status: 404 })
         }
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressed = await compressData(JSON.stringify(storedStatsData))
-        return new Response(compressed, { status: 200 })
+        return new Response(JSON.stringify(storedStatsData), { status: 200 })
       }
       
       return new Response(null, { status: 404 })
     })
 
-    // 3. Run update script
+    // 3. Mock cloudflare-kv module to return the 3-key structure
+    vi.mocked(await import('@/lib/cloudflare-kv')).getRankingFromKV = vi.fn().mockResolvedValue({
+      genres: mockGroup1Data.genres,
+      metadata: mockGroup1Data.metadata
+    })
+
+    // 4. Run update script
     const { updateVideoStats } = await import('../../scripts/update-video-stats')
     await updateVideoStats()
 
-    // 4. Verify stats were written to KV
+    // 5. Verify stats were written to KV
     expect(storedStatsData).toBeDefined()
     expect(storedStatsData.stats).toEqual(mockVideoStats)
     expect(storedStatsData.metadata.totalVideos).toBe(3)
 
-    // 5. Test API reading from KV - Need to clear mocks first to avoid conflicts
+    // 6. Test API reading from KV - Need to clear mocks first to avoid conflicts
     vi.clearAllMocks()
     
     // Re-setup fetch mock for getVideoStatsFromKV
@@ -125,9 +127,7 @@ describe('Video Stats KV Integration Flow', () => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('VIDEO_STATS_LATEST')) {
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressed = await compressData(JSON.stringify(storedStatsData))
-        return new Response(compressed, { status: 200 })
+        return new Response(JSON.stringify(storedStatsData), { status: 200 })
       }
       
       return new Response(null, { status: 404 })
@@ -150,7 +150,7 @@ describe('Video Stats KV Integration Flow', () => {
   })
 
   it('should handle empty ranking data gracefully', async () => {
-    const emptyRankingData: RankingData = {
+    const emptyRankingData = {
       genres: {},
       metadata: { version: 1, updatedAt: new Date().toISOString(), totalItems: 0 }
     }
@@ -158,10 +158,9 @@ describe('Video Stats KV Integration Flow', () => {
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
-      if (urlStr.includes('RANKING_LATEST')) {
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressed = await compressData(JSON.stringify(emptyRankingData))
-        return new Response(compressed, { status: 200 })
+      // Return empty for all groups
+      if (urlStr.includes('RANKING_GROUP_') && !options?.method) {
+        return new Response(JSON.stringify(emptyRankingData), { status: 200 })
       }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
@@ -170,6 +169,9 @@ describe('Video Stats KV Integration Flow', () => {
       
       return new Response(null, { status: 404 })
     })
+
+    // Mock cloudflare-kv module to return empty data
+    vi.mocked(await import('@/lib/cloudflare-kv')).getRankingFromKV = vi.fn().mockResolvedValue(emptyRankingData)
 
     const { updateVideoStats } = await import('../../scripts/update-video-stats')
     await expect(updateVideoStats()).resolves.not.toThrow()
@@ -204,9 +206,7 @@ describe('Video Stats API with KV Integration', () => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
       if (urlStr.includes('VIDEO_STATS_LATEST')) {
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressed = await compressData(JSON.stringify(storedStats))
-        return new Response(compressed, { status: 200 })
+        return new Response(JSON.stringify(storedStats), { status: 200 })
       }
       
       return new Response(null, { status: 404 })

@@ -100,7 +100,7 @@ describe('Full KV Optimization Mode', () => {
       const response2 = await worker.fetch(request2, mockEnv, mockContext)
 
       expect(response2.status).toBe(304)
-      expect(mockEnv.RANKING_DATA.getWithMetadata).toHaveBeenCalledTimes(1) // Should use memory cache
+      expect(mockEnv.RANKING_DATA.getWithMetadata).toHaveBeenCalledTimes(3) // 3-key structure reads 3 times
     })
   })
 

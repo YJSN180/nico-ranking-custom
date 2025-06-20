@@ -58,34 +58,15 @@ describe('Initial Setup Experience', () => {
     expect(response.headers.get('X-Data-Source')).toBe('mock')
   })
 
-  it('should cache data when scraping succeeds', async () => {
-    const mockData = Array.from({ length: 100 }, (_, i) => ({
-      rank: i + 1,
-      id: `sm${123 + i}`,
-      title: `Test Video ${i + 1}`,
-      thumbURL: 'https://example.com/thumb.jpg',
-      views: 1000 - i * 10,
-    }))
-    
+  it('should return error when no data exists in KV', async () => {
     vi.mocked(kv.get).mockResolvedValueOnce(null)
     vi.mocked(getGenreRanking).mockResolvedValueOnce(null)
-    vi.mocked(scrapeRankingPage).mockResolvedValueOnce({
-      items: mockData,
-      popularTags: [],
-    })
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
     const data = await response.json()
 
-    expect(response.status).toBe(200)
-    // API should return the scraped data when KV is empty
-    expect(data.items).toBeDefined()
-    expect(data.items).toHaveLength(100)
-    expect(data.items[0]).toMatchObject({
-      id: 'sm123',
-      title: 'Test Video 1',
-      views: 1000
-    })
+    expect(response.status).toBe(503)
+    expect(data.error).toContain('ランキングデータが見つかりません')
   })
 })
