@@ -80,3 +80,21 @@ export const RANKING_GENRES: Array<{ value: RankingGenre; label: string }> = Obj
   value: value as RankingGenre,
   label
 }))
+
+// Genre groups for 3-key KV splitting
+export const GENRE_GROUPS = {
+  1: ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing'] as RankingGenre[],
+  2: ['dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology'] as RankingGenre[],
+  3: ['society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other'] as RankingGenre[]
+} as const
+
+// Helper function to get group ID for a genre
+export function getGroupIdForGenre(genre: RankingGenre): 1 | 2 | 3 {
+  for (const [groupId, genres] of Object.entries(GENRE_GROUPS)) {
+    if (genres.includes(genre)) {
+      return parseInt(groupId) as 1 | 2 | 3
+    }
+  }
+  // Default to group 3 if not found
+  return 3
+}

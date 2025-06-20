@@ -2,6 +2,7 @@
 import 'dotenv/config'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
 
 // Save derived NG entries to KV
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
@@ -63,7 +64,7 @@ async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
 }
 
 // Write to Cloudflare KV directly (no temp keys)
-async function writeToCloudflareKV(data: any): Promise<void> {
+async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'): Promise<void> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
   const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN;
@@ -79,7 +80,7 @@ async function writeToCloudflareKV(data: any): Promise<void> {
   // Log data size but don't enforce 25MB limit (actual KV limit is higher)
   console.log(`Note: KV value size limit is 25MB for compressed data, current uncompressed size is ${dataSize.toFixed(2)} MB`)
 
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/RANKING_LATEST`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
   
   const maxRetries = 5;
   
@@ -114,10 +115,10 @@ async function writeToCloudflareKV(data: any): Promise<void> {
         throw new Error(`Cloudflare KV write failed: ${response.status} - ${error}`);
       }
       
-      console.log('✅ Successfully wrote to RANKING_LATEST');
+      console.log(`✅ Successfully wrote to ${keyName}`);
       
       // Set metadata
-      const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/RANKING_LATEST`;
+      const metadataUrl = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/metadata/${keyName}`;
       
       await fetch(metadataUrl, {
         method: "PUT",
@@ -144,6 +145,48 @@ async function writeToCloudflareKV(data: any): Promise<void> {
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
+}
+
+// Write data split into 3 groups
+async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
+  console.log('\n📦 Starting 3-key split write...');
+  
+  // Calculate size of each group before writing
+  const groupSizes: Record<string, number> = {};
+  
+  for (const [groupId, genreList] of Object.entries(GENRE_GROUPS)) {
+    const groupData = {
+      genres: {} as any,
+      metadata: {
+        ...rankingData.metadata,
+        groupId: parseInt(groupId),
+        genresInGroup: genreList
+      }
+    };
+    
+    // Extract only genres in this group
+    for (const genre of genreList) {
+      if (rankingData.genres[genre]) {
+        groupData.genres[genre] = rankingData.genres[genre];
+      }
+    }
+    
+    // Calculate and log size
+    const groupSize = JSON.stringify(groupData).length / 1024 / 1024;
+    groupSizes[groupId] = groupSize;
+    console.log(`Group ${groupId}: ${groupSize.toFixed(2)} MB (${genreList.length} genres)`);
+    
+    // Write this group to KV
+    try {
+      await writeToCloudflareKV(groupData, `RANKING_GROUP_${groupId}`);
+    } catch (error) {
+      console.error(`Failed to write group ${groupId}:`, error);
+      throw error;
+    }
+  }
+  
+  console.log('\n✅ Successfully wrote all 3 groups to KV');
+  console.log('Total sizes:', groupSizes);
 }
 
 async function main() {
@@ -298,6 +341,20 @@ async function main() {
 
     // Write to Cloudflare KV directly
     console.log('\nWriting aggregated data to Cloudflare KV...');
+    
+    // Check if we should test 3-key split
+    if (process.env.TEST_3KEY_SPLIT === 'true') {
+      console.log('\n🧪 Testing 3-key split writing...');
+      try {
+        await writeToCloudflareKVGroups(rankingData);
+        console.log('✅ 3-key split test successful!');
+      } catch (error) {
+        console.error('❌ 3-key split test failed:', error);
+        // Don't fail the entire process for test
+      }
+    }
+    
+    // Always write to the main key for now
     await writeToCloudflareKV(rankingData);
     
     // Clean up temp files
