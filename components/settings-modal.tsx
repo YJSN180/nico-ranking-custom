@@ -152,21 +152,17 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存（これによりuseUserNGListのngListが更新され、displayItemsが自動再計算される）
+    // NGリストを保存
     saveNGListDirectly(tempNGList)
     
-    // ngListUpdatedイベントで自動的に処理されるため、追加のイベントは不要
+    // モーダルを閉じる
+    onClose()
     
-    // 少し待ってからモーダルを閉じることで、状態更新が確実に完了する
+    // 少し待ってからページをリロード（ブラウザのレンダリングを完全にリセット）
     setTimeout(() => {
-      // コールバックを実行（API再取得など）
-      if (onApply) {
-        onApply()
-      }
-      
-      // モーダルを閉じる
-      onClose()
-    }, 50) // 50msの遅延で状態更新を確実にする
+      // 現在のURLを保持してリロード
+      window.location.reload()
+    }, 100) // 100msの遅延でモーダルが閉じるアニメーションを待つ
   }
   
   // 閉じる処理
