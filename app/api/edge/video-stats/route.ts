@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getVideoStatsFromKV } from '@/lib/video-stats-kv'
 import { fetchVideoStats } from '@/lib/snapshot-api'
 
-// Node.js Runtime指定（Edge Requests削減のため）
-export const runtime = 'nodejs'
+// Edge Runtime指定（KVからの読み取りが主なため）
+export const runtime = 'edge'
 
 // 動画の最新統計情報を取得するAPI (Edge Function版)
 export async function GET(request: NextRequest) {
