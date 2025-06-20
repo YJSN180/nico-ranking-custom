@@ -313,14 +313,13 @@ export default function ClientPage({
         apiParams.append('tag', newConfig.tag)
       }
       
-      const apiUrl = `/api/edge/ranking?${apiParams.toString()}`
+      // Use fallback mechanism to handle rate limits
+      const { APIFallback } = await import('@/lib/api-fallback')
       
       // Apply client-side rate limiting
-      await requestThrottle.throttle(apiUrl)
+      await requestThrottle.throttle('ranking-api')
       
-      const response = await fetch(apiUrl, {
-        signal: controller.signal
-      })
+      const response = await APIFallback.fetchWithFallback(apiParams, controller.signal)
       
       if (!response.ok) {
         // より詳細なエラーメッセージ

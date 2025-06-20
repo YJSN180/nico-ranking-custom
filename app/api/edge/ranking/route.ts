@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import type { RankingPeriod } from '@/types/ranking-config'
 
-export const runtime = 'nodejs'
+export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -20,11 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     // Tag-specific ranking
     if (tag) {
-      // eslint-disable-next-line no-console
-      console.log(`[Edge API] Fetching tag ranking: genre=${genre}, period=${period}, tag=${tag}`)
       const items = await getTagRanking(genre, period as RankingPeriod, tag)
-      // eslint-disable-next-line no-console
-      console.log(`[Edge API] Tag ranking result: ${items?.length || 0} items`)
       
       // タグランキングが見つからない場合でも空の配列を返す（エラーにしない）
       const response = NextResponse.json({
@@ -49,11 +45,7 @@ export async function GET(request: NextRequest) {
     // Genre ranking
     const data = await getGenreRanking(genre, period as RankingPeriod)
     
-    // Log metadata for debugging
-    if (data?.metadata) {
-      // eslint-disable-next-line no-console
-      console.log(`[Edge API] Metadata: updatedAt=${data.metadata.updatedAt}, groupId=${data.metadata.groupId}, genres=${data.metadata.genresInGroup?.join(',')}`)
-    }
+    // Metadata available in response
     
     // データが見つからない場合でも空のレスポンスを返す（エラーにしない）
     const maxItems = 500
@@ -74,22 +66,14 @@ export async function GET(request: NextRequest) {
       // データがない場合は短いキャッシュ時間
       response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
       response.headers.set('X-Cache-Status', 'MISS')
-      // eslint-disable-next-line no-console
-      console.warn(`[Edge API] No data found for genre=${genre}, period=${period}`)
+      // No data found - return empty response
     }
     
     response.headers.set('X-API-Version', '2')
     return response
     
   } catch (error: any) {
-    // eslint-disable-next-line no-console
-    console.error('Edge ranking API error:', error)
-    // eslint-disable-next-line no-console
-    console.error('Error details:', {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name
-    })
+    // Error occurred - return safe empty response
     
     // エラーが発生しても空のデータを返す（サーバーエラーを避ける）
     const response = NextResponse.json({
