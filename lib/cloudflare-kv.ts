@@ -264,18 +264,11 @@ export async function getGenreRanking(
     const groupData = await getRankingGroupFromKV(groupId)
     
     if (!groupData || !groupData.genres || !groupData.genres[genre]) {
-      console.error(`[KV] Genre '${genre}' not found in group ${groupId}`)
-      if (!groupData) {
-        console.error(`[KV] Group ${groupId} data is null`)
-      } else if (!groupData.genres) {
-        console.error(`[KV] Group ${groupId} has no genres property`)
-      } else {
-        console.error(`[KV] Group ${groupId} genres: ${Object.keys(groupData.genres).join(', ')}`)
-      }
+      // [KV] Genre not found in group, trying full data fetch
       // Fallback to fetching all data (backward compatibility)
       const data = await getRankingFromKV()
       if (!data || !data.genres || !data.genres[genre]) {
-        console.error(`[KV] Genre '${genre}' not found in any data source`)
+        // [KV] Genre not found in any data source
         return null
       }
       const result = data.genres[genre][period]
