@@ -120,14 +120,14 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`[KV] ${keyName} not found (404)`)
+          // ${keyName} not found (404)
           return null
         }
-        console.error(`[KV] Failed to read ${keyName}: ${response.status} ${response.statusText}`)
+        // Failed to read ${keyName}: ${response.status} ${response.statusText}
         // Try to get error details
         try {
           const errorText = await response.text()
-          console.error(`[KV] Error details for ${keyName}:`, errorText)
+          // Error details for ${keyName}: errorText
         } catch {}
         // Return null instead of throwing to allow partial reads
         return null
@@ -139,7 +139,7 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       try {
         return JSON.parse(jsonString) as KVRankingData
       } catch (parseError) {
-        console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
+        // Failed to parse JSON from ${keyName}: parseError
         return null
       }
     })
@@ -155,21 +155,21 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
     // Log detailed errors for failed groups
     groupResults.forEach((result, index) => {
       if (result.status === 'rejected') {
-        console.error(`[KV] Group ${index + 1} failed:`, result.reason)
+        // Group ${index + 1} failed: result.reason
       } else if (result.status === 'fulfilled' && result.value === null) {
-        console.error(`[KV] Group ${index + 1} returned null`)
+        // Group ${index + 1} returned null
       }
     })
     
     // If no groups were successfully read, return null
     if (successfulResults.length === 0) {
-      console.error('[KV] No groups could be read successfully')
+      // No groups could be read successfully
       return null
     }
     
     // Log warning if some groups failed
     if (successfulResults.length < 3) {
-      console.warn(`[KV] Only ${successfulResults.length}/3 groups were read successfully`)
+      // Only ${successfulResults.length}/3 groups were read successfully
     }
     
     // Merge all groups into single data structure
@@ -188,7 +188,7 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
     return mergedData
     
   } catch (error) {
-    console.error('[KV] Failed to read 3-key split data:', error)
+    // Failed to read 3-key split data: error
     return null
   }
 }
@@ -244,7 +244,7 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
     return JSON.parse(jsonString)
   } catch (error) {
     // Failed to read from Cloudflare KV - returning null
-    console.error('[KV] Failed to read RANKING_LATEST:', error)
+    // Failed to read RANKING_LATEST: error
     return null
   }
 }
@@ -259,16 +259,16 @@ export async function getGenreRanking(
   try {
     // For 3-key split, only fetch the specific group containing this genre
     const groupId = getGroupIdForGenre(genre as any)
-    console.log(`[KV] Fetching genre '${genre}' from group ${groupId}`)
+    // Fetching genre '${genre}' from group ${groupId}
     
     const groupData = await getRankingGroupFromKV(groupId)
     
     if (!groupData || !groupData.genres || !groupData.genres[genre]) {
-      console.warn(`[KV] Genre '${genre}' not found in group ${groupId}, trying full data fetch`)
+      // Genre '${genre}' not found in group ${groupId}, trying full data fetch
       // Fallback to fetching all data (backward compatibility)
       const data = await getRankingFromKV()
       if (!data || !data.genres || !data.genres[genre]) {
-        console.error(`[KV] Genre '${genre}' not found in any data source`)
+        // Genre '${genre}' not found in any data source
         return null
       }
       const result = data.genres[genre][period]
@@ -280,7 +280,7 @@ export async function getGenreRanking(
 
     const result = groupData.genres[genre][period]
     if (!result) {
-      console.error(`[KV] Period '${period}' not found for genre '${genre}'`)
+      // Period '${period}' not found for genre '${genre}'
       return null
     }
     
@@ -291,7 +291,7 @@ export async function getGenreRanking(
     
     return result
   } catch (error) {
-    console.error(`[KV] Error in getGenreRanking for genre='${genre}', period='${period}':`, error)
+    // Error in getGenreRanking for genre='${genre}', period='${period}': error
     return null
   }
 }
@@ -320,14 +320,14 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     
     if (!response.ok) {
       if (response.status === 404) {
-        console.log(`[KV] ${keyName} not found (404)`)
+        // ${keyName} not found (404)
         return null
       }
-      console.error(`[KV] Failed to read ${keyName}: ${response.status}`)
+      // Failed to read ${keyName}: ${response.status}
       // Log response body for debugging
       try {
         const errorText = await response.text()
-        console.error(`[KV] Error response: ${errorText}`)
+        // Error response: errorText
       } catch {}
       return null
     }
@@ -338,12 +338,12 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     try {
       return JSON.parse(jsonString) as KVRankingData
     } catch (parseError) {
-      console.error(`[KV] Failed to parse JSON from ${keyName}:`, parseError)
+      // Failed to parse JSON from ${keyName}: parseError
       return null
     }
     
   } catch (error) {
-    console.error(`[KV] Failed to read group ${groupId}:`, error)
+    // Failed to read group ${groupId}: error
     return null
   }
 }
