@@ -122,8 +122,8 @@ export function useUserNGList() {
   }, [recalculateTotalCount])
 
   // フィルタリング関数
-  // NGリストの内容が変わったときに新しい関数参照を作成
-  const filterItems = useCallback((items: any[]) => {
+  // useCallbackを削除して、常に最新のngListを参照するようにする
+  const filterItems = (items: any[]) => {
     // 高速化のためSetを作成
     const videoIdSet = new Set(ngList.videoIds)
     const videoTitleExactSet = new Set(ngList.videoTitles.exact)
@@ -155,7 +155,7 @@ export function useUserNGList() {
 
       return true
     })
-  }, [ngList])
+  }
 
   return {
     ngList,
