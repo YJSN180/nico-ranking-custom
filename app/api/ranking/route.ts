@@ -46,10 +46,16 @@ export async function GET(request: NextRequest) {
         }
       }
       
-      // KVにデータがない場合はエラーを返す
+      // KVにデータがない場合は、タグが人気タグリストにない可能性がある
+      // 404 Not Foundを返す（500エラーではなく）
       return NextResponse.json(
-        { error: 'Failed to fetch ranking data' },
-        { status: 500 }
+        { 
+          error: 'Tag ranking not found. This tag may not be in the popular tags list.',
+          items: [],
+          hasMore: false,
+          totalCached: 0
+        },
+        { status: 404 }
       )
     }
 
