@@ -155,11 +155,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     // NGリストを保存
     saveNGListDirectly(tempNGList)
     
-    // 確実に最新の状態を反映するため、ページをリロード
-    // これにより、NGリストの変更が確実に反映される
-    setTimeout(() => {
-      window.location.reload()
-    }, 100)
+    // 即座にページをリロードして、NGリストの変更を反映
+    window.location.reload()
   }
   
   // 閉じる処理
