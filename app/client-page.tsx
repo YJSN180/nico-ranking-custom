@@ -44,6 +44,8 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, filterItems } = useUserNGList()
   
+  // NG list updates are handled automatically via the displayItems useMemo
+  // which recalculates when ngList changes (see line 597)
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
@@ -249,9 +251,10 @@ export default function ClientPage({
   }, [initialGenre, initialPeriod, initialTag])
   
   // 設定変更時の処理
-  const handleConfigChange = useCallback(async (newConfig: RankingConfig) => {
-    // 変更がない場合は何もしない
+  const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
+    // 変更がない場合は何もしない（強制更新でない限り）
     if (
+      !force &&
       newConfig.genre === config.genre &&
       newConfig.period === config.period &&
       newConfig.tag === config.tag
