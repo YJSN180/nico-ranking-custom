@@ -3,10 +3,14 @@
  * デバッグ用のシンプルな実装
  */
 
+import { getGroupIdForGenre, extractGenreData } from './kv-optimization'
+
 // Rate limiting imports removed
 export interface KVNamespace {
-  get(key: string): Promise<string | null>
-  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+  get(key: string, type?: 'text'): Promise<string | null>
+  get(key: string, type: 'arrayBuffer'): Promise<ArrayBuffer | null>
+  get(key: string, type: 'json'): Promise<any | null>
+  put(key: string, value: string | ArrayBuffer, options?: { expirationTtl?: number }): Promise<void>
 }
 
 export interface Env {
@@ -98,6 +102,43 @@ export default {
         }, null, 2), {
           headers: { 'Content-Type': 'application/json' }
         })
+      }
+      
+      // Intercept /api/ranking for direct KV access
+      if (url.pathname === '/api/ranking' && env.RANKING_DATA) {
+        try {
+          // Extract query parameters
+          const genre = url.searchParams.get('genre') || 'all'
+          const period = url.searchParams.get('period') || '24h'
+          
+          // Get the appropriate KV group for this genre
+          const groupId = getGroupIdForGenre(genre)
+          const kvKey = `RANKING_GROUP_${groupId}`
+          
+          // Try to read from KV
+          const kvData = await env.RANKING_DATA.get(kvKey, 'arrayBuffer')
+          
+          if (kvData) {
+            // Extract the specific genre/period data
+            const extractedData = await extractGenreData(
+              new Uint8Array(kvData),
+              genre,
+              period
+            )
+            
+            // Return the data directly
+            return new Response(JSON.stringify(extractedData), {
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600',
+                'X-Data-Source': 'kv-direct'
+              }
+            })
+          }
+        } catch (error) {
+          // Log error but continue to Vercel fallback
+          console.error('[KV Direct] Failed to read from KV:', error)
+        }
       }
       
       // プレビュー環境または本番環境を選択
