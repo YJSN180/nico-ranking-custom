@@ -76,9 +76,10 @@ export function useUserNGList() {
     
     // ngListUpdatedイベントを監視（他のコンポーネントからの変更を検知）
     const handleNGListUpdated = (e: CustomEvent) => {
-      // イベントが自分自身のコンポーネントIDと異なる場合のみ処理
-      // （同じコンポーネント内でのsaveNGListDirectly呼び出しによる二重更新を防ぐ）
-      if (e.detail && e.detail.ngList && e.detail.sourceId !== componentId.current) {
+      console.log('[DEBUG] ngListUpdated event received, sourceId:', e.detail?.sourceId, 'myId:', componentId.current);
+      // 一時的に二重更新防止を無効化してデバッグ
+      if (e.detail && e.detail.ngList) {
+        console.log('[DEBUG] Updating NG list from event (debug mode - accepting all events)');
         setNGList(e.detail.ngList)
       }
     }
@@ -106,11 +107,13 @@ export function useUserNGList() {
 
   // 適用ボタン用：NGリストを直接保存
   const saveNGListDirectly = useCallback((newList: UserNGList) => {
+    console.log('[DEBUG] saveNGListDirectly called');
     const updatedList = {
       ...newList,
       updatedAt: new Date().toISOString(),
       totalCount: recalculateTotalCount(newList)
     }
+    console.log('[DEBUG] Setting NG list with updatedAt:', updatedList.updatedAt);
     setNGList(updatedList)
     
     // localStorageに保存

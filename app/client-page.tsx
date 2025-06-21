@@ -44,6 +44,9 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, filterItems } = useUserNGList()
   
+  // ngListの変更を検知するための値を抽出
+  const ngListVersion = ngList.updatedAt
+  
   // NG list updates are handled automatically via the displayItems useMemo
   // which recalculates when ngList changes (see line 597)
   
@@ -541,6 +544,15 @@ export default function ClientPage({
 
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
+    console.log('[DEBUG] displayItems useMemo recalculating...');
+    console.log('[DEBUG] Dependencies:', {
+      itemsWithTagsLength: itemsWithTags.length,
+      configTag: config.tag,
+      filterItemsRef: filterItems,
+      ngListVersion: ngListVersion,
+      ngListVideoIds: ngList.videoIds.length
+    });
+    
     // 表示件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
     
@@ -572,8 +584,11 @@ export default function ClientPage({
       }
     }
     
+    console.log('[DEBUG] displayItems result:', result.length, 'items');
+    console.log('[DEBUG] First 3 items ranks:', result.slice(0, 3).map(item => ({ id: item.id, rank: item.rank, originalRank: item.originalRank })));
+    
     return result
-  }, [itemsWithTags, config.tag, filterItems, ngList]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [itemsWithTags, config.tag, filterItems, ngListVersion]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
