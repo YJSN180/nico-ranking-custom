@@ -152,16 +152,14 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存（これがngListUpdatedイベントを発火し、UIが自動更新される）
+    // NGリストを保存
     saveNGListDirectly(tempNGList)
     
-    // onApplyコールバックがあれば実行
-    if (onApply) {
-      onApply()
-    }
-    
-    // モーダルを閉じる
-    onClose()
+    // 確実に最新の状態を反映するため、ページをリロード
+    // これにより、NGリストの変更が確実に反映される
+    setTimeout(() => {
+      window.location.reload()
+    }, 100)
   }
   
   // 閉じる処理
