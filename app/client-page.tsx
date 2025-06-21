@@ -539,6 +539,9 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
+  // NGリストの変更を確実に検知するため、キーとなる値を個別に抽出
+  const ngListKey = `${ngList.videoIds.length}-${ngList.updatedAt}`
+  
   // フィルタリングと順位再割り当て
   const displayItems = useMemo(() => {
     // 表示件数の上限
@@ -573,7 +576,7 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, config.tag, filterItems, ngList]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [itemsWithTags, config.tag, filterItems, ngListKey]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
