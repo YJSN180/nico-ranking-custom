@@ -54,9 +54,7 @@ async function fetchNGListFromKV(): Promise<void> {
 }
 
 // Run if called directly
-if (require.main === module) {
-  fetchNGListFromKV().catch(error => {
-    console.error('Failed to fetch NG list:', error)
-    process.exit(1)
-  })
-}
+fetchNGListFromKV().catch(error => {
+  console.error('Failed to fetch NG list:', error)
+  process.exit(1)
+})

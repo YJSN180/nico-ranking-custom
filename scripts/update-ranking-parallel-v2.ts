@@ -725,7 +725,5 @@ if (process.argv[2] === '--group') {
   });
 } else {
   // Run if called directly (full parallel mode)
-  if (require.main === module) {
-    main();
-  }
+  main();
 }
