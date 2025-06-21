@@ -44,18 +44,6 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, filterItems } = useUserNGList()
   
-  // Force re-render when NG list changes
-  const [ngListVersion, setNgListVersion] = useState(0)
-  
-  // Listen for NG list updates to force immediate re-render
-  useEffect(() => {
-    const handleNGListUpdate = () => {
-      setNgListVersion(prev => prev + 1)
-    }
-    
-    window.addEventListener('ngListUpdated', handleNGListUpdate)
-    return () => window.removeEventListener('ngListUpdated', handleNGListUpdate)
-  }, [])
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
@@ -582,7 +570,7 @@ export default function ClientPage({
     }
     
     return result
-  }, [itemsWithTags, config.tag, filterItems, ngListVersion])
+  }, [itemsWithTags, config.tag, filterItems, ngList]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
