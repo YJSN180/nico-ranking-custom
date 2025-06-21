@@ -122,6 +122,8 @@ export function useUserNGList() {
   }, [recalculateTotalCount])
 
   // フィルタリング関数
+  // NGリストの内容が変わったときに新しい関数参照を作成するため、
+  // ngListオブジェクト全体を依存配列に含める
   const filterItems = useCallback((items: any[]) => {
     // 高速化のためSetを作成
     const videoIdSet = new Set(ngList.videoIds)
@@ -154,7 +156,7 @@ export function useUserNGList() {
 
       return true
     })
-  }, [ngList])
+  }, [ngList.videoIds, ngList.videoTitles, ngList.authorIds, ngList.authorNames, ngList.updatedAt])
 
   return {
     ngList,
