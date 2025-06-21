@@ -147,22 +147,12 @@ function migrateLegacyNGList(data: any): NGList {
   };
 }
 
-// Get NG list from artifact file (CI) or Vercel KV (fallback)
+// Get NG list - always fetch fresh from KV to ensure latest data
 async function getNGList(): Promise<NGList> {
   try {
-    // Check if NG list is available from artifact (in CI environment)
-    const ngListPath = './ng-list.json';
-    try {
-      await fs.access(ngListPath);
-      console.log('Loading NG list from artifact file');
-      const data = JSON.parse(await fs.readFile(ngListPath, 'utf-8'));
-      return migrateLegacyNGList(data);
-    } catch {
-      // File doesn't exist, continue to KV fetch
-    }
-    
-    // Fallback to fetching from KV (for local development or manual runs)
-    console.log('Fetching NG list from KV');
+    // Always fetch fresh NG list from KV to ensure we have the latest data
+    // This prevents issues where admin updates NG list between GitHub Actions runs
+    console.log('Fetching fresh NG list from KV');
     const [manual, derived] = await Promise.all([
       kv.get<any>('ng-list-manual'),
       kv.get<string[]>('ng-list-derived')
