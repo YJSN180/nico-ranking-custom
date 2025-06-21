@@ -1,5 +1,4 @@
 #!/usr/bin/env npx tsx
-import 'dotenv/config'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { promisify } from 'util'

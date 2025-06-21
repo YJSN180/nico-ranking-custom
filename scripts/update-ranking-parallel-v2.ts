@@ -1,5 +1,4 @@
 #!/usr/bin/env npx tsx
-import 'dotenv/config'
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'

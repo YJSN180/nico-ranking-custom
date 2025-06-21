@@ -1,5 +1,4 @@
 #!/usr/bin/env npx tsx
-import 'dotenv/config'
 import * as fs from 'fs/promises'
 
 async function fetchNGListFromKV(): Promise<void> {
