@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export interface UserNGList {
   videoIds: string[]
@@ -37,9 +37,6 @@ const defaultNGList: UserNGList = {
 
 export function useUserNGList() {
   const [ngList, setNGList] = useState<UserNGList>(defaultNGList)
-  
-  // コンポーネントの一意IDを生成（二重更新を防ぐため）
-  const componentId = useRef(`ng-list-${Math.random().toString(36).substr(2, 9)}`)
 
   // 初回読み込みとストレージ変更の監視
   useEffect(() => {
@@ -76,10 +73,7 @@ export function useUserNGList() {
     
     // ngListUpdatedイベントを監視（他のコンポーネントからの変更を検知）
     const handleNGListUpdated = (e: CustomEvent) => {
-      console.log('[DEBUG] ngListUpdated event received, sourceId:', e.detail?.sourceId, 'myId:', componentId.current);
-      // 一時的に二重更新防止を無効化してデバッグ
       if (e.detail && e.detail.ngList) {
-        console.log('[DEBUG] Updating NG list from event (debug mode - accepting all events)');
         setNGList(e.detail.ngList)
       }
     }
@@ -107,13 +101,11 @@ export function useUserNGList() {
 
   // 適用ボタン用：NGリストを直接保存
   const saveNGListDirectly = useCallback((newList: UserNGList) => {
-    console.log('[DEBUG] saveNGListDirectly called');
     const updatedList = {
       ...newList,
       updatedAt: new Date().toISOString(),
       totalCount: recalculateTotalCount(newList)
     }
-    console.log('[DEBUG] Setting NG list with updatedAt:', updatedList.updatedAt);
     setNGList(updatedList)
     
     // localStorageに保存
@@ -121,12 +113,8 @@ export function useUserNGList() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
       
       // NGリスト更新イベントを発火（他のコンポーネントに通知）
-      // sourceIdを含めることで、自分自身への二重更新を防ぐ
       window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-        detail: { 
-          ngList: updatedList,
-          sourceId: componentId.current 
-        } 
+        detail: { ngList: updatedList } 
       }))
     } catch (error) {
       // ストレージエラーは無視
@@ -134,8 +122,7 @@ export function useUserNGList() {
   }, [recalculateTotalCount])
 
   // フィルタリング関数
-  // NGリストの内容が変わったときに新しい関数参照を作成するため、
-  // ngListオブジェクト全体を依存配列に含める
+  // NGリストの内容が変わったときに新しい関数参照を作成
   const filterItems = useCallback((items: any[]) => {
     // 高速化のためSetを作成
     const videoIdSet = new Set(ngList.videoIds)
@@ -168,7 +155,7 @@ export function useUserNGList() {
 
       return true
     })
-  }, [ngList.videoIds, ngList.videoTitles, ngList.authorIds, ngList.authorNames, ngList.updatedAt])
+  }, [ngList])
 
   return {
     ngList,
