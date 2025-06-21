@@ -1,7 +1,4 @@
 import { useState, useEffect, useCallback } from 'react'
-import { filterWithNGList } from '@/lib/filter-with-ng-list'
-import type { NGList } from '@/types/ng-list'
-import type { RankingItem } from '@/types/ranking'
 
 export interface UserNGList {
   videoIds: string[]
@@ -124,27 +121,9 @@ export function useUserNGList() {
     }
   }, [recalculateTotalCount])
 
-  // UserNGListをNGList形式に変換
-  const convertToNGList = useCallback((userNGList: UserNGList): NGList => {
-    return {
-      videoIds: userNGList.videoIds,
-      videoTitles: userNGList.videoTitles,
-      authorIds: userNGList.authorIds,
-      authorNames: userNGList.authorNames,
-      derivedVideoIds: [] // クライアント側では派生IDは使用しない
-    }
-  }, [])
-
-  // フィルタリング関数（ランク再計算を含む）
-  const filterItems = useCallback((items: RankingItem[]): RankingItem[] => {
-    const ngListForFilter = convertToNGList(ngList)
-    const result = filterWithNGList(items, ngListForFilter)
-    return result.filteredItems
-  }, [ngList, convertToNGList])
 
   return {
     ngList,
-    filterItems,
     saveNGListDirectly,
   }
 }

@@ -13,8 +13,10 @@ import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import { rankingCache } from '@/lib/ranking-cache'
 import { requestThrottle } from '@/lib/request-throttle'
+import { filterWithNGList } from '@/lib/filter-with-ng-list'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
+import type { NGList } from '@/types/ng-list'
 
 interface ClientPageProps {
   initialData: RankingData
@@ -42,7 +44,7 @@ export default function ClientPage({
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
-  const { ngList, filterItems } = useUserNGList()
+  const { ngList } = useUserNGList()
   
   // NG list updates are handled automatically via the displayItems useMemo
   // which recalculates when ngList changes (see line 597)
@@ -544,18 +546,27 @@ export default function ClientPage({
     // 表示件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
     
-    // filterItemsはfilterWithNGListを使用してランクを再計算する
-    const filtered = filterItems(itemsWithTags)
+    // UserNGListをNGList形式に変換（useUserNGListフック内のconvertToNGListロジックを展開）
+    const ngListForFilter: NGList = {
+      videoIds: ngList.videoIds,
+      videoTitles: ngList.videoTitles,
+      authorIds: ngList.authorIds,
+      authorNames: ngList.authorNames,
+      derivedVideoIds: [] // クライアント側では派生IDは使用しない
+    }
+    
+    // filterWithNGListを直接呼び出す（ランクの再計算を含む）
+    const { filteredItems } = filterWithNGList(itemsWithTags, ngListForFilter)
     
     // 表示件数を制限
-    const limited = filtered.slice(0, limit)
+    const limited = filteredItems.slice(0, limit)
     
     // originalRankを追加（元のランク番号を保持）
     return limited.map(item => ({
       ...item,
       originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
     }))
-  }, [itemsWithTags, config.tag, filterItems])
+  }, [itemsWithTags, config.tag, ngList])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
