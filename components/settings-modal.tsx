@@ -152,11 +152,11 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存
+    // NGリストを保存（filterWithNGListによる自動再計算により即座に反映される）
     saveNGListDirectly(tempNGList)
     
-    // 即座にページをリロードして、NGリストの変更を反映
-    window.location.reload()
+    // モーダルを閉じる
+    onClose()
   }
   
   // 閉じる処理

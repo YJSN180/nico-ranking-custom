@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { filterWithNGList } from '@/lib/filter-with-ng-list'
+import type { NGList } from '@/types/ng-list'
+import type { RankingItem } from '@/types/ranking'
 
 export interface UserNGList {
   videoIds: string[]
@@ -121,41 +124,23 @@ export function useUserNGList() {
     }
   }, [recalculateTotalCount])
 
-  // フィルタリング関数
-  // useCallbackを削除して、常に最新のngListを参照するようにする
-  const filterItems = (items: any[]) => {
-    // 高速化のためSetを作成
-    const videoIdSet = new Set(ngList.videoIds)
-    const videoTitleExactSet = new Set(ngList.videoTitles.exact)
-    const authorIdSet = new Set(ngList.authorIds)
-    const authorNameExactSet = new Set(ngList.authorNames.exact)
+  // UserNGListをNGList形式に変換
+  const convertToNGList = useCallback((userNGList: UserNGList): NGList => {
+    return {
+      videoIds: userNGList.videoIds,
+      videoTitles: userNGList.videoTitles,
+      authorIds: userNGList.authorIds,
+      authorNames: userNGList.authorNames,
+      derivedVideoIds: [] // クライアント側では派生IDは使用しない
+    }
+  }, [])
 
-    return items.filter(item => {
-      // 動画IDチェック
-      if (videoIdSet.has(item.id)) return false
-
-      // 動画タイトル（完全一致）チェック
-      if (videoTitleExactSet.has(item.title)) return false
-
-      // 動画タイトル（部分一致）チェック
-      if (ngList.videoTitles.partial.some(partial => item.title.includes(partial))) {
-        return false
-      }
-
-      // 投稿者IDチェック
-      if (item.authorId && authorIdSet.has(item.authorId)) return false
-
-      // 投稿者名（完全一致）チェック
-      if (item.authorName && authorNameExactSet.has(item.authorName)) return false
-
-      // 投稿者名（部分一致）チェック
-      if (item.authorName && ngList.authorNames.partial.some(partial => item.authorName.includes(partial))) {
-        return false
-      }
-
-      return true
-    })
-  }
+  // フィルタリング関数（ランク再計算を含む）
+  const filterItems = useCallback((items: RankingItem[]): RankingItem[] => {
+    const ngListForFilter = convertToNGList(ngList)
+    const result = filterWithNGList(items, ngListForFilter)
+    return result.filteredItems
+  }, [ngList, convertToNGList])
 
   return {
     ngList,

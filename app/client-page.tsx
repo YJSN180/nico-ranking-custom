@@ -539,41 +539,23 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // フィルタリングと順位再割り当て
+  // フィルタリングと順位再割り当て（filterWithNGListが自動的にランクを再計算）
   const displayItems = useMemo(() => {
     // 表示件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
     
-    // ソート済みの配列を作成しながらフィルタリングと再割り当てを同時に行う
-    const result: Array<RankingItem & { originalRank: number }> = []
-    let displayRank = 1
+    // filterItemsはfilterWithNGListを使用してランクを再計算する
+    const filtered = filterItems(itemsWithTags)
     
-    // itemsWithTagsが既にrank順であることを前提とする（APIからの順序を維持）
-    // もしソートが必要な場合は、元の配列をソートせずに処理
-    const needsSort = itemsWithTags.length > 0 && 
-      itemsWithTags.some((item, i) => i > 0 && item.rank < itemsWithTags[i - 1]!.rank)
+    // 表示件数を制限
+    const limited = filtered.slice(0, limit)
     
-    const processedItems = needsSort 
-      ? [...itemsWithTags].sort((a, b) => a.rank - b.rank)
-      : itemsWithTags
-    
-    // フィルタリングと再割り当てを1パスで実行
-    for (const item of processedItems) {
-      // NGフィルタチェック（filterItemsの内部ロジックを参照）
-      if (filterItems([item]).length > 0) {
-        result.push({
-          ...item,
-          originalRank: item.rank,
-          rank: displayRank++
-        })
-        
-        // 上限に達したら終了
-        if (result.length >= limit) break
-      }
-    }
-    
-    return result
-  }, [itemsWithTags, config.tag, ngList]) // eslint-disable-line react-hooks/exhaustive-deps
+    // originalRankを追加（元のランク番号を保持）
+    return limited.map(item => ({
+      ...item,
+      originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
+    }))
+  }, [itemsWithTags, config.tag, filterItems])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
