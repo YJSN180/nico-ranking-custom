@@ -360,8 +360,6 @@ export default function ClientPage({
           }
         } else if (response.status === 404 && newConfig.tag) {
           // タグが見つからない場合は、タグなしの状態に自動遷移
-          console.log(`[Client] Tag "${newConfig.tag}" not found, redirecting to genre ranking`)
-          
           // タグなしの設定で再度リクエスト
           const taglessConfig = { ...newConfig, tag: undefined }
           handleConfigChange(taglessConfig)
