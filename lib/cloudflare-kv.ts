@@ -243,7 +243,9 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
       if (response.status === 404) {
         return null
       }
-      throw new Error(`Cloudflare KV read failed: ${response.status}`)
+      // Log error but return null to allow graceful fallback
+      console.error(`[KV] Cloudflare KV read failed: ${response.status}`)
+      return null
     }
     
     const data = await response.arrayBuffer()
