@@ -21,6 +21,7 @@
 
 ## 🏗️ アーキテクチャ
 
+### 通常モード（Vercel経由）
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │   Cloudflare    │────▶│     Vercel      │────▶│   Nico Nico    │
@@ -34,6 +35,16 @@
 │  (Cache Store)  │      (Fallback Update)     │   (Cron Job)   │
 └─────────────────┘                            └─────────────────┘
 ```
+
+### KV最適化モード（推奨）
+```
+┌─────────────────┐     ┌─────────────────┐
+│   Cloudflare    │────▶│  Cloudflare KV  │
+│    Workers      │     │  (Direct Read)  │
+└─────────────────┘     └─────────────────┘
+```
+
+**重要**: KV最適化を有効にするには、Cloudflare Workersの環境変数で `KV_OPTIMIZATION_PERCENTAGE=100` を設定してください。
 
 ### 主要コンポーネント
 
@@ -85,6 +96,27 @@ ADMIN_USERNAME=your_admin_username
 ADMIN_PASSWORD=your_admin_password
 WORKER_AUTH_KEY=your_worker_key
 ```
+
+### Cloudflare Workers デプロイメント（重要）
+
+パフォーマンスを最大化するため、Cloudflare Workersで以下の設定を行ってください：
+
+1. **Workerをデプロイ**：
+   ```bash
+   source .env.local && CLOUDFLARE_API_TOKEN="$CLOUDFLARE_KV_API_TOKEN" wrangler deploy
+   ```
+
+2. **KV最適化を有効化**（Cloudflareダッシュボードで設定）：
+   - Workers & Pages → あなたのWorker → Settings → Environment Variables
+   - `KV_OPTIMIZATION_PERCENTAGE` = `100` を追加
+
+   または、wranglerコマンドで：
+   ```bash
+   wrangler secret put KV_OPTIMIZATION_PERCENTAGE
+   # プロンプトで「100」を入力
+   ```
+
+これにより、ランキングデータがCloudflare KVから直接読み込まれ、Vercelを経由しないため大幅に高速化されます。
 
 ## 📝 開発
 
