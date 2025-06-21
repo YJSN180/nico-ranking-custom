@@ -631,7 +631,7 @@ export default function ClientPage({
                 cursor: 'pointer'
               }}
             >
-              すべてのランキングを表示
+              ジャンル別ランキングに戻る
             </button>
           )}
         </div>
