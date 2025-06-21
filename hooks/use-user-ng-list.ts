@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 export interface UserNGList {
   videoIds: string[]
@@ -37,6 +37,9 @@ const defaultNGList: UserNGList = {
 
 export function useUserNGList() {
   const [ngList, setNGList] = useState<UserNGList>(defaultNGList)
+  
+  // コンポーネントの一意IDを生成（二重更新を防ぐため）
+  const componentId = useRef(`ng-list-${Math.random().toString(36).substr(2, 9)}`)
 
   // 初回読み込みとストレージ変更の監視
   useEffect(() => {
@@ -71,9 +74,11 @@ export function useUserNGList() {
       }
     }
     
-    // ngListUpdatedイベントを監視（同じタブ内での変更を検知）
+    // ngListUpdatedイベントを監視（他のコンポーネントからの変更を検知）
     const handleNGListUpdated = (e: CustomEvent) => {
-      if (e.detail && e.detail.ngList) {
+      // イベントが自分自身のコンポーネントIDと異なる場合のみ処理
+      // （同じコンポーネント内でのsaveNGListDirectly呼び出しによる二重更新を防ぐ）
+      if (e.detail && e.detail.ngList && e.detail.sourceId !== componentId.current) {
         setNGList(e.detail.ngList)
       }
     }
@@ -113,8 +118,12 @@ export function useUserNGList() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
       
       // NGリスト更新イベントを発火（他のコンポーネントに通知）
+      // sourceIdを含めることで、自分自身への二重更新を防ぐ
       window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-        detail: { ngList: updatedList } 
+        detail: { 
+          ngList: updatedList,
+          sourceId: componentId.current 
+        } 
       }))
     } catch (error) {
       // ストレージエラーは無視
