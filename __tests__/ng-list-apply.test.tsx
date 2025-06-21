@@ -43,7 +43,7 @@ describe('NG List Apply Functionality', () => {
     })
   })
 
-  it('should apply NG list changes immediately without loading state', async () => {
+  it('should apply NG list changes immediately without page reload', async () => {
     const { rerender } = render(
       <SettingsModal 
         isOpen={true} 
@@ -66,13 +66,14 @@ describe('NG List Apply Functionality', () => {
     // Verify that saveNGListDirectly was called immediately
     expect(mockSaveNGListDirectly).toHaveBeenCalledTimes(1)
     
+    // Verify onApply callback was called
+    expect(mockOnApply).toHaveBeenCalledTimes(1)
+    
     // Verify onClose was called immediately
     expect(mockOnClose).toHaveBeenCalledTimes(1)
     
-    // Wait for the timeout to complete and verify reload was called
-    await waitFor(() => {
-      expect(mockReload).toHaveBeenCalledTimes(1)
-    }, { timeout: 200 })
+    // Verify that page reload was NOT called
+    expect(mockReload).not.toHaveBeenCalled()
   })
 
   it('should trigger ngListUpdated event when saving NG list', async () => {
@@ -119,10 +120,7 @@ describe('NG List Apply Functionality', () => {
     window.removeEventListener('ngListUpdated', eventListener)
   })
 
-  it('should not trigger ngListApplied event anymore', async () => {
-    const ngListAppliedListener = vi.fn()
-    window.addEventListener('ngListApplied', ngListAppliedListener)
-
+  it('should call onApply callback when provided', async () => {
     render(
       <SettingsModal 
         isOpen={true} 
@@ -137,15 +135,12 @@ describe('NG List Apply Functionality', () => {
     fireEvent.click(screen.getAllByText('追加')[0])
     fireEvent.click(screen.getByText('適用'))
 
-    // Wait to ensure the modal closes and reload is called
-    await waitFor(() => {
-      expect(mockOnClose).toHaveBeenCalled()
-      expect(mockReload).toHaveBeenCalled()
-    })
-
-    // Verify ngListApplied was NOT triggered
-    expect(ngListAppliedListener).not.toHaveBeenCalled()
-
-    window.removeEventListener('ngListApplied', ngListAppliedListener)
+    // Verify callbacks were called in correct order
+    expect(mockSaveNGListDirectly).toHaveBeenCalled()
+    expect(mockOnApply).toHaveBeenCalled()
+    expect(mockOnClose).toHaveBeenCalled()
+    
+    // Verify no page reload
+    expect(mockReload).not.toHaveBeenCalled()
   })
 })
