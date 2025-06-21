@@ -13,18 +13,12 @@ describe('Derived NG List API', () => {
   describe('GET /api/admin/ng-list/derived', () => {
     it('should forward to Edge Function and return derived NG list', async () => {
       const mockDerivedList = ['sm123', 'sm456', 'sm789']
-      const mockResponse = {
-        videoIds: mockDerivedList,
-        count: 3,
-        lastUpdated: new Date().toISOString(),
-        totalVideosProcessed: 0
-      }
 
-      // Mock the internal fetch to Edge Function
+      // Mock the Cloudflare KV fetch - KV stores just the array
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => mockResponse
+        json: async () => mockDerivedList
       } as Response)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived', {
@@ -40,6 +34,7 @@ describe('Derived NG List API', () => {
       expect(data.videoIds).toEqual(mockDerivedList)
       expect(data.count).toBe(3)
       expect(data).toHaveProperty('lastUpdated')
+      expect(data.totalVideosProcessed).toBe(3)
     })
 
     it('should forward 401 status from Edge Function', async () => {
@@ -60,18 +55,11 @@ describe('Derived NG List API', () => {
     })
 
     it('should handle empty list response from Edge Function', async () => {
-      const mockResponse = {
-        videoIds: [],
-        count: 0,
-        lastUpdated: null,
-        totalVideosProcessed: 0
-      }
-
-      // Mock the internal fetch to Edge Function
+      // Mock the Cloudflare KV fetch - KV stores just the array
       vi.mocked(global.fetch).mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => mockResponse
+        json: async () => []
       } as Response)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list/derived', {

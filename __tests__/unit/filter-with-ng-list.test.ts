@@ -191,6 +191,7 @@ describe('filterWithNGList', () => {
     const result = filterWithNGList(items, ngList)
 
     expect(result.filteredItems.map(item => item.id)).toEqual(['sm1', 'sm3', 'sm5'])
-    expect(result.filteredItems.map(item => item.rank)).toEqual([1, 3, 5])
+    // Ranks should be recalculated to be continuous
+    expect(result.filteredItems.map(item => item.rank)).toEqual([1, 2, 3])
   })
 })

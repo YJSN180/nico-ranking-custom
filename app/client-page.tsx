@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
-import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -13,8 +12,10 @@ import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import { rankingCache } from '@/lib/ranking-cache'
 import { requestThrottle } from '@/lib/request-throttle'
+import { filterWithNGList } from '@/lib/filter-with-ng-list'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
+import type { NGList } from '@/types/ng-list'
 
 interface ClientPageProps {
   initialData: RankingData
@@ -42,7 +43,13 @@ export default function ClientPage({
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
-  const { ngList, filterItems } = useUserNGList()
+  const { ngList } = useUserNGList()
+  
+  // NGリストのバージョンを追跡（更新時に強制再レンダリング）
+  const ngListVersion = useMemo(() => {
+    // ngListオブジェクト全体をJSON文字列化してハッシュ値として使用
+    return JSON.stringify(ngList)
+  }, [ngList])
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
@@ -248,9 +255,10 @@ export default function ClientPage({
   }, [initialGenre, initialPeriod, initialTag])
   
   // 設定変更時の処理
-  const handleConfigChange = useCallback(async (newConfig: RankingConfig) => {
-    // 変更がない場合は何もしない
+  const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
+    // 変更がない場合は何もしない（強制更新でない限り）
     if (
+      !force &&
       newConfig.genre === config.genre &&
       newConfig.period === config.period &&
       newConfig.tag === config.tag
@@ -535,41 +543,34 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // フィルタリングと順位再割り当て
+  // フィルタリングと順位再割り当て（filterWithNGListが自動的にランクを再計算）
   const displayItems = useMemo(() => {
     // 表示件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
     
-    // ソート済みの配列を作成しながらフィルタリングと再割り当てを同時に行う
-    const result: Array<RankingItem & { originalRank: number }> = []
-    let displayRank = 1
-    
-    // itemsWithTagsが既にrank順であることを前提とする（APIからの順序を維持）
-    // もしソートが必要な場合は、元の配列をソートせずに処理
-    const needsSort = itemsWithTags.length > 0 && 
-      itemsWithTags.some((item, i) => i > 0 && item.rank < itemsWithTags[i - 1]!.rank)
-    
-    const processedItems = needsSort 
-      ? [...itemsWithTags].sort((a, b) => a.rank - b.rank)
-      : itemsWithTags
-    
-    // フィルタリングと再割り当てを1パスで実行
-    for (const item of processedItems) {
-      // NGフィルタチェック（filterItemsの内部ロジックを参照）
-      if (filterItems([item]).length > 0) {
-        result.push({
-          ...item,
-          originalRank: item.rank,
-          rank: displayRank++
-        })
-        
-        // 上限に達したら終了
-        if (result.length >= limit) break
-      }
+    // UserNGListをNGList形式に変換（useUserNGListフック内のconvertToNGListロジックを展開）
+    const ngListForFilter: NGList = {
+      videoIds: ngList.videoIds,
+      videoTitles: ngList.videoTitles,
+      authorIds: ngList.authorIds,
+      authorNames: ngList.authorNames,
+      derivedVideoIds: [] // クライアント側では派生IDは使用しない
     }
     
+    // filterWithNGListを直接呼び出す（ランクの再計算を含む）
+    const { filteredItems } = filterWithNGList(itemsWithTags, ngListForFilter)
+    
+    // 表示件数を制限
+    const limited = filteredItems.slice(0, limit)
+    
+    // originalRankを追加（元のランク番号を保持）
+    const result = limited.map(item => ({
+      ...item,
+      originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
+    }))
+    
     return result
-  }, [itemsWithTags, config.tag, filterItems])
+  }, [itemsWithTags, config.tag, ngList, ngListVersion])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
@@ -677,7 +678,7 @@ export default function ClientPage({
           </div>
           
           {/* ランキングリスト */}
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <RankingItemComponent 
                 key={item.id} 

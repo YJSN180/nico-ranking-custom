@@ -1,4 +1,8 @@
 #!/usr/bin/env npx tsx
+// DEPRECATED: This script is no longer needed
+// Each parallel job in GitHub Actions now fetches fresh NG list directly from KV
+// This ensures admin NG list updates are immediately reflected in the next run
+
 import * as fs from 'fs/promises'
 
 async function fetchNGListFromKV(): Promise<void> {

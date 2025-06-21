@@ -71,7 +71,7 @@ export function useUserNGList() {
       }
     }
     
-    // ngListUpdatedイベントを監視（同じタブ内での変更を検知）
+    // ngListUpdatedイベントを監視（他のコンポーネントからの変更を検知）
     const handleNGListUpdated = (e: CustomEvent) => {
       if (e.detail && e.detail.ngList) {
         setNGList(e.detail.ngList)
@@ -121,44 +121,9 @@ export function useUserNGList() {
     }
   }, [recalculateTotalCount])
 
-  // フィルタリング関数
-  const filterItems = useCallback((items: any[]) => {
-    // 高速化のためSetを作成
-    const videoIdSet = new Set(ngList.videoIds)
-    const videoTitleExactSet = new Set(ngList.videoTitles.exact)
-    const authorIdSet = new Set(ngList.authorIds)
-    const authorNameExactSet = new Set(ngList.authorNames.exact)
-
-    return items.filter(item => {
-      // 動画IDチェック
-      if (videoIdSet.has(item.id)) return false
-
-      // 動画タイトル（完全一致）チェック
-      if (videoTitleExactSet.has(item.title)) return false
-
-      // 動画タイトル（部分一致）チェック
-      if (ngList.videoTitles.partial.some(partial => item.title.includes(partial))) {
-        return false
-      }
-
-      // 投稿者IDチェック
-      if (item.authorId && authorIdSet.has(item.authorId)) return false
-
-      // 投稿者名（完全一致）チェック
-      if (item.authorName && authorNameExactSet.has(item.authorName)) return false
-
-      // 投稿者名（部分一致）チェック
-      if (item.authorName && ngList.authorNames.partial.some(partial => item.authorName.includes(partial))) {
-        return false
-      }
-
-      return true
-    })
-  }, [ngList])
 
   return {
     ngList,
-    filterItems,
     saveNGListDirectly,
   }
 }
