@@ -46,8 +46,19 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList } = useUserNGList()
   
-  // NG list updates are handled automatically via the displayItems useMemo
-  // which recalculates when ngList changes (see line 597)
+  // NGリスト更新時の強制再レンダリング用カウンター
+  const [ngListUpdateCount, setNgListUpdateCount] = useState(0)
+  
+  // NGリスト更新イベントを監視して強制再レンダリング
+  useEffect(() => {
+    const handleNGListUpdate = () => {
+      // カウンターをインクリメントして強制的に再レンダリング
+      setNgListUpdateCount(prev => prev + 1)
+    }
+    
+    window.addEventListener('ngListUpdated', handleNGListUpdate)
+    return () => window.removeEventListener('ngListUpdated', handleNGListUpdate)
+  }, [])
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
@@ -566,7 +577,7 @@ export default function ClientPage({
       ...item,
       originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
     }))
-  }, [itemsWithTags, config.tag, ngList])
+  }, [itemsWithTags, config.tag, ngList, ngListUpdateCount])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
