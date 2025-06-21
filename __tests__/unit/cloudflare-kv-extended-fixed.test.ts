@@ -78,21 +78,17 @@ describe('Cloudflare KV Integration (Fixed for 3-key split)', () => {
     })
 
     it('単一キーへのフォールバックが機能する', async () => {
-      // 3-keyが404を返す
+      // 3-keyが404を返す (no fallback to single key anymore)
       fetchMock
         .mockResolvedValueOnce({ ok: false, status: 404 })
         .mockResolvedValueOnce({ ok: false, status: 404 })
         .mockResolvedValueOnce({ ok: false, status: 404 })
-        .mockResolvedValueOnce({
-          ok: true,
-          arrayBuffer: async () => new TextEncoder().encode(JSON.stringify(mockRankingData)).buffer
-        })
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getRankingFromKV()
 
-      expect(result).toEqual(mockRankingData)
-      expect(fetchMock).toHaveBeenCalledTimes(4) // 3-key試行 + fallback
+      expect(result).toBeNull() // No data should return null
+      expect(fetchMock).toHaveBeenCalledTimes(3) // Only 3-key attempts
     })
   })
 

@@ -79,7 +79,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
     })
     
     try {
-      const response = await fetch(`/api/edge/admin/ng-list-derived/${videoId}`, {
+      const response = await fetch(`/api/admin/ng-list/derived/${videoId}`, {
         method: 'DELETE',
         credentials: 'same-origin',
         signal: controller.signal
@@ -133,7 +133,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
       // TODO: Implement bulk delete API for better performance
       await Promise.all(
         idsToDelete.map(id =>
-          fetch(`/api/edge/admin/ng-list-derived/${id}`, {
+          fetch(`/api/admin/ng-list/derived/${id}`, {
             method: 'DELETE',
             credentials: 'same-origin',
             signal: controller.signal

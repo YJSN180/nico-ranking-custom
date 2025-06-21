@@ -21,7 +21,8 @@ vi.mock('@/lib/cloudflare-kv', () => ({
     const decoder = new TextDecoder()
     const jsonString = decoder.decode(compressed.slice(2))
     return JSON.parse(jsonString)
-  })
+  }),
+  getRankingFromKV: vi.fn()
 }))
 
 // Mock fetch globally
@@ -48,7 +49,6 @@ afterAll(() => {
 describe.skipIf(process.env.CI)('update-video-stats script', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Clear module cache to allow re-importing
     vi.resetModules()
     // Suppress console logs during tests
     console.log = vi.fn()
@@ -106,19 +106,16 @@ describe.skipIf(process.env.CI)('update-video-stats script', () => {
     }
 
     const { fetchVideoStats } = await import('@/lib/snapshot-api')
+    const { getRankingFromKV } = await import('@/lib/cloudflare-kv')
+    
+    // Mock getRankingFromKV to return our test data
+    vi.mocked(getRankingFromKV).mockResolvedValueOnce(mockRankingData)
 
-    // Mock KV fetch for ranking data
+    // Mock KV fetch for stats updates
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
-      if (urlStr.includes('RANKING_LATEST')) {
-        // Return mock compressed data (our mock will handle compression/decompression)
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressedData = await compressData(mockRankingData)
-        return new Response(compressedData, { status: 200 })
-      }
-      
-      if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
+      if (urlStr.includes('VIDEO_STATS_LATEST')) {
         return new Response(null, { status: 200 })
       }
       
@@ -142,14 +139,7 @@ describe.skipIf(process.env.CI)('update-video-stats script', () => {
 
     // Assert
     // Verify that ranking data was fetched
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('RANKING_LATEST'),
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'Authorization': 'Bearer test-token'
-        })
-      })
-    )
+    expect(getRankingFromKV).toHaveBeenCalledTimes(1)
 
     // Verify that fetchVideoStats was called with unique video IDs
     expect(fetchVideoStats).toHaveBeenCalled()
@@ -164,7 +154,7 @@ describe.skipIf(process.env.CI)('update-video-stats script', () => {
         method: 'PUT',
         headers: expect.objectContaining({
           'Authorization': 'Bearer test-token',
-          'Content-Type': 'application/octet-stream'
+          'Content-Type': 'application/json'
         })
       })
     )
@@ -172,9 +162,8 @@ describe.skipIf(process.env.CI)('update-video-stats script', () => {
 
   it('should handle ranking data fetch failure gracefully', async () => {
     // Arrange
-    vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(null, { status: 404 })
-    )
+    const { getRankingFromKV } = await import('@/lib/cloudflare-kv')
+    vi.mocked(getRankingFromKV).mockResolvedValueOnce(null)
 
     // Act & Assert
     const { updateVideoStats } = await import('../../scripts/update-video-stats')
@@ -189,15 +178,11 @@ describe.skipIf(process.env.CI)('update-video-stats script', () => {
       metadata: { version: 1, updatedAt: '2024-01-01T00:00:00Z', totalItems: 0 }
     }
 
+    const { getRankingFromKV } = await import('@/lib/cloudflare-kv')
+    vi.mocked(getRankingFromKV).mockResolvedValueOnce(emptyRankingData)
+
     vi.mocked(global.fetch).mockImplementation(async (url, options) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
-      
-      if (urlStr.includes('RANKING_LATEST')) {
-        // Return mock compressed data
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressedData = await compressData(emptyRankingData)
-        return new Response(compressedData, { status: 200 })
-      }
       
       if (urlStr.includes('VIDEO_STATS_LATEST') && options?.method === 'PUT') {
         return new Response(null, { status: 200 })
@@ -234,14 +219,14 @@ describe.skipIf(process.env.CI)('update-video-stats script', () => {
 
     const { fetchVideoStats } = await import('@/lib/snapshot-api')
 
+    const { getRankingFromKV } = await import('@/lib/cloudflare-kv')
+    vi.mocked(getRankingFromKV).mockResolvedValueOnce(mockRankingData)
+
     vi.mocked(global.fetch).mockImplementation(async (url) => {
       const urlStr = typeof url === 'string' ? url : url.toString()
       
-      if (urlStr.includes('RANKING_LATEST')) {
-        // Return mock compressed data
-        const { compressData } = await import('@/lib/cloudflare-kv')
-        const compressedData = await compressData(mockRankingData)
-        return new Response(compressedData, { status: 200 })
+      if (urlStr.includes('VIDEO_STATS_LATEST')) {
+        return new Response(null, { status: 200 })
       }
       
       return new Response(null, { status: 404 })

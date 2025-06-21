@@ -115,9 +115,6 @@ describe('Workers Cache Integration Tests', () => {
       const videoIds = ['sm123', 'sm456', 'sm789']
       const request = new Request(`https://nico-rank.com/api/edge/video-stats?ids=${videoIds.join(',')}`)
       
-      // Mock cache miss
-      mockCache.match.mockResolvedValueOnce(undefined)
-      
       // Mock origin response with stats data
       const statsData = {
         stats: {
@@ -142,15 +139,15 @@ describe('Workers Cache Integration Tests', () => {
       // Act
       const response = await worker.fetch(request, mockEnv)
       
-      // Assert
-      expect(mockCache.match).toHaveBeenCalled()
+      // Assert - caching is disabled in the worker, so no cache calls
+      expect(mockCache.match).not.toHaveBeenCalled()
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/edge/video-stats'),
         expect.objectContaining({
           headers: expect.any(MockHeaders)
         })
       )
-      expect(mockCache.put).toHaveBeenCalled()
+      expect(mockCache.put).not.toHaveBeenCalled() // Caching is disabled
       
       // Verify response headers
       expect(response.headers.get('X-CF-Cache')).toBe('MISS')
@@ -163,17 +160,16 @@ describe('Workers Cache Integration Tests', () => {
       const videoIds = ['sm123', 'sm456']
       const request = new Request(`https://nico-rank.com/api/edge/video-stats?ids=${videoIds.join(',')}`)
       
-      const cachedData = {
+      const originData = {
         stats: {
           sm123: { viewCounter: 1000, commentCounter: 50, mylistCounter: 10, likeCounter: 100 },
           sm456: { viewCounter: 2000, commentCounter: 100, mylistCounter: 20, likeCounter: 200 }
         },
         timestamp: new Date().toISOString(),
-        count: 2,
-        cached: true
+        count: 2
       }
       
-      const cachedResponse = new Response(JSON.stringify(cachedData), {
+      const originResponse = new Response(JSON.stringify(originData), {
         status: 200,
         headers: {
           'content-type': 'application/json',
@@ -181,24 +177,20 @@ describe('Workers Cache Integration Tests', () => {
         }
       })
       
-      // Mock cache hit
-      mockCache.match.mockResolvedValueOnce(cachedResponse)
+      // Always fetches from origin (caching disabled)
+      mockFetch.mockResolvedValueOnce(originResponse)
       
       // Act
       const response = await worker.fetch(request, mockEnv)
       
-      // Assert
-      expect(mockCache.match).toHaveBeenCalled()
-      expect(mockFetch).not.toHaveBeenCalled() // Should not fetch from origin
-      expect(mockCache.put).not.toHaveBeenCalled() // Should not update cache
+      // Assert - no caching behavior
+      expect(mockCache.match).not.toHaveBeenCalled() // Caching disabled
+      expect(mockFetch).toHaveBeenCalled() // Always fetches from origin
+      expect(mockCache.put).not.toHaveBeenCalled() // No cache updates
       
-      // Verify cache hit header
-      expect(response.headers.get('X-CF-Cache')).toBe('HIT')
+      // Verify headers
+      expect(response.headers.get('X-CF-Cache')).toBe('MISS') // Always MISS
       expect(response.status).toBe(200)
-      
-      // Verify response body
-      const responseData = await response.json()
-      expect(responseData.cached).toBe(true)
     })
     
     it('should handle different video ID combinations as separate cache entries', async () => {
@@ -224,7 +216,7 @@ describe('Workers Cache Integration Tests', () => {
       await worker.fetch(request2, mockEnv)
       
       // Assert
-      expect(mockCache.put).toHaveBeenCalledTimes(2) // Both should be cached separately
+      expect(mockCache.put).not.toHaveBeenCalled() // Caching disabled
       expect(mockFetch).toHaveBeenCalledTimes(2) // Both should fetch from origin
     })
   })
@@ -239,9 +231,6 @@ describe('Workers Cache Integration Tests', () => {
     it('should continue to cache ranking API responses', async () => {
       // Arrange
       const request = new Request('https://nico-rank.com/api/edge/ranking?genre=all&period=24h')
-      
-      // Mock cache miss
-      mockCache.match.mockResolvedValueOnce(undefined)
       
       const rankingData = {
         items: [
@@ -260,9 +249,9 @@ describe('Workers Cache Integration Tests', () => {
       // Act
       const response = await worker.fetch(request, mockEnv)
       
-      // Assert
-      expect(mockCache.match).toHaveBeenCalled()
-      expect(mockCache.put).toHaveBeenCalled()
+      // Assert - caching disabled
+      expect(mockCache.match).not.toHaveBeenCalled()
+      expect(mockCache.put).not.toHaveBeenCalled()
       expect(response.headers.get('X-CF-Cache')).toBe('MISS')
       expect(response.status).toBe(200)
     })
@@ -278,8 +267,6 @@ describe('Workers Cache Integration Tests', () => {
     it('should not cache error responses', async () => {
       // Arrange
       const request = new Request('https://nico-rank.com/api/edge/video-stats?ids=invalid')
-      
-      mockCache.match.mockResolvedValueOnce(undefined)
       
       const errorResponse = new Response('Bad Request', {
         status: 400,
@@ -300,7 +287,6 @@ describe('Workers Cache Integration Tests', () => {
       // Arrange
       const request = new Request('https://nico-rank.com/api/edge/video-stats?ids=sm123')
       
-      mockCache.match.mockResolvedValueOnce(undefined)
       mockFetch.mockRejectedValueOnce(new Error('Network error'))
       
       // Act
@@ -352,29 +338,17 @@ describe('Workers Cache Integration Tests', () => {
       // Arrange
       const request = new Request('https://nico-rank.com/api/edge/video-stats?ids=sm123')
       
-      // First request to populate cache
-      mockCache.match.mockResolvedValueOnce(undefined)
       const originResponse = new Response('{"stats":{}}', {
         status: 200,
         headers: { 'content-type': 'application/json' }
       })
       mockFetch.mockResolvedValueOnce(originResponse)
       
-      // Make first request to populate cache
-      await worker.fetch(request, mockEnv)
-      
-      // Now test the cached response
-      const cachedResponse = new Response('{"stats":{}}', {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
-      mockCache.match.mockResolvedValueOnce(cachedResponse)
-      
       // Act
       const response = await worker.fetch(request, mockEnv)
       
-      // Assert - cached responses should still have security headers
-      expect(response.headers.get('X-CF-Cache')).toBe('HIT')
+      // Assert - security headers are always added
+      expect(response.headers.get('X-CF-Cache')).toBe('MISS') // Always MISS (no caching)
       expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
       expect(response.headers.get('X-Frame-Options')).toBe('DENY')
     })

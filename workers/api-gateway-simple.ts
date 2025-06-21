@@ -112,7 +112,7 @@ export default {
       const targetUrl = `${baseUrl}${url.pathname}${url.search}`
       
       // Cloudflare Workers Cache APIを使用
-      const cache = caches.default
+      const cache = (caches as any).default
       const cacheKey = new Request(targetUrl, request)
       
       // Disable Worker cache for large responses

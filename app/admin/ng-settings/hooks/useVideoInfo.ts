@@ -50,7 +50,7 @@ export function useVideoInfo(
 
       try {
         // Use existing video info endpoint
-        const response = await fetch('/api/edge/admin/video-info', {
+        const response = await fetch('/api/admin/video-info', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',

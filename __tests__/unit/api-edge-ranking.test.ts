@@ -47,7 +47,8 @@ describe('/api/edge/ranking', () => {
         items: mockData.items,
         popularTags: mockData.popularTags,
         hasMore: false,
-        totalCached: 2
+        totalCached: 2,
+        metadata: null
       })
       expect(response.headers.get('X-Cache-Status')).toBe('HIT')
       expect(response.headers.get('Cache-Control')).toBe('public, s-maxage=1800, stale-while-revalidate=3600')
@@ -65,7 +66,8 @@ describe('/api/edge/ranking', () => {
         items: [],
         popularTags: [],
         hasMore: false,
-        totalCached: 0
+        totalCached: 0,
+        metadata: null
       })
       expect(response.headers.get('X-Cache-Status')).toBe('MISS')
     })
@@ -149,17 +151,17 @@ describe('/api/edge/ranking', () => {
     })
   })
 
-  describe('Node.js runtime compatibility', () => {
-    it('should have nodejs runtime export', async () => {
+  describe('Edge runtime compatibility', () => {
+    it('should have edge runtime export', async () => {
       const module = await import('@/app/api/edge/ranking/route')
-      expect(module.runtime).toBe('nodejs')
+      expect(module.runtime).toBe('edge')
     })
 
-    it('should be Node.js runtime compatible', async () => {
-      // Node.js runtime compatibility is ensured by the runtime export
+    it('should be Edge runtime compatible', async () => {
+      // Edge runtime compatibility is ensured by the runtime export
       // and the fact that the module loads without errors
       const module = await import('@/app/api/edge/ranking/route')
-      expect(module.runtime).toBe('nodejs')
+      expect(module.runtime).toBe('edge')
       expect(module.GET).toBeDefined()
     })
   })

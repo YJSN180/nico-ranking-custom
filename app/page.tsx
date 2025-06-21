@@ -87,19 +87,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       // タグ別ランキングの場合
       const { getTagRanking, getRankingFromKV } = await import('@/lib/cloudflare-kv')
       
-      // デバッグ用：全データを確認
-      const allData = await getRankingFromKV()
-      if (allData?.genres?.[genre]?.[period as RankingPeriod]) {
-        const genreData = allData.genres[genre][period as RankingPeriod]
-        // eslint-disable-next-line no-console
-        console.log(`[SSR Debug] Genre data exists: items=${genreData.items?.length}, tags=${Object.keys(genreData.tags || {}).length}`)
-        // eslint-disable-next-line no-console
-        console.log(`[SSR Debug] Available tags:`, Object.keys(genreData.tags || {}).slice(0, 5))
-      }
+      // Removed debug code that reads full data unnecessarily
       
       const tagItems = await getTagRanking(genre, period as RankingPeriod, tag)
-      // eslint-disable-next-line no-console
-      console.log(`[SSR] Tag ranking fetch: genre=${genre}, period=${period}, tag=${tag}, items=${tagItems?.length || 0}`)
+      // Tag ranking fetched from KV
       if (tagItems && tagItems.length > 0) {
         // NGフィルタリングを適用
         const { filteredData } = await filterRankingDataServer({

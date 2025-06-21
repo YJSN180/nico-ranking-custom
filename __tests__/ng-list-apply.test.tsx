@@ -16,9 +16,16 @@ describe('NG List Apply Functionality', () => {
   const mockSaveNGListDirectly = vi.fn()
   const mockOnApply = vi.fn()
   const mockOnClose = vi.fn()
+  const mockReload = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
+    
+    // Mock window.location.reload
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { reload: mockReload }
+    })
     
     // Setup mock implementation
     vi.mocked(useUserNGList).mockReturnValue({
@@ -59,11 +66,13 @@ describe('NG List Apply Functionality', () => {
     // Verify that saveNGListDirectly was called immediately
     expect(mockSaveNGListDirectly).toHaveBeenCalledTimes(1)
     
-    // Wait for the timeout to complete
+    // Verify onClose was called immediately
+    expect(mockOnClose).toHaveBeenCalledTimes(1)
+    
+    // Wait for the timeout to complete and verify reload was called
     await waitFor(() => {
-      expect(mockOnApply).toHaveBeenCalledTimes(1)
-      expect(mockOnClose).toHaveBeenCalledTimes(1)
-    }, { timeout: 100 })
+      expect(mockReload).toHaveBeenCalledTimes(1)
+    }, { timeout: 200 })
   })
 
   it('should trigger ngListUpdated event when saving NG list', async () => {
@@ -128,9 +137,10 @@ describe('NG List Apply Functionality', () => {
     fireEvent.click(screen.getAllByText('追加')[0])
     fireEvent.click(screen.getByText('適用'))
 
-    // Wait to ensure no event is triggered
+    // Wait to ensure the modal closes and reload is called
     await waitFor(() => {
-      expect(mockOnApply).toHaveBeenCalled()
+      expect(mockOnClose).toHaveBeenCalled()
+      expect(mockReload).toHaveBeenCalled()
     })
 
     // Verify ngListApplied was NOT triggered
