@@ -1,11 +1,10 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef, useReducer } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
-import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -46,19 +45,11 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList } = useUserNGList()
   
-  // 強制再レンダリング用のフォースアップデート
-  const [, forceUpdate] = useReducer(x => x + 1, 0)
-  
-  // NGリスト更新イベントを監視して強制再レンダリング
-  useEffect(() => {
-    const handleNGListUpdate = () => {
-      // useReducerを使用した確実な強制再レンダリング
-      forceUpdate()
-    }
-    
-    window.addEventListener('ngListUpdated', handleNGListUpdate)
-    return () => window.removeEventListener('ngListUpdated', handleNGListUpdate)
-  }, [])
+  // NGリストのバージョンを追跡（更新時に強制再レンダリング）
+  const ngListVersion = useMemo(() => {
+    // ngListオブジェクト全体をJSON文字列化してハッシュ値として使用
+    return JSON.stringify(ngList)
+  }, [ngList])
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
@@ -579,7 +570,7 @@ export default function ClientPage({
     }))
     
     return result
-  }, [itemsWithTags, config.tag, ngList])
+  }, [itemsWithTags, config.tag, ngList, ngListVersion])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
@@ -687,7 +678,7 @@ export default function ClientPage({
           </div>
           
           {/* ランキングリスト */}
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <RankingItemComponent 
                 key={item.id} 
