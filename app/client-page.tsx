@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, useReducer } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
@@ -46,14 +46,14 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList } = useUserNGList()
   
-  // NGリスト更新時の強制再レンダリング用カウンター
-  const [ngListUpdateCount, setNgListUpdateCount] = useState(0)
+  // 強制再レンダリング用のフォースアップデート
+  const [, forceUpdate] = useReducer(x => x + 1, 0)
   
   // NGリスト更新イベントを監視して強制再レンダリング
   useEffect(() => {
     const handleNGListUpdate = () => {
-      // カウンターをインクリメントして強制的に再レンダリング
-      setNgListUpdateCount(prev => prev + 1)
+      // useReducerを使用した確実な強制再レンダリング
+      forceUpdate()
     }
     
     window.addEventListener('ngListUpdated', handleNGListUpdate)
@@ -573,11 +573,13 @@ export default function ClientPage({
     const limited = filteredItems.slice(0, limit)
     
     // originalRankを追加（元のランク番号を保持）
-    return limited.map(item => ({
+    const result = limited.map(item => ({
       ...item,
       originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
     }))
-  }, [itemsWithTags, config.tag, ngList, ngListUpdateCount])
+    
+    return result
+  }, [itemsWithTags, config.tag, ngList])
   
   // リアルタイム統計更新を無効化（KVの5分更新で十分）
   // 429エラーを回避し、NGフィルタリング時の問題を解決
