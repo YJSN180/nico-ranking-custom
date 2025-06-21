@@ -111,6 +111,19 @@ export default {
           const genre = url.searchParams.get('genre') || 'all'
           const period = url.searchParams.get('period') || '24h'
           
+          // Create cache key for this specific request
+          const cacheKey = `https://cache.nico-rank.com/ranking/${genre}/${period}`
+          const cache = (caches as any).default
+          
+          // Check cache first
+          const cachedResponse = await cache.match(cacheKey)
+          if (cachedResponse) {
+            // Clone and add cache hit header
+            const response = new Response(cachedResponse.body, cachedResponse)
+            response.headers.set('X-Cache-Status', 'HIT')
+            return response
+          }
+          
           // Get the appropriate KV group for this genre
           const groupId = getGroupIdForGenre(genre)
           const kvKey = `RANKING_GROUP_${groupId}`
@@ -126,14 +139,21 @@ export default {
               period
             )
             
-            // Return the data directly
-            return new Response(JSON.stringify(extractedData), {
+            // Create response
+            const response = new Response(JSON.stringify(extractedData), {
               headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'public, s-maxage=1800, stale-while-revalidate=3600',
-                'X-Data-Source': 'kv-direct'
+                'X-Data-Source': 'kv-direct',
+                'X-Cache-Status': 'MISS'
               }
             })
+            
+            // Cache the response
+            const cacheResponse = response.clone()
+            cache.put(cacheKey, cacheResponse)
+            
+            return response
           }
         } catch (error) {
           // Log error but continue to Vercel fallback
