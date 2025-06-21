@@ -3,6 +3,7 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import { promisify } from 'util'
 import { gzip } from 'zlib'
+import { exec } from 'child_process'
 import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
 
 const gzipAsync = promisify(gzip)
@@ -213,7 +214,6 @@ async function main() {
     // Look for NG derived files in both main tmp and subdirectories
     const ngDerivedFiles: string[] = [];
     const allNgFiles = await new Promise<string[]>((resolve) => {
-      const { exec } = require('child_process');
       exec('find ./tmp -name "ng-derived-group-*.json" -type f 2>/dev/null || true', (error: any, stdout: string) => {
         if (error) {
           console.log('No ng-derived files found via find command');
