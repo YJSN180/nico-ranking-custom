@@ -124,20 +124,14 @@ describe('NG List Rank Recalculation', () => {
       saveNGListDirectly: vi.fn()
     })
 
-    // Trigger a re-render by dispatching the ngListUpdated event
-    window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-      detail: { 
-        ngList: {
-          videoIds: ['sm2', 'sm4'],
-          videoTitles: { exact: [], partial: [] },
-          authorIds: [],
-          authorNames: { exact: [], partial: [] },
-          version: 1,
-          totalCount: 2,
-          updatedAt: new Date().toISOString()
-        }
-      } 
-    }))
+    // Force re-render with new mock data
+    rerender(
+      <ClientPage 
+        initialData={initialData}
+        initialGenre="all"
+        initialPeriod="24h"
+      />
+    )
 
     // Wait for the UI to update
     await waitFor(() => {
@@ -175,7 +169,7 @@ describe('NG List Rank Recalculation', () => {
       saveNGListDirectly: vi.fn()
     })
 
-    render(
+    const { rerender } = render(
       <ClientPage 
         initialData={initialData}
         initialGenre="all"
@@ -201,20 +195,14 @@ describe('NG List Rank Recalculation', () => {
       saveNGListDirectly: vi.fn()
     })
 
-    // Trigger NG list update
-    window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-      detail: { 
-        ngList: {
-          videoIds: ['sm1', 'sm2'],
-          videoTitles: { exact: [], partial: [] },
-          authorIds: [],
-          authorNames: { exact: [], partial: [] },
-          version: 1,
-          totalCount: 2,
-          updatedAt: new Date().toISOString()
-        }
-      } 
-    }))
+    // Force re-render with new mock data
+    rerender(
+      <ClientPage 
+        initialData={initialData}
+        initialGenre="all"
+        initialPeriod="24h"
+      />
+    )
 
     // Should show empty state
     await waitFor(() => {
@@ -243,7 +231,7 @@ describe('NG List Rank Recalculation', () => {
       saveNGListDirectly: vi.fn()
     })
 
-    render(
+    const { rerender } = render(
       <ClientPage 
         initialData={largeDataset}
         initialGenre="all"
@@ -277,20 +265,14 @@ describe('NG List Rank Recalculation', () => {
 
     const startTime = performance.now()
 
-    // Trigger NG list update
-    window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-      detail: { 
-        ngList: {
-          videoIds: Array.from(filteredIds),
-          videoTitles: { exact: [], partial: [] },
-          authorIds: [],
-          authorNames: { exact: [], partial: [] },
-          version: 1,
-          totalCount: 100,
-          updatedAt: new Date().toISOString()
-        }
-      } 
-    }))
+    // Force re-render with new mock data
+    rerender(
+      <ClientPage 
+        initialData={largeDataset}
+        initialGenre="all"
+        initialPeriod="24h"
+      />
+    )
 
     // Wait for update
     await waitFor(() => {

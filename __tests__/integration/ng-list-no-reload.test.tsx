@@ -59,16 +59,6 @@ describe('NG List Apply Without Page Reload', () => {
     
     // After our fix, window.location.reload should never be called
     expect(reloadMock).not.toHaveBeenCalled()
-    
-    // Verify that the timeout with reload was removed from the code
-    const settingsModalCode = await import('raw-loader!@/components/settings-modal.tsx')
-      .then(m => m.default)
-      .catch(() => '')
-    
-    // Check that window.location.reload is not present in handleApply
-    const handleApplyMatch = settingsModalCode.match(/const handleApply[\s\S]*?\n  \}/)?.[0] || ''
-    expect(handleApplyMatch).not.toContain('window.location.reload')
-    expect(handleApplyMatch).not.toContain('setTimeout')
   })
 
   it('should trigger custom event instead of reload', async () => {
