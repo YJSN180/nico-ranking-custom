@@ -613,10 +613,27 @@ export default function ClientPage({
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            marginBottom: '20px'
           }}>
-            ランキングデータがありません
+            {config.tag ? 'このタグの動画が見つかりません' : 'ランキングデータがありません'}
           </div>
+          {config.tag && (
+            <button
+              onClick={() => handleConfigChange({ ...config, tag: undefined })}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                backgroundColor: 'var(--primary-color)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              すべてのランキングを表示
+            </button>
+          )}
         </div>
       )}
       
