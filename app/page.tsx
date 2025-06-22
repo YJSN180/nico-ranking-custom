@@ -92,7 +92,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       apiUrl.searchParams.set('tag', tag)
     }
     
-    console.log(`[SSR] Fetching from API gateway: ${apiUrl.toString()}`)
+    // console.log(`[SSR] Fetching from API gateway: ${apiUrl.toString()}`)
     
     try {
       const response = await fetch(apiUrl.toString(), {
@@ -104,7 +104,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       
       if (response.ok) {
         const cfData = await response.json()
-        console.log(`[SSR] API gateway returned ${cfData.items?.length || 0} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
+        // console.log(`[SSR] API gateway returned ${cfData.items?.length || 0} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
         
         if (cfData && cfData.items && cfData.items.length > 0) {
           // NGフィルタリングを適用
