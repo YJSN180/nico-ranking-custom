@@ -36,7 +36,14 @@ export async function GET(request: NextRequest) {
     
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       return NextResponse.json(
-        { error: 'KV configuration missing' },
+        { 
+          error: 'KV configuration missing',
+          debug: {
+            hasAccountId: !!CF_ACCOUNT_ID,
+            hasNamespaceId: !!CF_NAMESPACE_ID,
+            hasApiToken: !!CF_API_TOKEN
+          }
+        },
         { status: 500 }
       )
     }
