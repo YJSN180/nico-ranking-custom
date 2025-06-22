@@ -16,6 +16,7 @@ import { filterWithNGList } from '@/lib/filter-with-ng-list'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
+import './client-page.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
@@ -538,7 +539,7 @@ export default function ClientPage({
       </div>
       
       {loading && (
-        <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div className="loading-container">
           <div style={{ 
             fontSize: '16px', 
             color: 'var(--text-secondary)'

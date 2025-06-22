@@ -1,0 +1,29 @@
+/* クライアントページのレイアウトシフト対策 */
+
+/* セレクターコンテナの高さを固定 */
+.selectors-container {
+  /* RankingSelectorとTagSelectorの高さを事前に確保 */
+  min-height: 200px; /* デスクトップ */
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .selectors-container {
+    min-height: 250px; /* モバイルはより多くのスペースが必要 */
+  }
+}
+
+/* ランキングリストコンテナ */
+.ranking-list-container {
+  /* 初期表示時の高さを確保してガタつきを防ぐ */
+  min-height: 600px;
+  position: relative;
+}
+
+/* ローディング表示の固定高さ */
+.loading-container {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

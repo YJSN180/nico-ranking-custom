@@ -181,7 +181,8 @@ export default async function Home({ searchParams }: PageProps) {
         <div style={{ 
           maxWidth: '1200px', 
           margin: '0 auto',
-          padding: '20px'
+          padding: '20px',
+          minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
         }}>
           <SuspenseWrapper>
             <ClientPage 
