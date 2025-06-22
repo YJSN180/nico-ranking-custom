@@ -220,7 +220,7 @@ describe('update-ranking-parallel.ts', () => {
 
       process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
       process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
-      process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
+      process.env.CLOUDFLARE_API_TOKEN = 'test-token'
 
       const data = { test: 'data' }
       const url = `https://api.cloudflare.com/client/v4/accounts/test-account/storage/kv/namespaces/test-namespace/values/RANKING_LATEST`

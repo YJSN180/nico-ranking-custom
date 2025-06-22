@@ -5,7 +5,7 @@ export async function GET() {
   const envStatus = {
     CLOUDFLARE_ACCOUNT_ID: !!process.env.CLOUDFLARE_ACCOUNT_ID,
     CLOUDFLARE_KV_NAMESPACE_ID: !!process.env.CLOUDFLARE_KV_NAMESPACE_ID,
-    CLOUDFLARE_KV_API_TOKEN: !!process.env.CLOUDFLARE_KV_API_TOKEN,
+    CLOUDFLARE_API_TOKEN: !!process.env.CLOUDFLARE_API_TOKEN,
     NODE_ENV: process.env.NODE_ENV,
     VERCEL_ENV: process.env.VERCEL_ENV,
   }
@@ -16,7 +16,7 @@ export async function GET() {
   let genreTest = null
   let groupTests: Record<string, any> = {}
   
-  if (envStatus.CLOUDFLARE_ACCOUNT_ID && envStatus.CLOUDFLARE_KV_NAMESPACE_ID && envStatus.CLOUDFLARE_KV_API_TOKEN) {
+  if (envStatus.CLOUDFLARE_ACCOUNT_ID && envStatus.CLOUDFLARE_KV_NAMESPACE_ID && envStatus.CLOUDFLARE_API_TOKEN) {
     try {
       const { getRankingFromKV, getGenreRanking } = await import('@/lib/cloudflare-kv')
       
@@ -60,7 +60,7 @@ export async function GET() {
           const url = `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/${key}`
           const response = await fetch(url, {
             headers: {
-              'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`,
+              'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
             },
           })
           

@@ -35,14 +35,14 @@ export async function POST(request: NextRequest) {
     killSwitchActivatedAt = new Date().toISOString()
 
     // Cloudflare KVにも停止フラグを書き込む（この1回の書き込みは許可）
-    if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_API_TOKEN) {
+    if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
       try {
         const kvResponse = await fetch(
           `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/KILL_SWITCH_ACTIVE`,
           {
             method: 'PUT',
             headers: {
-              'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`,
+              'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -92,14 +92,14 @@ export async function DELETE(request: NextRequest) {
   killSwitchActivatedAt = null
 
   // Cloudflare KVからも削除
-  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_API_TOKEN) {
+  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
     try {
       await fetch(
         `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/KILL_SWITCH_ACTIVE`,
         {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`
+            'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`
           }
         }
       )

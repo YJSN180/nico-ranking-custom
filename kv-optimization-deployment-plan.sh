@@ -21,8 +21,8 @@ fi
 
 source .env.local
 
-if [ -z "$CLOUDFLARE_KV_API_TOKEN" ]; then
-    echo "❌ Error: CLOUDFLARE_KV_API_TOKEN not set"
+if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+    echo "❌ Error: CLOUDFLARE_API_TOKEN not set"
     exit 1
 fi
 
@@ -60,7 +60,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-CLOUDFLARE_API_TOKEN="$CLOUDFLARE_KV_API_TOKEN" wrangler deploy -c wrangler-optimized.toml
+CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" wrangler deploy -c wrangler-optimized.toml
 
 # Stage 5: Verify deployment
 echo

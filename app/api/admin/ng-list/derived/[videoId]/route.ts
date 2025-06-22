@@ -23,7 +23,7 @@ export async function DELETE(
     
     const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
     const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
-    const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+    const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
     
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       return NextResponse.json({ error: 'KV credentials not configured' }, { status: 500 })

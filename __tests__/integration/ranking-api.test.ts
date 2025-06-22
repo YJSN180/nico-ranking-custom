@@ -34,13 +34,13 @@ describe('Ranking API Integration', () => {
     // Mock environment variables
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
-    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-api-token'
+    process.env.CLOUDFLARE_API_TOKEN = 'test-api-token'
   })
   
   afterEach(() => {
     delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
     delete process.env.CLOUDFLARE_ACCOUNT_ID
-    delete process.env.CLOUDFLARE_KV_API_TOKEN
+    delete process.env.CLOUDFLARE_API_TOKEN
   })
 
   it('should return 200 with ranking data when KV has data', async () => {

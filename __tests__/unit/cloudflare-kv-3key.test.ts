@@ -35,7 +35,7 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
     // 環境変数設定
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
-    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
+    process.env.CLOUDFLARE_API_TOKEN = 'test-token'
     
     // グローバル変数をリセット
     ;(global as any).RANKING_KV = undefined
@@ -44,7 +44,7 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
   afterEach(() => {
     delete process.env.CLOUDFLARE_ACCOUNT_ID
     delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
-    delete process.env.CLOUDFLARE_KV_API_TOKEN
+    delete process.env.CLOUDFLARE_API_TOKEN
   })
 
   describe('setRankingToKV', () => {
@@ -211,7 +211,7 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
 
     it('REST APIで認証情報がない場合nullを返す', async () => {
       ;(global as any).RANKING_KV = undefined
-      delete process.env.CLOUDFLARE_KV_API_TOKEN
+      delete process.env.CLOUDFLARE_API_TOKEN
 
       const module = await import('@/lib/cloudflare-kv')
       const result = await module.getRankingFromKV()

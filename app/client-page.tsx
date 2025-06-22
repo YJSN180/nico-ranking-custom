@@ -555,8 +555,10 @@ export default function ClientPage({
     return result
   }, [itemsWithTags, config.tag, ngList, ngListVersion])
   
-  // リアルタイム統計更新を無効化（KVの5分更新で十分）
-  // 429エラーを回避し、NGフィルタリング時の問題を解決
+  // リアルタイム統計更新を無効化
+  // 理由: KVのバッチ読み取りはキーごとに課金されるため、
+  // 100ユーザーで1時間あたり150,000回の読み取りが発生し、
+  // 無料枠（100,000回/日）を40分で超過してしまう
   const finalDisplayItems = displayItems
   const isUpdating = false
   const lastUpdated = null

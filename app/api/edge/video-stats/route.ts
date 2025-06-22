@@ -5,7 +5,8 @@ import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 
 // Cache configuration
-export const revalidate = 300 // 5 minutes
+// revalidateを削除してCache-Controlヘッダーで制御
+// export const revalidate = 300 // 5 minutes
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
     // Fetch from Cloudflare KV
     const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
     const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
-    const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
+    const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
     
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       return NextResponse.json(
@@ -60,19 +61,31 @@ export async function GET(request: NextRequest) {
     
     const statsData = await kvResponse.json()
     
-    // Filter to only requested video IDs
+    // Filter to only requested video IDs and convert to expected format
     const filteredStats: Record<string, any> = {}
     for (const id of videoIds) {
       if (statsData.stats?.[id]) {
-        filteredStats[id] = statsData.stats[id]
+        const stat = statsData.stats[id]
+        filteredStats[id] = {
+          viewCounter: stat.viewCounter,
+          commentCounter: stat.commentCounter,
+          mylistCounter: stat.mylistCounter,
+          likeCounter: stat.likeCounter
+        }
       }
     }
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       stats: filteredStats,
       timestamp: statsData.metadata?.updatedAt || new Date().toISOString(),
       count: Object.keys(filteredStats).length
     })
+    
+    // エッジキャッシュを活用して読み取り回数を削減
+    // WorkerのCron間隔（2分）に合わせて120秒のキャッシュを設定
+    response.headers.set('Cache-Control', 'public, max-age=120, s-maxage=120, stale-while-revalidate=60')
+    
+    return response
     
   } catch (error) {
     console.error('[Video Stats API] Error:', error)

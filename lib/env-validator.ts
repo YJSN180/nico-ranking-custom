@@ -6,7 +6,7 @@ export interface RequiredEnvVars {
   // CloudFlare
   CLOUDFLARE_ACCOUNT_ID: string
   CLOUDFLARE_KV_NAMESPACE_ID: string
-  CLOUDFLARE_KV_API_TOKEN: string
+  CLOUDFLARE_API_TOKEN: string
   
   // Authentication
   CRON_SECRET: string
@@ -35,7 +35,7 @@ export class EnvValidator {
     const required = [
       'CLOUDFLARE_ACCOUNT_ID',
       'CLOUDFLARE_KV_NAMESPACE_ID', 
-      'CLOUDFLARE_KV_API_TOKEN',
+      'CLOUDFLARE_API_TOKEN',
       'CRON_SECRET',
       'WORKER_AUTH_KEY',
       'ADMIN_USERNAME',
@@ -88,7 +88,7 @@ export class EnvValidator {
     return {
       CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID!,
       CLOUDFLARE_KV_NAMESPACE_ID: process.env.CLOUDFLARE_KV_NAMESPACE_ID!,
-      CLOUDFLARE_KV_API_TOKEN: process.env.CLOUDFLARE_KV_API_TOKEN!,
+      CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN!,
       CRON_SECRET: process.env.CRON_SECRET!,
       WORKER_AUTH_KEY: process.env.WORKER_AUTH_KEY!,
       ADMIN_USERNAME: process.env.ADMIN_USERNAME!,

@@ -31,7 +31,7 @@ describe('Security: Environment Variables', () => {
       process.env.ADMIN_KEY = 'test-admin-key-123'
       process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
       process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
-      process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
+      process.env.CLOUDFLARE_API_TOKEN = 'test-token'
       
       // KVモック
       vi.mock('@/lib/simple-kv', () => ({
@@ -89,7 +89,7 @@ describe('Security: Environment Variables', () => {
           expect(fileCode).not.toContain('ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj')
           // 環境変数から読み込むようになっていることを確認
           if (file.includes('cloudflare')) {
-            expect(fileCode).toContain('process.env.CLOUDFLARE_KV_API_TOKEN')
+            expect(fileCode).toContain('process.env.CLOUDFLARE_API_TOKEN')
           }
         } catch (error) {
           // ファイルが存在しない場合はスキップ
@@ -98,11 +98,11 @@ describe('Security: Environment Variables', () => {
     })
 
     it('should read Cloudflare credentials from environment variables', () => {
-      process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
+      process.env.CLOUDFLARE_API_TOKEN = 'test-token'
       process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
       process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
       
-      expect(process.env.CLOUDFLARE_KV_API_TOKEN).toBe('test-token')
+      expect(process.env.CLOUDFLARE_API_TOKEN).toBe('test-token')
       expect(process.env.CLOUDFLARE_ACCOUNT_ID).toBe('test-account')
       expect(process.env.CLOUDFLARE_KV_NAMESPACE_ID).toBe('test-namespace')
     })

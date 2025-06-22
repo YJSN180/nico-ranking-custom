@@ -19,7 +19,7 @@ export async function getVideoStatsFromKV(
       `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/VIDEO_STATS_LATEST`,
       {
         headers: {
-          'Authorization': `Bearer ${process.env.CLOUDFLARE_KV_API_TOKEN}`
+          'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`
         }
       }
     )

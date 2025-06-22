@@ -11,7 +11,7 @@ const gzipAsync = promisify(gzip)
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
-  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN;
+  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     throw new Error("Cloudflare KV credentials not configured");
@@ -70,7 +70,7 @@ async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
 async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'): Promise<void> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
-  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN;
+  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     throw new Error("Cloudflare KV credentials not configured");

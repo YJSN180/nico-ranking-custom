@@ -14,7 +14,7 @@ describe('Edge Admin NG Derived List Individual Delete API', () => {
     // Mock environment variables
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
-    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-api-token'
+    process.env.CLOUDFLARE_API_TOKEN = 'test-api-token'
   })
 
   describe('DELETE /api/edge/admin/ng-list-derived/[videoId]', () => {

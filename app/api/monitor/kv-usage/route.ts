@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     const stats = {
       timestamp: new Date().toISOString(),
       environment: process.env.VERCEL_ENV || 'development',
-      kvConfigured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN),
+      kvConfigured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_API_TOKEN),
       estimatedRateLimitKeys: 'N/A', // Can't list keys without additional KV API
       recentErrors: [] as string[],
       recommendations: [] as string[]

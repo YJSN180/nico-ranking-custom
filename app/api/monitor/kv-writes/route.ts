@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   try {
     // Cloudflare Analytics API を使用してKV書き込み数を取得
     const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
-    const apiToken = process.env.CLOUDFLARE_KV_API_TOKEN
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN
     
     if (!accountId || !apiToken) {
       return NextResponse.json({ 

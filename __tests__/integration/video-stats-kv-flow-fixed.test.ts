@@ -9,7 +9,7 @@ beforeAll(() => {
     ...originalEnv,
     CLOUDFLARE_ACCOUNT_ID: 'test-account',
     CLOUDFLARE_KV_NAMESPACE_ID: 'test-namespace',
-    CLOUDFLARE_KV_API_TOKEN: 'test-token'
+    CLOUDFLARE_API_TOKEN: 'test-token'
   }
 })
 

@@ -6,7 +6,7 @@ function getEnvVars() {
   return {
     CF_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID,
     CF_NAMESPACE_ID: process.env.CLOUDFLARE_KV_NAMESPACE_ID,
-    CF_API_TOKEN: process.env.CLOUDFLARE_KV_API_TOKEN
+    CF_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN
   }
 }
 

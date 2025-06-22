@@ -2,7 +2,7 @@
 
 # 環境変数を設定
 export CLOUDFLARE_ACCOUNT_ID="5984977746a3dfcd71415bed5c324eb1"
-export CLOUDFLARE_API_TOKEN="$CLOUDFLARE_KV_API_TOKEN"
+export CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN"
 
 # wrangler.tomlを作成
 cat > wrangler.toml << 'CONFIG'

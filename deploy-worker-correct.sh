@@ -2,7 +2,7 @@
 
 # Cloudflare API設定
 ACCOUNT_ID="5984977746a3dfcd71415bed5c324eb1"
-API_TOKEN="$CLOUDFLARE_KV_API_TOKEN"
+API_TOKEN="$CLOUDFLARE_API_TOKEN"
 SCRIPT_NAME="nico-ranking-api-gateway"
 
 # バンドル

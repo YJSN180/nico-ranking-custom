@@ -1,6 +1,6 @@
 #\!/bin/bash
 ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID"
-API_TOKEN="$CLOUDFLARE_KV_API_TOKEN"
+API_TOKEN="$CLOUDFLARE_API_TOKEN"
 WORKER_NAME="nico-ranking-api-gateway"
 
 # Read the bundled JS file

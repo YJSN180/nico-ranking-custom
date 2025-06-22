@@ -14,7 +14,7 @@ describe('Aggregate Ranking Results - Derivative NG Data', () => {
     // Mock environment variables
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
-    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
+    process.env.CLOUDFLARE_API_TOKEN = 'test-token'
   })
 
   it('should include derivativeNGData in final ranking data', async () => {

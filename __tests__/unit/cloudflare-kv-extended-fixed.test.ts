@@ -26,7 +26,7 @@ describe('Cloudflare KV Integration (Fixed for 3-key split)', () => {
     // 環境変数を設定
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
-    process.env.CLOUDFLARE_KV_API_TOKEN = 'test-token'
+    process.env.CLOUDFLARE_API_TOKEN = 'test-token'
     
     // グローバル変数をリセット
     ;(global as any).RANKING_KV = undefined
@@ -35,7 +35,7 @@ describe('Cloudflare KV Integration (Fixed for 3-key split)', () => {
   afterEach(() => {
     delete process.env.CLOUDFLARE_ACCOUNT_ID
     delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
-    delete process.env.CLOUDFLARE_KV_API_TOKEN
+    delete process.env.CLOUDFLARE_API_TOKEN
   })
 
   describe('getRankingFromKV (3-key split)', () => {

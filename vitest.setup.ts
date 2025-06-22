@@ -23,7 +23,7 @@ vi.stubEnv('NODE_ENV', 'test')
 vi.stubEnv('CRON_SECRET', 'test-cron-secret')
 vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'test-account-id')
 vi.stubEnv('CLOUDFLARE_KV_NAMESPACE_ID', 'test-namespace-id')
-vi.stubEnv('CLOUDFLARE_KV_API_TOKEN', 'test-cf-token')
+vi.stubEnv('CLOUDFLARE_API_TOKEN', 'test-cf-token')
 
 // Mock console methods to avoid test output
 global.console = {

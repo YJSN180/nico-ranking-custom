@@ -1,7 +1,7 @@
 #\!/bin/bash
 
 # APIトークンのテスト
-API_TOKEN="$CLOUDFLARE_KV_API_TOKEN"
+API_TOKEN="$CLOUDFLARE_API_TOKEN"
 
 echo "Testing Cloudflare API authentication..."
 curl -s -X GET "https://api.cloudflare.com/client/v4/user/tokens/verify" \
