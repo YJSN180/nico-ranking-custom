@@ -29,9 +29,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       // 「すべて」を選択した場合はタグをクリア
       onConfigChange({ ...config, tag: undefined })
     } else {
-      // 同じタグを選択した場合は解除
-      const newTag = config.tag === tag ? undefined : tag
-      onConfigChange({ ...config, tag: newTag })
+      // タグを選択（同じタグを再度クリックしても維持）
+      onConfigChange({ ...config, tag })
     }
   }
 
