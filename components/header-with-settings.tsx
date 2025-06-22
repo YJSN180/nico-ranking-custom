@@ -23,7 +23,7 @@ export function HeaderWithSettings() {
 
   return (
     <>
-      <header role="banner" style={{
+      <header role="banner" className="header-container" style={{
         background: 'var(--header-bg)',
         padding: isMobile ? '5px 12px' : '8px 20px',
         boxShadow: 'var(--shadow-md)',

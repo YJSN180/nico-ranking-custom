@@ -36,10 +36,21 @@
   contain: layout style paint;
 }
 
-/* ヘッダーの固定高さ */
+/* ヘッダーの固定高さとスティッキー設定 */
 .header-container {
   height: 60px;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--background-color);
+}
+
+/* セレクター部分のスティッキー設定 */
+.selectors-container {
+  position: sticky;
+  top: 60px;
+  z-index: 99;
+  background-color: var(--background-color);
 }
 
 /* ナビゲーションセレクターの固定高さ */
