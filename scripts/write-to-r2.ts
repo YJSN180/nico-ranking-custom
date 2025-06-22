@@ -6,8 +6,13 @@
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import { readFileSync } from 'fs'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import type { RankingData } from '../types/ranking'
+
+// ESモジュールでの__dirname取得
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 // 環境変数から設定を読み込み
 const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
