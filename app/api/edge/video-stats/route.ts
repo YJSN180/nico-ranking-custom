@@ -36,14 +36,7 @@ export async function GET(request: NextRequest) {
     
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
       return NextResponse.json(
-        { 
-          error: 'KV configuration missing',
-          debug: {
-            hasAccountId: !!CF_ACCOUNT_ID,
-            hasNamespaceId: !!CF_NAMESPACE_ID,
-            hasApiToken: !!CF_API_TOKEN
-          }
-        },
+        { error: 'KV configuration missing' },
         { status: 500 }
       )
     }
@@ -66,35 +59,15 @@ export async function GET(request: NextRequest) {
         error: errorText.substring(0, 500)
       })
       
-      // Return empty stats with debug info
+      // Return empty stats
       return NextResponse.json({
         stats: {},
         timestamp: new Date().toISOString(),
-        count: 0,
-        debug: {
-          kvStatus: kvResponse.status,
-          kvStatusText: kvResponse.statusText,
-          namespaceIdPreview: CF_NAMESPACE_ID ? 
-            `${CF_NAMESPACE_ID.substring(0, 4)}...${CF_NAMESPACE_ID.substring(CF_NAMESPACE_ID.length - 4)}` : 
-            'undefined',
-          accountIdPreview: CF_ACCOUNT_ID ? 
-            `${CF_ACCOUNT_ID.substring(0, 4)}...${CF_ACCOUNT_ID.substring(CF_ACCOUNT_ID.length - 4)}` : 
-            'undefined',
-          kvUrl: kvUrl.replace(CF_API_TOKEN || '', '[REDACTED]'),
-          errorPreview: errorText.substring(0, 200)
-        }
+        count: 0
       })
     }
     
     const statsData = await kvResponse.json()
-    
-    // Debug: Check data structure (remove console.log for production)
-    const kvDataInfo = {
-      hasStats: !!statsData.stats,
-      statsCount: statsData.stats ? Object.keys(statsData.stats).length : 0,
-      metadata: statsData.metadata,
-      sampleKeys: statsData.stats ? Object.keys(statsData.stats).slice(0, 5) : []
-    }
     
     // Filter to only requested video IDs and convert to expected format
     const filteredStats: Record<string, any> = {}
@@ -113,15 +86,7 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.json({
       stats: filteredStats,
       timestamp: statsData.metadata?.updatedAt || new Date().toISOString(),
-      count: Object.keys(filteredStats).length,
-      // Temporary debug info
-      debug: {
-        rawDataPreview: JSON.stringify(statsData).substring(0, 200),
-        hasData: !!statsData,
-        dataType: typeof statsData,
-        isString: typeof statsData === 'string',
-        kvDataInfo
-      }
+      count: Object.keys(filteredStats).length
     })
     
     // エッジキャッシュを活用して読み取り回数を削減
