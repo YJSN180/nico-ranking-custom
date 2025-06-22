@@ -2,9 +2,10 @@ name: Update Video Stats
 
 on:
   schedule:
-    # Run every 4 minutes (offset from ranking updates which run at 0,30)
-    # 15 times per hour = 360 times per day (within free tier of 1000 writes/day)
-    - cron: '2,6,10,14,18,22,26,34,38,42,46,50,54,58 * * * *'
+    # Run every 2 minutes for near real-time updates
+    # 30 times per hour = 720 times per day (72% of free tier 1000 writes/day)
+    # Ranking data writes have been stopped, so we can use more quota for video stats
+    - cron: '*/2 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 # Prevent concurrent runs

@@ -1,0 +1,30 @@
+diff --git a/scripts/aggregate-ranking-results-direct.ts b/scripts/aggregate-ranking-results-direct.ts
+index abc123..def456 100644
+--- a/scripts/aggregate-ranking-results-direct.ts
++++ b/scripts/aggregate-ranking-results-direct.ts
+@@ -300,15 +300,18 @@ async function main() {
+   
+   // 3つのグループに分割してKVに保存
+   console.log('\n📤 Writing to Cloudflare KV (3-key split)...')
+-  await writeToKV(groupData1, 'RANKING_GROUP_1')
+-  await writeToKV(groupData2, 'RANKING_GROUP_2')
+-  await writeToKV(groupData3, 'RANKING_GROUP_3')
++  // R2への移行が完了したため、KVへの書き込みは停止
++  // KVは動画統計とNGリストのみで使用
++  // await writeToKV(groupData1, 'RANKING_GROUP_1')
++  // await writeToKV(groupData2, 'RANKING_GROUP_2')
++  // await writeToKV(groupData3, 'RANKING_GROUP_3')
++  console.log('⏭️  Skipping KV writes (using R2 as primary storage)')
+   
+   // メタデータも保存
+-  await writeToKV({
+-    lastUpdated: new Date().toISOString(),
+-    totalGenres: Object.keys(combinedData.genres).length
+-  }, 'RANKING_METADATA')
++  // await writeToKV({
++  //   lastUpdated: new Date().toISOString(),
++  //   totalGenres: Object.keys(combinedData.genres).length
++  // }, 'RANKING_METADATA')
+   
+   console.log('✅ All data written to KV successfully')
+ }

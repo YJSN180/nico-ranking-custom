@@ -1,0 +1,221 @@
+name: Monitor R2 Write Statistics
+
+on:
+  schedule:
+    # 毎日朝9時（JST）に実行
+    - cron: '0 0 * * *'
+  workflow_run:
+    workflows: ["Update Nico Ranking Data (Parallel)"]
+    types:
+      - completed
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        run: |
+          npm install @slack/webhook
+          npm install @sendgrid/mail
+      
+      - name: Collect R2 Statistics
+        id: stats
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 最新のワークフロー実行から統計を収集
+          LATEST_RUN=$(gh run list --workflow "Update Nico Ranking Data (Parallel)" --limit 1 --json databaseId,conclusion,createdAt)
+          RUN_ID=$(echo $LATEST_RUN | jq -r '.[0].databaseId')
+          
+          if [ -n "$RUN_ID" ]; then
+            LOGS=$(gh run view $RUN_ID --log || echo "")
+            
+            # 統計を抽出
+            TOTAL_FILES=$(echo "$LOGS" | grep -o "Total files processed: [0-9]*" | grep -o "[0-9]*" || echo "0")
+            UPLOADED=$(echo "$LOGS" | grep -o "Files uploaded: [0-9]*" | grep -o "[0-9]*" || echo "0")
+            SKIPPED=$(echo "$LOGS" | grep -o "Files skipped.*: [0-9]*" | grep -o "[0-9]*" || echo "0")
+            REDUCTION=$(echo "$LOGS" | grep -o "Upload reduction: [0-9.]*%" | grep -o "[0-9.]*" || echo "0")
+            
+            # 環境変数として出力
+            echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
+            echo "uploaded=$UPLOADED" >> $GITHUB_OUTPUT
+            echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
+            echo "reduction=$REDUCTION" >> $GITHUB_OUTPUT
+            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+            
+            # 月間予測
+            MONTHLY_WRITES=$((UPLOADED * 48 * 30))
+            MONTHLY_ORIGINAL=$((TOTAL_FILES * 48 * 30))
+            MONTHLY_SAVED=$((MONTHLY_ORIGINAL - MONTHLY_WRITES))
+            
+            echo "monthly_writes=$MONTHLY_WRITES" >> $GITHUB_OUTPUT
+            echo "monthly_original=$MONTHLY_ORIGINAL" >> $GITHUB_OUTPUT
+            echo "monthly_saved=$MONTHLY_SAVED" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Send Slack Notification
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          cat << EOF > slack-notify.js
+          const { IncomingWebhook } = require('@slack/webhook');
+          const webhook = new IncomingWebhook(process.env.SLACK_WEBHOOK_URL);
+          
+          const stats = {
+            totalFiles: '${{ steps.stats.outputs.total_files }}',
+            uploaded: '${{ steps.stats.outputs.uploaded }}',
+            skipped: '${{ steps.stats.outputs.skipped }}',
+            reduction: '${{ steps.stats.outputs.reduction }}',
+            monthlyWrites: '${{ steps.stats.outputs.monthly_writes }}',
+            monthlyOriginal: '${{ steps.stats.outputs.monthly_original }}',
+            monthlySaved: '${{ steps.stats.outputs.monthly_saved }}'
+          };
+          
+          const message = {
+            blocks: [
+              {
+                type: "header",
+                text: {
+                  type: "plain_text",
+                  text: "📊 R2 Write Statistics Report"
+                }
+              },
+              {
+                type: "section",
+                fields: [
+                  {
+                    type: "mrkdwn",
+                    text: "*Total Files:*\n" + stats.totalFiles
+                  },
+                  {
+                    type: "mrkdwn",
+                    text: "*Uploaded:*\n" + stats.uploaded
+                  },
+                  {
+                    type: "mrkdwn",
+                    text: "*Skipped:*\n" + stats.skipped
+                  },
+                  {
+                    type: "mrkdwn",
+                    text: "*Reduction:*\n" + stats.reduction + "%"
+                  }
+                ]
+              },
+              {
+                type: "divider"
+              },
+              {
+                type: "section",
+                text: {
+                  type: "mrkdwn",
+                  text: "*Monthly Projection:*\n" +
+                        "• Original: " + parseInt(stats.monthlyOriginal).toLocaleString() + " writes\n" +
+                        "• Optimized: " + parseInt(stats.monthlyWrites).toLocaleString() + " writes\n" +
+                        "• Saved: " + parseInt(stats.monthlySaved).toLocaleString() + " writes\n" +
+                        "• Free tier usage: " + Math.round(stats.monthlyWrites / 1000000 * 100) + "%"
+                }
+              }
+            ]
+          };
+          
+          webhook.send(message).then(() => {
+            console.log('Slack notification sent');
+          }).catch(console.error);
+          EOF
+          
+          node slack-notify.js
+      
+      - name: Send Email Notification
+        if: env.SENDGRID_API_KEY != ''
+        env:
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: |
+          cat << EOF > email-notify.js
+          const sgMail = require('@sendgrid/mail');
+          sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+          
+          const stats = {
+            totalFiles: '${{ steps.stats.outputs.total_files }}',
+            uploaded: '${{ steps.stats.outputs.uploaded }}',
+            skipped: '${{ steps.stats.outputs.skipped }}',
+            reduction: '${{ steps.stats.outputs.reduction }}',
+            monthlyWrites: '${{ steps.stats.outputs.monthly_writes }}',
+            monthlyOriginal: '${{ steps.stats.outputs.monthly_original }}',
+            monthlySaved: '${{ steps.stats.outputs.monthly_saved }}',
+            timestamp: '${{ steps.stats.outputs.timestamp }}'
+          };
+          
+          const msg = {
+            to: process.env.EMAIL_TO,
+            from: process.env.EMAIL_FROM,
+            subject: 'R2 Write Statistics Report - ' + new Date().toLocaleDateString(),
+            html: \`
+              <h2>📊 R2 Write Statistics Report</h2>
+              <p>Report generated at: \${stats.timestamp}</p>
+              
+              <h3>Upload Statistics:</h3>
+              <ul>
+                <li>Total Files Processed: \${stats.totalFiles}</li>
+                <li>Files Uploaded: \${stats.uploaded}</li>
+                <li>Files Skipped: \${stats.skipped}</li>
+                <li>Upload Reduction: \${stats.reduction}%</li>
+              </ul>
+              
+              <h3>Monthly Projection:</h3>
+              <ul>
+                <li>Original writes: \${parseInt(stats.monthlyOriginal).toLocaleString()}</li>
+                <li>Optimized writes: \${parseInt(stats.monthlyWrites).toLocaleString()}</li>
+                <li>Saved writes: \${parseInt(stats.monthlySaved).toLocaleString()}</li>
+                <li>Free tier usage: \${Math.round(stats.monthlyWrites / 1000000 * 100)}%</li>
+              </ul>
+              
+              <p>
+                <strong>Cost Status:</strong> 
+                \${stats.monthlyWrites < 1000000 ? '✅ Within free tier' : '❌ Exceeds free tier'}
+              </p>
+            \`
+          };
+          
+          sgMail.send(msg).then(() => {
+            console.log('Email sent');
+          }).catch(console.error);
+          EOF
+          
+          node email-notify.js
+      
+      - name: Store Statistics
+        run: |
+          # 統計をアーティファクトとして保存
+          mkdir -p stats
+          cat << EOF > stats/r2-stats-$(date +%Y%m%d-%H%M%S).json
+          {
+            "timestamp": "${{ steps.stats.outputs.timestamp }}",
+            "totalFiles": ${{ steps.stats.outputs.total_files }},
+            "uploaded": ${{ steps.stats.outputs.uploaded }},
+            "skipped": ${{ steps.stats.outputs.skipped }},
+            "reduction": ${{ steps.stats.outputs.reduction }},
+            "monthlyWrites": ${{ steps.stats.outputs.monthly_writes }},
+            "monthlyOriginal": ${{ steps.stats.outputs.monthly_original }},
+            "monthlySaved": ${{ steps.stats.outputs.monthly_saved }}
+          }
+          EOF
+      
+      - name: Upload Statistics
+        uses: actions/upload-artifact@v4
+        with:
+          name: r2-statistics
+          path: stats/
+          retention-days: 30

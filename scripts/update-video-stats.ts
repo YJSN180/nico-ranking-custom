@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 import { fetchVideoStats } from '../lib/snapshot-api'
-import { getRankingFromKV as getRankingFromKVLib } from '../lib/cloudflare-kv'
 import type { RankingData } from '../types/ranking'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 
 const STATS_KEY = 'VIDEO_STATS_LATEST'
 
@@ -10,15 +10,15 @@ export async function updateVideoStats() {
   console.log('Starting video stats update...')
   
   try {
-    // 1. Fetch current ranking data from KV
-    const rankingData = await getRankingFromKV()
+    // 1. Fetch current ranking data from R2
+    const rankingData = await getRankingFromR2()
     if (!rankingData) {
       // eslint-disable-next-line no-console
-      console.error('No ranking data found in KV')
+      console.error('No ranking data found in R2')
       if (import.meta.url === `file://${process.argv[1]}`) {
         process.exit(1)
       }
-      throw new Error('No ranking data found in KV')
+      throw new Error('No ranking data found in R2')
     }
     
     // 2. Extract all unique video IDs
@@ -94,14 +94,59 @@ export async function updateVideoStats() {
   }
 }
 
-// Fetch ranking data from KV (uses 3-key split)
-async function getRankingFromKV(): Promise<RankingData | null> {
+// Fetch ranking data from R2
+async function getRankingFromR2(): Promise<RankingData | null> {
   try {
-    const data = await getRankingFromKVLib()
-    return data as RankingData
+    const r2Client = new S3Client({
+      region: 'auto',
+      endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+      },
+    })
+
+    const command = new GetObjectCommand({
+      Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking-data',
+      Key: 'rankings/metadata.json',
+    })
+
+    const response = await r2Client.send(command)
+    const metadataStr = await response.Body?.transformToString()
+    if (!metadataStr) {
+      throw new Error('No metadata found in R2')
+    }
+
+    const metadata = JSON.parse(metadataStr)
+    const allData: RankingData = {
+      genres: {},
+      metadata: metadata.metadata
+    }
+
+    // すべてのジャンルのデータを取得
+    for (const genre of metadata.genres || []) {
+      const genreCommand = new GetObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking-data',
+        Key: `rankings/${genre}/data.json`,
+      })
+      
+      try {
+        const genreResponse = await r2Client.send(genreCommand)
+        const genreDataStr = await genreResponse.Body?.transformToString()
+        if (genreDataStr) {
+          const genreData = JSON.parse(genreDataStr)
+          allData.genres[genre] = genreData
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.warn(`Failed to fetch data for genre ${genre}:`, error)
+      }
+    }
+
+    return allData
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('Failed to fetch ranking data:', error)
+    console.error('Failed to fetch ranking data from R2:', error)
     return null
   }
 }
@@ -144,7 +189,7 @@ async function writeToKV(key: string, data: string): Promise<void> {
 }
 
 // Export for testing
-export { getRankingFromKV, extractUniqueVideoIds, writeToKV }
+export { extractUniqueVideoIds, writeToKV }
 
 // Run the update only if this file is executed directly
 if (import.meta.url === `file://${process.argv[1]}`) {

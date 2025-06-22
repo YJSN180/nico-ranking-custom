@@ -8,9 +8,10 @@ import { cookies } from 'next/headers'
 import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
 import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingDataServer } from '@/lib/ng-filter-server'
-import { getGenreRanking } from '@/lib/cloudflare-kv'
+// import { getGenreRanking } from '@/lib/cloudflare-kv' // R2移行完了により不要
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
+import { notFound } from 'next/navigation'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 1800 // 30分間キャッシュ（cronジョブと同期）
@@ -118,30 +119,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       console.error('[SSR] API gateway error:', apiError)
     }
     
-    // APIゲートウェイからのデータ取得に失敗した場合、フォールバック
-    if (!tag) {
-      // タグなしの場合のみKVフォールバックを試みる
-      const cfData = await getGenreRanking(genre, period as RankingPeriod)
-      if (cfData && cfData.items && cfData.items.length > 0) {
-        // metadataをログ出力（デバッグ用）
-        if (cfData.metadata?.updatedAt) {
-          const lastUpdate = new Date(cfData.metadata.updatedAt)
-          const now = new Date()
-          const diffMinutes = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000 / 60)
-          // console.log(`[RANKING] KV data last updated: ${cfData.metadata.updatedAt} (${diffMinutes} minutes ago)`)
-          // console.log(`[RANKING] Total items in KV: ${cfData.metadata.totalItems || 'unknown'}`)
-          // console.log(`[RANKING] Genre: ${genre}, Period: ${period}, Items: ${cfData.items.length}`)
-        }
-        
-        // NGフィルタリングを適用
-        // 初期表示は100件だが、全データを保持してhasMoreの判定を正しく行えるようにする
-        const { filteredData } = await filterRankingDataServer({
-          items: cfData.items, // 全データを渡す（最大500件）
-          popularTags: cfData.popularTags
-        })
-        return filteredData
-      }
-    }
+    // R2への移行が完了したため、KVフォールバックは使用しない
   } catch (cfError) {
     // Cloudflare KVエラーは無視して空のデータを返す
   }
@@ -186,37 +164,10 @@ export default async function Home({ searchParams }: PageProps) {
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
-      return (
-        <main style={{ 
-          padding: '0',
-          minHeight: '100vh',
-          background: 'var(--background-color)'
-        }}>
-          <HeaderWithSettings />
-          
-          <div style={{ 
-            maxWidth: '600px', 
-            margin: '0 auto',
-            padding: '0 20px',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              background: 'var(--surface-color)',
-              borderRadius: '16px',
-              padding: '60px 40px',
-              boxShadow: 'var(--shadow-md)'
-            }}>
-              <div style={{ fontSize: '64px', marginBottom: '24px' }}>📊</div>
-              <h2 style={{ color: 'var(--text-primary)', fontSize: '1.5rem', marginBottom: '16px' }}>
-                {tag ? 'このタグの動画が見つかりません' : 'ランキングデータがありません'}
-              </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
-                {tag ? '別のタグをお試しください。' : 'データを取得中です。しばらくお待ちください。'}
-              </p>
-            </div>
-          </div>
-        </main>
-      )
+      // エラーページの場合は動的にレンダリング
+      const EmptyRankingPage = (await import('@/components/empty-ranking-page')).default
+      
+      return <EmptyRankingPage tag={tag} />
     }
 
     return (
