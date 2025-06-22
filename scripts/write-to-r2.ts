@@ -104,31 +104,60 @@ async function writeToR2() {
     }
   }
   
-  // 全てのアップロードを待つ
-  try {
-    await Promise.all(uploadPromises)
-    console.log(`\n✨ Successfully uploaded ${uploadCount} files to R2`)
-    
-    // メタデータをアップロード（最新更新時刻など）
-    const metadataKey = 'metadata.json'
-    const metadataCommand = new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: metadataKey,
-      Body: JSON.stringify({
-        lastUpdated: new Date().toISOString(),
-        totalFiles: uploadCount,
-        version: 1
-      }),
-      ContentType: 'application/json',
-      CacheControl: 'public, max-age=300' // 5分キャッシュ
+  // 全てのアップロードを待つ（部分的失敗を許容）
+  const results = await Promise.allSettled(uploadPromises)
+  
+  // 成功/失敗をカウント
+  const successCount = results.filter(r => r.status === 'fulfilled').length
+  const failureCount = results.filter(r => r.status === 'rejected').length
+  
+  console.log(`\n📊 Upload Results: ${successCount} succeeded, ${failureCount} failed`)
+  
+  if (failureCount > 0) {
+    // 失敗したアップロードの詳細を表示
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        const genreIndex = Math.floor(index / PERIODS.length)
+        const periodIndex = index % PERIODS.length
+        const genre = GENRES[genreIndex]
+        const period = PERIODS[periodIndex]
+        console.error(`❌ Failed: ${genre}/${period} - ${result.reason}`)
+      }
     })
     
+    // 50%以上失敗した場合はエラー終了
+    if (failureCount > successCount) {
+      console.error('❌ Too many uploads failed (>50%). Aborting.')
+      process.exit(1)
+    }
+  }
+  
+  // メタデータをアップロード（成功した分の情報を含む）
+  const metadataKey = 'metadata.json'
+  const metadataCommand = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: metadataKey,
+    Body: JSON.stringify({
+      lastUpdated: new Date().toISOString(),
+      totalFiles: uploadCount,
+      successfulUploads: successCount,
+      failedUploads: failureCount,
+      version: 1
+    }),
+    ContentType: 'application/json',
+    CacheControl: 'public, max-age=300' // 5分キャッシュ
+  })
+  
+  try {
     await r2Client.send(metadataCommand)
     console.log(`✅ Uploaded ${metadataKey}`)
-    
   } catch (error) {
-    console.error('❌ R2 upload failed:', error)
-    process.exit(1)
+    console.error(`❌ Failed to upload metadata:`, error)
+    // メタデータのアップロード失敗は致命的エラーとしない
+  }
+  
+  if (successCount > 0) {
+    console.log(`\n✨ Successfully uploaded ${successCount} files to R2`)
   }
 }
 
