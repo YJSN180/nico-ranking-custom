@@ -76,7 +76,12 @@ export async function GET(request: NextRequest) {
           kvStatusText: kvResponse.statusText,
           namespaceIdPreview: CF_NAMESPACE_ID ? 
             `${CF_NAMESPACE_ID.substring(0, 4)}...${CF_NAMESPACE_ID.substring(CF_NAMESPACE_ID.length - 4)}` : 
-            'undefined'
+            'undefined',
+          accountIdPreview: CF_ACCOUNT_ID ? 
+            `${CF_ACCOUNT_ID.substring(0, 4)}...${CF_ACCOUNT_ID.substring(CF_ACCOUNT_ID.length - 4)}` : 
+            'undefined',
+          kvUrl: kvUrl.replace(CF_API_TOKEN || '', '[REDACTED]'),
+          errorPreview: errorText.substring(0, 200)
         }
       })
     }
