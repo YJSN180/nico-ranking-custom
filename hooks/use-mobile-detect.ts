@@ -4,8 +4,6 @@ export function useMobileDetect() {
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    
     let timeoutId: NodeJS.Timeout
     
     const checkMobile = () => {

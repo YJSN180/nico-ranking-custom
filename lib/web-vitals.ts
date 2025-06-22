@@ -1,21 +1,14 @@
-type Metric = {
-  id: string
-  name: string
-  value: number
-}
+import { onCLS, onFCP, onLCP, onTTFB, onINP, type Metric } from 'web-vitals'
 
 const vitalsUrl = 'https://vitals.vercel-analytics.com/v1/vitals'
 
 function getConnectionSpeed() {
-  if (typeof navigator === 'undefined') return 'unknown'
   const nav = navigator as any
   const conn = nav.connection || nav.mozConnection || nav.webkitConnection
   return conn ? conn.effectiveType : 'unknown'
 }
 
 function sendToAnalytics(metric: Metric, options: { params: { [key: string]: any } }) {
-  if (typeof window === 'undefined') return
-  
   const page = Object.entries(options.params).reduce(
     (acc, [key, value]) => acc.replace(value, `[${key}]`),
     window.location.pathname
@@ -57,17 +50,13 @@ function sendToAnalytics(metric: Metric, options: { params: { [key: string]: any
   }
 }
 
-export async function reportWebVitals() {
-  if (typeof window === 'undefined') return
-  
+export function reportWebVitals() {
   try {
-    const { onCLS, onFCP, onLCP, onTTFB, onINP } = await import('web-vitals')
-    
-    onTTFB((metric) => sendToAnalytics(metric, { params: {} }))
-    onLCP((metric) => sendToAnalytics(metric, { params: {} }))
-    onCLS((metric) => sendToAnalytics(metric, { params: {} }))
-    onFCP((metric) => sendToAnalytics(metric, { params: {} }))
-    onINP((metric) => sendToAnalytics(metric, { params: {} }))
+    onTTFB((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onLCP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onCLS((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onFCP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
+    onINP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
   } catch (err) {
     // Fail silently
   }
