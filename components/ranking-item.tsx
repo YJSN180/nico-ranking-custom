@@ -140,20 +140,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   window.dispatchEvent(event)
                 }}
                 data-testid="video-title"
-                style={{ 
-                  color: 'var(--link-color)', 
-                  textDecoration: 'none',
-                  fontSize: '15px',
-                  fontWeight: '600',
-                  lineHeight: '1.3',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  wordBreak: 'break-all',
-                  minHeight: '39px'
-                }}
+                className="ranking-video-link ranking-video-link--mobile"
               >
                 {item.title}
               </a>
@@ -313,16 +300,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   const event = new CustomEvent('saveRankingState')
                   window.dispatchEvent(event)
                 }}
-                style={{ 
-                  color: 'var(--link-color)', 
-                  textDecoration: 'none',
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  lineHeight: '1.4',
-                  display: 'block',
-                  marginBottom: '6px',
-                  wordBreak: 'break-word'
-                }}
+                className="ranking-video-link ranking-video-link--desktop"
               >
                 {item.title}
               </a>
