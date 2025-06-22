@@ -83,24 +83,44 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   
   // 1. Primary: Cloudflare KVから読み取りを試みる
   try {
+    // R2移行後は、タグ別もジャンル別も同じAPIゲートウェイ経由で取得
+    const baseUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://api-ranking.nico-rank.com'
+    const apiUrl = new URL('/api/ranking', baseUrl)
+    apiUrl.searchParams.set('genre', genre)
+    apiUrl.searchParams.set('period', period)
     if (tag) {
-      // タグ別ランキングの場合
-      const { getTagRanking, getRankingFromKV } = await import('@/lib/cloudflare-kv')
+      apiUrl.searchParams.set('tag', tag)
+    }
+    
+    console.log(`[SSR] Fetching from API gateway: ${apiUrl.toString()}`)
+    
+    try {
+      const response = await fetch(apiUrl.toString(), {
+        headers: {
+          'User-Agent': 'nicorank-ssr/1.0',
+        },
+        next: { revalidate: 1800 } // 30分キャッシュ
+      })
       
-      // Removed debug code that reads full data unnecessarily
-      
-      const tagItems = await getTagRanking(genre, period as RankingPeriod, tag)
-      // Tag ranking fetched from KV
-      if (tagItems && tagItems.length > 0) {
-        // NGフィルタリングを適用
-        const { filteredData } = await filterRankingDataServer({
-          items: tagItems,
-          popularTags: []
-        })
-        return filteredData
+      if (response.ok) {
+        const cfData = await response.json()
+        console.log(`[SSR] API gateway returned ${cfData.items?.length || 0} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
+        
+        if (cfData && cfData.items && cfData.items.length > 0) {
+          // NGフィルタリングを適用
+          const { filteredData } = await filterRankingDataServer(cfData)
+          return filteredData
+        }
+      } else {
+        console.error(`[SSR] API gateway returned ${response.status}: ${response.statusText}`)
       }
-    } else {
-      // 通常のジャンル別ランキングの場合
+    } catch (apiError) {
+      console.error('[SSR] API gateway error:', apiError)
+    }
+    
+    // APIゲートウェイからのデータ取得に失敗した場合、フォールバック
+    if (!tag) {
+      // タグなしの場合のみKVフォールバックを試みる
       const cfData = await getGenreRanking(genre, period as RankingPeriod)
       if (cfData && cfData.items && cfData.items.length > 0) {
         // metadataをログ出力（デバッグ用）
