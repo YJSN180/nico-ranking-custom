@@ -252,14 +252,13 @@ async function fetchVideoStats(videoIds, apiKey) {
 }
 
 /**
- * Main scheduled handler for the Worker
+ * Process video stats update logic
  */
-export default {
-  async scheduled(controller, env, ctx) {
-    console.log('=== Starting video stats update ===');
-    console.log(`Time: ${new Date().toISOString()}`);
-    
-    try {
+async function processVideoStatsUpdate(env) {
+  console.log('=== Starting video stats update ===');
+  console.log(`Time: ${new Date().toISOString()}`);
+  
+  try {
       // 1. Fetch ranking metadata from R2
       const metadata = await fetchRankingMetadata(env.R2_BUCKET);
       console.log(`Using metadata - Genres: ${metadata.genres.join(', ')}, Periods: ${metadata.periods.join(', ')}`);
@@ -305,6 +304,12 @@ export default {
       
       console.log(`✓ Successfully updated stats for ${statsData.metadata.totalVideos} videos`);
       console.log('=== Video stats update completed ===');
+      
+      return {
+        success: true,
+        totalVideos: statsData.metadata.totalVideos,
+        updatedAt: statsData.metadata.updatedAt
+      };
     } catch (error) {
       console.error('Failed to update video stats:', error);
       console.error('Stack trace:', error.stack);
@@ -335,5 +340,40 @@ export default {
         throw error;
       }
     }
+}
+
+/**
+ * Main Worker export
+ */
+export default {
+  async scheduled(controller, env, ctx) {
+    await processVideoStatsUpdate(env);
+  },
+  
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    
+    // Manual trigger endpoint with auth
+    if (url.pathname === '/trigger' && request.method === 'POST') {
+      // Check authorization
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader || authHeader !== `Bearer ${env.WORKER_AUTH_KEY}`) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      
+      try {
+        const result = await processVideoStatsUpdate(env);
+        return Response.json(result);
+      } catch (error) {
+        return Response.json({ error: error.message }, { status: 500 });
+      }
+    }
+    
+    // Health check endpoint
+    if (url.pathname === '/health') {
+      return Response.json({ status: 'ok', time: new Date().toISOString() });
+    }
+    
+    return new Response('Not Found', { status: 404 });
   },
 };
