@@ -42,6 +42,35 @@ export default {
       })
     }
     
+    // /api/metadata パスの処理（メタデータを返す）
+    if (url.pathname === '/api/metadata' && env.R2_BUCKET) {
+      try {
+        const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json')
+        if (metadataObject) {
+          const metadata = await metadataObject.text()
+          return new Response(metadata, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=300',
+              ...corsHeaders,
+              ...securityHeaders
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Metadata read error:', error)
+      }
+      return new Response('{}', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders,
+          ...securityHeaders
+        }
+      })
+    }
+    
     // /api/ranking パスの処理（R2から直接配信）
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       try {
@@ -78,6 +107,7 @@ export default {
         }
         
         // R2から読み取り
+        console.log(`[Worker] Attempting to read from R2: ${r2Key}`)
         const r2Object = await env.R2_BUCKET.get(r2Key)
         
         if (!r2Object) {
@@ -115,6 +145,7 @@ export default {
         
         // R2から取得したデータを返す
         const data = await r2Object.text()
+        console.log(`[Worker] R2 data found for ${r2Key}, size: ${data.length} bytes`)
         response = new Response(data, {
           status: 200,
           headers: {
