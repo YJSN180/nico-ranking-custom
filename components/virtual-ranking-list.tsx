@@ -13,7 +13,7 @@ interface VirtualRankingListProps {
 
 export function VirtualRankingList({ items, isMobile, height = 800 }: VirtualRankingListProps) {
   const listRef = useRef<List>(null)
-  const itemHeight = isMobile ? 120 : 90
+  const itemHeight = isMobile ? 110 : 134
   
   // スクロール位置の復元
   useEffect(() => {
