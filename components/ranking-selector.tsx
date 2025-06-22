@@ -83,7 +83,6 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
               </button>
             ))}
           </div>
-        </div>
       </div>
     </div>
   )
