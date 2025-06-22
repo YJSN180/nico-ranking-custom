@@ -1,39 +1,29 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env node
 /**
- * ランキングデータをCloudflare R2に書き込むスクリプト
- * GitHub Actionsから呼び出される
+ * R2への書き込みスクリプト（メタデータ対応版）
+ * 人気タグの動的変化に対応し、効率的な読み込みを実現
  */
 
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import type { RankingData } from '../types/ranking'
+import type { RankingData } from '../app/types/ranking'
 
-// ESモジュールでの__dirname取得
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-// 環境変数から設定を読み込み
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
-const R2_ENDPOINT = process.env.R2_ENDPOINT || `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const BUCKET_NAME = 'nico-ranking'
-
-if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
-  console.error('Error: R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY must be set')
-  process.exit(1)
-}
-
-// R2クライアントの初期化
+// R2クライアントの設定
 const r2Client = new S3Client({
   region: 'auto',
-  endpoint: R2_ENDPOINT,
+  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY
-  }
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
 })
+
+const BUCKET_NAME = 'nico-ranking'
 
 // ジャンルと期間の定義
 const GENRES = [
@@ -46,15 +36,50 @@ const GENRES = [
 
 const PERIODS = ['24h', 'hour']
 
+interface TagMetadata {
+  tags: string[]
+  updatedAt: string
+}
+
 async function writeToR2() {
-  console.log('🚀 Starting R2 upload process...')
+  console.log('🚀 Starting R2 upload process with metadata support...')
   
   // 集約データファイルを読み込む
   const aggregatedDataPath = resolve(__dirname, '../tmp/latest-aggregated-data.json')
+  console.log(`📂 Loading aggregated data from: ${aggregatedDataPath}`)
+  
+  // ファイルの存在確認
+  if (!existsSync(aggregatedDataPath)) {
+    console.error(`❌ Aggregated data file not found: ${aggregatedDataPath}`)
+    throw new Error('Aggregated data file not found')
+  }
+  
   const aggregatedData = JSON.parse(readFileSync(aggregatedDataPath, 'utf-8'))
+  
+  // デバッグ: aggregatedDataの構造を確認
+  console.log('\n📊 Aggregated data structure:')
+  console.log(`  - Genres: ${Object.keys(aggregatedData.genres || {}).length}`)
+  if (aggregatedData.genres) {
+    const firstGenre = Object.keys(aggregatedData.genres)[0]
+    if (firstGenre && aggregatedData.genres[firstGenre]) {
+      console.log(`  - Sample genre (${firstGenre}): ${JSON.stringify(Object.keys(aggregatedData.genres[firstGenre]))}`)
+      const firstPeriod = Object.keys(aggregatedData.genres[firstGenre])[0]
+      if (firstPeriod && aggregatedData.genres[firstGenre][firstPeriod]) {
+        const periodData = aggregatedData.genres[firstGenre][firstPeriod]
+        console.log(`  - Sample period data (${firstGenre}/${firstPeriod}):`)
+        console.log(`    - Has items: ${!!periodData.items} (count: ${periodData.items?.length || 0})`)
+        console.log(`    - Has popularTags: ${!!periodData.popularTags} (count: ${periodData.popularTags?.length || 0})`)
+        console.log(`    - Has tags: ${!!periodData.tags} (count: ${periodData.tags ? Object.keys(periodData.tags).length : 0})`)
+        if (periodData.tags && Object.keys(periodData.tags).length > 0) {
+          console.log(`    - First 3 tags: ${Object.keys(periodData.tags).slice(0, 3).join(', ')}`)
+        }
+      }
+    }
+  }
   
   const uploadPromises: Promise<any>[] = []
   let uploadCount = 0
+  const tagMetadataByGenrePeriod: Record<string, TagMetadata> = {}
   
   // 各ジャンル・期間のデータを個別にアップロード
   for (const genre of GENRES) {
@@ -66,13 +91,27 @@ async function writeToR2() {
         continue
       }
       
+      // デバッグ: genreDataの構造を確認
+      console.log(`\n🔍 Debug ${genre}/${period}: has tags? ${!!genreData.tags}, tag count: ${genreData.tags ? Object.keys(genreData.tags).length : 0}`)
+      if (genreData.tags && Object.keys(genreData.tags).length > 0) {
+        console.log(`  - First 3 tags: ${Object.keys(genreData.tags).slice(0, 3).join(', ')}`)
+      }
+      
       const items = genreData.items || []
+      const popularTags = genreData.popularTags || []
+      
+      // メタデータの記録
+      const metadataKey = `${genre}/${period}`
+      tagMetadataByGenrePeriod[metadataKey] = {
+        tags: genreData.tags ? Object.keys(genreData.tags) : [],
+        updatedAt: aggregatedData.metadata?.updatedAt || new Date().toISOString()
+      }
       
       // 「すべて」のランキングデータを保存
       const allDataToStore: RankingData = {
         items: items,
-        popularTags: genreData.popularTags || [],
-        tags: {}, // 現時点では個別動画のタグ情報は取得できないため空
+        popularTags: popularTags,
+        tags: {}, // 個別動画のタグ情報は現時点では取得できないため空
         metadata: {
           version: 1,
           updatedAt: aggregatedData.metadata?.updatedAt || new Date().toISOString(),
@@ -81,7 +120,7 @@ async function writeToR2() {
         }
       }
       
-      // 「すべて」のランキングを保存（新形式）
+      // 新形式のキー（genre/period/all.json）
       const allKey = `rankings/${genre}/${period}/all.json`
       const allBody = JSON.stringify(allDataToStore)
       
@@ -125,10 +164,11 @@ async function writeToR2() {
       
       // タグ別ランキングデータを個別に保存
       if (genreData.tags && Object.keys(genreData.tags).length > 0) {
+        console.log(`📦 Processing ${Object.keys(genreData.tags).length} tags for ${genre}/${period}`)
         for (const [tag, tagItems] of Object.entries(genreData.tags)) {
           const tagDataToStore: RankingData = {
             items: tagItems as any[],
-            popularTags: genreData.popularTags || [],
+            popularTags: popularTags,
             tags: {}, // タグ別データには不要
             metadata: {
               version: 1,
@@ -162,69 +202,55 @@ async function writeToR2() {
               })
           )
         }
+      } else {
+        console.log(`⚠️  No tags found for ${genre}/${period}`)
       }
     }
   }
   
-  // 全てのアップロードを待つ（部分的失敗を許容）
-  const results = await Promise.allSettled(uploadPromises)
-  
-  // 成功/失敗をカウント
-  const successCount = results.filter(r => r.status === 'fulfilled').length
-  const failureCount = results.filter(r => r.status === 'rejected').length
-  
-  console.log(`\n📊 Upload Results: ${successCount} succeeded, ${failureCount} failed`)
-  
-  if (failureCount > 0) {
-    // 失敗したアップロードの詳細を表示
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        const genreIndex = Math.floor(index / PERIODS.length)
-        const periodIndex = index % PERIODS.length
-        const genre = GENRES[genreIndex]
-        const period = PERIODS[periodIndex]
-        console.error(`❌ Failed: ${genre}/${period} - ${result.reason}`)
-      }
-    })
-    
-    // 50%以上失敗した場合はエラー終了
-    if (failureCount > successCount) {
-      console.error('❌ Too many uploads failed (>50%). Aborting.')
-      process.exit(1)
-    }
-  }
-  
-  // メタデータをアップロード（成功した分の情報を含む）
-  const metadataKey = 'metadata.json'
-  const metadataCommand = new PutObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: metadataKey,
-    Body: JSON.stringify({
-      lastUpdated: new Date().toISOString(),
-      totalFiles: uploadCount,
-      successfulUploads: successCount,
-      failedUploads: failureCount,
-      version: 1
-    }),
-    ContentType: 'application/json',
-    CacheControl: 'public, max-age=300' // 5分キャッシュ
+  // メタデータファイルをアップロード
+  console.log('\n📋 Uploading metadata file...')
+  const metadataKey = 'rankings/metadata.json'
+  const metadataBody = JSON.stringify({
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    tagsByGenrePeriod: tagMetadataByGenrePeriod
   })
   
-  try {
-    await r2Client.send(metadataCommand)
-    console.log(`✅ Uploaded ${metadataKey}`)
-  } catch (error) {
-    console.error(`❌ Failed to upload metadata:`, error)
-    // メタデータのアップロード失敗は致命的エラーとしない
-  }
+  uploadPromises.push(
+    r2Client.send(new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: metadataKey,
+      Body: metadataBody,
+      ContentType: 'application/json',
+      CacheControl: 'public, max-age=300', // 5分キャッシュ（頻繁に更新される可能性があるため短め）
+    }))
+      .then(() => {
+        uploadCount++
+        console.log(`✅ Uploaded ${metadataKey} (${(metadataBody.length / 1024).toFixed(1)}KB)`)
+      })
+      .catch(error => {
+        console.error(`❌ Failed to upload ${metadataKey}:`, error)
+        // メタデータのアップロード失敗は警告のみ（必須ではない）
+      })
+  )
   
-  if (successCount > 0) {
-    console.log(`\n✨ Successfully uploaded ${successCount} files to R2`)
+  // すべてのアップロードを待つ
+  await Promise.all(uploadPromises)
+  
+  console.log(`\n✨ Successfully uploaded ${uploadCount} files to R2`)
+  
+  // メタデータのサマリーを表示
+  console.log('\n📊 Tag metadata summary:')
+  for (const [key, metadata] of Object.entries(tagMetadataByGenrePeriod)) {
+    if (metadata.tags.length > 0) {
+      console.log(`  - ${key}: ${metadata.tags.length} tags`)
+    }
   }
 }
 
-// メイン実行
+// エラーハンドリング付きで実行
 writeToR2().catch(error => {
-  console.error('Fatal error:', error)
+  console.error('Failed to write to R2:', error)
   process.exit(1)
 })
