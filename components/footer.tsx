@@ -9,6 +9,10 @@ export function Footer() {
       padding: '40px 20px',
       background: 'var(--surface-color)',
       borderTop: '1px solid var(--border-color)',
+      // CLS対策: フッターの最小高さを予約
+      minHeight: '160px',
+      // レイアウトシフト防止
+      willChange: 'auto',
     }}>
       <div style={{
         maxWidth: '1200px',

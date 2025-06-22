@@ -173,7 +173,8 @@ export default async function Home({ searchParams }: PageProps) {
     return (
       <main style={{ 
         padding: '0',
-        minHeight: '100vh',
+        // CLS対策: フッターマージンを考慮したminHeight
+        minHeight: 'calc(100vh - 80px)',
         background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />
@@ -201,7 +202,8 @@ export default async function Home({ searchParams }: PageProps) {
     return (
       <main style={{ 
         padding: '0',
-        minHeight: '100vh',
+        // CLS対策: フッターマージンを考慮したminHeight
+        minHeight: 'calc(100vh - 80px)',
         background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />

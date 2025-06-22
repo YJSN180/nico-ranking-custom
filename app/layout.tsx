@@ -100,6 +100,17 @@ export default async function RootLayout({
         {/* フォントのプリロード - ヘッダーで必須のため最優先で読み込む */}
         <link rel="preload" href="/fonts/nicomoji-plus-v2.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <link rel="preload" href="/fonts/comic-sans-ms-bold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        {/* クリティカルCSSをインライン化 */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* クリティカルCSS - LCPに必要な最小限のスタイル */
+          body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+          .header-container{background:linear-gradient(135deg,#00A8E8 0%,#0077BE 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
+          .selectors-container{min-height:200px}
+          .ranking-video-link{color:#0066cc;text-decoration:none}
+          .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}
+          [data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:12px;padding:16px}
+          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}}
+        ` }} />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
