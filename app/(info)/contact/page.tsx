@@ -119,26 +119,26 @@ export default function ContactPage() {
         borderRadius: '8px',
         border: '1px solid var(--border)',
       }}>
-        <h3 style={{
-          fontSize: '1.2rem',
-          marginBottom: '12px',
+        <h2 style={{
+          fontSize: '1.5rem',
+          marginBottom: '16px',
           color: 'var(--text-primary)',
           fontWeight: 'bold',
         }}>
           よくある質問
-        </h3>
+        </h2>
         <div style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
           <p style={{ marginBottom: '12px' }}>
             <strong>Q: ランキングはどのくらいの頻度で更新されますか？</strong><br />
-            A: 30分ごとに自動更新されます。
+            A: 1時間分ごとに自動更新されます。
           </p>
           <p style={{ marginBottom: '12px' }}>
-            <strong>Q: 特定の動画が表示されません</strong><br />
-            A: NGフィルターが適用されている可能性があります。設定から確認してください。
+            <strong>Q: 特定の動画が表示されません。</strong><br />
+            A: 管理者側またはユーザー側でNGフィルターが適用されている可能性があります。管理者側のNG動画は所定のものなので変更できません。ユーザー側のNGフィルターに関しては設定から確認してください。
           </p>
           <p>
-            <strong>Q: モバイルで正しく表示されません</strong><br />
-            A: 最新のブラウザをご利用ください。問題が続く場合はIssueで報告をお願いします。
+            <strong>Q: モバイルで正しく表示されません。</strong><br />
+            A: 最新のブラウザをご利用ください。問題が続く場合は上のXアカウントで報告をお願いします。
           </p>
         </div>
       </section>

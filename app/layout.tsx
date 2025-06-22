@@ -9,11 +9,11 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'ニコラン(Re:turn)',
+  title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
   description: 'ニコニコ動画のランキングを今すぐチェック！',
   metadataBase: new URL('https://nico-rank.com'),
   openGraph: {
-    title: 'ニコラン(Re:turn)',
+    title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
     description: 'ニコニコ動画のランキングを今すぐチェック！',
     url: 'https://nico-rank.com',
     siteName: 'ニコラン(Re:turn)',
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'ニコラン(Re:turn)',
+    title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
     description: 'ニコニコ動画のランキングを今すぐチェック！',
     images: [{
       url: '/og-image.png',
