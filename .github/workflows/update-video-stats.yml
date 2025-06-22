@@ -2,10 +2,10 @@ name: Update Video Stats
 
 on:
   schedule:
-    # Run every 2 minutes for near real-time updates
-    # 30 times per hour = 720 times per day (72% of free tier 1000 writes/day)
-    # Ranking data writes have been stopped, so we can use more quota for video stats
-    - cron: '*/2 * * * *'
+    # Run every 5 minutes (GitHub Actions recommended minimum)
+    # 12 times per hour = 288 times per day (28.8% of free tier 1000 writes/day)
+    # More reliable execution than shorter intervals
+    - cron: '*/5 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 # Prevent concurrent runs
