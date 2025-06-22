@@ -3,8 +3,6 @@
  * R2から直接ランキングデータを配信
  */
 
-import type { RankingData } from '../types/ranking'
-
 interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY: string
@@ -53,7 +51,7 @@ export default {
         
         // キャッシュキー
         const cacheKey = new Request(`https://r2-cache.nico-rank.com/ranking/${genre}/${period}`, request)
-        const cache = caches.default
+        const cache = (caches as any).default
         
         // キャッシュチェック
         let response = await cache.match(cacheKey)

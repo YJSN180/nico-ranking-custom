@@ -26,5 +26,7 @@ zone_name = "nico-rank.com"
 
 # ビルド設定
 [build]
-command = "npm run build:worker"
-watch_paths = ["workers/*.ts", "types/*.ts"]
+command = ""
+[build.upload]
+format = "modules"
+main = "workers/api-gateway-r2.ts"
