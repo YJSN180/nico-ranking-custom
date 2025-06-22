@@ -84,7 +84,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   // 1. Primary: Cloudflare KVから読み取りを試みる
   try {
     // R2移行後は、タグ別もジャンル別も同じAPIゲートウェイ経由で取得
-    const baseUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://api-ranking.nico-rank.com'
+    const baseUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
     const apiUrl = new URL('/api/ranking', baseUrl)
     apiUrl.searchParams.set('genre', genre)
     apiUrl.searchParams.set('period', period)

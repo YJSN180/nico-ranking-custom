@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://api-ranking.nico-rank.com'
+const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
 
 describe('タグフィルタリング機能', () => {
   describe('APIゲートウェイ経由のタグ別ランキング取得', () => {
