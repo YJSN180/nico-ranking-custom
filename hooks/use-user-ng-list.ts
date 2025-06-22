@@ -40,6 +40,8 @@ export function useUserNGList() {
 
   // 初回読み込みとストレージ変更の監視
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    
     const loadNGList = () => {
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
@@ -109,15 +111,17 @@ export function useUserNGList() {
     setNGList(updatedList)
     
     // localStorageに保存
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
-      
-      // NGリスト更新イベントを発火（他のコンポーネントに通知）
-      window.dispatchEvent(new CustomEvent('ngListUpdated', { 
-        detail: { ngList: updatedList } 
-      }))
-    } catch (error) {
-      // ストレージエラーは無視
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedList))
+        
+        // NGリスト更新イベントを発火（他のコンポーネントに通知）
+        window.dispatchEvent(new CustomEvent('ngListUpdated', { 
+          detail: { ngList: updatedList } 
+        }))
+      } catch (error) {
+        // ストレージエラーは無視
+      }
     }
   }, [recalculateTotalCount])
 
