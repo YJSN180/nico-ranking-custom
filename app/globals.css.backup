@@ -8,7 +8,7 @@
   src: url('/fonts/nicomoji-plus-v2.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
-  font-display: optional;
+  font-display: block;
 }
 
 @font-face {
@@ -16,7 +16,7 @@
   src: url('/fonts/comic-sans-ms-bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
-  font-display: optional;
+  font-display: swap;
 }
 
 /* デフォルトとライトテーマ */
@@ -32,15 +32,14 @@
   --text-muted: #999999;
   --border-color: #e5e5e5;
   --link-color: #0066cc;
-  --link-visited-color: #551a8b;
   --header-bg: linear-gradient(135deg, #00A8E8 0%, #0077BE 100%);
   --header-text: #ffffff;
   
-  /* 影 */
+  /* シャドウ */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.1);
   
-  /* カラーパレット */
+  /* 追加の色 */
   --primary-color: #667eea;
   --primary-hover: #5567d8;
   --primary-color-hover: #5567d8;
@@ -56,10 +55,10 @@
   --rank-silver: #C0C0C0;
   --rank-bronze: #CD7F32;
   
-  /* ボタン */
+  /* ボタンテキスト */
   --button-text-active: #ffffff;
   
-  /* メニュー */
+  /* メニュー専用変数（完全不透明） */
   --menu-bg: #ffffff;
   --menu-item-bg: #f8f9fa;
   --menu-item-hover: #e9ecef;
@@ -67,7 +66,12 @@
   --menu-border: #dee2e6;
 }
 
-/* ダークテーマ - 継承 */
+/* ライトテーマ（明示的）*/
+[data-theme="light"] {
+  /* ルートと同じ値を継承 */
+}
+
+/* ダークテーマ */
 [data-theme="dark"] {
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 20, 20, 20;
@@ -79,13 +83,14 @@
   --text-muted: #808080;
   --border-color: #333333;
   --link-color: #4db8ff;
-  --link-visited-color: #b19cd9;
   --header-bg: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
   --header-text: #ffffff;
   
+  /* シャドウ */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
   
+  /* 追加の色 */
   --primary-color: #7c8eff;
   --primary-hover: #6b7df0;
   --primary-color-hover: #6b7df0;
@@ -96,12 +101,15 @@
   --surface-secondary: #2a2a2a;
   --surface-hover: #333333;
   
+  /* ランク色 */
   --rank-gold: #FFD700;
   --rank-silver: #C0C0C0;
   --rank-bronze: #CD7F32;
   
+  /* ボタンテキスト */
   --button-text-active: #ffffff;
   
+  /* メニュー専用変数（完全不透明） */
   --menu-bg: #1e1e1e;
   --menu-item-bg: #2a2a2a;
   --menu-item-hover: #3a3a3a;
@@ -109,45 +117,95 @@
   --menu-border: #444444;
 }
 
-/* ダークブルーテーマ (X/Twitter風) */
+/* ダークブルーテーマ (X/Twitter公式カラー) */
 [data-theme="darkblue"] {
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 21, 32, 43;
   --background-end-rgb: 21, 32, 43;
-  --background-color: #15202b;
-  --surface-color: #192734;
+  --background-color: #15202b; /* X公式の最も濃い背景色 */
+  --surface-color: #192734; /* X公式のカード背景色 */
   --text-primary: #ffffff;
-  --text-secondary: #e7e9ea;
-  --text-muted: #8899ac;
-  --border-color: #38444d;
-  --link-color: #1d9bf0;
+  --text-secondary: #e7e9ea; /* 少し明るめの白 */
+  --text-muted: #8899ac; /* X公式のミュートテキスト色 */
+  --border-color: #38444d; /* X公式のボーダー色 */
+  --link-color: #1d9bf0; /* X公式のブルー */
   --header-bg: linear-gradient(135deg, #15202b 0%, #0f171e 100%);
   --header-text: #ffffff;
   
+  /* シャドウ */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.7);
   
-  --primary-color: #1d9bf0;
-  --primary-hover: #1a8cd8;
+  /* 追加の色 */
+  --primary-color: #1d9bf0; /* X公式のブルー */
+  --primary-hover: #1a8cd8; /* ホバー時の少し暗いブルー */
   --primary-color-hover: #1a8cd8;
-  --error-color: #f4212e;
+  --error-color: #f4212e; /* X公式のエラー/危険色 */
   --error-bg: rgba(244, 33, 46, 0.1);
-  --success-color: #00ba7c;
-  --warning-color: #ffd400;
-  --surface-secondary: #22303c;
-  --surface-hover: #283340;
+  --success-color: #00ba7c; /* X公式の成功色 */
+  --warning-color: #ffd400; /* X公式の警告色 */
+  --surface-secondary: #22303c; /* X公式の三次背景色 */
+  --surface-hover: #283340; /* ホバー時の背景色 */
   
+  /* ランク色 */
   --rank-gold: #FFD700;
   --rank-silver: #C0C0C0;
   --rank-bronze: #CD7F32;
   
+  /* ボタンテキスト */
   --button-text-active: #ffffff;
   
+  /* メニュー専用変数（完全不透明） */
   --menu-bg: #192734;
   --menu-item-bg: #22303c;
   --menu-item-hover: #2d3b47;
   --menu-text: #ffffff;
   --menu-border: #38444d;
+}
+
+/* システムの設定に従う場合 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 20, 20, 20;
+    --background-end-rgb: 0, 0, 0;
+    --background-color: #121212;
+    --surface-color: #1e1e1e;
+    --text-primary: #ffffff;
+    --text-secondary: #b3b3b3;
+    --text-muted: #808080;
+    --border-color: #333333;
+    --link-color: #4db8ff;
+    --header-bg: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+    --header-text: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
+    
+    /* 追加の色 */
+    --primary-color: #7c8eff;
+    --primary-hover: #6b7df0;
+    --error-color: #ff6b6b;
+    --error-bg: rgba(255, 107, 107, 0.2);
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --surface-secondary: #2a2a2a;
+    --surface-hover: #333333;
+    
+    /* ランク色 */
+    --rank-gold: #FFD700;
+    --rank-silver: #C0C0C0;
+    --rank-bronze: #CD7F32;
+    
+    /* ボタンテキスト */
+    --button-text-active: #ffffff;
+    
+    /* メニュー専用変数（完全不透明） */
+    --menu-bg: #1e1e1e;
+    --menu-item-bg: #2a2a2a;
+    --menu-item-hover: #3a3a3a;
+    --menu-text: #ffffff;
+    --menu-border: #444444;
+  }
 }
 
 body {
@@ -157,12 +215,12 @@ body {
   min-height: 100vh;
 }
 
-/* グラデーション背景 */
+/* ニコニコ動画風のスタイル */
 .nico-gradient {
   background: linear-gradient(135deg, #0080ff 0%, #00bfff 100%);
 }
 
-/* スクロールバー */
+/* スクロールバーのスタイル */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -181,7 +239,8 @@ body {
   background: var(--text-muted);
 }
 
-/* ユーザー選択 */
+/* テキスト選択制御 */
+/* ボタンやUI要素でのテキスト選択を防止 */
 button,
 .no-select {
   user-select: none;
@@ -190,13 +249,16 @@ button,
   -ms-user-select: none;
 }
 
+/* ランキング要素の選択制御 */
 [data-testid="ranking-item"] {
+  /* デフォルトでテキスト選択を無効化 */
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
 }
 
+/* 動画タイトルは選択可能にする */
 [data-testid="ranking-item"] a[data-testid="video-title"] {
   user-select: text;
   -webkit-user-select: text;
@@ -204,6 +266,7 @@ button,
   -ms-user-select: text;
 }
 
+/* 投稿者名リンクも選択可能にする */
 [data-testid="ranking-item"] a[href*="nicovideo.jp/user"],
 [data-testid="ranking-item"] a[href*="ch.nicovideo.jp"],
 [data-testid="ranking-item"] a[href*="com.nicovideo.jp"] {
@@ -213,45 +276,7 @@ button,
   -ms-user-select: text;
 }
 
+/* ホバー効果用のユーティリティクラス */
 .hover-underline:hover {
   text-decoration: underline !important;
-}
-
-/* ランキングアイテムのリンクスタイル */
-.ranking-video-link {
-  color: var(--link-color);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.ranking-video-link:visited {
-  color: var(--link-visited-color);
-}
-
-.ranking-video-link:hover {
-  text-decoration: underline;
-}
-
-/* モバイル用のタイトルリンク */
-.ranking-video-link--mobile {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  word-break: break-all;
-  min-height: 39px;
-}
-
-/* デスクトップ用のタイトルリンク */
-.ranking-video-link--desktop {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
-  display: block;
-  margin-bottom: 6px;
-  word-break: break-word;
 }

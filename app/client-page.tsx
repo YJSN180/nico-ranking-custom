@@ -566,12 +566,14 @@ export default function ClientPage({
   // レンダリング
   return (
     <>
-      <RankingSelector config={config} onConfigChange={handleConfigChange} />
-      <TagSelector 
-        config={config} 
-        onConfigChange={handleConfigChange} 
-        popularTags={currentPopularTags} 
-      />
+      <div className="selectors-container">
+        <RankingSelector config={config} onConfigChange={handleConfigChange} />
+        <TagSelector 
+          config={config} 
+          onConfigChange={handleConfigChange} 
+          popularTags={currentPopularTags} 
+        />
+      </div>
       
       {loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
