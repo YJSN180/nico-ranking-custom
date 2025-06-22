@@ -48,6 +48,33 @@ export default {
         // クエリパラメータからジャンルと期間を取得
         const genre = url.searchParams.get('genre') || 'all'
         const period = url.searchParams.get('period') || '24h'
+        const tag = url.searchParams.get('tag')
+        
+        // タグが指定されている場合は、タグデータがR2に存在しないため空の結果を返す
+        if (tag) {
+          console.log(`[Worker] Tag filtering requested for tag: ${tag}, returning empty result`)
+          const emptyResponse = {
+            items: [],
+            popularTags: [],
+            metadata: {
+              version: 1,
+              updatedAt: new Date().toISOString(),
+              genre,
+              period,
+              tag
+            }
+          }
+          return new Response(JSON.stringify(emptyResponse), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
+              'X-Data-Source': 'r2-tag-fallback',
+              ...corsHeaders,
+              ...securityHeaders
+            }
+          })
+        }
         
         // キャッシュキー
         const cacheKey = new Request(`https://r2-cache.nico-rank.com/ranking/${genre}/${period}`, request)

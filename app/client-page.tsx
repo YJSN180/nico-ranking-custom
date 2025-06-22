@@ -333,23 +333,6 @@ export default function ClientPage({
         // より詳細なエラーメッセージ
         if (response.status === 429) {
           throw new Error('リクエストが多すぎます。少し待ってから再度お試しください。')
-        } else if (response.status === 404 && newConfig.tag) {
-          // タグランキングが見つからない場合
-          console.warn(`[Client] Tag ranking not found for tag: ${newConfig.tag}`)
-          // 404の場合もレスポンスを処理してみる（空の配列が返ってくる可能性）
-          try {
-            const data = await response.json()
-            if (data.items && Array.isArray(data.items)) {
-              // 空の結果を表示
-              setRankingData(data.items)
-              setLoading(false)
-              setError('このタグのランキングデータは現在利用できません。')
-              return
-            }
-          } catch (e) {
-            // JSONパースエラーの場合は通常のエラー処理へ
-          }
-          throw new Error('このタグのランキングは人気タグに含まれていないため表示できません。')
         } else if (response.status >= 500) {
           // 500エラーでも続行を試みる
           console.error(`[Client] Server error ${response.status}, attempting to parse response`)

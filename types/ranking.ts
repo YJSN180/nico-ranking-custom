@@ -17,7 +17,18 @@ export interface RankingItem {
   originalRank?: number
 }
 
-export type RankingData = RankingItem[]
+// R2に保存されるランキングデータの構造
+export interface RankingData {
+  items: RankingItem[]
+  popularTags: string[]
+  tags?: Record<string, number>  // タグとその出現回数
+  metadata: {
+    version: number
+    updatedAt: string
+    genre: string
+    period: string
+  }
+}
 
 // 派生NGリストデータ構造
 export interface DerivativeNGData {

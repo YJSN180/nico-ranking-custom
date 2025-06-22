@@ -66,21 +66,22 @@ async function writeToR2() {
         continue
       }
       
+      const items = genreData.items || []
+      
+      // 注意: 現在のAPIレスポンスには個別動画のタグ情報が含まれていないため、
+      // タグ集計は行わず、人気タグのみを保存します
+      
       // R2に保存するデータ
       const dataToStore: RankingData = {
-        items: genreData.items || [],
+        items: items,
         popularTags: genreData.popularTags || [],
+        tags: {}, // 現時点では個別動画のタグ情報は取得できないため空
         metadata: {
           version: 1,
           updatedAt: aggregatedData.metadata?.updatedAt || new Date().toISOString(),
           genre,
           period
         }
-      }
-      
-      // タグデータがある場合は追加
-      if (genreData.tags) {
-        dataToStore.tags = genreData.tags
       }
       
       const key = `rankings/${genre}/${period}.json`
