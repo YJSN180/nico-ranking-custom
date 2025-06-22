@@ -81,16 +81,12 @@ async function writeToR2() {
       const key = `rankings/${genre}/${period}.json`
       const body = JSON.stringify(dataToStore)
       
-      // 1MB以上の場合のみ圧縮（CDNの自動圧縮を活用）
-      const shouldCompress = body.length > 1024 * 1024
-      
       const putCommand = new PutObjectCommand({
         Bucket: BUCKET_NAME,
         Key: key,
         Body: body,
         ContentType: 'application/json',
         CacheControl: 'public, max-age=1800', // 30分キャッシュ
-        // 圧縮は現時点では使用しない（CDNに任せる）
       })
       
       // 並列アップロード

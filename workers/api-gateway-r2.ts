@@ -3,7 +3,6 @@
  * R2から直接ランキングデータを配信
  */
 
-import { gzipSync, gunzipSync } from 'zlib'
 import type { RankingData } from '../types/ranking'
 
 interface Env {
@@ -108,10 +107,13 @@ export default {
 // Vercelへのプロキシ関数
 async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
-  const targetHost = env.VERCEL_DEPLOYMENT_URL || 'nico-ranking-custom-yjsns-projects.vercel.app'
+  const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
+  
+  // URLからホスト名を抽出
+  const targetHost = new URL(targetUrl).hostname
   
   // プロキシ用のURL構築
-  const proxyUrl = new URL(url.pathname + url.search, `https://${targetHost}`)
+  const proxyUrl = new URL(url.pathname + url.search, targetUrl)
   
   // リクエストヘッダーの準備
   const headers = new Headers(request.headers)

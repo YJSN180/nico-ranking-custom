@@ -1,11 +1,16 @@
 #!/bin/bash
+set -euo pipefail
 # R2バケットのセットアップスクリプト
 
 echo "🚀 R2バケットのセットアップを開始します..."
 
 # 1. R2バケットの作成
 echo "📦 R2バケットを作成中..."
-wrangler r2 bucket create nico-ranking
+if wrangler r2 bucket list | grep -qw "nico-ranking"; then
+  echo "✓ バケットは既に存在します"
+else
+  wrangler r2 bucket create nico-ranking
+fi
 
 # 2. CORS設定（パブリックアクセス用）
 echo "🔧 CORS設定を適用中..."

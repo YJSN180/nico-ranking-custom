@@ -38,7 +38,7 @@ tsx scripts/performance-test.ts https://nico-rank.com
 # Cloudflareダッシュボードで実行:
 # 1. R2へ移動
 # 2. "Create bucket"をクリック
-# 3. 名前: "nico-ranking-data"
+# 3. 名前: "nico-ranking"
 # 4. リージョン: APAC（アジア太平洋）を選択
 ```
 
@@ -57,19 +57,19 @@ tsx scripts/performance-test.ts https://nico-rank.com
 
 ```bash
 # .env.localに追加
-CLOUDFLARE_R2_ACCESS_KEY_ID=your_access_key_id
-CLOUDFLARE_R2_SECRET_ACCESS_KEY=your_secret_access_key
+R2_ACCESS_KEY_ID=your_access_key_id
+R2_SECRET_ACCESS_KEY=your_secret_access_key
 
 # GitHub Secretsにも追加
-gh secret set CLOUDFLARE_R2_ACCESS_KEY_ID
-gh secret set CLOUDFLARE_R2_SECRET_ACCESS_KEY
+gh secret set R2_ACCESS_KEY_ID
+gh secret set R2_SECRET_ACCESS_KEY
 ```
 
 ### 2.4 既存データの移行
 
 ```bash
 # Phase 2移行スクリプトを実行
-source .env.local && tsx scripts/migrate-to-r2.ts 2
+source .env.local && tsx scripts/write-to-r2.ts
 ```
 
 ### 2.5 GitHub Actionsの更新
@@ -103,7 +103,7 @@ curl -I https://nico-rank.com/api/ranking?genre=all | grep X-Data-Source
 
 ```bash
 # Phase 3移行スクリプトを実行
-source .env.local && tsx scripts/migrate-to-r2.ts 3
+source .env.local && tsx scripts/write-to-r2.ts
 ```
 
 ### 3.2 Phase 3 Workerのデプロイ

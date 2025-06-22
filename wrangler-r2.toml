@@ -9,15 +9,15 @@ bucket_name = "nico-ranking"
 
 # 環境変数（実際の値はwrangler secretで設定）
 [vars]
-VERCEL_DEPLOYMENT_URL = "nico-ranking-custom-yjsns-projects.vercel.app"
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 
 # 開発環境用の設定
 [env.development]
-vars = { VERCEL_DEPLOYMENT_URL = "localhost:3000" }
+vars = { VERCEL_DEPLOYMENT_URL = "http://localhost:3000" }
 
 # 本番環境用の設定
 [env.production]
-vars = { VERCEL_DEPLOYMENT_URL = "nico-ranking-custom-yjsns-projects.vercel.app" }
+vars = { VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app" }
 
 # ルート設定
 [[routes]]

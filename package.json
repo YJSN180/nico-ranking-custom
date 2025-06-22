@@ -17,7 +17,7 @@
     "aggregate-ranking": "tsx scripts/aggregate-ranking-results-direct.ts",
     "test-kv-data": "tsx scripts/test-kv-data.ts",
     "update-ranking:group": "tsx scripts/update-ranking-parallel-v2.ts --group",
-    "check:all": "npm run typecheck && npm run lint && npm test -- --run && npm run build",
+    "check:all": "npm run typecheck && npm run lint && npm test -- --run && npm run build && npm run build:worker",
     "test": "vitest",
     "test:ci": "vitest --config vitest.config.ci.ts --run",
     "test:coverage": "vitest --coverage",
