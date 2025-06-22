@@ -1,0 +1,178 @@
+/* セレクターのレスポンシブスタイル */
+
+/* 共通スタイル */
+.selectorContainer {
+  padding: 16px;
+  background: var(--surface-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 24px;
+}
+
+.selectorTitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* ボタンコンテナ - デスクトップ */
+.buttonContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ボタンコンテナ - モバイル */
+@media (max-width: 640px) {
+  .buttonContainer {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 2px;
+    position: relative;
+  }
+
+  .buttonContainer::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* スクロールインジケーター（グラデーション） */
+  .scrollContainer {
+    position: relative;
+  }
+
+  .scrollContainer::before,
+  .scrollContainer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 20px;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .scrollContainer::before {
+    left: 0;
+    background: linear-gradient(to right, var(--surface-color), transparent);
+  }
+
+  .scrollContainer::after {
+    right: 0;
+    background: linear-gradient(to left, var(--surface-color), transparent);
+  }
+}
+
+/* ボタン共通スタイル */
+.button {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.button:hover {
+  border-color: var(--primary-hover);
+}
+
+/* 選択されたボタン */
+.buttonSelected {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: var(--button-text-active);
+}
+
+/* ジャンルボタン - モバイル用の丸いスタイル */
+@media (max-width: 640px) {
+  .genreButton {
+    border-radius: 20px;
+  }
+
+  .genreButtonSelected {
+    padding: 10px 20px;
+    font-size: 15px;
+    transform: scale(1.05);
+  }
+}
+
+/* タグボタン */
+.tagButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 20px;
+}
+
+@media (max-width: 640px) {
+  .tagButtonSelected {
+    padding: 8px 16px;
+    font-size: 14px;
+    transform: scale(1.05);
+  }
+}
+
+/* タグセレクターコンテナ */
+.tagSelectorContainer {
+  padding: 16px;
+  background: var(--surface-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 16px;
+}
+
+.tagHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.tagTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.clearButton {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.selectedTag {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 4px 8px;
+  border-radius: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  margin-bottom: 12px;
+  display: inline-block;
+}
