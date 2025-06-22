@@ -58,11 +58,26 @@ export async function GET(request: NextRequest) {
     })
     
     if (!kvResponse.ok) {
-      // Return empty stats if KV is not available
+      // Log and return error details for debugging
+      const errorText = await kvResponse.text()
+      console.error('[Video Stats API] KV fetch failed:', {
+        status: kvResponse.status,
+        statusText: kvResponse.statusText,
+        error: errorText.substring(0, 500)
+      })
+      
+      // Return empty stats with debug info
       return NextResponse.json({
         stats: {},
         timestamp: new Date().toISOString(),
-        count: 0
+        count: 0,
+        debug: {
+          kvStatus: kvResponse.status,
+          kvStatusText: kvResponse.statusText,
+          namespaceIdPreview: CF_NAMESPACE_ID ? 
+            `${CF_NAMESPACE_ID.substring(0, 4)}...${CF_NAMESPACE_ID.substring(CF_NAMESPACE_ID.length - 4)}` : 
+            'undefined'
+        }
       })
     }
     
