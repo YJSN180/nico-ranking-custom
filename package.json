@@ -11,11 +11,13 @@
     "typecheck": "tsc --noEmit",
     "typecheck:ci": "tsc --noEmit -p tsconfig.test.json",
     "deploy:worker": "wrangler deploy",
+    "build:worker": "tsc workers/api-gateway-r2.ts --outDir dist --skipLibCheck --moduleResolution node --target es2022",
+    "deploy:worker:r2": "wrangler deploy -c wrangler-r2.toml",
     "update-ranking": "tsx scripts/update-ranking-parallel-v2.ts",
     "aggregate-ranking": "tsx scripts/aggregate-ranking-results-direct.ts",
     "test-kv-data": "tsx scripts/test-kv-data.ts",
     "update-ranking:group": "tsx scripts/update-ranking-parallel-v2.ts --group",
-    "check:all": "npm run typecheck && npm run lint && npm test -- --run && npm run build",
+    "check:all": "npm run typecheck && npm run lint && npm test -- --run && npm run build && npm run build:worker",
     "test": "vitest",
     "test:ci": "vitest --config vitest.config.ci.ts --run",
     "test:coverage": "vitest --coverage",
@@ -48,6 +50,7 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.832.0",
     "@cloudflare/workers-types": "^4.20250620.0",
     "@playwright/test": "^1.49.1",
     "@stagewise/toolbar-next": "^0.1.2",

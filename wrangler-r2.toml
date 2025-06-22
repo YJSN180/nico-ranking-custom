@@ -1,0 +1,32 @@
+name = "nico-ranking-api-gateway-r2"
+main = "workers/api-gateway-r2.ts"
+compatibility_date = "2024-01-01"
+
+# R2バケットバインディング
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# 環境変数（実際の値はwrangler secretで設定）
+[vars]
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+
+# 開発環境用の設定
+[env.development]
+vars = { VERCEL_DEPLOYMENT_URL = "http://localhost:3000" }
+
+# 本番環境用の設定
+[env.production]
+vars = { VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app" }
+
+# ルート設定
+[[routes]]
+pattern = "nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+# ビルド設定
+[build]
+command = ""
+[build.upload]
+format = "modules"
+main = "workers/api-gateway-r2.ts"
