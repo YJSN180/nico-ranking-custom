@@ -50,34 +50,23 @@ export default {
         const period = url.searchParams.get('period') || '24h'
         const tag = url.searchParams.get('tag')
         
-        // タグが指定されている場合は、タグデータがR2に存在しないため空の結果を返す
+        // R2のキーを構築
+        let r2Key: string
+        let cacheKeySuffix: string
+        
         if (tag) {
-          console.log(`[Worker] Tag filtering requested for tag: ${tag}, returning empty result`)
-          const emptyResponse = {
-            items: [],
-            popularTags: [],
-            metadata: {
-              version: 1,
-              updatedAt: new Date().toISOString(),
-              genre,
-              period,
-              tag
-            }
-          }
-          return new Response(JSON.stringify(emptyResponse), {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache',
-              'X-Data-Source': 'r2-tag-fallback',
-              ...corsHeaders,
-              ...securityHeaders
-            }
-          })
+          // タグ別ランキング
+          const encodedTag = encodeURIComponent(tag)
+          r2Key = `rankings/${genre}/${period}/tags/${encodedTag}.json`
+          cacheKeySuffix = `${genre}/${period}/tags/${encodedTag}`
+        } else {
+          // ジャンル別「すべて」ランキング
+          r2Key = `rankings/${genre}/${period}/all.json`
+          cacheKeySuffix = `${genre}/${period}/all`
         }
         
         // キャッシュキー
-        const cacheKey = new Request(`https://r2-cache.nico-rank.com/ranking/${genre}/${period}`, request)
+        const cacheKey = new Request(`https://r2-cache.nico-rank.com/ranking/${cacheKeySuffix}`, request)
         const cache = (caches as any).default
         
         // キャッシュチェック
@@ -89,13 +78,39 @@ export default {
         }
         
         // R2から読み取り
-        const r2Key = `rankings/${genre}/${period}.json`
         const r2Object = await env.R2_BUCKET.get(r2Key)
         
         if (!r2Object) {
-          // R2にデータがない場合はVercelにフォールバック
-          console.log(`R2 miss for ${r2Key}, falling back to Vercel`)
-          return proxyToVercel(request, env)
+          // R2にデータがない場合
+          if (tag) {
+            // タグ別データが存在しない場合は空の結果を返す
+            console.log(`[Worker] Tag data not found for ${r2Key}, returning empty result`)
+            const emptyResponse = {
+              items: [],
+              popularTags: [],
+              metadata: {
+                version: 1,
+                updatedAt: new Date().toISOString(),
+                genre,
+                period,
+                tag
+              }
+            }
+            return new Response(JSON.stringify(emptyResponse), {
+              status: 200,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+                'X-Data-Source': 'r2-tag-not-found',
+                ...corsHeaders,
+                ...securityHeaders
+              }
+            })
+          } else {
+            // 通常のランキングデータが存在しない場合はVercelにフォールバック
+            console.log(`R2 miss for ${r2Key}, falling back to Vercel`)
+            return proxyToVercel(request, env)
+          }
         }
         
         // R2から取得したデータを返す

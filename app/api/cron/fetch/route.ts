@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           }
           
           // 500件に切り詰め、ランク番号を振り直す
-          const items: RankingData = allItems.slice(0, targetCount).map((item, index) => ({
+          const items: RankingItem[] = allItems.slice(0, targetCount).map((item, index) => ({
             ...item,
             rank: index + 1
           }))

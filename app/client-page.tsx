@@ -18,7 +18,7 @@ import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 
 interface ClientPageProps {
-  initialData: RankingData
+  initialData: { items: RankingItem[], popularTags?: string[] }
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -60,7 +60,7 @@ export default function ClientPage({
     }
   })
   
-  const [rankingData, setRankingData] = useState<RankingData>(initialData)
+  const [rankingData, setRankingData] = useState<RankingItem[]>(initialData.items || initialData as any)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
     // サーバーサイドでは localStorage を使用しない
     if (typeof window === 'undefined') {

@@ -1,8 +1,8 @@
 import Script from 'next/script'
-import type { RankingData } from '@/types/ranking'
+import type { RankingItem } from '@/types/ranking'
 
 interface JsonLdProps {
-  rankingData: RankingData
+  rankingData: RankingItem[]
   genre: string
   period: string
 }

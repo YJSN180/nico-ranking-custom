@@ -46,7 +46,7 @@ async function fetchRankingWithScraping(
   const detailsMap = await fetchVideoDetailsBatch(videoIds)
   
   // データを統合
-  return scrapedItems
+  const items = scrapedItems
     .filter(item => item.id)
     .map(item => {
       const details = detailsMap.get(item.id!) || {}
@@ -66,6 +66,17 @@ async function fetchRankingWithScraping(
         registeredAt: details.registeredAt
       } as RankingItem
     })
+  
+  return {
+    items,
+    popularTags: popularTags || [],
+    metadata: {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      genre,
+      period
+    }
+  }
 }
 
 // 人気タグを一時的に保存

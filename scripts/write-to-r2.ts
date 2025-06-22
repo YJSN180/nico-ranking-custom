@@ -68,11 +68,8 @@ async function writeToR2() {
       
       const items = genreData.items || []
       
-      // 注意: 現在のAPIレスポンスには個別動画のタグ情報が含まれていないため、
-      // タグ集計は行わず、人気タグのみを保存します
-      
-      // R2に保存するデータ
-      const dataToStore: RankingData = {
+      // 「すべて」のランキングデータを保存
+      const allDataToStore: RankingData = {
         items: items,
         popularTags: genreData.popularTags || [],
         tags: {}, // 現時点では個別動画のタグ情報は取得できないため空
@@ -84,29 +81,88 @@ async function writeToR2() {
         }
       }
       
-      const key = `rankings/${genre}/${period}.json`
-      const body = JSON.stringify(dataToStore)
+      // 「すべて」のランキングを保存（新形式）
+      const allKey = `rankings/${genre}/${period}/all.json`
+      const allBody = JSON.stringify(allDataToStore)
       
-      const putCommand = new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-        Body: body,
-        ContentType: 'application/json',
-        CacheControl: 'public, max-age=1800', // 30分キャッシュ
-      })
-      
-      // 並列アップロード
       uploadPromises.push(
-        r2Client.send(putCommand)
+        r2Client.send(new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: allKey,
+          Body: allBody,
+          ContentType: 'application/json',
+          CacheControl: 'public, max-age=1800', // 30分キャッシュ
+        }))
           .then(() => {
             uploadCount++
-            console.log(`✅ Uploaded ${key} (${(body.length / 1024).toFixed(1)}KB)`)
+            console.log(`✅ Uploaded ${allKey} (${(allBody.length / 1024).toFixed(1)}KB)`)
           })
           .catch(error => {
-            console.error(`❌ Failed to upload ${key}:`, error)
+            console.error(`❌ Failed to upload ${allKey}:`, error)
             throw error
           })
       )
+      
+      // 旧形式のキーにも保存（後方互換性のため）
+      const legacyKey = `rankings/${genre}/${period}.json`
+      uploadPromises.push(
+        r2Client.send(new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: legacyKey,
+          Body: allBody,
+          ContentType: 'application/json',
+          CacheControl: 'public, max-age=1800', // 30分キャッシュ
+        }))
+          .then(() => {
+            uploadCount++
+            console.log(`✅ Uploaded ${legacyKey} (legacy format)`)
+          })
+          .catch(error => {
+            console.error(`❌ Failed to upload ${legacyKey}:`, error)
+            // 旧形式の失敗は無視（新形式が成功していればOK）
+          })
+      )
+      
+      // タグ別ランキングデータを個別に保存
+      if (genreData.tags && Object.keys(genreData.tags).length > 0) {
+        for (const [tag, tagItems] of Object.entries(genreData.tags)) {
+          const tagDataToStore: RankingData = {
+            items: tagItems as any[],
+            popularTags: genreData.popularTags || [],
+            tags: {}, // タグ別データには不要
+            metadata: {
+              version: 1,
+              updatedAt: aggregatedData.metadata?.updatedAt || new Date().toISOString(),
+              genre,
+              period,
+              tag
+            }
+          }
+          
+          // タグ名をURLセーフにエンコード
+          const encodedTag = encodeURIComponent(tag)
+          const tagKey = `rankings/${genre}/${period}/tags/${encodedTag}.json`
+          const tagBody = JSON.stringify(tagDataToStore)
+          
+          uploadPromises.push(
+            r2Client.send(new PutObjectCommand({
+              Bucket: BUCKET_NAME,
+              Key: tagKey,
+              Body: tagBody,
+              ContentType: 'application/json',
+              CacheControl: 'public, max-age=1800', // 30分キャッシュ
+            }))
+              .then(() => {
+                uploadCount++
+                console.log(`✅ Uploaded ${tagKey} (${(tagBody.length / 1024).toFixed(1)}KB)`)
+              })
+              .catch(error => {
+                console.error(`❌ Failed to upload ${tagKey}:`, error)
+                throw error
+              })
+          )
+        }
+      }
     }
   }
   

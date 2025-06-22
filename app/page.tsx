@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import type { RankingData } from '@/types/ranking'
+import type { RankingData, RankingItem } from '@/types/ranking'
 import ClientPage from './client-page'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
@@ -77,7 +77,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 }
 
 async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
-  items: RankingData
+  items: RankingItem[]
   popularTags?: string[]
 }> {
   
@@ -214,7 +214,7 @@ export default async function Home({ searchParams }: PageProps) {
         }}>
           <SuspenseWrapper>
             <ClientPage 
-              initialData={rankingData} 
+              initialData={{ items: rankingData, popularTags }} 
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}
