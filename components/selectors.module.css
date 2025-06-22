@@ -132,7 +132,14 @@
   background: var(--surface-color);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
-  margin-bottom: 16px;
+  margin-bottom: 24px; /* デスクトップでより良い視覚的区切り */
+}
+
+/* モバイルではスペースを狭める */
+@media (max-width: 640px) {
+  .tagSelectorContainer {
+    margin-bottom: 16px;
+  }
 }
 
 .tagHeader {

@@ -9,10 +9,11 @@
   font-weight: normal;
   font-style: normal;
   font-display: swap; /* 確実に表示させるためswapを使用 */
-  /* フォントメトリクスの調整でレイアウトシフトを最小化 */
-  size-adjust: 105%;
-  ascent-override: 95%;
-  descent-override: 25%;
+  /* ニコニコ動画サイトを参考にした精密なフォントメトリクス調整 */
+  /* Hiragino Kaku Gothic ProNとの差を最小化 */
+  size-adjust: 85%; /* ニコモジは大きめなので85%に縮小 */
+  ascent-override: 85%; /* 上部の余白を調整 */
+  descent-override: 15%; /* 下部の余白を調整 */
   line-gap-override: 0%;
 }
 
@@ -22,9 +23,10 @@
   font-weight: bold;
   font-style: normal;
   font-display: swap; /* (Re:turn)は英語なので素早く表示 */
-  size-adjust: 102%;
-  ascent-override: 93%;
-  descent-override: 27%;
+  /* Arialとの差を最小化 */
+  size-adjust: 98%; /* Arialとほぼ同じサイズに */
+  ascent-override: 90%; /* 上部余白を調整 */
+  descent-override: 23%; /* 下部余白を調整 */
   line-gap-override: 0%;
 }
 
@@ -189,6 +191,22 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* フォント読み込み最適化 */
+.nico-title {
+  font-family: "Nicomoji Plus v2", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif;
+  /* フォント読み込み中のレイアウトシフトを防ぐ */
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.return-title {
+  font-family: "Comic Sans MS Bold", Arial, sans-serif;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* ユーザー選択 */

@@ -100,11 +100,11 @@ export function HeaderWithSettings() {
                 whiteSpace: 'nowrap'
               }}>
                 <span style={{
-                  fontFamily: '"Nicomoji Plus v2"',
+                  fontFamily: '"Nicomoji Plus v2", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", sans-serif',
                   fontSize: 'inherit'
                 }}>ニコラン</span>
                 <span style={{
-                  fontFamily: '"Comic Sans MS Bold"',
+                  fontFamily: '"Comic Sans MS Bold", Arial, sans-serif',
                   fontSize: '85%',
                   marginLeft: '0.05em'
                 }}>(Re:turn)</span>
