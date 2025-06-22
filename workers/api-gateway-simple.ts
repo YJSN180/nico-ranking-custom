@@ -104,7 +104,10 @@ export default {
         })
       }
       
-      // Intercept /api/ranking for direct KV access
+      // TEMPORARILY DISABLED: KV direct access causing CPU limit errors
+      // The 8.4MB decompression exceeds Worker CPU limits
+      // Reverting to Vercel proxy until we implement streaming decompression
+      /*
       if (url.pathname === '/api/ranking' && env.RANKING_DATA) {
         try {
           // Extract query parameters
@@ -160,6 +163,7 @@ export default {
           console.error('[KV Direct] Failed to read from KV:', error)
         }
       }
+      */
       
       // プレビュー環境または本番環境を選択
       const baseUrl = env.USE_PREVIEW === 'true' && env.PREVIEW_URL 
