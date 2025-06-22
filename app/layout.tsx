@@ -97,6 +97,9 @@ export default async function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0080ff" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        {/* フォントのプリロード - ヘッダーで必須のため最優先で読み込む */}
+        <link rel="preload" href="/fonts/nicomoji-plus-v2.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/comic-sans-ms-bold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

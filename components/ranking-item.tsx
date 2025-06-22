@@ -99,8 +99,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => {
-                    const event = new CustomEvent('saveRankingState')
-                    window.dispatchEvent(event)
+                    // 別タブで開くため、スクロール位置保存は不要
                   }}
                   style={{ display: 'block', cursor: 'pointer' }}
                 >
@@ -135,9 +134,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => {
-                  // スクロール位置を保存する（動画ページから戻った時のため）
-                  const event = new CustomEvent('saveRankingState')
-                  window.dispatchEvent(event)
+                  // 別タブで開くため、スクロール位置保存は不要
                 }}
                 data-testid="video-title"
                 className="ranking-video-link ranking-video-link--mobile"
@@ -258,9 +255,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => {
-                  // スクロール位置を保存する（動画ページから戻った時のため）
-                  const event = new CustomEvent('saveRankingState')
-                  window.dispatchEvent(event)
+                  // 別タブで開くため、スクロール位置保存は不要
                 }}
                 style={{ display: 'block', cursor: 'pointer' }}
               >
@@ -296,9 +291,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => {
-                  // スクロール位置を保存する（動画ページから戻った時のため）
-                  const event = new CustomEvent('saveRankingState')
-                  window.dispatchEvent(event)
+                  // 別タブで開くため、スクロール位置保存は不要
                 }}
                 className="ranking-video-link ranking-video-link--desktop"
               >

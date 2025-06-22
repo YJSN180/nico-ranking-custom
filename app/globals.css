@@ -8,7 +8,12 @@
   src: url('/fonts/nicomoji-plus-v2.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
-  font-display: optional;
+  font-display: swap; /* 確実に表示させるためswapを使用 */
+  /* フォントメトリクスの調整でレイアウトシフトを最小化 */
+  size-adjust: 105%;
+  ascent-override: 95%;
+  descent-override: 25%;
+  line-gap-override: 0%;
 }
 
 @font-face {
@@ -16,7 +21,11 @@
   src: url('/fonts/comic-sans-ms-bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
-  font-display: optional;
+  font-display: swap; /* (Re:turn)は英語なので素早く表示 */
+  size-adjust: 102%;
+  ascent-override: 93%;
+  descent-override: 27%;
+  line-gap-override: 0%;
 }
 
 /* デフォルトとライトテーマ */
