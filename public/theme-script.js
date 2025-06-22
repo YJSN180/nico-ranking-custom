@@ -13,10 +13,6 @@
       if (cookieValue) {
         const prefs = JSON.parse(decodeURIComponent(cookieValue));
         let theme = prefs.theme || 'light';
-        // Handle 'darkblue' to 'dark-blue' conversion
-        if (theme === 'darkblue') {
-          theme = 'dark-blue';
-        }
         document.documentElement.setAttribute('data-theme', theme);
         return;
       }
@@ -27,10 +23,6 @@
     if (saved) {
       const prefs = JSON.parse(saved);
       let theme = prefs.theme || 'light';
-      // Handle 'darkblue' to 'dark-blue' conversion
-      if (theme === 'darkblue') {
-        theme = 'dark-blue';
-      }
       document.documentElement.setAttribute('data-theme', theme);
     }
   } catch (e) {
