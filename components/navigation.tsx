@@ -42,13 +42,13 @@ const NAV_ITEMS: NavItem[] = [
     external: true,
     section: 'external',
     subItems: [
-      { href: 'https://www.nicovideo.jp/ranking', label: 'ランキング（公式）', external: true },
-      { href: 'https://www.nicochart.jp', label: 'ニコニコチャート', external: true },
-      { href: 'https://www.nicolog.jp', label: 'ニコログ', external: true },
-      { href: 'https://810video.com', label: '野獣動画2nd', external: true },
-      { href: 'https://yajuvideo.in', label: 'ヤジュヤジュ動画', external: true }
+      { href: 'https://www.nicovideo.jp/ranking', label: 'ランキング（公式）', external: true }
     ]
   },
+  { href: 'https://www.nicochart.jp', label: 'ニコニコチャート', icon: <ExternalLinkIcon />, external: true, section: 'external' },
+  { href: 'https://www.nicolog.jp', label: 'ニコログ', icon: <ExternalLinkIcon />, external: true, section: 'external' },
+  { href: 'https://810video.com', label: '野獣動画2nd', icon: <ExternalLinkIcon />, external: true, section: 'external' },
+  { href: 'https://yajuvideo.in', label: 'ヤジュヤジュ動画', icon: <ExternalLinkIcon />, external: true, section: 'external' },
   
   // 情報セクション
   { href: '/about', label: 'このサイトについて', icon: <InfoIcon />, section: 'info' },
