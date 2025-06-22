@@ -4,7 +4,8 @@
  * 人気タグの動的変化に対応し、効率的な読み込みを実現
  */
 
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { createHash } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -39,6 +40,57 @@ const PERIODS = ['24h', 'hour']
 interface TagMetadata {
   tags: string[]
   updatedAt: string
+}
+
+// コンテンツのハッシュを計算
+function calculateHash(content: string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+// R2から既存データを取得してハッシュを計算
+async function getExistingContentHash(key: string): Promise<string | null> {
+  try {
+    const response = await r2Client.send(new GetObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+    }))
+    
+    if (response.Body) {
+      const existingContent = await response.Body.transformToString()
+      return calculateHash(existingContent)
+    }
+  } catch (error: any) {
+    // オブジェクトが存在しない場合はnullを返す
+    if (error.Code === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
+      return null
+    }
+    console.error(`Error fetching ${key}:`, error)
+  }
+  return null
+}
+
+// 差分チェックとアップロード
+async function uploadIfChanged(key: string, body: string, contentType: string, cacheControl: string): Promise<boolean> {
+  const newHash = calculateHash(body)
+  const existingHash = await getExistingContentHash(key)
+  
+  // ハッシュが同じ場合はスキップ
+  if (existingHash && existingHash === newHash) {
+    console.log(`⏭️  Skipped ${key} (no changes)`)
+    return false
+  }
+  
+  // アップロード実行
+  await r2Client.send(new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    CacheControl: cacheControl,
+  }))
+  
+  console.log(`✅ Uploaded ${key} (${(body.length / 1024).toFixed(1)}KB)`)
+  return true
 }
 
 async function writeToR2() {
@@ -125,40 +177,13 @@ async function writeToR2() {
       const allBody = JSON.stringify(allDataToStore)
       
       uploadPromises.push(
-        r2Client.send(new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: allKey,
-          Body: allBody,
-          ContentType: 'application/json',
-          CacheControl: 'public, max-age=1800', // 30分キャッシュ
-        }))
-          .then(() => {
-            uploadCount++
-            console.log(`✅ Uploaded ${allKey} (${(allBody.length / 1024).toFixed(1)}KB)`)
+        uploadIfChanged(allKey, allBody, 'application/json', 'public, max-age=1800')
+          .then(uploaded => {
+            if (uploaded) uploadCount++
           })
           .catch(error => {
             console.error(`❌ Failed to upload ${allKey}:`, error)
             throw error
-          })
-      )
-      
-      // 旧形式のキーにも保存（後方互換性のため）
-      const legacyKey = `rankings/${genre}/${period}.json`
-      uploadPromises.push(
-        r2Client.send(new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: legacyKey,
-          Body: allBody,
-          ContentType: 'application/json',
-          CacheControl: 'public, max-age=1800', // 30分キャッシュ
-        }))
-          .then(() => {
-            uploadCount++
-            console.log(`✅ Uploaded ${legacyKey} (legacy format)`)
-          })
-          .catch(error => {
-            console.error(`❌ Failed to upload ${legacyKey}:`, error)
-            // 旧形式の失敗は無視（新形式が成功していればOK）
           })
       )
       
@@ -185,16 +210,9 @@ async function writeToR2() {
           const tagBody = JSON.stringify(tagDataToStore)
           
           uploadPromises.push(
-            r2Client.send(new PutObjectCommand({
-              Bucket: BUCKET_NAME,
-              Key: tagKey,
-              Body: tagBody,
-              ContentType: 'application/json',
-              CacheControl: 'public, max-age=1800', // 30分キャッシュ
-            }))
-              .then(() => {
-                uploadCount++
-                console.log(`✅ Uploaded ${tagKey} (${(tagBody.length / 1024).toFixed(1)}KB)`)
+            uploadIfChanged(tagKey, tagBody, 'application/json', 'public, max-age=1800')
+              .then(uploaded => {
+                if (uploaded) uploadCount++
               })
               .catch(error => {
                 console.error(`❌ Failed to upload ${tagKey}:`, error)
@@ -218,16 +236,9 @@ async function writeToR2() {
   })
   
   uploadPromises.push(
-    r2Client.send(new PutObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: metadataKey,
-      Body: metadataBody,
-      ContentType: 'application/json',
-      CacheControl: 'public, max-age=300', // 5分キャッシュ（頻繁に更新される可能性があるため短め）
-    }))
-      .then(() => {
-        uploadCount++
-        console.log(`✅ Uploaded ${metadataKey} (${(metadataBody.length / 1024).toFixed(1)}KB)`)
+    uploadIfChanged(metadataKey, metadataBody, 'application/json', 'public, max-age=300')
+      .then(uploaded => {
+        if (uploaded) uploadCount++
       })
       .catch(error => {
         console.error(`❌ Failed to upload ${metadataKey}:`, error)
@@ -238,7 +249,14 @@ async function writeToR2() {
   // すべてのアップロードを待つ
   await Promise.all(uploadPromises)
   
-  console.log(`\n✨ Successfully uploaded ${uploadCount} files to R2`)
+  const totalFiles = uploadPromises.length
+  const skippedFiles = totalFiles - uploadCount
+  
+  console.log(`\n✨ Upload summary:`)
+  console.log(`  - Total files processed: ${totalFiles}`)
+  console.log(`  - Files uploaded: ${uploadCount}`)
+  console.log(`  - Files skipped (no changes): ${skippedFiles}`)
+  console.log(`  - Upload reduction: ${((skippedFiles / totalFiles) * 100).toFixed(1)}%`)
   
   // メタデータのサマリーを表示
   console.log('\n📊 Tag metadata summary:')
