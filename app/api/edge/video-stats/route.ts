@@ -88,6 +88,14 @@ export async function GET(request: NextRequest) {
     
     const statsData = await kvResponse.json()
     
+    // Debug: Check data structure
+    console.log('[Video Stats API] KV data structure:', {
+      hasStats: !!statsData.stats,
+      statsCount: statsData.stats ? Object.keys(statsData.stats).length : 0,
+      metadata: statsData.metadata,
+      sampleKeys: statsData.stats ? Object.keys(statsData.stats).slice(0, 5) : []
+    })
+    
     // Filter to only requested video IDs and convert to expected format
     const filteredStats: Record<string, any> = {}
     for (const id of videoIds) {
@@ -105,7 +113,14 @@ export async function GET(request: NextRequest) {
     const response = NextResponse.json({
       stats: filteredStats,
       timestamp: statsData.metadata?.updatedAt || new Date().toISOString(),
-      count: Object.keys(filteredStats).length
+      count: Object.keys(filteredStats).length,
+      // Temporary debug info
+      debug: {
+        rawDataPreview: JSON.stringify(statsData).substring(0, 200),
+        hasData: !!statsData,
+        dataType: typeof statsData,
+        isString: typeof statsData === 'string'
+      }
     })
     
     // エッジキャッシュを活用して読み取り回数を削減
