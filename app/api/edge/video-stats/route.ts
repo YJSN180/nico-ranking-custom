@@ -88,13 +88,13 @@ export async function GET(request: NextRequest) {
     
     const statsData = await kvResponse.json()
     
-    // Debug: Check data structure
-    console.log('[Video Stats API] KV data structure:', {
+    // Debug: Check data structure (remove console.log for production)
+    const kvDataInfo = {
       hasStats: !!statsData.stats,
       statsCount: statsData.stats ? Object.keys(statsData.stats).length : 0,
       metadata: statsData.metadata,
       sampleKeys: statsData.stats ? Object.keys(statsData.stats).slice(0, 5) : []
-    })
+    }
     
     // Filter to only requested video IDs and convert to expected format
     const filteredStats: Record<string, any> = {}
@@ -119,7 +119,8 @@ export async function GET(request: NextRequest) {
         rawDataPreview: JSON.stringify(statsData).substring(0, 200),
         hasData: !!statsData,
         dataType: typeof statsData,
-        isString: typeof statsData === 'string'
+        isString: typeof statsData === 'string',
+        kvDataInfo
       }
     })
     
