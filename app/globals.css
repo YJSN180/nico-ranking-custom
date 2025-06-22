@@ -41,7 +41,7 @@
   --text-muted: #999999;
   --border-color: #e5e5e5;
   --link-color: #0066cc;
-  --link-visited-color: #551a8b;
+  --link-visited-color: #7b3ba2;  /* より明るく視認性の良い紫 */
   --header-bg: linear-gradient(135deg, #00A8E8 0%, #0077BE 100%);
   --header-text: #ffffff;
   
@@ -88,7 +88,7 @@
   --text-muted: #808080;
   --border-color: #333333;
   --link-color: #4db8ff;
-  --link-visited-color: #b19cd9;
+  --link-visited-color: #a78bdb;  /* ダークモードで視認性の良い薄紫 */
   --header-bg: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
   --header-text: #ffffff;
   
@@ -130,6 +130,7 @@
   --text-muted: #8899ac;
   --border-color: #38444d;
   --link-color: #1d9bf0;
+  --link-visited-color: #a88fcf;  /* ダークブルーで映える明るい紫 */
   --header-bg: linear-gradient(135deg, #15202b 0%, #0f171e 100%);
   --header-text: #ffffff;
   

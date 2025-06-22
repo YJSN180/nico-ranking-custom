@@ -212,47 +212,9 @@ export default function ClientPage({
     }
   }, [])
   
-  // スクロール位置の保存（動画ページ遷移時）
-  const saveScrollPosition = useCallback(() => {
-    const storageKey = `ranking-scroll-${config.genre}-${config.period}-${config.tag || 'none'}`
-    const scrollPosition = window.pageYOffset || document.documentElement.scrollTop
-    sessionStorage.setItem(storageKey, scrollPosition.toString())
-  }, [config])
-  
-  // リンククリックイベントのハンドリング
-  useEffect(() => {
-    const handleLinkClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      const link = target.closest('a')
-      
-      // ニコニコ動画へのリンクの場合のみスクロール位置を保存
-      if (link && (link.href.includes('nicovideo.jp') || link.href.includes('niconico.jp'))) {
-        saveScrollPosition()
-      }
-    }
-    
-    document.addEventListener('click', handleLinkClick)
-    return () => document.removeEventListener('click', handleLinkClick)
-  }, [saveScrollPosition])
-  
-  // スクロール位置の復元
-  useEffect(() => {
-    const isFromNiconico = document.referrer && 
-      (document.referrer.includes('nicovideo.jp') || document.referrer.includes('niconico.jp'))
-    
-    if (isFromNiconico) {
-      const storageKey = `ranking-scroll-${initialGenre}-${initialPeriod}-${initialTag || 'none'}`
-      const savedScrollPosition = sessionStorage.getItem(storageKey)
-      
-      if (savedScrollPosition) {
-        const scrollPosition = parseInt(savedScrollPosition, 10)
-        requestAnimationFrame(() => {
-          window.scrollTo(0, scrollPosition)
-        })
-        sessionStorage.removeItem(storageKey)
-      }
-    }
-  }, [initialGenre, initialPeriod, initialTag])
+  // スクロール位置の保存・復元ロジックは削除
+  // 理由: 動画リンクは target="_blank" で別タブで開くため、
+  // 元のタブのスクロール位置は自動的に保持される
   
   // 設定変更時の処理
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
