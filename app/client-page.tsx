@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemComponent from '@/components/ranking-item'
+import { VirtualRankingList } from '@/components/virtual-ranking-list'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useMobileDetect } from '@/hooks/use-mobile-detect'
@@ -662,16 +663,11 @@ export default function ClientPage({
             {finalDisplayItems.length}件表示
           </div>
           
-          {/* ランキングリスト */}
-          <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {finalDisplayItems.map((item) => (
-              <RankingItemComponent 
-                key={item.id} 
-                item={item} 
-                isMobile={isMobile} 
-              />
-            ))}
-          </ul>
+          {/* ランキングリスト - 仮想スクロール */}
+          <VirtualRankingList 
+            items={finalDisplayItems} 
+            isMobile={isMobile} 
+          />
         </>
       )}
     </>

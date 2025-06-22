@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
               hasMore: false, // タグ別ランキングは常にfalse
               totalCached: cfItems.length
             })
-            response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
+            response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Total-Cached', cfItems.length.toString())
             response.headers.set('X-API-Version', '2') // バージョン確認用
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
             hasMore: false, // ページネーションなし
             totalCached: cfData.items.length
           })
-          response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
+          response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
           response.headers.set('X-Cache-Status', 'CF-HIT')
           response.headers.set('X-Max-Items', String(maxItems))
           response.headers.set('X-API-Version', '2') // バージョン確認用
