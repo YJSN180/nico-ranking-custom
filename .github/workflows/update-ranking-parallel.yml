@@ -2,9 +2,10 @@ name: Update Nico Ranking Data (Parallel)
 
 on:
   schedule:
-    # Run at 0 and 30 minutes past every hour (JST: 日本時間の毎時0分と30分)
+    # Run every hour (JST: 日本時間の毎時0分)
     # GitHub Actions uses UTC, so JST-9 hours
-    - cron: '0,30 * * * *'
+    # Reduced from 30 minutes to 1 hour to stay within KV write limits
+    - cron: '0 * * * *'
   workflow_dispatch: # Allow manual trigger
 
 # 同時実行を防ぐ
@@ -146,6 +147,16 @@ jobs:
         echo "Aggregating results and writing to KV..."
         echo "Expected 6 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
         npx tsx scripts/aggregate-ranking-results-direct.ts
+    
+    - name: Write to R2
+      if: success()
+      env:
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      run: |
+        echo "📤 Uploading to R2..."
+        npx tsx scripts/write-to-r2.ts
     
     - name: Report completion
       run: |
