@@ -30,7 +30,7 @@ export function HeaderWithSettings() {
         marginBottom: '20px',
         position: 'relative'
       }}>
-        <Navigation isMobile={isMobile} />
+        <Navigation />
         
         <div style={{ 
           maxWidth: '1200px', 
