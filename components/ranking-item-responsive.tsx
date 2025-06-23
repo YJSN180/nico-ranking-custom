@@ -34,7 +34,21 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         overflow: 'hidden',
         boxShadow: 'var(--shadow-md)',
         border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
-        marginBottom: '8px'
+        marginBottom: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+        position: 'relative'
+      }}
+      onClick={(e) => {
+        // 投稿者リンクなどの子要素のクリックは除外
+        if ((e.target as HTMLElement).closest('a')) return;
+        window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = 'var(--surface-color)';
       }}
     >
       <div className="ranking-item-responsive__content">
@@ -121,36 +135,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
           
           {/* 投稿者情報 */}
           <div className="ranking-item-responsive__author">
-            {item.authorIcon && item.authorId && (
-              <a
-                href={item.authorId.startsWith('channel/') 
-                  ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
-                  : item.authorId.startsWith('community/') 
-                  ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
-                  : `https://www.nicovideo.jp/user/${item.authorId}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  textDecoration: 'none'
-                }}
-              >
-                <OptimizedImage
-                  src={item.authorIcon}
-                  alt={item.authorName || ''}
-                  width={20}
-                  height={20}
-                  style={{ 
-                    borderRadius: '50%',
-                    border: '1px solid var(--border-color)',
-                    flexShrink: 0
-                  }}
-                  loading="lazy"
-                />
-              </a>
-            )}
             {(item.authorName || item.authorId) && item.authorId && (
               <a
                 href={item.authorId.startsWith('channel/') 
@@ -161,13 +145,42 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                 }
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ranking-item-responsive__author-name"
+                onClick={(e) => e.stopPropagation()}
                 style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  textDecoration: 'none',
                   color: 'inherit',
-                  textDecoration: 'none'
+                  padding: '3px 6px',
+                  margin: '-3px -6px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
                 }}
               >
-                {item.authorName || item.authorId}
+                {item.authorIcon && (
+                  <OptimizedImage
+                    src={item.authorIcon}
+                    alt={item.authorName || ''}
+                    width={20}
+                    height={20}
+                    style={{ 
+                      borderRadius: '50%',
+                      border: '1px solid var(--border-color)',
+                      flexShrink: 0
+                    }}
+                    loading="lazy"
+                  />
+                )}
+                <span className="ranking-item-responsive__author-name">
+                  {item.authorName || item.authorId}
+                </span>
               </a>
             )}
             <span className="ranking-item-responsive__separator">·</span>

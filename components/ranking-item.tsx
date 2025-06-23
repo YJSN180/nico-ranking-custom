@@ -75,8 +75,22 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           overflow: 'hidden',
           boxShadow: 'var(--shadow-sm)',
           border: '1px solid var(--border-color)',
-          cursor: 'default'
-        }}>
+          cursor: 'pointer',
+          transition: 'background-color 0.2s',
+          position: 'relative'
+        }}
+        onClick={(e) => {
+          // 投稿者リンクなどの子要素のクリックは除外
+          if ((e.target as HTMLElement).closest('a')) return;
+          window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+        }}
+      >
         <div style={{ padding: '3px 5px' }}>
           {/* メインコンテンツ */}
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -163,31 +177,62 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   fontSize: isVeryNarrow ? '11px' : '13px',
                   color: 'var(--text-secondary)'
                 }}>
-                {/* 投稿者アイコン */}
-                {item.authorIcon && (
-                  <OptimizedImage
-                    src={item.authorIcon}
-                    alt={item.authorName || ''}
-                    width={16}
-                    height={16}
-                    style={{ 
-                      borderRadius: '50%',
-                      border: '1px solid var(--border-color)',
-                      flexShrink: 0
-                    }}
-                    loading="lazy"
-                  />
-                )}
-                {/* 投稿者名 */}
+                {/* 投稿者アイコンと名前（リンク化） */}
                 {(item.authorName || item.authorId) && (
-                  <span style={{ 
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    maxWidth: isVeryNarrow ? '80px' : '100px'
-                  }}>
-                    {item.authorName || item.authorId}
-                  </span>
+                  <a
+                    href={item.authorId?.startsWith('channel/') 
+                      ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
+                      : item.authorId?.startsWith('community/') 
+                      ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
+                      : `https://www.nicovideo.jp/user/${item.authorId}`
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      color: 'var(--text-secondary)',
+                      textDecoration: 'none',
+                      padding: '2px 4px',
+                      margin: '-2px -4px',
+                      borderRadius: '4px',
+                      transition: 'background-color 0.2s',
+                      overflow: 'hidden'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }}
+                  >
+                    {/* 投稿者アイコン */}
+                    {item.authorIcon && (
+                      <OptimizedImage
+                        src={item.authorIcon}
+                        alt={item.authorName || ''}
+                        width={16}
+                        height={16}
+                        style={{ 
+                          borderRadius: '50%',
+                          border: '1px solid var(--border-color)',
+                          flexShrink: 0
+                        }}
+                        loading="lazy"
+                      />
+                    )}
+                    {/* 投稿者名 */}
+                    <span style={{ 
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      maxWidth: isVeryNarrow ? '80px' : '100px'
+                    }}>
+                      {item.authorName || item.authorId}
+                    </span>
+                  </a>
                 )}
                 <span>·</span>
                 {/* 投稿日時 */}
@@ -237,8 +282,22 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       overflow: 'hidden',
       boxShadow: 'var(--shadow-md)',
       border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
-      cursor: 'default'
-    }}>
+      cursor: 'pointer',
+      transition: 'background-color 0.2s',
+      position: 'relative'
+    }}
+    onClick={(e) => {
+      // 投稿者リンクなどの子要素のクリックは除外
+      if ((e.target as HTMLElement).closest('a')) return;
+      window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+    }}
+    >
       <div style={{ padding: '6px' }}>
         {/* メインコンテンツ行 */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
@@ -317,18 +376,6 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   gap: '8px',
                   marginBottom: '8px'
                 }}>
-                  {item.authorIcon && (
-                    <OptimizedImage
-                      src={item.authorIcon}
-                      alt={item.authorName || ''}
-                      width={24}
-                      height={24}
-                      style={{ 
-                        borderRadius: '50%',
-                        border: '1px solid var(--border-color)'
-                      }}
-                    />
-                  )}
                   <a
                     href={item.authorId?.startsWith('channel/') 
                       ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
@@ -338,14 +385,40 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                     }
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
                     style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
                       color: 'var(--text-secondary)',
                       textDecoration: 'none',
                       fontSize: '14px',
-                      fontWeight: '500'
+                      fontWeight: '500',
+                      padding: '4px 8px',
+                      margin: '-4px -8px',
+                      borderRadius: '6px',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent'
                     }}
                   >
-                    {item.authorName || item.authorId}
+                    {item.authorIcon && (
+                      <OptimizedImage
+                        src={item.authorIcon}
+                        alt={item.authorName || ''}
+                        width={24}
+                        height={24}
+                        style={{ 
+                          borderRadius: '50%',
+                          border: '1px solid var(--border-color)'
+                        }}
+                      />
+                    )}
+                    <span>{item.authorName || item.authorId}</span>
                   </a>
                   {dateDisplay && (
                     <span style={{ 
