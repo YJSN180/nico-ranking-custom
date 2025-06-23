@@ -1,0 +1,74 @@
+name: Update Nico Ranking Data (TEST)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to test from'
+        required: true
+        default: 'develop'
+      test_mode:
+        description: 'Test mode (dry-run or real)'
+        required: true
+        default: 'dry-run'
+        type: choice
+        options:
+          - dry-run
+          - real
+      target_genres:
+        description: 'Genres to test (comma-separated, or "all")'
+        required: false
+        default: 'all,game'
+
+jobs:
+  test-ranking-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run test update
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # テスト用KVを使う場合はこちらを有効化
+          # CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.TEST_KV_NAMESPACE_ID }}
+          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          TEST_MODE: ${{ github.event.inputs.test_mode }}
+          TARGET_GENRES: ${{ github.event.inputs.target_genres }}
+        run: |
+          echo "Running in $TEST_MODE mode"
+          echo "Testing genres: $TARGET_GENRES"
+          echo "Branch: ${{ github.event.inputs.branch }}"
+          
+          # テストモード用のスクリプトを実行
+          if [ "$TEST_MODE" = "dry-run" ]; then
+            echo "[DRY RUN] Would update rankings for: $TARGET_GENRES"
+            # 実際にはKVに書き込まないテスト実行
+            node scripts/test-ranking-update.ts
+          else
+            echo "[REAL MODE] Updating rankings..."
+            node scripts/update-ranking-parallel-v2.ts
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: |
+            test-results/
+            logs/

@@ -1,6 +1,7 @@
 'use client'
 
 import { HeaderWithSettings } from '@/components/header-with-settings'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 
 interface EmptyRankingPageProps {
@@ -8,14 +9,34 @@ interface EmptyRankingPageProps {
 }
 
 export default function EmptyRankingPage({ tag }: EmptyRankingPageProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  
   useEffect(() => {
-    // クライアントサイドで定期的に再試行
+    // 現在のパラメータを取得
+    const genre = searchParams.get('genre') || 'all'
+    const period = searchParams.get('period') || '24h'
+    
+    // 適切なURLへリダイレクト
     const timer = setTimeout(() => {
-      window.location.reload()
-    }, 5000) // 5秒後に自動リロード
+      if (tag) {
+        // タグが原因の場合はタグなしのURLへ
+        const params = new URLSearchParams()
+        if (genre !== 'all') params.set('genre', genre)
+        if (period !== '24h') params.set('period', period)
+        const redirectUrl = params.toString() ? `/?${params.toString()}` : '/'
+        router.push(redirectUrl)
+      } else if (genre !== 'all') {
+        // ジャンルが原因の場合は総合ランキングへ
+        router.push('/')
+      } else {
+        // 総合ランキングでもデータがない場合のみリロード
+        window.location.reload()
+      }
+    }, 5000) // 5秒後にリダイレクト
 
     return () => clearTimeout(timer)
-  }, [])
+  }, [router, searchParams, tag])
 
   return (
     <main style={{ 
@@ -45,7 +66,7 @@ export default function EmptyRankingPage({ tag }: EmptyRankingPageProps) {
             {tag ? '別のタグをお試しください。' : 'データを取得中です。しばらくお待ちください。'}
           </p>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            5秒後に自動的に再読み込みします...
+            5秒後に{tag ? 'タグなしのランキング' : searchParams.get('genre') !== 'all' ? '総合ランキング' : '再読み込み'}に移動します...
           </p>
         </div>
       </div>

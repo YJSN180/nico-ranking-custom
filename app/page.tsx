@@ -176,9 +176,24 @@ export default async function Home({ searchParams }: PageProps) {
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
     if (rankingData.length === 0) {
-      // エラーページの場合は動的にレンダリング
-      const EmptyRankingPage = (await import('@/components/empty-ranking-page')).default
+      // タグ検索でデータがない場合は、タグなしでリダイレクト
+      if (tag) {
+        const { redirect } = await import('next/navigation')
+        const params = new URLSearchParams()
+        if (genre !== 'all') params.set('genre', genre)
+        if (period !== '24h') params.set('period', period)
+        const redirectUrl = params.toString() ? `/?${params.toString()}` : '/'
+        redirect(redirectUrl)
+      }
       
+      // ジャンル自体のデータがない場合は総合ランキングへリダイレクト
+      if (genre !== 'all') {
+        const { redirect } = await import('next/navigation')
+        redirect('/')
+      }
+      
+      // 総合ランキングでもデータがない場合のみエラーページを表示
+      const EmptyRankingPage = (await import('@/components/empty-ranking-page')).default
       return <EmptyRankingPage tag={tag} />
     }
 

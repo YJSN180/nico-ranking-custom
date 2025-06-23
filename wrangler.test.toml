@@ -1,0 +1,29 @@
+name = "nico-ranking-test"
+main = "workers/src/index.ts"
+compatibility_date = "2024-01-01"
+
+[env.staging]
+name = "nico-ranking-staging"
+kv_namespaces = [
+  { binding = "RANKING_DATA", id = "YOUR_TEST_KV_NAMESPACE_ID" },
+  { binding = "NG_LIST", id = "YOUR_TEST_NG_LIST_ID" }
+]
+
+[env.staging.vars]
+ENVIRONMENT = "staging"
+DEBUG = "true"
+
+[[env.staging.triggers.crons]]
+# テスト用は手動実行のみ、または1日1回など
+cron = "0 0 * * *"
+
+[env.development]
+name = "nico-ranking-dev"
+kv_namespaces = [
+  { binding = "RANKING_DATA", id = "YOUR_DEV_KV_NAMESPACE_ID" },
+  { binding = "NG_LIST", id = "YOUR_DEV_NG_LIST_ID" }
+]
+
+[env.development.vars]
+ENVIRONMENT = "development"
+DEBUG = "true"
