@@ -95,19 +95,25 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     
     if (tag) {
       const { getTagRanking } = await import('@/lib/cloudflare-kv')
-      kvData = await getTagRanking(genre, period as RankingPeriod, tag)
+      const tagItems = await getTagRanking(genre, period as RankingPeriod, tag)
+      if (tagItems && Array.isArray(tagItems)) {
+        kvData = { items: tagItems, popularTags: [] }
+      }
     } else {
       const { getGenreRanking } = await import('@/lib/cloudflare-kv')
-      kvData = await getGenreRanking(genre as RankingGenre, period as RankingPeriod)
+      const genreData = await getGenreRanking(genre as RankingGenre, period as RankingPeriod)
+      if (genreData && genreData.items) {
+        kvData = { items: genreData.items, popularTags: genreData.popularTags || [] }
+      }
     }
     
     if (kvData && kvData.items && kvData.items.length > 0) {
-      console.log(`[SSR] KV returned ${kvData.items.length} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
+      // console.log(`[SSR] KV returned ${kvData.items.length} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
       // NGフィルタリングを適用
       const { filteredData } = await filterRankingDataServer(kvData)
       return filteredData
     } else {
-      console.log(`[SSR] No data in KV for ${genre}/${period}${tag ? `/${tag}` : ''}`)
+      // console.log(`[SSR] No data in KV for ${genre}/${period}${tag ? `/${tag}` : ''}`)
     }
   } catch (kvError) {
     console.error('[SSR] KV error:', kvError)
@@ -133,23 +139,31 @@ export default async function Home({ searchParams }: PageProps) {
   let tag = params.tag as string | undefined
   let page = parseInt((params.page as string) || '1', 10)
   
-  // 一時的にCookieの使用を無効化（デバッグ用）
-  // TODO: Cookieの内容を検証後、再有効化する
-  /*
+  // Cookieから設定を読み取る（無効なジャンルを除外）
   if (!genre || !period) {
     const preferenceCookie = cookieStore.get(COOKIE_NAME)
     if (preferenceCookie?.value) {
       try {
         const preferences = JSON.parse(preferenceCookie.value)
-        if (!genre) genre = preferences.lastGenre || 'all'
-        if (!period) period = preferences.lastPeriod || '24h'
-        if (!tag) tag = preferences.lastTag
+        
+        // ジャンルの検証（有効なジャンルのみ許可）
+        const validGenres = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other']
+        const validPeriods = ['24h', 'hour']
+        
+        if (!genre && preferences.lastGenre && validGenres.includes(preferences.lastGenre)) {
+          genre = preferences.lastGenre
+        }
+        if (!period && preferences.lastPeriod && validPeriods.includes(preferences.lastPeriod)) {
+          period = preferences.lastPeriod
+        }
+        if (!tag && preferences.lastTag) {
+          tag = preferences.lastTag
+        }
       } catch {
         // パースエラーは無視
       }
     }
   }
-  */
   
   // デフォルト値を設定
   genre = genre || 'all'
@@ -157,7 +171,7 @@ export default async function Home({ searchParams }: PageProps) {
   page = Math.max(1, page || 1) // ページは最低1
   
   try {
-    console.log(`[SSR] Attempting to fetch: genre=${genre}, period=${period}, tag=${tag}`)
+    // console.log(`[SSR] Attempting to fetch: genre=${genre}, period=${period}, tag=${tag}`)
     
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
