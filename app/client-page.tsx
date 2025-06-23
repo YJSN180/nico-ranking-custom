@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
@@ -46,6 +46,7 @@ export default function ClientPage({
   popularTags = []
 }: ClientPageProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
