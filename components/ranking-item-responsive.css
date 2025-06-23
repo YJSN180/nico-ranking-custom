@@ -3,8 +3,8 @@
 
 .ranking-item-responsive__content {
   display: grid;
-  gap: 12px;
-  padding: 12px;
+  gap: 3px;
+  padding: 3px;
   
   /* デスクトップレイアウト: rank + thumbnail + details を横並び */
   grid-template-columns: auto auto 1fr;
@@ -101,8 +101,8 @@
     grid-template-columns: auto 1fr;
     grid-template-areas: 
       "thumbnail details";
-    gap: 8px;
-    padding: 3px 5px;
+    gap: 2px;
+    padding: 1px 2px;
     min-height: 70px;
   }
   
@@ -169,8 +169,8 @@
 /* Container Query: 400px以下で超モバイルレイアウト */
 @container (max-width: 400px) {
   .ranking-item-responsive__content {
-    padding: 2px 4px;
-    gap: 6px;
+    padding: 1px 1px;
+    gap: 2px;
   }
   
   .ranking-item-responsive__rank {
@@ -230,8 +230,8 @@
     .ranking-item-responsive__content {
       grid-template-columns: auto 1fr;
       grid-template-areas: "thumbnail details";
-      gap: 8px;
-      padding: 3px 5px;
+      gap: 2px;
+      padding: 1px 2px;
     }
     
     .ranking-item-responsive__rank {
