@@ -1,6 +1,6 @@
 'use client'
 
-import { HeaderWithSettings } from '@/components/header-with-settings'
+import { HeaderWrapper } from '@/components/header-wrapper'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 
@@ -44,7 +44,7 @@ export default function EmptyRankingPage({ tag }: EmptyRankingPageProps) {
       minHeight: '100vh',
       background: 'var(--background-color)'
     }}>
-      <HeaderWithSettings />
+      <HeaderWrapper />
       
       <div style={{ 
         maxWidth: '600px', 

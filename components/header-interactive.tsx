@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { SettingsModal } from './settings-modal'
+import { Navigation } from './navigation'
 
 interface HeaderInteractiveProps {
   isMobile: boolean
@@ -22,6 +23,7 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
 
   return (
     <>
+      <Navigation />
       <button
         onClick={() => setIsSettingsOpen(true)}
         style={{

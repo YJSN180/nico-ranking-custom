@@ -1,6 +1,5 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { Navigation } from './navigation'
 
 interface HeaderStaticProps {
   isMobile: boolean
@@ -16,7 +15,6 @@ export function HeaderStatic({ isMobile }: HeaderStaticProps) {
       marginBottom: '20px',
       position: 'relative'
     }}>
-      <Navigation />
       <div style={{ 
         maxWidth: '1200px', 
         margin: '0 auto',
