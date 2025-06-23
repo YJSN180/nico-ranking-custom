@@ -60,7 +60,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   const isNew = isWithin24Hours(item.registeredAt)
   const dateDisplay = isMobile ? formatTimeAgo(item.registeredAt || '') : formatRegisteredDate(item.registeredAt)
 
-  // モバイル用新レイアウト（順位を上に配置）
+  // モバイル用新レイアウト（順位をサムネイル上にオーバーレイ）
   if (isMobile) {
     const timeDisplay = isVeryNarrow ? formatTimeCompact(dateDisplay) : dateDisplay
     
@@ -77,22 +77,11 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           border: '1px solid var(--border-color)',
           cursor: 'default'
         }}>
-        <div style={{ padding: '4px 6px' }}>
+        <div style={{ padding: '3px 5px' }}>
           {/* メインコンテンツ */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {/* 左側：順位 + サムネイル */}
-            <div style={{ flexShrink: 0 }}>
-              {/* 順位 */}
-              <div style={{ 
-                ...getRankStyle(item.rank, true),
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                MozUserSelect: 'none',
-                msUserSelect: 'none'
-              }}>
-                {item.rank}
-              </div>
-              
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {/* 左側：サムネイル（順位オーバーレイ付き） */}
+            <div style={{ flexShrink: 0, position: 'relative' }}>
               {/* サムネイル */}
               {item.thumbURL && (
                 <a
@@ -116,6 +105,27 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                     loading={item.rank <= 3 ? undefined : "lazy"}
                     priority={item.rank <= 3}
                   />
+                  {/* 順位オーバーレイ */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: '2px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: 'white',
+                    backgroundColor: item.rank <= 3 ? rankColors[item.rank] : 'rgba(0, 0, 0, 0.7)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    lineHeight: '1',
+                    zIndex: 1,
+                    textShadow: '1px 1px 2px rgba(0, 0, 0, 0.8)',
+                    userSelect: 'none',
+                    WebkitUserSelect: 'none',
+                    MozUserSelect: 'none',
+                    msUserSelect: 'none'
+                  }}>
+                    {item.rank}
+                  </div>
                 </a>
               )}
             </div>
