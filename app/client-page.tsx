@@ -29,7 +29,7 @@ interface ClientPageProps {
 }
 
 // ページネーション設定
-const ITEMS_PER_PAGE = 50    // ページあたりの表示件数（DOM要素数削減のため）
+const ITEMS_PER_PAGE = 100   // ページあたりの表示件数（DOM要素数削減のため）
 const DISPLAY_LIMITS = {
   TAG: 300,      // タグ別ランキングは全300件取得
   GENRE: 500,    // ジャンル別ランキングは500件取得
