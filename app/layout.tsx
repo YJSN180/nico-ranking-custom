@@ -111,20 +111,6 @@ export default async function RootLayout({
           [data-theme="dark"] body{color:#fff;background-color:#121212}
           [data-theme="darkblue"] body{color:#fff;background-color:#15202b}
           .header-container{background:linear-gradient(135deg,#00A8E8 0%,#0077BE 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
-          /* ヘッダーの初期サイズ設定 - レイアウトシフト防止 */
-          .header-container h1{font-size:48px;gap:12px;color:#ffffff;margin:0;text-align:center;font-weight:700;display:flex;align-items:center;justify-content:center}
-          .header-container h1 > div:first-child{width:106px;height:106px}
-          /* (Re:turn)の初期フォントサイズ */
-          .header-container h1 span:first-child{font-family:"Nicomoji Plus v2","Hiragino Kaku Gothic ProN","Hiragino Sans","Meiryo",sans-serif}
-          .header-container h1 span:last-child{font-family:"Comic Sans MS Bold",Arial,sans-serif;font-size:85%}
-          /* 設定ボタンの初期サイズ */
-          .header-container button{position:absolute;top:50%;transform:translateY(-50%);right:16px;padding:6px 10px;font-size:18px}
-          @media(max-width:640px){
-            .header-container{padding:5px 12px}
-            .header-container h1{font-size:22px;gap:4px}
-            .header-container h1 > div:first-child{width:48px;height:48px}
-            .header-container button{right:12px;padding:4px 8px;font-size:16px}
-          }
           .selectors-container{min-height:200px}
           .ranking-video-link{color:#0066cc;text-decoration:none}
           .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}
