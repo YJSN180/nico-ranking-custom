@@ -229,7 +229,8 @@
   /* デフォルトスタイル（4位以下） */
 }
 
-/* デスクトップでのランク1-3位は大きく表示 */
+/* デスクトップでのランク1-3位も通常サイズで表示 */
+/* コメントアウト: 1-3位を大きく表示する設定
 .ranking-item-responsive__rank[style*="--rank-gold"] {
   min-width: 56px !important;
   height: 56px !important;
@@ -250,15 +251,16 @@
   font-size: 32px !important;
   font-weight: 800 !important;
 }
+*/
 
-/* モバイルでは通常サイズに戻す */
-@container (max-width: 600px) {
+/* モバイルでは通常サイズに戻す - 現在は不要 */
+/* @container (max-width: 600px) {
   .ranking-item-responsive__rank[style*="--rank-gold"],
   .ranking-item-responsive__rank[style*="--rank-silver"],
   .ranking-item-responsive__rank[style*="--rank-bronze"] {
-    /* モバイルでは通常サイズを維持 */
+    モバイルでは通常サイズを維持
   }
-}
+} */
 
 /* フォールバック: Container Queriesをサポートしていないブラウザ用 */
 @supports not (container-type: inline-size) {
