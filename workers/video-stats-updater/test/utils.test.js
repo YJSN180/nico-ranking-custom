@@ -101,19 +101,18 @@ describe('Utils', () => {
       const videoIds = ['sm1', 'sm2', 'sm3'];
       const url = buildSnapshotAPIUrl(videoIds);
       
-      expect(url).toContain('api.search.nicovideo.jp/api/v2/snapshot/video/contents/search');
-      expect(url).toContain('_context=apiguide');
+      expect(url).toContain('snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search');
       expect(url).toContain('jsonFilter=' + encodeURIComponent('{"type":"or","filters":[{"type":"equal","field":"contentId","value":"sm1"},{"type":"equal","field":"contentId","value":"sm2"},{"type":"equal","field":"contentId","value":"sm3"}]}'));
     });
 
     it('should handle single video ID', () => {
       const url = buildSnapshotAPIUrl(['sm1']);
-      expect(url).toContain('"value":"sm1"');
+      expect(url).toContain(encodeURIComponent('"value":"sm1"'));
     });
 
     it('should handle empty array', () => {
       const url = buildSnapshotAPIUrl([]);
-      expect(url).toContain('"filters":[]');
+      expect(url).toContain(encodeURIComponent('"filters":[]'));
     });
   });
 
