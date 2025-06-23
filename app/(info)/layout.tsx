@@ -1,4 +1,4 @@
-import { HeaderWrapper } from '@/components/header-wrapper'
+import { HeaderWithSettings } from '@/components/header-with-settings'
 
 export default function InfoLayout({
   children,
@@ -7,7 +7,7 @@ export default function InfoLayout({
 }) {
   return (
     <>
-      <HeaderWrapper />
+      <HeaderWithSettings />
       <main style={{ 
         backgroundColor: 'var(--background-color)',
         color: 'var(--text-primary)',

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import ClientPage from './client-page'
-import { HeaderWrapper } from '@/components/header-wrapper'
+import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
 import { cookies } from 'next/headers'
@@ -211,7 +211,7 @@ export default async function Home({ searchParams }: PageProps) {
         minHeight: 'calc(100vh - 80px)',
         background: 'var(--background-color)'
       }}>
-        <HeaderWrapper />
+        <HeaderWithSettings />
         
         <div 
           className="main-container-responsive"
@@ -244,7 +244,7 @@ export default async function Home({ searchParams }: PageProps) {
         minHeight: 'calc(100vh - 80px)',
         background: 'var(--background-color)'
       }}>
-        <HeaderWrapper />
+        <HeaderWithSettings />
         
         <div style={{ 
           maxWidth: '600px', 
@@ -283,7 +283,7 @@ export default async function Home({ searchParams }: PageProps) {
                 error: error instanceof Error ? error.message : String(error),
                 genre,
                 tag,
-                CloudflareKV_configured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_API_TOKEN),
+                CloudflareKV_configured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN),
               }, null, 2)}</pre>
             </details>
           </div>
