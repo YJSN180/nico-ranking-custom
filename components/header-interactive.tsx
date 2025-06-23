@@ -28,8 +28,8 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
         onClick={() => setIsSettingsOpen(true)}
         style={{
           position: 'absolute',
-          top: '0',
-          bottom: '0',
+          top: '50%',
+          transform: 'translateY(-50%)',
           right: isMobile ? '12px' : '16px',
           background: 'rgba(255, 255, 255, 0.25)',
           border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -41,17 +41,15 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
           transition: 'all 0.2s',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
-          zIndex: 10,
-          margin: 'auto',
-          height: 'fit-content'
+          zIndex: 10
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-          e.currentTarget.style.transform = 'scale(1.05)'
+          e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
         }}
         aria-label="設定"
         role="button"
