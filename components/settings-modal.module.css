@@ -39,16 +39,20 @@
 .closeButton {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.8rem;
+  line-height: 1;
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 4px 8px;
+  padding: 8px 12px;
   border-radius: 4px;
-  transition: background-color 0.2s;
+  transition: all 0.2s;
+  font-weight: 300;
 }
 
 .closeButton:hover {
   background-color: var(--surface-hover);
+  color: var(--text-primary);
+  transform: scale(1.1);
 }
 
 .tabs {

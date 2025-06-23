@@ -153,6 +153,7 @@ export function Navigation() {
             justifyContent: 'center',
             width: '36px',
             height: '36px',
+            pointerEvents: 'auto'
           }}
           onMouseEnter={(e) => {
             if (!isMobile) {

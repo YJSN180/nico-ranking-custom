@@ -176,7 +176,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="設定">
         <div className={styles.header}>
           <h2>設定</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={styles.closeButton} onClick={onClose} aria-label="閉じる">
+            ✕
+          </button>
         </div>
 
         <div className={styles.tabs}>
@@ -452,7 +454,25 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 適用
               </button>
             )}
-            <button className={styles.closeButton} onClick={handleClose}>
+            <button 
+              onClick={handleClose}
+              style={{
+                padding: '8px 24px',
+                background: 'var(--surface-secondary)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--surface-hover)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--surface-secondary)'
+              }}
+            >
               閉じる
             </button>
           </div>
