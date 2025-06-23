@@ -3,14 +3,14 @@
 
 .ranking-item-responsive__content {
   display: grid;
-  gap: 3px;
-  padding: 3px;
+  gap: 6px;
+  padding: 6px;
   
   /* デスクトップレイアウト: rank + thumbnail + details を横並び */
   grid-template-columns: auto auto 1fr;
   grid-template-areas: "rank thumbnail details";
   align-items: start;
-  min-height: 80px;
+  height: 90px;
 }
 
 /* 順位表示 */
@@ -33,9 +33,10 @@
   grid-area: details;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   min-width: 0; /* text-overflow: ellipsis のため */
-  justify-content: center;
+  justify-content: flex-start;
+  overflow: hidden;
 }
 
 /* タイトル */
@@ -44,9 +45,12 @@
   text-decoration: none;
   font-size: 16px;
   font-weight: 600;
-  line-height: 1.4;
-  display: block;
-  margin-bottom: 6px;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 1px;
   word-break: break-word;
 }
 
@@ -58,10 +62,10 @@
 .ranking-item-responsive__author {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 3px;
+  font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 1px;
 }
 
 .ranking-item-responsive__author-name {
@@ -83,8 +87,8 @@
 /* 統計情報 */
 .ranking-item-responsive__stats {
   display: flex;
-  gap: 12px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 12px;
   color: var(--text-secondary);
   user-select: none;
   flex-wrap: wrap;
@@ -97,98 +101,56 @@
 /* Container Query: 600px以下でモバイルレイアウト */
 @container (max-width: 600px) {
   .ranking-item-responsive__content {
-    /* モバイルレイアウト: thumbnail + details を横並び */
-    grid-template-columns: auto 1fr;
-    grid-template-areas: 
-      "thumbnail details";
-    gap: 2px;
-    padding: 1px 2px;
-    min-height: 70px;
+    /* モバイルレイアウト: rank + thumbnail + details を横並び */
+    grid-template-columns: auto auto 1fr;
+    grid-template-areas: "rank thumbnail details";
+    gap: 4px;
+    padding: 4px 5px;
+    height: 75px;
   }
   
   .ranking-item-responsive__rank {
-    /* 順位をサムネイル上にオーバーレイ */
-    grid-area: thumbnail;
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    min-width: auto;
-    width: auto;
-    height: auto;
-    font-size: 12px;
+    /* 順位をサムネの左上に配置 */
+    grid-area: rank;
+    min-width: 28px;
+    height: 28px;
+    font-size: 14px;
     font-weight: 700;
-    color: white;
-    background: var(--mobile-rank-bg, rgba(0, 0, 0, 0.7)) !important;
-    padding: 2px 6px;
-    border-radius: 4px;
-    line-height: 1;
-    z-index: 1;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: start;
+    margin-top: 0;
   }
   
   .ranking-item-responsive__thumbnail {
     grid-area: thumbnail;
-    width: 120px;
+    width: 100px;
     position: relative;
     margin-top: 0;
   }
   
   .ranking-item-responsive__details {
     grid-area: details;
-    gap: 4px;
-  }
-  
-  .ranking-item-responsive__title {
-    font-size: 15px;
-    margin-bottom: 4px;
-    /* モバイルでは3行まで表示 */
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.3;
-  }
-  
-  .ranking-item-responsive__author {
-    font-size: 13px;
-    gap: 4px;
-    margin-bottom: 4px;
-  }
-  
-  .ranking-item-responsive__author-name {
-    max-width: 120px;
-  }
-  
-  .ranking-item-responsive__stats {
-    font-size: 12px;
-    gap: 8px;
-  }
-}
-
-/* Container Query: 400px以下で超モバイルレイアウト */
-@container (max-width: 400px) {
-  .ranking-item-responsive__content {
-    padding: 1px 1px;
     gap: 2px;
-  }
-  
-  .ranking-item-responsive__rank {
-    font-size: 11px;
-    padding: 1px 4px;
-  }
-  
-  .ranking-item-responsive__thumbnail {
-    width: 100px;
-    margin-top: 0;
+    overflow: hidden;
   }
   
   .ranking-item-responsive__title {
     font-size: 14px;
+    margin-bottom: 1px;
+    /* モバイルでは2行まで表示 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.2;
   }
   
   .ranking-item-responsive__author {
-    font-size: 12px;
+    font-size: 11px;
+    gap: 2px;
+    margin-bottom: 1px;
   }
   
   .ranking-item-responsive__author-name {
@@ -196,8 +158,45 @@
   }
   
   .ranking-item-responsive__stats {
-    font-size: 11px;
+    font-size: 10px;
     gap: 6px;
+  }
+}
+
+/* Container Query: 400px以下で超モバイルレイアウト */
+@container (max-width: 400px) {
+  .ranking-item-responsive__content {
+    padding: 3px 4px;
+    gap: 3px;
+    height: 70px;
+  }
+  
+  .ranking-item-responsive__rank {
+    min-width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+  
+  .ranking-item-responsive__thumbnail {
+    width: 90px;
+    margin-top: 0;
+  }
+  
+  .ranking-item-responsive__title {
+    font-size: 13px;
+  }
+  
+  .ranking-item-responsive__author {
+    font-size: 10px;
+  }
+  
+  .ranking-item-responsive__author-name {
+    max-width: 60px;
+  }
+  
+  .ranking-item-responsive__stats {
+    font-size: 9px;
+    gap: 4px;
   }
   
   /* 超モバイルではマイリスト数を非表示 */
@@ -228,45 +227,41 @@
   /* 従来のMedia Queriesで対応 */
   @media (max-width: 640px) {
     .ranking-item-responsive__content {
-      grid-template-columns: auto 1fr;
-      grid-template-areas: "thumbnail details";
-      gap: 2px;
-      padding: 1px 2px;
+      grid-template-columns: auto auto 1fr;
+      grid-template-areas: "rank thumbnail details";
+      gap: 4px;
+      padding: 4px 5px;
+      height: 75px;
     }
     
     .ranking-item-responsive__rank {
-      grid-area: thumbnail;
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      min-width: auto;
-      width: auto;
-      height: auto;
-      font-size: 12px;
+      grid-area: rank;
+      min-width: 28px;
+      height: 28px;
+      font-size: 14px;
       font-weight: 700;
-      color: white;
-      background: var(--mobile-rank-bg, rgba(0, 0, 0, 0.7)) !important;
-      padding: 2px 6px;
-      border-radius: 4px;
-      line-height: 1;
-      z-index: 1;
-      text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-      margin-bottom: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      align-self: start;
+      margin-top: 0;
     }
     
     .ranking-item-responsive__thumbnail {
       grid-area: thumbnail;
-      width: 120px;
+      width: 100px;
       position: relative;
       margin-top: 0;
     }
     
     .ranking-item-responsive__title {
-      font-size: 15px;
+      font-size: 14px;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      line-height: 1.2;
+      margin-bottom: 1px;
     }
   }
   
