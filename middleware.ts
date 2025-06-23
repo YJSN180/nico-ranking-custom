@@ -175,6 +175,13 @@ export async function middleware(request: NextRequest) {
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=300')
   }
   
+  // メインページのキャッシュ（ISRの代替として）
+  if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
+    // Cloudflare CDNで30分間キャッシュ
+    response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
+    response.headers.set('CDN-Cache-Control', 'public, s-maxage=1800')
+  }
+  
   // セキュリティヘッダーを追加
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'DENY')

@@ -16,33 +16,12 @@ import { notFound } from 'next/navigation'
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 1800 // 30分間キャッシュ（cronジョブと同期）
 
-// 主要なルートをビルド時に生成してTTFBを改善
-export async function generateStaticParams() {
-  // よくアクセスされるジャンル
-  const genres = [
-    'all',           // 総合
-    'other',         // その他
-    'game',          // ゲーム
-    'anime',         // アニメ
-    'vocaloid',      // ボカロ
-    'voicesynthesis',// 音声合成実況・解説・劇場
-    'entertainment', // エンタメ
-    'music'          // 音楽
-  ]
-  const periods = ['24h', 'hour']
-  
-  const params = []
-  for (const genre of genres) {
-    for (const period of periods) {
-      params.push({ genre, period })
-    }
-  }
-  
-  // デフォルトルート（パラメータなし）も含める
-  params.push({})
-  
-  return params
-}
+// 静的生成を無効化（ISRのWrite Units制限のため）
+// Vercel Hobbyプランは128 Write Units/月しかないため、
+// 動的レンダリングに切り替えてキャッシュヘッダーで対応
+// export async function generateStaticParams() {
+//   return []
+// }
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
