@@ -154,6 +154,7 @@ export default async function Home({ searchParams }: PageProps) {
   page = Math.max(1, page || 1) // ページは最低1
   
   try {
+    console.log(`[SSR] Attempting to fetch: genre=${genre}, period=${period}, tag=${tag}`)
     
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
@@ -163,7 +164,7 @@ export default async function Home({ searchParams }: PageProps) {
         const { redirect } = await import('next/navigation')
         const params = new URLSearchParams()
         if (genre !== 'all') params.set('genre', genre)
-        if (period !== '24h') params.set('period', period)
+        if (period && period !== '24h') params.set('period', period)
         const redirectUrl = params.toString() ? `/?${params.toString()}` : '/'
         redirect(redirectUrl)
       }
