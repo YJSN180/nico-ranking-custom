@@ -102,7 +102,7 @@
 @container (max-width: 600px) {
   .ranking-item-responsive__content {
     /* モバイルレイアウト: 順位 + サムネ/詳細を横並び */
-    grid-template-columns: 48px auto 1fr;
+    grid-template-columns: 40px auto 1fr;
     grid-template-areas: "rank thumbnail details";
     gap: 10px;
     padding: 2px;
@@ -112,16 +112,16 @@
   .ranking-item-responsive__rank {
     /* 順位を左側に配置 */
     grid-area: rank;
-    min-width: 40px;
-    height: 40px;
-    font-size: 20px;
+    min-width: 32px;
+    height: 32px;
+    font-size: 16px;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
     /* モバイルでは背景色を適用 */
     background: var(--mobile-rank-bg) !important;
-    color: white !important;
+    color: var(--mobile-rank-color) !important;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -167,16 +167,16 @@
 /* Container Query: 400px以下で超モバイルレイアウト */
 @container (max-width: 400px) {
   .ranking-item-responsive__content {
-    grid-template-columns: 40px auto 1fr;
+    grid-template-columns: 32px auto 1fr;
     padding: 2px;
     gap: 8px;
     min-height: 70px;
   }
   
   .ranking-item-responsive__rank {
-    min-width: 36px;
-    height: 36px;
-    font-size: 18px;
+    min-width: 28px;
+    height: 28px;
+    font-size: 14px;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -239,9 +239,9 @@
   .ranking-item-responsive__rank[style*="--rank-gold"],
   .ranking-item-responsive__rank[style*="--rank-silver"],
   .ranking-item-responsive__rank[style*="--rank-bronze"] {
-    min-width: 40px !important;
-    height: 40px !important;
-    font-size: 20px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important;
     font-weight: 700 !important;
   }
 }
@@ -251,7 +251,7 @@
   /* 従来のMedia Queriesで対応 */
   @media (max-width: 640px) {
     .ranking-item-responsive__content {
-      grid-template-columns: 48px auto 1fr;
+      grid-template-columns: 40px auto 1fr;
       grid-template-areas: "rank thumbnail details";
       gap: 10px;
       padding: 2px;
@@ -260,16 +260,16 @@
     
     .ranking-item-responsive__rank {
       grid-area: rank;
-      min-width: 40px;
-      height: 40px;
-      font-size: 20px;
+      min-width: 32px;
+      height: 32px;
+      font-size: 16px;
       font-weight: 700;
       display: flex;
       align-items: center;
       justify-content: center;
       /* モバイルでは背景色を適用 */
       background: var(--mobile-rank-bg) !important;
-      color: white !important;
+      color: var(--mobile-rank-color) !important;
     }
     
     .ranking-item-responsive__thumbnail {
