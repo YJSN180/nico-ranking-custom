@@ -49,8 +49,10 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             justifyContent: 'center',
             borderRadius: '6px',
             fontWeight: '700',
-            userSelect: 'none'
-          }}
+            userSelect: 'none',
+            // モバイルではオーバーレイ用の背景色を設定（CSSで上書きされる）
+            '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'rgba(0, 0, 0, 0.7)'
+          } as React.CSSProperties & { '--mobile-rank-bg': string }}
         >
           {item.rank}
         </div>
