@@ -669,25 +669,6 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 表示件数情報とページ情報 */}
-          <div style={{
-            padding: '8px 16px',
-            fontSize: '14px',
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '8px'
-          }}>
-            <div>
-              ページ {currentPage} / {totalPages}
-            </div>
-            <div>
-              {finalDisplayItems.length}件表示 (全{totalItems}件中)
-            </div>
-          </div>
-          
           {/* 上部ページネーション */}
           <Pagination
             currentPage={currentPage}
