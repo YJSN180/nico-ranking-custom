@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import InitialRankingSkeleton from './initial-ranking-skeleton'
 
 interface SuspenseWrapperProps {
   children: React.ReactNode
@@ -6,8 +7,30 @@ interface SuspenseWrapperProps {
 }
 
 export function SuspenseWrapper({ children, fallback }: SuspenseWrapperProps) {
+  const defaultFallback = (
+    <div>
+      {/* セレクターエリアのスケルトン */}
+      <div className="selectors-container" style={{ minHeight: '200px' }}>
+        <div className="skeleton-pulse" style={{ 
+          background: 'var(--surface-secondary)', 
+          height: '40px', 
+          borderRadius: '8px', 
+          marginBottom: '16px'
+        }} />
+        <div className="skeleton-pulse" style={{ 
+          background: 'var(--surface-secondary)', 
+          height: '40px', 
+          borderRadius: '8px'
+        }} />
+      </div>
+      
+      {/* ランキングアイテムのスケルトン */}
+      <InitialRankingSkeleton itemCount={5} />
+    </div>
+  )
+  
   return (
-    <Suspense fallback={fallback || <div style={{ textAlign: 'center', padding: '40px' }}>読み込み中...</div>}>
+    <Suspense fallback={fallback || defaultFallback}>
       {children}
     </Suspense>
   )

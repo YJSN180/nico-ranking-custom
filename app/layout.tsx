@@ -109,6 +109,8 @@ export default async function RootLayout({
           .ranking-video-link{color:#0066cc;text-decoration:none}
           .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}
           [data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:12px;padding:16px}
+          .skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite alternate}
+          @keyframes skeleton-pulse{0%{opacity:0.6}100%{opacity:1}}
           @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}}
         ` }} />
         <script
