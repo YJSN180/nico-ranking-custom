@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import InitialRankingSkeleton from './initial-ranking-skeleton'
+import { ErrorBoundary } from './error-boundary'
 
 interface SuspenseWrapperProps {
   children: React.ReactNode
@@ -30,8 +31,10 @@ export function SuspenseWrapper({ children, fallback }: SuspenseWrapperProps) {
   )
   
   return (
-    <Suspense fallback={fallback || defaultFallback}>
-      {children}
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={fallback || defaultFallback}>
+        {children}
+      </Suspense>
+    </ErrorBoundary>
   )
 }

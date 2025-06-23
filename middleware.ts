@@ -160,10 +160,10 @@ export async function middleware(request: NextRequest) {
   
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
-    // リソースヒントの追加でTTFBを改善
+    // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.ttf>; rel=preload; as=font; type=font/ttf; crossorigin=anonymous',
-      '</fonts/comic-sans-ms-bold.ttf>; rel=preload; as=font; type=font/ttf; crossorigin=anonymous',
+      '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+      '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
@@ -182,6 +182,12 @@ export async function middleware(request: NextRequest) {
     // Cloudflare CDNで20分間キャッシュ
     response.headers.set('Cache-Control', getCacheHeaders('ranking'))
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
+  }
+  
+  // フォントファイルの長期キャッシュ
+  if (request.nextUrl.pathname.startsWith('/fonts/')) {
+    response.headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+    response.headers.set('CDN-Cache-Control', 'public, s-maxage=31536000, immutable')
   }
   
   // セキュリティヘッダーを追加

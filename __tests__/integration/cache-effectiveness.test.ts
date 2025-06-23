@@ -22,8 +22,8 @@ describe('Cache Effectiveness', () => {
     
     const cacheHeader = apiCacheConfig.headers.find((h: any) => h.key === 'Cache-Control')
     expect(cacheHeader).toBeDefined()
-    expect(cacheHeader.value).toContain('s-maxage=180') // 3 minutes server cache
-    expect(cacheHeader.value).toContain('stale-while-revalidate=300') // 5 minutes stale
+    expect(cacheHeader.value).toContain('s-maxage=1200') // 20 minutes server cache
+    expect(cacheHeader.value).toContain('stale-while-revalidate=2400') // 40 minutes stale
   })
 
   test('should configure static asset caching', async () => {
@@ -49,7 +49,7 @@ describe('Cache Effectiveness', () => {
     // API cache: Short duration for dynamic content
     const apiCache = headers.find((h: any) => h.source === '/api/:path*')
     const apiCacheControl = apiCache.headers.find((h: any) => h.key === 'Cache-Control')
-    expect(apiCacheControl.value).toMatch(/s-maxage=180/) // 3 minutes
+    expect(apiCacheControl.value).toMatch(/s-maxage=1200/) // 20 minutes
     
     // Static assets: Long duration for immutable content
     const staticCache = headers.find((h: any) => h.source.includes('png|jpg'))
@@ -60,9 +60,9 @@ describe('Cache Effectiveness', () => {
   test('page ISR configuration should match data update frequency', async () => {
     const pageModule = await import('../../app/page.tsx')
     
-    // Cron job runs every 30 minutes (1800 seconds)
-    // Page revalidation should match this interval
-    expect(pageModule.revalidate).toBe(1800)
+    // Cron job runs every hour, but we use 20 minutes for fresher data
+    // Page revalidation should be 1200 seconds (20 minutes)
+    expect(pageModule.revalidate).toBe(1200)
   })
 
   test('cache configuration should minimize resource consumption', async () => {
