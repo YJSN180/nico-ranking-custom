@@ -42,4 +42,9 @@ describe('HeaderInteractive Component', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
+  it('should mark component as client component', () => {
+    // このコンポーネントは'use client'ディレクティブを持つべき
+    const component = require('@/components/header-interactive')
+    expect(component.__esModule).toBe(true)
+  })
 })

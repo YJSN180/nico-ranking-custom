@@ -173,7 +173,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="設定">
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>設定</h2>
           <button className={styles.closeButton} onClick={onClose}>×</button>

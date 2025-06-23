@@ -5,7 +5,7 @@ The following environment variables need to be added to your Vercel project:
 ## Cloudflare KV Variables (Required)
 CLOUDFLARE_ACCOUNT_ID=<your_cloudflare_account_id>
 CLOUDFLARE_KV_NAMESPACE_ID=<your_kv_namespace_id>
-CLOUDFLARE_API_TOKEN=<your_cloudflare_api_token>
+CLOUDFLARE_KV_API_TOKEN=<your_cloudflare_api_token>
 
 ## Convex Variables (Required)
 NEXT_PUBLIC_CONVEX_URL=<your_convex_url>
