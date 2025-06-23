@@ -5,13 +5,13 @@ import { kv } from '../lib/simple-kv'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-// All 24 genres to fetch (including 例のソレ)
+// All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
   'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
   'entertainment', 'music', 'sing', 'dance', 'play',
   'commentary', 'cooking', 'travel', 'nature', 'vehicle',
   'technology', 'society', 'mmd', 'vtuber', 'radio',
-  'sports', 'animal', 'other', 'reisore'
+  'sports', 'animal', 'other'
 ];
 
 // Genre ID mapping
@@ -38,8 +38,7 @@ const GENRE_ID_MAP: Record<RankingGenre, string> = {
   radio: 'oxzi6bje',
   sports: '4w3p65pf',
   animal: 'ne72lua2',
-  other: 'ramuboyn',
-  reisore: 'd2um7mc4'
+  other: 'ramuboyn'
 };
 
 // NG list interface (matching frontend structure)
@@ -267,11 +266,6 @@ async function fetchRankingPageWithRetry(
       // Extract popular tags, but handle special case for reisore genre
       let popularTags = extractTrendTags(serverData);
       
-      // Special handling for 'reisore' genre - it returns 'all' genre's featuredKey
-      if (genre === 'reisore' && serverData.data?.response?.$getTeibanRankingFeaturedKeyAndTrendTags?.data?.featuredKey === 'e9uj2uks') {
-        console.log(`[${genre}] API returned 'all' genre data, skipping popular tags`);
-        popularTags = [];
-      }
       
       const startRank = (page - 1) * 100 + 1;
       const items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
