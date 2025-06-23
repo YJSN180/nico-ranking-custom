@@ -23,10 +23,8 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
 
   return (
     <>
-      {/* ボタン類をヘッダー内に配置 */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-        <Navigation />
-        <button
+      <Navigation />
+      <button
           onClick={() => setIsSettingsOpen(true)}
           style={{
             position: 'absolute',
@@ -44,7 +42,6 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             zIndex: 10,
-            pointerEvents: 'auto'
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
@@ -59,9 +56,7 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
         >
           ⚙️
         </button>
-      </div>
       
-      {/* モーダルはヘッダー外に配置 */}
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
