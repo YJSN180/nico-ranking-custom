@@ -23,15 +23,16 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   
   const getRankStyle = (rank: number, mobile: boolean) => {
     if (mobile) {
-      // モバイル用のコンパクトなスタイル
+      // モバイル用のコンパクトなスタイル（動画タイトルと同じサイズ、左詰め）
       return {
-        fontSize: '18px',
-        fontWeight: '700' as const,
+        fontSize: '15px',
+        fontWeight: '600' as const,
         color: rank <= 3 ? rankColors[rank] : 'var(--text-primary)',
         marginBottom: '4px',
-        height: '22px',
+        height: '18px',
         display: 'flex',
-        alignItems: 'center'
+        alignItems: 'center',
+        justifyContent: 'flex-start'
       }
     }
     
@@ -68,7 +69,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
         data-testid="ranking-item"
         className="mobile-v2"
         style={{ 
-          marginBottom: '4px',
+          marginBottom: '3px',
           background: 'var(--surface-color)',
           borderRadius: '6px',
           overflow: 'hidden',
@@ -76,9 +77,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           border: '1px solid var(--border-color)',
           cursor: 'default'
         }}>
-        <div style={{ padding: '6px 8px' }}>
+        <div style={{ padding: '4px 6px' }}>
           {/* メインコンテンツ */}
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
             {/* 左側：順位 + サムネイル */}
             <div style={{ flexShrink: 0 }}>
               {/* 順位 */}
@@ -124,7 +125,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
               flex: 1, 
               display: 'flex', 
               flexDirection: 'column', 
-              gap: '4px',
+              gap: '3px',
               minWidth: 0,
               justifyContent: 'center'
             }}>
@@ -220,7 +221,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
     <li 
       data-testid="ranking-item"
       style={{ 
-      marginBottom: '6px',
+      marginBottom: '4px',
       background: 'var(--surface-color)',
       borderRadius: '8px',
       overflow: 'hidden',
@@ -228,7 +229,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
       cursor: 'default'
     }}>
-      <div style={{ padding: '10px' }}>
+      <div style={{ padding: '6px' }}>
         {/* メインコンテンツ行 */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
           {/* ランク */}
