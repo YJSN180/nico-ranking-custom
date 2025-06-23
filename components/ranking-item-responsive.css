@@ -15,10 +15,14 @@
 
 /* 順位表示 */
 .ranking-item-responsive__rank {
-  grid-area: rank;
   min-width: 44px;
   height: 44px;
   font-size: 24px;
+}
+
+/* デスクトップ順位のみgrid-areaを設定 */
+.ranking-item-responsive__rank--desktop {
+  grid-area: rank;
 }
 
 /* デスクトップでのみモバイル順位を非表示 */
