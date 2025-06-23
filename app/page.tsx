@@ -207,6 +207,11 @@ export default async function Home({ searchParams }: PageProps) {
             padding: '20px',
             minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
           }}>
+          {/* 初期HTMLに含まれる静的なランキングリスト */}
+          <div style={{ display: 'none' }} className="ssr-only-content">
+            <RankingListServer items={currentPageItems} />
+          </div>
+          
           <SuspenseWrapper>
             <ClientPage 
               initialData={{ items: currentPageItems, popularTags }} 

@@ -1,5 +1,4 @@
 import { Suspense } from 'react'
-import { InitialRankingSkeleton } from './initial-ranking-skeleton'
 
 interface SuspenseWrapperProps {
   children: React.ReactNode
@@ -8,7 +7,7 @@ interface SuspenseWrapperProps {
 
 export function SuspenseWrapper({ children, fallback }: SuspenseWrapperProps) {
   return (
-    <Suspense fallback={fallback || <InitialRankingSkeleton />}>
+    <Suspense fallback={fallback || <div style={{ textAlign: 'center', padding: '40px' }}>読み込み中...</div>}>
       {children}
     </Suspense>
   )
