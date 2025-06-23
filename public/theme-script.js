@@ -2,13 +2,6 @@
 // This file is served as a static asset to avoid CSP issues
 (function() {
   try {
-    // Check if theme is already set (from SSR)
-    const currentTheme = document.documentElement.getAttribute('data-theme');
-    if (currentTheme) {
-      // Theme already set by SSR, no need to set again
-      return;
-    }
-    
     // First try to read from cookie
     const cookies = document.cookie.split(';');
     const preferenceCookie = cookies.find(cookie => 

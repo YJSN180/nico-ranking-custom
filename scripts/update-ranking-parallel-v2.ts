@@ -5,13 +5,13 @@ import { kv } from '../lib/simple-kv'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
-// All 24 genres to fetch (including 例のソレ)
+// All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
   'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
   'entertainment', 'music', 'sing', 'dance', 'play',
   'commentary', 'cooking', 'travel', 'nature', 'vehicle',
   'technology', 'society', 'mmd', 'vtuber', 'radio',
-  'sports', 'animal', 'other', 'reisore'
+  'sports', 'animal', 'other'
 ];
 
 // Genre ID mapping
@@ -38,8 +38,7 @@ const GENRE_ID_MAP: Record<RankingGenre, string> = {
   radio: 'oxzi6bje',
   sports: '4w3p65pf',
   animal: 'ne72lua2',
-  other: 'ramuboyn',
-  reisore: 'd2um7mc4'
+  other: 'ramuboyn'
 };
 
 // NG list interface (matching frontend structure)
