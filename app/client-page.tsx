@@ -600,6 +600,17 @@ export default function ClientPage({
   const isUpdating = false
   const lastUpdated = null
   
+  // ランキングデータがない場合の自動リダイレクト
+  useEffect(() => {
+    if (!loading && !error && finalDisplayItems.length === 0 && !config.tag) {
+      // タグ指定なしでデータがない場合は、2秒後にトップページへリダイレクト
+      const redirectTimer = setTimeout(() => {
+        handleConfigChange({ genre: 'all', period: '24h', tag: undefined })
+      }, 2000)
+      return () => clearTimeout(redirectTimer)
+    }
+  }, [loading, error, finalDisplayItems.length, config.tag, handleConfigChange])
+  
   // レンダリング
   return (
     <>
@@ -643,7 +654,7 @@ export default function ClientPage({
           }}>
             {config.tag ? 'このタグの動画が見つかりません' : 'ランキングデータがありません'}
           </div>
-          {config.tag && (
+          {config.tag ? (
             <button
               onClick={() => handleConfigChange({ ...config, tag: undefined })}
               style={{
@@ -658,6 +669,14 @@ export default function ClientPage({
             >
               ジャンル別ランキングに戻る
             </button>
+          ) : (
+            <div style={{ 
+              fontSize: '14px', 
+              color: 'var(--text-secondary)',
+              marginBottom: '20px'
+            }}>
+              トップページへリダイレクトします...
+            </div>
           )}
         </div>
       )}
