@@ -8,9 +8,9 @@
   src: url('/fonts/nicomoji-plus-v2.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
-  font-display: optional; /* FOUTを防ぐためoptionalを使用 */
+  font-display: fallback; /* 3秒以内に読み込めればswap、そうでなければfallback */
   /* ニコニコ動画サイトを参考にした精密なフォントメトリクス調整 */
-  /* Hiragino Kaku Gothic ProNとの差を最小化 */
+  /* Hiragino Kaku Gothic ProNとの差を最小化してCLSを軽減 */
   size-adjust: 85%; /* ニコモジは大きめなので85%に縮小 */
   ascent-override: 85%; /* 上部の余白を調整 */
   descent-override: 15%; /* 下部の余白を調整 */
@@ -22,8 +22,8 @@
   src: url('/fonts/comic-sans-ms-bold.ttf') format('truetype');
   font-weight: bold;
   font-style: normal;
-  font-display: optional; /* FOUTを防ぐためoptionalを使用 */
-  /* Arialとの差を最小化 */
+  font-display: fallback; /* 3秒以内に読み込めればswap、そうでなければfallback */
+  /* Arialとの差を最小化してCLSを軽減 */
   size-adjust: 98%; /* Arialとほぼ同じサイズに */
   ascent-override: 90%; /* 上部余白を調整 */
   descent-override: 23%; /* 下部余白を調整 */
