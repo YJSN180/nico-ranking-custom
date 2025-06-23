@@ -182,14 +182,6 @@ export default async function Home({ searchParams }: PageProps) {
       return <EmptyRankingPage tag={tag} />
     }
 
-    // ページネーション設定
-    const ITEMS_PER_PAGE = 100;
-    const startIndex = (page - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    
-    // 現在のページのアイテムのみを切り出す
-    const currentPageItems = rankingData.slice(startIndex, endIndex);
-    
     return (
       <main style={{ 
         padding: '0',
@@ -209,8 +201,7 @@ export default async function Home({ searchParams }: PageProps) {
           }}>
           <SuspenseWrapper>
             <ClientPage 
-              initialData={{ items: currentPageItems, popularTags }} 
-              allRankingData={rankingData}  // 全データはJSONとして渡す
+              initialData={{ items: rankingData, popularTags }} 
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}

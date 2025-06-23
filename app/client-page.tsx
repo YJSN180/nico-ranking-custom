@@ -21,7 +21,6 @@ import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
-  allRankingData?: RankingItem[]  // 全データ（オプショナル）
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -38,7 +37,6 @@ const DISPLAY_LIMITS = {
 
 export default function ClientPage({ 
   initialData, 
-  allRankingData,
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
@@ -81,10 +79,6 @@ export default function ClientPage({
     return initialPage
   })
   
-  // 全データを保持（初期値はallRankingDataまたはinitialData.items）
-  const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(
-    allRankingData || initialData.items || initialData as any
-  )
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData.items || initialData as any)
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
     // サーバーサイドでは localStorage を使用しない
@@ -294,10 +288,7 @@ export default function ClientPage({
     // Check client-side cache first
     const cached = rankingCache.get(newConfig.genre, newConfig.period, newConfig.tag)
     if (cached) {
-      setFullRankingData(cached.data)  // 全データを保存
-      // ページ1から開始（設定変更時はページリセット）
-      setRankingData(cached.data.slice(0, ITEMS_PER_PAGE))
-      setCurrentPage(1)
+      setRankingData(cached.data)
       if (cached.popularTags && !newConfig.tag && newConfig.genre !== 'all') {
         setCurrentPopularTags(cached.popularTags)
       }
@@ -356,11 +347,7 @@ export default function ClientPage({
       const data = await response.json()
       
       if (data.items && Array.isArray(data.items)) {
-        setFullRankingData(data.items)  // 全データを保存
-        // 現在のページに応じてデータを表示
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-        const endIndex = startIndex + ITEMS_PER_PAGE
-        setRankingData(data.items.slice(startIndex, endIndex))
+        setRankingData(data.items)
         
         // Cache the data
         rankingCache.set(
@@ -436,11 +423,7 @@ export default function ClientPage({
           // 人気タグが既にある場合は維持
         }
       } else if (Array.isArray(data)) {
-        setFullRankingData(data)  // 全データを保存
-        // 現在のページに応じてデータを表示
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-        const endIndex = startIndex + ITEMS_PER_PAGE
-        setRankingData(data.slice(startIndex, endIndex))
+        setRankingData(data)
         
         // Cache the data (array format)
         rankingCache.set(
@@ -492,11 +475,6 @@ export default function ClientPage({
     
     setCurrentPage(page)
     
-    // fullRankingDataから該当ページのデータを表示
-    const startIndex = (page - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    setRankingData(fullRankingData.slice(startIndex, endIndex))
-    
     // URLを更新（ページパラメータを追加）
     const params = new URLSearchParams()
     if (config.genre !== 'all') params.set('genre', config.genre)
@@ -505,7 +483,7 @@ export default function ClientPage({
     if (page > 1) params.set('page', page.toString())
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
-  }, [currentPage, config, router, fullRankingData])
+  }, [currentPage, config, router])
   
   // sessionStorageから設定を復元
   useEffect(() => {
