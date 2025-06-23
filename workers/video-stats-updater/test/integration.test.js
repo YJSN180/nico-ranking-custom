@@ -50,7 +50,7 @@ describe('Worker Integration Tests', () => {
               metadata: mockRankingData.metadata,
             }),
           };
-        } else if (key === 'rankings/all/data.json') {
+        } else if (key === 'rankings/all/24h/all.json' || key === 'rankings/all/hour/all.json') {
           return {
             text: async () => JSON.stringify(mockRankingData.genres.all),
           };
@@ -196,7 +196,7 @@ describe('Worker Integration Tests', () => {
               metadata: { version: 1, updatedAt: new Date().toISOString() },
             }),
           };
-        } else if (key === 'rankings/all/data.json') {
+        } else if (key === 'rankings/all/24h/all.json' || key === 'rankings/all/hour/all.json') {
           return {
             text: async () => JSON.stringify(mockRankingData.genres.all),
           };

@@ -107,6 +107,9 @@ export default async function RootLayout({
           @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:swap;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
           /* クリティカルCSS - LCPに必要な最小限のスタイル */
           body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+          /* テーマのデフォルトスタイル - ちらつき防止 */
+          [data-theme="dark"] body{color:#fff;background-color:#121212}
+          [data-theme="darkblue"] body{color:#fff;background-color:#15202b}
           .header-container{background:linear-gradient(135deg,#00A8E8 0%,#0077BE 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
           .selectors-container{min-height:200px}
           .ranking-video-link{color:#0066cc;text-decoration:none}
@@ -123,7 +126,6 @@ export default async function RootLayout({
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <Script src="/theme-script.js" strategy="beforeInteractive" />
         <ThemeProvider>
           <WebVitalsReporter />
           {children}

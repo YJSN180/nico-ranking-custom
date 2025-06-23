@@ -80,9 +80,12 @@ describe('Video Stats Updater Worker', () => {
 
       // Verify R2 reads
       expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/metadata.json');
-      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/all/data.json');
-      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/anime/data.json');
-      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/music/data.json');
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/all/24h/all.json');
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/all/hour/all.json');
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/anime/24h/all.json');
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/anime/hour/all.json');
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/music/24h/all.json');
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/music/hour/all.json');
 
       // Verify KV write
       expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
@@ -127,11 +130,9 @@ describe('Video Stats Updater Worker', () => {
 
     it('should handle empty ranking data', async () => {
       // Setup R2 with empty data
-      env.R2_BUCKET._storage.set('rankings/metadata.json', {
-        metadata: { version: 1, updatedAt: new Date().toISOString() },
-        genres: ['all'],
-      });
-      env.R2_BUCKET._storage.set('rankings/all/data.json', mockEmptyRankingData);
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockEmptyRankingData);
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockEmptyRankingData);
 
       await worker.scheduled(null, env, ctx);
       await flushPromises();
@@ -166,7 +167,8 @@ describe('Video Stats Updater Worker', () => {
     it('should handle Snapshot API errors gracefully', async () => {
       // Setup R2 mock data
       env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
-      env.R2_BUCKET._storage.set('rankings/all/data.json', mockRankingData);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockRankingData);
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockRankingDataHour);
 
       // Make fetch throw an error
       global.fetch = vi.fn().mockRejectedValue(new Error('API error'));
@@ -189,11 +191,9 @@ describe('Video Stats Updater Worker', () => {
         'hour': { items: [] },
       };
 
-      env.R2_BUCKET._storage.set('rankings/metadata.json', {
-        metadata: { version: 1, updatedAt: new Date().toISOString() },
-        genres: ['all'],
-      });
-      env.R2_BUCKET._storage.set('rankings/all/data.json', manyVideos);
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', manyVideos);
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', manyVideos);
 
       // Mock API responses for batches
       global.fetch = vi.fn(async (url) => {
