@@ -21,6 +21,7 @@ import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
+  allRankingData?: RankingItem[]
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -37,6 +38,7 @@ const DISPLAY_LIMITS = {
 
 export default function ClientPage({ 
   initialData, 
+  allRankingData,
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
@@ -80,6 +82,9 @@ export default function ClientPage({
   })
   
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData.items || initialData as any)
+  const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(
+    allRankingData || initialData.items || initialData as any
+  )
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
     // サーバーサイドでは localStorage を使用しない
     if (typeof window === 'undefined') {
@@ -218,7 +223,7 @@ export default function ClientPage({
   }, []) // 初回のみ実行
   
   // NGフィルタリング前のアイテム（リアルタイム統計は後で適用）
-  const itemsWithTags = rankingData
+  // const itemsWithTags = rankingData // 使用されなくなったため削除
   
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
@@ -288,7 +293,14 @@ export default function ClientPage({
     // Check client-side cache first
     const cached = rankingCache.get(newConfig.genre, newConfig.period, newConfig.tag)
     if (cached) {
-      setRankingData(cached.data)
+      // 全データを保存
+      setFullRankingData(cached.data)
+      
+      // 現在のページのアイテムのみを表示データとして設定
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+      const endIndex = startIndex + ITEMS_PER_PAGE
+      setRankingData(cached.data.slice(startIndex, endIndex))
+      
       if (cached.popularTags && !newConfig.tag && newConfig.genre !== 'all') {
         setCurrentPopularTags(cached.popularTags)
       }
@@ -347,7 +359,13 @@ export default function ClientPage({
       const data = await response.json()
       
       if (data.items && Array.isArray(data.items)) {
-        setRankingData(data.items)
+        // 全データを保存
+        setFullRankingData(data.items)
+        
+        // 現在のページのアイテムのみを表示データとして設定
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+        const endIndex = startIndex + ITEMS_PER_PAGE
+        setRankingData(data.items.slice(startIndex, endIndex))
         
         // Cache the data
         rankingCache.set(
@@ -423,7 +441,13 @@ export default function ClientPage({
           // 人気タグが既にある場合は維持
         }
       } else if (Array.isArray(data)) {
-        setRankingData(data)
+        // 全データを保存
+        setFullRankingData(data)
+        
+        // 現在のページのアイテムのみを表示データとして設定
+        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+        const endIndex = startIndex + ITEMS_PER_PAGE
+        setRankingData(data.slice(startIndex, endIndex))
         
         // Cache the data (array format)
         rankingCache.set(
@@ -450,6 +474,7 @@ export default function ClientPage({
           }
         }
       } else {
+        setFullRankingData([])
         setRankingData([])
       }
     } catch (err: any) {
@@ -459,6 +484,7 @@ export default function ClientPage({
       }
       
       setError(err instanceof Error ? err.message : 'データの取得に失敗しました')
+      setFullRankingData([])
       setRankingData([])
     } finally {
       // AbortErrorの場合はローディング状態を維持
@@ -475,6 +501,13 @@ export default function ClientPage({
     
     setCurrentPage(page)
     
+    // フルデータから現在のページのアイテムを抽出
+    if (fullRankingData.length > 0) {
+      const startIndex = (page - 1) * ITEMS_PER_PAGE
+      const endIndex = startIndex + ITEMS_PER_PAGE
+      setRankingData(fullRankingData.slice(startIndex, endIndex))
+    }
+    
     // URLを更新（ページパラメータを追加）
     const params = new URLSearchParams()
     if (config.genre !== 'all') params.set('genre', config.genre)
@@ -483,7 +516,7 @@ export default function ClientPage({
     if (page > 1) params.set('page', page.toString())
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
-  }, [currentPage, config, router])
+  }, [currentPage, config, router, fullRankingData])
   
   // sessionStorageから設定を復元
   useEffect(() => {
@@ -546,8 +579,8 @@ export default function ClientPage({
       derivedVideoIds: [] // クライアント側では派生IDは使用しない
     }
     
-    // filterWithNGListを直接呼び出す（ランクの再計算を含む）
-    const { filteredItems } = filterWithNGList(itemsWithTags, ngListForFilter)
+    // フルデータに対してフィルタリングを適用
+    const { filteredItems } = filterWithNGList(fullRankingData, ngListForFilter)
     
     // 全取得件数を制限
     const allItems = filteredItems.slice(0, limit)
@@ -560,7 +593,7 @@ export default function ClientPage({
     // originalRankを追加（元のランク番号を保持）
     const result = pageItems.map(item => ({
       ...item,
-      originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
+      originalRank: fullRankingData.find(original => original.id === item.id)?.rank || item.rank
     }))
     
     return {
@@ -568,7 +601,7 @@ export default function ClientPage({
       totalPages: Math.ceil(allItems.length / ITEMS_PER_PAGE),
       totalItems: allItems.length
     }
-  }, [itemsWithTags, config.tag, ngList, ngListVersion, currentPage])
+  }, [fullRankingData, config.tag, ngList, ngListVersion, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
