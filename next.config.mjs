@@ -1,9 +1,13 @@
+import bundleAnalyzer from '@next/bundle-analyzer'
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    // 外部画像（ニコニコ動画サムネイル）の最適化を無効化
-    // ニコニコ動画のサムネイルAPIは特殊なCORSヘッダーが必要で最適化が困難
-    unoptimized: true,
+    // ローカル画像（ロゴ等）は最適化を有効にしてWebP/AVIF変換
+    // 外部画像（ニコニコ動画サムネイル）のみ最適化を無効化
+    formats: ['image/webp', 'image/avif'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     remotePatterns: [
       {
         protocol: 'https',
@@ -100,7 +104,7 @@ const nextConfig = {
       },
       // Cache headers for static assets
       {
-        source: '/(.*)\\.(png|jpg|jpeg|gif|ico|svg|webp)',
+        source: '/(.*)\\.(png|jpg|jpeg|gif|ico|svg|webp|avif)',
         headers: [
           {
             key: 'Cache-Control',
@@ -118,24 +122,67 @@ const nextConfig = {
     workerThreads: false,
     cpus: 1
   },
-  // ビルド時のメモリ最適化
+  // ビルド時のメモリ最適化とJavaScript削減
   webpack: (config, { isServer }) => {
+    // クライアントサイドバンドルからサーバー専用モジュールを除外
     if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        os: false,
+        crypto: false,
+        stream: false,
+        util: false,
+        zlib: false,
+        http: false,
+        https: false,
+        url: false,
+      }
+      
+      // 不要なモジュールを除外
+      config.externals = {
+        ...config.externals,
+        '@cloudflare/workers-types': 'commonjs @cloudflare/workers-types',
+        'wrangler': 'commonjs wrangler',
+      }
+      
       config.optimization.splitChunks = {
         chunks: 'all',
+        minSize: 20000,
+        maxSize: 244000,
         cacheGroups: {
           default: false,
           vendors: false,
           commons: {
             name: 'commons',
             chunks: 'all',
-            minChunks: 2
+            minChunks: 2,
+            priority: 10,
+            reuseExistingChunk: true
+          },
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendors',
+            chunks: 'all',
+            priority: 20,
+            maxSize: 244000
           }
         }
+      }
+      
+      // 使用していないexportsを削除（本番ビルドのみ）
+      if (process.env.NODE_ENV === 'production') {
+        config.optimization.usedExports = true
+        config.optimization.sideEffects = false
       }
     }
     return config
   },
 }
 
-export default nextConfig
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+})
+
+export default withBundleAnalyzer(nextConfig)

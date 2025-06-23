@@ -15,7 +15,34 @@ import { notFound } from 'next/navigation'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 1800 // 30分間キャッシュ（cronジョブと同期）
-// dynamicを削除してISRを有効化
+
+// 主要なルートをビルド時に生成してTTFBを改善
+export async function generateStaticParams() {
+  // よくアクセスされるジャンル
+  const genres = [
+    'all',           // 総合
+    'other',         // その他
+    'game',          // ゲーム
+    'anime',         // アニメ
+    'vocaloid',      // ボカロ
+    'voicesynthesis',// 音声合成実況・解説・劇場
+    'entertainment', // エンタメ
+    'music'          // 音楽
+  ]
+  const periods = ['24h', 'hour']
+  
+  const params = []
+  for (const genre of genres) {
+    for (const period of periods) {
+      params.push({ genre, period })
+    }
+  }
+  
+  // デフォルトルート（パラメータなし）も含める
+  params.push({})
+  
+  return params
+}
 
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
@@ -132,8 +159,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 }
 
 export default async function Home({ searchParams }: PageProps) {
-  const params = await searchParams
-  const cookieStore = await cookies()
+  // 並列でPromiseを解決してTTFBを改善
+  const [params, cookieStore] = await Promise.all([
+    searchParams,
+    cookies()
+  ])
   
   // URLパラメータが優先、なければCookieから、それもなければデフォルト値
   let genre = params.genre as string

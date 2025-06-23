@@ -1,4 +1,5 @@
-import { onCLS, onFCP, onLCP, onTTFB, onINP, type Metric } from 'web-vitals'
+// Dynamic import for web-vitals to reduce initial bundle size
+import type { Metric } from 'web-vitals'
 
 const vitalsUrl = 'https://vitals.vercel-analytics.com/v1/vitals'
 
@@ -50,8 +51,11 @@ function sendToAnalytics(metric: Metric, options: { params: { [key: string]: any
   }
 }
 
-export function reportWebVitals() {
+export async function reportWebVitals() {
   try {
+    // Dynamic import to avoid including web-vitals in the initial bundle
+    const { onCLS, onFCP, onLCP, onTTFB, onINP } = await import('web-vitals')
+    
     onTTFB((metric: Metric) => sendToAnalytics(metric, { params: {} }))
     onLCP((metric: Metric) => sendToAnalytics(metric, { params: {} }))
     onCLS((metric: Metric) => sendToAnalytics(metric, { params: {} }))

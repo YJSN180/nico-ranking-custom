@@ -3,7 +3,8 @@ import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
 
-export const runtime = 'nodejs'
+// Edge Runtimeを使用してレイテンシを削減
+export const runtime = 'edge'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)

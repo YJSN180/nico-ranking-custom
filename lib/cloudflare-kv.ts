@@ -1,11 +1,32 @@
 // Cloudflare KV integration for ranking data storage
 // This module handles reading and writing ranking data to Cloudflare KV
 
-import { promisify } from 'util'
-import { gunzip } from 'zlib'
 import { getGroupIdForGenre, GENRE_GROUPS } from '../types/ranking-config'
 
-const gunzipAsync = promisify(gunzip)
+// ブラウザ・Edge Runtime用のdecompression（pakoを使用）
+let pakoInstance: any = null
+const getDecompressionMethod = async () => {
+  // Edge RuntimeやClientサイドではpakoを使用
+  if (typeof process === 'undefined' || process.env.NEXT_RUNTIME === 'edge' || typeof window !== 'undefined') {
+    if (!pakoInstance) {
+      const pako = await import('pako')
+      pakoInstance = pako
+    }
+    return (data: Uint8Array) => {
+      const decompressed = pakoInstance.gunzip(data, { to: 'string' })
+      return decompressed
+    }
+  } else {
+    // Node.jsサーバーサイドでのみzlibを使用
+    const { promisify } = await import('util')
+    const { gunzip } = await import('zlib')
+    const gunzipAsync = promisify(gunzip)
+    return async (data: Uint8Array) => {
+      const decompressed = await gunzipAsync(Buffer.from(data))
+      return decompressed.toString()
+    }
+  }
+}
 
 // KV namespace binding (will be injected by Cloudflare Workers)
 declare global {
@@ -141,8 +162,9 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       
       // Try to decompress first (for compressed data)
       try {
-        const decompressed = await gunzipAsync(Buffer.from(data))
-        const jsonString = new TextDecoder().decode(decompressed)
+        const decompress = await getDecompressionMethod()
+        const decompressed = await decompress(new Uint8Array(data))
+        const jsonString = typeof decompressed === 'string' ? decompressed : new TextDecoder().decode(decompressed)
         return JSON.parse(jsonString) as KVRankingData
       } catch (gzipError) {
         // If decompression fails, try parsing as plain JSON (backward compatibility)
@@ -255,8 +277,9 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
     
     // Try to decompress first
     try {
-      const decompressed = await gunzipAsync(Buffer.from(uint8Array))
-      const jsonString = new TextDecoder().decode(decompressed)
+      const decompress = await getDecompressionMethod()
+      const decompressed = await decompress(uint8Array)
+      const jsonString = typeof decompressed === 'string' ? decompressed : new TextDecoder().decode(decompressed)
       return JSON.parse(jsonString)
     } catch (gzipError) {
       // Fallback to plain JSON
@@ -357,8 +380,9 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     
     // Try to decompress first (for compressed data)
     try {
-      const decompressed = await gunzipAsync(Buffer.from(data))
-      const jsonString = new TextDecoder().decode(decompressed)
+      const decompress = await getDecompressionMethod()
+      const decompressed = await decompress(new Uint8Array(data))
+      const jsonString = typeof decompressed === 'string' ? decompressed : new TextDecoder().decode(decompressed)
       return JSON.parse(jsonString) as KVRankingData
     } catch (gzipError) {
       // If decompression fails, try parsing as plain JSON (backward compatibility)

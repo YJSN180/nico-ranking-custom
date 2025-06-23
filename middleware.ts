@@ -157,6 +157,24 @@ export async function middleware(request: NextRequest) {
   
   const response = NextResponse.next()
   
+  // パフォーマンス最適化ヘッダー
+  if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
+    // リソースヒントの追加でTTFBを改善
+    response.headers.set('Link', [
+      '</fonts/nicomoji-plus-v2.ttf>; rel=preload; as=font; type=font/ttf; crossorigin',
+      '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
+      '<https://tn.smilevideo.jp>; rel=preconnect',
+      '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
+    ].join(', '))
+  }
+  
+  // APIルートの最適化
+  if (request.nextUrl.pathname.startsWith('/api/ranking')) {
+    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    // Cloudflare用のキャッシュヘッダー
+    response.headers.set('CDN-Cache-Control', 'public, s-maxage=300')
+  }
+  
   // セキュリティヘッダーを追加
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'DENY')

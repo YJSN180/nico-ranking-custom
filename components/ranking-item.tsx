@@ -1,7 +1,7 @@
 'use client'
 
 import { memo } from 'react'
-import Image from 'next/image'
+import { OptimizedImage } from './optimized-image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact } from '@/lib/format-utils'
 import { useMobileLayout } from '@/hooks/use-mobile-layout'
@@ -103,7 +103,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   }}
                   style={{ display: 'block', cursor: 'pointer' }}
                 >
-                  <Image
+                  <OptimizedImage
                     src={item.thumbURL}
                     alt={item.title}
                     width={120}
@@ -154,7 +154,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 }}>
                 {/* 投稿者アイコン */}
                 {item.authorIcon && (
-                  <Image
+                  <OptimizedImage
                     src={item.authorIcon}
                     alt={item.authorName || ''}
                     width={16}
@@ -259,7 +259,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 }}
                 style={{ display: 'block', cursor: 'pointer' }}
               >
-                <Image
+                <OptimizedImage
                   src={item.thumbURL}
                   alt={item.title}
                   width={160}
@@ -307,7 +307,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   marginBottom: '8px'
                 }}>
                   {item.authorIcon && (
-                    <Image
+                    <OptimizedImage
                       src={item.authorIcon}
                       alt={item.authorName || ''}
                       width={24}
