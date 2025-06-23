@@ -133,20 +133,23 @@ export default async function Home({ searchParams }: PageProps) {
   let tag = params.tag as string | undefined
   let page = parseInt((params.page as string) || '1', 10)
   
-  // URLパラメータがない場合はCookieから読み取る
-  if (!genre && !period && !tag) {
+  // 一時的にCookieの使用を無効化（デバッグ用）
+  // TODO: Cookieの内容を検証後、再有効化する
+  /*
+  if (!genre || !period) {
     const preferenceCookie = cookieStore.get(COOKIE_NAME)
     if (preferenceCookie?.value) {
       try {
         const preferences = JSON.parse(preferenceCookie.value)
-        genre = genre || preferences.lastGenre || 'all'
-        period = period || preferences.lastPeriod || '24h'
-        tag = tag || preferences.lastTag
+        if (!genre) genre = preferences.lastGenre || 'all'
+        if (!period) period = preferences.lastPeriod || '24h'
+        if (!tag) tag = preferences.lastTag
       } catch {
         // パースエラーは無視
       }
     }
   }
+  */
   
   // デフォルト値を設定
   genre = genre || 'all'
