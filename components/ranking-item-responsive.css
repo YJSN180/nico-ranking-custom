@@ -149,7 +149,7 @@
   }
   
   .ranking-item-responsive__author {
-    font-size: 13px;
+    font-size: 14px;
     gap: 4px;
     margin-bottom: 4px;
   }
@@ -159,7 +159,7 @@
   }
   
   .ranking-item-responsive__stats {
-    font-size: 12px;
+    font-size: 14px;
     gap: 8px;
   }
 }
@@ -189,7 +189,7 @@
   }
   
   .ranking-item-responsive__author {
-    font-size: 10px;
+    font-size: 11px;
   }
   
   .ranking-item-responsive__author-name {
@@ -197,7 +197,7 @@
   }
   
   .ranking-item-responsive__stats {
-    font-size: 9px;
+    font-size: 11px;
     gap: 4px;
   }
   
