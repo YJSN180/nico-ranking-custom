@@ -90,7 +90,7 @@
 
 .ranking-item-responsive__date {
   flex-shrink: 0;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* 統計情報 */
@@ -172,9 +172,6 @@
     margin-bottom: 4px;
   }
   
-  .ranking-item-responsive__date {
-    font-size: 13.5px;
-  }
   
   .ranking-item-responsive__author-name {
     max-width: 120px;
@@ -216,9 +213,6 @@
     font-size: 11px;
   }
   
-  .ranking-item-responsive__date {
-    font-size: 10.5px;
-  }
   
   .ranking-item-responsive__author-name {
     max-width: 60px;
