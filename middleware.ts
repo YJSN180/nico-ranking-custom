@@ -161,7 +161,8 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.ttf>; rel=preload; as=font; type=font/ttf; crossorigin',
+      '</fonts/nicomoji-plus-v2.ttf>; rel=preload; as=font; type=font/ttf; crossorigin=anonymous',
+      '</fonts/comic-sans-ms-bold.ttf>; rel=preload; as=font; type=font/ttf; crossorigin=anonymous',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',

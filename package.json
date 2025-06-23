@@ -71,6 +71,8 @@
     "fetch-mock": "^11.0.0",
     "jsdom": "^26.0.0",
     "msw": "^2.7.0",
+    "subset-font": "^2.4.0",
+    "ttf2woff2": "^8.0.0",
     "typescript": "^5",
     "vite": "^6.0.7",
     "vitest": "^3.2.3",
