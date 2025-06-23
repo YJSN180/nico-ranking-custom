@@ -29,7 +29,8 @@ const GENRES_TO_UPDATE: RankingGenre[] = [
   'radio',
   'sports',
   'animal',
-  'other'
+  'other',
+  'reisore'
 ]
 
 interface UpdateResult {
