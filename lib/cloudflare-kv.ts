@@ -415,37 +415,11 @@ export async function getTagRanking(
   
   // 該当するタグデータを抽出
   const genreData = allData.genres[genre]?.[period]
-  if (!genreData) {
+  if (!genreData || !genreData.tags || !genreData.tags[tag]) {
     return null
   }
   
-  // タグデータが存在する場合はそれを返す
-  if (genreData.tags && genreData.tags[tag]) {
-    return genreData.tags[tag]
-  }
-  
-  // タグデータが存在しない場合は、通常のランキングからタグを含む動画をフィルタリング
-  // これにより、「データを準備しています」ページを避けることができる
-  if (genreData.items && genreData.items.length > 0) {
-    // タグでフィルタリング（部分一致で検索）
-    const filteredItems = genreData.items.filter(item => {
-      if (!item.tags || !Array.isArray(item.tags)) return false
-      return item.tags.some(t => t.toLowerCase().includes(tag.toLowerCase()))
-    })
-    
-    // フィルタリング結果が空の場合はnullを返す
-    if (filteredItems.length === 0) {
-      return null
-    }
-    
-    // ランク番号を振り直す
-    return filteredItems.map((item, index) => ({
-      ...item,
-      rank: index + 1
-    }))
-  }
-  
-  return null
+  return genreData.tags[tag]
 }
 
 /**
