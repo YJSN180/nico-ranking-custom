@@ -102,7 +102,7 @@
     grid-template-columns: 48px auto 1fr;
     grid-template-areas: "rank thumbnail details";
     gap: 10px;
-    padding: 8px 10px;
+    padding: 10px;
     min-height: 75px;
   }
   
@@ -251,7 +251,7 @@
       grid-template-columns: 48px auto 1fr;
       grid-template-areas: "rank thumbnail details";
       gap: 10px;
-      padding: 8px 10px;
+      padding: 10px;
       min-height: 75px;
     }
     
