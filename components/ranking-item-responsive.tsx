@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
-import { formatNumberMobile, formatTimeAgo, formatTimeCompact } from '@/lib/format-utils'
+import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
@@ -97,6 +97,12 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                 priority={item.rank <= 3}
               />
             </a>
+            {/* 再生時間オーバーレイ */}
+            {item.duration && (
+              <div className="ranking-item-responsive__duration">
+                {formatDuration(item.duration)}
+              </div>
+            )}
           </div>
         )}
         

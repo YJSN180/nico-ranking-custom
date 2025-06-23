@@ -278,7 +278,8 @@ async function fetchRankingPageWithRetry(
         authorId: item.owner?.id || item.user?.id,
         authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
         authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
-        registeredAt: item.registeredAt || item.startTime || item.createTime
+        registeredAt: item.registeredAt || item.startTime || item.createTime,
+        duration: item.duration
       }));
 
       return { items, popularTags };
