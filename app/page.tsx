@@ -89,46 +89,28 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
-  // 1. Primary: Cloudflare KVから読み取りを試みる
+  // 1. サーバーサイドでは内部の getGenreRanking を直接使用
   try {
-    // R2移行後は、タグ別もジャンル別も同じAPIゲートウェイ経由で取得
-    const baseUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
-    const apiUrl = new URL('/api/ranking', baseUrl)
-    apiUrl.searchParams.set('genre', genre)
-    apiUrl.searchParams.set('period', period)
+    let kvData: { items: RankingItem[], popularTags?: string[] } | null = null
+    
     if (tag) {
-      apiUrl.searchParams.set('tag', tag)
+      const { getTagRanking } = await import('@/lib/cloudflare-kv')
+      kvData = await getTagRanking(genre, period as RankingPeriod, tag)
+    } else {
+      const { getGenreRanking } = await import('@/lib/cloudflare-kv')
+      kvData = await getGenreRanking(genre as RankingGenre, period as RankingPeriod)
     }
     
-    // console.log(`[SSR] Fetching from API gateway: ${apiUrl.toString()}`)
-    
-    try {
-      const response = await fetch(apiUrl.toString(), {
-        headers: {
-          'User-Agent': 'nicorank-ssr/1.0',
-        },
-        next: { revalidate: 1800 } // 30分キャッシュ
-      })
-      
-      if (response.ok) {
-        const cfData = await response.json()
-        // console.log(`[SSR] API gateway returned ${cfData.items?.length || 0} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
-        
-        if (cfData && cfData.items && cfData.items.length > 0) {
-          // NGフィルタリングを適用
-          const { filteredData } = await filterRankingDataServer(cfData)
-          return filteredData
-        }
-      } else {
-        console.error(`[SSR] API gateway returned ${response.status}: ${response.statusText}`)
-      }
-    } catch (apiError) {
-      console.error('[SSR] API gateway error:', apiError)
+    if (kvData && kvData.items && kvData.items.length > 0) {
+      console.log(`[SSR] KV returned ${kvData.items.length} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
+      // NGフィルタリングを適用
+      const { filteredData } = await filterRankingDataServer(kvData)
+      return filteredData
+    } else {
+      console.log(`[SSR] No data in KV for ${genre}/${period}${tag ? `/${tag}` : ''}`)
     }
-    
-    // R2への移行が完了したため、KVフォールバックは使用しない
-  } catch (cfError) {
-    // Cloudflare KVエラーは無視して空のデータを返す
+  } catch (kvError) {
+    console.error('[SSR] KV error:', kvError)
   }
 
   // 2. KVにデータがない場合は空のデータを返す
