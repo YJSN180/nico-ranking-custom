@@ -120,7 +120,7 @@
   
   /* デスクトップ順位を非表示 */
   .ranking-item-responsive__rank--desktop {
-    display: none;
+    display: none !important;
   }
   
   /* モバイル順位を表示 */
@@ -274,7 +274,7 @@
     
     /* デスクトップ順位を非表示 */
     .ranking-item-responsive__rank--desktop {
-      display: none;
+      display: none !important;
     }
     
     /* モバイル順位を表示 */
