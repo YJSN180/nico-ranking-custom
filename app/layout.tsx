@@ -98,10 +98,13 @@ export default async function RootLayout({
         <meta name="theme-color" content="#0080ff" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         {/* フォントのプリロード - ヘッダーで必須のため最優先で読み込む */}
-        <link rel="preload" href="/fonts/nicomoji-plus-v2.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
-        <link rel="preload" href="/fonts/comic-sans-ms-bold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/nicomoji-plus-v2.ttf" as="font" type="font/ttf" crossOrigin="anonymous" fetchPriority="high" />
+        <link rel="preload" href="/fonts/comic-sans-ms-bold.ttf" as="font" type="font/ttf" crossOrigin="anonymous" fetchPriority="high" />
         {/* クリティカルCSSをインライン化 */}
         <style dangerouslySetInnerHTML={{ __html: `
+          /* クリティカルフォント定義 - ヘッダー高速レンダリング用 */
+          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
+          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:swap;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
           /* クリティカルCSS - LCPに必要な最小限のスタイル */
           body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
           .header-container{background:linear-gradient(135deg,#00A8E8 0%,#0077BE 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
