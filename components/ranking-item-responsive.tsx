@@ -38,54 +38,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
       }}
     >
       <div className="ranking-item-responsive__content">
-        {/* 左側エリア（順位＋サムネイル） */}
-        <div className="ranking-item-responsive__left">
-          {/* 順位 */}
-          <div 
-            className="ranking-item-responsive__rank"
-            style={{
-              background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-              color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
-              borderRadius: '6px',
-              fontWeight: '700',
-              userSelect: 'none',
-              // モバイルではオーバーレイ用の背景色を設定（CSSで上書きされる）
-              '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'rgba(0, 0, 0, 0.7)'
-            } as React.CSSProperties & { '--mobile-rank-bg': string }}
-          >
-            {item.rank}
-          </div>
-          
-          {/* サムネイル */}
-          {item.thumbURL && (
-            <div className="ranking-item-responsive__thumbnail">
-              <a
-                href={`https://www.nicovideo.jp/watch/${item.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ display: 'block', cursor: 'pointer' }}
-              >
-                <OptimizedImage
-                  src={item.thumbURL}
-                  alt={item.title}
-                  width={160}
-                  height={90}
-                  style={{ 
-                    objectFit: 'cover',
-                    borderRadius: '4px',
-                    width: '100%',
-                    height: 'auto',
-                    aspectRatio: '16 / 9'
-                  }}
-                  loading={item.rank <= 3 ? undefined : "lazy"}
-                  priority={item.rank <= 3}
-                />
-              </a>
-            </div>
-          )}
-        </div>
-        
-        {/* デスクトップ用の順位（モバイルでは非表示） */}
+        {/* 順位 */}
         <div 
           className="ranking-item-responsive__rank"
           style={{
@@ -96,13 +49,15 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             justifyContent: 'center',
             borderRadius: '6px',
             fontWeight: '700',
-            userSelect: 'none'
-          }}
+            userSelect: 'none',
+            // モバイルではオーバーレイ用の背景色を設定（CSSで上書きされる）
+            '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'rgba(0, 0, 0, 0.7)'
+          } as React.CSSProperties & { '--mobile-rank-bg': string }}
         >
           {item.rank}
         </div>
         
-        {/* デスクトップ用のサムネイル（モバイルでは非表示） */}
+        {/* サムネイル */}
         {item.thumbURL && (
           <div className="ranking-item-responsive__thumbnail">
             <a
@@ -132,18 +87,16 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         
         {/* コンテンツエリア */}
         <div className="ranking-item-responsive__details">
-          {/* タイトル（固定高さラッパー） */}
-          <div className="ranking-item-responsive__title-wrapper">
-            <a
-              href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ranking-item-responsive__title"
-              data-testid="video-title"
-            >
-              {item.title}
-            </a>
-          </div>
+          {/* タイトル */}
+          <a
+            href={`https://www.nicovideo.jp/watch/${item.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ranking-item-responsive__title"
+            data-testid="video-title"
+          >
+            {item.title}
+          </a>
           
           {/* 投稿者情報 */}
           <div className="ranking-item-responsive__author">
