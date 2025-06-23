@@ -38,9 +38,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
       }}
     >
       <div className="ranking-item-responsive__content">
-        {/* 順位 */}
+        {/* デスクトップ用順位（モバイルでは非表示） */}
         <div 
-          className="ranking-item-responsive__rank"
+          className="ranking-item-responsive__rank ranking-item-responsive__rank--desktop"
           style={{
             background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
             color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
@@ -61,6 +61,20 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         {/* サムネイル */}
         {item.thumbURL && (
           <div className="ranking-item-responsive__thumbnail">
+            {/* モバイル用順位オーバーレイ */}
+            <div 
+              className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
+              style={{
+                background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+                color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
+                fontWeight: '700',
+                userSelect: 'none',
+                '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+                '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
+              } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
+            >
+              {item.rank}
+            </div>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               target="_blank"
