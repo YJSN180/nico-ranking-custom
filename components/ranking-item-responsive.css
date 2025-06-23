@@ -89,6 +89,10 @@
   max-width: 200px;
 }
 
+.ranking-item-responsive__author-name:hover {
+  text-decoration: underline;
+}
+
 .ranking-item-responsive__separator {
   color: var(--text-muted);
 }

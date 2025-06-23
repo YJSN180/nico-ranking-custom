@@ -121,24 +121,54 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
           
           {/* 投稿者情報 */}
           <div className="ranking-item-responsive__author">
-            {item.authorIcon && (
-              <OptimizedImage
-                src={item.authorIcon}
-                alt={item.authorName || ''}
-                width={20}
-                height={20}
+            {item.authorIcon && item.authorId && (
+              <a
+                href={item.authorId.startsWith('channel/') 
+                  ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
+                  : item.authorId.startsWith('community/') 
+                  ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
+                  : `https://www.nicovideo.jp/user/${item.authorId}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{ 
-                  borderRadius: '50%',
-                  border: '1px solid var(--border-color)',
-                  flexShrink: 0
+                  display: 'flex',
+                  alignItems: 'center',
+                  textDecoration: 'none'
                 }}
-                loading="lazy"
-              />
+              >
+                <OptimizedImage
+                  src={item.authorIcon}
+                  alt={item.authorName || ''}
+                  width={20}
+                  height={20}
+                  style={{ 
+                    borderRadius: '50%',
+                    border: '1px solid var(--border-color)',
+                    flexShrink: 0
+                  }}
+                  loading="lazy"
+                />
+              </a>
             )}
-            {(item.authorName || item.authorId) && (
-              <span className="ranking-item-responsive__author-name">
+            {(item.authorName || item.authorId) && item.authorId && (
+              <a
+                href={item.authorId.startsWith('channel/') 
+                  ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
+                  : item.authorId.startsWith('community/') 
+                  ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
+                  : `https://www.nicovideo.jp/user/${item.authorId}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ranking-item-responsive__author-name"
+                style={{ 
+                  color: 'inherit',
+                  textDecoration: 'none'
+                }}
+              >
                 {item.authorName || item.authorId}
-              </span>
+              </a>
             )}
             <span className="ranking-item-responsive__separator">·</span>
             <span 
