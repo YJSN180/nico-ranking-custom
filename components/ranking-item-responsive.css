@@ -4,7 +4,7 @@
 .ranking-item-responsive__content {
   display: grid;
   gap: 12px;
-  padding: 12px;
+  padding: 8px;
   
   /* デスクトップレイアウト: rank + thumbnail + details を横並び */
   grid-template-columns: auto auto 1fr;
@@ -102,7 +102,7 @@
     grid-template-columns: 48px auto 1fr;
     grid-template-areas: "rank thumbnail details";
     gap: 10px;
-    padding: 6px;
+    padding: 4px;
     min-height: 75px;
   }
   
@@ -165,7 +165,7 @@
 @container (max-width: 400px) {
   .ranking-item-responsive__content {
     grid-template-columns: 40px auto 1fr;
-    padding: 4px 6px;
+    padding: 3px 4px;
     gap: 8px;
     min-height: 70px;
   }
@@ -251,7 +251,7 @@
       grid-template-columns: 48px auto 1fr;
       grid-template-areas: "rank thumbnail details";
       gap: 10px;
-      padding: 6px;
+      padding: 4px;
       min-height: 75px;
     }
     
