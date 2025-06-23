@@ -688,6 +688,15 @@ export default function ClientPage({
             </div>
           </div>
           
+          {/* 上部ページネーション */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={handlePageChange}
+          />
+          
           {/* ランキングリスト */}
           <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
@@ -698,7 +707,7 @@ export default function ClientPage({
             ))}
           </ul>
           
-          {/* ページネーション */}
+          {/* 下部ページネーション */}
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
