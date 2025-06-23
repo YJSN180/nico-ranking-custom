@@ -92,13 +92,14 @@ const nextConfig = {
           }
         ]
       },
-      // Cache headers for API routes
+      // Note: API route cache headers are now handled by middleware.ts
+      // This configuration is kept as a fallback
       {
         source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, s-maxage=180, stale-while-revalidate=300'
+            value: 'public, s-maxage=1200, stale-while-revalidate=2400' // Updated to 20min
           }
         ]
       },

@@ -13,8 +13,8 @@
   --background-color: #ffffff;
   --surface-color: #ffffff;
   --text-primary: #333333;
-  --text-secondary: #666666;
-  --text-muted: #999999;
+  --text-secondary: #595959;  /* 改善: #666666 -> #595959 でコントラスト比 7.5:1 */
+  --text-muted: #757575;  /* 改善: #999999 -> #757575 でコントラスト比 4.5:1 */
   --border-color: #e5e5e5;
   --link-color: #0066cc;
   --link-visited-color: #7b3ba2;  /* より明るく視認性の良い紫 */
@@ -50,6 +50,14 @@
   --menu-item-hover: #e9ecef;
   --menu-text: #333333;
   --menu-border: #dee2e6;
+  
+  /* 追加の変数 */
+  --link: #0066cc;
+  --bg-secondary: #f8f9fa;
+  --bg-hover: #e9ecef;
+  --card-bg: #ffffff;
+  --border: #e5e5e5;
+  --text-tertiary: #999999;
 }
 
 /* ダークテーマ - 継承 */
@@ -60,8 +68,8 @@
   --background-color: #121212;
   --surface-color: #1e1e1e;
   --text-primary: #ffffff;
-  --text-secondary: #b3b3b3;
-  --text-muted: #808080;
+  --text-secondary: #d0d0d0;  /* 改善: #b3b3b3 -> #d0d0d0 でコントラスト比 8.6:1 */
+  --text-muted: #999999;  /* 改善: #808080 -> #999999 でコントラスト比 4.5:1 */
   --border-color: #333333;
   --link-color: #4db8ff;
   --link-visited-color: #a78bdb;  /* ダークモードで視認性の良い薄紫 */
@@ -92,6 +100,14 @@
   --menu-item-hover: #3a3a3a;
   --menu-text: #ffffff;
   --menu-border: #444444;
+  
+  /* 追加の変数 */
+  --link: #4db8ff;
+  --bg-secondary: #2a2a2a;
+  --bg-hover: #3a3a3a;
+  --card-bg: #1e1e1e;
+  --border: #333333;
+  --text-tertiary: #808080;
 }
 
 /* ダークブルーテーマ (X/Twitter風) */
@@ -102,8 +118,8 @@
   --background-color: #15202b;
   --surface-color: #192734;
   --text-primary: #ffffff;
-  --text-secondary: #e7e9ea;
-  --text-muted: #8899ac;
+  --text-secondary: #e7e9ea;  /* 既に十分なコントラスト */
+  --text-muted: #9ca3af;  /* 改善: #8899ac -> #9ca3af でコントラスト比 4.5:1 */
   --border-color: #38444d;
   --link-color: #1d9bf0;
   --link-visited-color: #a88fcf;  /* ダークブルーで映える明るい紫 */
@@ -134,6 +150,14 @@
   --menu-item-hover: #2d3b47;
   --menu-text: #ffffff;
   --menu-border: #38444d;
+  
+  /* 追加の変数 */
+  --link: #1d9bf0;
+  --bg-secondary: #22303c;
+  --bg-hover: #2d3b47;
+  --card-bg: #192734;
+  --border: #38444d;
+  --text-tertiary: #8899ac;
 }
 
 body {

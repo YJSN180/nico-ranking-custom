@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
+import { getCacheHeaders } from '@/lib/cache-durations'
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -12,14 +13,14 @@ export async function GET(request: NextRequest) {
     
     return NextResponse.json({ tags }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60'
+        'Cache-Control': getCacheHeaders('popular-tags')
       }
     })
   } catch (error) {
     return NextResponse.json({ tags: [] }, {
       status: 200, // エラーでも200を返して空配列を返す
       headers: {
-        'Cache-Control': 'public, max-age=60, s-maxage=60'
+        'Cache-Control': getCacheHeaders('popular-tags')
       }
     })
   }

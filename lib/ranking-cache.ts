@@ -8,7 +8,9 @@ interface CacheEntry {
   size: number // Approximate size in bytes
 }
 
-const CACHE_TTL = 25 * 60 * 1000 // 25 minutes (aligned with 30-minute update cycle)
+import { CACHE_DURATIONS } from './cache-durations'
+
+const CACHE_TTL = CACHE_DURATIONS.CLIENT_CACHE * 1000 // 20 minutes (fresher data for better UX)
 const MAX_CACHE_SIZE = 50 * 1024 * 1024 // 50MB max cache size
 const MAX_ENTRIES = 100 // Maximum number of cache entries
 

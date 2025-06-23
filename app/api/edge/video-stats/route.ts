@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getCacheHeaders } from '@/lib/cache-durations'
 
 // This API fetches video stats from Cloudflare KV
 // Uses Node.js runtime for KV access compatibility
@@ -90,8 +91,8 @@ export async function GET(request: NextRequest) {
     })
     
     // エッジキャッシュを活用して読み取り回数を削減
-    // WorkerのCron間隔（2分）に合わせて120秒のキャッシュを設定
-    response.headers.set('Cache-Control', 'public, max-age=120, s-maxage=120, stale-while-revalidate=60')
+    // WorkerのCron間隔（2分）に合わせたキャッシュ設定
+    response.headers.set('Cache-Control', getCacheHeaders('video-stats'))
     
     return response
     

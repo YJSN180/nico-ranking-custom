@@ -12,9 +12,10 @@ import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
+import { CACHE_DURATIONS } from '@/lib/cache-durations'
 
 // ISRを使用してFunction Invocationsを削減
-export const revalidate = 1800 // 30分間キャッシュ（cronジョブと同期）
+export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
+import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
@@ -171,16 +172,16 @@ export async function middleware(request: NextRequest) {
   
   // APIルートの最適化
   if (request.nextUrl.pathname.startsWith('/api/ranking')) {
-    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600')
+    response.headers.set('Cache-Control', getCacheHeaders('ranking'))
     // Cloudflare用のキャッシュヘッダー
-    response.headers.set('CDN-Cache-Control', 'public, s-maxage=300')
+    response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
   }
   
   // メインページのキャッシュ（ISRの代替として）
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
-    // Cloudflare CDNで30分間キャッシュ
-    response.headers.set('Cache-Control', 'public, s-maxage=1800, stale-while-revalidate=3600')
-    response.headers.set('CDN-Cache-Control', 'public, s-maxage=1800')
+    // Cloudflare CDNで20分間キャッシュ
+    response.headers.set('Cache-Control', getCacheHeaders('ranking'))
+    response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
   }
   
   // セキュリティヘッダーを追加

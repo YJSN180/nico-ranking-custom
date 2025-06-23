@@ -8,7 +8,15 @@ export default function InfoLayout({
   return (
     <>
       <HeaderWithSettings />
-      <main>{children}</main>
+      <main style={{ 
+        backgroundColor: 'var(--background-color)',
+        color: 'var(--text-primary)',
+        minHeight: 'calc(100vh - 70px)',
+        paddingTop: '20px',
+        paddingBottom: '40px'
+      }}>
+        {children}
+      </main>
     </>
   )
 }
