@@ -13,6 +13,11 @@
   min-height: 80px;
 }
 
+/* 左側エリア（モバイルのみで使用） */
+.ranking-item-responsive__left {
+  display: none; /* デスクトップでは非表示 */
+}
+
 /* 順位表示 */
 .ranking-item-responsive__rank {
   grid-area: rank;
@@ -26,6 +31,11 @@
   grid-area: thumbnail;
   width: 160px;
   flex-shrink: 0;
+}
+
+/* タイトルラッパー（モバイルのみで使用） */
+.ranking-item-responsive__title-wrapper {
+  display: contents; /* デスクトップではラッパーを無効化 */
 }
 
 /* コンテンツエリア */
@@ -101,51 +111,72 @@
 /* Container Query: 600px以下でモバイルレイアウト */
 @container (max-width: 600px) {
   .ranking-item-responsive__content {
-    /* モバイルレイアウト: 順位 + サムネ/詳細を横並び */
-    grid-template-columns: 48px auto 1fr;
-    grid-template-areas: "rank thumbnail details";
+    /* モバイルレイアウト: 2カラム構成 */
+    grid-template-columns: 120px 1fr;
+    grid-template-areas: "left details";
     gap: 10px;
     padding: 2px;
     min-height: 75px;
   }
   
+  /* デスクトップ用の要素を非表示 */
+  .ranking-item-responsive__content > .ranking-item-responsive__rank:not(.ranking-item-responsive__left .ranking-item-responsive__rank),
+  .ranking-item-responsive__content > .ranking-item-responsive__thumbnail:not(.ranking-item-responsive__left .ranking-item-responsive__thumbnail) {
+    display: none;
+  }
+  
+  /* 左側エリア（順位＋サムネイル） */
+  .ranking-item-responsive__left {
+    grid-area: left;
+    display: flex; /* モバイルでは表示 */
+    flex-direction: column;
+    gap: 0;
+  }
+  
   .ranking-item-responsive__rank {
-    /* 順位を左側に配置 */
-    grid-area: rank;
-    min-width: 40px;
-    height: 40px;
-    font-size: 20px;
+    /* 順位をサムネイルの上に配置 */
+    height: auto;
+    padding: 2px 4px;
+    font-size: 14px;
     font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    align-self: flex-start;
     /* モバイルでは背景色を適用 */
     background: var(--mobile-rank-bg) !important;
     color: white !important;
+    border-radius: 4px;
+    margin-bottom: 2px;
   }
   
   .ranking-item-responsive__thumbnail {
-    grid-area: thumbnail;
     width: 120px;
     position: relative;
-    margin-top: 0;
   }
   
   .ranking-item-responsive__details {
     grid-area: details;
+    display: flex;
+    flex-direction: column;
     gap: 4px;
     overflow: hidden;
   }
   
+  /* タイトルエリアを固定高さに */
+  .ranking-item-responsive__title-wrapper {
+    height: 39px;
+    display: flex;
+    align-items: center;
+  }
+  
   .ranking-item-responsive__title {
     font-size: 15px;
-    margin-bottom: 4px;
     /* モバイルでは2行まで表示 */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.3;
+    margin-bottom: 0;
   }
   
   .ranking-item-responsive__author {
@@ -251,40 +282,58 @@
   /* 従来のMedia Queriesで対応 */
   @media (max-width: 640px) {
     .ranking-item-responsive__content {
-      grid-template-columns: 48px auto 1fr;
-      grid-template-areas: "rank thumbnail details";
+      grid-template-columns: 120px 1fr;
+      grid-template-areas: "left details";
       gap: 10px;
       padding: 2px;
       min-height: 75px;
     }
     
-    .ranking-item-responsive__rank {
-      grid-area: rank;
-      min-width: 40px;
-      height: 40px;
-      font-size: 20px;
-      font-weight: 700;
+    /* デスクトップ用の要素を非表示 */
+    .ranking-item-responsive__content > .ranking-item-responsive__rank:not(.ranking-item-responsive__left .ranking-item-responsive__rank),
+    .ranking-item-responsive__content > .ranking-item-responsive__thumbnail:not(.ranking-item-responsive__left .ranking-item-responsive__thumbnail) {
+      display: none;
+    }
+    
+    .ranking-item-responsive__left {
+      grid-area: left;
       display: flex;
-      align-items: center;
-      justify-content: center;
-      /* モバイルでは背景色を適用 */
+      flex-direction: column;
+      gap: 0;
+    }
+    
+    .ranking-item-responsive__rank {
+      height: auto;
+      padding: 2px 4px;
+      font-size: 14px;
+      font-weight: 700;
+      display: inline-block;
+      align-self: flex-start;
       background: var(--mobile-rank-bg) !important;
       color: white !important;
+      border-radius: 4px;
+      margin-bottom: 2px;
     }
     
     .ranking-item-responsive__thumbnail {
-      grid-area: thumbnail;
       width: 120px;
       position: relative;
-      margin-top: 0;
+    }
+    
+    .ranking-item-responsive__title-wrapper {
+      height: 39px;
+      display: flex;
+      align-items: center;
     }
     
     .ranking-item-responsive__title {
       font-size: 15px;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      line-height: 1.3;
+      margin-bottom: 0;
     }
   }
   
