@@ -2,7 +2,7 @@
 // 動的取得が失敗した場合のフォールバック用
 // 最新のデータはgetPopularTags関数で取得すること
 
-import { fetchRanking } from './complete-hybrid-scraper'
+import { scrapeRankingPage } from './scraper'
 import { getGenreRanking } from './cloudflare-kv'
 import { GENRE_ID_MAP } from './genre-mapping'
 import type { RankingGenre } from '../types/ranking-config'
@@ -50,7 +50,7 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
   
   try {
     // 2. 動的に人気タグを取得（フォールバック）
-    const data = await fetchRanking(genre, null, period)
+    const data = await scrapeRankingPage(genre, period)
     
     if (data.popularTags && data.popularTags.length > 0) {
       return data.popularTags
@@ -77,7 +77,7 @@ async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour
   
   try {
     // 2. 動的に人気タグを取得（フォールバック）
-    const data = await fetchRanking(genre, null, period)
+    const data = await scrapeRankingPage(genre, period)
     
     if (data.popularTags && data.popularTags.length > 0) {
       return data.popularTags

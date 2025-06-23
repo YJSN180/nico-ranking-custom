@@ -1,8 +1,6 @@
 // ニコニコ動画のランキングページをnvapiから取得するモジュール
 
 import type { RankingItem } from '@/types/ranking'
-import { fetchRanking } from './complete-hybrid-scraper'
-import { rssHybridScrape } from './rss-hybrid-scraper'
 
 // User-Agentの設定
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
@@ -49,12 +47,8 @@ export async function scrapeRankingPage(
   items: Partial<RankingItem>[]
   popularTags?: string[]
 }> {
-  // fetchRankingを使用（指定されたページのデータを取得）
-  const data = await fetchRanking(genre, tag, term, limit, page)
-  return {
-    items: data.items,
-    popularTags: data.popularTags
-  }
+  // nvAPI専用実装を使用
+  return await scrapeRankingPageNvApiOnly(genre, term, tag)
 }
 
 // 既存のnvAPI専用実装（テスト用に保持）
