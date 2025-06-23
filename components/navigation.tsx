@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { 
   HamburgerIcon, 
@@ -56,13 +57,9 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/changelog', label: '更新履歴', icon: <HistoryIcon />, section: 'info' },
 ]
 
-interface NavigationProps {
-  isMobile: boolean
-}
-
-export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
+export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(isMobileProp)
+  const isMobile = useMobileDetect()
   const pathname = usePathname()
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -74,20 +71,6 @@ export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
     // 設定モーダルを開くイベントを発火
     window.dispatchEvent(new Event('openSettings'))
   }
-
-  // クライアントサイドでのみ実行されるリサイズ処理
-  useEffect(() => {
-    const checkSize = () => {
-      // 768pxをブレークポイントとする
-      setIsMobile(window.innerWidth <= 768)
-    }
-
-    // 初回マウント時にもチェック
-    checkSize()
-
-    window.addEventListener('resize', checkSize)
-    return () => window.removeEventListener('resize', checkSize)
-  }, []) // 依存配列は空でOK
 
   // モバイルメニューの外側クリックで閉じる
   useEffect(() => {
@@ -136,8 +119,10 @@ export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
     }
   }, [isMobile, isOpen])
 
-  // isMobile状態に基づいてレンダリングを分岐
-  if (isMobile) {
+  // 768px以下でモバイル表示
+  const shouldShowMobile = isMobile || (typeof window !== 'undefined' && window.innerWidth <= 768)
+
+  if (shouldShowMobile) {
     return (
       <>
         {/* ハンバーガーメニューボタン */}

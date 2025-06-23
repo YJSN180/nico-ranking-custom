@@ -23,7 +23,7 @@ export function HeaderInteractive({ isMobile }: HeaderInteractiveProps) {
 
   return (
     <>
-      <Navigation isMobile={isMobile} />
+      <Navigation />
       <button
           onClick={() => setIsSettingsOpen(true)}
           style={{
