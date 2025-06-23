@@ -130,6 +130,11 @@
 
 /* Container Query: 600px以下でモバイルレイアウト */
 @container (max-width: 600px) {
+  /* モバイルでの再生時間フォントサイズ調整 */
+  .ranking-item-responsive__duration {
+    font-size: 11px;
+  }
+  
   .ranking-item-responsive__content {
     /* モバイルレイアウト: 2カラム（サムネイル + 詳細） */
     grid-template-columns: 140px 1fr;
@@ -206,6 +211,11 @@
 
 /* Container Query: 400px以下で超モバイルレイアウト */
 @container (max-width: 400px) {
+  /* 超モバイルでの再生時間フォントサイズ調整 */
+  .ranking-item-responsive__duration {
+    font-size: 10px;
+  }
+  
   .ranking-item-responsive__content {
     grid-template-columns: 100px 1fr;
     grid-template-areas: "thumbnail details";
@@ -289,6 +299,11 @@
 @supports not (container-type: inline-size) {
   /* 従来のMedia Queriesで対応 */
   @media (max-width: 640px) {
+    /* モバイルでの再生時間フォントサイズ調整 */
+    .ranking-item-responsive__duration {
+      font-size: 11px;
+    }
+    
     .ranking-item-responsive__content {
       grid-template-columns: 140px 1fr;
       grid-template-areas: "thumbnail details";
