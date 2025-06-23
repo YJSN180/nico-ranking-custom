@@ -79,7 +79,9 @@ export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
   useEffect(() => {
     const checkSize = () => {
       // 768pxをブレークポイントとする
-      setIsMobile(window.innerWidth <= 768)
+      const newIsMobile = window.innerWidth <= 768
+      console.log('Navigation: checkSize', { windowWidth: window.innerWidth, newIsMobile, currentIsMobile: isMobile })
+      setIsMobile(newIsMobile)
     }
 
     // 初回マウント時にもチェック
@@ -137,6 +139,7 @@ export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
   }, [isMobile, isOpen])
 
   // isMobile状態に基づいてレンダリングを分岐
+  console.log('Navigation: render decision', { isMobile, propsIsMobile: isMobileProp })
   if (isMobile) {
     return (
       <>
