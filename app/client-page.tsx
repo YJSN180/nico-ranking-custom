@@ -605,12 +605,11 @@ export default function ClientPage({
     if (!loading && !error && finalDisplayItems.length === 0 && !config.tag) {
       // タグ指定なしでデータがない場合は、2秒後にトップページへリダイレクト
       const redirectTimer = setTimeout(() => {
-        // 直接URLを指定してリダイレクト（24h総合ランキング）
-        window.location.href = '/'
+        handleConfigChange({ genre: 'all', period: '24h', tag: undefined })
       }, 2000)
       return () => clearTimeout(redirectTimer)
     }
-  }, [loading, error, finalDisplayItems.length, config.tag])
+  }, [loading, error, finalDisplayItems.length, config.tag, handleConfigChange])
   
   // レンダリング
   return (
@@ -671,25 +670,13 @@ export default function ClientPage({
               ジャンル別ランキングに戻る
             </button>
           ) : (
-            <>
-              <div style={{ 
-                fontSize: '14px', 
-                color: 'var(--text-secondary)',
-                marginBottom: '10px'
-              }}>
-                2秒後にトップページへ移動します...
-              </div>
-              <a 
-                href="/"
-                style={{
-                  color: 'var(--link-color)',
-                  textDecoration: 'underline',
-                  fontSize: '14px'
-                }}
-              >
-                今すぐトップページへ移動
-              </a>
-            </>
+            <div style={{ 
+              fontSize: '14px', 
+              color: 'var(--text-secondary)',
+              marginBottom: '20px'
+            }}>
+              トップページへリダイレクトします...
+            </div>
           )}
         </div>
       )}
