@@ -101,26 +101,27 @@
 /* Container Query: 600px以下でモバイルレイアウト */
 @container (max-width: 600px) {
   .ranking-item-responsive__content {
-    /* モバイルレイアウト: rank + thumbnail + details を横並び */
-    grid-template-columns: auto auto 1fr;
-    grid-template-areas: "rank thumbnail details";
+    /* モバイルレイアウト: 順位上、サムネと詳細下 */
+    grid-template-columns: auto 1fr;
+    grid-template-areas: 
+      "rank rank"
+      "thumbnail details";
     gap: 4px;
     padding: 4px 5px;
     height: 75px;
   }
   
   .ranking-item-responsive__rank {
-    /* 順位をサムネの左上に配置 */
+    /* 順位をサムネの上に配置 */
     grid-area: rank;
-    min-width: 28px;
-    height: 28px;
+    width: auto;
+    height: auto;
     font-size: 14px;
     font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    align-self: start;
-    margin-top: 0;
+    display: block;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -172,8 +173,6 @@
   }
   
   .ranking-item-responsive__rank {
-    min-width: 24px;
-    height: 24px;
     font-size: 12px;
   }
   
@@ -227,8 +226,10 @@
   /* 従来のMedia Queriesで対応 */
   @media (max-width: 640px) {
     .ranking-item-responsive__content {
-      grid-template-columns: auto auto 1fr;
-      grid-template-areas: "rank thumbnail details";
+      grid-template-columns: auto 1fr;
+      grid-template-areas: 
+        "rank rank"
+        "thumbnail details";
       gap: 4px;
       padding: 4px 5px;
       height: 75px;
@@ -236,15 +237,14 @@
     
     .ranking-item-responsive__rank {
       grid-area: rank;
-      min-width: 28px;
-      height: 28px;
+      width: auto;
+      height: auto;
       font-size: 14px;
       font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      align-self: start;
-      margin-top: 0;
+      display: block;
+      margin: 0;
+      padding: 0;
+      line-height: 1;
     }
     
     .ranking-item-responsive__thumbnail {
