@@ -1,4 +1,4 @@
-// プロキシサーバー経由でランキングを取得
+// プロキシサーバー経由で例のソレジャンルのランキングを取得
 
 import type { RankingItem } from '@/types/ranking'
 
@@ -163,16 +163,16 @@ export async function testProxyAccess() {
   
   // プロキシなしでテスト
   try {
-    const result = await fetchRankingViaProxy('e9uj2uks', 'hour') // 'all' genre
+    const result = await fetchRankingViaProxy('d2um7mc4', 'hour')
   } catch (error) {
   }
   
   // 各プロキシでテスト
   for (const proxy of japaneseProxies) {
     try {
-      const result = await fetchRankingViaProxy('e9uj2uks', 'hour', proxy) // 'all' genre
+      const result = await fetchRankingViaProxy('d2um7mc4', 'hour', proxy)
       
-      if (result.genreId === 'e9uj2uks') {
+      if (result.genreId === 'd2um7mc4') {
         return result
       }
     } catch (error) {
