@@ -80,12 +80,12 @@ export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
     const checkSize = () => {
       // 768pxをブレークポイントとする
       const newIsMobile = window.innerWidth <= 768
-      console.log('Navigation: checkSize', { windowWidth: window.innerWidth, newIsMobile, currentIsMobile: isMobile })
       setIsMobile(newIsMobile)
     }
 
-    // 初回マウント時にもチェック
-    checkSize()
+    // ハイドレーションミスマッチを防ぐため、初回チェックは削除
+    // 初回はサーバーから渡されたisMobileプロップを信頼する
+    // checkSize()
 
     window.addEventListener('resize', checkSize)
     return () => window.removeEventListener('resize', checkSize)
@@ -139,7 +139,6 @@ export function Navigation({ isMobile: isMobileProp }: NavigationProps) {
   }, [isMobile, isOpen])
 
   // isMobile状態に基づいてレンダリングを分岐
-  console.log('Navigation: render decision', { isMobile, propsIsMobile: isMobileProp })
   if (isMobile) {
     return (
       <>
