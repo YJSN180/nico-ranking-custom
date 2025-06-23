@@ -8,18 +8,11 @@ interface HeaderStaticProps {
 // サーバーコンポーネント（'use client'ディレクティブなし）
 export function HeaderStatic({ isMobile }: HeaderStaticProps) {
   return (
-    <header role="banner" className="header-container" style={{
-      background: 'var(--header-bg)',
-      padding: isMobile ? '5px 12px' : '8px 20px',
-      boxShadow: 'var(--shadow-md)',
-      marginBottom: '20px',
-      position: 'relative'
+    <div style={{ 
+      maxWidth: '1200px', 
+      margin: '0 auto',
+      padding: isMobile ? '0 60px' : '0 120px' // 両サイドのボタンのスペースを確保
     }}>
-      <div style={{ 
-        maxWidth: '1200px', 
-        margin: '0 auto',
-        padding: isMobile ? '0 60px' : '0 120px' // 両サイドのボタンのスペースを確保
-      }}>
         <Link 
           href="/" 
           style={{ 
@@ -84,7 +77,6 @@ export function HeaderStatic({ isMobile }: HeaderStaticProps) {
             </div>
           </h1>
         </Link>
-      </div>
-    </header>
+    </div>
   )
 }
