@@ -1,6 +1,7 @@
 'use client'
 
 import { memo } from 'react'
+import { useMediaQuery } from '@/hooks/use-media-query'
 
 interface PaginationProps {
   currentPage: number
@@ -17,6 +18,8 @@ const Pagination = memo(function Pagination({
   itemsPerPage,
   onPageChange
 }: PaginationProps) {
+  const isMobile = useMediaQuery('(max-width: 600px)')
+  
   if (totalPages <= 1) return null
 
   const getVisiblePages = () => {
@@ -101,47 +104,58 @@ const Pagination = memo(function Pagination({
           ← 前
         </button>
 
-        {/* ページ番号 */}
-        {visiblePages.map((page, index) => {
-          if (page === '...') {
+        {/* モバイル: 現在/全体 形式、デスクトップ: ページ番号 */}
+        {isMobile ? (
+          <div style={{
+            padding: '8px 12px',
+            fontSize: '14px',
+            color: 'var(--text-primary)',
+            fontWeight: '600'
+          }}>
+            {currentPage} / {totalPages}
+          </div>
+        ) : (
+          visiblePages.map((page, index) => {
+            if (page === '...') {
+              return (
+                <span
+                  key={`dots-${index}`}
+                  style={{
+                    padding: '8px 4px',
+                    color: 'var(--text-muted)',
+                    fontSize: '14px'
+                  }}
+                >
+                  ...
+                </span>
+              )
+            }
+
+            const pageNum = page as number
+            const isActive = pageNum === currentPage
+
             return (
-              <span
-                key={`dots-${index}`}
+              <button
+                key={pageNum}
+                onClick={() => onPageChange(pageNum)}
                 style={{
-                  padding: '8px 4px',
-                  color: 'var(--text-muted)',
-                  fontSize: '14px'
+                  padding: '8px 12px',
+                  fontSize: '14px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  background: isActive ? 'var(--primary-color)' : 'var(--surface-color)',
+                  color: isActive ? 'white' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  fontWeight: isActive ? '600' : '400',
+                  transition: 'all 0.2s',
+                  minWidth: '40px'
                 }}
               >
-                ...
-              </span>
+                {pageNum}
+              </button>
             )
-          }
-
-          const pageNum = page as number
-          const isActive = pageNum === currentPage
-
-          return (
-            <button
-              key={pageNum}
-              onClick={() => onPageChange(pageNum)}
-              style={{
-                padding: '8px 12px',
-                fontSize: '14px',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                background: isActive ? 'var(--primary-color)' : 'var(--surface-color)',
-                color: isActive ? 'white' : 'var(--text-primary)',
-                cursor: 'pointer',
-                fontWeight: isActive ? '600' : '400',
-                transition: 'all 0.2s',
-                minWidth: '40px'
-              }}
-            >
-              {pageNum}
-            </button>
-          )
-        })}
+          })
+        )}
 
         {/* 次のページボタン */}
         <button
