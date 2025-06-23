@@ -264,7 +264,15 @@ async function fetchRankingPageWithRetry(
         throw new Error('ランキングデータが見つかりません');
       }
 
-      const popularTags = extractTrendTags(serverData);
+      // Extract popular tags, but handle special case for reisore genre
+      let popularTags = extractTrendTags(serverData);
+      
+      // Special handling for 'reisore' genre - it returns 'all' genre's featuredKey
+      if (genre === 'reisore' && serverData.data?.response?.$getTeibanRankingFeaturedKeyAndTrendTags?.data?.featuredKey === 'e9uj2uks') {
+        console.log(`[${genre}] API returned 'all' genre data, skipping popular tags`);
+        popularTags = [];
+      }
+      
       const startRank = (page - 1) * 100 + 1;
       const items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
         rank: startRank + index,

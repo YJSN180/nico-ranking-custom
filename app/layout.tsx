@@ -106,10 +106,10 @@ export default async function RootLayout({
           body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
           .header-container{background:linear-gradient(135deg,#00A8E8 0%,#0077BE 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
           .selectors-container{min-height:200px}
-          .ranking-video-link{color:#0066cc;text-decoration:none}
-          .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}
-          [data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:12px;padding:16px}
-          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}}
+          .ranking-item-responsive__title{color:#0066cc;text-decoration:none;font-size:16px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;word-break:break-word}
+          .ranking-item-responsive__content{display:grid;gap:12px;padding:4px;grid-template-columns:auto auto 1fr;align-items:start;min-height:80px}
+          li[data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-item-responsive__title{font-size:15px;-webkit-line-clamp:2}}
         ` }} />
         <script
           type="application/ld+json"

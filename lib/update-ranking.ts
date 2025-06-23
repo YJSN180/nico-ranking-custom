@@ -29,8 +29,7 @@ const GENRES_TO_UPDATE: RankingGenre[] = [
   'radio',
   'sports',
   'animal',
-  'other',
-  'reisore'
+  'other'
 ]
 
 interface UpdateResult {
@@ -155,6 +154,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
       // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
       
       // 「その他」ジャンルのすべての人気タグを両期間で事前生成
+      // 「例のソレ」ジャンルは人気タグがないため除外
       if (genre === 'other' && popularTags && popularTags.length > 0) {
         // すべての人気タグを処理（最大15タグ程度を想定）
         for (const tag of popularTags) {

@@ -24,6 +24,5 @@ export const GENRE_ID_MAP: Record<RankingGenre, string> = {
   radio: 'oxzi6bje',
   sports: '4w3p65pf',
   animal: 'ne72lua2',
-  other: 'ramuboyn',
-  reisore: 'd2um7mc4'
+  other: 'ramuboyn'
 }
