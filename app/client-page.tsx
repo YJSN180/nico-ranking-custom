@@ -4,10 +4,10 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
-import RankingItemComponent from '@/components/ranking-item'
+import RankingItemResponsive from '@/components/ranking-item-responsive'
+import Pagination from '@/components/pagination'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
-import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import { rankingCache } from '@/lib/ranking-cache'
@@ -17,19 +17,22 @@ import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 import './client-page.css'
+import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
+  initialPage?: number
   popularTags?: string[]
 }
 
-// 表示件数の定数
+// ページネーション設定
+const ITEMS_PER_PAGE = 50    // ページあたりの表示件数（DOM要素数削減のため）
 const DISPLAY_LIMITS = {
-  TAG: 300,      // タグ別ランキングは全300件表示
-  GENRE: 500,    // ジャンル別ランキングは500件表示
+  TAG: 300,      // タグ別ランキングは全300件取得
+  GENRE: 500,    // ジャンル別ランキングは500件取得
 }
 
 export default function ClientPage({ 
@@ -37,6 +40,7 @@ export default function ClientPage({
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
+  initialPage = 1,
   popularTags = []
 }: ClientPageProps) {
   const router = useRouter()
@@ -59,6 +63,20 @@ export default function ClientPage({
       genre: initialGenre as RankingGenre,
       tag: initialTag
     }
+  })
+  
+  // ページ状態の管理
+  const [currentPage, setCurrentPage] = useState(() => {
+    // URLパラメータから初期ページを取得
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const pageParam = urlParams.get('page')
+      if (pageParam) {
+        const pageNum = parseInt(pageParam, 10)
+        return Math.max(1, pageNum)
+      }
+    }
+    return initialPage
   })
   
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData.items || initialData as any)
@@ -103,8 +121,7 @@ export default function ClientPage({
     }
   }, [])
   
-  // モバイル検出
-  const isMobile = useMobileDetect()
+  // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
   
   // 初回マウント時にデータ移行を実行
   useEffect(() => {
@@ -118,6 +135,7 @@ export default function ClientPage({
         genre: config.genre,
         period: config.period,
         tag: config.tag,
+        page: currentPage,
         popularTags: currentPopularTags,
         savedAt: Date.now()
       }
@@ -147,14 +165,15 @@ export default function ClientPage({
       window.removeEventListener('beforeunload', saveCurrentState)
       document.removeEventListener('click', handleInternalNavigation)
     }
-  }, [config, currentPopularTags])
+  }, [config, currentPopularTags, currentPage])
   
   // sessionStorageから復元する設定を管理
   const [shouldRestore, setShouldRestore] = useState(() => {
     // URLパラメータがない場合のみ、sessionStorageから復元を試みる
     const hasUrlParams = new URLSearchParams(window.location.search).has('genre') || 
                         new URLSearchParams(window.location.search).has('period') || 
-                        new URLSearchParams(window.location.search).has('tag')
+                        new URLSearchParams(window.location.search).has('tag') ||
+                        new URLSearchParams(window.location.search).has('page')
     
     if (!hasUrlParams && typeof window !== 'undefined') {
       try {
@@ -245,6 +264,8 @@ export default function ClientPage({
     if (newConfig.genre !== 'all') params.set('genre', newConfig.genre)
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
+    // 設定変更時はページ1にリセット
+    setCurrentPage(1)
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
@@ -448,6 +469,22 @@ export default function ClientPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, router, updatePreferences, savePopularTagsToCache])
   
+  // ページ変更時の処理
+  const handlePageChange = useCallback((page: number) => {
+    if (page === currentPage) return
+    
+    setCurrentPage(page)
+    
+    // URLを更新（ページパラメータを追加）
+    const params = new URLSearchParams()
+    if (config.genre !== 'all') params.set('genre', config.genre)
+    if (config.period !== '24h') params.set('period', config.period)
+    if (config.tag) params.set('tag', config.tag)
+    if (page > 1) params.set('page', page.toString())
+    
+    router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
+  }, [currentPage, config, router])
+  
   // sessionStorageから設定を復元
   useEffect(() => {
     if (shouldRestore) {
@@ -468,11 +505,17 @@ export default function ClientPage({
           setCurrentPopularTags(shouldRestore.popularTags)
         }
         
+        // ページ状態も復元
+        if (shouldRestore.page && shouldRestore.page > 1) {
+          setCurrentPage(shouldRestore.page)
+        }
+        
         // URLを更新（ブラウザの履歴に追加しない）
         const params = new URLSearchParams()
         if (restoredConfig.genre !== 'all') params.set('genre', restoredConfig.genre)
         if (restoredConfig.period !== '24h') params.set('period', restoredConfig.period)
         if (restoredConfig.tag) params.set('tag', restoredConfig.tag)
+        if (shouldRestore.page && shouldRestore.page > 1) params.set('page', shouldRestore.page.toString())
         
         const newUrl = params.toString() ? `?${params.toString()}` : '/'
         window.history.replaceState(null, '', newUrl)
@@ -489,9 +532,9 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // フィルタリングと順位再割り当て（filterWithNGListが自動的にランクを再計算）
-  const displayItems = useMemo(() => {
-    // 表示件数の上限
+  // フィルタリングとページネーション
+  const { displayItems, totalPages, totalItems } = useMemo(() => {
+    // 取得件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
     
     // UserNGListをNGList形式に変換（useUserNGListフック内のconvertToNGListロジックを展開）
@@ -506,17 +549,26 @@ export default function ClientPage({
     // filterWithNGListを直接呼び出す（ランクの再計算を含む）
     const { filteredItems } = filterWithNGList(itemsWithTags, ngListForFilter)
     
-    // 表示件数を制限
-    const limited = filteredItems.slice(0, limit)
+    // 全取得件数を制限
+    const allItems = filteredItems.slice(0, limit)
+    
+    // ページネーション計算
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    const pageItems = allItems.slice(startIndex, endIndex)
     
     // originalRankを追加（元のランク番号を保持）
-    const result = limited.map(item => ({
+    const result = pageItems.map(item => ({
       ...item,
       originalRank: itemsWithTags.find(original => original.id === item.id)?.rank || item.rank
     }))
     
-    return result
-  }, [itemsWithTags, config.tag, ngList, ngListVersion])
+    return {
+      displayItems: result,
+      totalPages: Math.ceil(allItems.length / ITEMS_PER_PAGE),
+      totalItems: allItems.length
+    }
+  }, [itemsWithTags, config.tag, ngList, ngListVersion, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -617,26 +669,43 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 表示件数情報 */}
+          {/* 表示件数情報とページ情報 */}
           <div style={{
             padding: '8px 16px',
             fontSize: '14px',
             color: 'var(--text-secondary)',
-            textAlign: 'right'
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '8px'
           }}>
-            {finalDisplayItems.length}件表示
+            <div>
+              ページ {currentPage} / {totalPages}
+            </div>
+            <div>
+              {finalDisplayItems.length}件表示 (全{totalItems}件中)
+            </div>
           </div>
           
           {/* ランキングリスト */}
           <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
-              <RankingItemComponent 
+              <RankingItemResponsive 
                 key={item.id} 
-                item={item} 
-                isMobile={isMobile} 
+                item={item}
               />
             ))}
           </ul>
+          
+          {/* ページネーション */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={handlePageChange}
+          />
         </>
       )}
     </>

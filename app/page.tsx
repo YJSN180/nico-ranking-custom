@@ -32,6 +32,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const genre = (params.genre as RankingGenre) || 'all'
   const period = (params.period as RankingPeriod) || '24h'
   const tag = params.tag as string | undefined
+  const page = parseInt((params.page as string) || '1', 10)
   
   const genreInfo = RANKING_GENRES.find(g => g.value === genre)
   const genreName = genreInfo?.label || '総合'
@@ -148,6 +149,7 @@ export default async function Home({ searchParams }: PageProps) {
   let genre = params.genre as string
   let period = params.period as string
   let tag = params.tag as string | undefined
+  let page = parseInt((params.page as string) || '1', 10)
   
   // URLパラメータがない場合はCookieから読み取る
   if (!genre && !period && !tag) {
@@ -167,6 +169,7 @@ export default async function Home({ searchParams }: PageProps) {
   // デフォルト値を設定
   genre = genre || 'all'
   period = period || '24h'
+  page = Math.max(1, page || 1) // ページは最低1
   
   try {
     
@@ -188,18 +191,21 @@ export default async function Home({ searchParams }: PageProps) {
       }}>
         <HeaderWithSettings />
         
-        <div style={{ 
-          maxWidth: '1200px', 
-          margin: '0 auto',
-          padding: '20px',
-          minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
-        }}>
+        <div 
+          className="main-container-responsive"
+          style={{ 
+            maxWidth: '1200px', 
+            margin: '0 auto',
+            padding: '20px',
+            minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
+          }}>
           <SuspenseWrapper>
             <ClientPage 
               initialData={{ items: rankingData, popularTags }} 
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}
+              initialPage={page}
               popularTags={popularTags}
             />
           </SuspenseWrapper>

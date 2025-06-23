@@ -56,6 +56,12 @@ footer {
   border-top: 1px solid #e5e5e5;
 }
 
+/* Container Queries対応メインコンテナ */
+.main-container-responsive {
+  container-type: inline-size;
+  container-name: main;
+}
+
 /* レスポンシブ */
 @media (max-width: 640px) {
   .header-container {
