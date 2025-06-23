@@ -102,7 +102,7 @@
 @container (max-width: 600px) {
   .ranking-item-responsive__content {
     /* モバイルレイアウト: 順位 + サムネ/詳細を横並び */
-    grid-template-columns: 40px auto 1fr;
+    grid-template-columns: 36px auto 1fr;
     grid-template-areas: "rank thumbnail details";
     gap: 10px;
     padding: 2px;
@@ -112,9 +112,9 @@
   .ranking-item-responsive__rank {
     /* 順位を左側に配置 */
     grid-area: rank;
-    min-width: 32px;
-    height: 32px;
-    font-size: 16px;
+    min-width: 28px;
+    height: 28px;
+    font-size: 14px;
     font-weight: 700;
     display: flex;
     align-items: center;
@@ -167,16 +167,16 @@
 /* Container Query: 400px以下で超モバイルレイアウト */
 @container (max-width: 400px) {
   .ranking-item-responsive__content {
-    grid-template-columns: 32px auto 1fr;
+    grid-template-columns: 28px auto 1fr;
     padding: 2px;
     gap: 8px;
     min-height: 70px;
   }
   
   .ranking-item-responsive__rank {
-    min-width: 28px;
-    height: 28px;
-    font-size: 14px;
+    min-width: 24px;
+    height: 24px;
+    font-size: 12px;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -201,10 +201,7 @@
     gap: 4px;
   }
   
-  /* 超モバイルではマイリスト数を非表示 */
-  .ranking-item-responsive__stat--desktop-only {
-    display: none;
-  }
+  /* 超モバイルでもマイリスト数を表示 */
 }
 
 /* ランク1-3位の特別スタイル（Container Query対応） */
@@ -239,9 +236,9 @@
   .ranking-item-responsive__rank[style*="--rank-gold"],
   .ranking-item-responsive__rank[style*="--rank-silver"],
   .ranking-item-responsive__rank[style*="--rank-bronze"] {
-    min-width: 32px !important;
-    height: 32px !important;
-    font-size: 16px !important;
+    min-width: 28px !important;
+    height: 28px !important;
+    font-size: 14px !important;
     font-weight: 700 !important;
   }
 }
@@ -251,7 +248,7 @@
   /* 従来のMedia Queriesで対応 */
   @media (max-width: 640px) {
     .ranking-item-responsive__content {
-      grid-template-columns: 40px auto 1fr;
+      grid-template-columns: 36px auto 1fr;
       grid-template-areas: "rank thumbnail details";
       gap: 10px;
       padding: 2px;
@@ -260,9 +257,9 @@
     
     .ranking-item-responsive__rank {
       grid-area: rank;
-      min-width: 32px;
-      height: 32px;
-      font-size: 16px;
+      min-width: 28px;
+      height: 28px;
+      font-size: 14px;
       font-weight: 700;
       display: flex;
       align-items: center;
