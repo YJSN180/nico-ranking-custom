@@ -8,7 +8,7 @@ test.describe('モバイル専用テスト', () => {
 
   test('モバイルメニューが正しく動作する', async ({ page }) => {
     // メニューボタンが表示される
-    const menuButton = page.locator('button[aria-label="メニュー"]')
+    const menuButton = page.locator('button[aria-label="メニューを開く"]')
     await expect(menuButton).toBeVisible()
     
     // メニューを開く
@@ -19,7 +19,7 @@ test.describe('モバイル専用テスト', () => {
     
     // メニュー項目が表示される
     await page.waitForTimeout(500)
-    const menuItems = await page.locator('[role="menuitem"], nav a, [class*="dropdown"] a').count()
+    const menuItems = await page.locator('#navigation-menu a').count()
     expect(menuItems).toBeGreaterThan(0)
   })
 
@@ -35,13 +35,13 @@ test.describe('モバイル専用テスト', () => {
   test('モバイル用のスタイルが適用される', async ({ page }) => {
     // ヘッダーのパディングが小さい
     const header = page.locator('header')
-    const headerStyle = await header.evaluate(el => window.getComputedStyle(el))
-    expect(headerStyle.padding).toMatch(/5px|12px/)
+    const headerPadding = await header.evaluate(el => window.getComputedStyle(el).padding)
+    expect(headerPadding).toMatch(/5px|12px/)
     
     // フォントサイズが適切
     const h1 = page.locator('h1')
-    const h1Style = await h1.evaluate(el => window.getComputedStyle(el))
-    const fontSize = parseInt(h1Style.fontSize)
+    const h1FontSize = await h1.evaluate(el => window.getComputedStyle(el).fontSize)
+    const fontSize = parseInt(h1FontSize)
     expect(fontSize).toBeLessThan(40) // モバイルでは小さめ
   })
 
