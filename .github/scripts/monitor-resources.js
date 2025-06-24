@@ -268,6 +268,12 @@ async function main() {
   try {
     const metrics = await collectAllMetrics();
     
+    // メトリクス取得が失敗した場合はエラーとして扱う
+    if (!metrics.r2 || !metrics.kv) {
+      console.error('Failed to collect metrics: r2=', !!metrics.r2, 'kv=', !!metrics.kv);
+      process.exit(1);
+    }
+    
     // 月間予測を計算（3時間のデータから）
     const hoursInMonth = 24 * 30;
     const scaleFactor = hoursInMonth / 3; // 3時間のデータを月間に拡大
@@ -356,12 +362,14 @@ async function main() {
       const output = [
         `r2_storage_gb=${result.projections.r2.storageGB}`,
         `r2_storage_usage=${usage.r2.storage}`,
+        `r2_object_count=${metrics.r2 ? metrics.r2.storage.objectCount : 0}`,
         `r2_classA_monthly=${result.projections.r2.monthlyClassA}`,
         `r2_classA_usage=${usage.r2.classA}`,
         `r2_classB_monthly=${result.projections.r2.monthlyClassB}`,
         `r2_classB_usage=${usage.r2.classB}`,
         `kv_storage_gb=${result.projections.kv.storageGB}`,
         `kv_storage_usage=${usage.kv.storage}`,
+        `kv_key_count=${metrics.kv ? metrics.kv.storage.keyCount : 0}`,
         `kv_reads_daily=${result.projections.kv.dailyReads}`,
         `kv_reads_usage=${usage.kv.reads}`,
         `kv_writes_daily=${result.projections.kv.dailyWrites}`,

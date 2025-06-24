@@ -62,19 +62,21 @@ jobs:
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && (failure() || success())
       with:
         name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
         path: playwright-report/
         retention-days: 30
+        if-no-files-found: ignore
 
     - name: Upload test videos
       uses: actions/upload-artifact@v4
-      if: always()
+      if: always() && (failure() || success())
       with:
         name: test-videos-${{ matrix.browser }}-${{ matrix.shard }}
         path: test-results/
         retention-days: 7
+        if-no-files-found: ignore
 
   merge-reports:
     needs: e2e-tests
@@ -125,6 +127,17 @@ jobs:
         KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
         KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
 
+    - name: Start server for Lighthouse
+      run: |
+        npm run start &
+        sleep 15
+        curl --retry 10 --retry-connrefused http://localhost:3000 || exit 1
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+        KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
+    
     - name: Run Lighthouse CI
       uses: treosh/lighthouse-ci-action@v11
       with:
@@ -135,7 +148,6 @@ jobs:
         uploadArtifacts: true
         temporaryPublicStorage: true
         runs: 3
-        configPath: './lighthouserc.js'
 
   accessibility:
     runs-on: ubuntu-latest
@@ -159,8 +171,9 @@ jobs:
     - name: Build and start server
       run: |
         npm run build
-        npm run start &
-        sleep 10
+        PORT=3001 npm run start &
+        sleep 15
+        curl --retry 10 --retry-connrefused http://localhost:3001 || exit 1
       env:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -168,7 +181,7 @@ jobs:
         KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
 
     - name: Run accessibility tests
-      run: npx playwright test tests/e2e/accessibility-seo.spec.ts --project=chromium
+      run: PLAYWRIGHT_BASE_URL=http://localhost:3001 npx playwright test tests/e2e/accessibility-seo.spec.ts --project=chromium
 
     - name: Upload accessibility results
       uses: actions/upload-artifact@v4
@@ -177,3 +190,4 @@ jobs:
         name: accessibility-results
         path: test-results/
         retention-days: 7
+        if-no-files-found: ignore
