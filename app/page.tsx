@@ -109,6 +109,32 @@ async function fetchRankingDataDirect(genre: string = 'all', period: string = '2
   popularTags?: string[]
 }> {
   
+  // 開発環境でKV_RANKING_IDがない場合はAPIエンドポイントを使用
+  if (process.env.NODE_ENV === 'development' && !process.env.KV_RANKING_ID) {
+    try {
+      const params = new URLSearchParams({
+        genre,
+        period,
+      })
+      if (tag) {
+        params.append('tag', tag)
+      }
+      
+      const apiUrl = `http://localhost:3000/api/ranking?${params.toString()}`
+      const response = await fetch(apiUrl)
+      
+      if (response.ok) {
+        const data = await response.json()
+        // NGフィルタリングを適用
+        const { filteredData } = await filterRankingDataServer(data)
+        return filteredData
+      }
+    } catch (error) {
+      console.error('[SSR] API fetch error:', error)
+    }
+    return { items: [], popularTags: [] }
+  }
+  
   // 直接Cloudflare KVから取得してAPIコールを回避
   try {
     if (tag) {

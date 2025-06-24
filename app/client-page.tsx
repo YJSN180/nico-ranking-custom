@@ -1,11 +1,10 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue, useTransition, Suspense } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
-import VirtualizedRankingList from '@/components/virtualized-ranking-list'
 import Pagination from '@/components/pagination'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
@@ -737,14 +736,12 @@ export default function ClientPage({
             onPageChange={handlePageChange}
           />
           
-          {/* ランキングリスト（仮想化） */}
-          <Suspense fallback={<div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>リストを準備中...</div>}>
-            <VirtualizedRankingList
-              items={finalDisplayItems}
-              height={Math.min(finalDisplayItems.length * 140, 600)} // 最大600px、または実際のアイテム数に応じた高さ
-              itemHeight={140} // 各アイテムの高さ（概算）
-            />
-          </Suspense>
+          {/* ランキングリスト */}
+          <div>
+            {finalDisplayItems.map((item) => (
+              <RankingItemResponsive key={item.id} item={item} />
+            ))}
+          </div>
           
           {/* 下部ページネーション */}
           <Pagination
