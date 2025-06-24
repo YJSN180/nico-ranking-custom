@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     
     // CI環境でのデバッグ情報
     if (process.env.CI) {
+      // eslint-disable-next-line no-console
       console.log('CI Environment Debug:', {
         hasKvRankingId: !!kvRankingId,
         hasApiToken: !!cloudflareApiToken,
