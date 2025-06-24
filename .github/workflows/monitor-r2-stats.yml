@@ -1,13 +1,9 @@
-name: Monitor R2 Write Statistics
+name: Monitor Resource Usage
 
 on:
   schedule:
-    # 毎日朝9時（JST）に実行
-    - cron: '0 0 * * *'
-  workflow_run:
-    workflows: ["Update Nico Ranking Data (Parallel)"]
-    types:
-      - completed
+    # 3時間ごとに実行
+    - cron: '0 */3 * * *'
   workflow_dispatch: # 手動実行も可能
 
 jobs:
@@ -23,199 +19,142 @@ jobs:
         with:
           node-version: '20'
       
-      - name: Install dependencies
-        run: |
-          npm install @slack/webhook
-          npm install @sendgrid/mail
-      
-      - name: Collect R2 Statistics
-        id: stats
+      - name: Collect Resource Usage
+        id: metrics
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          # 最新のワークフロー実行から統計を収集
-          LATEST_RUN=$(gh run list --workflow "Update Nico Ranking Data (Parallel)" --limit 1 --json databaseId,conclusion,createdAt)
-          RUN_ID=$(echo $LATEST_RUN | jq -r '.[0].databaseId')
-          
-          if [ -n "$RUN_ID" ]; then
-            LOGS=$(gh run view $RUN_ID --log || echo "")
-            
-            # 統計を抽出
-            TOTAL_FILES=$(echo "$LOGS" | grep -o "Total files processed: [0-9]*" | grep -o "[0-9]*" || echo "0")
-            UPLOADED=$(echo "$LOGS" | grep -o "Files uploaded: [0-9]*" | grep -o "[0-9]*" || echo "0")
-            SKIPPED=$(echo "$LOGS" | grep -o "Files skipped.*: [0-9]*" | grep -o "[0-9]*" || echo "0")
-            REDUCTION=$(echo "$LOGS" | grep -o "Upload reduction: [0-9.]*%" | grep -o "[0-9.]*" || echo "0")
-            
-            # 環境変数として出力
-            echo "total_files=$TOTAL_FILES" >> $GITHUB_OUTPUT
-            echo "uploaded=$UPLOADED" >> $GITHUB_OUTPUT
-            echo "skipped=$SKIPPED" >> $GITHUB_OUTPUT
-            echo "reduction=$REDUCTION" >> $GITHUB_OUTPUT
-            echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
-            
-            # 月間予測
-            MONTHLY_WRITES=$((UPLOADED * 48 * 30))
-            MONTHLY_ORIGINAL=$((TOTAL_FILES * 48 * 30))
-            MONTHLY_SAVED=$((MONTHLY_ORIGINAL - MONTHLY_WRITES))
-            
-            echo "monthly_writes=$MONTHLY_WRITES" >> $GITHUB_OUTPUT
-            echo "monthly_original=$MONTHLY_ORIGINAL" >> $GITHUB_OUTPUT
-            echo "monthly_saved=$MONTHLY_SAVED" >> $GITHUB_OUTPUT
-          fi
+          # リソース使用状況を収集
+          node .github/scripts/monitor-resources.js
       
       - name: Send Slack Notification
-        if: env.SLACK_WEBHOOK_URL != ''
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          timestamp: ${{ steps.metrics.outputs.timestamp }}
+          warning_messages: ${{ steps.metrics.outputs.warning_messages }}
+          r2_storage_gb: ${{ steps.metrics.outputs.r2_storage_gb }}
+          r2_storage_usage: ${{ steps.metrics.outputs.r2_storage_usage }}
+          r2_classA_monthly: ${{ steps.metrics.outputs.r2_classA_monthly }}
+          r2_classA_usage: ${{ steps.metrics.outputs.r2_classA_usage }}
+          r2_classB_monthly: ${{ steps.metrics.outputs.r2_classB_monthly }}
+          r2_classB_usage: ${{ steps.metrics.outputs.r2_classB_usage }}
+          kv_storage_gb: ${{ steps.metrics.outputs.kv_storage_gb }}
+          kv_storage_usage: ${{ steps.metrics.outputs.kv_storage_usage }}
+          kv_reads_daily: ${{ steps.metrics.outputs.kv_reads_daily }}
+          kv_reads_usage: ${{ steps.metrics.outputs.kv_reads_usage }}
+          kv_writes_daily: ${{ steps.metrics.outputs.kv_writes_daily }}
+          kv_writes_usage: ${{ steps.metrics.outputs.kv_writes_usage }}
         run: |
-          cat << EOF > slack-notify.js
-          const { IncomingWebhook } = require('@slack/webhook');
-          const webhook = new IncomingWebhook(process.env.SLACK_WEBHOOK_URL);
+          # Slack通知を送信
+          node .github/scripts/notify-resource-usage.js
+      
+      - name: Send Critical Alert on High Usage
+        if: steps.metrics.outputs.warnings > 0
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          cat << EOF > critical-alert.js
+          const https = require('https');
           
-          const stats = {
-            totalFiles: '${{ steps.stats.outputs.total_files }}',
-            uploaded: '${{ steps.stats.outputs.uploaded }}',
-            skipped: '${{ steps.stats.outputs.skipped }}',
-            reduction: '${{ steps.stats.outputs.reduction }}',
-            monthlyWrites: '${{ steps.stats.outputs.monthly_writes }}',
-            monthlyOriginal: '${{ steps.stats.outputs.monthly_original }}',
-            monthlySaved: '${{ steps.stats.outputs.monthly_saved }}'
-          };
-          
-          const message = {
+          async function sendSlackMessage(message) {
+            const token = process.env.SLACK_BOT_TOKEN;
+            if (!token) return;
+
+            const data = JSON.stringify(message);
+            const options = {
+              hostname: 'slack.com',
+              port: 443,
+              path: '/api/chat.postMessage',
+              method: 'POST',
+              headers: {
+                'Authorization': \`Bearer \${token}\`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(data)
+              }
+            };
+
+            return new Promise((resolve, reject) => {
+              const req = https.request(options, (res) => {
+                let responseData = '';
+                res.on('data', chunk => responseData += chunk);
+                res.on('end', () => resolve(JSON.parse(responseData)));
+              });
+              req.on('error', reject);
+              req.write(data);
+              req.end();
+            });
+          }
+
+          const alertMessage = {
+            channel: 'C092SFGUSKC',
             blocks: [
               {
                 type: "header",
                 text: {
                   type: "plain_text",
-                  text: "📊 R2 Write Statistics Report"
+                  text: "🚨 リソース使用量警告"
                 }
-              },
-              {
-                type: "section",
-                fields: [
-                  {
-                    type: "mrkdwn",
-                    text: "*Total Files:*\n" + stats.totalFiles
-                  },
-                  {
-                    type: "mrkdwn",
-                    text: "*Uploaded:*\n" + stats.uploaded
-                  },
-                  {
-                    type: "mrkdwn",
-                    text: "*Skipped:*\n" + stats.skipped
-                  },
-                  {
-                    type: "mrkdwn",
-                    text: "*Reduction:*\n" + stats.reduction + "%"
-                  }
-                ]
-              },
-              {
-                type: "divider"
               },
               {
                 type: "section",
                 text: {
                   type: "mrkdwn",
-                  text: "*Monthly Projection:*\n" +
-                        "• Original: " + parseInt(stats.monthlyOriginal).toLocaleString() + " writes\n" +
-                        "• Optimized: " + parseInt(stats.monthlyWrites).toLocaleString() + " writes\n" +
-                        "• Saved: " + parseInt(stats.monthlySaved).toLocaleString() + " writes\n" +
-                        "• Free tier usage: " + Math.round(stats.monthlyWrites / 1000000 * 100) + "%"
+                  text: "無料枠の使用量が上限に近づいています。詳細は定期レポートをご確認ください。"
                 }
               }
             ]
           };
-          
-          webhook.send(message).then(() => {
-            console.log('Slack notification sent');
+
+          sendSlackMessage(alertMessage).then(() => {
+            console.log('Critical alert sent');
           }).catch(console.error);
           EOF
           
-          node slack-notify.js
+          node critical-alert.js
       
-      - name: Send Email Notification
-        if: env.SENDGRID_API_KEY != ''
-        env:
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-        run: |
-          cat << EOF > email-notify.js
-          const sgMail = require('@sendgrid/mail');
-          sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-          
-          const stats = {
-            totalFiles: '${{ steps.stats.outputs.total_files }}',
-            uploaded: '${{ steps.stats.outputs.uploaded }}',
-            skipped: '${{ steps.stats.outputs.skipped }}',
-            reduction: '${{ steps.stats.outputs.reduction }}',
-            monthlyWrites: '${{ steps.stats.outputs.monthly_writes }}',
-            monthlyOriginal: '${{ steps.stats.outputs.monthly_original }}',
-            monthlySaved: '${{ steps.stats.outputs.monthly_saved }}',
-            timestamp: '${{ steps.stats.outputs.timestamp }}'
-          };
-          
-          const msg = {
-            to: process.env.EMAIL_TO,
-            from: process.env.EMAIL_FROM,
-            subject: 'R2 Write Statistics Report - ' + new Date().toLocaleDateString(),
-            html: \`
-              <h2>📊 R2 Write Statistics Report</h2>
-              <p>Report generated at: \${stats.timestamp}</p>
-              
-              <h3>Upload Statistics:</h3>
-              <ul>
-                <li>Total Files Processed: \${stats.totalFiles}</li>
-                <li>Files Uploaded: \${stats.uploaded}</li>
-                <li>Files Skipped: \${stats.skipped}</li>
-                <li>Upload Reduction: \${stats.reduction}%</li>
-              </ul>
-              
-              <h3>Monthly Projection:</h3>
-              <ul>
-                <li>Original writes: \${parseInt(stats.monthlyOriginal).toLocaleString()}</li>
-                <li>Optimized writes: \${parseInt(stats.monthlyWrites).toLocaleString()}</li>
-                <li>Saved writes: \${parseInt(stats.monthlySaved).toLocaleString()}</li>
-                <li>Free tier usage: \${Math.round(stats.monthlyWrites / 1000000 * 100)}%</li>
-              </ul>
-              
-              <p>
-                <strong>Cost Status:</strong> 
-                \${stats.monthlyWrites < 1000000 ? '✅ Within free tier' : '❌ Exceeds free tier'}
-              </p>
-            \`
-          };
-          
-          sgMail.send(msg).then(() => {
-            console.log('Email sent');
-          }).catch(console.error);
-          EOF
-          
-          node email-notify.js
-      
-      - name: Store Statistics
+      - name: Store Resource Usage Statistics
         run: |
           # 統計をアーティファクトとして保存
           mkdir -p stats
-          cat << EOF > stats/r2-stats-$(date +%Y%m%d-%H%M%S).json
+          cat << EOF > stats/resource-usage-$(date +%Y%m%d-%H%M%S).json
           {
-            "timestamp": "${{ steps.stats.outputs.timestamp }}",
-            "totalFiles": ${{ steps.stats.outputs.total_files }},
-            "uploaded": ${{ steps.stats.outputs.uploaded }},
-            "skipped": ${{ steps.stats.outputs.skipped }},
-            "reduction": ${{ steps.stats.outputs.reduction }},
-            "monthlyWrites": ${{ steps.stats.outputs.monthly_writes }},
-            "monthlyOriginal": ${{ steps.stats.outputs.monthly_original }},
-            "monthlySaved": ${{ steps.stats.outputs.monthly_saved }}
+            "timestamp": "${{ steps.metrics.outputs.timestamp }}",
+            "r2": {
+              "storage": {
+                "gb": ${{ steps.metrics.outputs.r2_storage_gb }},
+                "usage_percent": ${{ steps.metrics.outputs.r2_storage_usage }}
+              },
+              "classA": {
+                "monthly_projected": ${{ steps.metrics.outputs.r2_classA_monthly }},
+                "usage_percent": ${{ steps.metrics.outputs.r2_classA_usage }}
+              },
+              "classB": {
+                "monthly_projected": ${{ steps.metrics.outputs.r2_classB_monthly }},
+                "usage_percent": ${{ steps.metrics.outputs.r2_classB_usage }}
+              }
+            },
+            "kv": {
+              "storage": {
+                "gb": ${{ steps.metrics.outputs.kv_storage_gb }},
+                "usage_percent": ${{ steps.metrics.outputs.kv_storage_usage }}
+              },
+              "reads": {
+                "daily_projected": ${{ steps.metrics.outputs.kv_reads_daily }},
+                "usage_percent": ${{ steps.metrics.outputs.kv_reads_usage }}
+              },
+              "writes": {
+                "daily_projected": ${{ steps.metrics.outputs.kv_writes_daily }},
+                "usage_percent": ${{ steps.metrics.outputs.kv_writes_usage }}
+              }
+            },
+            "warnings": ${{ steps.metrics.outputs.warnings }}
           }
           EOF
       
       - name: Upload Statistics
         uses: actions/upload-artifact@v4
         with:
-          name: r2-statistics
+          name: resource-usage-statistics
           path: stats/
           retention-days: 30

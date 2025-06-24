@@ -5,7 +5,7 @@
 export interface RequiredEnvVars {
   // CloudFlare
   CLOUDFLARE_ACCOUNT_ID: string
-  CLOUDFLARE_KV_NAMESPACE_ID: string
+  KV_RANKING_ID: string
   CLOUDFLARE_API_TOKEN: string
   
   // Authentication
@@ -34,7 +34,7 @@ export class EnvValidator {
     // Required variables
     const required = [
       'CLOUDFLARE_ACCOUNT_ID',
-      'CLOUDFLARE_KV_NAMESPACE_ID', 
+      'KV_RANKING_ID', 
       'CLOUDFLARE_API_TOKEN',
       'CRON_SECRET',
       'WORKER_AUTH_KEY',
@@ -54,9 +54,9 @@ export class EnvValidator {
       this.errors.push('CLOUDFLARE_ACCOUNT_ID must be a 32-character hex string')
     }
     
-    if (process.env.CLOUDFLARE_KV_NAMESPACE_ID && 
-        !/^[a-f0-9]{32}$/.test(process.env.CLOUDFLARE_KV_NAMESPACE_ID)) {
-      this.errors.push('CLOUDFLARE_KV_NAMESPACE_ID must be a 32-character hex string')
+    if (process.env.KV_RANKING_ID && 
+        !/^[a-f0-9]{32}$/.test(process.env.KV_RANKING_ID)) {
+      this.errors.push('KV_RANKING_ID must be a 32-character hex string')
     }
     
     // Security checks
@@ -87,7 +87,7 @@ export class EnvValidator {
     
     return {
       CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID!,
-      CLOUDFLARE_KV_NAMESPACE_ID: process.env.CLOUDFLARE_KV_NAMESPACE_ID!,
+      KV_RANKING_ID: process.env.KV_RANKING_ID!,
       CLOUDFLARE_API_TOKEN: process.env.CLOUDFLARE_API_TOKEN!,
       CRON_SECRET: process.env.CRON_SECRET!,
       WORKER_AUTH_KEY: process.env.WORKER_AUTH_KEY!,

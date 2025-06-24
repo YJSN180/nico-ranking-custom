@@ -31,6 +31,6 @@ export function setUserPreferencesCookieClient(preferences: Partial<UserPreferen
   const expires = new Date(Date.now() + COOKIE_MAX_AGE * 1000).toUTCString()
   
   document.cookie = `${COOKIE_NAME}=${value}; expires=${expires}; path=/; SameSite=Lax${
-    window.location.protocol === 'https:' ? '; Secure' : ''
+    typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
   }`
 }

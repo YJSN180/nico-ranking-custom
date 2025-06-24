@@ -40,6 +40,8 @@ export function useUserNGList() {
 
   // 初回読み込みとストレージ変更の監視
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
     const loadNGList = () => {
       try {
         const stored = localStorage.getItem(STORAGE_KEY)

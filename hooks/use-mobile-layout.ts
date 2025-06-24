@@ -14,6 +14,8 @@ export function useMobileLayout(): MobileLayout {
   })
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+    
     let timeoutId: NodeJS.Timeout
     
     const checkLayout = () => {

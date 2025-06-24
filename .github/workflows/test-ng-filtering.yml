@@ -1,0 +1,70 @@
+name: Test NG Filtering
+
+on:
+  workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: 'Enable debug mode'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  test-ng-fetch:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Test NG list fetching
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      run: |
+        echo "Testing NG list fetch from Cloudflare KV..."
+        npx tsx scripts/test-ng-fetch.ts
+    
+    - name: Test NG filtering functionality
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      run: |
+        echo "Testing NG filtering functionality..."
+        npx tsx scripts/test-ng-filtering.ts
+    
+    - name: Test single genre with NG filtering
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      run: |
+        echo "Testing actual ranking fetch with NG filtering (genre: game)..."
+        npx tsx scripts/update-ranking-parallel-v2.ts --group 1 6 --test-mode || true
+    
+    - name: Debug environment (if enabled)
+      if: ${{ github.event.inputs.debug_mode == 'true' }}
+      run: |
+        echo "=== Environment Debug Info ==="
+        echo "CLOUDFLARE_ACCOUNT_ID is set: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' && 'YES' || 'NO' }}"
+        echo "CLOUDFLARE_KV_NAMESPACE_ID is set: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID != '' && 'YES' || 'NO' }}"
+        echo "CLOUDFLARE_API_TOKEN is set: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && 'YES' || 'NO' }}"
+        echo "Runner OS: ${{ runner.os }}"
+        echo "Node version:"
+        node --version
+        echo "NPM version:"
+        npm --version

@@ -174,6 +174,9 @@ export default function ClientPage({
   
   // sessionStorageから復元する設定を管理
   const [shouldRestore, setShouldRestore] = useState(() => {
+    // サーバーサイドでは復元しない
+    if (typeof window === 'undefined') return null
+    
     // URLパラメータがない場合のみ、sessionStorageから復元を試みる
     const hasUrlParams = new URLSearchParams(window.location.search).has('genre') || 
                         new URLSearchParams(window.location.search).has('period') || 
@@ -601,7 +604,7 @@ export default function ClientPage({
       totalPages: Math.ceil(allItems.length / ITEMS_PER_PAGE),
       totalItems: allItems.length
     }
-  }, [fullRankingData, config.tag, ngList, ngListVersion, currentPage])
+  }, [fullRankingData, config.tag, ngList, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

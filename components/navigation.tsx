@@ -69,7 +69,9 @@ export function Navigation() {
   const openSettings = () => {
     setIsOpen(false)
     // 設定モーダルを開くイベントを発火
-    window.dispatchEvent(new Event('openSettings'))
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('openSettings'))
+    }
   }
 
   // モバイルメニューの外側クリックで閉じる
@@ -119,7 +121,7 @@ export function Navigation() {
     }
   }, [isMobile, isOpen])
 
-  // 768px以下でモバイル表示
+  // 768px以下でモバイル表示 (SSR中はfalseとする)
   const shouldShowMobile = isMobile || (typeof window !== 'undefined' && window.innerWidth <= 768)
 
   if (shouldShowMobile) {
@@ -343,7 +345,9 @@ export function Navigation() {
                       <button
                         onClick={() => {
                           updatePreferences({ theme: 'light' })
-                          document.documentElement.setAttribute('data-theme', 'light')
+                          if (typeof document !== 'undefined') {
+                            document.documentElement.setAttribute('data-theme', 'light')
+                          }
                         }}
                         style={{
                           flex: 1,
@@ -362,7 +366,9 @@ export function Navigation() {
                       <button
                         onClick={() => {
                           updatePreferences({ theme: 'dark' })
-                          document.documentElement.setAttribute('data-theme', 'dark')
+                          if (typeof document !== 'undefined') {
+                            document.documentElement.setAttribute('data-theme', 'dark')
+                          }
                         }}
                         style={{
                           flex: 1,
@@ -381,7 +387,9 @@ export function Navigation() {
                       <button
                         onClick={() => {
                           updatePreferences({ theme: 'darkblue' })
-                          document.documentElement.setAttribute('data-theme', 'darkblue')
+                          if (typeof document !== 'undefined') {
+                            document.documentElement.setAttribute('data-theme', 'darkblue')
+                          }
                         }}
                         style={{
                           flex: 1,
