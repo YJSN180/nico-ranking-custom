@@ -152,9 +152,9 @@ export default {
           }
         }
         
-        // R2から取得したデータを返す
-        const data = await r2Object.text()
-        console.log(`[Worker] R2 data found for ${r2Key}, size: ${data.length} bytes`)
+        // R2から取得したデータ（既にgzip圧縮されている）
+        const compressedData = await r2Object.arrayBuffer()
+        console.log(`[Worker] R2 data found for ${r2Key}, compressed size: ${compressedData.byteLength} bytes`)
         
         // クライアントがgzip圧縮をサポートしているかチェック
         const acceptEncoding = request.headers.get('Accept-Encoding') || ''
@@ -167,36 +167,36 @@ export default {
           'CDN-Cache-Control': 'public, max-age=3600',
           'X-Data-Source': 'r2-direct',
           'X-Cache-Status': 'MISS',
-          'X-Original-Size': data.length.toString(),
           ...corsHeaders,
           ...securityHeaders
         }
         
-        // gzip圧縮をサポートしている場合は圧縮
         if (supportsGzip) {
-          // CompressionStreamを使用してgzip圧縮
-          const stream = new Response(data).body
-          const compressionStream = stream!.pipeThrough(new CompressionStream('gzip'))
-          
+          // データは既にgzip圧縮されているので、そのまま返す
           responseHeaders['Content-Encoding'] = 'gzip'
           responseHeaders['Vary'] = 'Accept-Encoding'
+          responseHeaders['X-Compressed-Size'] = compressedData.byteLength.toString()
           
-          response = new Response(compressionStream, {
+          response = new Response(compressedData, {
             status: 200,
             headers: responseHeaders
           })
           
-          console.log(`[Worker] Response compressed with gzip`)
+          console.log(`[Worker] Returning pre-compressed gzip data`)
         } else {
-          // 圧縮なしのレスポンス
-          responseHeaders['Vary'] = 'Accept-Encoding'
+          // クライアントが圧縮をサポートしていない場合は解凍する
+          const decompressionStream = new Response(compressedData).body!.pipeThrough(new DecompressionStream('gzip'))
+          const decompressedData = await new Response(decompressionStream).text()
           
-          response = new Response(data, {
+          responseHeaders['Vary'] = 'Accept-Encoding'
+          responseHeaders['X-Original-Size'] = decompressedData.length.toString()
+          
+          response = new Response(decompressedData, {
             status: 200,
             headers: responseHeaders
           })
           
-          console.log(`[Worker] Response sent without compression`)
+          console.log(`[Worker] Response decompressed for client`)
         }
         
         // キャッシュに保存
