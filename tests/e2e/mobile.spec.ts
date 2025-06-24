@@ -1,8 +1,7 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, devices } from '@playwright/test'
 
-// モバイルプロジェクトでのみ実行
+// モバイル専用テスト
 test.describe('モバイル専用テスト', () => {
-  test.skip(({ browserName }) => browserName !== 'webkit', 'Mobile tests run only on webkit')
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
   })

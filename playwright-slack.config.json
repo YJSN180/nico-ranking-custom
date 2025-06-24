@@ -1,0 +1,30 @@
+{
+  "webhook": {
+    "enable": true,
+    "url": "SLACK_WEBHOOK_URL"
+  },
+  "sendResults": "on-failure",
+  "showInThread": true,
+  "meta": [
+    {
+      "key": "Environment",
+      "value": "CI"
+    },
+    {
+      "key": "Branch",
+      "value": "GITHUB_REF_NAME"
+    },
+    {
+      "key": "Run ID",
+      "value": "GITHUB_RUN_ID"
+    }
+  ],
+  "channels": ["#nico-ranking-alerts"],
+  "testTitle": "E2E Test Results - Nico Ranking",
+  "includeScreenshots": true,
+  "includeResults": {
+    "pass": false,
+    "fail": true,
+    "skip": false
+  }
+}

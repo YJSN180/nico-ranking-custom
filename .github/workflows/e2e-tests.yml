@@ -28,8 +28,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
-        shard: [1, 2]
+        include:
+          # Desktop browsers
+          - project: chromium
+            shard: 1
+          - project: chromium
+            shard: 2
+          - project: firefox
+            shard: 1
+          - project: firefox
+            shard: 2
+          - project: webkit
+            shard: 1
+          - project: webkit
+            shard: 2
+          # Mobile Safari
+          - project: mobile-safari
+            shard: 1
 
     steps:
     - name: Checkout code
@@ -43,6 +58,14 @@ jobs:
 
     - name: Install dependencies
       run: npm ci
+
+    - name: Debug - Check secrets availability
+      run: |
+        echo "CLOUDFLARE_ACCOUNT_ID is set: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}"
+        echo "KV_RANKING_ID is set: ${{ secrets.KV_RANKING_ID != '' }}"
+        echo "CLOUDFLARE_API_TOKEN is set: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
+        echo "CRON_SECRET is set: ${{ secrets.CRON_SECRET != '' }}"
+        echo "WORKER_AUTH_KEY is set: ${{ secrets.WORKER_AUTH_KEY != '' }}"
 
     - name: Install Playwright browsers
       run: npx playwright install --with-deps
@@ -76,7 +99,7 @@ jobs:
       id: test-execution
       run: |
         set +e
-        npm run test:e2e -- --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/2
+        npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.project == 'mobile-safari' && '1' || '2' }}
         TEST_EXIT_CODE=$?
         
         if [ $TEST_EXIT_CODE -eq 0 ]; then
@@ -126,7 +149,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always() && (failure() || success())
       with:
-        name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
+        name: playwright-report-${{ matrix.project }}-${{ matrix.shard }}
         path: playwright-report/
         retention-days: 30
         if-no-files-found: ignore
@@ -135,7 +158,7 @@ jobs:
       uses: actions/upload-artifact@v4
       if: always() && (failure() || success())
       with:
-        name: test-videos-${{ matrix.browser }}-${{ matrix.shard }}
+        name: test-videos-${{ matrix.project }}-${{ matrix.shard }}
         path: test-results/
         retention-days: 7
         if-no-files-found: ignore
@@ -270,6 +293,9 @@ jobs:
     if: always()
     
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Download all test results
       uses: actions/download-artifact@v4
       with:
@@ -287,6 +313,26 @@ jobs:
         name: playwright-report-merged
         path: playwright-report/
         retention-days: 30
+
+    - name: Generate JSON report
+      if: always()
+      run: |
+        npx playwright merge-reports --reporter json ./playwright-report-* > merged-results.json || true
+
+    - name: Send Slack notification with detailed results
+      if: always()
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+      run: |
+        # Replace environment variables in config
+        sed -i "s|SLACK_WEBHOOK_URL|$SLACK_WEBHOOK_URL|g" playwright-slack.config.json
+        sed -i "s|GITHUB_REF_NAME|$GITHUB_REF_NAME|g" playwright-slack.config.json
+        sed -i "s|GITHUB_RUN_ID|$GITHUB_RUN_ID|g" playwright-slack.config.json
+        
+        # Send report
+        npx playwright-slack-report --config="playwright-slack.config.json" --json-results="merged-results.json" || true
 
   lighthouse:
     runs-on: ubuntu-latest

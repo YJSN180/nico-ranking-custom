@@ -20,25 +20,27 @@ export default defineConfig({
   },
   
   projects: [
+    // Desktop browsers
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /.*\.mobile\.spec\.ts/, // モバイルテストを除外
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testIgnore: /.*\.mobile\.spec\.ts/, // モバイルテストを除外
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testIgnore: /.*\.mobile\.spec\.ts/, // モバイルテストを除外
     },
+    // Mobile browsers - WebKit only
     {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-    {
-      name: 'Mobile Safari',
+      name: 'mobile-safari',
       use: { ...devices['iPhone 12'] },
+      testMatch: /.*\.mobile\.spec\.ts/, // モバイルテストのみ実行
     },
   ],
   
