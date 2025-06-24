@@ -26,7 +26,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           # リソース使用状況を収集
-          node .github/scripts/monitor-resources.js
+          node .github/scripts/monitor-resources.cjs
       
       - name: Send Slack Notification
         env:
@@ -47,7 +47,7 @@ jobs:
           kv_writes_usage: ${{ steps.metrics.outputs.kv_writes_usage }}
         run: |
           # Slack通知を送信
-          node .github/scripts/notify-resource-usage.js
+          node .github/scripts/notify-resource-usage.cjs
       
       - name: Send Critical Alert on High Usage
         if: steps.metrics.outputs.warnings > 0
