@@ -319,8 +319,7 @@ jobs:
     - name: Start server for Lighthouse
       run: |
         npm run start &
-        sleep 15
-        curl --retry 10 --retry-connrefused http://localhost:3000 || exit 1
+        npx wait-on http://localhost:3000 --timeout 60000
       env:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
@@ -363,8 +362,7 @@ jobs:
       run: |
         npm run build
         PORT=3001 npm run start &
-        sleep 15
-        curl --retry 10 --retry-connrefused http://localhost:3001 || exit 1
+        npx wait-on http://localhost:3001 --timeout 60000
       env:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
