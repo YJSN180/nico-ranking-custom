@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Cloudflare KVが利用可能かチェック（環境変数で判定）
-    const useCloudflareKV = process.env.CLOUDFLARE_KV_NAMESPACE_ID ? true : false
+    const useCloudflareKV = process.env.KV_RANKING_ID && process.env.CLOUDFLARE_API_TOKEN ? true : false
     
     // タグ別ランキングの処理
     if (tag) {
