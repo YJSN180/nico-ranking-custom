@@ -18,7 +18,7 @@ env:
 jobs:
   # Setup job to install and cache Playwright browsers
   setup-playwright:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
@@ -52,7 +52,7 @@ jobs:
 
   e2e-tests:
     needs: setup-playwright
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     
     outputs:
@@ -141,10 +141,10 @@ jobs:
         
         # Install additional WebKit dependencies
         sudo apt-get update
-        # Try different package names for woff2
-        sudo apt-get install -y libwoff2-dev || true
-        sudo apt-get install -y libwoff-dev || true
-        sudo apt-get install -y libwoff2dec1 || true
+        # Install all WebKit font-related dependencies
+        sudo apt-get install -y libwoff1 libwoff-dev || true
+        sudo apt-get install -y libwoff2-dev libwoff2dec1 || true
+        sudo apt-get install -y fonts-liberation fonts-noto-color-emoji || true
         
         # List installed woff libraries
         ldconfig -p | grep woff || true
@@ -251,7 +251,7 @@ jobs:
 
   notify-slack:
     name: Notify Slack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [e2e-tests, merge-reports, lighthouse, accessibility]
     if: always()
     
@@ -375,7 +375,7 @@ jobs:
 
   merge-reports:
     needs: e2e-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: always()
     
     steps:
@@ -421,7 +421,7 @@ jobs:
         npx playwright-slack-report --config="playwright-slack.config.json" --json-results="merged-results.json" || true
 
   lighthouse:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     
     steps:
@@ -469,7 +469,7 @@ jobs:
 
   accessibility:
     needs: setup-playwright
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
     
     steps:
@@ -512,13 +512,13 @@ jobs:
         
         # Install additional WebKit dependencies
         sudo apt-get update
-        # Try different package names for woff2
-        sudo apt-get install -y libwoff2-dev || true
-        sudo apt-get install -y libwoff-dev || true
-        sudo apt-get install -y libwoff2dec1 || true
+        # Install all WebKit font-related dependencies
+        sudo apt-get install -y libwoff1 libwoff-dev || true
+        sudo apt-get install -y libwoff2-dev libwoff2dec1 || true
+        sudo apt-get install -y fonts-liberation fonts-noto-color-emoji || true
         
         # List installed woff libraries
-        ldconfig -p | grep woff || true chromium
+        ldconfig -p | grep woff || true
 
     - name: Build and start server
       run: |
