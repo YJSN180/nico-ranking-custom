@@ -90,37 +90,41 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
-  // 1. サーバーサイドでは内部の getGenreRanking を直接使用
+  // サーバーサイドでAPIエンドポイントを使用（R2から直接データを取得）
   try {
-    let kvData: { items: RankingItem[], popularTags?: string[] } | null = null
+    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nico-rank.com'
+    const params = new URLSearchParams()
+    params.set('genre', genre)
+    params.set('period', period)
+    if (tag) params.set('tag', tag)
     
-    if (tag) {
-      const { getTagRanking } = await import('@/lib/cloudflare-kv')
-      const tagItems = await getTagRanking(genre, period as RankingPeriod, tag)
-      if (tagItems && Array.isArray(tagItems)) {
-        kvData = { items: tagItems, popularTags: [] }
+    const apiUrl = `${baseUrl}/api/ranking?${params.toString()}`
+    // console.log(`[SSR] Fetching from API: ${apiUrl}`)
+    
+    const response = await fetch(apiUrl, {
+      next: { revalidate: 300 }, // 5分間キャッシュ
+      headers: {
+        'Accept': 'application/json',
       }
-    } else {
-      const { getGenreRanking } = await import('@/lib/cloudflare-kv')
-      const genreData = await getGenreRanking(genre as RankingGenre, period as RankingPeriod)
-      if (genreData && genreData.items) {
-        kvData = { items: genreData.items, popularTags: genreData.popularTags || [] }
-      }
+    })
+    
+    if (!response.ok) {
+      console.error(`[SSR] API returned ${response.status}`)
+      return { items: [], popularTags: [] }
     }
     
-    if (kvData && kvData.items && kvData.items.length > 0) {
-      // console.log(`[SSR] KV returned ${kvData.items.length} items for ${genre}/${period}${tag ? `/${tag}` : ''}`)
+    const data = await response.json()
+    
+    if (data && data.items && Array.isArray(data.items)) {
       // NGフィルタリングを適用
-      const { filteredData } = await filterRankingDataServer(kvData)
+      const { filteredData } = await filterRankingDataServer(data)
       return filteredData
-    } else {
-      // console.log(`[SSR] No data in KV for ${genre}/${period}${tag ? `/${tag}` : ''}`)
     }
-  } catch (kvError) {
-    console.error('[SSR] KV error:', kvError)
+  } catch (error) {
+    console.error('[SSR] API error:', error)
   }
 
-  // 2. KVにデータがない場合は空のデータを返す
+  // エラーの場合は空のデータを返す
   return {
     items: [],
     popularTags: []
