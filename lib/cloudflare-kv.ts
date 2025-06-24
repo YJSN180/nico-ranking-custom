@@ -126,7 +126,7 @@ export async function getRankingFromKV(): Promise<KVRankingData | null> {
 async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
-  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     return null
@@ -245,7 +245,7 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
   // Node.js環境の場合はREST APIを使用
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
-  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     // Cloudflare KV credentials not configured - returning null
@@ -346,7 +346,7 @@ export async function getGenreRanking(
 async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData | null> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
   const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
-  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
+  const CF_API_TOKEN = process.env.CLOUDFLARE_KV_API_TOKEN
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
     return null

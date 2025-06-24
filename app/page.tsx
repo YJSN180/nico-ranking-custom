@@ -236,60 +236,15 @@ export default async function Home({ searchParams }: PageProps) {
         <Footer />
       </main>
     )
-  } catch (error) {
-    return (
-      <main style={{ 
-        padding: '0',
-        // CLS対策: フッターマージンを考慮したminHeight
-        minHeight: 'calc(100vh - 80px)',
-        background: 'var(--background-color)'
-      }}>
-        <HeaderWithSettings />
-        
-        <div style={{ 
-          maxWidth: '600px', 
-          margin: '0 auto',
-          padding: '0 20px',
-          textAlign: 'center'
-        }}>
-          <div style={{
-            background: 'var(--surface-color)',
-            borderRadius: '16px',
-            padding: '60px 40px',
-            boxShadow: 'var(--shadow-md)'
-          }}>
-            <div style={{ fontSize: '64px', marginBottom: '24px' }}>⏳</div>
-            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.5rem', marginBottom: '16px' }}>
-              データを準備しています
-            </h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6', marginBottom: '8px' }}>
-              ランキングデータは毎時更新されます。
-            </p>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1rem', lineHeight: '1.6' }}>
-              初回アクセスの場合、しばらくお待ちください。
-            </p>
-            
-            {/* Debug info */}
-            <details style={{ marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
-              <summary style={{ cursor: 'pointer' }}>技術的な詳細</summary>
-              <pre style={{ 
-                textAlign: 'left', 
-                background: 'var(--surface-secondary)', 
-                padding: '12px', 
-                borderRadius: '8px',
-                marginTop: '8px',
-                overflow: 'auto'
-              }}>{JSON.stringify({
-                error: error instanceof Error ? error.message : String(error),
-                genre,
-                tag,
-                CloudflareKV_configured: !!(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_KV_NAMESPACE_ID && process.env.CLOUDFLARE_KV_API_TOKEN),
-              }, null, 2)}</pre>
-            </details>
-          </div>
-        </div>
-        <Footer />
-      </main>
-    )
+  } catch (error: any) {
+    // Next.js の redirect() によるエラーはそのまま再スロー
+    if (error?.digest === 'NEXT_REDIRECT' || error?.message?.includes('NEXT_REDIRECT')) {
+      throw error
+    }
+    
+    // その他のエラーの場合はエラーページを表示
+    console.error('[SSR] Unexpected error:', error)
+    const { notFound } = await import('next/navigation')
+    notFound()
   }
 }

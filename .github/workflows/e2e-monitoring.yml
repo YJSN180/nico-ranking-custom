@@ -1,0 +1,206 @@
+name: E2E Monitoring
+
+on:
+  schedule:
+    # 4時間ごとに軽量なモニタリングテストを実行
+    - cron: '0 */4 * * *'
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: 'Test scope to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - full
+          - performance
+          - accessibility
+
+env:
+  NODE_VERSION: '20'
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright
+      run: npx playwright install chromium
+
+    - name: Run smoke tests
+      id: smoke-tests
+      run: |
+        # スモークテスト用の軽量なテストセット
+        npx playwright test tests/e2e/integration.spec.ts \
+          --project=chromium \
+          --grep="基本的なページ構造|ランキングデータが表示" \
+          --reporter=json > test-results.json
+      continue-on-error: true
+
+    - name: Check API health
+      id: api-health
+      run: |
+        # APIエンドポイントのヘルスチェック
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://nico-rank.com/api/ranking?genre=all&period=24h)
+        echo "API_STATUS=$response" >> $GITHUB_OUTPUT
+        if [ "$response" != "200" ]; then
+          echo "API health check failed with status: $response"
+          exit 1
+        fi
+      continue-on-error: true
+
+    - name: Performance check
+      id: performance
+      if: github.event.inputs.test_scope == 'performance' || github.event.schedule == '0 0 * * 1'
+      run: |
+        # パフォーマンステストを実行
+        npx playwright test tests/e2e/performance.spec.ts --project=chromium
+      continue-on-error: true
+
+    - name: Send notification on failure
+      if: failure() || steps.smoke-tests.outcome == 'failure' || steps.api-health.outcome == 'failure'
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            username: 'E2E Monitor',
+            icon_emoji: ':warning:',
+            attachments: [{
+              color: 'danger',
+              title: 'E2E Monitoring Alert',
+              fields: [
+                {
+                  title: 'Status',
+                  value: 'Failed',
+                  short: true
+                },
+                {
+                  title: 'Time',
+                  value: '${{ steps.date.outputs.date }}',
+                  short: true
+                },
+                {
+                  title: 'Test Results',
+                  value: 'Smoke Tests: ${{ steps.smoke-tests.outcome }}\nAPI Health: ${{ steps.api-health.outcome }}',
+                  short: false
+                },
+                {
+                  title: 'Action URL',
+                  value: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+                  short: false
+                }
+              ]
+            }]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
+
+    - name: Create issue on repeated failures
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // 過去24時間のワークフロー実行を確認
+          const { data: runs } = await github.rest.actions.listWorkflowRuns({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: 'e2e-monitoring.yml',
+            status: 'completed',
+            created: `>${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}`
+          });
+          
+          const failureCount = runs.workflow_runs.filter(run => run.conclusion === 'failure').length;
+          
+          // 24時間で3回以上失敗したらIssueを作成
+          if (failureCount >= 3) {
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['e2e-monitoring', 'automated'],
+              state: 'open'
+            });
+            
+            if (existingIssues.data.length === 0) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '🚨 E2E Monitoring: Repeated Failures Detected',
+                body: `## E2E Monitoring Alert
+                
+The E2E monitoring tests have failed ${failureCount} times in the past 24 hours.
+
+### Recent Failures
+- Smoke Tests: ${{ steps.smoke-tests.outcome }}
+- API Health: ${{ steps.api-health.outcome }}
+- API Status Code: ${{ steps.api-health.outputs.API_STATUS }}
+
+### Action Required
+1. Check the [latest workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+2. Review recent deployments
+3. Check Cloudflare KV and Workers status
+4. Verify API endpoints are responding correctly
+
+### Automated Issue
+This issue was created automatically by the E2E monitoring workflow.`,
+                labels: ['e2e-monitoring', 'automated', 'bug']
+              });
+            }
+          }
+
+  weekly-comprehensive:
+    if: github.event.schedule == '0 0 * * 1' || github.event.inputs.test_scope == 'full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    strategy:
+      matrix:
+        browser: [chromium, firefox, webkit]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps ${{ matrix.browser }}
+
+    - name: Run comprehensive tests
+      run: npm run test:e2e -- --project=${{ matrix.browser }}
+
+    - name: Generate coverage report
+      if: matrix.browser == 'chromium'
+      run: |
+        # テストカバレッジレポートを生成
+        npx nyc --reporter=html --reporter=text npm run test:e2e
+
+    - name: Upload coverage report
+      if: matrix.browser == 'chromium'
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/
+        retention-days: 30

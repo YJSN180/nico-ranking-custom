@@ -1,0 +1,179 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+  schedule:
+    # 毎日午前3時（JST 12時）に実行
+    - cron: '0 18 * * *'
+    # 毎週月曜日の午前9時（JST 18時）に詳細テストを実行
+    - cron: '0 0 * * 1'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox]
+        shard: [1, 2]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps ${{ matrix.browser }}
+
+    - name: Build application
+      run: npm run build
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+        KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3000
+
+    - name: Run E2E tests
+      run: npm run test:e2e -- --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/2
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+        KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
+        CI: true
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: playwright-report-${{ matrix.browser }}-${{ matrix.shard }}
+        path: playwright-report/
+        retention-days: 30
+
+    - name: Upload test videos
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-videos-${{ matrix.browser }}-${{ matrix.shard }}
+        path: test-results/
+        retention-days: 7
+
+  merge-reports:
+    needs: e2e-tests
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Download all test results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: playwright-report-*
+        merge-multiple: true
+
+    - name: Merge test reports
+      run: |
+        npm install -g @playwright/test
+        npx playwright merge-reports --reporter html ./playwright-report-*
+
+    - name: Upload merged report
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report-merged
+        path: playwright-report/
+        retention-days: 30
+
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build application
+      run: npm run build
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+        KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
+
+    - name: Run Lighthouse CI
+      uses: treosh/lighthouse-ci-action@v11
+      with:
+        urls: |
+          http://localhost:3000
+          http://localhost:3000/?genre=game
+          http://localhost:3000/?genre=music&period=hour
+        uploadArtifacts: true
+        temporaryPublicStorage: true
+        runs: 3
+        configPath: './lighthouserc.js'
+
+  accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install -D axe-playwright
+
+    - name: Build and start server
+      run: |
+        npm run build
+        npm run start &
+        sleep 10
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+        KV_METADATA_ID: ${{ secrets.KV_METADATA_ID }}
+
+    - name: Run accessibility tests
+      run: npx playwright test tests/e2e/accessibility-seo.spec.ts --project=chromium
+
+    - name: Upload accessibility results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: accessibility-results
+        path: test-results/
+        retention-days: 7
