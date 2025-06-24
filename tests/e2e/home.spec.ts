@@ -17,7 +17,7 @@ test.describe('Home Page E2E', () => {
     }
     
     // Check that genre selector is present
-    await expect(page.locator('[data-testid="genre-selector"], select')).toBeVisible()
+    await expect(page.locator('h2:has-text("ジャンル")')).toBeVisible()
   })
 
   test('should display loading state initially', async ({ page }) => {

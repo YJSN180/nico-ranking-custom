@@ -394,7 +394,16 @@ jobs:
     - name: Merge test reports
       run: |
         npm install -g @playwright/test
-        npx playwright merge-reports --reporter html ./playwright-report-*
+        
+        # Check if any report directories exist
+        if ls playwright-report-* 1> /dev/null 2>&1; then
+          echo "Found playwright report directories, merging..."
+          npx playwright merge-reports --reporter html ./playwright-report-*
+        else
+          echo "No playwright report directories found, creating empty report..."
+          mkdir -p playwright-report
+          echo '{"suites": []}' > playwright-report/results.json
+        fi
 
     - name: Upload merged report
       uses: actions/upload-artifact@v4
@@ -406,7 +415,14 @@ jobs:
     - name: Generate JSON report
       if: always()
       run: |
-        npx playwright merge-reports --reporter json ./playwright-report-* > merged-results.json || true
+        # Check if any report directories exist for JSON merge
+        if ls playwright-report-* 1> /dev/null 2>&1; then
+          echo "Generating merged JSON report..."
+          npx playwright merge-reports --reporter json ./playwright-report-* > merged-results.json || true
+        else
+          echo "No report directories found, creating empty JSON report..."
+          echo '{"suites": []}' > merged-results.json
+        fi
 
     - name: Send Slack notification with detailed results
       if: always()
