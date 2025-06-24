@@ -74,42 +74,10 @@ jobs:
 
     - name: Send notification on failure
       if: failure() || steps.smoke-tests.outcome == 'failure' || steps.api-health.outcome == 'failure'
-      uses: 8398a7/action-slack@v3
-      with:
-        status: custom
-        custom_payload: |
-          {
-            username: 'E2E Monitor',
-            icon_emoji: ':warning:',
-            attachments: [{
-              color: 'danger',
-              title: 'E2E Monitoring Alert',
-              fields: [
-                {
-                  title: 'Status',
-                  value: 'Failed',
-                  short: true
-                },
-                {
-                  title: 'Time',
-                  value: '${{ steps.date.outputs.date }}',
-                  short: true
-                },
-                {
-                  title: 'Test Results',
-                  value: 'Smoke Tests: ${{ steps.smoke-tests.outcome }}\nAPI Health: ${{ steps.api-health.outcome }}',
-                  short: false
-                },
-                {
-                  title: 'Action URL',
-                  value: '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
-                  short: false
-                }
-              ]
-            }]
-          }
       env:
-        SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK_URL }}
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      run: |
+        node .github/scripts/notify-slack.js failure "Smoke Tests: ${{ steps.smoke-tests.outcome }}, API Health: ${{ steps.api-health.outcome }}"
 
     - name: Create issue on repeated failures
       if: failure()

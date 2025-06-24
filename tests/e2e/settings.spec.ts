@@ -13,13 +13,13 @@ test.describe('設定機能', () => {
     // 設定モーダルを開く
     await settingsButton.click()
     
-    // モーダルが表示されるまで待つ
-    await expect(page.locator('.modal, [role="dialog"]').first()).toBeVisible({ timeout: 10000 })
+    // CSS Modulesのクラス名に対応 - overlayクラスが表示されるのを待つ
+    await expect(page.locator('[class*="overlay"]').first()).toBeVisible({ timeout: 10000 })
   })
 
   test('設定モーダルの開閉が正しく動作する', async ({ page }) => {
-    // モーダルが開いていることを確認
-    const modal = page.locator('.modal, [role="dialog"]').first()
+    // モーダルが開いていることを確認（CSS Modules対応）
+    const modal = page.locator('[class*="modal"]').first()
     await expect(modal).toBeVisible()
     
     // 閉じるボタンで閉じる
@@ -30,8 +30,8 @@ test.describe('設定機能', () => {
     await page.click('button[aria-label="設定"]')
     await expect(modal).toBeVisible()
     
-    // オーバーレイクリックで閉じる
-    await page.click('.overlay', { position: { x: 10, y: 10 } })
+    // オーバーレイクリックで閉じる（CSS Modules対応）
+    await page.click('[class*="overlay"]', { position: { x: 10, y: 10 } })
     await expect(modal).not.toBeVisible()
   })
 
@@ -161,8 +161,8 @@ test.describe('設定機能', () => {
     // 閉じるボタンをクリック
     await page.click('button:has-text("閉じる")')
     
-    // モーダルがまだ開いていることを確認
-    await expect(page.locator('.modal, [role="dialog"]').first()).toBeVisible()
+    // モーダルがまだ開いていることを確認（CSS Modules対応）
+    await expect(page.locator('[class*="modal"]').first()).toBeVisible()
     
     // 今度は承認する
     page.removeAllListeners('dialog')
@@ -172,8 +172,8 @@ test.describe('設定機能', () => {
     
     await page.click('button:has-text("閉じる")')
     
-    // モーダルが閉じたことを確認
-    await expect(page.locator('.modal, [role="dialog"]').first()).not.toBeVisible()
+    // モーダルが閉じたことを確認（CSS Modules対応）
+    await expect(page.locator('[class*="modal"]').first()).not.toBeVisible()
   })
 
   test('NGリストの統計表示', async ({ page }) => {
