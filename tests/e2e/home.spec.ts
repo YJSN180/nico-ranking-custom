@@ -7,8 +7,14 @@ test.describe('Home Page E2E', () => {
     // Check site title
     await expect(page.locator('h1')).toContainText('ニコラン(Re:turn)')
     
-    // Check navigation button exists (nav is hidden by default on mobile)
-    await expect(page.locator('button[aria-label="メニューを開く"]')).toBeVisible()
+    // Check navigation exists (button on mobile, nav on desktop)
+    const isMobile = await page.viewportSize()?.width! <= 768
+    if (isMobile) {
+      await expect(page.locator('button[aria-label="メニューを開く"]')).toBeVisible()
+    } else {
+      // On desktop, check that navigation is visible
+      await expect(page.locator('nav, [role="navigation"]').first()).toBeVisible()
+    }
     
     // Check that genre selector is present
     await expect(page.locator('[data-testid="genre-selector"], select')).toBeVisible()
