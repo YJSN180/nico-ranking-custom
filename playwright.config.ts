@@ -24,23 +24,26 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /.*\.mobile\.spec\.ts/, // モバイルテストを除外
+      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: /.*\.mobile\.spec\.ts/, // モバイルテストを除外
+      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
-      testIgnore: /.*\.mobile\.spec\.ts/, // モバイルテストを除外
+      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
     },
     // Mobile browsers - WebKit only
     {
       name: 'mobile-safari',
-      use: { ...devices['iPhone 12'] },
-      testMatch: /.*\.mobile\.spec\.ts/, // モバイルテストのみ実行
+      use: { 
+        ...devices['iPhone 12'],
+        hasTouch: true, // タッチスクリーンを有効化
+      },
+      testMatch: '**/mobile.spec.ts', // モバイルテストのみ実行
     },
   ],
   
