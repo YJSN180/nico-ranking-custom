@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import { cookies } from 'next/headers'
 import { ThemeProvider } from '@/components/theme-provider'
-import { WebVitalsReporter } from '@/components/web-vitals-reporter'
+import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -127,7 +127,7 @@ export default async function RootLayout({
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider>
-          <WebVitalsReporter />
+          <ClientOnlyWebVitals />
           {children}
         </ThemeProvider>
       </body>

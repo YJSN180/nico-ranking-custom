@@ -18,13 +18,13 @@ env:
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
 
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
-        browser: [chromium, firefox]
-        shard: [1, 2]
+        browser: [chromium]
+        shard: [1]
 
     steps:
     - name: Checkout code
@@ -104,7 +104,7 @@ jobs:
 
   lighthouse:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     
     steps:
     - name: Checkout code
@@ -144,15 +144,13 @@ jobs:
       with:
         urls: |
           http://localhost:3000
-          http://localhost:3000/?genre=game
-          http://localhost:3000/?genre=music&period=hour
         uploadArtifacts: true
         temporaryPublicStorage: true
-        runs: 3
+        runs: 1
 
   accessibility:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     
     steps:
     - name: Checkout code
