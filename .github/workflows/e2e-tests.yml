@@ -163,6 +163,13 @@ jobs:
 
     - name: Start dev server
       run: |
+        # Debug environment variables
+        echo "=== Environment Check ==="
+        echo "KV_RANKING_ID set: ${KV_RANKING_ID:+true}"
+        echo "KV_RANKING_ID length: ${#KV_RANKING_ID}"
+        echo "CLOUDFLARE_API_TOKEN set: ${CLOUDFLARE_API_TOKEN:+true}"
+        echo "CLOUDFLARE_API_TOKEN length: ${#CLOUDFLARE_API_TOKEN}"
+        
         npm run dev &
         npx wait-on http://localhost:3000 --timeout 120000
       env:
