@@ -30,6 +30,7 @@
     "test:e2e:report": "playwright show-report",
     "test:e2e:codegen": "playwright codegen",
     "test:e2e:with-server": "./scripts/test-with-server.sh",
+    "wait-on": "wait-on",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:coverage:report": "vitest --coverage --reporter=html",
     "update-video-stats": "tsx scripts/update-video-stats.ts",
@@ -82,6 +83,7 @@
     "vite": "^6.0.7",
     "vitest": "^3.2.3",
     "vitest-environment-miniflare": "^2.14.4",
+    "wait-on": "^7.2.0",
     "woff2-feature-test": "^1.0.3",
     "wrangler": "^3.102.0"
   }
