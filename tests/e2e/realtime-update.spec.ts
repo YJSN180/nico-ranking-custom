@@ -157,7 +157,7 @@ test.describe('リアルタイム更新機能', () => {
     // 24時間以内の動画は赤字で「○時間前」表示
     const newVideoDate = page.locator('text=20時間前')
     await expect(newVideoDate).toBeVisible()
-    await expect(newVideoDate).toHaveCSS('color', 'rgb(231, 76, 60)') // #e74c3c
+    await expect(newVideoDate).toHaveCSS('color', 'rgb(197, 48, 48)') // #c53030
 
     // 24時間以上前の動画は通常色で日付表示
     const oldVideoDate = page.locator('text=/202\\d-\\d{2}-\\d{2}/')

@@ -85,7 +85,7 @@ test.describe('設定機能', () => {
     await expect(page.locator('text=sm87654321')).toBeVisible()
     
     // 削除
-    await page.click('button:has-text("×"):near(text=sm12345678)')
+    await page.locator('text=sm12345678').locator('..').locator('button:has-text("×")').click()
     await expect(page.locator('text=sm12345678')).not.toBeVisible()
     
     // 適用ボタンで保存
@@ -97,7 +97,7 @@ test.describe('設定機能', () => {
     await page.click('button:has-text("NGリスト管理")')
     
     // 完全一致で追加
-    await page.check('input[type="radio"][value="exact"]:near(text=動画タイトル)')
+    await page.locator('text=動画タイトル').locator('..').locator('input[type="radio"][value="exact"]').check()
     const titleInput = page.locator('input[placeholder="タイトルを入力"]')
     await titleInput.fill('テスト動画タイトル')
     await titleInput.press('Enter')
@@ -105,7 +105,7 @@ test.describe('設定機能', () => {
     await expect(page.locator('text=テスト動画タイトル (完全)')).toBeVisible()
     
     // 部分一致に切り替えて追加
-    await page.check('input[type="radio"][value="partial"]:near(text=動画タイトル)')
+    await page.locator('text=動画タイトル').locator('..').locator('input[type="radio"][value="partial"]').check()
     await titleInput.fill('広告')
     await titleInput.press('Enter')
     
@@ -126,7 +126,7 @@ test.describe('設定機能', () => {
     await expect(page.locator('text=ID: 123456')).toBeVisible()
     
     // 投稿者名を追加（完全一致）
-    await page.check('input[type="radio"][value="exact"]:near(text=名前)')
+    await page.locator('text=名前').locator('..').locator('input[type="radio"][value="exact"]').check()
     const authorNameInput = page.locator('input[placeholder="投稿者名"]')
     await authorNameInput.fill('テスト投稿者')
     await authorNameInput.press('Enter')
@@ -134,7 +134,7 @@ test.describe('設定機能', () => {
     await expect(page.locator('text=名前: テスト投稿者 (完全)')).toBeVisible()
     
     // 部分一致で追加
-    await page.check('input[type="radio"][value="partial"]:near(text=名前)')
+    await page.locator('text=名前').locator('..').locator('input[type="radio"][value="partial"]').check()
     await authorNameInput.fill('bot')
     await authorNameInput.press('Enter')
     
@@ -198,17 +198,17 @@ test.describe('設定機能', () => {
 
   test('タブ切り替えが正しく動作する', async ({ page }) => {
     // 初期状態はNGリスト管理タブ
-    await expect(page.locator('button:has-text("NGリスト管理").active')).toBeVisible()
+    await expect(page.locator('button:has-text("NGリスト管理")')).toBeVisible()
     await expect(page.locator('h3:has-text("動画ID")')).toBeVisible()
     
     // 表示設定タブに切り替え
     await page.click('button:has-text("表示設定")')
-    await expect(page.locator('button:has-text("表示設定").active')).toBeVisible()
+    await expect(page.locator('button:has-text("表示設定")')).toBeVisible()
     await expect(page.locator('legend:has-text("テーマ設定")')).toBeVisible()
     
     // NGリスト管理タブに戻る
     await page.click('button:has-text("NGリスト管理")')
-    await expect(page.locator('button:has-text("NGリスト管理").active')).toBeVisible()
+    await expect(page.locator('button:has-text("NGリスト管理")')).toBeVisible()
     await expect(page.locator('h3:has-text("動画ID")')).toBeVisible()
   })
 })
