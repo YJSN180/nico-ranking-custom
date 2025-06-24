@@ -1,10 +1,6 @@
 name: E2E Tests
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
   workflow_dispatch:
   schedule:
     # 毎日午前3時（JST 12時）に実行
