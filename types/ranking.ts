@@ -16,6 +16,22 @@ export interface RankingItem {
   duration?: number  // 動画の再生時間（秒単位）
   // 順位管理用（NGフィルタリング後の元順位保持）
   originalRank?: number
+  // 開発環境用モックデータフィールド
+  videoId?: string  // sm番号形式のID（開発環境用）
+  thumbnailUrl?: string  // サムネイルURL（開発環境用）
+  viewCount?: number  // 再生数（開発環境用）
+  likeCount?: number  // いいね数（開発環境用）
+  mylistCount?: number  // マイリスト数（開発環境用）
+  commentCount?: number  // コメント数（開発環境用）
+  lengthInSeconds?: number  // 動画長さ（秒）（開発環境用）
+  publishedAt?: string  // 公開日時（開発環境用）
+  previousRank?: number  // 前回順位（開発環境用）
+}
+
+export interface PopularTag {
+  name: string
+  count: number
+  rank: number
 }
 
 // R2に保存されるランキングデータの構造

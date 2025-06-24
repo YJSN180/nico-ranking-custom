@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
+import { generateMockRankingData, generateMockPopularTags, isDevelopmentWithoutKV } from '@/lib/mock-data'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
 
@@ -20,6 +21,55 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // 開発環境でKVが設定されていない場合はモックデータを返す
+    if (isDevelopmentWithoutKV()) {
+      // eslint-disable-next-line no-console
+      console.log('[Development] Using mock data - KV not configured')
+      
+      const mockItems = generateMockRankingData(500)
+      const mockPopularTags = generateMockPopularTags()
+      
+      // タグ別ランキングの処理
+      if (tag) {
+        // タグに該当する動画のみフィルタリング
+        const taggedItems = mockItems
+          .filter(item => item.tags.includes(tag))
+          .slice(0, 100) // タグ別は最大100件
+        
+        if (taggedItems.length === 0) {
+          return NextResponse.json(
+            { 
+              error: 'Tag ranking not found. This tag may not be in the popular tags list.',
+              items: [],
+              hasMore: false,
+              totalCached: 0
+            },
+            { status: 404 }
+          )
+        }
+        
+        const response = NextResponse.json({
+          items: taggedItems,
+          hasMore: false,
+          totalCached: taggedItems.length
+        })
+        response.headers.set('X-Data-Source', 'mock')
+        response.headers.set('X-Environment', 'development')
+        return response
+      }
+      
+      // ジャンル別ランキング（開発環境ではジャンルフィルタリングなし）
+      const response = NextResponse.json({
+        items: mockItems,
+        popularTags: mockPopularTags,
+        hasMore: false,
+        totalCached: mockItems.length
+      })
+      response.headers.set('X-Data-Source', 'mock')
+      response.headers.set('X-Environment', 'development')
+      return response
+    }
+    
     // Cloudflare KVが利用可能かチェック（環境変数で判定）
     const kvRankingId = process.env.KV_RANKING_ID?.trim()
     const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN?.trim()

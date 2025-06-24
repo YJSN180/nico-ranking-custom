@@ -3,6 +3,8 @@
  * R2から直接ランキングデータを配信
  */
 
+/// <reference types="@cloudflare/workers-types" />
+
 interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY: string
@@ -94,9 +96,16 @@ export default {
           cacheKeySuffix = `${genre}/${period}/all`
         }
         
-        // キャッシュキー
-        const cacheKey = new Request(`https://r2-cache.nico-rank.com/ranking/${cacheKeySuffix}`, request)
-        const cache = (caches as any).default
+        // キャッシュキー（実際のURLベースで作成）
+        const cacheUrl = new URL(request.url)
+        cacheUrl.pathname = `/api/ranking/${cacheKeySuffix}`
+        const cacheKey = new Request(cacheUrl.toString(), {
+          method: 'GET',
+          headers: {
+            'CF-Cache-Key': cacheKeySuffix
+          }
+        })
+        const cache = caches.default
         
         // キャッシュチェック
         let response = await cache.match(cacheKey)
@@ -146,17 +155,49 @@ export default {
         // R2から取得したデータを返す
         const data = await r2Object.text()
         console.log(`[Worker] R2 data found for ${r2Key}, size: ${data.length} bytes`)
-        response = new Response(data, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=1800, s-maxage=3600',
-            'X-Data-Source': 'r2-direct',
-            'X-Cache-Status': 'MISS',
-            ...corsHeaders,
-            ...securityHeaders
-          }
-        })
+        
+        // クライアントがgzip圧縮をサポートしているかチェック
+        const acceptEncoding = request.headers.get('Accept-Encoding') || ''
+        const supportsGzip = acceptEncoding.includes('gzip')
+        
+        // レスポンスヘッダーの準備
+        const responseHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
+          'CDN-Cache-Control': 'public, max-age=3600',
+          'X-Data-Source': 'r2-direct',
+          'X-Cache-Status': 'MISS',
+          'X-Original-Size': data.length.toString(),
+          ...corsHeaders,
+          ...securityHeaders
+        }
+        
+        // gzip圧縮をサポートしている場合は圧縮
+        if (supportsGzip) {
+          // CompressionStreamを使用してgzip圧縮
+          const stream = new Response(data).body
+          const compressionStream = stream!.pipeThrough(new CompressionStream('gzip'))
+          
+          responseHeaders['Content-Encoding'] = 'gzip'
+          responseHeaders['Vary'] = 'Accept-Encoding'
+          
+          response = new Response(compressionStream, {
+            status: 200,
+            headers: responseHeaders
+          })
+          
+          console.log(`[Worker] Response compressed with gzip`)
+        } else {
+          // 圧縮なしのレスポンス
+          responseHeaders['Vary'] = 'Accept-Encoding'
+          
+          response = new Response(data, {
+            status: 200,
+            headers: responseHeaders
+          })
+          
+          console.log(`[Worker] Response sent without compression`)
+        }
         
         // キャッシュに保存
         ctx.waitUntil(cache.put(cacheKey, response.clone()))

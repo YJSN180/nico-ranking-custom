@@ -1,38 +1,96 @@
-import type { RankingItem } from '@/types/ranking'
+import type { RankingItem, PopularTag } from '@/types/ranking'
 
-export function getMockRankingData(): RankingItem[] {
-  return mockRankingData
+// 開発環境用のモックデータ生成
+export function generateMockRankingData(count: number = 100): RankingItem[] {
+  const mockTitles = [
+    'VOCALOID新曲リンク',
+    'ゲーム実況プレイ',
+    '歌ってみた',
+    '踊ってみた',
+    'MMD艦これ',
+    'ゆっくり実況プレイ',
+    'アニメOP集',
+    '音MAD',
+    'VOICEROIDキッチン',
+    '作業用BGM'
+  ]
+
+  const mockTags = [
+    'VOCALOID',
+    'ゲーム',
+    '実況プレイ',
+    '歌ってみた',
+    '踊ってみた',
+    'MMD',
+    'アニメ',
+    '音楽',
+    'VOICEROID',
+    'ゆっくり実況'
+  ]
+
+  const items: RankingItem[] = []
+  
+  for (let i = 0; i < count; i++) {
+    const randomTitle = mockTitles[Math.floor(Math.random() * mockTitles.length)]
+    const randomTagCount = Math.floor(Math.random() * 5) + 1
+    const selectedTags = [...mockTags]
+      .sort(() => Math.random() - 0.5)
+      .slice(0, randomTagCount)
+
+    items.push({
+      rank: i + 1,
+      id: `sm${40000000 + i}`,
+      title: `【${randomTitle}】テスト動画 Part ${i + 1}`,
+      thumbURL: `https://nicovideo.cdn.nimg.jp/thumbnails/${40000000 + i}/${40000000 + i}`,
+      views: Math.floor(Math.random() * 100000) + 1000,
+      likes: Math.floor(Math.random() * 5000) + 100,
+      mylists: Math.floor(Math.random() * 1000) + 10,
+      comments: Math.floor(Math.random() * 2000) + 50,
+      duration: Math.floor(Math.random() * 600) + 60,
+      registeredAt: new Date(Date.now() - Math.random() * 86400000).toISOString(),
+      tags: selectedTags,
+      originalRank: Math.random() > 0.5 ? i + Math.floor(Math.random() * 10) - 5 : 0
+    })
+  }
+
+  return items
 }
 
-export const mockRankingData: RankingItem[] = [
-  {
-    rank: 1,
-    id: 'sm43521234',
-    title: '【初音ミク】テストソング【オリジナル】',
-    thumbURL: 'https://nicovideo.cdn.nimg.jp/thumbnails/43521234/43521234.jpg',
-    views: 150000,
-  },
-  {
-    rank: 2,
-    id: 'sm43521235',
-    title: 'ゲーム実況プレイ Part1',
-    thumbURL: 'https://nicovideo.cdn.nimg.jp/thumbnails/43521235/43521235.jpg',
-    views: 120000,
-  },
-  {
-    rank: 3,
-    id: 'sm43521236',
-    title: '料理動画：簡単レシピ',
-    thumbURL: 'https://nicovideo.cdn.nimg.jp/thumbnails/43521236/43521236.jpg',
-    views: 98000,
-  },
-  // ... 実際は100件まで
-].concat(
-  Array.from({ length: 97 }, (_, i) => ({
-    rank: i + 4,
-    id: `sm4352${1237 + i}`,
-    title: `サンプル動画 ${i + 4}`,
-    thumbURL: `https://nicovideo.cdn.nimg.jp/thumbnails/4352${1237 + i}/4352${1237 + i}.jpg`,
-    views: Math.floor(Math.random() * 50000) + 10000,
+export function generateMockPopularTags(): PopularTag[] {
+  const baseTags = [
+    'VOCALOID',
+    'ゲーム',
+    '実況プレイ',
+    '歌ってみた',
+    '踊ってみた',
+    'MMD',
+    'アニメ',
+    '音楽',
+    'VOICEROID',
+    'ゆっくり実況',
+    '初音ミク',
+    '東方',
+    'RTA',
+    'MAD',
+    'エンターテイメント'
+  ]
+
+  return baseTags.map((tag, index) => ({
+    name: tag,
+    count: Math.floor(Math.random() * 5000) + 1000,
+    rank: index + 1
   }))
-)
+}
+
+// 開発環境チェック関数
+export function isDevelopmentWithoutKV(): boolean {
+  return process.env.NODE_ENV === 'development' && 
+         (!process.env.KV_RANKING_ID || !process.env.CLOUDFLARE_API_TOKEN)
+}
+
+// 旧APIとの互換性のため
+export function getMockRankingData(): RankingItem[] {
+  return generateMockRankingData(100)
+}
+
+export const mockRankingData = getMockRankingData()
