@@ -10,6 +10,8 @@ function getConnectionSpeed() {
 }
 
 function sendToAnalytics(metric: Metric, options: { params: { [key: string]: any } }) {
+  if (typeof window === 'undefined') return
+  
   const page = Object.entries(options.params).reduce(
     (acc, [key, value]) => acc.replace(value, `[${key}]`),
     window.location.pathname
