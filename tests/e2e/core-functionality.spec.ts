@@ -60,8 +60,8 @@ test.describe('Core Functionality E2E', () => {
     const title = await page.title()
     expect(title.length).toBeGreaterThan(0)
     
-    // Check for charset
-    await expect(page.locator('meta[charset], meta[charset="utf-8"]').first()).toBeVisible()
+    // Check for charset - meta tags are not visible elements, check they exist instead
+    await expect(page.locator('meta[charset], meta[charset="utf-8"]').first()).toHaveCount(1)
   })
 
   test('should handle API errors gracefully', async ({ page }) => {
