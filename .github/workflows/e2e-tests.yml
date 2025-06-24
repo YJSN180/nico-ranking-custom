@@ -16,7 +16,42 @@ env:
   NODE_VERSION: '20'
 
 jobs:
+  # Setup job to install and cache Playwright browsers
+  setup-playwright:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Get Playwright version
+      id: playwright-version
+      run: |
+        echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    - name: Install Playwright browsers
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
+      run: npx playwright install --with-deps
+
   e2e-tests:
+    needs: setup-playwright
     runs-on: ubuntu-latest
     timeout-minutes: 30
     
@@ -67,8 +102,18 @@ jobs:
         echo "CRON_SECRET is set: ${{ secrets.CRON_SECRET != '' }}"
         echo "WORKER_AUTH_KEY is set: ${{ secrets.WORKER_AUTH_KEY != '' }}"
 
-    - name: Install Playwright browsers
-      run: npx playwright install --with-deps
+    - name: Get Playwright version
+      id: playwright-version
+      run: |
+        echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
+
+    - name: Restore Playwright browsers from cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
 
     - name: Build application
       run: npm run build
@@ -386,6 +431,7 @@ jobs:
         runs: 1
 
   accessibility:
+    needs: setup-playwright
     runs-on: ubuntu-latest
     timeout-minutes: 10
     
@@ -403,6 +449,19 @@ jobs:
       run: |
         npm ci
         npm install -D axe-playwright
+
+    - name: Get Playwright version
+      id: playwright-version
+      run: |
+        echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
+
+    - name: Restore Playwright browsers from cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
 
     - name: Build and start server
       run: |
