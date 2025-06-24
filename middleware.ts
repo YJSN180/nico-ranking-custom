@@ -6,8 +6,34 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
 export async function middleware(request: NextRequest) {
-  // Cloudflare Workers経由のアクセスチェック（開発環境以外）
-  // development以外では認証チェックを行う
+  const pathname = request.nextUrl.pathname
+  
+  // メインページとAPIルートのみを高速化対象とする
+  if (pathname === '/' || pathname.startsWith('/api/ranking')) {
+    // 最小限の処理のみ実行
+    const response = NextResponse.next()
+    
+    // パフォーマンス最適化ヘッダー（メインページのみ）
+    if (pathname === '/') {
+      response.headers.set('Link', [
+        '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+        '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+        '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
+        '<https://tn.smilevideo.jp>; rel=preconnect',
+        '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
+      ].join(', '))
+      response.headers.set('Cache-Control', 'public, s-maxage=1200, stale-while-revalidate=600')
+    }
+    
+    // APIルートのキャッシュ最適化
+    if (pathname.startsWith('/api/ranking')) {
+      response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
+    }
+    
+    return response
+  }
+  
+  // その他のルートは従来通りの処理
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
   
   // Check auth for Cloudflare Workers
@@ -16,12 +42,8 @@ export async function middleware(request: NextRequest) {
     const expectedKey = process.env.WORKER_AUTH_KEY
     const host = request.headers.get('host')
     
-    
     // Workersからの認証がない場合の処理
     if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
-      // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
-      // ただし、プレビューデプロイメントは除外
-      // 重要: nico-rank.comドメインからのアクセスは許可する（無限ループ防止）
       if (host?.includes('vercel.app') && 
           request.method !== 'OPTIONS' && 
           process.env.VERCEL_ENV !== 'preview' &&

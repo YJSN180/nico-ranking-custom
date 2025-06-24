@@ -141,11 +141,18 @@ const nextConfig = {
         url: false,
       }
       
-      // 不要なモジュールを除外
+      // サーバー専用モジュールをクライアントバンドルから完全除外
       config.externals = {
         ...config.externals,
         '@cloudflare/workers-types': 'commonjs @cloudflare/workers-types',
         'wrangler': 'commonjs wrangler',
+        'cheerio': 'commonjs cheerio',
+        'fast-xml-parser': 'commonjs fast-xml-parser', 
+        'pako': 'commonjs pako',
+        '@types/jsdom': 'commonjs @types/jsdom',
+        'node-fetch': 'commonjs node-fetch',
+        'tsx': 'commonjs tsx',
+        'qrcode': 'commonjs qrcode', // QRCodeライブラリを完全にクライアントから除外
       }
       
       config.optimization.splitChunks = {
@@ -167,7 +174,17 @@ const nextConfig = {
             name: 'vendors',
             chunks: 'all',
             priority: 20,
-            maxSize: 244000
+            maxSize: 244000,
+            // QRCodeなどのサーバー専用ライブラリを除外
+            enforce: true
+          },
+          // 特定のライブラリを個別のチャンクに分割（必要に応じて）
+          react: {
+            test: /[\\/]node_modules[\\/](react|react-dom)[\\/]/,
+            name: 'react',
+            chunks: 'all',
+            priority: 30,
+            reuseExistingChunk: true
           }
         }
       }

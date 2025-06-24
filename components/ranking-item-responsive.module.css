@@ -1,0 +1,276 @@
+/* Ranking Item Responsive Styles */
+.rankingItem {
+  /* Container Queries対応 */
+  container-type: inline-size;
+  background: var(--surface-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+}
+
+.rankingItem:hover {
+  background-color: var(--surface-hover);
+}
+
+/* ランク別ボーダー */
+.rankingItem.rank1 {
+  border: 2px solid var(--rank-gold);
+}
+
+.rankingItem.rank2 {
+  border: 2px solid var(--rank-silver);
+}
+
+.rankingItem.rank3 {
+  border: 2px solid var(--rank-bronze);
+}
+
+.content {
+  display: flex;
+  padding: 12px;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+/* デスクトップ用順位 */
+.rank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-weight: 700;
+  user-select: none;
+  min-width: 40px;
+  height: 40px;
+  font-size: 16px;
+}
+
+.rank.desktop {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.rank.desktop.rank1 {
+  background: var(--rank-gold);
+  color: var(--button-text-active);
+}
+
+.rank.desktop.rank2 {
+  background: var(--rank-silver);
+  color: var(--button-text-active);
+}
+
+.rank.desktop.rank3 {
+  background: var(--rank-bronze);
+  color: var(--button-text-active);
+}
+
+/* モバイル用順位オーバーレイ */
+.rank.mobile {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 2;
+  min-width: 32px;
+  height: 32px;
+  font-size: 14px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.rank.mobile.rank1 {
+  background: var(--rank-gold);
+  color: var(--button-text-active);
+}
+
+.rank.mobile.rank2 {
+  background: var(--rank-silver);
+  color: var(--button-text-active);
+}
+
+.rank.mobile.rank3 {
+  background: var(--rank-bronze);
+  color: var(--button-text-active);
+}
+
+/* サムネイル */
+.thumbnail {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  width: 160px;
+}
+
+.thumbnailImage {
+  object-fit: cover;
+  border-radius: 4px;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+}
+
+/* 再生時間オーバーレイ */
+.duration {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* コンテンツエリア */
+.details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* タイトル */
+.title {
+  color: var(--text-primary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.title:hover {
+  color: var(--primary-color);
+}
+
+/* 投稿者情報 */
+.author {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.authorLink {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: inherit;
+  padding: 3px 6px;
+  margin: -3px -6px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.authorLink:hover {
+  background-color: var(--surface-secondary);
+}
+
+.authorIcon {
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.authorName {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  margin: 0 4px;
+  color: var(--text-muted);
+}
+
+.date {
+  font-size: 13px;
+}
+
+.date.new {
+  color: #c53030;
+  font-weight: 600;
+}
+
+/* 統計情報 */
+.stats {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.stat.desktopOnly {
+  display: flex;
+}
+
+/* レスポンシブ対応 */
+@container (max-width: 640px) {
+  .rank.desktop {
+    display: none;
+  }
+  
+  .rank.mobile {
+    display: flex;
+  }
+  
+  .content {
+    padding: 8px;
+    gap: 8px;
+  }
+  
+  .thumbnail {
+    width: 120px;
+  }
+  
+  .title {
+    font-size: 14px;
+  }
+  
+  .author {
+    font-size: 13px;
+  }
+  
+  .stats {
+    gap: 12px;
+  }
+  
+  .stat.desktopOnly {
+    display: none;
+  }
+}
+
+@container (min-width: 641px) {
+  .rank.desktop {
+    display: flex;
+  }
+  
+  .rank.mobile {
+    display: none;
+  }
+}

@@ -66,15 +66,9 @@ export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilter
     return true
   })
   
-  // フィルタリング後、ランク番号を再計算する
-  // これにより、NGリストでブロックされた動画を除いた連続した番号になる
-  const rerankedItems = filteredItems.map((item, index) => ({
-    ...item,
-    rank: index + 1  // 1から始まる連続した番号に再計算
-  }))
-  
+  // 再ランク付けは不要（client-pageでoriginalRankを計算するため）
   return {
-    filteredItems: rerankedItems,
+    filteredItems,
     newDerivedIds
   }
 }

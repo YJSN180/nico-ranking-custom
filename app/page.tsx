@@ -15,7 +15,7 @@ import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
 
 // ISRを使用してFunction Invocationsを削減
-export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
+export const revalidate = 300 // 5分間キャッシュ（TTFB重視）
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
@@ -28,31 +28,62 @@ interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }
 
+// メタデータテンプレートを事前定義して計算コストを削減
+const DEFAULT_TITLE = 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示'
+const DEFAULT_DESCRIPTION = 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！'
+const OG_IMAGE = {
+  url: '/og-image.png',
+  width: 1200,
+  height: 630,
+  type: 'image/png' as const,
+}
+
 export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
   const params = await searchParams
   const genre = (params.genre as RankingGenre) || 'all'
   const period = (params.period as RankingPeriod) || '24h'
   const tag = params.tag as string | undefined
-  const page = parseInt((params.page as string) || '1', 10)
   
+  // デフォルト（総合・24時間・タグなし）の場合は事前定義されたメタデータを使用
+  const isDefault = genre === 'all' && period === '24h' && !tag
+  
+  if (isDefault) {
+    return {
+      title: DEFAULT_TITLE,
+      description: DEFAULT_DESCRIPTION,
+      openGraph: {
+        title: DEFAULT_TITLE,
+        description: DEFAULT_DESCRIPTION,
+        siteName: 'ニコラン(Re:turn)',
+        url: 'https://nico-rank.com',
+        images: [{ ...OG_IMAGE, alt: DEFAULT_TITLE }],
+      },
+      twitter: {
+        title: DEFAULT_TITLE,
+        description: DEFAULT_DESCRIPTION,
+        card: 'summary_large_image',
+        images: [{ ...OG_IMAGE, alt: DEFAULT_TITLE }],
+      },
+    }
+  }
+  
+  // 非デフォルトの場合のみ動的に生成
   const genreInfo = RANKING_GENRES.find(g => g.value === genre)
   const genreName = genreInfo?.label || '総合'
   const periodName = period === '24h' ? '24時間' : '毎時'
   
-  // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
-  const isDefault = genre === 'all' && period === '24h' && !tag
-  
-  let title = isDefault ? 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示' : `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
-  let description = isDefault ? 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
+  let title: string
+  let description: string
   
   if (tag) {
     title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
-    description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
+    description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。最新の人気動画をチェック！`
+  } else {
+    title = `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
+    description = `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。最新の人気動画をチェック！`
   }
   
-  if (!isDefault) {
-    description += '最新の人気動画をチェック！'
-  }
+  const url = `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`
   
   return {
     title,
@@ -61,67 +92,50 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
       title,
       description,
       siteName: 'ニコラン(Re:turn)',
-      url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
-      images: [{
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: title,
-        type: 'image/png',
-      }],
+      url,
+      images: [{ ...OG_IMAGE, alt: title }],
     },
     twitter: {
       title,
       description,
-      card: 'summary_large_image', // 大きなサムネイル表示
-      images: [{
-        url: '/og-image.png',
-        width: 1200,
-        height: 630,
-        alt: title,
-        type: 'image/png',
-      }],
+      card: 'summary_large_image',
+      images: [{ ...OG_IMAGE, alt: title }],
     },
   }
 }
 
-async function fetchRankingData(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
+async function fetchRankingDataDirect(genre: string = 'all', period: string = '24h', tag?: string): Promise<{
   items: RankingItem[]
   popularTags?: string[]
 }> {
   
-  // サーバーサイドでAPIエンドポイントを使用（R2から直接データを取得）
+  // 直接Cloudflare KVから取得してAPIコールを回避
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nico-rank.com'
-    const params = new URLSearchParams()
-    params.set('genre', genre)
-    params.set('period', period)
-    if (tag) params.set('tag', tag)
-    
-    const apiUrl = `${baseUrl}/api/ranking?${params.toString()}`
-    // console.log(`[SSR] Fetching from API: ${apiUrl}`)
-    
-    const response = await fetch(apiUrl, {
-      next: { revalidate: 300 }, // 5分間キャッシュ
-      headers: {
-        'Accept': 'application/json',
+    if (tag) {
+      // タグ別ランキングの場合
+      const { getTagRanking } = await import('@/lib/cloudflare-kv')
+      const tagItems = await getTagRanking(genre, period as 'hour' | '24h', tag)
+      if (tagItems && tagItems.length > 0) {
+        // NGフィルタリングを適用
+        const { filteredData } = await filterRankingDataServer({ items: tagItems })
+        return filteredData
       }
-    })
-    
-    if (!response.ok) {
-      console.error(`[SSR] API returned ${response.status}`)
       return { items: [], popularTags: [] }
-    }
-    
-    const data = await response.json()
-    
-    if (data && data.items && Array.isArray(data.items)) {
-      // NGフィルタリングを適用
-      const { filteredData } = await filterRankingDataServer(data)
-      return filteredData
+    } else {
+      // 通常のジャンル別ランキング
+      const { getGenreRanking } = await import('@/lib/cloudflare-kv')
+      const genreData = await getGenreRanking(genre, period as 'hour' | '24h')
+      if (genreData && genreData.items && genreData.items.length > 0) {
+        // NGフィルタリングを適用
+        const { filteredData } = await filterRankingDataServer({
+          items: genreData.items,
+          popularTags: genreData.popularTags
+        })
+        return filteredData
+      }
     }
   } catch (error) {
-    console.error('[SSR] API error:', error)
+    console.error('[SSR] Direct KV error:', error)
   }
 
   // エラーの場合は空のデータを返す
@@ -132,11 +146,15 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 }
 
 export default async function Home({ searchParams }: PageProps) {
+  const startTime = Date.now()
+  
   // 並列でPromiseを解決してTTFBを改善
   const [params, cookieStore] = await Promise.all([
     searchParams,
     cookies()
   ])
+  
+  const paramsTime = Date.now() - startTime
   
   // URLパラメータが優先、なければCookieから、それもなければデフォルト値
   let genre = params.genre as string
@@ -176,9 +194,15 @@ export default async function Home({ searchParams }: PageProps) {
   page = Math.max(1, page || 1) // ページは最低1
   
   try {
-    // console.log(`[SSR] Attempting to fetch: genre=${genre}, period=${period}, tag=${tag}`)
+    const dataFetchStart = Date.now()
+    const { items: rankingData, popularTags = [] } = await fetchRankingDataDirect(genre, period, tag)
+    const dataFetchTime = Date.now() - dataFetchStart
     
-    const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
+    // Performance logging (development only)
+    if (process.env.NODE_ENV === 'development') {
+      // eslint-disable-next-line no-console
+      console.log(`[PERF] Params: ${paramsTime}ms, Data fetch: ${dataFetchTime}ms, Total: ${Date.now() - startTime}ms`)
+    }
 
     if (rankingData.length === 0) {
       // タグ検索でデータがない場合は、タグなしでリダイレクト

@@ -3,8 +3,17 @@ import { kv } from './simple-kv'
 import type { NGList } from '@/types/ng-list'
 import { migrateLegacyNGList, createEmptyNGList } from './ng-list-migration'
 
+// NGリストのメモリキャッシュ
+let ngListCache: { data: NGList, timestamp: number } | null = null
+const NG_CACHE_TTL = 10 * 60 * 1000 // 10分間
+
 // Get NG list from KV
 export async function getServerNGList(): Promise<NGList> {
+  // メモリキャッシュから確認
+  if (ngListCache && Date.now() - ngListCache.timestamp < NG_CACHE_TTL) {
+    return ngListCache.data
+  }
+  
   try {
     const [manual, derived] = await Promise.all([
       kv.get<any>('ng-list-manual'),
@@ -14,13 +23,20 @@ export async function getServerNGList(): Promise<NGList> {
     // マイグレーション処理を適用
     const migratedManual = migrateLegacyNGList(manual)
     
-    return {
+    const result = {
       ...migratedManual,
       derivedVideoIds: derived || []
     }
+    
+    // メモリキャッシュに保存
+    ngListCache = { data: result, timestamp: Date.now() }
+    
+    return result
   } catch (error) {
     // Failed to get NG list from KV - returning empty list
-    return createEmptyNGList()
+    const empty = createEmptyNGList()
+    ngListCache = { data: empty, timestamp: Date.now() }
+    return empty
   }
 }
 

@@ -28,7 +28,7 @@ class SimpleKV {
       throw new Error('Cloudflare KV credentials not configured')
     }
 
-    const maxRetries = 3
+    const maxRetries = 2 // Reduce retries for faster failure
     let attempt = 0
     
     while (attempt < maxRetries) {
@@ -37,6 +37,8 @@ class SimpleKV {
           headers: {
             'Authorization': `Bearer ${CF_API_TOKEN}`,
           },
+          // Add timeout to prevent hanging requests
+          signal: AbortSignal.timeout(5000) // 5 second timeout
         })
 
         if (response.status === 404) {

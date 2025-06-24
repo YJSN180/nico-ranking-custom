@@ -40,10 +40,8 @@ export default function SetupMFAPage() {
       const data = await response.json()
       setSecret(data.secret)
       
-      // Generate QR code
-      const QRCode = await import('qrcode')
-      const qrCodeURL = await QRCode.toDataURL(data.qrCodeURI)
-      setQrCodeDataURL(qrCodeURL)
+      // Use QR code data URL generated on server side
+      setQrCodeDataURL(data.qrCodeDataURL)
     } catch (err: any) {
       // Ignore AbortError
       if (err.name !== 'AbortError') {

@@ -18,6 +18,13 @@ export async function GET(request: NextRequest) {
   if (!validPeriods.includes(period)) {
     return NextResponse.json({ error: 'Invalid period' }, { status: 400 })
   }
+  
+  // Response headers for performance optimization
+  const headers = {
+    'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=1800',
+    'CDN-Cache-Control': 'public, s-maxage=3600',
+    'X-API-Version': '2'
+  }
 
   try {
     // Cloudflare KVが利用可能かチェック（環境変数で判定）
@@ -50,10 +57,11 @@ export async function GET(request: NextRequest) {
               hasMore: false, // タグ別ランキングは常にfalse
               totalCached: cfItems.length
             })
-            response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
+            Object.entries(headers).forEach(([key, value]) => {
+              response.headers.set(key, value)
+            })
             response.headers.set('X-Cache-Status', 'CF-HIT')
             response.headers.set('X-Total-Cached', cfItems.length.toString())
-            response.headers.set('X-API-Version', '2') // バージョン確認用
             return response
           }
         } catch (error) {
@@ -91,10 +99,11 @@ export async function GET(request: NextRequest) {
             hasMore: false, // ページネーションなし
             totalCached: cfData.items.length
           })
-          response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
+          Object.entries(headers).forEach(([key, value]) => {
+            response.headers.set(key, value)
+          })
           response.headers.set('X-Cache-Status', 'CF-HIT')
           response.headers.set('X-Max-Items', String(maxItems))
-          response.headers.set('X-API-Version', '2') // バージョン確認用
           return response
         }
       } catch (error) {

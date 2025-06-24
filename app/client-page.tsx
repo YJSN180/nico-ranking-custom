@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue, useTransition, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import { TagSelector } from '@/components/tag-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
+import VirtualizedRankingList from '@/components/virtualized-ranking-list'
 import Pagination from '@/components/pagination'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
@@ -52,10 +53,12 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList } = useUserNGList()
   
-  // NGリストのバージョンを追跡（更新時に強制再レンダリング）
+  // NGリストの変更検出（軽量な方法）
   const ngListVersion = useMemo(() => {
-    // ngListオブジェクト全体をJSON文字列化してハッシュ値として使用
-    return JSON.stringify(ngList)
+    // 配列の長さとチェックサムでの軽量な変更検出
+    const videoCount = ngList.videoIds.length + ngList.videoTitles.exact.length + ngList.videoTitles.partial.length
+    const authorCount = ngList.authorIds.length + ngList.authorNames.exact.length + ngList.authorNames.partial.length
+    return `${videoCount}-${authorCount}`
   }, [ngList])
   
   // 設定の管理（初期値はURLパラメータから）
@@ -108,6 +111,10 @@ export default function ClientPage({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // React 18 Concurrent Features
+  const [isPending, startTransition] = useTransition()
+  const deferredNgListVersion = useDeferredValue(ngListVersion)
   
   // リクエストキャンセル用のAbortController
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -244,7 +251,7 @@ export default function ClientPage({
   // 理由: 動画リンクは target="_blank" で別タブで開くため、
   // 元のタブのスクロール位置は自動的に保持される
   
-  // 設定変更時の処理
+  // 設定変更時の処理（Transitionを使用）
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
     // 変更がない場合は何もしない（強制更新でない限り）
     if (
@@ -256,7 +263,11 @@ export default function ClientPage({
       return
     }
     
-    setConfig(newConfig)
+    // Transitionを使ってUI更新の優先度を下げる
+    startTransition(() => {
+      setConfig(newConfig)
+    })
+    
     setLoading(true)
     setError(null)
     
@@ -568,10 +579,21 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // フィルタリングとページネーション
-  const { displayItems, totalPages, totalItems } = useMemo(() => {
+  // フィルタリング処理の最適化（段階的実行）
+  const { displayItems, totalPages, totalItems, isFiltering } = useMemo(() => {
     // 取得件数の上限
     const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
+    
+    // 遅延されたNGリストバージョンを使用して、UI更新を段階的に行う
+    if (deferredNgListVersion !== ngListVersion) {
+      // NGリストが変更中の場合は、前の結果を保持
+      return {
+        displayItems: [],
+        totalPages: 0,
+        totalItems: 0,
+        isFiltering: true
+      }
+    }
     
     // UserNGListをNGList形式に変換（useUserNGListフック内のconvertToNGListロジックを展開）
     const ngListForFilter: NGList = {
@@ -602,9 +624,10 @@ export default function ClientPage({
     return {
       displayItems: result,
       totalPages: Math.ceil(allItems.length / ITEMS_PER_PAGE),
-      totalItems: allItems.length
+      totalItems: allItems.length,
+      isFiltering: false
     }
-  }, [fullRankingData, config.tag, ngList, currentPage])
+  }, [fullRankingData, config.tag, ngList, currentPage, deferredNgListVersion, ngListVersion])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -626,13 +649,13 @@ export default function ClientPage({
         />
       </div>
       
-      {loading && (
+      {(loading || isPending || isFiltering) && (
         <div className="loading-container">
           <div style={{ 
             fontSize: '16px', 
             color: 'var(--text-secondary)'
           }}>
-            読み込み中...
+            {isFiltering ? 'フィルタリング中...' : '読み込み中...'}
           </div>
         </div>
       )}
@@ -714,15 +737,14 @@ export default function ClientPage({
             onPageChange={handlePageChange}
           />
           
-          {/* ランキングリスト */}
-          <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {finalDisplayItems.map((item) => (
-              <RankingItemResponsive 
-                key={item.id} 
-                item={item}
-              />
-            ))}
-          </ul>
+          {/* ランキングリスト（仮想化） */}
+          <Suspense fallback={<div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary)' }}>リストを準備中...</div>}>
+            <VirtualizedRankingList
+              items={finalDisplayItems}
+              height={Math.min(finalDisplayItems.length * 140, 600)} // 最大600px、または実際のアイテム数に応じた高さ
+              itemHeight={140} // 各アイテムの高さ（概算）
+            />
+          </Suspense>
           
           {/* 下部ページネーション */}
           <Pagination
