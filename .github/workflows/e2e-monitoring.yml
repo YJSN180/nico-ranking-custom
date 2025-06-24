@@ -109,22 +109,24 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: '🚨 E2E Monitoring: Repeated Failures Detected',
-                body: `## E2E Monitoring Alert
-                
-The E2E monitoring tests have failed ${failureCount} times in the past 24 hours.
+                body: |
+                  ## E2E Monitoring Alert
+                  
+                  The E2E monitoring tests have failed multiple times in the past 24 hours.
 
-### Recent Failures
-- Smoke Tests: ${context.payload.steps?.smoke_tests?.outcome || 'unknown'}
-- API Health: ${context.payload.steps?.api_health?.outcome || 'unknown'}
+                  ### Recent Failures
+                  - Smoke Tests: Failed
+                  - API Health: Failed
 
-### Action Required
-1. Check the latest workflow run
-2. Review recent deployments
-3. Check Cloudflare KV and Workers status
-4. Verify API endpoints are responding correctly
+                  
+                  ### Action Required
+                  1. Check the latest workflow run
+                  2. Review recent deployments
+                  3. Check Cloudflare KV and Workers status
+                  4. Verify API endpoints are responding correctly
 
-### Automated Issue
-This issue was created automatically by the E2E monitoring workflow.`,
+                  ### Automated Issue
+                  This issue was created automatically by the E2E monitoring workflow.
                 labels: ['e2e-monitoring', 'automated', 'bug']
               });
             }
