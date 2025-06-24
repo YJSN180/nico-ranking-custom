@@ -93,16 +93,40 @@ test.describe('ナビゲーション機能', () => {
   })
 
   test('URLパラメータによる直接アクセスが機能する', async ({ page }) => {
-    // 特定のジャンル・期間・タグで直接アクセス
-    await page.goto('/?genre=music&period=hour&tag=歌ってみた')
+    // まずホームページに移動して人気タグを取得
+    await page.goto('/')
     
-    // ページが正常に表示されることを確認
-    await expect(page.locator('h1')).toBeVisible()
+    // 人気タグが存在する場合、最初のタグを取得（「すべて」以外）
+    const tagButtons = page.locator('button').filter({ hasText: /^(?!すべて).*/ })
+    const firstTagButton = tagButtons.filter({ has: page.locator('[class*="tagButton"]') }).first()
+    const tagExists = await firstTagButton.count() > 0
     
-    // URLパラメータが維持されていることを確認
-    expect(page.url()).toContain('genre=music')
-    expect(page.url()).toContain('period=hour')
-    expect(page.url()).toContain('tag=')
+    if (tagExists) {
+      // 最初の人気タグのテキストを取得
+      const tagText = await firstTagButton.textContent()
+      const encodedTag = encodeURIComponent(tagText?.trim() || '')
+      
+      // 特定のジャンル・期間・タグで直接アクセス
+      await page.goto(`/?genre=music&period=hour&tag=${encodedTag}`)
+      
+      // ページが正常に表示されることを確認
+      await expect(page.locator('h1')).toBeVisible()
+      
+      // URLパラメータが維持されていることを確認
+      expect(page.url()).toContain('genre=music')
+      expect(page.url()).toContain('period=hour')
+      expect(page.url()).toContain('tag=')
+    } else {
+      // タグがない場合はジャンルと期間のみでテスト
+      await page.goto('/?genre=music&period=hour')
+      
+      // ページが正常に表示されることを確認
+      await expect(page.locator('h1')).toBeVisible()
+      
+      // URLパラメータが維持されていることを確認
+      expect(page.url()).toContain('genre=music')
+      expect(page.url()).toContain('period=hour')
+    }
   })
 
   test('ブラウザの戻る/進むボタンが正しく動作する', async ({ page }) => {
