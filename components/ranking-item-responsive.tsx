@@ -1,11 +1,10 @@
 'use client'
 
-import { memo, useCallback } from 'react'
+import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
-import styles from './ranking-item-responsive.module.css'
 
 interface RankingItemProps {
   item: RankingItem
@@ -14,86 +13,107 @@ interface RankingItemProps {
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Container Queriesとflexbox/gridを活用してCLSを完全に回避
 const RankingItemResponsive = memo(function RankingItemResponsive({ item }: RankingItemProps) {
+  const rankColors: Record<number, string> = {
+    1: 'var(--rank-gold)',
+    2: 'var(--rank-silver)', 
+    3: 'var(--rank-bronze)'
+  }
+  
   const isNew = isWithin24Hours(item.registeredAt)
   const dateDisplay = formatRegisteredDate(item.registeredAt)
-
-  // イベントハンドラーをメモ化
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    // 投稿者リンクなどの子要素のクリックは除外
-    if ((e.target as HTMLElement).closest('a')) return;
-    window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
-  }, [item.id])
-
-  const handleAuthorClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
-
-  // クラス名を事前計算
-  const rankingItemClass = [
-    styles.rankingItem,
-    item.rank === 1 && styles.rank1,
-    item.rank === 2 && styles.rank2,
-    item.rank === 3 && styles.rank3
-  ].filter(Boolean).join(' ')
-
-  const desktopRankClass = [
-    styles.rank,
-    styles.desktop,
-    item.rank === 1 && styles.rank1,
-    item.rank === 2 && styles.rank2,
-    item.rank === 3 && styles.rank3
-  ].filter(Boolean).join(' ')
-
-  const mobileRankClass = [
-    styles.rank,
-    styles.mobile,
-    item.rank === 1 && styles.rank1,
-    item.rank === 2 && styles.rank2,
-    item.rank === 3 && styles.rank3
-  ].filter(Boolean).join(' ')
-
-  const dateClass = [
-    styles.date,
-    isNew && styles.new
-  ].filter(Boolean).join(' ')
 
   return (
     <li 
       data-testid="ranking-item"
-      className={rankingItemClass}
-      onClick={handleClick}
+      className="ranking-item-responsive"
+      style={{
+        // Container Queries用のcontainment設定
+        containerType: 'inline-size',
+        background: 'var(--surface-color)',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        boxShadow: 'var(--shadow-md)',
+        border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
+        marginBottom: '8px',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s',
+        position: 'relative'
+      }}
+      onClick={(e) => {
+        // 投稿者リンクなどの子要素のクリックは除外
+        if ((e.target as HTMLElement).closest('a')) return;
+        window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+      }}
     >
-      <div className={styles.content}>
+      <div className="ranking-item-responsive__content">
         {/* デスクトップ用順位（モバイルでは非表示） */}
-        <div className={desktopRankClass}>
+        <div 
+          className="ranking-item-responsive__rank ranking-item-responsive__rank--desktop"
+          style={{
+            background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+            color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: '6px',
+            fontWeight: '700',
+            userSelect: 'none',
+            // モバイルではオーバーレイ用の背景色を設定（CSSで上書きされる）
+            '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+            '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
+          } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
+        >
           {item.rank}
         </div>
         
         {/* サムネイル */}
         {item.thumbURL && (
-          <div className={styles.thumbnail}>
+          <div className="ranking-item-responsive__thumbnail">
             {/* モバイル用順位オーバーレイ */}
-            <div className={mobileRankClass}>
+            <div 
+              className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
+              style={{
+                background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+                color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
+                fontWeight: '700',
+                userSelect: 'none',
+                '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+                '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
+              } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
+            >
               {item.rank}
             </div>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               target="_blank"
               rel="noopener noreferrer"
+              style={{ display: 'block', cursor: 'pointer' }}
             >
               <OptimizedImage
                 src={item.thumbURL}
                 alt={item.title}
                 width={160}
                 height={90}
-                className={styles.thumbnailImage}
+                style={{ 
+                  objectFit: 'cover',
+                  borderRadius: '4px',
+                  width: '100%',
+                  height: 'auto',
+                  aspectRatio: '16 / 9'
+                }}
                 loading={item.rank <= 3 ? undefined : "lazy"}
                 priority={item.rank <= 3}
               />
             </a>
             {/* 再生時間オーバーレイ */}
             {item.duration && (
-              <div className={styles.duration}>
+              <div className="ranking-item-responsive__duration">
                 {formatDuration(item.duration)}
               </div>
             )}
@@ -101,20 +121,20 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         )}
         
         {/* コンテンツエリア */}
-        <div className={styles.details}>
+        <div className="ranking-item-responsive__details">
           {/* タイトル */}
           <a
             href={`https://www.nicovideo.jp/watch/${item.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className={styles.title}
+            className="ranking-item-responsive__title"
             data-testid="video-title"
           >
             {item.title}
           </a>
           
           {/* 投稿者情報 */}
-          <div className={styles.author}>
+          <div className="ranking-item-responsive__author">
             {(item.authorName || item.authorId) && item.authorId && (
               <a
                 href={item.authorId.startsWith('channel/') 
@@ -125,8 +145,24 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                 }
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={handleAuthorClick}
-                className={styles.authorLink}
+                onClick={(e) => e.stopPropagation()}
+                style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  padding: '3px 6px',
+                  margin: '-3px -6px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
               >
                 {item.authorIcon && (
                   <OptimizedImage
@@ -134,36 +170,46 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                     alt={item.authorName || ''}
                     width={20}
                     height={20}
-                    className={styles.authorIcon}
+                    style={{ 
+                      borderRadius: '50%',
+                      border: '1px solid var(--border-color)',
+                      flexShrink: 0
+                    }}
                     loading="lazy"
                   />
                 )}
-                <span className={styles.authorName}>
+                <span className="ranking-item-responsive__author-name">
                   {item.authorName || item.authorId}
                 </span>
               </a>
             )}
-            <span className={styles.separator}>·</span>
-            <span className={dateClass}>
+            <span className="ranking-item-responsive__separator">·</span>
+            <span 
+              className="ranking-item-responsive__date"
+              style={{ 
+                color: isNew ? '#c53030' : 'var(--text-secondary)',
+                fontWeight: isNew ? '600' : '400'
+              }}
+            >
               {dateDisplay}
             </span>
           </div>
           
           {/* 統計情報 */}
           <div 
-            className={styles.stats}
+            className="ranking-item-responsive__stats"
             data-testid="video-stats"
           >
-            <span className={styles.stat}>
+            <span className="ranking-item-responsive__stat">
               ▶️ {formatNumberMobile(item.views)}
             </span>
-            <span className={styles.stat}>
+            <span className="ranking-item-responsive__stat">
               💬 {formatNumberMobile(item.comments || 0)}
             </span>
-            <span className={styles.stat}>
+            <span className="ranking-item-responsive__stat">
               ❤️ {formatNumberMobile(item.likes || 0)}
             </span>
-            <span className={`${styles.stat} ${styles.desktopOnly}`}>
+            <span className="ranking-item-responsive__stat ranking-item-responsive__stat--desktop-only">
               📁 {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
@@ -172,24 +218,13 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
     </li>
   )
 }, (prevProps, nextProps) => {
-  // 完全な比較関数 - すべてのプロパティを確認
-  const prev = prevProps.item
-  const next = nextProps.item
-  
+  // メモ化の比較関数
   return (
-    prev.id === next.id &&
-    prev.rank === next.rank &&
-    prev.title === next.title &&
-    prev.views === next.views &&
-    prev.comments === next.comments &&
-    prev.mylists === next.mylists &&
-    prev.likes === next.likes &&
-    prev.thumbURL === next.thumbURL &&
-    prev.authorName === next.authorName &&
-    prev.authorId === next.authorId &&
-    prev.authorIcon === next.authorIcon &&
-    prev.registeredAt === next.registeredAt &&
-    prev.duration === next.duration
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.views === nextProps.item.views &&
+    prevProps.item.comments === nextProps.item.comments &&
+    prevProps.item.mylists === nextProps.item.mylists &&
+    prevProps.item.likes === nextProps.item.likes
   )
 })
 

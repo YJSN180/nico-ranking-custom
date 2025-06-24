@@ -3,32 +3,29 @@
 
 import { getGroupIdForGenre, GENRE_GROUPS } from '../types/ranking-config'
 
-// 最適化されたdecompression（キャッシュ付き）
-let decompressionMethod: any = null
-
+// ブラウザ・Edge Runtime用のdecompression（pakoを使用）
+let pakoInstance: any = null
 const getDecompressionMethod = async () => {
-  if (decompressionMethod) {
-    return decompressionMethod
-  }
-  
-  // Node.jsサーバーサイドでのみzlibを使用（最高速）
-  if (typeof process !== 'undefined' && process.env.NEXT_RUNTIME !== 'edge' && typeof window === 'undefined') {
+  // Edge RuntimeやClientサイドではpakoを使用
+  if (typeof process === 'undefined' || process.env.NEXT_RUNTIME === 'edge' || typeof window !== 'undefined') {
+    if (!pakoInstance) {
+      const pako = await import('pako')
+      pakoInstance = pako
+    }
+    return (data: Uint8Array) => {
+      const decompressed = pakoInstance.gunzip(data, { to: 'string' })
+      return decompressed
+    }
+  } else {
+    // Node.jsサーバーサイドでのみzlibを使用
     const { promisify } = await import('util')
     const { gunzip } = await import('zlib')
     const gunzipAsync = promisify(gunzip)
-    decompressionMethod = async (data: Uint8Array) => {
+    return async (data: Uint8Array) => {
       const decompressed = await gunzipAsync(Buffer.from(data))
       return decompressed.toString()
     }
-  } else {
-    // Edge RuntimeやClientサイドではpakoを使用
-    const pako = await import('pako')
-    decompressionMethod = (data: Uint8Array) => {
-      return pako.ungzip(data, { to: 'string' })
-    }
   }
-  
-  return decompressionMethod
 }
 
 // KV namespace binding (will be injected by Cloudflare Workers)
@@ -299,46 +296,46 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
 /**
  * Get specific genre/period data from KV (optimized for 3-key split)
  */
-// メモリキャッシュを追加（アプリケーションレベル）
-const memoryCache = new Map<string, { data: any, timestamp: number }>()
-const CACHE_TTL = 5 * 60 * 1000 // 5分間
-
 export async function getGenreRanking(
   genre: string,
   period: '24h' | 'hour'
 ): Promise<{ items: any[], popularTags: string[], tags?: { [tag: string]: any[] }, metadata?: any } | null> {
-  const cacheKey = `genre:${genre}:${period}`
-  
-  // メモリキャッシュから確認
-  const cached = memoryCache.get(cacheKey)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data
-  }
-  
   try {
     // For 3-key split, only fetch the specific group containing this genre
     const groupId = getGroupIdForGenre(genre as any)
+    // Fetching genre '${genre}' from group ${groupId}
     
     const groupData = await getRankingGroupFromKV(groupId)
     
     if (!groupData || !groupData.genres || !groupData.genres[genre]) {
-      // Genre not found in specific group, return null to avoid expensive fallback
-      return null
+      // [KV] Genre not found in group, trying full data fetch
+      // Fallback to fetching all data (backward compatibility)
+      const data = await getRankingFromKV()
+      if (!data || !data.genres || !data.genres[genre]) {
+        // [KV] Genre not found in any data source
+        return null
+      }
+      const result = data.genres[genre][period]
+      if (data.metadata) {
+        return { ...result, metadata: data.metadata }
+      }
+      return result
     }
 
     const result = groupData.genres[genre][period]
     if (!result) {
+      // Period '${period}' not found for genre '${genre}'
       return null
     }
     
     // Add metadata if available
-    const finalResult = groupData.metadata ? { ...result, metadata: groupData.metadata } : result
+    if (groupData.metadata) {
+      return { ...result, metadata: groupData.metadata }
+    }
     
-    // メモリキャッシュに保存
-    memoryCache.set(cacheKey, { data: finalResult, timestamp: Date.now() })
-    
-    return finalResult
+    return result
   } catch (error) {
+    // Error in getGenreRanking for genre='${genre}', period='${period}': error
     return null
   }
 }
@@ -346,16 +343,7 @@ export async function getGenreRanking(
 /**
  * Read specific group from KV (optimized for single genre requests)
  */
-// グループレベルのメモリキャッシュ
-const groupCache = new Map<number, { data: KVRankingData | null, timestamp: number }>()
-
 async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData | null> {
-  // グループキャッシュから確認
-  const cached = groupCache.get(groupId)
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data
-  }
-  
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
   const CF_NAMESPACE_ID = process.env.KV_RANKING_ID
   const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
@@ -372,16 +360,19 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
       headers: {
         'Authorization': `Bearer ${CF_API_TOKEN}`,
       },
-      // HTTPキャッシュも活用
-      next: { revalidate: 300 }
     })
     
     if (!response.ok) {
       if (response.status === 404) {
-        groupCache.set(groupId, { data: null, timestamp: Date.now() })
+        // ${keyName} not found (404)
         return null
       }
-      groupCache.set(groupId, { data: null, timestamp: Date.now() })
+      // Failed to read ${keyName}: ${response.status}
+      // Log response body for debugging
+      try {
+        const errorText = await response.text()
+        // Error response: errorText
+      } catch {}
       return null
     }
     
@@ -392,28 +383,20 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
       const decompress = await getDecompressionMethod()
       const decompressed = await decompress(new Uint8Array(data))
       const jsonString = typeof decompressed === 'string' ? decompressed : new TextDecoder().decode(decompressed)
-      const result = JSON.parse(jsonString) as KVRankingData
-      
-      // グループキャッシュに保存
-      groupCache.set(groupId, { data: result, timestamp: Date.now() })
-      return result
+      return JSON.parse(jsonString) as KVRankingData
     } catch (gzipError) {
       // If decompression fails, try parsing as plain JSON (backward compatibility)
       try {
         const jsonString = new TextDecoder().decode(new Uint8Array(data))
-        const result = JSON.parse(jsonString) as KVRankingData
-        
-        // グループキャッシュに保存
-        groupCache.set(groupId, { data: result, timestamp: Date.now() })
-        return result
+        return JSON.parse(jsonString) as KVRankingData
       } catch (parseError) {
-        groupCache.set(groupId, { data: null, timestamp: Date.now() })
+        // Failed to parse from keyName
         return null
       }
     }
     
   } catch (error) {
-    groupCache.set(groupId, { data: null, timestamp: Date.now() })
+    // Failed to read group ${groupId}: error
     return null
   }
 }

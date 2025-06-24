@@ -198,23 +198,11 @@ const Pagination = memo(function Pagination({
               color: 'var(--text-primary)'
             }}
           >
-            {/* 大きなページ数の場合は範囲を制限 */}
-            {(() => {
-              const maxOptions = 50 // 最大50個のオプションに制限
-              const start = Math.max(1, currentPage - Math.floor(maxOptions / 2))
-              const end = Math.min(totalPages, start + maxOptions - 1)
-              const options = []
-              
-              for (let i = start; i <= end; i++) {
-                options.push(
-                  <option key={i} value={i}>
-                    {i}
-                  </option>
-                )
-              }
-              
-              return options
-            })()}
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <option key={page} value={page}>
+                {page}
+              </option>
+            ))}
           </select>
         </div>
       )}
