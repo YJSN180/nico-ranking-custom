@@ -56,8 +56,19 @@ test.describe('デバッグテスト', () => {
     const h2Elements = await page.locator('h2').allTextContents()
     console.log(`h2要素: ${h2Elements.join(', ')}`)
     
-    // スクリーンショットを撮る
-    await page.screenshot({ path: 'debug-after-click.png', fullPage: true })
-    console.log('スクリーンショットを保存しました: debug-after-click.png')
+    // スクリーンショットを撮る（WebKitの制限を考慮）
+    try {
+      await page.screenshot({ path: 'debug-after-click.png', fullPage: false })
+      console.log('スクリーンショットを保存しました: debug-after-click.png')
+    } catch (error) {
+      console.log('スクリーンショットの保存に失敗:', error.message)
+      // viewport内のみでスクリーンショットを試行
+      try {
+        await page.screenshot({ path: 'debug-after-click-viewport.png' })
+        console.log('ビューポートのスクリーンショットを保存しました')
+      } catch (viewportError) {
+        console.log('ビューポートスクリーンショットも失敗:', viewportError.message)
+      }
+    }
   })
 })

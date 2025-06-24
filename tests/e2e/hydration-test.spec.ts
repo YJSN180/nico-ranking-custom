@@ -109,7 +109,19 @@ test.describe('ハイドレーションの確認', () => {
       errors.forEach(err => console.log('- ' + err))
     }
     
-    // 最終的なスクリーンショット
-    await page.screenshot({ path: 'hydration-test-result.png', fullPage: true })
+    // 最終的なスクリーンショット（WebKitの制限を考慮）
+    try {
+      await page.screenshot({ path: 'hydration-test-result.png', fullPage: false })
+      console.log('スクリーンショットを保存しました')
+    } catch (error) {
+      console.log('スクリーンショット保存に失敗:', error.message)
+      // viewport内のみでスクリーンショットを試行
+      try {
+        await page.screenshot({ path: 'hydration-test-viewport.png' })
+        console.log('ビューポートのスクリーンショットを保存しました')
+      } catch (viewportError) {
+        console.log('ビューポートスクリーンショットも失敗:', viewportError.message)
+      }
+    }
   })
 })

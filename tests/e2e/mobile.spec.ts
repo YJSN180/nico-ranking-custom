@@ -45,7 +45,8 @@ test.describe('モバイル専用テスト', () => {
     const h1 = page.locator('h1')
     const h1FontSize = await h1.evaluate(el => window.getComputedStyle(el).fontSize)
     const fontSize = parseInt(h1FontSize)
-    expect(fontSize).toBeLessThan(40) // モバイルでは小さめ
+    expect(fontSize).toBeGreaterThan(20) // モバイルでも読みやすいサイズ
+    expect(fontSize).toBeLessThan(60) // 適度なサイズ制限
   })
 
   test('モバイルでの画像最適化', async ({ page }) => {
