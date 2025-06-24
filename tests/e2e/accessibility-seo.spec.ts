@@ -132,6 +132,8 @@ test.describe('SEOテスト', () => {
     // メタディスクリプション
     const description = await page.locator('meta[name="description"]').getAttribute('content')
     expect(description).toBeTruthy()
+    console.log(`Meta description content: "${description}"`)
+    console.log(`Meta description length: ${description!.length}`)
     expect(description!.length).toBeGreaterThan(50)
     expect(description!.length).toBeLessThan(160)
     

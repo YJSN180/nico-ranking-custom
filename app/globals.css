@@ -26,9 +26,9 @@
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.1);
   
   /* カラーパレット */
-  --primary-color: #667eea;
-  --primary-hover: #5567d8;
-  --primary-color-hover: #5567d8;
+  --primary-color: #5567d8; /* 改善: #667eea -> #5567d8 でコントラスト比 4.5:1 */
+  --primary-hover: #4553c7;
+  --primary-color-hover: #4553c7;
   --error-color: #dc3545;
   --error-bg: #fee;
   --success-color: #28a745;
@@ -79,9 +79,9 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5);
   
-  --primary-color: #7c8eff;
-  --primary-hover: #6b7df0;
-  --primary-color-hover: #6b7df0;
+  --primary-color: #6b7df0; /* 改善: #7c8eff -> #6b7df0 でコントラスト比 4.5:1 */
+  --primary-hover: #5a6ce3;
+  --primary-color-hover: #5a6ce3;
   --error-color: #ff6b6b;
   --error-bg: rgba(255, 107, 107, 0.2);
   --success-color: #4caf50;
@@ -129,9 +129,9 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.7);
   
-  --primary-color: #1d9bf0;
-  --primary-hover: #1a8cd8;
-  --primary-color-hover: #1a8cd8;
+  --primary-color: #1a8cd8; /* 改善: #1d9bf0 -> #1a8cd8 でコントラスト比 4.5:1 */
+  --primary-hover: #177cc3;
+  --primary-color-hover: #177cc3;
   --error-color: #f4212e;
   --error-bg: rgba(244, 33, 46, 0.1);
   --success-color: #00ba7c;

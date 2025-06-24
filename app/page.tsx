@@ -42,8 +42,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
   const isDefault = genre === 'all' && period === '24h' && !tag
   
-  let title = isDefault ? 'ニコラン(Re:turn)' : `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
-  let description = isDefault ? 'ニコニコ動画のランキングを今すぐチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
+  let title = isDefault ? 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示' : `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
+  let description = isDefault ? 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
   
   if (tag) {
     title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
