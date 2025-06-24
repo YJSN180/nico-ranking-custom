@@ -101,6 +101,13 @@ jobs:
         echo "CLOUDFLARE_API_TOKEN is set: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
         echo "CRON_SECRET is set: ${{ secrets.CRON_SECRET != '' }}"
         echo "WORKER_AUTH_KEY is set: ${{ secrets.WORKER_AUTH_KEY != '' }}"
+        
+        # Check actual lengths (masked)
+        echo "KV_RANKING_ID length: ${#KV_RANKING_ID}"
+        echo "CLOUDFLARE_API_TOKEN length: ${#CLOUDFLARE_API_TOKEN}"
+      env:
+        KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
     - name: Get Playwright version
       id: playwright-version
@@ -118,7 +125,29 @@ jobs:
 
     - name: Install Playwright browsers if cache miss
       if: steps.playwright-cache-e2e.outputs.cache-hit != 'true'
-      run: npx playwright install --with-deps
+      run: |
+        # Install all browsers for desktop tests
+        if [[ "${{ matrix.project }}" != "mobile-safari" ]]; then
+          npx playwright install --with-deps ${{ matrix.project }}
+        else
+          # Mobile Safari needs WebKit
+          npx playwright install --with-deps webkit
+        fi
+      
+    - name: Install system dependencies for browsers
+      run: |
+        # Install Playwright dependencies
+        npx playwright install-deps
+        
+        # Install additional WebKit dependencies
+        sudo apt-get update
+        # Try different package names for woff2
+        sudo apt-get install -y libwoff2-dev || true
+        sudo apt-get install -y libwoff-dev || true
+        sudo apt-get install -y libwoff2dec1 || true
+        
+        # List installed woff libraries
+        ldconfig -p | grep woff || true
 
     - name: Build application
       run: npm run build
@@ -414,8 +443,18 @@ jobs:
 
     - name: Start server for Lighthouse
       run: |
+        # Kill any existing process on port 3000
+        lsof -ti:3000 | xargs kill -9 || true
+        
+        # Start server with environment variables
         npm run start &
+        SERVER_PID=$!
+        
+        # Wait for server to be ready
         npx wait-on http://localhost:3000 --timeout 60000
+        
+        # Check if server is responding
+        curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "Server check failed"
       env:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
@@ -434,6 +473,7 @@ jobs:
         uploadArtifacts: true
         temporaryPublicStorage: true
         runs: 1
+        configPath: ./lighthouserc.cjs
 
   accessibility:
     needs: setup-playwright
@@ -472,6 +512,21 @@ jobs:
     - name: Install Playwright browsers if cache miss
       if: steps.playwright-cache-acc.outputs.cache-hit != 'true'
       run: npx playwright install --with-deps chromium
+      
+    - name: Install system dependencies for browsers
+      run: |
+        # Install Playwright dependencies
+        npx playwright install-deps
+        
+        # Install additional WebKit dependencies
+        sudo apt-get update
+        # Try different package names for woff2
+        sudo apt-get install -y libwoff2-dev || true
+        sudo apt-get install -y libwoff-dev || true
+        sudo apt-get install -y libwoff2dec1 || true
+        
+        # List installed woff libraries
+        ldconfig -p | grep woff || true chromium
 
     - name: Build and start server
       run: |

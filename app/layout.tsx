@@ -10,11 +10,11 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
-  description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。24時間・週間・月間・全期間のランキングを各ジャンルごとに表示。最新の急上昇動画もチェック！',
+  description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！',
   metadataBase: new URL('https://nico-rank.com'),
   openGraph: {
     title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
-    description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。24時間・週間・月間・全期間のランキングを各ジャンルごとに表示。最新の急上昇動画もチェック！',
+    description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！',
     url: 'https://nico-rank.com',
     siteName: 'ニコラン(Re:turn)',
     images: [
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
-    description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。24時間・週間・月間・全期間のランキングを各ジャンルごとに表示。最新の急上昇動画もチェック！',
+    description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！',
     images: [{
       url: '/og-image.png',
       width: 1200,

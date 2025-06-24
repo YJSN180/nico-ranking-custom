@@ -2,22 +2,31 @@ const https = require('https');
 
 // Slack通知を送信
 async function sendSlackMessage(message, channel = 'C092SFGUSKC') {
-  const token = process.env.SLACK_BOT_TOKEN;
+  const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   
-  if (!token) {
-    console.error('SLACK_BOT_TOKEN is not set');
+  if (!webhookUrl) {
+    console.error('SLACK_WEBHOOK_URL is not set');
     return;
   }
 
-  const data = JSON.stringify(message);
+  // Webhook用のメッセージフォーマットに変換
+  const webhookMessage = {
+    channel: message.channel || channel,
+    username: 'Resource Monitor',
+    icon_emoji: ':chart_with_upwards_trend:',
+    blocks: message.blocks,
+    attachments: message.attachments
+  };
+
+  const data = JSON.stringify(webhookMessage);
+  const url = new URL(webhookUrl);
 
   const options = {
-    hostname: 'slack.com',
+    hostname: url.hostname,
     port: 443,
-    path: '/api/chat.postMessage',
+    path: url.pathname,
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
       'Content-Length': Buffer.byteLength(data)
     }
@@ -32,13 +41,13 @@ async function sendSlackMessage(message, channel = 'C092SFGUSKC') {
       });
       
       res.on('end', () => {
-        const result = JSON.parse(responseData);
-        if (result.ok) {
+        // Webhookは空のレスポンスを返すことがある
+        if (res.statusCode === 200 || res.statusCode === 204) {
           console.log('Slack notification sent successfully');
-          resolve(result);
+          resolve({ ok: true });
         } else {
-          console.error('Slack API error:', result.error);
-          reject(new Error(result.error));
+          console.error('Slack webhook error:', res.statusCode, responseData);
+          reject(new Error(`Webhook returned ${res.statusCode}`));
         }
       });
     });

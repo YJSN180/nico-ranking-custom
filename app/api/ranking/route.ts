@@ -21,7 +21,20 @@ export async function GET(request: NextRequest) {
 
   try {
     // Cloudflare KVが利用可能かチェック（環境変数で判定）
-    const useCloudflareKV = process.env.KV_RANKING_ID && process.env.CLOUDFLARE_API_TOKEN ? true : false
+    const kvRankingId = process.env.KV_RANKING_ID?.trim()
+    const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN?.trim()
+    const useCloudflareKV = kvRankingId && cloudflareApiToken && kvRankingId !== '' && cloudflareApiToken !== ''
+    
+    // CI環境でのデバッグ情報
+    if (process.env.CI) {
+      console.log('CI Environment Debug:', {
+        hasKvRankingId: !!kvRankingId,
+        hasApiToken: !!cloudflareApiToken,
+        kvIdLength: kvRankingId?.length || 0,
+        apiTokenLength: cloudflareApiToken?.length || 0,
+        useCloudflareKV
+      })
+    }
     
     // タグ別ランキングの処理
     if (tag) {

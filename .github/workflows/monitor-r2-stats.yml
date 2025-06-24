@@ -30,7 +30,7 @@ jobs:
       
       - name: Send Slack Notification
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           timestamp: ${{ steps.metrics.outputs.timestamp }}
           warning_messages: ${{ steps.metrics.outputs.warning_messages }}
           r2_storage_gb: ${{ steps.metrics.outputs.r2_storage_gb }}
@@ -52,23 +52,23 @@ jobs:
       - name: Send Critical Alert on High Usage
         if: steps.metrics.outputs.warnings > 0
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           cat << EOF > critical-alert.js
           const https = require('https');
           
           async function sendSlackMessage(message) {
-            const token = process.env.SLACK_BOT_TOKEN;
-            if (!token) return;
+            const webhookUrl = process.env.SLACK_WEBHOOK_URL;
+            if (!webhookUrl) return;
 
             const data = JSON.stringify(message);
+            const url = new URL(webhookUrl);
             const options = {
-              hostname: 'slack.com',
+              hostname: url.hostname,
               port: 443,
-              path: '/api/chat.postMessage',
+              path: url.pathname,
               method: 'POST',
               headers: {
-                'Authorization': \`Bearer \${token}\`,
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(data)
               }
