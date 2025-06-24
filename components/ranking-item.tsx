@@ -238,7 +238,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                 {/* 投稿日時 */}
                 <span style={{ 
                   flexShrink: 0,
-                  color: isNew ? '#e74c3c' : 'var(--text-muted)',
+                  color: isNew ? '#c53030' : 'var(--text-secondary)',
                   fontWeight: isNew ? '600' : '400'
                 }}>
                   {timeDisplay}
@@ -423,7 +423,7 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
                   {dateDisplay && (
                     <span style={{ 
                       fontSize: '13px',
-                      color: isNew ? 'var(--error-color)' : 'var(--text-muted)',
+                      color: isNew ? 'var(--error-color)' : 'var(--text-secondary)',
                       fontWeight: isNew ? '600' : '400'
                     }}>
                       {dateDisplay}

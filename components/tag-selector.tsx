@@ -60,9 +60,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   if (loading) {
     return (
       <div className={styles.tagSelectorContainer}>
-        <h3 className={styles.tagTitle}>
+        <h2 className={styles.tagTitle}>
           人気タグ
-        </h3>
+        </h2>
         <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
           タグを読み込み中...
         </div>
@@ -79,9 +79,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   return (
     <div className={styles.tagSelectorContainer}>
       <div className={styles.tagHeader}>
-        <h3 className={styles.tagTitle}>
+        <h2 className={styles.tagTitle}>
           人気タグ
-        </h3>
+        </h2>
         {config.tag && (
           <button
             onClick={clearTag}

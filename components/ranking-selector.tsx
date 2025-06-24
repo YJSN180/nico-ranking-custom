@@ -47,9 +47,9 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
     <div className={styles.selectorContainer}>
       {/* 期間セレクター */}
       <div>
-        <h3 className={styles.selectorTitle}>
+        <h2 className={styles.selectorTitle}>
           期間
-        </h3>
+        </h2>
         <div className={styles.buttonContainer}>
           {(Object.entries(PERIOD_LABELS) as [RankingPeriod, string][]).map(([value, label]) => (
             <button
@@ -65,9 +65,9 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
 
       {/* ジャンルセレクター */}
       <div>
-        <h3 className={styles.selectorTitle}>
+        <h2 className={styles.selectorTitle}>
           ジャンル
-        </h3>
+        </h2>
           <div 
             ref={genreScrollRef}
             className={styles.buttonContainer}

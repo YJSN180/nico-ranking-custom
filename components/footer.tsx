@@ -54,7 +54,7 @@ export function Footer() {
         </div>
         <div style={{
           fontSize: '12px',
-          color: 'var(--text-muted)',
+          color: 'var(--text-secondary)',
         }}>
           このサイトはニコニコ動画の非公式ファンサイトです。<br />
           ニコニコ動画は株式会社ドワンゴの登録商標です。

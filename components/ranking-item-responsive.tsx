@@ -187,7 +187,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             <span 
               className="ranking-item-responsive__date"
               style={{ 
-                color: isNew ? '#e74c3c' : 'var(--text-muted)',
+                color: isNew ? '#c53030' : 'var(--text-secondary)',
                 fontWeight: isNew ? '600' : '400'
               }}
             >

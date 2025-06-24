@@ -122,7 +122,7 @@ const Pagination = memo(function Pagination({
                   key={`dots-${index}`}
                   style={{
                     padding: '8px 4px',
-                    color: 'var(--text-muted)',
+                    color: 'var(--text-secondary)',
                     fontSize: '14px'
                   }}
                 >

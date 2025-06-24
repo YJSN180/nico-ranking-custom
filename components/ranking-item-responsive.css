@@ -94,7 +94,7 @@
 }
 
 .ranking-item-responsive__separator {
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .ranking-item-responsive__date {
