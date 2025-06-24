@@ -152,51 +152,61 @@ export default {
           }
         }
         
-        // R2から取得したデータ（生のJSON）
-        const data = await r2Object.text()
-        console.log(`[Worker] R2 data found for ${r2Key}, size: ${data.length} bytes`)
+        // R2から取得したデータを返す
+        // R2オブジェクトがgzip圧縮されているかチェック
+        const contentEncoding = r2Object.httpMetadata?.contentEncoding
+        const isPreCompressed = contentEncoding === 'gzip'
         
-        // クライアントがgzip圧縮をサポートしているかチェック
+        // クライアントがgzipをサポートしているかチェック
         const acceptEncoding = request.headers.get('Accept-Encoding') || ''
         const supportsGzip = acceptEncoding.includes('gzip')
         
-        // レスポンスヘッダーの準備
+        console.log(`[Worker] R2 data found for ${r2Key}, pre-compressed: ${isPreCompressed}, client supports gzip: ${supportsGzip}`)
+        
         const responseHeaders: Record<string, string> = {
           'Content-Type': 'application/json',
           'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
           'CDN-Cache-Control': 'public, max-age=3600',
           'X-Data-Source': 'r2-direct',
           'X-Cache-Status': 'MISS',
-          'X-Original-Size': data.length.toString(),
+          'X-Pre-Compressed': isPreCompressed ? 'true' : 'false',
           ...corsHeaders,
           ...securityHeaders
         }
         
-        // gzip圧縮をサポートしている場合は圧縮
-        if (supportsGzip) {
-          // CompressionStreamを使用してgzip圧縮
-          const stream = new Response(data).body
-          const compressionStream = stream!.pipeThrough(new CompressionStream('gzip'))
-          
+        if (isPreCompressed && supportsGzip) {
+          // R2データが既に圧縮済みで、クライアントもgzipをサポートしている場合
+          // そのまま圧縮データを返す
+          const compressedData = await r2Object.arrayBuffer()
           responseHeaders['Content-Encoding'] = 'gzip'
           responseHeaders['Vary'] = 'Accept-Encoding'
-          
-          response = new Response(compressionStream, {
+          responseHeaders['X-Original-Size'] = r2Object.size.toString()
+          console.log(`[Worker] Serving pre-compressed data: ${compressedData.byteLength} bytes`)
+          response = new Response(compressedData, {
             status: 200,
             headers: responseHeaders
           })
-          
-          console.log(`[Worker] Response compressed with gzip`)
+        } else if (isPreCompressed && !supportsGzip) {
+          // R2データが圧縮済みだが、クライアントがgzipをサポートしていない場合
+          // 解凍して返す（このケースは稀だが対応）
+          const compressedData = await r2Object.arrayBuffer()
+          console.log(`[Worker] Client doesn't support gzip, decompressing...`)
+          // ブラウザ環境ではDecompressionStreamを使用
+          const stream = new Response(compressedData).body
+          const decompressedStream = stream!.pipeThrough(new DecompressionStream('gzip'))
+          response = new Response(decompressedStream, {
+            status: 200,
+            headers: responseHeaders
+          })
         } else {
-          // 圧縮なしのレスポンス
-          responseHeaders['Vary'] = 'Accept-Encoding'
-          
+          // R2データが非圧縮の場合（既存のデータとの互換性のため）
+          const data = await r2Object.text()
+          responseHeaders['X-Original-Size'] = data.length.toString()
+          console.log(`[Worker] Serving uncompressed data: ${data.length} characters`)
           response = new Response(data, {
             status: 200,
             headers: responseHeaders
           })
-          
-          console.log(`[Worker] Response sent without compression`)
         }
         
         // キャッシュに保存

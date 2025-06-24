@@ -9,6 +9,7 @@ import { createHash } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { gzipSync } from 'zlib'
 import type { RankingData } from '../app/types/ranking'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -47,7 +48,7 @@ function calculateHash(content: string): string {
   return createHash('sha256').update(content).digest('hex')
 }
 
-// R2から既存データを取得してハッシュを計算
+// R2から既存データを取得してハッシュを計算（圧縮対応）
 async function getExistingContentHash(key: string): Promise<string | null> {
   try {
     const response = await r2Client.send(new GetObjectCommand({
@@ -56,8 +57,17 @@ async function getExistingContentHash(key: string): Promise<string | null> {
     }))
     
     if (response.Body) {
-      const existingContent = await response.Body.transformToString()
-      return calculateHash(existingContent)
+      // Content-Encodingがgzipの場合は、圧縮されたデータのまま比較する
+      const contentEncoding = response.ContentEncoding
+      if (contentEncoding === 'gzip') {
+        // 圧縮されたデータのハッシュを計算（バイナリデータのまま）
+        const buffer = await response.Body.transformToByteArray()
+        return createHash('sha256').update(buffer).digest('hex')
+      } else {
+        // 非圧縮データの場合は文字列として扱う
+        const existingContent = await response.Body.transformToString()
+        return calculateHash(existingContent)
+      }
     }
   } catch (error: any) {
     // オブジェクトが存在しない場合はnullを返す
@@ -69,9 +79,25 @@ async function getExistingContentHash(key: string): Promise<string | null> {
   return null
 }
 
-// 差分チェックとアップロード
-async function uploadIfChanged(key: string, body: string, contentType: string, cacheControl: string): Promise<boolean> {
-  const newHash = calculateHash(body)
+// 差分チェックとアップロード（gzip圧縮対応）
+async function uploadIfChanged(key: string, body: string, contentType: string, cacheControl: string, compress: boolean = false): Promise<boolean> {
+  // 圧縮する場合は圧縮後のハッシュを計算
+  let newHash: string
+  let uploadBody: string | Uint8Array = body
+  let uploadContentType = contentType
+  let uploadContentEncoding: string | undefined
+  
+  if (compress) {
+    // Node.js標準のzlibを使用してgzip圧縮
+    uploadBody = gzipSync(body, { level: 9 }) // 最高圧縮レベル
+    uploadContentEncoding = 'gzip'
+    // 圧縮後のデータのハッシュを計算
+    newHash = createHash('sha256').update(uploadBody).digest('hex')
+    console.log(`🗜️  Compressed ${key}: ${(body.length / 1024).toFixed(1)}KB → ${(uploadBody.length / 1024).toFixed(1)}KB (${((1 - uploadBody.length / body.length) * 100).toFixed(1)}% reduction)`)
+  } else {
+    newHash = calculateHash(body)
+  }
+  
   const existingHash = await getExistingContentHash(key)
   
   // ハッシュが同じ場合はスキップ
@@ -81,15 +107,22 @@ async function uploadIfChanged(key: string, body: string, contentType: string, c
   }
   
   // アップロード実行
-  await r2Client.send(new PutObjectCommand({
+  const putObjectParams: any = {
     Bucket: BUCKET_NAME,
     Key: key,
-    Body: body,
-    ContentType: contentType,
+    Body: uploadBody,
+    ContentType: uploadContentType,
     CacheControl: cacheControl,
-  }))
+  }
   
-  console.log(`✅ Uploaded ${key} (${(body.length / 1024).toFixed(1)}KB)`)
+  // Content-Encodingヘッダーを設定
+  if (uploadContentEncoding) {
+    putObjectParams.ContentEncoding = uploadContentEncoding
+  }
+  
+  await r2Client.send(new PutObjectCommand(putObjectParams))
+  
+  console.log(`✅ Uploaded ${key} (${compress ? 'compressed' : 'raw'})`)
   return true
 }
 
@@ -177,7 +210,7 @@ async function writeToR2() {
       const allBody = JSON.stringify(allDataToStore)
       
       uploadPromises.push(
-        uploadIfChanged(allKey, allBody, 'application/json', 'public, max-age=1800')
+        uploadIfChanged(allKey, allBody, 'application/json', 'public, max-age=1800', true) // gzip圧縮を有効化
           .then(uploaded => {
             if (uploaded) uploadCount++
           })
@@ -210,7 +243,7 @@ async function writeToR2() {
           const tagBody = JSON.stringify(tagDataToStore)
           
           uploadPromises.push(
-            uploadIfChanged(tagKey, tagBody, 'application/json', 'public, max-age=1800')
+            uploadIfChanged(tagKey, tagBody, 'application/json', 'public, max-age=1800', true) // gzip圧縮を有効化
               .then(uploaded => {
                 if (uploaded) uploadCount++
               })
@@ -236,7 +269,7 @@ async function writeToR2() {
   })
   
   uploadPromises.push(
-    uploadIfChanged(metadataKey, metadataBody, 'application/json', 'public, max-age=300')
+    uploadIfChanged(metadataKey, metadataBody, 'application/json', 'public, max-age=300', true) // gzip圧縮を有効化
       .then(uploaded => {
         if (uploaded) uploadCount++
       })
