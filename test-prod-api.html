@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Production API Test</title>
+</head>
+<body>
+    <h1>Production API Test</h1>
+    <div id="results"></div>
+    
+    <script>
+    async function testAPI() {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = '<p>Testing...</p>';
+        
+        try {
+            // Test 1: Direct fetch
+            console.log('=== Test 1: Direct fetch ===');
+            const response1 = await fetch('https://nico-rank.com/api/ranking?genre=game');
+            console.log('Status:', response1.status);
+            console.log('Headers:', Object.fromEntries(response1.headers.entries()));
+            
+            try {
+                const data1 = await response1.json();
+                console.log('JSON parse successful!');
+                console.log('Items count:', data1.items?.length || 0);
+                resultsDiv.innerHTML += '<p style="color: green;">✓ Direct fetch: JSON parse successful</p>';
+            } catch (e) {
+                console.error('JSON parse error:', e);
+                const text = await response1.text();
+                console.log('Response text first 100 chars:', text.slice(0, 100));
+                resultsDiv.innerHTML += '<p style="color: red;">✗ Direct fetch: ' + e.message + '</p>';
+            }
+            
+            // Test 2: With explicit Accept-Encoding
+            console.log('\n=== Test 2: With Accept-Encoding header ===');
+            const response2 = await fetch('https://nico-rank.com/api/ranking?genre=anime', {
+                headers: {
+                    'Accept-Encoding': 'gzip, deflate, br'
+                }
+            });
+            console.log('Status:', response2.status);
+            console.log('Headers:', Object.fromEntries(response2.headers.entries()));
+            
+            try {
+                const data2 = await response2.json();
+                console.log('JSON parse successful!');
+                console.log('Items count:', data2.items?.length || 0);
+                resultsDiv.innerHTML += '<p style="color: green;">✓ With Accept-Encoding: JSON parse successful</p>';
+            } catch (e) {
+                console.error('JSON parse error:', e);
+                resultsDiv.innerHTML += '<p style="color: red;">✗ With Accept-Encoding: ' + e.message + '</p>';
+            }
+            
+            // Test 3: Check if response is actually gzipped
+            console.log('\n=== Test 3: Check response encoding ===');
+            const response3 = await fetch('https://nico-rank.com/api/ranking?genre=all');
+            const arrayBuffer = await response3.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            console.log('First 10 bytes:', Array.from(uint8Array.slice(0, 10)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
+            const isGzipped = uint8Array[0] === 0x1f && uint8Array[1] === 0x8b;
+            console.log('Is gzipped:', isGzipped);
+            console.log('Content-Encoding header:', response3.headers.get('content-encoding'));
+            
+            if (isGzipped && !response3.headers.get('content-encoding')) {
+                resultsDiv.innerHTML += '<p style="color: orange;">⚠ Response is gzipped but Content-Encoding header is missing!</p>';
+            } else if (isGzipped && response3.headers.get('content-encoding') === 'gzip') {
+                resultsDiv.innerHTML += '<p style="color: green;">✓ Response is properly gzipped with header</p>';
+            }
+            
+        } catch (error) {
+            console.error('Test error:', error);
+            resultsDiv.innerHTML += '<p style="color: red;">Error: ' + error.message + '</p>';
+        }
+    }
+    
+    // Run test on page load
+    testAPI();
+    </script>
+</body>
+</html>

@@ -362,7 +362,53 @@ export default function ClientPage({
       // レスポンスのパース
       // 本番環境でWorkerがContent-Encoding: gzipを設定している場合、
       // ブラウザが自動的に解凍するので通常のJSONパースでOK
-      const data = await response.json()
+      let data: any
+      
+      // Content-Encodingヘッダーが設定されていない場合の対策
+      const contentEncoding = response.headers.get('content-encoding')
+      if (contentEncoding === 'gzip') {
+        // 正常：ブラウザが自動的に解凍
+        data = await response.json()
+      } else {
+        // Content-Encodingヘッダーがない場合、生データをチェック
+        try {
+          // まず通常のJSONパースを試みる
+          const clonedResponse = response.clone()
+          data = await clonedResponse.json()
+        } catch (jsonError) {
+          // JSONパースに失敗した場合、gzip圧縮データの可能性をチェック
+          console.error('[Client] JSON parse error, checking if data is gzipped:', jsonError)
+          
+          const arrayBuffer = await response.arrayBuffer()
+          const uint8Array = new Uint8Array(arrayBuffer)
+          
+          // gzipマジックナンバーチェック (0x1f, 0x8b)
+          if (uint8Array.length >= 2 && uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
+            console.warn('[Client] Detected gzipped data without Content-Encoding header!')
+            
+            // ブラウザ環境でgzipを解凍
+            try {
+              const decompressionStream = new DecompressionStream('gzip')
+              const writer = decompressionStream.writable.getWriter()
+              writer.write(uint8Array)
+              writer.close()
+              
+              const decompressedStream = decompressionStream.readable
+              const decompressedResponse = new Response(decompressedStream)
+              const decompressedText = await decompressedResponse.text()
+              data = JSON.parse(decompressedText)
+              
+              // console.log('[Client] Successfully decompressed gzipped data')
+            } catch (decompressError) {
+              console.error('[Client] Failed to decompress:', decompressError)
+              throw new Error('データの解凍に失敗しました')
+            }
+          } else {
+            // gzipでもない場合は元のエラーを再スロー
+            throw jsonError
+          }
+        }
+      }
       
       if (data.items && Array.isArray(data.items)) {
         // 全データを保存
