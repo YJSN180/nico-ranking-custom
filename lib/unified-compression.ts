@@ -57,7 +57,7 @@ export async function parseBufferAsJSON<T = any>(buffer: ArrayBuffer): Promise<T
  * ストレージ用のgzip圧縮（Node.js環境用）
  * R2/KVにデータを保存する際に使用
  */
-export async function compressForStorage(data: string): Promise<{
+export async function compressForStorage(data: any): Promise<{
   compressedData: Uint8Array
   metadata: {
     originalSize: number
@@ -73,8 +73,11 @@ export async function compressForStorage(data: string): Promise<{
   const { promisify } = await import('util')
   const gzipAsync = promisify(gzip)
   
-  const originalSize = Buffer.byteLength(data, 'utf-8')
-  const compressed = await gzipAsync(Buffer.from(data, 'utf-8'))
+  // オブジェクトの場合はJSON文字列に変換
+  const jsonString = typeof data === 'string' ? data : JSON.stringify(data)
+  
+  const originalSize = Buffer.byteLength(jsonString, 'utf-8')
+  const compressed = await gzipAsync(Buffer.from(jsonString, 'utf-8'))
   const compressedSize = compressed.length
   
   return {
