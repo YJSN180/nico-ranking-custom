@@ -14,7 +14,7 @@ declare global {
   }
 }
 
-import { decompressAndParseJSON } from './unified-compression'
+import { parseBufferAsJSON } from './unified-compression'
 
 /**
  * Decompress gzipped data in Workers environment
@@ -22,23 +22,35 @@ import { decompressAndParseJSON } from './unified-compression'
  */
 export async function decompressData(compressed: Uint8Array): Promise<any> {
   try {
-    const result = await decompressAndParseJSON(compressed)
-    return result.data
+    // Convert Uint8Array to ArrayBuffer properly
+    const buffer = compressed.buffer instanceof ArrayBuffer 
+      ? compressed.buffer.slice(compressed.byteOffset, compressed.byteOffset + compressed.byteLength)
+      : compressed.slice().buffer
+    const result = await parseBufferAsJSON(buffer)
+    return result
   } catch (error) {
     console.error('[UnifiedCompression] Decompression failed:', error)
     throw new Error(`Decompression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
-import { compressForStorage } from './unified-compression'
-
 /**
- * Compress data using unified compression library
+ * Compress data using Web API CompressionStream
+ * Used for storing data in KV
  */
 export async function compressData(data: any): Promise<Uint8Array> {
   try {
-    const result = await compressForStorage(data)
-    return result.compressedData
+    const jsonString = JSON.stringify(data)
+    const encoder = new TextEncoder()
+    const input = encoder.encode(jsonString)
+    
+    const stream = new CompressionStream('gzip')
+    const writer = stream.writable.getWriter()
+    writer.write(input)
+    writer.close()
+    
+    const compressed = await new Response(stream.readable).arrayBuffer()
+    return new Uint8Array(compressed)
   } catch (error) {
     console.error('Workers compression failed:', error)
     throw new Error(`Compression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)

@@ -31,12 +31,10 @@ describe('NG List Apply Functionality', () => {
     vi.mocked(useUserNGList).mockReturnValue({
       ngList: {
         videoIds: [],
-        videoTitles: { exact: [], partial: [] },
+        videoTitles: [],
         authorIds: [],
-        authorNames: { exact: [], partial: [] },
-        version: 1,
-        totalCount: 0,
-        updatedAt: new Date().toISOString()
+        authorNames: [],
+        derivedVideoIds: []
       },
       filterItems: vi.fn(),
       saveNGListDirectly: mockSaveNGListDirectly

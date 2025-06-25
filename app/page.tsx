@@ -92,7 +92,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   
   // サーバーサイドでAPIエンドポイントを使用（R2から直接データを取得）
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nico-rank.com'
+    // SSRでは内部URLを使用（開発環境では localhost:3000）
+    const baseUrl = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000' 
+      : (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nico-rank.com')
     const params = new URLSearchParams()
     params.set('genre', genre)
     params.set('period', period)
@@ -101,11 +104,41 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     const apiUrl = `${baseUrl}/api/ranking?${params.toString()}`
     // console.log(`[SSR] Fetching from API: ${apiUrl}`)
     
-    // 統一圧縮対応のfetch
-    const { fetchJSON } = await import('@/lib/fetch-with-compression')
-    const data = await fetchJSON(apiUrl, {
+    // SSRでのfetch（Node.js環境）
+    const response = await fetch(apiUrl, {
       next: { revalidate: 300 }, // 5分間キャッシュ
+      headers: {
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'application/json'
+      }
     })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    
+    // Content-Encodingヘッダーをチェック
+    const contentEncoding = response.headers.get('content-encoding')
+    
+    let data: any
+    if (contentEncoding === 'gzip') {
+      // SSRではNode.js環境なので手動で解凍が必要
+      const buffer = await response.arrayBuffer()
+      const { decompressGzipInSSR } = await import('@/lib/unified-compression')
+      
+      try {
+        const text = await decompressGzipInSSR(buffer)
+        data = JSON.parse(text)
+      } catch (error) {
+        console.error('[SSR] Decompression error:', error)
+        // 解凍に失敗した場合は、圧縮されていないデータとして扱う
+        const text = new TextDecoder().decode(buffer)
+        data = JSON.parse(text)
+      }
+    } else {
+      // 圧縮されていない場合は通常のJSONパース
+      data = await response.json()
+    }
     
     if (data && data.items && Array.isArray(data.items)) {
       // NGフィルタリングを適用

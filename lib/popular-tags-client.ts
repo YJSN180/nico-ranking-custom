@@ -26,10 +26,15 @@ export async function getPopularTagsClient(
     await requestThrottle.throttle(apiUrl)
     
     // 統一圧縮対応
-    const { fetchJSON } = await import('@/lib/fetch-with-compression')
-    const data = await fetchJSON(apiUrl, {
+    const response = await fetch(apiUrl, {
       signal
     })
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch popular tags: ${response.status}`)
+    }
+    
+    const data = await response.json()
     return data.tags || []
   } catch (error: any) {
     // AbortErrorは正常なキャンセルなので空配列を返す

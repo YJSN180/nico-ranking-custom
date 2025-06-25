@@ -1,116 +1,267 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('包括的ナビゲーションテスト', () => {
+test.describe('包括的ナビゲーションテスト（修正版）', () => {
   test('期間切り替え（毎時⇔24時間）', async ({ page }) => {
     await page.goto('http://localhost:3000')
     
     // 初期状態の確認
     await expect(page.locator('text=24時間').first()).toBeVisible()
     
+    // APIリクエストを監視
+    const hourApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && response.url().includes('period=hour')
+    )
+    
     // 毎時に切り替え
-    await page.click('text=毎時')
-    await page.waitForLoadState('networkidle')
+    await page.click('button:has-text("毎時")')
+    
+    // APIレスポンスを待つ
+    await hourApiPromise
     
     // URLが更新されることを確認
-    await expect(page).toHaveURL(/period=hour/)
+    await expect(page).toHaveURL(/period=hour/, { timeout: 10000 })
     
     // 24時間に戻す
-    await page.click('text=24時間')
-    await page.waitForLoadState('networkidle')
+    const dailyApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && !response.url().includes('period=hour')
+    )
+    
+    await page.click('button:has-text("24時間")')
+    await dailyApiPromise
     
     // URLが戻ることを確認
-    await expect(page).toHaveURL(/period=24h|^http:\/\/localhost:3000\/$/)
+    await expect(page).toHaveURL(/period=24h|^http:\/\/localhost:3000\/$/, { timeout: 10000 })
   })
 
   test('ジャンル切り替え（総合→ゲーム→アニメ→ボカロ）', async ({ page }) => {
     await page.goto('http://localhost:3000')
     
+    // 初期状態でランキングアイテムが表示されていることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const initialItems = await page.locator('[data-testid="ranking-item"]').count()
+    expect(initialItems).toBeGreaterThan(0)
+    
     // ゲームジャンルに切り替え
-    await page.click('text=ゲーム')
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(/genre=game/)
+    const gameApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && response.url().includes('genre=game')
+    )
+    
+    await page.click('button:has-text("ゲーム")')
+    await gameApiPromise
+    
+    await expect(page).toHaveURL(/genre=game/, { timeout: 10000 })
+    
+    // ゲームジャンルのランキングが表示されることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const gameItems = await page.locator('[data-testid="ranking-item"]').count()
+    expect(gameItems).toBeGreaterThan(0)
     
     // アニメジャンルに切り替え
-    await page.click('text=アニメ')
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(/genre=anime/)
+    const animeApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && response.url().includes('genre=anime')
+    )
+    
+    await page.click('button:has-text("アニメ")')
+    await animeApiPromise
+    
+    await expect(page).toHaveURL(/genre=anime/, { timeout: 10000 })
+    
+    // アニメジャンルのランキングが表示されることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const animeItems = await page.locator('[data-testid="ranking-item"]').count()
+    expect(animeItems).toBeGreaterThan(0)
     
     // ボカロジャンルに切り替え
-    await page.click('text=ボカロ')
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(/genre=vocaloid/)
+    const vocaloidApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && response.url().includes('genre=vocaloid')
+    )
+    
+    await page.click('button:has-text("ボカロ")')
+    await vocaloidApiPromise
+    
+    await expect(page).toHaveURL(/genre=vocaloid/, { timeout: 10000 })
+    
+    // ボカロジャンルのランキングが表示されることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const vocaloidItems = await page.locator('[data-testid="ranking-item"]').count()
+    expect(vocaloidItems).toBeGreaterThan(0)
     
     // 総合に戻す
-    await page.click('text=総合')
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(/genre=all|^http:\/\/localhost:3000\/$/)
+    const allApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && 
+                 !response.url().includes('genre=') || 
+                 response.url().includes('genre=all')
+    )
+    
+    await page.click('button:has-text("総合")')
+    await allApiPromise
+    
+    await expect(page).toHaveURL(/genre=all|^http:\/\/localhost:3000\/$/, { timeout: 10000 })
+    
+    // 総合ランキングが表示されることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const allItems = await page.locator('[data-testid="ranking-item"]').count()
+    expect(allItems).toBeGreaterThan(0)
   })
 
   test('タグ切り替え（人気タグ選択）', async ({ page }) => {
     // まずゲームジャンルに移動（総合では人気タグが表示されないため）
     await page.goto('http://localhost:3000?genre=game')
     
-    // 人気タグセクションが存在することを確認
-    const tagSection = page.locator('text=人気タグ').first()
-    await expect(tagSection).toBeVisible()
+    // ページが完全に読み込まれるのを待つ
+    await page.waitForLoadState('networkidle')
     
-    // 人気タグボタンを探す（最初のいくつかのタグボタンのいずれか）
-    const tagButtons = page.locator('button').filter({ hasText: /ゲーム|VOICEROID|MMD|歌ってみた|踊ってみた|VOCALOID/ })
+    // 人気タグセクションが存在することを確認
+    const tagSection = page.locator('h2:has-text("人気タグ")')
+    await expect(tagSection).toBeVisible({ timeout: 10000 })
+    
+    // 人気タグセクションの親要素を取得
+    const tagSelectorContainer = page.locator('.tagSelectorContainer, [class*="tagSelectorContainer"]')
+    
+    // タグボタンを正確に選択（「すべて」以外の最初のタグ）
+    const tagButtons = tagSelectorContainer.locator('button').filter({ 
+      hasNotText: 'すべて'
+    })
+    
     const tagCount = await tagButtons.count()
     
     if (tagCount > 0) {
-      // 最初のタグをクリック
-      const firstTag = tagButtons.first()
-      const tagText = await firstTag.textContent()
+      const firstTagButton = tagButtons.first()
+      const tagText = await firstTagButton.textContent()
+      console.log(`Clicking tag: ${tagText}`)
       
-      const requestPromise = page.waitForRequest(req => 
-        req.url().includes('/api/ranking') || req.url().includes('tag=')
+      // APIリクエストを監視
+      const tagApiPromise = page.waitForResponse(
+        response => response.url().includes('/api/ranking') && response.url().includes('tag=')
       )
-      await firstTag.click()
-      await requestPromise
+      
+      // タグをクリック
+      await firstTagButton.click()
+      await tagApiPromise
       
       // URLにタグパラメータが含まれることを確認
-      await expect(page).toHaveURL(/tag=/)
+      await expect(page).toHaveURL(/tag=/, { timeout: 10000 })
       
-      // クリアボタンでタグをクリア
-      const clearButton = page.locator('button').filter({ hasText: 'クリア' }).first()
-      if (await clearButton.count() > 0) {
-        await clearButton.click()
-        await expect(page).not.toHaveURL(/tag=/)
+      // ランキングが表示されることを確認
+      await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+      const taggedItems = await page.locator('[data-testid="ranking-item"]').count()
+      expect(taggedItems).toBeGreaterThan(0)
+      
+      // 「すべて」ボタンでタグをクリア
+      const allButton = tagSelectorContainer.locator('button:has-text("すべて")')
+      if (await allButton.count() > 0) {
+        const clearApiPromise = page.waitForResponse(
+          response => response.url().includes('/api/ranking') && !response.url().includes('tag=')
+        )
+        
+        await allButton.click()
+        await clearApiPromise
+        
+        await expect(page).not.toHaveURL(/tag=/, { timeout: 10000 })
       }
+    } else {
+      console.warn('人気タグボタンが見つかりませんでした')
     }
   })
 
   test('複合的な切り替え（ジャンル→期間→タグ）', async ({ page }) => {
     await page.goto('http://localhost:3000')
     
+    // 初期状態のランキング数を確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const initialCount = await page.locator('[data-testid="ranking-item"]').count()
+    expect(initialCount).toBeGreaterThan(0)
+    
     // 1. ゲームジャンルに切り替え
-    await page.click('text=ゲーム')
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(/genre=game/)
+    const gameApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && response.url().includes('genre=game')
+    )
+    
+    await page.click('button:has-text("ゲーム")')
+    await gameApiPromise
+    
+    await expect(page).toHaveURL(/genre=game/, { timeout: 10000 })
+    
+    // ゲームランキングが表示されることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const gameCount = await page.locator('[data-testid="ranking-item"]').count()
+    expect(gameCount).toBeGreaterThan(0)
     
     // 2. 毎時に切り替え
-    await page.click('text=毎時')
-    await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(/genre=game.*period=hour|period=hour.*genre=game/)
+    const hourApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && 
+                 response.url().includes('genre=game') && 
+                 response.url().includes('period=hour')
+    )
     
-    // 3. タグがあれば選択
-    const tagButtons = page.locator('button').filter({ hasText: /ゲーム実況|実況プレイ|RPG/ })
-    if (await tagButtons.count() > 0) {
-      await tagButtons.first().click()
-      await page.waitForLoadState('networkidle')
-      await expect(page).toHaveURL(/tag=/)
+    await page.click('button:has-text("毎時")')
+    await hourApiPromise
+    
+    await expect(page).toHaveURL(/genre=game.*period=hour|period=hour.*genre=game/, { timeout: 10000 })
+    
+    // 毎時ランキングが表示されることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const hourlyCount = await page.locator('[data-testid="ranking-item"]').count()
+    expect(hourlyCount).toBeGreaterThan(0)
+    
+    // 3. 人気タグから選択（存在する場合）
+    await page.waitForLoadState('networkidle')
+    const tagSelectorContainer = page.locator('.tagSelectorContainer, [class*="tagSelectorContainer"]')
+    const popularTagButton = tagSelectorContainer.locator('button').filter({ 
+      hasText: /^(VOCALOID|実況プレイ|歌ってみた|踊ってみた|MMD|アニメ|音楽|VOICEROID|ゆっくり実況|初音ミク|東方|RTA|MAD|エンターテイメント)$/
+    }).first()
+    
+    if (await popularTagButton.count() > 0) {
+      const tagApiPromise = page.waitForResponse(
+        response => response.url().includes('/api/ranking') && response.url().includes('tag=')
+      )
+      
+      await popularTagButton.click()
+      await tagApiPromise
+      
+      await expect(page).toHaveURL(/tag=/, { timeout: 10000 })
+      
+      // タグ別ランキングが表示されることを確認
+      await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+      const tagCount = await page.locator('[data-testid="ranking-item"]').count()
+      expect(tagCount).toBeGreaterThan(0)
     }
     
     // 4. すべてクリアして初期状態に戻る
-    await page.click('text=総合')
-    await page.waitForLoadState('networkidle')
-    await page.click('text=24時間')
-    await page.waitForLoadState('networkidle')
+    // 総合ジャンルに戻す
+    const allGenreApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && 
+                 (!response.url().includes('genre=') || response.url().includes('genre=all'))
+    )
     
-    // 初期状態に戻ったことを確認
+    await page.click('button:has-text("総合")')
+    await allGenreApiPromise
+    
+    // 24時間に戻す
+    const dailyApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && 
+                 (!response.url().includes('period=') || response.url().includes('period=24h'))
+    )
+    
+    await page.click('button:has-text("24時間")')
+    await dailyApiPromise
+    
+    // 最終的なURLの確認
+    await page.waitForTimeout(1000) // 念のため少し待つ
     const url = page.url()
-    expect(url === 'http://localhost:3000/' || url === 'http://localhost:3000').toBeTruthy()
+    console.log('Final URL:', url)
+    
+    // URLがホームページに戻るか、パラメータなしなら成功
+    expect(
+      url === 'http://localhost:3000/' || 
+      url === 'http://localhost:3000' || 
+      (!url.includes('genre=') && !url.includes('period=') && !url.includes('tag='))
+    ).toBeTruthy()
+    
+    // 最終的にランキングが表示されていることを確認
+    await page.waitForSelector('[data-testid="ranking-item"]', { state: 'visible' })
+    const finalCount = await page.locator('[data-testid="ranking-item"]').count()
+    expect(finalCount).toBeGreaterThan(0)
   })
 
   test('データ圧縮の動作確認（ネットワークレスポンス）', async ({ page }) => {
@@ -146,8 +297,12 @@ test.describe('包括的ナビゲーションテスト', () => {
     }
     
     // ジャンルを切り替えて再度確認
-    await page.click('text=アニメ')
-    await page.waitForLoadState('networkidle')
+    const animeApiPromise = page.waitForResponse(
+      response => response.url().includes('/api/ranking') && response.url().includes('genre=anime')
+    )
+    
+    await page.click('button:has-text("アニメ")')
+    await animeApiPromise
     
     const animeResponse = responses.find(r => r.url.includes('genre=anime'))
     if (animeResponse) {

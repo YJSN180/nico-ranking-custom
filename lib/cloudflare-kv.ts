@@ -2,7 +2,7 @@
 // This module handles reading and writing ranking data to Cloudflare KV
 
 import { getGroupIdForGenre, GENRE_GROUPS } from '../types/ranking-config'
-import { decompressAndParseJSON } from './unified-compression'
+import { parseBufferAsJSON } from './unified-compression'
 
 // KV namespace binding (will be injected by Cloudflare Workers)
 declare global {
@@ -136,20 +136,8 @@ async function getRankingFromKV3Keys(): Promise<KVRankingData | null> {
       
       const data = await response.arrayBuffer()
       
-      // Try to decompress using unified compression library
-      try {
-        const result = await decompressAndParseJSON(new Uint8Array(data))
-        return result.data as KVRankingData
-      } catch (decompressionError) {
-        // If decompression fails, try parsing as plain JSON (backward compatibility)
-        try {
-          const jsonString = new TextDecoder().decode(new Uint8Array(data))
-          return JSON.parse(jsonString) as KVRankingData
-        } catch (parseError) {
-          // Failed to parse from keyName
-          return null
-        }
-      }
+      // Parse data using unified compression library
+      return await parseBufferAsJSON<KVRankingData>(data)
     })
     
     const groupResults = await Promise.allSettled(groupPromises)
@@ -249,15 +237,8 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
     
     // console.log(`[KV] Data received: ${data.byteLength} bytes`)
     
-    // Try to decompress using unified compression library
-    try {
-      const result = await decompressAndParseJSON(uint8Array)
-      return result.data
-    } catch (decompressionError) {
-      // Fallback: try parsing as plain JSON (backward compatibility)
-      const jsonString = new TextDecoder().decode(uint8Array)
-      return JSON.parse(jsonString)
-    }
+    // Parse data using unified compression library
+    return await parseBufferAsJSON(data)
   } catch (error) {
     // Failed to read from Cloudflare KV - returning null
     // Failed to read RANKING_LATEST: error
@@ -350,20 +331,8 @@ async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData 
     
     const data = await response.arrayBuffer()
     
-    // Try to decompress using unified compression library
-    try {
-      const result = await decompressAndParseJSON<KVRankingData>(new Uint8Array(data))
-      return result.data
-    } catch (decompressionError) {
-      // Fallback: try parsing as plain JSON (backward compatibility)
-      try {
-        const jsonString = new TextDecoder().decode(new Uint8Array(data))
-        return JSON.parse(jsonString) as KVRankingData
-      } catch (parseError) {
-        // Failed to parse from keyName
-        return null
-      }
-    }
+    // Parse data using unified compression library
+    return await parseBufferAsJSON<KVRankingData>(data)
     
   } catch (error) {
     // Failed to read group ${groupId}: error

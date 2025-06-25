@@ -26,18 +26,10 @@ vi.mock('@/hooks/use-user-ng-list', () => ({
   useUserNGList: () => ({ 
     ngList: {
       videoIds: [],
-      videoTitles: {
-        exact: [],
-        partial: []
-      },
+      videoTitles: [],
       authorIds: [],
-      authorNames: {
-        exact: [],
-        partial: []
-      },
-      version: 1,
-      totalCount: 0,
-      updatedAt: new Date().toISOString()
+      authorNames: [],
+      derivedVideoIds: []
     },
     filterItems: (items: RankingItem[]) => items, // No NG filtering 
     addToNGList: vi.fn(),

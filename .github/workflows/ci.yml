@@ -80,6 +80,15 @@ jobs:
         env:
           CI: true
       
+      - name: Run comprehensive navigation tests
+        if: github.event_name == 'pull_request'
+        run: |
+          # 包括的なナビゲーションテストを実行（圧縮エラー対策済み）
+          npx playwright test tests/e2e/comprehensive-navigation.spec.ts \
+            --project=chromium
+        env:
+          CI: true
+      
       - name: Upload Playwright report
         if: always() && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4

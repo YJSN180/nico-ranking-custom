@@ -27,7 +27,9 @@ export async function GET(request: NextRequest) {
       console.log('[Development] Using mock data - KV not configured')
       
       const mockItems = generateMockRankingData(500)
-      const mockPopularTags = generateMockPopularTags()
+      const mockPopularTagObjects = generateMockPopularTags()
+      // PopularTagオブジェクトから名前のみの配列に変換
+      const mockPopularTags = mockPopularTagObjects.map(tag => tag.name)
       
       // タグ別ランキングの処理
       if (tag) {
