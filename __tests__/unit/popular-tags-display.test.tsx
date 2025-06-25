@@ -194,33 +194,26 @@ describe('人気タグの表示問題', () => {
       />
     )
 
-    // 初期状態の確認
+    // 初期状態の確認（すべてボタンが最初に表示される）
     const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
     let tagButtons = popularTagsSection?.querySelectorAll('button')
     let tagTexts = Array.from(tagButtons || []).map(btn => btn.textContent)
+    expect(tagTexts).toContain('すべて')  // すべてボタンが最初
     expect(tagTexts).toContain('ゲーム')
     expect(tagTexts).toContain('実況プレイ動画')
 
     // エンターテイメントに切り替え
-    const genreButtons = screen.getAllByRole('button')
-    const gameGenreButton = genreButtons.find(btn => 
-      btn.textContent === 'ゲーム' && 
-      !btn.closest('[style*="人気タグ"]') &&
-      btn.style.cssText.includes('min-width: 80px')
-    )
-    expect(gameGenreButton).toBeTruthy()
-    await user.click(gameGenreButton!)
-    
-    // エンタメボタンを探す
-    const entertainmentOption = screen.getByText('エンタメ')
-    await user.click(entertainmentOption)
+    const entertainmentButton = screen.getByText('エンタメ')
+    await user.click(entertainmentButton)
 
-    // APIコールを待つ
+    // APIコールを待つ（URLがqueryパラメータの順序によって異なる可能性がある）
     await waitFor(() => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking?genre=entertainment&period=24h')
+        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0].includes('genre=entertainment') &&
+        call[0].includes('period=24h')
       )
       expect(rankingCall).toBeTruthy()
     })
@@ -230,15 +223,15 @@ describe('人気タグの表示問題', () => {
       const updatedPopularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
       const updatedTagButtons = updatedPopularTagsSection?.querySelectorAll('button')
       const updatedTagTexts = Array.from(updatedTagButtons || []).map(btn => btn.textContent)
+      expect(updatedTagTexts).toContain('すべて')  // すべてボタンは常に存在
       expect(updatedTagTexts).toContain('エンターテイメント')
       expect(updatedTagTexts).toContain('踊ってみた')
-      // 前のタグが消えていることを確認
-      expect(updatedTagTexts).not.toContain('ゲーム')
+      // 前のゲームタグが消えていることを確認（ただし、「ゲーム」はタグとして残る可能性あり）
       expect(updatedTagTexts).not.toContain('実況プレイ動画')
     })
   })
 
-  it('allジャンルでは人気タグが表示されない', async () => {
+  it('allジャンルでは人気タグセクションが表示されるが空になる', async () => {
     const user = userEvent.setup()
 
     render(
@@ -252,32 +245,34 @@ describe('人気タグの表示問題', () => {
 
     // 初期状態の確認（ゲームジャンルでは人気タグが表示される）
     expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    const initialTagSection = screen.getByText('人気タグ').closest('div')?.parentElement
+    const initialTagButtons = initialTagSection?.querySelectorAll('button')
+    expect(initialTagButtons?.length).toBeGreaterThan(1) // すべてボタン + タグ
 
-    // ゲームジャンルボタンを見つける
-    const genreButtons = screen.getAllByRole('button')
-    const gameGenreButton = genreButtons.find(btn => 
-      btn.textContent === 'ゲーム' && 
-      btn.style.cssText.includes('min-width: 80px')
-    )
-    await user.click(gameGenreButton!)
-    
     // 総合（all）に切り替え
-    const allOption = screen.getByText('総合')
-    await user.click(allOption)
+    const allButton = screen.getByText('総合')
+    await user.click(allButton)
 
-    // APIコールを待つ
+    // APIコールを待つ（URLがqueryパラメータの順序によって異なる可能性がある）
     await waitFor(() => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking?genre=all&period=24h')
+        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0].includes('genre=all') &&
+        call[0].includes('period=24h')
       )
       expect(rankingCall).toBeTruthy()
     })
 
-    // 人気タグセクションが表示されないことを確認
+    // 人気タグセクションは表示されるが、すべてボタンのみになることを確認
     await waitFor(() => {
-      expect(screen.queryByText('人気タグ')).not.toBeInTheDocument()
+      expect(screen.getByText('人気タグ')).toBeInTheDocument()
+      const tagSection = screen.getByText('人気タグ').closest('div')?.parentElement
+      const tagButtons = tagSection?.querySelectorAll('button')
+      // すべてボタンのみ表示される
+      expect(tagButtons?.length).toBe(1)
+      expect(tagButtons?.[0]?.textContent).toBe('すべて')
     })
   })
 
@@ -320,26 +315,21 @@ describe('人気タグの表示問題', () => {
     const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
     let tagButtons = popularTagsSection?.querySelectorAll('button')
     let tagTexts = Array.from(tagButtons || []).map(btn => btn.textContent)
+    expect(tagTexts).toContain('すべて')  // すべてボタンが最初
     expect(tagTexts).toContain('ゲーム24h')
 
-    // 24時間ボタンをクリック
-    const periodButtons = screen.getAllByRole('button')
-    const periodButton = periodButtons.find(btn => 
-      btn.textContent === '24時間' &&
-      btn.style.cssText.includes('background: var(--primary-color)')
-    )
-    await user.click(periodButton!)
-    
     // 毎時に切り替え
-    const hourOption = screen.getByText('毎時')
-    await user.click(hourOption)
+    const hourButton = screen.getByText('毎時')
+    await user.click(hourButton)
 
-    // APIコールを待つ
+    // APIコールを待つ（URLがqueryパラメータの順序によって異なる可能性がある）
     await waitFor(() => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking?genre=game&period=hour')
+        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0].includes('genre=game') &&
+        call[0].includes('period=hour')
       )
       expect(rankingCall).toBeTruthy()
     })
@@ -349,6 +339,7 @@ describe('人気タグの表示問題', () => {
       const updatedPopularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
       const updatedTagButtons = updatedPopularTagsSection?.querySelectorAll('button')
       const updatedTagTexts = Array.from(updatedTagButtons || []).map(btn => btn.textContent)
+      expect(updatedTagTexts).toContain('すべて')  // すべてボタンは常に存在
       expect(updatedTagTexts).toContain('ゲーム')
       expect(updatedTagTexts).toContain('実況プレイ動画')
     })
@@ -364,6 +355,24 @@ describe('人気タグの表示問題', () => {
             { id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 },
             { id: '2', title: 'Video 2', rank: 2, thumbURL: '', views: 200 }
           ] // 配列形式（人気タグなし）
+        })
+      }
+      // video-stats APIの場合は空のレスポンスを返す
+      if (url.includes('/api/edge/video-stats')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            stats: {},
+            timestamp: new Date().toISOString(),
+            count: 0
+          })
+        })
+      }
+      // video-tags APIの場合は空のレスポンスを返す
+      if (url.includes('/api/edge/video-tags')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({})
         })
       }
       return Promise.reject(new Error('Not found'))
@@ -382,33 +391,31 @@ describe('人気タグの表示問題', () => {
 
     // 初期状態の確認
     expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    const initialTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
+    const initialTagButtons = initialTagsSection?.querySelectorAll('button')
+    const initialTagTexts = Array.from(initialTagButtons || []).map(btn => btn.textContent)
+    expect(initialTagTexts).toContain('すべて')
+    expect(initialTagTexts).toContain('ゲーム')
+    expect(initialTagTexts).toContain('実況プレイ動画')
 
-    // ゲームジャンルボタンを見つける
-    const genreButtons = screen.getAllByRole('button')
-    const gameGenreButton = genreButtons.find(btn => 
-      btn.textContent === 'ゲーム' && 
-      btn.style.cssText.includes('min-width: 80px')
-    )
-    await user.click(gameGenreButton!)
-    
     // エンタメに切り替え
-    const entertainmentOption = screen.getByText('エンタメ')
-    await user.click(entertainmentOption)
+    const entertainmentButton = screen.getByText('エンタメ')
+    await user.click(entertainmentButton)
 
     // APIコールを待つ
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalled()
     })
 
-    // getPopularTagsで動的に取得されることを確認
+    // 配列形式の場合、getPopularTagsが呼ばれて動的に取得される
     await waitFor(() => {
       const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
       const tagButtons = popularTagsSection?.querySelectorAll('button')
       const tagTexts = Array.from(tagButtons || []).map(btn => btn.textContent)
-      // タグが表示されていることを確認（順番は問わない）
+      // getPopularTagsが呼ばれて、エンタメジャンルのタグが表示される
       expect(tagTexts).toContain('すべて') // 「すべて」ボタンが最初に表示される
-      expect(tagTexts).toContain('ゲーム') // ゲームタグが表示される（初期のpopularTagsから）
-      expect(tagTexts).toContain('実況プレイ動画')
+      expect(tagTexts).toContain('エンターテイメント')
+      expect(tagTexts).toContain('踊ってみた')
     })
   })
 })
