@@ -1,0 +1,227 @@
+name: Deploy Preview Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+      - develop
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  deploy-worker-preview:
+    name: Deploy Worker Preview
+    runs-on: ubuntu-latest
+    outputs:
+      worker_url: ${{ steps.deploy.outputs.worker_url }}
+      version_id: ${{ steps.deploy.outputs.version_id }}
+      preview_token: ${{ steps.deploy.outputs.preview_token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Preview Token
+        id: token
+        run: |
+          # PR番号を含むユニークなトークンを生成
+          PREVIEW_TOKEN="pr-${{ github.event.pull_request.number }}-$(openssl rand -hex 16)"
+          echo "::add-mask::$PREVIEW_TOKEN"
+          echo "preview_token=$PREVIEW_TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Deploy Worker Version
+        id: deploy
+        run: |
+          # wrangler.tomlからworker名を取得
+          WORKER_NAME=$(grep -oP 'name = "\K[^"]+' wrangler-preview.toml)
+          
+          # プレビュートークンを環境変数として設定
+          export PREVIEW_TOKEN="${{ steps.token.outputs.preview_token }}"
+          
+          # wrangler versions upload を実行
+          echo "Uploading worker version..."
+          OUTPUT=$(npx wrangler versions upload \
+            --config wrangler-preview.toml \
+            --message "Preview for PR #${{ github.event.pull_request.number }}" \
+            --tag "pr-${{ github.event.pull_request.number }}" \
+            --var PREVIEW_TOKEN:$PREVIEW_TOKEN \
+            2>&1)
+          
+          # デバッグ出力
+          echo "Wrangler output: $OUTPUT"
+          
+          # JSONからversion_idを抽出（エラーハンドリング付き）
+          VERSION_ID=$(echo "$OUTPUT" | grep -o '"id":\s*"[^"]*"' | sed 's/"id":\s*"//;s/"$//')
+          
+          if [ -z "$VERSION_ID" ]; then
+            echo "Error: Failed to extract version ID from wrangler output"
+            echo "Full output: $OUTPUT"
+            exit 1
+          fi
+          
+          # Cloudflareのサブドメイン（Secretsに設定）
+          WORKERS_SUBDOMAIN="${{ secrets.CF_WORKERS_SUBDOMAIN }}"
+          
+          # プレビューURLを組み立て
+          WORKER_URL="https://${VERSION_ID}.${WORKER_NAME}.${WORKERS_SUBDOMAIN}.workers.dev"
+          
+          echo "Worker Preview URL: $WORKER_URL"
+          echo "Version ID: $VERSION_ID"
+          
+          # Jobのoutputsに設定
+          echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
+          echo "version_id=$VERSION_ID" >> $GITHUB_OUTPUT
+          echo "preview_token=${{ steps.token.outputs.preview_token }}" >> $GITHUB_OUTPUT
+          
+          # Worker動作確認
+          echo "Testing worker deployment..."
+          sleep 5  # デプロイが反映されるまで待機
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "X-Preview-Token: ${{ steps.token.outputs.preview_token }}" \
+            "$WORKER_URL/api/metadata")
+          
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Warning: Worker health check returned status $RESPONSE"
+          else
+            echo "Worker is responding correctly"
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-vercel-preview:
+    name: Deploy Vercel Preview
+    runs-on: ubuntu-latest
+    needs: deploy-worker-preview
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel Environment Information
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build Project Artifacts
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          NEXT_PUBLIC_WORKER_URL: ${{ needs.deploy-worker-preview.outputs.worker_url }}
+          NEXT_PUBLIC_PREVIEW_TOKEN: ${{ needs.deploy-worker-preview.outputs.preview_token }}
+
+      - name: Deploy to Vercel
+        id: vercel_deploy
+        run: |
+          # Vercelのデプロイコマンドを実行
+          DEPLOY_URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }} | tail -n 1)
+          echo "Vercel Preview URL: $DEPLOY_URL"
+          echo "deploy_url=$DEPLOY_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `🚀 **Preview environment deployed!**
+            
+            | Environment | URL | Status |
+            |------------|-----|--------|
+            | **Frontend** | [Vercel Preview](${{ steps.vercel_deploy.outputs.deploy_url }}) | ✅ Ready |
+            | **Backend** | [Worker Preview](${{ needs.deploy-worker-preview.outputs.worker_url }}) | ✅ Ready |
+            
+            **Preview Access:**
+            - The preview environment is protected with authentication
+            - Frontend automatically includes the required token
+            - Direct API access requires \`X-Preview-Token\` header
+            
+            **Deployment Details:**
+            - PR: #${{ github.event.pull_request.number }}
+            - Commit: ${{ github.sha }}
+            - Worker Version: \`${{ needs.deploy-worker-preview.outputs.version_id }}\`
+            
+            ---
+            <details>
+            <summary>Testing the preview</summary>
+            
+            \`\`\`bash
+            # Test API endpoint
+            curl -H "X-Preview-Token: [token]" \\
+              ${{ needs.deploy-worker-preview.outputs.worker_url }}/api/ranking?genre=all
+            \`\`\`
+            </details>`;
+            
+            // 既存のコメントを検索
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Preview environment deployed')
+            );
+            
+            if (botComment) {
+              // 既存のコメントを更新
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment,
+              });
+            } else {
+              // 新規コメントを作成
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment,
+              });
+            }
+
+      - name: Store deployment info
+        uses: actions/cache@v4
+        with:
+          path: |
+            .preview-deployment
+          key: preview-deployment-pr-${{ github.event.pull_request.number }}
+        if: always()
+          
+      - name: Create deployment info file
+        run: |
+          mkdir -p .preview-deployment
+          cat > .preview-deployment/info.json << EOF
+          {
+            "pr_number": ${{ github.event.pull_request.number }},
+            "worker_url": "${{ needs.deploy-worker-preview.outputs.worker_url }}",
+            "vercel_url": "${{ steps.vercel_deploy.outputs.deploy_url }}",
+            "version_id": "${{ needs.deploy-worker-preview.outputs.version_id }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit_sha": "${{ github.sha }}"
+          }
+          EOF

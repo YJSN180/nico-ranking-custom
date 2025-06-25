@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>新しいWorkerテスト</title>
+</head>
+<body>
+    <h1>動的キャッシュWorkerテスト</h1>
+    <button onclick="testAPI()">APIテスト実行</button>
+    <h2>結果:</h2>
+    <pre id="result"></pre>
+    
+    <script>
+    async function testAPI() {
+        const resultEl = document.getElementById('result');
+        const url = 'https://nico-ranking-api-gateway-new.yjsn180180.workers.dev/api/ranking?genre=all';
+        
+        try {
+            const response = await fetch(url);
+            const headers = {};
+            response.headers.forEach((value, key) => {
+                headers[key] = value;
+            });
+            
+            const data = await response.json();
+            
+            resultEl.textContent = `ステータス: ${response.status}\n\nヘッダー:\n${JSON.stringify(headers, null, 2)}\n\nデータ (最初の3件):\n${JSON.stringify(data.items.slice(0, 3), null, 2)}`;
+        } catch (error) {
+            resultEl.textContent = `エラー: ${error.message}`;
+        }
+    }
+    </script>
+</body>
+</html>

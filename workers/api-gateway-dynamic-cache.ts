@@ -117,6 +117,22 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     
+    // プレビュー環境での認証チェック
+    if (env.ENVIRONMENT === 'preview' && url.pathname.startsWith('/api/')) {
+      const token = request.headers.get('X-Preview-Token')
+      const expectedToken = env.PREVIEW_TOKEN
+      
+      if (!token || !expectedToken || token !== expectedToken) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: {
+            'Content-Type': 'application/json',
+            ...getCorsHeaders(request)
+          }
+        })
+      }
+    }
+    
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
       return new Response(null, {
@@ -263,42 +279,74 @@ export default {
           })
         }
         
-        // 圧縮データの処理
-        let responseBody: ReadableStream<Uint8Array> | string
-        let contentEncoding: string | undefined
+        // R2オブジェクトのメタデータから圧縮情報を取得（元のWorkerと同じロジック）
+        const r2ContentEncoding = r2Object.httpMetadata?.contentEncoding
+        const r2ContentType = r2Object.httpMetadata?.contentType
+        console.log(`[Worker] R2 object httpMetadata.contentEncoding: ${r2ContentEncoding}`)
+        console.log(`[Worker] R2 object httpMetadata.contentType: ${r2ContentType}`)
         
-        if (r2Object.httpMetadata?.contentEncoding === 'gzip') {
-          // 圧縮されたまま返す
-          responseBody = r2Object.body!
-          contentEncoding = 'gzip'
-        } else {
-          // 非圧縮データ
-          responseBody = await r2Object.text()
-        }
+        // ストリームを分割して最初のチャンクを検査
+        const [inspectStream, passthroughStream] = r2Object.body!.tee()
+        
+        const reader = inspectStream.getReader()
+        const { value: firstChunk, done } = await reader.read()
+        reader.releaseLock()
+        
+        // gzipマジックナンバーチェック (0x1f, 0x8b)
+        const isGzipped = !done && firstChunk && firstChunk.length >= 2 && firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
         
         // 動的TTLを計算
         const { cacheControl, cdnCacheControl } = calculateDynamicTTL()
         
-        // レスポンス作成
-        const headers: HeadersInit = {
-          'Content-Type': 'application/json',
-          'Cache-Control': cacheControl,
-          'CDN-Cache-Control': cdnCacheControl,
-          'ETag': etag,
-          'X-Data-Source': 'r2-direct',
-          'X-Cache-Status': 'MISS',
-          ...getCorsHeaders(request),
-          ...securityHeaders
-        }
+        // レスポンスヘッダー作成
+        const headers = new Headers()
+        headers.set('Content-Type', 'application/json')
+        headers.set('Cache-Control', cacheControl)
+        headers.set('CDN-Cache-Control', cdnCacheControl)
+        headers.set('ETag', etag)
+        headers.set('X-Data-Source', 'r2-direct')
+        headers.set('X-Cache-Status', 'MISS')
         
-        if (contentEncoding) {
-          headers['Content-Encoding'] = contentEncoding
-        }
-        
-        response = new Response(responseBody, {
-          status: 200,
-          headers
+        // CORSとセキュリティヘッダーを追加
+        Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
+          headers.set(key, value)
         })
+        Object.entries(securityHeaders).forEach(([key, value]) => {
+          headers.set(key, value)
+        })
+        
+        // R2のメタデータにContent-Encodingがある場合は優先
+        if (r2ContentEncoding) {
+          headers.set('Content-Encoding', r2ContentEncoding)
+          headers.set('Vary', 'Accept-Encoding')
+          // Cloudflareの変換を防ぐためno-transformを追加
+          headers.set('Cache-Control', `${cacheControl}, no-transform`)
+        }
+        
+        if (isGzipped) {
+          console.log(`[Worker] Serving pre-compressed gzipped data`)
+          
+          // 重要: encodeBody: "manual" を使用してCloudflareの自動圧縮を無効化
+          headers.set('Content-Encoding', 'gzip')
+          headers.set('Vary', 'Accept-Encoding')
+          // Cloudflareの変換を防ぐためno-transformを追加
+          headers.set('Cache-Control', `${cacheControl}, no-transform`)
+          headers.set('CDN-Cache-Control', `${cdnCacheControl}, no-transform`)
+          
+          response = new Response(passthroughStream, {
+            status: 200,
+            headers,
+            // CloudflareドキュメントのQ: 既に圧縮されたデータを配信するには
+            // A: encodeBody: "manual" を設定する必要がある
+            encodeBody: "manual"
+          } as ResponseInit)
+        } else {
+          // 非圧縮データの場合はそのまま返す（Cloudflareが自動圧縮する）
+          response = new Response(passthroughStream, {
+            status: 200,
+            headers
+          })
+        }
         
         // キャッシュに保存
         ctx.waitUntil(cache.put(cacheKey, response.clone()))

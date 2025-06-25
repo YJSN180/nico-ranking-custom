@@ -9,6 +9,8 @@ interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY: string
   R2_BUCKET: R2Bucket
+  ENVIRONMENT?: string  // プレビュー環境の識別
+  PREVIEW_TOKEN?: string  // プレビュー環境のアクセストークン
 }
 
 // セキュリティヘッダー定義
@@ -35,6 +37,20 @@ const corsHeaders = {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
+    
+    // プレビュー環境のアクセス制御
+    if (env.ENVIRONMENT === 'preview' && env.PREVIEW_TOKEN) {
+      const authHeader = request.headers.get('X-Preview-Token')
+      if (authHeader !== env.PREVIEW_TOKEN) {
+        return new Response('Unauthorized', {
+          status: 401,
+          headers: {
+            ...securityHeaders,
+            'WWW-Authenticate': 'Bearer realm="preview"'
+          }
+        })
+      }
+    }
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {

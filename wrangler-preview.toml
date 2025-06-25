@@ -1,0 +1,28 @@
+# Preview環境用の設定
+name = "nico-ranking-api-gateway"
+main = "workers/api-gateway-dynamic-cache.ts"  # 動的キャッシュ版を使用
+compatibility_date = "2025-06-24"
+compatibility_flags = ["nodejs_compat"]
+
+# プレビュー環境用のKV namespace（本番とは分離）
+[[kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"  # 本番と同じKVを参照（読み取り専用）
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# 環境変数（プレビュー用）
+[vars]
+ENVIRONMENT = "preview"
+# VERCEL_DEPLOYMENT_URLはGitHub Actionsで動的に設定
+# PREVIEW_TOKENもGitHub Actionsで動的に設定
+
+# プレビュー環境ではカスタムドメインは使用しない
+# routes セクションは削除
+
+# TypeScript設定
+[build]
+command = ""

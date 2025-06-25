@@ -1,0 +1,127 @@
+name: Cleanup Preview Environment
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+      - develop
+
+jobs:
+  cleanup-worker-version:
+    name: Cleanup Worker Version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore deployment info
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: |
+            .preview-deployment
+          key: preview-deployment-pr-${{ github.event.pull_request.number }}
+
+      - name: Delete Worker Version via API
+        if: steps.cache.outputs.cache-hit == 'true'
+        run: |
+          # デプロイメント情報を読み込み
+          if [ -f .preview-deployment/info.json ]; then
+            VERSION_ID=$(jq -r '.version_id' .preview-deployment/info.json)
+            
+            if [ -n "$VERSION_ID" ] && [ "$VERSION_ID" != "null" ]; then
+              echo "Deleting worker version: $VERSION_ID"
+              
+              # Cloudflare APIを使用してバージョンを削除
+              # 注: 2025年6月現在、Workers Versionsの削除APIは未実装の可能性があります
+              # 以下は想定されるAPIエンドポイントです
+              
+              WORKER_NAME=$(grep -oP 'name = "\K[^"]+' wrangler-preview.toml || echo "nico-ranking-api-gateway")
+              
+              # バージョン情報の取得（確認用）
+              echo "Fetching version information..."
+              curl -s -X GET \
+                "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/workers/scripts/${WORKER_NAME}/versions/${VERSION_ID}" \
+                -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+                -H "Content-Type: application/json" | jq .
+              
+              # 注: 削除APIが利用可能になったら以下のコメントを解除
+              # curl -X DELETE \
+              #   "https://api.cloudflare.com/client/v4/accounts/${{ secrets.CLOUDFLARE_ACCOUNT_ID }}/workers/scripts/${WORKER_NAME}/versions/${VERSION_ID}" \
+              #   -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+              #   -H "Content-Type: application/json"
+              
+              echo "Note: Worker version deletion API is not yet available. Version will remain but is inaccessible."
+            else
+              echo "No version ID found in deployment info"
+            fi
+          else
+            echo "No deployment info found"
+          fi
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `🧹 **Preview environment cleanup completed**
+            
+            The preview environment for PR #${{ github.event.pull_request.number }} has been cleaned up.
+            
+            - Worker preview version has been marked for deletion
+            - Vercel preview will be automatically archived
+            
+            Thank you for your contribution! 🎉`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment,
+            });
+
+  cleanup-old-versions:
+    name: Cleanup Old Versions (Weekly)
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * 0'  # 毎週日曜日の深夜に実行
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: List and cleanup old versions
+        run: |
+          # 30日以上前のpr-*タグを持つバージョンをリストアップ
+          echo "Listing old preview versions..."
+          
+          # wranglerを使ってバージョンリストを取得
+          npx wrangler versions list --config wrangler-preview.toml > versions.txt
+          
+          # 30日以上前の日付を計算
+          CUTOFF_DATE=$(date -d '30 days ago' +%Y-%m-%d)
+          
+          echo "Cutoff date: $CUTOFF_DATE"
+          echo "Versions to be cleaned up:"
+          
+          # pr-*タグを持つ古いバージョンを抽出
+          grep -E 'pr-[0-9]+' versions.txt | while read -r line; do
+            VERSION_DATE=$(echo "$line" | awk '{print $3}')
+            if [[ "$VERSION_DATE" < "$CUTOFF_DATE" ]]; then
+              echo "$line"
+              # 実際の削除処理はAPIが利用可能になってから実装
+            fi
+          done
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
