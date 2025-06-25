@@ -1,0 +1,23 @@
+# 本番環境用Worker設定
+name = "nico-ranking-api-gateway-dynamic-cache-20250625"
+main = "workers/api-gateway-dynamic-cache.ts"
+compatibility_date = "2024-10-01"
+
+# 本番環境の変数
+[vars]
+ENVIRONMENT = "production"
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+WORKER_AUTH_KEY = "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
+
+# 本番R2バケット
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking-data"
+
+[placement]
+mode = "smart"
+
+# 本番ドメインでのルーティング
+[[routes]]
+pattern = "nico-rank.com/api/*"
+zone_name = "nico-rank.com"
