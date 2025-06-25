@@ -58,6 +58,9 @@ test.describe('リアルタイム更新機能', () => {
     // ページを開く
     await page.goto('/')
 
+    // APIレスポンスを待つ
+    await page.waitForResponse('**/api/edge/ranking/**')
+
     // 初期データが表示されることを確認
     await expect(page.locator('text=テスト動画1')).toBeVisible()
     await expect(page.locator('text=/1,?000.*再生/')).toBeVisible()
@@ -157,17 +160,15 @@ test.describe('リアルタイム更新機能', () => {
 
     await page.goto('/')
 
-    // 24時間以内の動画は赤字で「○時間前」表示
-    const newVideoDate = page.locator('text=/\\d+時間前/')
-    if (await newVideoDate.count() > 0) {
-      await expect(newVideoDate).toBeVisible()
-      // CSS色の検証を緩和（ブラウザごとの差異を考慮）
-      const color = await newVideoDate.evaluate(el => window.getComputedStyle(el).color)
-      expect(color).toMatch(/rgb\(19[0-9], [3-5][0-9], [3-5][0-9]\)|#c53030/) // 赤系色
-    }
+    // 24時間以内の動画は赤字で「○時間前」表示（20時間前の動画）
+    const newVideoDate = page.locator('text=20時間前')
+    await expect(newVideoDate).toBeVisible()
+    // CSS色の検証を緩和（ブラウザごとの差異を考慮）
+    const color = await newVideoDate.evaluate(el => window.getComputedStyle(el).color)
+    expect(color).toMatch(/rgb\(19[0-9], [3-5][0-9], [3-5][0-9]\)|#c53030/) // 赤系色
 
-    // 24時間以上前の動画は通常色で日付表示
-    const oldVideoDate = page.locator('text=/202\\d-\\d{2}-\\d{2}/')
+    // 24時間以上前の動画は通常色で日付表示（YYYY/M/D形式）
+    const oldVideoDate = page.locator('text=/202\\d\\/\\d{1,2}\\/\\d{1,2}/')
     if (await oldVideoDate.count() > 0) {
       await expect(oldVideoDate).toBeVisible()
       // 日付が表示されていることを確認（色は環境により異なる可能性）

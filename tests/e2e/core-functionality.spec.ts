@@ -35,7 +35,7 @@ test.describe('Core Functionality E2E', () => {
     await page.goto('/')
     
     // Look for genre selector (dropdown, buttons, etc.)
-    const genreSelectors = page.locator('select, [data-testid="genre-selector"], button:has-text("全体"), button:has-text("音楽"), button:has-text("ゲーム")')
+    const genreSelectors = page.locator('button:has-text("総合"), button:has-text("音楽"), button:has-text("ゲーム")')
     
     if (await genreSelectors.count() > 0) {
       // Test selecting different genres if available
