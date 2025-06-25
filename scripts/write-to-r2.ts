@@ -9,7 +9,7 @@ import { createHash } from 'crypto'
 import { readFileSync, existsSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { gzipSync } from 'zlib'
+import { compressForStorage } from '../lib/unified-compression.js'
 import type { RankingData } from '../app/types/ranking'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -79,21 +79,22 @@ async function getExistingContentHash(key: string): Promise<string | null> {
   return null
 }
 
-// 差分チェックとアップロード（gzip圧縮対応）
+// 差分チェックとアップロード（統一圧縮システム対応）
 async function uploadIfChanged(key: string, body: string, contentType: string, cacheControl: string, compress: boolean = false): Promise<boolean> {
-  // 圧縮する場合は圧縮後のハッシュを計算
+  // 圧縮する場合は統一圧縮ライブラリを使用
   let newHash: string
   let uploadBody: string | Uint8Array = body
   let uploadContentType = contentType
   let uploadContentEncoding: string | undefined
   
   if (compress) {
-    // Node.js標準のzlibを使用してgzip圧縮
-    uploadBody = gzipSync(body, { level: 9 }) // 最高圧縮レベル
+    // 統一圧縮ライブラリを使用してWeb API標準でgzip圧縮
+    const compressionResult = await compressForStorage(body)
+    uploadBody = compressionResult.compressedData
     uploadContentEncoding = 'gzip'
     // 圧縮後のデータのハッシュを計算
     newHash = createHash('sha256').update(uploadBody).digest('hex')
-    console.log(`🗜️  Compressed ${key}: ${(body.length / 1024).toFixed(1)}KB → ${(uploadBody.length / 1024).toFixed(1)}KB (${((1 - uploadBody.length / body.length) * 100).toFixed(1)}% reduction)`)
+    console.log(`🗜️  Compressed ${key}: ${(compressionResult.metadata.originalSize / 1024).toFixed(1)}KB → ${(compressionResult.metadata.compressedSize / 1024).toFixed(1)}KB (${compressionResult.metadata.compressionRatio.toFixed(1)}% reduction)`)
   } else {
     newHash = calculateHash(body)
   }

@@ -1,0 +1,52 @@
+{
+  "genres": {
+    "all": {
+      "24h": {
+        "items": [
+          {
+            "id": "sm45120378",
+            "title": "テストランキング動画1",
+            "viewCount": 10000,
+            "mylistCount": 500,
+            "commentCount": 100,
+            "likeCount": 1000,
+            "thumbnailUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/45120378/45120378.21534814",
+            "postedAt": "2025-06-24T10:00:00+09:00",
+            "lengthInSeconds": 300,
+            "channelId": null,
+            "ownerId": "1594318",
+            "channelTitle": null,
+            "ownerName": "テストユーザー1"
+          }
+        ],
+        "popularTags": ["VOCALOID", "ゲーム"],
+        "tags": {}
+      },
+      "hour": {
+        "items": [
+          {
+            "id": "sm45120378",
+            "title": "テストランキング動画1",
+            "viewCount": 10000,
+            "mylistCount": 500,
+            "commentCount": 100,
+            "likeCount": 1000,
+            "thumbnailUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/45120378/45120378.21534814",
+            "postedAt": "2025-06-24T10:00:00+09:00",
+            "lengthInSeconds": 300,
+            "channelId": null,
+            "ownerId": "1594318",
+            "channelTitle": null,
+            "ownerName": "テストユーザー1"
+          }
+        ],
+        "popularTags": ["VOCALOID", "ゲーム"],
+        "tags": {}
+      }
+    }
+  },
+  "metadata": {
+    "updatedAt": "2025-06-24T19:00:00Z",
+    "version": 1
+  }
+}

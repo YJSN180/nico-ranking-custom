@@ -101,19 +101,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     const apiUrl = `${baseUrl}/api/ranking?${params.toString()}`
     // console.log(`[SSR] Fetching from API: ${apiUrl}`)
     
-    const response = await fetch(apiUrl, {
+    // 統一圧縮対応のfetch
+    const { fetchJSON } = await import('@/lib/fetch-with-compression')
+    const data = await fetchJSON(apiUrl, {
       next: { revalidate: 300 }, // 5分間キャッシュ
-      headers: {
-        'Accept': 'application/json',
-      }
     })
-    
-    if (!response.ok) {
-      console.error(`[SSR] API returned ${response.status}`)
-      return { items: [], popularTags: [] }
-    }
-    
-    const data = await response.json()
     
     if (data && data.items && Array.isArray(data.items)) {
       // NGフィルタリングを適用

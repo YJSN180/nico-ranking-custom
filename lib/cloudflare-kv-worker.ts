@@ -14,53 +14,31 @@ declare global {
   }
 }
 
+import { decompressAndParseJSON } from './unified-compression'
+
 /**
  * Decompress gzipped data in Workers environment
- * Uses DecompressionStream API available in Workers
+ * Uses unified compression library for consistency
  */
 export async function decompressData(compressed: Uint8Array): Promise<any> {
   try {
-    // Check if the data has gzip magic numbers
-    if (compressed[0] !== 0x1f || compressed[1] !== 0x8b) {
-      const jsonString = new TextDecoder().decode(compressed)
-      return JSON.parse(jsonString)
-    }
-    
-    // Use DecompressionStream API in Workers - simplified approach
-    const stream = new Response(compressed).body!.pipeThrough(new DecompressionStream('gzip'))
-    const decompressedArrayBuffer = await new Response(stream).arrayBuffer()
-    const jsonString = new TextDecoder().decode(decompressedArrayBuffer)
-    
-    return JSON.parse(jsonString)
-    
+    const result = await decompressAndParseJSON(compressed)
+    return result.data
   } catch (error) {
-    console.error('[DecompressionStream] Decompression failed:', error)
-    
-    // Fallback: try to parse as uncompressed JSON
-    try {
-      const jsonString = new TextDecoder().decode(compressed)
-      return JSON.parse(jsonString)
-    } catch (fallbackError) {
-      throw new Error(`Decompression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
+    console.error('[UnifiedCompression] Decompression failed:', error)
+    throw new Error(`Decompression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
+import { compressForStorage } from './unified-compression'
+
 /**
- * Compress data using CompressionStream (for future use)
+ * Compress data using unified compression library
  */
 export async function compressData(data: any): Promise<Uint8Array> {
   try {
-    const jsonString = JSON.stringify(data)
-    const encoder = new TextEncoder()
-    const input = encoder.encode(jsonString)
-    
-    // Use CompressionStream API in Workers - simplified approach
-    const stream = new Response(input).body!.pipeThrough(new CompressionStream('gzip'))
-    const compressedArrayBuffer = await new Response(stream).arrayBuffer()
-    
-    return new Uint8Array(compressedArrayBuffer)
-    
+    const result = await compressForStorage(data)
+    return result.compressedData
   } catch (error) {
     console.error('Workers compression failed:', error)
     throw new Error(`Compression failed: ${error instanceof Error ? error.message : 'Unknown error'}`)

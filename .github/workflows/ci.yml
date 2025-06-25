@@ -40,8 +40,14 @@ jobs:
 
       - name: Run unit and integration tests
         run: |
-          echo "Temporarily skipping tests due to memory issues"
-          echo "TODO: Fix memory issues and re-enable tests"
+          # Run unit tests for unified compression system
+          npm run test:unit -- unified-compression
+          # Run integration tests for unified compression system
+          npm run test:integration -- unified-compression
+          # Run backward compatibility tests
+          npm run test:integration -- backward-compatibility
+          # Run worker integration tests  
+          npm run test:integration -- worker-unified-compression
 
       # Codecov upload disabled - requires token configuration
       # - name: Upload coverage reports

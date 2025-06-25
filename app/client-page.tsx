@@ -588,10 +588,21 @@ export default function ClientPage({
     // 全取得件数を制限
     const allItems = filteredItems.slice(0, limit)
     
-    // ページネーション計算
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    const pageItems = allItems.slice(startIndex, endIndex)
+    // タグ別ランキングの場合はページネーションなしで全件表示
+    let pageItems: RankingItem[]
+    let calculatedTotalPages: number
+    
+    if (config.tag) {
+      // タグ別ランキングは全300件を表示
+      pageItems = allItems
+      calculatedTotalPages = 1
+    } else {
+      // ジャンル別ランキングは通常のページネーション
+      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+      const endIndex = startIndex + ITEMS_PER_PAGE
+      pageItems = allItems.slice(startIndex, endIndex)
+      calculatedTotalPages = Math.ceil(allItems.length / ITEMS_PER_PAGE)
+    }
     
     // originalRankを追加（元のランク番号を保持）
     const result = pageItems.map(item => ({
@@ -601,7 +612,7 @@ export default function ClientPage({
     
     return {
       displayItems: result,
-      totalPages: Math.ceil(allItems.length / ITEMS_PER_PAGE),
+      totalPages: calculatedTotalPages,
       totalItems: allItems.length
     }
   }, [fullRankingData, config.tag, ngList, currentPage])
@@ -705,14 +716,33 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 上部ページネーション */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={handlePageChange}
-          />
+          {/* 上部ページネーション（タグ別ランキングでは非表示） */}
+          {!config.tag ? (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={handlePageChange}
+            />
+          ) : (
+            /* タグ別ランキングの件数表示 */
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              padding: '20px 0',
+              borderTop: '1px solid var(--border-color)',
+              marginTop: '20px'
+            }}>
+              <div style={{
+                fontSize: '14px',
+                color: 'var(--text-secondary)',
+                textAlign: 'center'
+              }}>
+                {totalItems}件表示
+              </div>
+            </div>
+          )}
           
           {/* ランキングリスト */}
           <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -724,14 +754,16 @@ export default function ClientPage({
             ))}
           </ul>
           
-          {/* 下部ページネーション */}
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalItems}
-            itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={handlePageChange}
-          />
+          {/* 下部ページネーション（タグ別ランキングでは非表示） */}
+          {!config.tag && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={handlePageChange}
+            />
+          )}
         </>
       )}
     </>

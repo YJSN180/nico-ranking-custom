@@ -50,20 +50,10 @@ export async function extractGenreData(
   metadata?: any
 }> {
   try {
-    // Check if data is gzipped
-    const isGzipped = compressedData[0] === 0x1f && compressedData[1] === 0x8b
-    
-    let jsonString: string
-    if (isGzipped) {
-      // Dynamic import for pako only when needed
-      const pako = await import('pako')
-      jsonString = pako.ungzip(compressedData, { to: 'string' })
-    } else {
-      // Not compressed, parse directly
-      jsonString = new TextDecoder().decode(compressedData)
-    }
-    
-    const data = JSON.parse(jsonString)
+    // 統一圧縮ライブラリを使用して解凍
+    const { decompressAndParseJSON } = await import('../lib/unified-compression')
+    const decompressedResult = await decompressAndParseJSON(compressedData)
+    const data = decompressedResult.data
     
     // Extract specific genre/period data
     const genreData = data.genres?.[genre]?.[period]

@@ -191,10 +191,13 @@ export default {
           // 解凍して返す（このケースは稀だが対応）
           const compressedData = await r2Object.arrayBuffer()
           console.log(`[Worker] Client doesn't support gzip, decompressing...`)
-          // ブラウザ環境ではDecompressionStreamを使用
-          const stream = new Response(compressedData).body
-          const decompressedStream = stream!.pipeThrough(new DecompressionStream('gzip'))
-          response = new Response(decompressedStream, {
+          
+          // 統一圧縮ライブラリを使用して解凍
+          const { decompressAndParseJSON } = await import('../lib/unified-compression')
+          const decompressedResult = await decompressAndParseJSON(new Uint8Array(compressedData))
+          const decompressedString = JSON.stringify(decompressedResult.data)
+          
+          response = new Response(decompressedString, {
             status: 200,
             headers: responseHeaders
           })

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import ClientPage from '@/app/client-page'
 import type { RankingItem } from '@/types/ranking'
@@ -24,7 +24,25 @@ vi.mock('@/hooks/use-user-preferences', () => ({
 
 vi.mock('@/hooks/use-user-ng-list', () => ({
   useUserNGList: () => ({ 
-    filterItems: (items: RankingItem[]) => items // No NG filtering 
+    ngList: {
+      videoIds: [],
+      videoTitles: {
+        exact: [],
+        partial: []
+      },
+      authorIds: [],
+      authorNames: {
+        exact: [],
+        partial: []
+      },
+      version: 1,
+      totalCount: 0,
+      updatedAt: new Date().toISOString()
+    },
+    filterItems: (items: RankingItem[]) => items, // No NG filtering 
+    addToNGList: vi.fn(),
+    removeFromNGList: vi.fn(),
+    isLoading: false
   }),
 }))
 

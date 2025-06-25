@@ -1,11 +1,8 @@
 #!/usr/bin/env npx tsx
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { promisify } from 'util'
-import { gzip } from 'zlib'
 import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
-
-const gzipAsync = promisify(gzip)
+import { compressForStorage } from '../lib/unified-compression.js'
 
 // Save derived NG entries to KV
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
@@ -82,9 +79,10 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
   
   // Compress to reduce size and improve Worker performance
   console.log(`Compressing data...`);
-  const compressed = await gzipAsync(jsonString);
+  const compressionResult = await compressForStorage(data);
+  const compressed = Buffer.from(compressionResult.compressedData);
   const compressedSize = compressed.length / 1024 / 1024;
-  console.log(`Compressed size: ${compressedSize.toFixed(2)} MB (${((1 - compressedSize/dataSize) * 100).toFixed(1)}% reduction)`)
+  console.log(`Compressed size: ${compressedSize.toFixed(2)} MB (${compressionResult.metadata.compressionRatio.toFixed(1)}% reduction)`)
 
   const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
   
