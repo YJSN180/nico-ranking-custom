@@ -52,3 +52,37 @@ export async function parseBufferAsJSON<T = any>(buffer: ArrayBuffer): Promise<T
     return null
   }
 }
+
+/**
+ * ストレージ用のgzip圧縮（Node.js環境用）
+ * R2/KVにデータを保存する際に使用
+ */
+export async function compressForStorage(data: string): Promise<{
+  compressedData: Uint8Array
+  metadata: {
+    originalSize: number
+    compressedSize: number
+    compressionRatio: number
+  }
+}> {
+  if (typeof window !== 'undefined') {
+    throw new Error('This function should only be called in Node.js environment')
+  }
+  
+  const { gzip } = await import('zlib')
+  const { promisify } = await import('util')
+  const gzipAsync = promisify(gzip)
+  
+  const originalSize = Buffer.byteLength(data, 'utf-8')
+  const compressed = await gzipAsync(Buffer.from(data, 'utf-8'))
+  const compressedSize = compressed.length
+  
+  return {
+    compressedData: new Uint8Array(compressed),
+    metadata: {
+      originalSize,
+      compressedSize,
+      compressionRatio: ((originalSize - compressedSize) / originalSize) * 100
+    }
+  }
+}

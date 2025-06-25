@@ -1,0 +1,35 @@
+name: Debug Environment Variables
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug-env:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check environment variables
+      env:
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+      run: |
+        echo "=== Environment Variables Check ==="
+        echo "CLOUDFLARE_ACCOUNT_ID: $([ -n "$CLOUDFLARE_ACCOUNT_ID" ] && echo 'SET (length: '${#CLOUDFLARE_ACCOUNT_ID}')' || echo 'NOT SET')"
+        echo "CLOUDFLARE_KV_NAMESPACE_ID: $([ -n "$CLOUDFLARE_KV_NAMESPACE_ID" ] && echo 'SET (length: '${#CLOUDFLARE_KV_NAMESPACE_ID}')' || echo 'NOT SET')"
+        echo "CLOUDFLARE_API_TOKEN: $([ -n "$CLOUDFLARE_API_TOKEN" ] && echo 'SET (length: '${#CLOUDFLARE_API_TOKEN}')' || echo 'NOT SET')"
+        echo "R2_ACCESS_KEY_ID: $([ -n "$R2_ACCESS_KEY_ID" ] && echo 'SET (length: '${#R2_ACCESS_KEY_ID}')' || echo 'NOT SET')"
+        echo "R2_SECRET_ACCESS_KEY: $([ -n "$R2_SECRET_ACCESS_KEY" ] && echo 'SET (length: '${#R2_SECRET_ACCESS_KEY}')' || echo 'NOT SET')"
+        echo "CRON_SECRET: $([ -n "$CRON_SECRET" ] && echo 'SET (length: '${#CRON_SECRET}')' || echo 'NOT SET')"
+        echo "WORKER_AUTH_KEY: $([ -n "$WORKER_AUTH_KEY" ] && echo 'SET (length: '${#WORKER_AUTH_KEY}')' || echo 'NOT SET')"
+        echo ""
+        echo "=== GitHub Actions Context ==="
+        echo "Repository: ${{ github.repository }}"
+        echo "Event: ${{ github.event_name }}"
+        echo "Workflow: ${{ github.workflow }}"
+        echo "Run ID: ${{ github.run_id }}"
+        echo "Runner OS: ${{ runner.os }}"

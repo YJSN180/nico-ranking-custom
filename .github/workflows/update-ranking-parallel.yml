@@ -47,6 +47,8 @@ jobs:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        # Add KV Namespace ID fallback
+        CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
         # Debug: Check if environment variables are set
@@ -54,6 +56,13 @@ jobs:
         echo "CLOUDFLARE_ACCOUNT_ID is set: $([ -n "$CLOUDFLARE_ACCOUNT_ID" ] && echo 'YES' || echo 'NO')"
         echo "CLOUDFLARE_KV_NAMESPACE_ID is set: $([ -n "$CLOUDFLARE_KV_NAMESPACE_ID" ] && echo 'YES' || echo 'NO')"
         echo "CLOUDFLARE_API_TOKEN is set: $([ -n "$CLOUDFLARE_API_TOKEN" ] && echo 'YES' || echo 'NO')"
+        
+        # Use fallback if KV_NAMESPACE_ID is not set
+        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
+          export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
+          echo "Using fallback KV namespace ID"
+        fi
+        
         # Use improved version with better error handling and retry logic
         npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 6
     
@@ -148,9 +157,18 @@ jobs:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        # Add KV Namespace ID fallback
+        CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
       run: |
         echo "Aggregating results and writing to KV..."
         echo "Expected 6 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
+        
+        # Use fallback if KV_NAMESPACE_ID is not set
+        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
+          export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
+          echo "Using fallback KV namespace ID"
+        fi
+        
         npx tsx scripts/aggregate-ranking-results-direct.ts
     
     - name: Write to R2

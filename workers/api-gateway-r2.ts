@@ -73,6 +73,77 @@ export default {
       })
     }
     
+    // デバッグエンドポイント
+    if (url.pathname === '/api/debug') {
+      return new Response(JSON.stringify({
+        time: new Date().toISOString(),
+        headers: Object.fromEntries(request.headers.entries()),
+        worker: 'api-gateway-r2',
+        version: '2025-06-25-debug-v2'
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          ...corsHeaders
+        }
+      })
+    }
+    
+    // R2メタデータテストエンドポイント
+    if (url.pathname === '/api/test-r2-metadata') {
+      try {
+        const testKey = 'rankings/all/24h/all.json'
+        const testObject = await env.R2_BUCKET.get(testKey)
+        
+        if (testObject) {
+          // 最初の10バイトを読み取ってgzip確認
+          const reader = testObject.body.getReader()
+          const { value: firstChunk } = await reader.read()
+          reader.releaseLock()
+          
+          const isGzipped = firstChunk && firstChunk.length >= 2 && 
+                           firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
+          
+          return new Response(JSON.stringify({
+            key: testKey,
+            exists: true,
+            size: testObject.size,
+            httpMetadata: testObject.httpMetadata || {},
+            customMetadata: testObject.customMetadata || {},
+            firstBytes: firstChunk ? Array.from(firstChunk.slice(0, 10)) : [],
+            isGzipped: isGzipped
+          }, null, 2), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          })
+        } else {
+          return new Response(JSON.stringify({
+            key: testKey,
+            exists: false
+          }), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders
+            }
+          })
+        }
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error.message
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders
+          }
+        })
+      }
+    }
+    
     // /api/ranking パスの処理（R2から直接配信）
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       try {
@@ -119,6 +190,13 @@ export default {
         console.log(`[Worker] Attempting to read from R2: ${r2Key}`)
         const r2Object = await env.R2_BUCKET.get(r2Key)
         
+        // R2オブジェクトのデバッグ情報
+        if (r2Object) {
+          console.log(`[Worker] R2 object found, size: ${r2Object.size}`)
+          console.log(`[Worker] R2 httpMetadata:`, JSON.stringify(r2Object.httpMetadata || {}))
+          console.log(`[Worker] R2 customMetadata:`, JSON.stringify(r2Object.customMetadata || {}))
+        }
+        
         if (!r2Object) {
           // R2にデータがない場合
           if (tag) {
@@ -153,86 +231,82 @@ export default {
         }
         
         // R2から取得したデータを返す
-        // R2オブジェクトがgzip圧縮されているかチェック
-        const contentEncoding = r2Object.httpMetadata?.contentEncoding
-        const isPreCompressed = contentEncoding === 'gzip'
+        // Stream処理で効率的に実装（専門家の推奨案）
+        const headers = new Headers()
+        headers.set('Content-Type', 'application/json')
         
-        // クライアントがgzipをサポートしているかチェック
-        const acceptEncoding = request.headers.get('Accept-Encoding') || ''
-        const supportsGzip = acceptEncoding.includes('gzip')
-        
-        console.log(`[Worker] R2 data found for ${r2Key}, pre-compressed: ${isPreCompressed}, client supports gzip: ${supportsGzip}`)
-        
-        const responseHeaders: Record<string, string> = {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
-          'CDN-Cache-Control': 'public, max-age=3600',
-          'X-Data-Source': 'r2-direct',
-          'X-Cache-Status': 'MISS',
-          'X-Pre-Compressed': isPreCompressed ? 'true' : 'false',
-          ...corsHeaders,
-          ...securityHeaders
-        }
-        
-        if (isPreCompressed && supportsGzip) {
-          // R2データが既に圧縮済みで、クライアントもgzipをサポートしている場合
-          // そのまま圧縮データを返す
-          const compressedData = await r2Object.arrayBuffer()
-          responseHeaders['Content-Encoding'] = 'gzip'
-          responseHeaders['Vary'] = 'Accept-Encoding'
-          responseHeaders['X-Original-Size'] = r2Object.size.toString()
-          console.log(`[Worker] Serving pre-compressed data: ${compressedData.byteLength} bytes`)
-          response = new Response(compressedData, {
-            status: 200,
-            headers: responseHeaders
-          })
-        } else if (isPreCompressed && !supportsGzip) {
-          // R2データが圧縮済みだが、クライアントがgzipをサポートしていない場合
-          // 解凍して返す（このケースは稀だが対応）
-          const compressedData = await r2Object.arrayBuffer()
-          console.log(`[Worker] Client doesn't support gzip, decompressing...`)
-          
-          // DecompressionStreamを使用して解凍
-          const decompressionStream = new DecompressionStream('gzip')
-          const writer = decompressionStream.writable.getWriter()
-          const reader = decompressionStream.readable.getReader()
-          
-          writer.write(new Uint8Array(compressedData))
-          writer.close()
-          
-          const chunks: Uint8Array[] = []
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-            chunks.push(value)
-          }
-          
-          const decompressedData = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0))
-          let offset = 0
-          for (const chunk of chunks) {
-            decompressedData.set(chunk, offset)
-            offset += chunk.length
-          }
-          
-          const decompressedString = new TextDecoder().decode(decompressedData)
-          
-          response = new Response(decompressedString, {
-            status: 200,
-            headers: responseHeaders
-          })
+        // ゲームジャンルの場合は一時的にキャッシュを無効化
+        if (genre === 'game') {
+          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+          headers.set('Pragma', 'no-cache')
+          headers.set('Expires', '0')
+          headers.set('X-Debug-Note', 'Game genre cache disabled temporarily')
         } else {
-          // R2データが非圧縮の場合（既存のデータとの互換性のため）
-          const data = await r2Object.text()
-          responseHeaders['X-Original-Size'] = data.length.toString()
-          console.log(`[Worker] Serving uncompressed data: ${data.length} characters`)
-          response = new Response(data, {
+          headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
+        }
+        
+        headers.set('CDN-Cache-Control', 'public, max-age=3600')
+        headers.set('X-Data-Source', 'r2-direct')
+        headers.set('X-Cache-Status', 'MISS')
+        
+        // CORSとセキュリティヘッダーを追加
+        Object.entries(corsHeaders).forEach(([key, value]) => {
+          headers.set(key, value)
+        })
+        Object.entries(securityHeaders).forEach(([key, value]) => {
+          headers.set(key, value)
+        })
+        
+        // R2オブジェクトのメタデータから圧縮情報を取得
+        const r2ContentEncoding = r2Object.httpMetadata?.contentEncoding
+        const r2ContentType = r2Object.httpMetadata?.contentType
+        console.log(`[Worker] R2 object httpMetadata.contentEncoding: ${r2ContentEncoding}`)
+        console.log(`[Worker] R2 object httpMetadata.contentType: ${r2ContentType}`)
+        
+        // R2のメタデータにContent-Encodingがある場合は優先
+        if (r2ContentEncoding) {
+          headers.set('Content-Encoding', r2ContentEncoding)
+          headers.set('Vary', 'Accept-Encoding')
+          // Cloudflareの変換を防ぐためno-transformを追加
+          headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400, no-transform')
+        }
+        
+        // ストリームを分割して最初のチャンクを検査
+        const [inspectStream, passthroughStream] = r2Object.body.tee()
+        
+        const reader = inspectStream.getReader()
+        const { value: firstChunk, done } = await reader.read()
+        reader.releaseLock()
+        
+        // gzipマジックナンバーチェック (0x1f, 0x8b)
+        const isGzipped = !done && firstChunk && firstChunk.length >= 2 && firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
+        
+        if (isGzipped) {
+          console.log(`[Worker] Serving pre-compressed gzipped data`)
+          
+          // 重要: encodeBody: "manual" を使用してCloudflareの自動圧縮を無効化
+          headers.set('Content-Encoding', 'gzip')
+          headers.set('Vary', 'Accept-Encoding')
+          // Cloudflareの変換を防ぐためno-transformを追加
+          headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400, no-transform')
+          
+          response = new Response(passthroughStream, {
             status: 200,
-            headers: responseHeaders
+            headers,
+            // CloudflareドキュメントのQ: 既に圧縮されたデータを配信するには
+            // A: encodeBody: "manual" を設定する必要がある
+            encodeBody: "manual"
+          } as ResponseInit)
+        } else {
+          // 非圧縮データの場合はそのまま返す（Cloudflareが自動圧縮する）
+          response = new Response(passthroughStream, {
+            status: 200,
+            headers
           })
         }
         
-        // キャッシュに保存
-        ctx.waitUntil(cache.put(cacheKey, response.clone()))
+        // キャッシュに保存（一時的に無効化してデバッグ）
+        // ctx.waitUntil(cache.put(cacheKey, response.clone()))
         
         return response
         

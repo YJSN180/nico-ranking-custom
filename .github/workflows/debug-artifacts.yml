@@ -1,0 +1,71 @@
+name: Debug Artifacts
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-test-artifacts:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        group: [1, 2]
+    
+    steps:
+    - name: Create test data
+      run: |
+        mkdir -p tmp
+        echo '[{"genre": "test${{ matrix.group }}", "data": {"24h": {"items": [], "popularTags": []}, "hour": {"items": [], "popularTags": []}}}]' > tmp/ranking-group-${{ matrix.group }}.json
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ranking-data-group-${{ matrix.group }}
+        path: ./tmp/ranking-group-${{ matrix.group }}.json
+
+  test-download:
+    needs: create-test-artifacts
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Create temp directory
+      run: mkdir -p ./tmp
+    
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./tmp
+        pattern: ranking-data-group-*
+    
+    - name: Show structure before move
+      run: |
+        echo "=== Directory structure before move ==="
+        find ./tmp -type f -name "*.json" | sort
+        echo ""
+        echo "=== Content of files ==="
+        for file in $(find ./tmp -type f -name "*.json"); do
+          echo "File: $file"
+          head -5 "$file"
+          echo ""
+        done
+    
+    - name: Move files
+      run: |
+        for file in $(find ./tmp -type f -name "*.json" | grep -v "^./tmp/[^/]*\\.json$"); do
+          echo "Moving: $file"
+          mv "$file" ./tmp/ 2>/dev/null || echo "Failed to move: $file"
+        done
+    
+    - name: Show structure after move
+      run: |
+        echo "=== Directory structure after move ==="
+        ls -la ./tmp/ranking-group-*.json 2>/dev/null || echo "No files found"
+        echo ""
+        echo "=== Content check ==="
+        for file in ./tmp/ranking-group-*.json; do
+          echo "File: $file"
+          head -5 "$file"
+          echo ""
+        done
