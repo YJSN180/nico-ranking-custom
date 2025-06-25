@@ -624,10 +624,10 @@ export default function ClientPage({
     
     // UserNGListをNGList形式に変換（useUserNGListフック内のconvertToNGListロジックを展開）
     const ngListForFilter: NGList = {
-      videoIds: ngList.videoIds,
-      videoTitles: ngList.videoTitles,
-      authorIds: ngList.authorIds,
-      authorNames: ngList.authorNames,
+      videoIds: ngList?.videoIds || [],
+      videoTitles: ngList?.videoTitles || { exact: [], partial: [] },
+      authorIds: ngList?.authorIds || [],
+      authorNames: ngList?.authorNames || { exact: [], partial: [] },
       derivedVideoIds: [] // クライアント側では派生IDは使用しない
     }
     

@@ -70,7 +70,7 @@ describe('ジャンル別ランキング500件表示', () => {
     }))
   }
 
-  it('ジャンル別ランキングは500件まで表示される', () => {
+  it('ジャンル別ランキングは1ページ100件表示される', () => {
     const mockData = createMockData(1000)
     
     render(
@@ -82,19 +82,19 @@ describe('ジャンル別ランキング500件表示', () => {
       />
     )
     
-    // 500件が表示されることを確認
+    // 1ページ目では100件が表示されることを確認
     const items = screen.getAllByText(/Test Video \d+/)
-    expect(items).toHaveLength(500)
+    expect(items).toHaveLength(100)
     
-    // 「もっと見る」ボタンが表示されないことを確認
-    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    // ページネーションが表示されることを確認（2ページ以上ある場合）
+    expect(screen.queryByText('次へ') || screen.queryByText('2')).toBeTruthy()
     
-    // 表示件数情報を確認
-    expect(screen.getByText(/500件表示/)).toBeInTheDocument()
+    // 表示件数情報を確認（500件制限の100件表示）
+    expect(screen.getByText(/100件表示/)).toBeInTheDocument()
   })
 
-  it('ジャンル別ランキングが500件未満の場合も正しく表示される', () => {
-    const mockData = createMockData(250)
+  it('ジャンル別ランキングが100件未満の場合も正しく表示される', () => {
+    const mockData = createMockData(50)
     
     render(
       <ClientPage 
@@ -105,14 +105,14 @@ describe('ジャンル別ランキング500件表示', () => {
       />
     )
     
-    // 250件すべてが表示されることを確認
+    // 50件すべてが表示されることを確認
     const items = screen.getAllByText(/Test Video \d+/)
-    expect(items).toHaveLength(250)
+    expect(items).toHaveLength(50)
     
-    // 「もっと見る」ボタンが表示されないことを確認
-    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    // ページネーションが表示されないことを確認
+    expect(screen.queryByText('次へ')).not.toBeInTheDocument()
     
     // 表示件数情報を確認
-    expect(screen.getByText(/250件表示/)).toBeInTheDocument()
+    expect(screen.getByText(/50件表示/)).toBeInTheDocument()
   })
 })

@@ -8,6 +8,17 @@ global.fetch = vi.fn()
 describe('Derived NG List API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Set up environment variables
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
+    process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
+    process.env.CLOUDFLARE_API_TOKEN = 'test-api-token'
+  })
+  
+  afterEach(() => {
+    // Clean up environment variables
+    delete process.env.CLOUDFLARE_ACCOUNT_ID
+    delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
+    delete process.env.CLOUDFLARE_API_TOKEN
   })
 
   describe('GET /api/admin/ng-list/derived', () => {
