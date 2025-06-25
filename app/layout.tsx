@@ -110,7 +110,7 @@ export default async function RootLayout({
           /* テーマのデフォルトスタイル - ちらつき防止 */
           [data-theme="dark"] body{color:#fff;background-color:#121212}
           [data-theme="darkblue"] body{color:#fff;background-color:#15202b}
-          .header-container{background:linear-gradient(135deg,#00A8E8 0%,#0077BE 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
+          .header-container{background:linear-gradient(135deg,#0066CC 0%,#004B99 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
           .selectors-container{min-height:200px}
           .ranking-video-link{color:#0066cc;text-decoration:none}
           .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}

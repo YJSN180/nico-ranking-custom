@@ -18,7 +18,7 @@
   --border-color: #e5e5e5;
   --link-color: #0066cc;
   --link-visited-color: #7b3ba2;  /* より明るく視認性の良い紫 */
-  --header-bg: linear-gradient(135deg, #00A8E8 0%, #0077BE 100%);
+  --header-bg: linear-gradient(135deg, #0066CC 0%, #004B99 100%);
   --header-text: #ffffff;
   
   /* 影 */
