@@ -192,10 +192,29 @@ export default {
           const compressedData = await r2Object.arrayBuffer()
           console.log(`[Worker] Client doesn't support gzip, decompressing...`)
           
-          // 統一圧縮ライブラリを使用して解凍
-          const { decompressAndParseJSON } = await import('../lib/unified-compression')
-          const decompressedResult = await decompressAndParseJSON(new Uint8Array(compressedData))
-          const decompressedString = JSON.stringify(decompressedResult.data)
+          // DecompressionStreamを使用して解凍
+          const decompressionStream = new DecompressionStream('gzip')
+          const writer = decompressionStream.writable.getWriter()
+          const reader = decompressionStream.readable.getReader()
+          
+          writer.write(new Uint8Array(compressedData))
+          writer.close()
+          
+          const chunks: Uint8Array[] = []
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+            chunks.push(value)
+          }
+          
+          const decompressedData = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0))
+          let offset = 0
+          for (const chunk of chunks) {
+            decompressedData.set(chunk, offset)
+            offset += chunk.length
+          }
+          
+          const decompressedString = new TextDecoder().decode(decompressedData)
           
           response = new Response(decompressedString, {
             status: 200,

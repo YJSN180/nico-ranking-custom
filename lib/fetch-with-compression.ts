@@ -43,25 +43,56 @@ export async function fetchWithCompression(
  */
 export async function parseCompressedJSON(response: Response): Promise<any> {
   const contentEncoding = response.headers.get('content-encoding')
+  const contentType = response.headers.get('content-type') || ''
   
-  // 圧縮されている場合
-  if (contentEncoding === 'gzip' || contentEncoding === 'deflate') {
-    const arrayBuffer = await response.arrayBuffer()
+  // デバッグ情報（本番環境のデバッグ時のみ有効化）
+  // if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+  //   console.log('[FetchCompression] Response headers:', {
+  //     contentEncoding,
+  //     contentType,
+  //     status: response.status
+  //   })
+  // }
+  
+  // まずarrayBufferとして読み込む（一度しか読めないため）
+  const arrayBuffer = await response.arrayBuffer()
+  const uint8Array = new Uint8Array(arrayBuffer)
+  
+  // 圧縮されている場合（gzip, deflate, br）
+  if (contentEncoding && ['gzip', 'deflate', 'br'].includes(contentEncoding)) {
+    // ブラウザが自動的に解凍している可能性を考慮
+    // まず通常のテキストとしてパースを試みる
+    const textContent = new TextDecoder().decode(uint8Array)
     try {
-      // 統一圧縮ライブラリでデコンプレッション
-      const { decompressAndParseJSON } = await import('@/lib/unified-compression')
-      const result = await decompressAndParseJSON(new Uint8Array(arrayBuffer))
-      return result.data
-    } catch (decompError) {
-      console.error('[FetchCompression] Decompression failed:', decompError)
-      // フォールバック: 通常のテキストデコード
-      const textContent = new TextDecoder().decode(arrayBuffer)
+      // 有効なJSONか確認
       return JSON.parse(textContent)
+    } catch (jsonError) {
+      // JSONパースに失敗した場合、圧縮データとして処理
+      // デバッグログ（開発環境のみ）
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.log('[FetchCompression] Direct JSON parse failed, attempting decompression')
+      }
+      try {
+        // 統一圧縮ライブラリでデコンプレッション
+        const { decompressAndParseJSON } = await import('@/lib/unified-compression')
+        const result = await decompressAndParseJSON(uint8Array)
+        return result.data
+      } catch (decompError) {
+        console.error('[FetchCompression] Decompression failed:', decompError)
+        throw new Error(`Failed to parse compressed response: ${decompError.message}`)
+      }
     }
   }
   
-  // 非圧縮の場合は通常のJSON解析
-  return response.json()
+  // 非圧縮の場合
+  const textContent = new TextDecoder().decode(uint8Array)
+  try {
+    return JSON.parse(textContent)
+  } catch (error) {
+    console.error('[FetchCompression] JSON parse error:', error)
+    console.error('[FetchCompression] Raw content preview:', textContent.substring(0, 200))
+    throw new Error(`Invalid JSON response: ${error.message}`)
+  }
 }
 
 /**

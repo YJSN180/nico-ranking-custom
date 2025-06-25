@@ -359,6 +359,9 @@ export default function ClientPage({
         }
       }
       
+      // レスポンスのパース
+      // 本番環境でWorkerがContent-Encoding: gzipを設定している場合、
+      // ブラウザが自動的に解凍するので通常のJSONパースでOK
       const data = await response.json()
       
       if (data.items && Array.isArray(data.items)) {

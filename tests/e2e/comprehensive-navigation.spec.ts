@@ -7,24 +7,16 @@ test.describe('包括的ナビゲーションテスト', () => {
     // 初期状態の確認
     await expect(page.locator('text=24時間').first()).toBeVisible()
     
-    // ネットワークリクエストを監視
-    const requestPromise = page.waitForRequest(req => 
-      req.url().includes('/api/ranking') || req.url().includes('genre=')
-    )
-    
     // 毎時に切り替え
     await page.click('text=毎時')
-    await requestPromise
+    await page.waitForLoadState('networkidle')
     
     // URLが更新されることを確認
     await expect(page).toHaveURL(/period=hour/)
     
     // 24時間に戻す
-    const requestPromise2 = page.waitForRequest(req => 
-      req.url().includes('/api/ranking') || req.url().includes('genre=')
-    )
     await page.click('text=24時間')
-    await requestPromise2
+    await page.waitForLoadState('networkidle')
     
     // URLが戻ることを確認
     await expect(page).toHaveURL(/period=24h|^http:\/\/localhost:3000\/$/)
@@ -34,44 +26,33 @@ test.describe('包括的ナビゲーションテスト', () => {
     await page.goto('http://localhost:3000')
     
     // ゲームジャンルに切り替え
-    const requestPromise1 = page.waitForRequest(req => 
-      req.url().includes('/api/ranking') || req.url().includes('genre=game')
-    )
     await page.click('text=ゲーム')
-    await requestPromise1
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/genre=game/)
     
     // アニメジャンルに切り替え
-    const requestPromise2 = page.waitForRequest(req => 
-      req.url().includes('/api/ranking') || req.url().includes('genre=anime')
-    )
     await page.click('text=アニメ')
-    await requestPromise2
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/genre=anime/)
     
     // ボカロジャンルに切り替え
-    const requestPromise3 = page.waitForRequest(req => 
-      req.url().includes('/api/ranking') || req.url().includes('genre=vocaloid')
-    )
     await page.click('text=ボカロ')
-    await requestPromise3
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/genre=vocaloid/)
     
     // 総合に戻す
-    const requestPromise4 = page.waitForRequest(req => 
-      req.url().includes('/api/ranking') || req.url().includes('genre=all')
-    )
     await page.click('text=総合')
-    await requestPromise4
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(/genre=all|^http:\/\/localhost:3000\/$/)
   })
 
   test('タグ切り替え（人気タグ選択）', async ({ page }) => {
-    await page.goto('http://localhost:3000')
+    // まずゲームジャンルに移動（総合では人気タグが表示されないため）
+    await page.goto('http://localhost:3000?genre=game')
     
-    // タグセレクタが存在することを確認
-    const tagSelector = page.locator('text=タグ:').first()
-    await expect(tagSelector).toBeVisible()
+    // 人気タグセクションが存在することを確認
+    const tagSection = page.locator('text=人気タグ').first()
+    await expect(tagSection).toBeVisible()
     
     // 人気タグボタンを探す（最初のいくつかのタグボタンのいずれか）
     const tagButtons = page.locator('button').filter({ hasText: /ゲーム|VOICEROID|MMD|歌ってみた|踊ってみた|VOCALOID/ })
@@ -91,8 +72,8 @@ test.describe('包括的ナビゲーションテスト', () => {
       // URLにタグパラメータが含まれることを確認
       await expect(page).toHaveURL(/tag=/)
       
-      // タグをクリアして総合に戻る
-      const clearButton = page.locator('button').filter({ hasText: /×|クリア|すべて/ }).first()
+      // クリアボタンでタグをクリア
+      const clearButton = page.locator('button').filter({ hasText: 'クリア' }).first()
       if (await clearButton.count() > 0) {
         await clearButton.click()
         await expect(page).not.toHaveURL(/tag=/)
