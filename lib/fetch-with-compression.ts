@@ -68,10 +68,10 @@ export async function parseCompressedJSON(response: Response): Promise<any> {
       return JSON.parse(textContent)
     } catch (jsonError) {
       // JSONパースに失敗した場合、圧縮データとして処理
-      // デバッグログ（開発環境のみ）
-      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-        console.log('[FetchCompression] Direct JSON parse failed, attempting decompression')
-      }
+      // デバッグログは本番環境では無効化
+      // if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      //   console.log('[FetchCompression] Direct JSON parse failed, attempting decompression')
+      // }
       try {
         // 統一圧縮ライブラリでデコンプレッション
         const { decompressAndParseJSON } = await import('@/lib/unified-compression')
