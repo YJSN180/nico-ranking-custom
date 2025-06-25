@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { getGroupIdForGenre, extractGenreData, getCachedResponse } from '@/workers/kv-optimization'
 import type { RankingGenre } from '@/types/ranking-config'
 
+// Mock unified-compression module
+vi.mock('@/lib/unified-compression', () => ({
+  decompressAndParseJSON: vi.fn()
+}))
+
 describe('KV Optimization', () => {
   describe('getGroupIdForGenre', () => {
     it('should return group 1 for genres: all, game, anime, vocaloid, voicesynthesis, entertainment, music, sing', () => {
@@ -57,10 +62,10 @@ describe('KV Optimization', () => {
         }
       }
 
-      // Mock compressed data
-      const encoder = new TextEncoder()
-      const jsonString = JSON.stringify(mockData)
-      const compressed = new Uint8Array(encoder.encode(jsonString)) // Simplified for test
+      const { decompressAndParseJSON } = await import('@/lib/unified-compression')
+      vi.mocked(decompressAndParseJSON).mockResolvedValue({ data: mockData })
+
+      const compressed = new Uint8Array([1, 2, 3]) // Dummy compressed data
 
       const result = await extractGenreData(compressed, 'game', '24h')
       
@@ -77,10 +82,12 @@ describe('KV Optimization', () => {
         metadata: { updatedAt: '2025-01-01T00:00:00Z' }
       }
 
-      const encoder = new TextEncoder()
-      const compressed = new Uint8Array(encoder.encode(JSON.stringify(mockData)))
+      const { decompressAndParseJSON } = await import('@/lib/unified-compression')
+      vi.mocked(decompressAndParseJSON).mockResolvedValue({ data: mockData })
 
-      const result = await extractGenreData(compressed, 'nonexistent', '24h')
+      const compressed = new Uint8Array([1, 2, 3]) // Dummy compressed data
+
+      const result = await extractGenreData(compressed, 'nonexistent' as any, '24h')
       
       expect(result).toEqual({
         items: [],

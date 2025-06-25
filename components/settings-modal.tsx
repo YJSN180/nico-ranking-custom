@@ -155,6 +155,11 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     // NGリストを保存（filterWithNGListによる自動再計算により即座に反映される）
     saveNGListDirectly(tempNGList)
     
+    // onApplyコールバックがあれば呼び出す
+    if (onApply) {
+      onApply()
+    }
+    
     // モーダルを閉じる
     onClose()
   }

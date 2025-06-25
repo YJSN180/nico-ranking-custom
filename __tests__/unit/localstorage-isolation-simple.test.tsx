@@ -31,7 +31,23 @@ vi.mock('@/hooks/use-user-preferences', () => ({
 
 vi.mock('@/hooks/use-user-ng-list', () => ({
   useUserNGList: () => ({
-    filterItems: (items: any) => items
+    ngList: {
+      videoIds: [],
+      videoTitles: {
+        exact: [],
+        partial: []
+      },
+      authorIds: [],
+      authorNames: {
+        exact: [],
+        partial: []
+      },
+      version: 1,
+      totalCount: 0,
+      updatedAt: new Date().toISOString()
+    },
+    filterItems: (items: any) => items,
+    saveNGListDirectly: vi.fn()
   })
 }))
 

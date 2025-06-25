@@ -26,9 +26,15 @@ vi.mock('@/hooks/use-user-ng-list', () => ({
   useUserNGList: () => ({ 
     ngList: {
       videoIds: [],
-      videoTitles: [],
+      videoTitles: {
+        exact: [],
+        partial: []
+      },
       authorIds: [],
-      authorNames: [],
+      authorNames: {
+        exact: [],
+        partial: []
+      },
       derivedVideoIds: []
     },
     filterItems: (items: RankingItem[]) => items, // No NG filtering 
@@ -70,10 +76,10 @@ describe('Duplicate Rank Bug', () => {
     // Extract ranks from the rendered items
     const ranks: number[] = []
     rankingItems.forEach(item => {
-      // Find the rank number in the item's text content
-      const rankMatch = item.textContent?.match(/^\d+/)
-      if (rankMatch) {
-        ranks.push(parseInt(rankMatch[0]))
+      // Find the rank element specifically (not just any number in text content)
+      const rankElement = item.querySelector('.ranking-item-responsive__rank')
+      if (rankElement && rankElement.textContent) {
+        ranks.push(parseInt(rankElement.textContent))
       }
     })
     
@@ -118,10 +124,10 @@ describe('Duplicate Rank Bug', () => {
     // Extract ranks from the rendered items
     const ranks: number[] = []
     rankingItems.forEach(item => {
-      // Find the rank number in the item's text content
-      const rankMatch = item.textContent?.match(/^\d+/)
-      if (rankMatch) {
-        ranks.push(parseInt(rankMatch[0]))
+      // Find the rank element specifically (not just any number in text content)
+      const rankElement = item.querySelector('.ranking-item-responsive__rank')
+      if (rankElement && rankElement.textContent) {
+        ranks.push(parseInt(rankElement.textContent))
       }
     })
     
