@@ -172,9 +172,17 @@ export async function middleware(request: NextRequest) {
   
   // APIルートの最適化
   if (request.nextUrl.pathname.startsWith('/api/ranking')) {
-    response.headers.set('Cache-Control', getCacheHeaders('ranking'))
-    // Cloudflare用のキャッシュヘッダー
-    response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
+    // 開発環境で動的キャッシュWorkerを使用している場合は、Workerのヘッダーを優先
+    const existingCacheControl = response.headers.get('Cache-Control')
+    const hasWorkerHeaders = response.headers.get('X-Worker-URL') || response.headers.get('X-Data-Source')
+    
+    if (!existingCacheControl || !hasWorkerHeaders) {
+      // WorkerのヘッダーがなければデフォルトのCache-Controlを設定
+      response.headers.set('Cache-Control', getCacheHeaders('ranking'))
+      // Cloudflare用のキャッシュヘッダー
+      response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
+    }
+    // WorkerのヘッダーがあればそのままKeep（何もしない）
   }
   
   // メインページのキャッシュ（ISRの代替として）

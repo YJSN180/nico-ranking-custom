@@ -24,12 +24,30 @@ const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on'
 }
 
-// CORSヘッダー定義
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400'
+// 動的CORSヘッダー生成
+function getCorsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('Origin')
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://nico-rank.com',
+    'https://nico-ranking-custom-yjsns-projects.vercel.app'
+  ]
+  
+  // Vercelプレビューデプロイメントのパターン
+  const vercelPreviewPattern = /^https:\/\/nico-ranking-[a-z0-9-]+\.vercel\.app$/
+  
+  let allowOrigin = '*' // デフォルト（公開API向け）
+  
+  if (origin && (allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin))) {
+    allowOrigin = origin
+  }
+  
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
+    'Access-Control-Max-Age': '86400'
+  }
 }
 
 /**
@@ -103,7 +121,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: corsHeaders
+        headers: getCorsHeaders(request)
       })
     }
     
@@ -121,7 +139,7 @@ export default {
               'Content-Type': 'application/json',
               'Cache-Control': cacheControl,
               'ETag': metadataObject.httpEtag || `"${metadataObject.etag}"`,
-              ...corsHeaders,
+              ...getCorsHeaders(request),
               ...securityHeaders
             }
           })
@@ -133,7 +151,7 @@ export default {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          ...corsHeaders,
+          ...getCorsHeaders(request),
           ...securityHeaders
         }
       })
@@ -181,7 +199,7 @@ export default {
                 'ETag': cachedETag,
                 'Cache-Control': cacheControl,
                 'CDN-Cache-Control': cdnCacheControl,
-                ...corsHeaders,
+                ...getCorsHeaders(request),
                 ...securityHeaders
               }
             })
@@ -215,7 +233,7 @@ export default {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Data-Source': 'r2-tag-not-found',
-                ...corsHeaders,
+                ...getCorsHeaders(request),
                 ...securityHeaders
               }
             })
@@ -239,7 +257,7 @@ export default {
               'ETag': etag,
               'Cache-Control': cacheControl,
               'CDN-Cache-Control': cdnCacheControl,
-              ...corsHeaders,
+              ...getCorsHeaders(request),
               ...securityHeaders
             }
           })
@@ -269,7 +287,7 @@ export default {
           'ETag': etag,
           'X-Data-Source': 'r2-direct',
           'X-Cache-Status': 'MISS',
-          ...corsHeaders,
+          ...getCorsHeaders(request),
           ...securityHeaders
         }
         
@@ -341,7 +359,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     })
     
     // CORSヘッダー追加
-    Object.entries(corsHeaders).forEach(([key, value]) => {
+    Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
       responseHeaders.set(key, value)
     })
     
@@ -356,7 +374,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
       status: 502,
       headers: {
         'Content-Type': 'text/plain',
-        ...corsHeaders
+        ...getCorsHeaders(request)
       }
     })
   }

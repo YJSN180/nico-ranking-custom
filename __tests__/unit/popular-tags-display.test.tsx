@@ -3,20 +3,31 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import ClientPage from '@/app/client-page'
 
-// Request throttle のモック
-vi.mock('@/lib/request-throttle', () => ({
-  requestThrottle: {
-    throttle: vi.fn().mockResolvedValue(undefined)
+// Request throttle のモック（内部のMapを含む完全なモック）
+vi.mock('@/lib/request-throttle', () => {
+  const throttleMap = new Map()
+  return {
+    requestThrottle: {
+      throttleMap,
+      throttle: vi.fn().mockResolvedValue(undefined),
+      cleanup: vi.fn()
+    }
   }
-}))
+})
 
-// Ranking cache のモック
-vi.mock('@/lib/ranking-cache', () => ({
-  rankingCache: {
-    get: vi.fn().mockReturnValue(null),
-    set: vi.fn()
+// Ranking cache のモック（内部のMapを含む完全なモック）
+vi.mock('@/lib/ranking-cache', () => {
+  const cacheMap = new Map()
+  return {
+    rankingCache: {
+      cache: cacheMap,
+      get: vi.fn().mockReturnValue(null),
+      set: vi.fn(),
+      clear: vi.fn(),
+      getStats: vi.fn().mockReturnValue({ entries: 0, totalSize: 0, totalSizeMB: '0.00' })
+    }
   }
-}))
+})
 
 // Next.js のモック
 vi.mock('next/navigation', () => ({
@@ -31,7 +42,7 @@ vi.mock('next/navigation', () => ({
 // popular-tags モジュールのモック
 vi.mock('@/lib/popular-tags', () => ({
   getPopularTags: vi.fn().mockImplementation(async (genre) => {
-    if (genre === 'all') return ['ゲーム', 'エンターテイメント', 'VOICEROID実況プレイ'] // すべてジャンルの集計タグ
+    if (genre === 'all') return [] // allジャンルでは空配列を返す（実装に合わせて修正）
     if (genre === 'game') return ['ゲーム', '実況プレイ動画', 'VOICEROID実況プレイ']
     if (genre === 'entertainment') return ['エンターテイメント', '踊ってみた', '歌ってみた']
     if (genre === 'other') return ['その他', 'MMD', 'MikuMikuDance']
@@ -65,6 +76,21 @@ vi.mock('@/hooks/use-video-tags', () => ({
     items: data,
     isLoading: false
   })
+}))
+
+// api-fallbackのモック
+vi.mock('@/lib/api-fallback', () => ({
+  APIFallback: {
+    fetchWithFallback: vi.fn((params, signal) => {
+      const url = `/api/ranking?${params.toString()}`
+      return (global.fetch as any)(url, { signal })
+    }),
+    getStatus: vi.fn().mockReturnValue({
+      usingEdge: false,
+      failureCount: 0,
+      lastFailureTime: 0
+    })
+  }
 }))
 
 // 他のフックのモック
@@ -111,7 +137,7 @@ describe('人気タグの表示問題', () => {
     
     // デフォルトのfetchレスポンス
     ;(global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/edge/ranking')) {
+      if (url.includes('/api/ranking')) {
         const urlObj = new URL(url, 'http://localhost')
         const genre = urlObj.searchParams.get('genre') || 'all'
         
@@ -121,7 +147,7 @@ describe('人気タグの表示問題', () => {
             ok: true,
             json: async () => ({
               items: [{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }],
-              popularTags: ['ゲーム', 'エンターテイメント', 'VOICEROID実況プレイ'] // allジャンルでも集計タグを返す
+              popularTags: [] // allジャンルでは空配列を返す（実装に合わせて修正）
             })
           })
         }
@@ -154,7 +180,24 @@ describe('人気タグの表示問題', () => {
           json: async () => ({})
         })
       }
-      return Promise.reject(new Error('Not found'))
+      // popular-tags APIの場合
+      if (url.includes('/api/popular-tags')) {
+        const urlObj = new URL(url, 'http://localhost')
+        const genre = urlObj.searchParams.get('genre') || 'all'
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            tags: genre === 'game' ? ['ゲーム', '実況プレイ動画', 'VOICEROID実況プレイ'] :
+                  genre === 'entertainment' ? ['エンターテイメント', '踊ってみた', '歌ってみた'] :
+                  genre === 'other' ? ['その他', 'MMD', 'MikuMikuDance'] : []
+          })
+        })
+      }
+      // その他のURLはデフォルトで空のレスポンスを返す
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({})
+      })
     })
   })
 
@@ -211,7 +254,7 @@ describe('人気タグの表示問題', () => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0] && call[0].includes('/api/ranking') && 
         call[0].includes('genre=entertainment') &&
         call[0].includes('period=24h')
       )
@@ -258,7 +301,7 @@ describe('人気タグの表示問題', () => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0] && call[0].includes('/api/ranking') && 
         call[0].includes('genre=all') &&
         call[0].includes('period=24h')
       )
@@ -327,7 +370,7 @@ describe('人気タグの表示問題', () => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0] && call[0].includes('/api/ranking') && 
         call[0].includes('genre=game') &&
         call[0].includes('period=hour')
       )
@@ -348,7 +391,7 @@ describe('人気タグの表示問題', () => {
   it('配列形式のAPIレスポンスでも人気タグが維持される', async () => {
     // 配列形式のレスポンスを返すようモック
     ;(global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/edge/ranking')) {
+      if (url.includes('/api/ranking')) {
         return Promise.resolve({
           ok: true,
           json: async () => [
@@ -375,7 +418,24 @@ describe('人気タグの表示問題', () => {
           json: async () => ({})
         })
       }
-      return Promise.reject(new Error('Not found'))
+      // popular-tags APIの場合
+      if (url.includes('/api/popular-tags')) {
+        const urlObj = new URL(url, 'http://localhost')
+        const genre = urlObj.searchParams.get('genre') || 'all'
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            tags: genre === 'game' ? ['ゲーム', '実況プレイ動画', 'VOICEROID実況プレイ'] :
+                  genre === 'entertainment' ? ['エンターテイメント', '踊ってみた', '歌ってみた'] :
+                  genre === 'other' ? ['その他', 'MMD', 'MikuMikuDance'] : []
+          })
+        })
+      }
+      // その他のURLはデフォルトで空のレスポンスを返す
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({})
+      })
     })
 
     const user = userEvent.setup()
