@@ -5,86 +5,68 @@ test.describe('包括的ナビゲーションテスト（修正版）', () => {
     await page.goto('http://localhost:3000')
     await page.waitForLoadState('networkidle')
     
-    // 期間切り替えボタンの存在確認
-    const periodButtons = page.locator('button').filter({ hasText: /毎時|24時間|daily|hour/ })
-    const hasValidButtons = await periodButtons.count() > 0
+    // セレクター要素の確認（実装に基づく正確なセレクター）
+    const periodSelector = page.locator('.selectors-container h2:has-text("期間")')
+    await expect(periodSelector).toBeVisible({ timeout: 10000 })
     
-    if (!hasValidButtons) {
-      console.log('Period buttons not found - checking alternative selectors')
-      // 代替セレクターで確認
-      const altButtons = page.locator('[data-testid*="period"], .period-selector, .time-selector')
-      expect(await altButtons.count()).toBeGreaterThan(0)
-      return
+    // 期間切り替えボタンの存在確認（実装準拠）
+    const periodContainer = page.locator('.selectors-container h2:has-text("期間") + div')
+    const periodButtons = periodContainer.locator('button')
+    const buttonCount = await periodButtons.count()
+    
+    expect(buttonCount).toBeGreaterThan(0)
+    
+    // 各ボタンをクリックしてみる（存在する場合）
+    for (let i = 0; i < Math.min(buttonCount, 2); i++) {
+      const button = periodButtons.nth(i)
+      const buttonText = await button.textContent()
+      console.log(`Period button ${i}: ${buttonText}`)
+      
+      await button.click()
+      await page.waitForTimeout(1000) // 短い待機時間
+      
+      // ランキングアイテムが表示されていることを確認
+      const items = page.locator('[data-testid="ranking-item"]')
+      await expect(items.first()).toBeVisible({ timeout: 5000 })
     }
-    
-    // 毎時ボタンをクリック（存在する場合）
-    const hourButton = periodButtons.filter({ hasText: /毎時|hour/ }).first()
-    if (await hourButton.count() > 0) {
-      await hourButton.click()
-      // URL変更またはコンテンツ変更を待つ（タイムアウトを短縮）
-      await Promise.race([
-        page.waitForURL(/period=hour/, { timeout: 5000 }).catch(() => {}),
-        page.waitForSelector('[data-testid="ranking-item"]', { timeout: 5000 }).catch(() => {})
-      ])
-    }
-    
-    // 24時間ボタンをクリック（存在する場合）
-    const dailyButton = periodButtons.filter({ hasText: /24時間|daily/ }).first()
-    if (await dailyButton.count() > 0) {
-      await dailyButton.click()
-      await Promise.race([
-        page.waitForURL(/period=24h|^http:\/\/localhost:3000\/$/, { timeout: 5000 }).catch(() => {}),
-        page.waitForSelector('[data-testid="ranking-item"]', { timeout: 5000 }).catch(() => {})
-      ])
-    }
-    
-    // 基本的な機能が動作していることを確認
-    expect(hasValidButtons).toBeTruthy()
   })
 
   test('ジャンル切り替え（総合→ゲーム→アニメ→ボカロ）', async ({ page }) => {
     await page.goto('http://localhost:3000')
     await page.waitForLoadState('networkidle')
     
-    // 基本コンテンツの読み込み確認
-    const mainContent = page.locator('main, [role="main"], .main-content')
-    await expect(mainContent).toBeVisible({ timeout: 10000 })
+    // ジャンルセレクター要素の確認（実装に基づく正確なセレクター）
+    const genreSelector = page.locator('.selectors-container h2:has-text("ジャンル")')
+    await expect(genreSelector).toBeVisible({ timeout: 10000 })
     
-    // ジャンルボタンの存在確認
-    const genreButtons = page.locator('button').filter({ hasText: /ゲーム|アニメ|ボカロ|総合|game|anime|vocaloid|all/ })
-    const hasGenreButtons = await genreButtons.count() > 0
+    // ジャンル切り替えボタンの存在確認（実装準拠）
+    const genreContainer = page.locator('.selectors-container h2:has-text("ジャンル") + div')
+    const genreButtons = genreContainer.locator('button')
+    const buttonCount = await genreButtons.count()
     
-    if (!hasGenreButtons) {
-      // 代替セレクターで確認
-      const altGenreButtons = page.locator('[data-testid*="genre"], .genre-selector, .category-selector')
-      expect(await altGenreButtons.count()).toBeGreaterThan(0)
-      return
-    }
+    expect(buttonCount).toBeGreaterThan(0)
     
-    // ゲームジャンルボタンをクリック（存在する場合）
-    const gameButton = genreButtons.filter({ hasText: /ゲーム|game/ }).first()
-    if (await gameButton.count() > 0) {
-      await gameButton.click()
-      // コンテンツ変更を短いタイムアウトで待つ
+    // 複数のジャンルボタンをクリックしてテスト
+    for (let i = 0; i < Math.min(buttonCount, 4); i++) {
+      const button = genreButtons.nth(i)
+      const buttonText = await button.textContent()
+      console.log(`Genre button ${i}: ${buttonText}`)
+      
+      await button.click()
       await page.waitForTimeout(1000)
+      
+      // ランキングアイテムが表示されていることを確認
+      const items = page.locator('[data-testid="ranking-item"]')
+      await expect(items.first()).toBeVisible({ timeout: 5000 })
+      
+      // ジャンルによってタグセレクターが表示されることを確認（総合以外）
+      if (buttonText && !buttonText.includes('総合') && !buttonText.includes('all')) {
+        const tagSelector = page.locator('h2:has-text("人気タグ")')
+        // タグセレクターは存在する場合とない場合がある
+        const hasTagSelector = await tagSelector.count() > 0
+        console.log(`Tag selector visible for ${buttonText}: ${hasTagSelector}`)
+      }
     }
-    
-    // アニメジャンルボタンをクリック（存在する場合）
-    const animeButton = genreButtons.filter({ hasText: /アニメ|anime/ }).first()
-    if (await animeButton.count() > 0) {
-      await animeButton.click()
-      await page.waitForTimeout(1000)
-    }
-    
-    // ボカロジャンルボタンをクリック（存在する場合）
-    const vocaloidButton = genreButtons.filter({ hasText: /ボカロ|vocaloid/ }).first()
-    if (await vocaloidButton.count() > 0) {
-      await vocaloidButton.click()
-      await page.waitForTimeout(1000)
-    }
-    
-    // 基本的な機能が動作していることを確認
-    expect(hasGenreButtons).toBeTruthy()
   })
 
   test('タグ切り替え（人気タグ選択）', async ({ page }) => {

@@ -4,25 +4,27 @@ test.describe('リアルタイム更新機能', () => {
   test('動画の統計情報がリアルタイムで更新される', async ({ page }) => {
     // ページを開く
     await page.goto('/')
+    await page.waitForLoadState('networkidle')
 
-    // 基本的なページ構造が表示されることを確認（実際のAPIデータを使用）
-    const mainContent = page.locator('main, [role="main"], .main-content')
-    await expect(mainContent).toBeVisible({ timeout: 10000 })
+    // ヘッダーが表示されることを確認
+    const header = page.locator('header[role="banner"], header.header-container')
+    await expect(header).toBeVisible({ timeout: 10000 })
 
-    // 動画リストが表示されることを確認
-    const videoList = page.locator('[data-testid="video-list"], .video-list, article')
-    await expect(videoList.first()).toBeVisible({ timeout: 10000 })
+    // 動画リストアイテムが表示されることを確認（実装の正確なセレクター）
+    const rankingItems = page.locator('[data-testid="ranking-item"], li.ranking-item-responsive')
+    await expect(rankingItems.first()).toBeVisible({ timeout: 10000 })
 
-    // 動画タイトルが表示されることを確認（具体的なタイトルではなく存在確認）
-    const videoTitles = page.locator('h3, h2, .video-title, [data-testid="video-title"]')
+    // 動画タイトルが表示されることを確認
+    const videoTitles = page.locator('[data-testid="video-title"], a.ranking-item-responsive__title')
     await expect(videoTitles.first()).toBeVisible({ timeout: 10000 })
 
-    // 統計情報の表示を確認（より柔軟に）
-    const hasStats = await page.locator('text=/[▶️👀].*[💬コメント].*[❤️♡].*[📁マイリスト]/').count() > 0 ||
-                    await page.locator('text=/再生.*コメント.*マイリスト/').count() > 0 ||
-                    await page.locator('[data-testid="video-stats"]').count() > 0
+    // 統計情報が表示されることを確認
+    const videoStats = page.locator('[data-testid="video-stats"], .ranking-item-responsive__stats')
+    await expect(videoStats.first()).toBeVisible({ timeout: 10000 })
 
-    expect(hasStats).toBeTruthy()
+    // 基本的なランキングが機能していることを確認
+    const itemsCount = await rankingItems.count()
+    expect(itemsCount).toBeGreaterThan(0)
   })
 
   test('更新中インジケーターが表示される', async ({ page }) => {
