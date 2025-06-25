@@ -1,5 +1,5 @@
 /**
- * 強化版R2 API Gatewayのユニットテスト
+ * 動的キャッシュ API Gatewayのユニットテスト
  * 動的TTLとETag機能を検証
  */
 

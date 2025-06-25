@@ -1,0 +1,22 @@
+# ステージング環境用Worker設定
+name = "nico-ranking-dynamic-cache-staging"
+main = "workers/api-gateway-dynamic-cache.ts"
+compatibility_date = "2024-10-01"
+
+# ステージング環境の変数
+[vars]
+ENVIRONMENT = "staging"
+DEBUG_MODE = "false"
+
+# 本番と同じR2バケットを使用（読み取り専用で安全）
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+[placement]
+mode = "smart"
+
+# ステージング用のカスタムドメイン（オプション）
+# routes = [
+#   { pattern = "staging-api.nico-rank.com/*", zone_name = "nico-rank.com" }
+# ]

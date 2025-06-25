@@ -1,5 +1,5 @@
-name = "nico-ranking-api-gateway-r2-v2"
-main = "workers/api-gateway-r2-v2.ts"
+name = "nico-ranking-dynamic-cache-20250625"
+main = "workers/api-gateway-dynamic-cache.ts"
 compatibility_date = "2024-10-01"
 
 [env.production]
