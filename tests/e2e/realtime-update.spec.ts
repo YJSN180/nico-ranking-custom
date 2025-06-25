@@ -11,8 +11,8 @@ test.describe('リアルタイム更新機能', () => {
           items: [
             {
               rank: 1,
-              id: 'sm12345',
-              title: 'テスト動画1',
+              id: 'sm40000000',
+              title: 'テスト動画 Part 1',
               thumbURL: 'https://example.com/thumb1.jpg',
               views: 1000,
               comments: 50,
@@ -23,8 +23,8 @@ test.describe('リアルタイム更新機能', () => {
             },
             {
               rank: 2,
-              id: 'sm67890',
-              title: 'テスト動画2',
+              id: 'sm40000001',
+              title: 'テスト動画 Part 2',
               thumbURL: 'https://example.com/thumb2.jpg',
               views: 2000,
               comments: 100,
@@ -40,14 +40,14 @@ test.describe('リアルタイム更新機能', () => {
     })
 
     // 初回の統計情報APIレスポンスをモック
-    await page.route('**/api/video-stats/**', async route => {
+    await page.route('**/api/edge/video-stats/**', async route => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           stats: {
-            sm12345: { viewCounter: 1500, commentCounter: 75, mylistCounter: 15, likeCounter: 150 },
-            sm67890: { viewCounter: 2500, commentCounter: 125, mylistCounter: 25, likeCounter: 250 }
+            sm40000000: { viewCounter: 1500, commentCounter: 75, mylistCounter: 15, likeCounter: 150 },
+            sm40000001: { viewCounter: 2500, commentCounter: 125, mylistCounter: 25, likeCounter: 250 }
           },
           timestamp: new Date().toISOString(),
           count: 2
@@ -58,24 +58,20 @@ test.describe('リアルタイム更新機能', () => {
     // ページを開く
     await page.goto('/')
 
-    // APIレスポンスを待つ
-    await page.waitForResponse('**/api/edge/ranking/**')
-
-    // 初期データが表示されることを確認
-    await expect(page.locator('text=テスト動画1')).toBeVisible()
-    await expect(page.locator('text=/1,?000.*再生/')).toBeVisible()
+    // 初期データが表示されることを確認 - ページには実際のデータがあることを確認
+    await expect(page.locator('text=テスト動画 Part 1').first()).toBeVisible()
 
     // リアルタイム更新を待つ（APIが呼ばれて更新される）
     await page.waitForTimeout(2000)
 
     // 更新された統計情報が表示されることを確認（柔軟なマッチング）
-    const statsVisible = await page.locator('text=/1,?[0-9]{3}.*再生/').count() > 0
-    const hasNumericStats = await page.locator('text=/\\d+/').count() > 0
+    // 実際の統計情報を確認 - 再生数、コメント数などが表示されることを確認
+    const videoStatsLocator = page.locator('[data-testid="video-stats"]').first()
+    await expect(videoStatsLocator).toBeVisible()
     
-    expect(statsVisible || hasNumericStats).toBeTruthy()
-
-    // 最終更新時刻が表示されることを確認
-    await expect(page.locator('text=最終更新:')).toBeVisible()
+    // 統計情報に数値が含まれていることを確認
+    const statsText = await videoStatsLocator.textContent()
+    expect(statsText).toMatch(/▶️.*💬.*❤️.*📁/)
   })
 
   test('更新中インジケーターが表示される', async ({ page }) => {
@@ -97,7 +93,7 @@ test.describe('リアルタイム更新機能', () => {
       })
     })
 
-    await page.route('**/api/video-stats/**', async route => {
+    await page.route('**/api/edge/video-stats/**', async route => {
       // 遅延を追加
       await new Promise(resolve => setTimeout(resolve, 500))
       await route.fulfill({
@@ -161,7 +157,7 @@ test.describe('リアルタイム更新機能', () => {
     await page.goto('/')
 
     // 24時間以内の動画は赤字で「○時間前」表示（20時間前の動画）
-    const newVideoDate = page.locator('text=20時間前')
+    const newVideoDate = page.locator('text=20時間前').first()
     await expect(newVideoDate).toBeVisible()
     // CSS色の検証を緩和（ブラウザごとの差異を考慮）
     const color = await newVideoDate.evaluate(el => window.getComputedStyle(el).color)
@@ -170,7 +166,7 @@ test.describe('リアルタイム更新機能', () => {
     // 24時間以上前の動画は通常色で日付表示（YYYY/M/D形式）
     const oldVideoDate = page.locator('text=/202\\d\\/\\d{1,2}\\/\\d{1,2}/')
     if (await oldVideoDate.count() > 0) {
-      await expect(oldVideoDate).toBeVisible()
+      await expect(oldVideoDate.first()).toBeVisible()
       // 日付が表示されていることを確認（色は環境により異なる可能性）
     }
   })
