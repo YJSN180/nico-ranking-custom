@@ -134,16 +134,36 @@ export default {
         env.MAINTENANCE_FLAGS.get("active_worker") // "blue" or "green"
       ]);
       
+      // リクエスト情報をログ出力（デバッグ用）
+      const xForwardedFor = request.headers.get('X-Forwarded-For');
+      const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
+      const userAgent = request.headers.get('User-Agent') || '';
+      
+      console.log(`[Request] Path: ${url.pathname}, X-Forwarded-For: ${xForwardedFor}, CF-Connecting-IP: ${cfConnectingIP}, User-Agent: ${userAgent.substring(0, 50)}...`);
+      
       // メンテナンスモード処理
       if (maintenanceMode === "true") {
         // Worker認証ヘッダーをチェック（Vercel SSR用）
         const workerAuthHeader = request.headers.get('X-Worker-Auth');
+        const ssrHeader = request.headers.get('X-SSR-Request');
         const expectedAuthKey = env.WORKER_AUTH_KEY;
         
-        // 認証ヘッダーが正しい場合はメンテナンスモードをバイパス
-        if (workerAuthHeader && expectedAuthKey && workerAuthHeader === expectedAuthKey) {
-          console.log(`[Maintenance] Access allowed via Worker Auth`);
+        // 認証ヘッダーまたはSSRヘッダーが正しい場合はメンテナンスモードをバイパス
+        if ((workerAuthHeader && expectedAuthKey && workerAuthHeader === expectedAuthKey) || ssrHeader === 'true') {
+          console.log(`[Maintenance] Access allowed via Worker Auth or SSR: auth=${!!workerAuthHeader}, ssr=${!!ssrHeader}`);
         } else {
+          console.log(`[Maintenance] Auth check failed - Header: ${workerAuthHeader ? 'present' : 'missing'}, Expected: ${expectedAuthKey ? 'configured' : 'not configured'}`);
+          if (workerAuthHeader && expectedAuthKey) {
+            console.log(`[Maintenance] Auth mismatch - Header length: ${workerAuthHeader.length}, Expected length: ${expectedAuthKey.length}`);
+            // デバッグ用：最初の10文字と最後の10文字を表示
+            const headerPreview = workerAuthHeader.length > 20 
+              ? `${workerAuthHeader.substring(0, 10)}...${workerAuthHeader.substring(workerAuthHeader.length - 10)}`
+              : workerAuthHeader;
+            const expectedPreview = expectedAuthKey.length > 20
+              ? `${expectedAuthKey.substring(0, 10)}...${expectedAuthKey.substring(expectedAuthKey.length - 10)}`
+              : expectedAuthKey;
+            console.log(`[Maintenance] Header preview: "${headerPreview}", Expected preview: "${expectedPreview}"`);
+          }
           // IPの取得優先順位：X-Forwarded-For（Vercel経由） > CF-Connecting-IP（直接アクセス）
           const xForwardedFor = request.headers.get('X-Forwarded-For');
           const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
@@ -168,8 +188,9 @@ export default {
       }
       
       // アクティブなWorkerを決定（デフォルトは "blue"）
+      console.log(`[Router] Raw activeWorker from KV: "${activeWorker}" (type: ${typeof activeWorker})`);
       const targetWorker = activeWorker === "green" ? "green" : "blue";
-      console.log(`[Router] Active worker: ${targetWorker}`);
+      console.log(`[Router] Active worker resolved to: ${targetWorker}`);
       
       // デバッグエンドポイント
       if (url.pathname === '/api/debug') {
@@ -183,6 +204,8 @@ export default {
           time: new Date().toISOString(),
           worker: 'api-gateway-smart-router',
           activeWorker: targetWorker,
+          activeWorkerRaw: activeWorker,
+          activeWorkerType: typeof activeWorker,
           maintenance: {
             mode: maintenanceMode || 'not_set',
             client_ip: clientIP || 'unknown',
@@ -198,33 +221,38 @@ export default {
         });
       }
       
-      // 選択されたWorkerへリクエストをルーティング
-      if (targetWorker === "green" && env.WORKER_GREEN) {
-        // 新版Worker（動的TTL対応）へルーティング
-        const response = await env.WORKER_GREEN.fetch(request.clone());
-        const newResponse = new Response(response.body, response);
-        newResponse.headers.set('X-Worker-Version', 'green-dynamic-ttl');
-        return newResponse;
-      } else if (env.WORKER_BLUE) {
-        // 現行版Workerへルーティング
-        const response = await env.WORKER_BLUE.fetch(request.clone());
-        const newResponse = new Response(response.body, response);
-        newResponse.headers.set('X-Worker-Version', 'blue-stable');
-        return newResponse;
-      } else {
-        // Service Bindingが設定されていない場合、エラーを返す（循環参照を防止）
-        console.error('[Router] No service bindings configured');
-        return new Response('Service temporarily unavailable', { 
-          status: 503,
-          headers: {
-            'Content-Type': 'text/plain',
-            'Retry-After': '60'
-          }
-        });
+      // /api/ パスは選択されたWorkerへリクエストをルーティング
+      if (url.pathname.startsWith('/api/')) {
+        if (targetWorker === "green" && env.WORKER_GREEN) {
+          // 新版Worker（動的TTL対応）へルーティング
+          const response = await env.WORKER_GREEN.fetch(request.clone());
+          const newResponse = new Response(response.body, response);
+          newResponse.headers.set('X-Worker-Version', 'green-dynamic-ttl');
+          return newResponse;
+        } else if (env.WORKER_BLUE) {
+          // 現行版Workerへルーティング
+          const response = await env.WORKER_BLUE.fetch(request.clone());
+          const newResponse = new Response(response.body, response);
+          newResponse.headers.set('X-Worker-Version', 'blue-stable');
+          return newResponse;
+        } else {
+          // Service Bindingが設定されていない場合、エラーを返す（循環参照を防止）
+          console.error('[Router] No service bindings configured');
+          return new Response('Service temporarily unavailable', { 
+            status: 503,
+            headers: {
+              'Content-Type': 'text/plain',
+              'Retry-After': '60'
+            }
+          });
+        }
       }
       
+      // その他のパス（/, /about など）はVercelへプロキシ
+      return proxyToVercel(request, env);
+      
     } catch (error) {
-      console.error('[Router] Error:', error);
+      console.error('[Router] Error:', error instanceof Error ? error.stack : String(error));
       // エラー時は503を返す（循環参照を防止）
       return new Response('Service temporarily unavailable', { 
         status: 503,

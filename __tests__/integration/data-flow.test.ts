@@ -53,18 +53,14 @@ describe('Data Flow Integration', () => {
     const { GET } = await import('@/app/api/ranking/route')
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response1 = await GET(request)
-    const data1 = await response1.json()
     
-    expect(data1).toBeDefined()
-    expect(data1.items).toBeDefined()
-    expect(data1.items).toHaveLength(100)
-    expect(data1.items[0]).toMatchObject({
-      rank: 1,
-      id: 'sm45026928',
-      title: 'Test Video 1',
-      views: 15672
-    })
-    expect(data1.popularTags).toEqual([])
+    // The ranking API now redirects to Cloudflare Workers (301 redirect)
+    expect(response1.status).toBe(301)
+    expect(response1.headers.get('location')).toContain('/api/ranking')
+    
+    // Test that the redirect URL contains the API gateway
+    const location = response1.headers.get('location')
+    expect(location).toMatch(/^https:\/\/nico-rank\.com\/api\/ranking/)
   })
 
 })

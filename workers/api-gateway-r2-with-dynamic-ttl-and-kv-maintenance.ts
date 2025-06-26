@@ -6,8 +6,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
 interface Env {
-  VERCEL_DEPLOYMENT_URL: string
-  WORKER_AUTH_KEY: string
   R2_BUCKET: R2Bucket
   RANKING_DATA: KVNamespace
   MAINTENANCE_FLAGS: KVNamespace
@@ -53,7 +51,8 @@ function getCorsHeaders(request: Request): Record<string, string> {
 }
 
 /**
- * 動的TTLを計算（インライン実装）
+ * 最適化された動的TTLを計算
+ * 改良点：固定Browser TTL、適切なstale-while-revalidate、パフォーマンス向上
  */
 function calculateDynamicTTL() {
   const now = new Date()
@@ -82,18 +81,25 @@ function calculateDynamicTTL() {
   // 次の更新時刻までの秒数を計算
   const secondsUntilUpdate = Math.floor((nextUpdate.getTime() - now.getTime()) / 1000)
   
-  // TTL値を計算（最低60秒）
-  const workersTTL = Math.max(60, secondsUntilUpdate)
-  const cdnTTL = Math.max(60, secondsUntilUpdate - 60)
-  const browserTTL = Math.max(60, secondsUntilUpdate - 120)
+  // 最適化されたTTL値
+  // Browser: 固定5分（セッション内の重複リクエスト防止）
+  // CDN: 固定15分（安定したキャッシュヒット率）
+  // Worker: 動的（最大20分）
+  const browserTTL = 300  // 5分固定
+  const cdnTTL = 900     // 15分固定
+  const workerTTL = Math.min(secondsUntilUpdate, 1200) // 最大20分
   
   // Cache-Controlヘッダーを生成
-  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${cdnTTL}, stale-while-revalidate=86400`
+  // stale-while-revalidate: 20分（鮮度要件の上限）
+  // stale-if-error: 24時間（障害時の可用性確保）
+  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${cdnTTL}, stale-while-revalidate=1200, stale-if-error=86400`
   const cdnCacheControl = `public, max-age=${cdnTTL}`
   
   return {
     cacheControl,
-    cdnCacheControl
+    cdnCacheControl,
+    workerTTL,
+    secondsUntilUpdate
   }
 }
 
@@ -316,7 +322,7 @@ export default {
     // /api/ranking パスの処理
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       const genre = url.searchParams.get('genre') || 'all'
-      const period = url.searchParams.get('period') || 'daily'
+      const period = url.searchParams.get('period') || '24h'
       const tag = url.searchParams.get('tag') || ''
       const page = parseInt(url.searchParams.get('page') || '1', 10)
       const limit = parseInt(url.searchParams.get('limit') || '100', 10)
@@ -361,9 +367,21 @@ export default {
               }
             })
           } else {
-            // 通常のランキングデータが存在しない場合はVercelにフォールバック
-            console.log(`R2 miss for ${r2Key}, falling back to Vercel`)
-            return proxyToVercel(request, env)
+            // 通常のランキングデータが存在しない場合は404を返す
+            console.log(`R2 miss for ${r2Key}, returning 404`)
+            return new Response(JSON.stringify({
+              error: 'Ranking data not found',
+              message: `No data available for ${genre}/${period}`
+            }), {
+              status: 404,
+              headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'X-Data-Source': 'r2-not-found',
+                ...getCorsHeaders(request),
+                ...securityHeaders
+              }
+            })
           }
         }
         
@@ -373,13 +391,15 @@ export default {
         // If-None-Matchチェック
         const ifNoneMatch = request.headers.get('If-None-Match')
         if (ifNoneMatch && isETagMatch(etag, ifNoneMatch)) {
-          const { cacheControl, cdnCacheControl } = calculateDynamicTTL()
+          const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
           return new Response(null, {
             status: 304,
             headers: {
               'ETag': etag,
               'Cache-Control': cacheControl,
               'CDN-Cache-Control': cdnCacheControl,
+              'CF-Cache-Status': 'REVALIDATED',
+              'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
               ...getCorsHeaders(request),
               ...securityHeaders
             }
@@ -387,7 +407,7 @@ export default {
         }
         
         // 動的TTLを計算
-        const { cacheControl, cdnCacheControl } = calculateDynamicTTL()
+        const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
         
         // R2から取得したデータを返す
         const headers = new Headers()
@@ -397,6 +417,8 @@ export default {
         headers.set('ETag', etag)
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
+        headers.set('CF-Cache-Status', 'MISS')
+        headers.set('Server-Timing', `cfCache;desc="MISS", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`)
         
         // CORSとセキュリティヘッダーを追加
         Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
@@ -425,7 +447,18 @@ export default {
         
       } catch (error) {
         console.error('[Worker] Error fetching from R2:', error)
-        return proxyToVercel(request, env)
+        return new Response(JSON.stringify({
+          error: 'Internal server error',
+          message: 'Failed to fetch ranking data'
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            ...getCorsHeaders(request),
+            ...securityHeaders
+          }
+        })
       }
       
       // レスポンスにキャッシュ情報を追加
@@ -435,12 +468,12 @@ export default {
       return response
     }
     
-    // その他のリクエストはVercelへプロキシ
+    // その他のリクエストはVercelにプロキシ
     return proxyToVercel(request, env)
   }
 }
 
-// Vercelへのプロキシ関数
+// Vercelへのプロキシ関数（フォールバック用）
 async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
@@ -454,7 +487,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   // リクエストヘッダーの準備
   const headers = new Headers(request.headers)
   headers.set('Host', targetHost)
-  headers.set('X-Forwarded-Host', 'nico-rank.com') // 明示的にnico-rank.comを設定
+  headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
   
@@ -468,28 +501,11 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     method: request.method,
     headers,
     body: request.body,
-    redirect: 'manual' // リダイレクトを手動で処理
+    redirect: 'manual'
   })
   
   try {
     const response = await fetch(proxyRequest)
-    
-    console.log(`[Worker] Vercel response - Status: ${response.status}, URL: ${proxyUrl.toString()}`)
-    
-    // リダイレクトレスポンスの処理
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('Location')
-      console.log(`[Worker] Redirect detected - Location: ${location}`)
-      
-      // リダイレクト先がnico-rank.comの場合、リダイレクトせずに元のレスポンスを返す
-      if (location && location.includes('nico-rank.com')) {
-        console.log(`[Worker] Blocking redirect to nico-rank.com to prevent loop`)
-        // リダイレクトを無視して通常のレスポンスを返す
-      } else if (location) {
-        // その他のリダイレクトはそのまま返す
-        return response
-      }
-    }
     
     // レスポンスヘッダーの処理
     const responseHeaders = new Headers(response.headers)
@@ -511,12 +527,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     })
   } catch (error) {
     console.error('Proxy error:', error)
-    console.error('Error details:', {
-      url: proxyUrl.toString(),
-      method: request.method,
-      error: error instanceof Error ? error.message : String(error)
-    })
-    return new Response(`Gateway Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { 
+    return new Response('Gateway Error', { 
       status: 502,
       headers: {
         'Content-Type': 'text/plain',
@@ -525,3 +536,4 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     })
   }
 }
+

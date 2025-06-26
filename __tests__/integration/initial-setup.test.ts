@@ -58,15 +58,15 @@ describe('Initial Setup Experience', () => {
     expect(response.headers.get('X-Data-Source')).toBe('mock')
   })
 
-  it('should return error when no data exists in KV', async () => {
+  it('should return redirect when no data exists in KV', async () => {
     vi.mocked(kv.get).mockResolvedValueOnce(null)
     vi.mocked(getGenreRanking).mockResolvedValueOnce(null)
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)
-    const data = await response.json()
 
-    expect(response.status).toBe(503)
-    expect(data.error).toContain('ランキングデータが見つかりません')
+    // The API route now redirects to Cloudflare Workers regardless of data availability
+    expect(response.status).toBe(301)
+    expect(response.headers.get('location')).toContain('/api/ranking')
   })
 })

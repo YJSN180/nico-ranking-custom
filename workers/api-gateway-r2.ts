@@ -263,13 +263,9 @@ export default {
         console.log(`[Worker] R2 object httpMetadata.contentEncoding: ${r2ContentEncoding}`)
         console.log(`[Worker] R2 object httpMetadata.contentType: ${r2ContentType}`)
         
-        // R2のメタデータにContent-Encodingがある場合は優先
-        if (r2ContentEncoding) {
-          headers.set('Content-Encoding', r2ContentEncoding)
-          headers.set('Vary', 'Accept-Encoding')
-          // Cloudflareの変換を防ぐためno-transformを追加
-          headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400, no-transform')
-        }
+        // Content-Encodingヘッダーは設定しない
+        // Cloudflareが自動的に圧縮を処理するため、手動での設定は避ける
+        // これにより、ヘッダーとボディの不一致を防ぐ
         
         // ストリームを分割して最初のチャンクを検査
         const [inspectStream, passthroughStream] = r2Object.body.tee()
@@ -282,21 +278,30 @@ export default {
         const isGzipped = !done && firstChunk && firstChunk.length >= 2 && firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
         
         if (isGzipped) {
-          console.log(`[Worker] Serving pre-compressed gzipped data`)
+          console.log(`[Worker] Data is gzipped, decompressing before sending`)
           
-          // 重要: encodeBody: "manual" を使用してCloudflareの自動圧縮を無効化
-          headers.set('Content-Encoding', 'gzip')
-          headers.set('Vary', 'Accept-Encoding')
-          // Cloudflareの変換を防ぐためno-transformを追加
-          headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400, no-transform')
-          
-          response = new Response(passthroughStream, {
-            status: 200,
-            headers,
-            // CloudflareドキュメントのQ: 既に圧縮されたデータを配信するには
-            // A: encodeBody: "manual" を設定する必要がある
-            encodeBody: "manual"
-          } as ResponseInit)
+          // gzip圧縮されたデータを解凍してから送信
+          // これにより、Content-Encodingヘッダーとデータの不一致を防ぐ
+          try {
+            // ストリーム全体を読み込んで解凍
+            const compressedData = await new Response(passthroughStream).arrayBuffer()
+            const decompressedData = await new Response(
+              new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
+            ).arrayBuffer()
+            
+            // 解凍したデータを返す（Cloudflareが必要に応じて再圧縮）
+            response = new Response(decompressedData, {
+              status: 200,
+              headers
+            })
+          } catch (decompressError) {
+            console.error('[Worker] Failed to decompress gzipped data:', decompressError)
+            // 解凍に失敗した場合は、元のストリームをそのまま返す
+            response = new Response(passthroughStream, {
+              status: 200,
+              headers
+            })
+          }
         } else {
           // 非圧縮データの場合はそのまま返す（Cloudflareが自動圧縮する）
           response = new Response(passthroughStream, {

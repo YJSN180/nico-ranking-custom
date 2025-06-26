@@ -643,8 +643,11 @@ export default function ClientPage({
     // フルデータに対してフィルタリングを適用
     const { filteredItems } = filterWithNGList(fullRankingData, ngListForFilter)
     
+    // ランク順でソート（重要：テストで期待される順序）
+    const sortedItems = [...filteredItems].sort((a, b) => a.rank - b.rank)
+    
     // 全取得件数を制限
-    const allItems = filteredItems.slice(0, limit)
+    const allItems = sortedItems.slice(0, limit)
     
     // タグ別ランキングの場合はページネーションなしで全件表示
     let pageItems: RankingItem[]
@@ -662,11 +665,15 @@ export default function ClientPage({
       calculatedTotalPages = Math.ceil(allItems.length / ITEMS_PER_PAGE)
     }
     
-    // originalRankを追加（元のランク番号を保持）
-    const result = pageItems.map(item => ({
-      ...item,
-      originalRank: fullRankingData.find(original => original.id === item.id)?.rank || item.rank
-    }))
+    // originalRankを追加（元のランク番号を保持）し、連続したランク番号を割り当て
+    const result = pageItems.map((item, index) => {
+      const startRank = config.tag ? 1 : (currentPage - 1) * ITEMS_PER_PAGE + 1
+      return {
+        ...item,
+        originalRank: fullRankingData.find(original => original.id === item.id)?.rank || item.rank,
+        rank: startRank + index // 連続した表示用ランク番号
+      }
+    })
     
     return {
       displayItems: result,

@@ -105,6 +105,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     console.log(`[SSR] WORKER_AUTH_KEY present: ${!!process.env.WORKER_AUTH_KEY}`)
     // eslint-disable-next-line no-console
     console.log(`[SSR] WORKER_AUTH_KEY length: ${process.env.WORKER_AUTH_KEY?.length}`)
+    // eslint-disable-next-line no-console
+    console.log(`[SSR] Headers to send:`, {
+      'X-Worker-Auth': process.env.WORKER_AUTH_KEY ? `${process.env.WORKER_AUTH_KEY.substring(0, 10)}...` : 'missing',
+      'X-SSR-Request': 'true'
+    })
     
     // SSRでのfetch（Node.js環境）
     const response = await fetch(apiUrl, {

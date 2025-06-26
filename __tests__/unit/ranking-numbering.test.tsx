@@ -34,7 +34,7 @@ describe('ランキング順位のナンバリング検証', () => {
 
     render(
       <ClientPage
-        initialData={testData}
+        initialData={{ items: testData }}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -60,7 +60,7 @@ describe('ランキング順位のナンバリング検証', () => {
 
     render(
       <ClientPage
-        initialData={testData}
+        initialData={{ items: testData }}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -92,7 +92,7 @@ describe('ランキング順位のナンバリング検証', () => {
 
     render(
       <ClientPage
-        initialData={testData}
+        initialData={{ items: testData }}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -134,7 +134,7 @@ describe('ランキング順位のナンバリング検証', () => {
 
     render(
       <ClientPage
-        initialData={testData}
+        initialData={{ items: testData }}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -164,7 +164,7 @@ describe('ランキング順位のナンバリング検証', () => {
 
     render(
       <ClientPage
-        initialData={testData}
+        initialData={{ items: testData }}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
