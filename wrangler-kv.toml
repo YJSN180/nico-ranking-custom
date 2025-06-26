@@ -1,0 +1,21 @@
+name = "nico-ranking-api-gateway"
+main = "workers/api-gateway-kv.ts"
+compatibility_date = "2025-06-24"
+
+# KV namespace bindings
+[[kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+# 環境変数
+[vars]
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+
+# Custom domain
+[[routes]]
+pattern = "nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+# 環境変数
+[env.production]
+vars = { WORKER_AUTH_KEY = "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493" }

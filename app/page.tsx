@@ -125,14 +125,26 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     if (contentEncoding === 'gzip') {
       // SSRではNode.js環境なので手動で解凍が必要
       const buffer = await response.arrayBuffer()
-      const { decompressGzipInSSR } = await import('@/lib/unified-compression')
+      const bytes = new Uint8Array(buffer)
       
-      try {
-        const text = await decompressGzipInSSR(buffer)
-        data = JSON.parse(text)
-      } catch (error) {
-        console.error('[SSR] Decompression error:', error)
-        // 解凍に失敗した場合は、圧縮されていないデータとして扱う
+      // Check if it's actually gzipped (magic number: 0x1f, 0x8b)
+      const isActuallyGzipped = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
+      
+      if (isActuallyGzipped) {
+        // 実際にgzip圧縮されている場合のみ解凍
+        const { decompressGzipInSSR } = await import('@/lib/unified-compression')
+        try {
+          const text = await decompressGzipInSSR(buffer)
+          data = JSON.parse(text)
+        } catch (error) {
+          console.error('[SSR] Decompression error:', error)
+          // 解凍に失敗した場合は、圧縮されていないデータとして扱う
+          const text = new TextDecoder().decode(buffer)
+          data = JSON.parse(text)
+        }
+      } else {
+        // Content-Encodingヘッダーがgzipでも実際には圧縮されていない場合
+        // Cloudflareが自動的に解凍した可能性がある
         const text = new TextDecoder().decode(buffer)
         data = JSON.parse(text)
       }

@@ -344,10 +344,9 @@ async function main() {
     await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));
     console.log(`\nSaved aggregated data to ${backupPath}`);
 
-    // Write to Cloudflare KV using 3-key split
-    console.log('\nSkipping KV writes - using R2 as primary storage');
-    // KVへのランキングデータ書き込みは停止（R2移行完了）
-    // await writeToCloudflareKVGroups(rankingData);
+    // Write to Cloudflare KV
+    console.log('\nWriting to Cloudflare KV...');
+    await writeToCloudflareKV(rankingData);
     
     // RANKING_LATEST への書き込みは不要（3-key分割のみ使用）
     
