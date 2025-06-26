@@ -28,17 +28,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Deploy Worker with Maintenance Mode
+      - name: Create temporary wrangler.toml
         run: |
-          npx wrangler deploy workers/api-gateway-r2-with-maintenance.ts \
-            --name nico-ranking-api-gateway \
-            --compatibility-date 2025-06-24 \
-            --var MAINTENANCE_MODE:${{ github.event.inputs.maintenance_mode }} \
-            --var ALLOWED_IPS:"27.94.226.29" \
-            --var MAINTENANCE_TOKEN:"${{ secrets.MAINTENANCE_TOKEN }}" \
-            --var VERCEL_DEPLOYMENT_URL:"https://nico-ranking-7b010d3zi-yjsns-projects.vercel.app" \
-            --kv RANKING_DATA:80f4535c379b4e8cb89ce6dbdb7d2dc9 \
-            --r2 R2_BUCKET:nico-ranking
+          cat > wrangler.toml << 'EOF'
+          name = "nico-ranking-api-gateway"
+          main = "workers/api-gateway-r2-with-maintenance.ts"
+          compatibility_date = "2025-06-24"
+          compatibility_flags = ["nodejs_compat"]
+          
+          [[kv_namespaces]]
+          binding = "RANKING_DATA"
+          id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+          
+          [[r2_buckets]]
+          binding = "R2_BUCKET"
+          bucket_name = "nico-ranking"
+          
+          [vars]
+          VERCEL_DEPLOYMENT_URL = "https://nico-ranking-7b010d3zi-yjsns-projects.vercel.app"
+          MAINTENANCE_MODE = "${{ github.event.inputs.maintenance_mode }}"
+          ALLOWED_IPS = "27.94.226.29"
+          MAINTENANCE_TOKEN = "${{ secrets.MAINTENANCE_TOKEN }}"
+          
+          [[routes]]
+          pattern = "nico-rank.com/*"
+          zone_name = "nico-rank.com"
+          EOF
+      
+      - name: Deploy Worker with Maintenance Mode
+        run: npx wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
