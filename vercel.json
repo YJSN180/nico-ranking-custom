@@ -20,5 +20,6 @@
         }
       ]
     }
-  ]
+  ],
+  "deploymentProtection": false
 }
