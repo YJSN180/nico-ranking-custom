@@ -26,7 +26,9 @@ export async function middleware(request: NextRequest) {
           request.method !== 'OPTIONS' && 
           process.env.VERCEL_ENV !== 'preview' &&
           !request.headers.get('x-forwarded-host')?.includes('nico-rank.com')) {
-        return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+        // 一時的にリダイレクトを無効化してデバッグ
+        console.log('[Middleware] Would redirect - Host:', host, 'X-Forwarded-Host:', request.headers.get('x-forwarded-host'))
+        // return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
       }
     }
   }
