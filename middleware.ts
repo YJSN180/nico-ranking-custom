@@ -6,43 +6,51 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
 export async function middleware(request: NextRequest) {
-  // 内部API呼び出しは認証チェックをスキップ
-  const isInternalAPI = request.nextUrl.pathname.startsWith('/api/')
-  if (isInternalAPI) {
+  const pathname = request.nextUrl.pathname
+  const host = request.headers.get('host')
+  
+  // /api/ パスは常に許可（内部APIコール）
+  if (pathname.startsWith('/api/')) {
     return NextResponse.next()
   }
   
-  // Cloudflare Workers経由のアクセスチェック（開発環境以外）
-  // development以外では認証チェックを行う
-  const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
+  // 開発環境は認証チェックをスキップ
+  if (process.env.VERCEL_ENV === 'development') {
+    return NextResponse.next()
+  }
   
-  // Check auth for Cloudflare Workers
-  if (shouldCheckAuth) {
+  // メインページ（/）へのアクセスは認証不要
+  if (pathname === '/' || pathname === '') {
+    // Worker認証をチェック（オプショナル）
     const cfWorkerKey = request.headers.get('X-Worker-Auth')
     const expectedKey = process.env.WORKER_AUTH_KEY
-    const host = request.headers.get('host')
     
+    // Worker経由の場合は認証OK
+    if (cfWorkerKey && expectedKey && cfWorkerKey === expectedKey) {
+      return NextResponse.next()
+    }
     
-    // Workersからの認証がない場合の処理
-    if (!cfWorkerKey || !expectedKey || cfWorkerKey !== expectedKey) {
-      // Vercel URLへの直接アクセスをブロック（プリフライトリクエストは除外）
-      // ただし、プレビューデプロイメントは除外
-      // 重要: nico-rank.comドメインからのアクセスは許可する（無限ループ防止）
-      if (host?.includes('vercel.app') && 
-          request.method !== 'OPTIONS' && 
-          process.env.VERCEL_ENV !== 'preview') {
-        const xForwardedHost = request.headers.get('x-forwarded-host')
-        
-        // CloudflareのWorker経由でない場合のみリダイレクト
-        if (!xForwardedHost || !xForwardedHost.includes('nico-rank.com')) {
-          console.log('[Middleware] Would redirect to nico-rank.com - Host:', host, 'X-Forwarded-Host:', xForwardedHost)
-          // リダイレクトを有効化
-          return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
-        }
-        
-        // Worker経由の場合はリダイレクトしない
-        console.log('[Middleware] Skipping redirect - Request from Worker - X-Forwarded-Host:', xForwardedHost)
-      }
+    // 認証なしでもアクセス許可（SSRが内部APIを呼べるように）
+    return NextResponse.next()
+  }
+  
+  // その他のパスは通常の認証チェック
+  const cfWorkerKey = request.headers.get('X-Worker-Auth')
+  const expectedKey = process.env.WORKER_AUTH_KEY
+  
+  // Workersからの認証チェック
+  if (cfWorkerKey && expectedKey && cfWorkerKey === expectedKey) {
+    // 認証OK
+    return NextResponse.next()
+  }
+  
+  // 認証がない場合、Vercel URLへの直接アクセスかチェック
+  if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
+    const xForwardedHost = request.headers.get('x-forwarded-host')
+    
+    // CloudflareのWorker経由でない場合はリダイレクト
+    if (!xForwardedHost || !xForwardedHost.includes('nico-rank.com')) {
+      return NextResponse.redirect('https://nico-rank.com' + pathname)
     }
   }
   
