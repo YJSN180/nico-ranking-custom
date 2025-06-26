@@ -24,11 +24,17 @@ export async function middleware(request: NextRequest) {
       // 重要: nico-rank.comドメインからのアクセスは許可する（無限ループ防止）
       if (host?.includes('vercel.app') && 
           request.method !== 'OPTIONS' && 
-          process.env.VERCEL_ENV !== 'preview' &&
-          !request.headers.get('x-forwarded-host')?.includes('nico-rank.com')) {
-        // 一時的にリダイレクトを無効化してデバッグ
-        console.log('[Middleware] Would redirect - Host:', host, 'X-Forwarded-Host:', request.headers.get('x-forwarded-host'))
-        // return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+          process.env.VERCEL_ENV !== 'preview') {
+        const xForwardedHost = request.headers.get('x-forwarded-host')
+        
+        // CloudflareのWorker経由でない場合のみリダイレクト
+        if (!xForwardedHost || !xForwardedHost.includes('nico-rank.com')) {
+          console.log('[Middleware] Redirecting to nico-rank.com - Host:', host, 'X-Forwarded-Host:', xForwardedHost)
+          return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+        }
+        
+        // Worker経由の場合はリダイレクトしない
+        console.log('[Middleware] Skipping redirect - Request from Worker - X-Forwarded-Host:', xForwardedHost)
       }
     }
   }

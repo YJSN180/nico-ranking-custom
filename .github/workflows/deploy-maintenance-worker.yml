@@ -46,10 +46,8 @@ jobs:
           
           [vars]
           VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
-          WORKER_AUTH_KEY = "${{ secrets.WORKER_AUTH_KEY }}"
           MAINTENANCE_MODE = "${{ github.event.inputs.maintenance_mode }}"
           ALLOWED_IPS = "27.94.226.29"
-          MAINTENANCE_TOKEN = "${{ secrets.MAINTENANCE_TOKEN }}"
           
           [[routes]]
           pattern = "nico-rank.com/*"
@@ -61,6 +59,8 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+          MAINTENANCE_TOKEN: ${{ secrets.MAINTENANCE_TOKEN }}
       
       - name: Test deployment
         run: |
