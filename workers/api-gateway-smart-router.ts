@@ -186,15 +186,27 @@ export default {
         newResponse.headers.set('X-Worker-Version', 'blue-stable');
         return newResponse;
       } else {
-        // Service Bindingが設定されていない場合、直接処理
-        console.warn('[Router] No service bindings configured, falling back to direct proxy');
-        return proxyToVercel(request, env);
+        // Service Bindingが設定されていない場合、エラーを返す（循環参照を防止）
+        console.error('[Router] No service bindings configured');
+        return new Response('Service temporarily unavailable', { 
+          status: 503,
+          headers: {
+            'Content-Type': 'text/plain',
+            'Retry-After': '60'
+          }
+        });
       }
       
     } catch (error) {
       console.error('[Router] Error:', error);
-      // エラー時はフェイルセーフとして直接処理
-      return proxyToVercel(request, env);
+      // エラー時は503を返す（循環参照を防止）
+      return new Response('Service temporarily unavailable', { 
+        status: 503,
+        headers: {
+          'Content-Type': 'text/plain',
+          'Retry-After': '60'
+        }
+      });
     }
   }
 }

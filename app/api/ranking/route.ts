@@ -22,8 +22,7 @@ export async function GET(request: NextRequest) {
   try {
     // 開発環境でKVが設定されていない場合はモックデータを返す
     if (isDevelopmentWithoutKV()) {
-      // eslint-disable-next-line no-console
-      console.log('[Development] Using mock data - KV not configured')
+      // [Development] Using mock data - KV not configured
       
       const mockItems = generateMockRankingData(500)
       const mockPopularTagObjects = generateMockPopularTags()
@@ -75,7 +74,7 @@ export async function GET(request: NextRequest) {
     const apiGatewayUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL
     
     if (!apiGatewayUrl) {
-      console.error('[API] NEXT_PUBLIC_API_GATEWAY_URL is not configured')
+      // [API] NEXT_PUBLIC_API_GATEWAY_URL is not configured
       return NextResponse.json(
         { error: 'API Gateway URLが設定されていません。' },
         { status: 500 }
@@ -90,19 +89,20 @@ export async function GET(request: NextRequest) {
       if (tag) params.set('tag', tag)
       
       const workerUrl = `${apiGatewayUrl}/api/ranking?${params.toString()}`
-      console.log(`[API] Fetching from Worker: ${workerUrl}`)
+      // [API] Fetching from Worker: ${workerUrl}
       
       const workerResponse = await fetch(workerUrl, {
         headers: {
           'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br'
+          'Accept-Encoding': 'gzip, deflate, br',
+          'X-Worker-Auth': process.env.WORKER_AUTH_KEY || ''
         },
         // Add timeout to prevent hanging
         signal: AbortSignal.timeout(30000) // 30 seconds timeout
       })
       
       if (!workerResponse.ok) {
-        console.error(`[API] Worker returned error: ${workerResponse.status} ${workerResponse.statusText}`)
+        // [API] Worker returned error: ${workerResponse.status} ${workerResponse.statusText}
         
         // タグが見つからない場合
         if (workerResponse.status === 404 && tag) {
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
       )
       
     } catch (error) {
-      console.error('[API] Worker fetch error:', error)
+      // [API] Worker fetch error:
       
       // AbortError (timeout)
       if (error instanceof Error && error.name === 'AbortError') {
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
     }
     
   } catch (error) {
-    console.error('[API] Unexpected error:', error)
+    // [API] Unexpected error:
     // API error - return error response
     return NextResponse.json(
       { error: 'ランキングデータの取得に失敗しました。' },
