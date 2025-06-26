@@ -45,7 +45,7 @@ jobs:
           bucket_name = "nico-ranking"
           
           [vars]
-          VERCEL_DEPLOYMENT_URL = "https://nico-ranking-7b010d3zi-yjsns-projects.vercel.app"
+          VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-cxd401zwt-yjsns-projects.vercel.app"
           MAINTENANCE_MODE = "${{ github.event.inputs.maintenance_mode }}"
           ALLOWED_IPS = "27.94.226.29"
           MAINTENANCE_TOKEN = "${{ secrets.MAINTENANCE_TOKEN }}"
