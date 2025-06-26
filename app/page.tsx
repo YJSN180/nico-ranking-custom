@@ -99,7 +99,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     
     // Cloudflare Worker のエンドポイントに直接アクセス
     const apiUrl = `https://nico-rank.com/api/ranking?${params.toString()}`
-    // console.log(`[SSR] Fetching directly from Cloudflare Worker: ${apiUrl}`)
+    console.log(`[SSR] Fetching directly from Cloudflare Worker: ${apiUrl}`)
+    console.log(`[SSR] WORKER_AUTH_KEY present: ${!!process.env.WORKER_AUTH_KEY}`)
+    console.log(`[SSR] WORKER_AUTH_KEY length: ${process.env.WORKER_AUTH_KEY?.length}`)
     
     // SSRでのfetch（Node.js環境）
     const response = await fetch(apiUrl, {
@@ -115,42 +117,30 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     })
     
     if (!response.ok) {
+      console.log(`[SSR] Response status: ${response.status}`)
+      console.log(`[SSR] Response headers:`, Object.fromEntries(response.headers.entries()))
+      const errorText = await response.text()
+      console.log(`[SSR] Error response body:`, errorText.substring(0, 500))
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
-    // Content-Encodingヘッダーをチェック
-    const contentEncoding = response.headers.get('content-encoding')
-    
+    // レスポンスをテキストとして取得してJSONパース
+    // Content-Encodingヘッダーの問題を回避
     let data: any
-    if (contentEncoding === 'gzip') {
-      // SSRではNode.js環境なので手動で解凍が必要
-      const buffer = await response.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
-      
-      // Check if it's actually gzipped (magic number: 0x1f, 0x8b)
-      const isActuallyGzipped = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b
-      
-      if (isActuallyGzipped) {
-        // 実際にgzip圧縮されている場合のみ解凍
-        const { decompressGzipInSSR } = await import('@/lib/unified-compression')
-        try {
-          const text = await decompressGzipInSSR(buffer)
-          data = JSON.parse(text)
-        } catch (error) {
-          console.error('[SSR] Decompression error:', error)
-          // 解凍に失敗した場合は、圧縮されていないデータとして扱う
-          const text = new TextDecoder().decode(buffer)
-          data = JSON.parse(text)
-        }
-      } else {
-        // Content-Encodingヘッダーがgzipでも実際には圧縮されていない場合
-        // Cloudflareが自動的に解凍した可能性がある
-        const text = new TextDecoder().decode(buffer)
-        data = JSON.parse(text)
-      }
-    } else {
-      // 圧縮されていない場合は通常のJSONパース
+    try {
+      // まずJSONとして直接パースを試みる
       data = await response.json()
+    } catch (jsonError) {
+      // JSONパースに失敗した場合、テキストとして取得して再度パース
+      console.warn('[SSR] Initial JSON parse failed, trying text approach:', jsonError)
+      const text = await response.text()
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        console.error('[SSR] Failed to parse response:', parseError)
+        console.error('[SSR] Response text (first 500 chars):', text.substring(0, 500))
+        throw new Error('Invalid JSON response from API')
+      }
     }
     
     if (data && data.items && Array.isArray(data.items)) {
@@ -160,6 +150,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     }
   } catch (error) {
     console.error('[SSR] API error:', error)
+    console.error('[SSR] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    })
   }
 
   // エラーの場合は空のデータを返す

@@ -136,26 +136,35 @@ export default {
       
       // メンテナンスモード処理
       if (maintenanceMode === "true") {
-        // IPの取得優先順位：X-Forwarded-For（Vercel経由） > CF-Connecting-IP（直接アクセス）
-        const xForwardedFor = request.headers.get('X-Forwarded-For');
-        const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
+        // Worker認証ヘッダーをチェック（Vercel SSR用）
+        const workerAuthHeader = request.headers.get('X-Worker-Auth');
+        const expectedAuthKey = env.WORKER_AUTH_KEY;
         
-        // X-Forwarded-Forの最初のIPを取得（複数のプロキシ経由の場合）
-        const clientIP = xForwardedFor 
-          ? xForwardedFor.split(',')[0].trim()
-          : cfConnectingIP;
-        
-        const allowedIPList = allowedIPs ? allowedIPs.split(',').map(ip => ip.trim()) : [];
-        
-        console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, X-Forwarded-For: ${xForwardedFor}, CF-Connecting-IP: ${cfConnectingIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
-        
-        // IPホワイトリストチェック
-        if (!allowedIPList.includes(clientIP)) {
-          console.log(`[Maintenance] Access denied for IP: ${clientIP}`);
-          return createMaintenanceResponse();
+        // 認証ヘッダーが正しい場合はメンテナンスモードをバイパス
+        if (workerAuthHeader && expectedAuthKey && workerAuthHeader === expectedAuthKey) {
+          console.log(`[Maintenance] Access allowed via Worker Auth`);
+        } else {
+          // IPの取得優先順位：X-Forwarded-For（Vercel経由） > CF-Connecting-IP（直接アクセス）
+          const xForwardedFor = request.headers.get('X-Forwarded-For');
+          const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
+          
+          // X-Forwarded-Forの最初のIPを取得（複数のプロキシ経由の場合）
+          const clientIP = xForwardedFor 
+            ? xForwardedFor.split(',')[0].trim()
+            : cfConnectingIP;
+          
+          const allowedIPList = allowedIPs ? allowedIPs.split(',').map(ip => ip.trim()) : [];
+          
+          console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, X-Forwarded-For: ${xForwardedFor}, CF-Connecting-IP: ${cfConnectingIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
+          
+          // IPホワイトリストチェック
+          if (!allowedIPList.includes(clientIP)) {
+            console.log(`[Maintenance] Access denied for IP: ${clientIP}`);
+            return createMaintenanceResponse();
+          }
+          
+          console.log(`[Maintenance] Access allowed for IP: ${clientIP}`);
         }
-        
-        console.log(`[Maintenance] Access allowed for IP: ${clientIP}`);
       }
       
       // アクティブなWorkerを決定（デフォルトは "blue"）
