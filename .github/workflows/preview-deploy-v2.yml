@@ -108,7 +108,9 @@ jobs:
           DEPLOYMENT_URL=$(vercel deploy \
             --token=$VERCEL_TOKEN \
             --yes \
-            --prod=false)
+            --prod=false \
+            --env NEXT_PUBLIC_WORKER_URL=$WORKER_URL \
+            --env NEXT_PUBLIC_PREVIEW_TOKEN=${{ needs.deploy-worker.outputs.preview_token }})
           
           echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
           
