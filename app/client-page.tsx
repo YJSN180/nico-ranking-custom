@@ -72,7 +72,9 @@ export default function ClientPage({
   
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(
-    allRankingData || initialData?.items || []
+    (allRankingData && Array.isArray(allRankingData)) ? allRankingData : 
+    (initialData?.items && Array.isArray(initialData.items)) ? initialData.items : 
+    []
   )
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
@@ -287,8 +289,8 @@ export default function ClientPage({
     // Check client-side cache first
     const cached = rankingCache.get(newConfig.genre, newConfig.period, newConfig.tag)
     if (cached && cached.data) {
-      // 全データを保存
-      setFullRankingData(cached.data)
+      // 全データを保存（安全性チェック付き）
+      setFullRankingData(Array.isArray(cached.data) ? cached.data : [])
       
       // 設定変更時は必ず1ページ目から表示
       const startIndex = 0
@@ -402,8 +404,8 @@ export default function ClientPage({
       }
       
       if (data.items && Array.isArray(data.items)) {
-        // 全データを保存
-        setFullRankingData(data.items)
+        // 全データを保存（安全性チェック付き）
+        setFullRankingData(Array.isArray(data.items) ? data.items : [])
         
         // 設定変更時は必ず1ページ目から表示
         const startIndex = 0
@@ -484,8 +486,8 @@ export default function ClientPage({
           // 人気タグが既にある場合は維持
         }
       } else if (Array.isArray(data)) {
-        // 全データを保存
-        setFullRankingData(data)
+        // 全データを保存（安全性チェック付き）
+        setFullRankingData(Array.isArray(data) ? data : [])
         
         // 設定変更時は必ず1ページ目から表示
         const startIndex = 0

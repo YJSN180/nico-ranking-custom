@@ -15,6 +15,14 @@ export interface NGFilterResult {
 export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilterResult {
   const newDerivedIds: string[] = []
   
+  // items が undefined または null の場合は空の結果を返す
+  if (!items || !Array.isArray(items)) {
+    return {
+      filteredItems: [],
+      newDerivedIds: []
+    }
+  }
+  
   // 高速検索のためにSetを作成
   const videoIdSet = new Set(ngList.videoIds)
   const derivedVideoIdSet = new Set(ngList.derivedVideoIds || [])
