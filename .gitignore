@@ -46,6 +46,9 @@ next-env.d.ts
 # Cloudflare Workers
 wrangler.toml
 .wrangler/
+
+# OpenNext build artifacts
+.open-next/
 .dev.vars
 
 # Documentation files (except README.md)

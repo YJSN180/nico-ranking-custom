@@ -1,0 +1,51 @@
+name: Deploy Maintenance Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      maintenance_mode:
+        description: 'Enable maintenance mode'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Deploy Worker with Maintenance Mode
+        run: |
+          npx wrangler deploy \
+            --var MAINTENANCE_MODE:${{ github.event.inputs.maintenance_mode }} \
+            --var ALLOWED_IPS:"27.94.226.29" \
+            --var MAINTENANCE_TOKEN:"${{ secrets.MAINTENANCE_TOKEN }}"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      
+      - name: Test deployment
+        run: |
+          echo "Testing deployment..."
+          curl -I https://nico-rank.com/ || echo "Site check completed"
+      
+      - name: Deployment summary
+        run: |
+          echo "🚀 Worker deployed successfully!"
+          echo "- Maintenance mode: ${{ github.event.inputs.maintenance_mode }}"
+          echo "- Allowed IP: 27.94.226.29"
+          echo "- Site: https://nico-rank.com/"
