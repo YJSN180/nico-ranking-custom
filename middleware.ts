@@ -19,22 +19,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
   
-  // メインページ（/）へのアクセスは認証不要
-  if (pathname === '/' || pathname === '') {
-    // Worker認証をチェック（オプショナル）
-    const cfWorkerKey = request.headers.get('X-Worker-Auth')
-    const expectedKey = process.env.WORKER_AUTH_KEY
-    
-    // Worker経由の場合は認証OK
-    if (cfWorkerKey && expectedKey && cfWorkerKey === expectedKey) {
-      return NextResponse.next()
-    }
-    
-    // 認証なしでもアクセス許可（SSRが内部APIを呼べるように）
-    return NextResponse.next()
-  }
-  
-  // その他のパスは通常の認証チェック
+  // 本番環境のWorker認証チェック
   const cfWorkerKey = request.headers.get('X-Worker-Auth')
   const expectedKey = process.env.WORKER_AUTH_KEY
   
@@ -231,8 +216,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/admin/:path*',
-    '/api/admin/:path*',
-    // より厳密なマッチングで不要なリクエストを除外
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json).*)'
+    '/api/admin/:path*'
   ]
 }
