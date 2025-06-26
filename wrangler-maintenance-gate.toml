@@ -1,0 +1,24 @@
+# Maintenance Gate Worker設定
+name = "nico-ranking-maintenance-gate"
+main = "workers/maintenance-gate.ts"
+compatibility_date = "2025-06-24"
+compatibility_flags = ["nodejs_compat"]
+
+# 環境変数
+[vars]
+# 現行の本番Worker URL（内部アクセス用）
+CURRENT_WORKER_URL = "https://nico-ranking-api-gateway.yjsn.workers.dev"
+# テスト中の新Worker URL（内部アクセス用）
+NEW_WORKER_URL = "https://nico-ranking-dynamic-cache-20250625.yjsn.workers.dev"
+# メンテナンスモード（"true"で全員メンテナンス画面、"false"でIP/トークンゲート）
+MAINTENANCE_MODE = "false"
+
+# 本番ドメインにルーティング
+# 注意: 既存のWorkerを先に削除するか、--force フラグを使用
+[[routes]]
+pattern = "nico-rank.com/*"
+zone_name = "nico-rank.com"
+
+# TypeScript設定
+[build]
+command = ""

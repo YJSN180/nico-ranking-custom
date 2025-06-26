@@ -38,6 +38,7 @@ scripts/set-*.sh
 vercel-env-vars.txt
 *.env
 .env.*
+.maintenance-gate.env
 
 # typescript
 *.tsbuildinfo

@@ -1,6 +1,6 @@
 /**
- * Cloudflare Worker - API Gateway with R2 Integration v2
- * 動的TTLとETag対応版
+ * Cloudflare Worker - API Gateway with R2 Integration + Maintenance Mode
+ * R2から直接ランキングデータを配信（メンテナンスモード付き）
  */
 
 /// <reference types="@cloudflare/workers-types" />
@@ -12,6 +12,10 @@ interface Env {
   RANKING_DATA?: KVNamespace
   ENVIRONMENT?: string
   PREVIEW_TOKEN?: string
+  // メンテナンスモード用
+  MAINTENANCE_MODE?: string
+  ALLOWED_IPS?: string
+  MAINTENANCE_TOKEN?: string
 }
 
 // セキュリティヘッダー定義
@@ -27,110 +31,115 @@ const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on'
 }
 
-// 動的CORSヘッダー生成
-function getCorsHeaders(request: Request): Record<string, string> {
-  const origin = request.headers.get('Origin')
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'https://nico-rank.com',
-    'https://nico-ranking-custom-yjsns-projects.vercel.app'
-  ]
-  
-  // Vercelプレビューデプロイメントのパターン
-  const vercelPreviewPattern = /^https:\/\/nico-ranking-[a-z0-9-]+\.vercel\.app$/
-  
-  let allowOrigin = '*' // デフォルト（公開API向け）
-  
-  if (origin && (allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin))) {
-    allowOrigin = origin
-  }
-  
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, If-None-Match, X-Preview-Token',
-    'Access-Control-Max-Age': '86400'
-  }
+// CORSヘッダー定義
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Max-Age': '86400'
 }
 
-/**
- * 動的TTLを計算（インライン実装）
- */
-function calculateDynamicTTL() {
-  const now = new Date()
-  const currentMinute = now.getMinutes()
-  
-  // 次の更新時刻を計算
-  let nextUpdateMinute: number
-  let hoursToAdd = 0
-  
-  if (currentMinute < 5) {
-    nextUpdateMinute = 5
-  } else if (currentMinute < 25) {
-    nextUpdateMinute = 25
-  } else {
-    nextUpdateMinute = 5
-    hoursToAdd = 1
-  }
-  
-  // 次の更新時刻のDateオブジェクトを作成
-  const nextUpdate = new Date(now)
-  nextUpdate.setHours(now.getHours() + hoursToAdd)
-  nextUpdate.setMinutes(nextUpdateMinute)
-  nextUpdate.setSeconds(0)
-  nextUpdate.setMilliseconds(0)
-  
-  // 次の更新時刻までの秒数を計算
-  const secondsUntilUpdate = Math.floor((nextUpdate.getTime() - now.getTime()) / 1000)
-  
-  // TTL値を計算（最低60秒）
-  const workersTTL = Math.max(60, secondsUntilUpdate)
-  const cdnTTL = Math.max(60, secondsUntilUpdate - 60)
-  const browserTTL = Math.max(60, secondsUntilUpdate - 120)
-  
-  // Cache-Controlヘッダーを生成
-  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${cdnTTL}, stale-while-revalidate=86400`
-  const cdnCacheControl = `public, max-age=${cdnTTL}`
-  
-  return {
-    cacheControl,
-    cdnCacheControl
-  }
-}
+// メンテナンス画面のレスポンスを生成
+function createMaintenanceResponse(): Response {
+  const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>メンテナンス中 - ニコニコランキング</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background-color: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      text-align: center;
+      padding: 2rem;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      max-width: 500px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+      color: #0066cc;
+    }
+    p {
+      line-height: 1.6;
+      color: #666;
+    }
+    .icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">🔧</div>
+    <h1>ただいまメンテナンス中です</h1>
+    <p>より良いサービスをご提供するため、システムのメンテナンスを行っております。</p>
+    <p>ご不便をおかけして申し訳ございませんが、しばらくお待ちください。</p>
+    <p style="margin-top: 2rem; font-size: 0.9rem;">
+      完了予定時刻: 未定
+    </p>
+  </div>
+</body>
+</html>`
 
-/**
- * ETagが一致するかチェック（簡易版）
- */
-function isETagMatch(currentETag: string, ifNoneMatch: string | null): boolean {
-  if (!ifNoneMatch) return false
-  
-  // ワイルドカードの場合
-  if (ifNoneMatch.trim() === '*') return true
-  
-  // weak比較（W/プレフィックスを無視）
-  const normalizeETag = (etag: string) => etag.replace(/^W\//, '')
-  const normalizedCurrent = normalizeETag(currentETag)
-  
-  // カンマ区切りのETagリストをチェック
-  const etags = ifNoneMatch.split(',').map(e => e.trim())
-  return etags.some(etag => normalizeETag(etag) === normalizedCurrent)
+  return new Response(html, {
+    status: 503,
+    headers: {
+      'Content-Type': 'text/html; charset=UTF-8',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Retry-After': '300'
+    }
+  })
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     
-    // プレビュー環境での認証チェック
-    if (env.ENVIRONMENT === 'preview' && url.pathname.startsWith('/api/')) {
-      const token = request.headers.get('X-Preview-Token')
-      const expectedToken = env.PREVIEW_TOKEN
+    // メンテナンスモードのチェック
+    if (env.MAINTENANCE_MODE === 'true') {
+      // クライアントIPを取得
+      const clientIP = request.headers.get('CF-Connecting-IP') || ''
       
-      if (!token || !expectedToken || token !== expectedToken) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      // 許可IPリストを配列に変換
+      const allowedIPs = env.ALLOWED_IPS ? env.ALLOWED_IPS.split(',').map(ip => ip.trim()) : []
+      
+      // メンテナンストークンをチェック
+      const maintenanceToken = request.headers.get('X-Maintenance-Token')
+      
+      // アクセス判定
+      const isAllowedIP = allowedIPs.includes(clientIP)
+      const hasValidToken = env.MAINTENANCE_TOKEN && maintenanceToken === env.MAINTENANCE_TOKEN
+      
+      // 許可されていない場合はメンテナンス画面
+      if (!isAllowedIP && !hasValidToken) {
+        return createMaintenanceResponse()
+      }
+    }
+    
+    // 以下、元のapi-gateway-r2.tsのロジック
+    
+    // プレビュー環境のアクセス制御
+    if (env.ENVIRONMENT === 'preview' && env.PREVIEW_TOKEN) {
+      const authHeader = request.headers.get('X-Preview-Token')
+      if (authHeader !== env.PREVIEW_TOKEN) {
+        return new Response('Unauthorized', {
           status: 401,
           headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request)
+            ...securityHeaders,
+            'WWW-Authenticate': 'Bearer realm="preview"'
           }
         })
       }
@@ -140,44 +149,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: getCorsHeaders(request)
-      })
-    }
-    
-    // /api/test パスの処理（プレビュー環境のテスト用）
-    if (url.pathname === '/api/test') {
-      const testInfo: any = {
-        environment: env.ENVIRONMENT || 'unknown',
-        hasR2Binding: !!env.R2_BUCKET,
-        hasKVBinding: !!env.RANKING_DATA,
-        timestamp: new Date().toISOString(),
-        vercelUrl: env.VERCEL_DEPLOYMENT_URL || 'not set'
-      }
-      
-      // R2の接続テスト
-      if (env.R2_BUCKET) {
-        try {
-          const testKey = 'rankings/all/24h.json'
-          const testObject = await env.R2_BUCKET.get(testKey)
-          testInfo.r2Test = {
-            key: testKey,
-            exists: !!testObject,
-            size: testObject?.size || 0
-          }
-        } catch (error) {
-          testInfo.r2Test = {
-            error: error instanceof Error ? error.message : String(error)
-          }
-        }
-      }
-      
-      return new Response(JSON.stringify(testInfo, null, 2), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          ...getCorsHeaders(request),
-          ...securityHeaders
-        }
+        headers: corsHeaders
       })
     }
     
@@ -187,15 +159,12 @@ export default {
         const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json')
         if (metadataObject) {
           const metadata = await metadataObject.text()
-          const { cacheControl } = calculateDynamicTTL()
-          
           return new Response(metadata, {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': cacheControl,
-              'ETag': metadataObject.httpEtag || `"${metadataObject.etag}"`,
-              ...getCorsHeaders(request),
+              'Cache-Control': 'public, max-age=300',
+              ...corsHeaders,
               ...securityHeaders
             }
           })
@@ -207,16 +176,16 @@ export default {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          ...getCorsHeaders(request),
+          ...corsHeaders,
           ...securityHeaders
         }
       })
     }
     
-    // /api/ranking R2から読み込み
+    // /api/ranking パスでR2から読み込み
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       try {
-        // パラメータ取得
+        // クエリパラメータ取得
         const genre = url.searchParams.get('genre') || 'all'
         const period = url.searchParams.get('period') || '24h'
         const tag = url.searchParams.get('tag')
@@ -226,41 +195,26 @@ export default {
         let cacheKeySuffix: string
         
         if (tag) {
+          // タグランキングの場合
           const encodedTag = encodeURIComponent(tag)
           r2Key = `rankings/${genre}/${period}/tags/${encodedTag}.json`
           cacheKeySuffix = `${genre}/${period}/tags/${encodedTag}`
         } else {
+          // 通常ランキングの場合
           r2Key = `rankings/${genre}/${period}/all.json`
           cacheKeySuffix = `${genre}/${period}/all`
         }
         
-        // Workersキャッシュのキー
+        // Workers Cacheキー
         const cacheKey = new Request(`https://r2-cache.nico-rank.com/ranking/${cacheKeySuffix}`, request)
         const cache = caches.default
         
         // キャッシュチェック
         let response = await cache.match(cacheKey)
         if (response) {
+          // キャッシュヒット
           response = new Response(response.body, response)
           response.headers.set('X-Cache-Status', 'HIT')
-          
-          // If-None-Matchチェック
-          const cachedETag = response.headers.get('ETag')
-          const ifNoneMatch = request.headers.get('If-None-Match')
-          if (cachedETag && ifNoneMatch && isETagMatch(cachedETag, ifNoneMatch)) {
-            const { cacheControl, cdnCacheControl } = calculateDynamicTTL()
-            return new Response(null, {
-              status: 304,
-              headers: {
-                'ETag': cachedETag,
-                'Cache-Control': cacheControl,
-                'CDN-Cache-Control': cdnCacheControl,
-                ...getCorsHeaders(request),
-                ...securityHeaders
-              }
-            })
-          }
-          
           return response
         }
         
@@ -269,8 +223,8 @@ export default {
         const r2Object = await env.R2_BUCKET.get(r2Key)
         
         if (!r2Object) {
+          // タグデータが存在しない場合
           if (tag) {
-            // タグデータが存在しない場合
             console.log(`[Worker] Tag data not found for ${r2Key}, returning empty result`)
             const emptyResponse = {
               items: [],
@@ -289,41 +243,21 @@ export default {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Data-Source': 'r2-tag-not-found',
-                ...getCorsHeaders(request),
+                ...corsHeaders,
                 ...securityHeaders
               }
             })
           } else {
-            // Vercelへフォールバック
+            // 通常ランキングが存在しない場合、Vercelへフォールバック
             console.log(`R2 miss for ${r2Key}, falling back to Vercel`)
             return proxyToVercel(request, env)
           }
         }
         
-        // ETag取得
-        const etag = r2Object.httpEtag || `"${r2Object.etag}"`
-        
-        // If-None-Matchチェック
-        const ifNoneMatch = request.headers.get('If-None-Match')
-        if (ifNoneMatch && isETagMatch(etag, ifNoneMatch)) {
-          const { cacheControl, cdnCacheControl } = calculateDynamicTTL()
-          return new Response(null, {
-            status: 304,
-            headers: {
-              'ETag': etag,
-              'Cache-Control': cacheControl,
-              'CDN-Cache-Control': cdnCacheControl,
-              ...getCorsHeaders(request),
-              ...securityHeaders
-            }
-          })
-        }
-        
-        // R2オブジェクトのメタデータから圧縮情報を取得（元のWorkerと同じロジック）
+        // R2オブジェクトのメタデータから圧縮情報を取得
         const r2ContentEncoding = r2Object.httpMetadata?.contentEncoding
         const r2ContentType = r2Object.httpMetadata?.contentType
-        console.log(`[Worker] R2 object httpMetadata.contentEncoding: ${r2ContentEncoding}`)
-        console.log(`[Worker] R2 object httpMetadata.contentType: ${r2ContentType}`)
+        console.log(`[Worker] R2 object metadata - encoding: ${r2ContentEncoding}, type: ${r2ContentType}`)
         
         // ストリームを分割して最初のチャンクを検査
         const [inspectStream, passthroughStream] = r2Object.body!.tee()
@@ -333,22 +267,21 @@ export default {
         reader.releaseLock()
         
         // gzipマジックナンバーチェック (0x1f, 0x8b)
-        const isGzipped = !done && firstChunk && firstChunk.length >= 2 && firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
+        const isGzipped = !done && firstChunk && firstChunk.length >= 2 && 
+                         firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
         
-        // 動的TTLを計算
-        const { cacheControl, cdnCacheControl } = calculateDynamicTTL()
+        console.log(`[Worker] Data is ${isGzipped ? 'gzipped' : 'not gzipped'}`)
         
         // レスポンスヘッダー作成
         const headers = new Headers()
         headers.set('Content-Type', 'application/json')
-        headers.set('Cache-Control', cacheControl)
-        headers.set('CDN-Cache-Control', cdnCacheControl)
-        headers.set('ETag', etag)
+        headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400, no-transform')
+        headers.set('CDN-Cache-Control', 'public, max-age=3600')
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
         
         // CORSとセキュリティヘッダーを追加
-        Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
+        Object.entries(corsHeaders).forEach(([key, value]) => {
           headers.set(key, value)
         })
         Object.entries(securityHeaders).forEach(([key, value]) => {
@@ -359,8 +292,6 @@ export default {
         if (r2ContentEncoding) {
           headers.set('Content-Encoding', r2ContentEncoding)
           headers.set('Vary', 'Accept-Encoding')
-          // Cloudflareの変換を防ぐためno-transformを追加
-          headers.set('Cache-Control', `${cacheControl}, no-transform`)
         }
         
         if (isGzipped) {
@@ -369,15 +300,10 @@ export default {
           // 重要: encodeBody: "manual" を使用してCloudflareの自動圧縮を無効化
           headers.set('Content-Encoding', 'gzip')
           headers.set('Vary', 'Accept-Encoding')
-          // Cloudflareの変換を防ぐためno-transformを追加
-          headers.set('Cache-Control', `${cacheControl}, no-transform`)
-          headers.set('CDN-Cache-Control', `${cdnCacheControl}, no-transform`)
           
           response = new Response(passthroughStream, {
             status: 200,
             headers,
-            // CloudflareドキュメントのQ: 既に圧縮されたデータを配信するには
-            // A: encodeBody: "manual" を設定する必要がある
             encodeBody: "manual"
           } as ResponseInit)
         } else {
@@ -395,7 +321,7 @@ export default {
         
       } catch (error) {
         console.error('R2 read error:', error)
-        // Vercelへフォールバック
+        // エラー時はVercelへフォールバック
         return proxyToVercel(request, env)
       }
     }
@@ -408,7 +334,9 @@ export default {
 // Vercelへのプロキシ関数
 async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
-  const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
+  const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-7b010d3zi-yjsns-projects.vercel.app'
+  
+  console.log(`[Proxy] Proxying ${url.pathname} to ${targetUrl}`)
   
   // ターゲットURLのホスト名取得
   const targetHost = new URL(targetUrl).hostname
@@ -438,6 +366,33 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   try {
     const response = await fetch(proxyRequest)
     
+    // Handle redirects manually to prevent loops
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('Location')
+      if (location) {
+        // If the redirect is to the same domain, follow it internally
+        const locationUrl = new URL(location, url.origin)
+        if (locationUrl.hostname === url.hostname) {
+          console.warn(`Redirect loop detected: ${url.toString()} -> ${location}`)
+          // Don't follow the redirect, just proxy the content
+        } else {
+          // For external redirects, pass them through
+          const responseHeaders = new Headers(response.headers)
+          Object.entries(securityHeaders).forEach(([key, value]) => {
+            responseHeaders.set(key, value)
+          })
+          Object.entries(corsHeaders).forEach(([key, value]) => {
+            responseHeaders.set(key, value)
+          })
+          return new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: responseHeaders
+          })
+        }
+      }
+    }
+    
     // レスポンスヘッダー
     const responseHeaders = new Headers(response.headers)
     
@@ -447,7 +402,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     })
     
     // CORSヘッダー追加
-    Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
+    Object.entries(corsHeaders).forEach(([key, value]) => {
       responseHeaders.set(key, value)
     })
     
@@ -462,7 +417,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
       status: 502,
       headers: {
         'Content-Type': 'text/plain',
-        ...getCorsHeaders(request)
+        ...corsHeaders
       }
     })
   }
