@@ -6,6 +6,12 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
 export async function middleware(request: NextRequest) {
+  // 内部API呼び出しは認証チェックをスキップ
+  const isInternalAPI = request.nextUrl.pathname.startsWith('/api/')
+  if (isInternalAPI) {
+    return NextResponse.next()
+  }
+  
   // Cloudflare Workers経由のアクセスチェック（開発環境以外）
   // development以外では認証チェックを行う
   const shouldCheckAuth = process.env.VERCEL_ENV !== 'development'
@@ -30,8 +36,8 @@ export async function middleware(request: NextRequest) {
         // CloudflareのWorker経由でない場合のみリダイレクト
         if (!xForwardedHost || !xForwardedHost.includes('nico-rank.com')) {
           console.log('[Middleware] Would redirect to nico-rank.com - Host:', host, 'X-Forwarded-Host:', xForwardedHost)
-          // 一時的に無効化
-          // return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+          // リダイレクトを有効化
+          return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
         }
         
         // Worker経由の場合はリダイレクトしない
