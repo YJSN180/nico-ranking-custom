@@ -247,7 +247,6 @@ export default function ClientPage({
       return
     }
     
-    console.log('[ClientPage] handleConfigChange called:', newConfig)
     setConfig(newConfig)
     setLoading(true)
     setError(null)
