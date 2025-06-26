@@ -29,8 +29,9 @@ export async function middleware(request: NextRequest) {
         
         // CloudflareのWorker経由でない場合のみリダイレクト
         if (!xForwardedHost || !xForwardedHost.includes('nico-rank.com')) {
-          console.log('[Middleware] Redirecting to nico-rank.com - Host:', host, 'X-Forwarded-Host:', xForwardedHost)
-          return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
+          console.log('[Middleware] Would redirect to nico-rank.com - Host:', host, 'X-Forwarded-Host:', xForwardedHost)
+          // 一時的に無効化
+          // return NextResponse.redirect('https://nico-rank.com' + request.nextUrl.pathname)
         }
         
         // Worker経由の場合はリダイレクトしない

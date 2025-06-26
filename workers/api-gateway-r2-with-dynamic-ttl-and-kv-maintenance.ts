@@ -468,32 +468,13 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     method: request.method,
     headers,
     body: request.body,
-    redirect: 'manual' // manualに戻す
+    redirect: 'follow' // リダイレクトを自動的に処理
   })
   
   try {
     const response = await fetch(proxyRequest)
     
     console.log(`[Worker] Vercel response - Status: ${response.status}, URL: ${proxyUrl.toString()}`)
-    
-    // 3xxリダイレクトの場合の処理
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get('Location')
-      console.log(`[Worker] Redirect detected to: ${location}`)
-      
-      // nico-rank.comへのリダイレクトの場合、無限ループを防ぐ
-      if (location && location.includes('nico-rank.com')) {
-        console.log(`[Worker] Preventing redirect loop to nico-rank.com`)
-        // リダイレクトを無視して、元のリクエストを再実行
-        return new Response('Redirect loop prevented', { 
-          status: 500,
-          headers: {
-            'Content-Type': 'text/plain',
-            ...getCorsHeaders(request)
-          }
-        })
-      }
-    }
     
     // レスポンスヘッダーの処理
     const responseHeaders = new Headers(response.headers)
