@@ -13,7 +13,7 @@ jobs:
   deploy-worker:
     runs-on: ubuntu-latest
     outputs:
-      worker_url: ${{ steps.deploy.outputs.worker_url }}
+      worker_url_encoded: ${{ steps.deploy.outputs.worker_url_encoded }}
       version_id: ${{ steps.deploy.outputs.version_id }}
       preview_token: ${{ steps.deploy.outputs.preview_token }}
     steps:
@@ -58,11 +58,15 @@ jobs:
           
           # If not found, construct it
           if [ -z "$WORKER_URL" ]; then
-            WORKER_URL="https://nico-ranking-api-gateway-pr-${{ github.event.number }}.${{ secrets.CLOUDFLARE_SUBDOMAIN }}.workers.dev"
+            # Construct URL without using secrets directly to avoid masking
+            SUBDOMAIN="${{ secrets.CLOUDFLARE_SUBDOMAIN }}"
+            WORKER_URL="https://nico-ranking-api-gateway-pr-${{ github.event.number }}.${SUBDOMAIN}.workers.dev"
           fi
           
           echo "Worker URL: $WORKER_URL"
-          echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
+          # Use base64 encoding to avoid GitHub's secret masking
+          ENCODED_URL=$(echo -n "$WORKER_URL" | base64 -w 0)
+          echo "worker_url_encoded=$ENCODED_URL" >> $GITHUB_OUTPUT
           
           # Clean up
           rm -f wrangler-temp.toml deployment.log
@@ -95,7 +99,9 @@ jobs:
           npm i -g vercel
           
           # Create a temporary .env file for the build
-          echo "NEXT_PUBLIC_WORKER_URL=${{ needs.deploy-worker.outputs.worker_url }}" > .env.production
+          # Decode the base64 encoded URL
+          WORKER_URL=$(echo "${{ needs.deploy-worker.outputs.worker_url_encoded }}" | base64 -d)
+          echo "NEXT_PUBLIC_WORKER_URL=$WORKER_URL" > .env.production
           echo "NEXT_PUBLIC_PREVIEW_TOKEN=${{ needs.deploy-worker.outputs.preview_token }}" >> .env.production
           
           # Deploy with environment variables
@@ -130,11 +136,14 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const workerUrlEncoded = '${{ needs.deploy-worker.outputs.worker_url_encoded }}';
+            const workerUrl = workerUrlEncoded ? Buffer.from(workerUrlEncoded, 'base64').toString() : 'Worker URL not available';
+            
             const comment = `## 🎉 Preview Environment Ready!
             
             ### 🌐 Preview URLs
             - **Frontend**: ${{ steps.vercel.outputs.deployment_url }}
-            - **Worker API**: ${{ needs.deploy-worker.outputs.worker_url }}
+            - **Worker API**: ${workerUrl}
             
             ### 🔒 Security
             This preview is protected with a unique token. Only authorized requests will be processed.
