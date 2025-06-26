@@ -175,6 +175,9 @@ describe('ランキング順位のナンバリング検証', () => {
     const rankingItems = screen.getAllByText(/Video \d/)
     const titles = rankingItems.map(item => item.textContent)
     
+    // デバッグ用: 実際の順序を確認
+    console.log('Actual titles order:', titles)
+    
     // rank順でソートされて表示されることを確認
     expect(titles).toEqual(['Video 1', 'Video 2', 'Video 3', 'Video 4', 'Video 5'])
   })
