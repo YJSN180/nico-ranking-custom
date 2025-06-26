@@ -468,13 +468,28 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     method: request.method,
     headers,
     body: request.body,
-    redirect: 'follow' // リダイレクトを自動的に処理
+    redirect: 'manual' // リダイレクトを手動で処理
   })
   
   try {
     const response = await fetch(proxyRequest)
     
     console.log(`[Worker] Vercel response - Status: ${response.status}, URL: ${proxyUrl.toString()}`)
+    
+    // リダイレクトレスポンスの処理
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('Location')
+      console.log(`[Worker] Redirect detected - Location: ${location}`)
+      
+      // リダイレクト先がnico-rank.comの場合、リダイレクトせずに元のレスポンスを返す
+      if (location && location.includes('nico-rank.com')) {
+        console.log(`[Worker] Blocking redirect to nico-rank.com to prevent loop`)
+        // リダイレクトを無視して通常のレスポンスを返す
+      } else if (location) {
+        // その他のリダイレクトはそのまま返す
+        return response
+      }
+    }
     
     // レスポンスヘッダーの処理
     const responseHeaders = new Headers(response.headers)
@@ -496,7 +511,12 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     })
   } catch (error) {
     console.error('Proxy error:', error)
-    return new Response('Gateway Error', { 
+    console.error('Error details:', {
+      url: proxyUrl.toString(),
+      method: request.method,
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return new Response(`Gateway Error: ${error instanceof Error ? error.message : 'Unknown error'}`, { 
       status: 502,
       headers: {
         'Content-Type': 'text/plain',

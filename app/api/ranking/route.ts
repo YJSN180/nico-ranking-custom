@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getGenreRanking, getTagRanking } from '@/lib/cloudflare-kv'
 import { generateMockRankingData, generateMockPopularTags, isDevelopmentWithoutKV } from '@/lib/mock-data'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { RankingItem } from '@/types/ranking'
@@ -72,95 +71,119 @@ export async function GET(request: NextRequest) {
       return response
     }
     
-    // Cloudflare KVが利用可能かチェック（環境変数で判定）
-    const kvRankingId = process.env.KV_RANKING_ID?.trim()
-    const cloudflareApiToken = process.env.CLOUDFLARE_API_TOKEN?.trim()
-    const useCloudflareKV = kvRankingId && cloudflareApiToken && kvRankingId !== '' && cloudflareApiToken !== ''
+    // Cloudflare Workers API Gatewayを使用
+    const apiGatewayUrl = process.env.NEXT_PUBLIC_API_GATEWAY_URL
     
-    // CI環境でのデバッグ情報
-    if (process.env.CI) {
-      // eslint-disable-next-line no-console
-      console.log('CI Environment Debug:', {
-        hasKvRankingId: !!kvRankingId,
-        hasApiToken: !!cloudflareApiToken,
-        kvIdLength: kvRankingId?.length || 0,
-        apiTokenLength: cloudflareApiToken?.length || 0,
-        useCloudflareKV
-      })
-    }
-    
-    // タグ別ランキングの処理
-    if (tag) {
-      // Cloudflare KVからの取得を試みる
-      if (useCloudflareKV) {
-        try {
-          const cfItems = await getTagRanking(genre, period as RankingPeriod, tag)
-          if (cfItems && cfItems.length > 0) {
-            // タグ別ランキングは全件返す（KVに保存されている分すべて）
-            const response = NextResponse.json({
-              items: cfItems, // 全件返す（239件など）
-              hasMore: false, // タグ別ランキングは常にfalse
-              totalCached: cfItems.length
-            })
-            response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
-            response.headers.set('X-Cache-Status', 'CF-HIT')
-            response.headers.set('X-Total-Cached', cfItems.length.toString())
-            response.headers.set('X-API-Version', '2') // バージョン確認用
-            return response
-          }
-        } catch (error) {
-          // Cloudflare KV error - silently fallback to dynamic fetch
-        }
-      }
-      
-      // KVにデータがない場合は、タグが人気タグリストにない可能性がある
-      // 404 Not Foundを返す（500エラーではなく）
+    if (!apiGatewayUrl) {
+      console.error('[API] NEXT_PUBLIC_API_GATEWAY_URL is not configured')
       return NextResponse.json(
-        { 
-          error: 'Tag ranking not found. This tag may not be in the popular tags list.',
-          items: [],
-          hasMore: false,
-          totalCached: 0
-        },
-        { status: 404 }
+        { error: 'API Gateway URLが設定されていません。' },
+        { status: 500 }
       )
     }
-
-    // 通常のジャンル別ランキング
     
-    // Cloudflare KVからの取得を試みる
-    if (useCloudflareKV) {
-      try {
-        const cfData = await getGenreRanking(genre, period as RankingPeriod)
-        if (cfData && cfData.items && cfData.items.length > 0) {
-          // ジャンル別ランキングは500件まで返す
-          const maxItems = 500
-          const items = cfData.items.slice(0, maxItems)
-          
-          const response = NextResponse.json({
-            items: items,
-            popularTags: cfData.popularTags || [],
-            hasMore: false, // ページネーションなし
-            totalCached: cfData.items.length
-          })
-          response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
-          response.headers.set('X-Cache-Status', 'CF-HIT')
-          response.headers.set('X-Max-Items', String(maxItems))
-          response.headers.set('X-API-Version', '2') // バージョン確認用
-          return response
+    // Cloudflare Workers経由でデータを取得
+    try {
+      const params = new URLSearchParams()
+      params.set('genre', genre)
+      params.set('period', period)
+      if (tag) params.set('tag', tag)
+      
+      const workerUrl = `${apiGatewayUrl}/api/ranking?${params.toString()}`
+      console.log(`[API] Fetching from Worker: ${workerUrl}`)
+      
+      const workerResponse = await fetch(workerUrl, {
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate, br'
+        },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(30000) // 30 seconds timeout
+      })
+      
+      if (!workerResponse.ok) {
+        console.error(`[API] Worker returned error: ${workerResponse.status} ${workerResponse.statusText}`)
+        
+        // タグが見つからない場合
+        if (workerResponse.status === 404 && tag) {
+          return NextResponse.json(
+            { 
+              error: 'Tag ranking not found. This tag may not be in the popular tags list.',
+              items: [],
+              hasMore: false,
+              totalCached: 0
+            },
+            { status: 404 }
+          )
         }
-      } catch (error) {
-        // Cloudflare KV error - silently fallback to dynamic fetch
+        
+        // その他のエラー
+        return NextResponse.json(
+          { error: `Worker error: ${workerResponse.status}` },
+          { status: workerResponse.status }
+        )
       }
+      
+      // レスポンスをパース
+      const data = await workerResponse.json()
+      
+      // タグ別ランキングの処理
+      if (tag && data.items) {
+        const response = NextResponse.json({
+          items: data.items,
+          hasMore: false,
+          totalCached: data.items.length
+        })
+        response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
+        response.headers.set('X-Cache-Status', 'WORKER-HIT')
+        response.headers.set('X-Total-Cached', data.items.length.toString())
+        response.headers.set('X-API-Version', '3') // Worker経由バージョン
+        return response
+      }
+      
+      // ジャンル別ランキング
+      if (data.items) {
+        const maxItems = 500
+        const items = data.items.slice(0, maxItems)
+        
+        const response = NextResponse.json({
+          items: items,
+          popularTags: data.popularTags || [],
+          hasMore: false,
+          totalCached: data.items.length
+        })
+        response.headers.set('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=1800')
+        response.headers.set('X-Cache-Status', 'WORKER-HIT')
+        response.headers.set('X-Max-Items', String(maxItems))
+        response.headers.set('X-API-Version', '3') // Worker経由バージョン
+        return response
+      }
+      
+      // データが空の場合
+      return NextResponse.json(
+        { error: 'ランキングデータが見つかりません。' },
+        { status: 503 }
+      )
+      
+    } catch (error) {
+      console.error('[API] Worker fetch error:', error)
+      
+      // AbortError (timeout)
+      if (error instanceof Error && error.name === 'AbortError') {
+        return NextResponse.json(
+          { error: 'API Gateway timeout' },
+          { status: 504 }
+        )
+      }
+      
+      return NextResponse.json(
+        { error: 'API Gateway connection failed' },
+        { status: 503 }
+      )
     }
     
-    // KVにデータがない場合はエラーを返す
-    return NextResponse.json(
-      { error: 'ランキングデータが見つかりません。しばらくしてから再度お試しください。' },
-      { status: 503 }
-    )
-    
   } catch (error) {
+    console.error('[API] Unexpected error:', error)
     // API error - return error response
     return NextResponse.json(
       { error: 'ランキングデータの取得に失敗しました。' },
