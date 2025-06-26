@@ -136,10 +136,18 @@ export default {
       
       // メンテナンスモード処理
       if (maintenanceMode === "true") {
-        const clientIP = request.headers.get('CF-Connecting-IP') || '';
+        // IPの取得優先順位：X-Forwarded-For（Vercel経由） > CF-Connecting-IP（直接アクセス）
+        const xForwardedFor = request.headers.get('X-Forwarded-For');
+        const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
+        
+        // X-Forwarded-Forの最初のIPを取得（複数のプロキシ経由の場合）
+        const clientIP = xForwardedFor 
+          ? xForwardedFor.split(',')[0].trim()
+          : cfConnectingIP;
+        
         const allowedIPList = allowedIPs ? allowedIPs.split(',').map(ip => ip.trim()) : [];
         
-        console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
+        console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, X-Forwarded-For: ${xForwardedFor}, CF-Connecting-IP: ${cfConnectingIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
         
         // IPホワイトリストチェック
         if (!allowedIPList.includes(clientIP)) {
@@ -156,13 +164,22 @@ export default {
       
       // デバッグエンドポイント
       if (url.pathname === '/api/debug') {
+        const xForwardedFor = request.headers.get('X-Forwarded-For');
+        const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
+        const clientIP = xForwardedFor 
+          ? xForwardedFor.split(',')[0].trim()
+          : cfConnectingIP;
+          
         return new Response(JSON.stringify({
           time: new Date().toISOString(),
           worker: 'api-gateway-smart-router',
           activeWorker: targetWorker,
           maintenance: {
             mode: maintenanceMode || 'not_set',
-            client_ip: request.headers.get('CF-Connecting-IP') || 'unknown'
+            client_ip: clientIP || 'unknown',
+            cf_connecting_ip: cfConnectingIP || 'unknown',
+            x_forwarded_for: xForwardedFor || 'not_set',
+            allowed_ips: allowedIPs || 'not_set'
           }
         }, null, 2), {
           status: 200,

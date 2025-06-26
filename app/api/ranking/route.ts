@@ -95,7 +95,12 @@ export async function GET(request: NextRequest) {
         headers: {
           'Accept': 'application/json',
           'Accept-Encoding': 'gzip, deflate, br',
-          'X-Worker-Auth': process.env.WORKER_AUTH_KEY || ''
+          'X-Worker-Auth': process.env.WORKER_AUTH_KEY || '',
+          // クライアントの実際のIPを転送（メンテナンスモード対応）
+          'X-Forwarded-For': request.headers.get('x-forwarded-for') || 
+                             request.headers.get('x-real-ip') || 
+                             request.headers.get('cf-connecting-ip') || 
+                             ''
         },
         // Add timeout to prevent hanging
         signal: AbortSignal.timeout(30000) // 30 seconds timeout
