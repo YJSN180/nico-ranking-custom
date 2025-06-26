@@ -106,7 +106,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     
     // SSRでのfetch（Node.js環境）
     const response = await fetch(apiUrl, {
-      next: { revalidate: 300 }, // 5分間キャッシュ
+      next: { revalidate: 1200 }, // 20分間キャッシュ（429エラー対策で延長）
       headers: {
         'Accept-Encoding': 'gzip, deflate, br',
         'Accept': 'application/json',

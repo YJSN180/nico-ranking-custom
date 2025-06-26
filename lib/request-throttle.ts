@@ -5,9 +5,9 @@ interface ThrottleEntry {
   resetTime: number
 }
 
-const WINDOW_SIZE = 10 * 1000 // 10 seconds window
-const MAX_REQUESTS_PER_WINDOW = 10 // Max 10 requests per 10 seconds
-const MIN_REQUEST_INTERVAL = 100 // Minimum 100ms between requests
+const WINDOW_SIZE = 60 * 1000 // 60 seconds window (429エラー対策で延長)
+const MAX_REQUESTS_PER_WINDOW = 20 // Max 20 requests per 60 seconds
+const MIN_REQUEST_INTERVAL = 500 // Minimum 500ms between requests (429エラー対策で延長)
 
 class RequestThrottle {
   private throttleMap = new Map<string, ThrottleEntry>()

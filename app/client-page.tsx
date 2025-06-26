@@ -67,6 +67,9 @@ export default function ClientPage({
     }
   })
   
+  // 初回ロードを追跡（二重リクエスト防止用）
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  
   // ページ状態の管理
   const [currentPage, setCurrentPage] = useState(initialPage)
   
@@ -156,6 +159,9 @@ export default function ClientPage({
       setCurrentPage(Math.max(1, pageNum))
     }
     
+    // 初回レンダリング時はSSRのデータを使用するため、追加のAPI呼び出しを避ける
+    // これにより二重リクエストを防ぐ
+    
     // 人気タグをlocalStorageから復元（ブラウザバック対応）
     const storageKey = `popular-tags-${initialGenre}-${initialPeriod}`
     try {
@@ -239,6 +245,15 @@ export default function ClientPage({
   
   // 設定変更時の処理
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
+    // 初回ロードの場合はSSRのデータをそのまま使用
+    if (isInitialLoad && 
+        newConfig.genre === initialGenre && 
+        newConfig.period === initialPeriod && 
+        newConfig.tag === initialTag) {
+      setIsInitialLoad(false)
+      return
+    }
+    
     // 変更がない場合は何もしない（強制更新でない限り）
     if (
       !force &&
@@ -538,7 +553,7 @@ export default function ClientPage({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config, router, updatePreferences, savePopularTagsToCache])
+  }, [config, router, updatePreferences, savePopularTagsToCache, isInitialLoad, initialGenre, initialPeriod, initialTag])
   
   // ページ変更時の処理
   const handlePageChange = useCallback((page: number) => {
