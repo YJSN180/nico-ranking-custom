@@ -1,18 +1,19 @@
-// Simplified API without Edge runtime support
+// Direct connection to Cloudflare Worker (Vercel Function を使わない)
 export class APIFallback {
-  private static readonly NODE_ENDPOINT = '/api/ranking'
+  private static readonly CLOUDFLARE_ENDPOINT = 'https://nico-rank.com/api/ranking'
   
   static async fetchWithFallback(
     params: URLSearchParams,
     signal?: AbortSignal
   ): Promise<Response> {
-    // Use Node.js endpoint only (Edge removed due to zlib incompatibility)
-    const response = await fetch(`${this.NODE_ENDPOINT}?${params.toString()}`, {
+    // Cloudflare Worker に直接接続（Vercel Function をバイパス）
+    const response = await fetch(`${this.CLOUDFLARE_ENDPOINT}?${params.toString()}`, {
       signal,
-      // Add headers to ensure proper decompression
       headers: {
         'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate, br'
+        'Accept-Encoding': 'gzip, deflate, br',
+        // CORS対応のため Origin を設定
+        'Origin': typeof window !== 'undefined' ? window.location.origin : ''
       }
     })
     

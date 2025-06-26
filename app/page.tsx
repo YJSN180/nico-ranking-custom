@@ -90,28 +90,27 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
-  // サーバーサイドでAPIエンドポイントを使用（R2から直接データを取得）
+  // Cloudflare Worker から直接データを取得（Vercel Function をバイパス）
   try {
-    // SSRでは内部URLを使用（開発環境では localhost:3000）
-    const baseUrl = process.env.NODE_ENV === 'development' 
-      ? 'http://localhost:3000' 
-      : (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://nico-rank.com')
     const params = new URLSearchParams()
     params.set('genre', genre)
     params.set('period', period)
     if (tag) params.set('tag', tag)
     
-    const apiUrl = `${baseUrl}/api/ranking?${params.toString()}`
-    // console.log(`[SSR] Fetching from API: ${apiUrl}`)
+    // Cloudflare Worker のエンドポイントに直接アクセス
+    const apiUrl = `https://nico-rank.com/api/ranking?${params.toString()}`
+    // console.log(`[SSR] Fetching directly from Cloudflare Worker: ${apiUrl}`)
     
     // SSRでのfetch（Node.js環境）
     const response = await fetch(apiUrl, {
-      next: { revalidate: 1200 }, // 20分間キャッシュ（429エラー対策で延長）
+      next: { revalidate: 1200 }, // 20分間キャッシュ
       headers: {
         'Accept-Encoding': 'gzip, deflate, br',
         'Accept': 'application/json',
-        // SSRから自身のAPIを呼ぶ際も認証が必要
-        'X-Worker-Auth': process.env.WORKER_AUTH_KEY || ''
+        // Worker認証ヘッダー
+        'X-Worker-Auth': process.env.WORKER_AUTH_KEY || '',
+        // SSRであることを示すヘッダー
+        'X-SSR-Request': 'true'
       }
     })
     
