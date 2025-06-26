@@ -109,6 +109,8 @@ jobs:
             --token=$VERCEL_TOKEN \
             --yes \
             --prod=false \
+            --build-env NEXT_PUBLIC_WORKER_URL=$WORKER_URL \
+            --build-env NEXT_PUBLIC_PREVIEW_TOKEN=${{ needs.deploy-worker.outputs.preview_token }} \
             --env NEXT_PUBLIC_WORKER_URL=$WORKER_URL \
             --env NEXT_PUBLIC_PREVIEW_TOKEN=${{ needs.deploy-worker.outputs.preview_token }})
           
