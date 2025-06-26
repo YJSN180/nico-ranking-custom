@@ -94,7 +94,8 @@ export async function GET(request: NextRequest) {
       const workerResponse = await fetch(workerUrl, {
         headers: {
           'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br'
+          'Accept-Encoding': 'gzip, deflate, br',
+          'X-Worker-Auth': process.env.WORKER_AUTH_KEY || ''
         },
         // Add timeout to prevent hanging
         signal: AbortSignal.timeout(30000) // 30 seconds timeout
