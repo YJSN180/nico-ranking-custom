@@ -9,6 +9,9 @@ interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY: string
   R2_BUCKET: R2Bucket
+  RANKING_DATA?: KVNamespace
+  ENVIRONMENT?: string
+  PREVIEW_TOKEN?: string
 }
 
 // セキュリティヘッダー定義
@@ -45,7 +48,7 @@ function getCorsHeaders(request: Request): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
+    'Access-Control-Allow-Headers': 'Content-Type, If-None-Match, X-Preview-Token',
     'Access-Control-Max-Age': '86400'
   }
 }

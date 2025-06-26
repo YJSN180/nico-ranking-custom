@@ -1,0 +1,21 @@
+name = "nico-ranking-opennext"
+main = "./.open-next/worker/index.mjs"
+compatibility_date = "2025-06-26"
+compatibility_flags = ["nodejs_compat"]
+
+# 既存のR2/KVバインディング継続利用
+[[kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# 環境変数
+[vars]
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+
+# Workers Cron設定（既存GitHub Actionsを段階移行）
+[[triggers.crons]]
+cron = "*/30 * * * *"  # 30分間隔でランキング更新

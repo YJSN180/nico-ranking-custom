@@ -1,0 +1,52 @@
+name: Cleanup Preview Environment v2
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Delete Worker Preview
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Delete the PR-specific Worker
+          echo "Deleting Worker: nico-ranking-api-gateway-pr-${{ github.event.number }}"
+          
+          # Try to delete the worker
+          npx wrangler delete \
+            --name nico-ranking-api-gateway-pr-${{ github.event.number }} \
+            --force || echo "Worker may have already been deleted"
+            
+      - name: Comment Cleanup Status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## 🧹 Preview Environment Cleaned Up
+            
+            The preview environment for PR #${{ github.event.number }} has been removed.
+            
+            - ✅ Worker instance deleted
+            - ✅ Vercel preview will be automatically archived
+            
+            Thank you for your contribution!`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            })

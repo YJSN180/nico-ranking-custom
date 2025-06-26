@@ -4,7 +4,7 @@ main = "workers/api-gateway-dynamic-cache.ts"  # 動的キャッシュ版を使�
 compatibility_date = "2025-06-24"
 compatibility_flags = ["nodejs_compat"]
 
-# プレビュー環境用のKV namespace（本番とは分離）
+# プレビュー環境用のKV namespace（本番と同じデータを参照）
 [[kv_namespaces]]
 binding = "RANKING_DATA"
 id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"  # 本番と同じKVを参照（読み取り専用）

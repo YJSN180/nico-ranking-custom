@@ -134,3 +134,6 @@ venv/
 __pycache__/
 *.pyc
 
+# OpenNext build directory
+.open-next/
+

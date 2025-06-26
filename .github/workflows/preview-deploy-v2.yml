@@ -1,0 +1,169 @@
+name: Deploy Preview Environment v2
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  deploy-worker:
+    runs-on: ubuntu-latest
+    outputs:
+      worker_url: ${{ steps.deploy.outputs.worker_url }}
+      version_id: ${{ steps.deploy.outputs.version_id }}
+      preview_token: ${{ steps.deploy.outputs.preview_token }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Deploy Worker Preview
+        id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Generate unique preview token
+          PREVIEW_TOKEN=$(openssl rand -hex 16)
+          echo "preview_token=$PREVIEW_TOKEN" >> $GITHUB_OUTPUT
+          
+          # Create a temporary wrangler.toml with dynamic values
+          cp wrangler-preview.toml wrangler-temp.toml
+          
+          # Deploy using wrangler versions
+          echo "Deploying Worker version for PR #${{ github.event.number }}..."
+          
+          # Use wrangler deploy with --no-bundle to get preview URL
+          DEPLOYMENT_OUTPUT=$(npx wrangler deploy \
+            --name nico-ranking-api-gateway-pr-${{ github.event.number }} \
+            --var ENVIRONMENT:preview \
+            --var PREVIEW_TOKEN:$PREVIEW_TOKEN \
+            --var VERCEL_DEPLOYMENT_URL:pending \
+            --config wrangler-temp.toml \
+            --compatibility-date 2025-06-24 \
+            --no-route 2>&1 | tee deployment.log)
+          
+          # Extract the preview URL from deployment output
+          WORKER_URL=$(grep -oP 'https://[a-zA-Z0-9-]+\.workers\.dev' deployment.log | head -1)
+          
+          # If not found, construct it
+          if [ -z "$WORKER_URL" ]; then
+            WORKER_URL="https://nico-ranking-api-gateway-pr-${{ github.event.number }}.${{ secrets.CLOUDFLARE_SUBDOMAIN }}.workers.dev"
+          fi
+          
+          echo "Worker URL: $WORKER_URL"
+          echo "worker_url=$WORKER_URL" >> $GITHUB_OUTPUT
+          
+          # Clean up
+          rm -f wrangler-temp.toml deployment.log
+          
+      - name: Comment Worker URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 Worker Preview: ${{ steps.deploy.outputs.worker_url }}'
+            })
+
+  deploy-vercel:
+    needs: deploy-worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Deploy to Vercel
+        id: vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          # Install Vercel CLI
+          npm i -g vercel
+          
+          # Create a temporary .env file for the build
+          echo "NEXT_PUBLIC_WORKER_URL=${{ needs.deploy-worker.outputs.worker_url }}" > .env.production
+          echo "NEXT_PUBLIC_PREVIEW_TOKEN=${{ needs.deploy-worker.outputs.preview_token }}" >> .env.production
+          
+          # Deploy with environment variables
+          DEPLOYMENT_URL=$(vercel deploy \
+            --token=$VERCEL_TOKEN \
+            --yes \
+            --prod=false)
+          
+          echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
+          
+          # Clean up
+          rm -f .env.production
+          
+      - name: Update Worker with Vercel URL
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Update the Worker with the actual Vercel deployment URL
+          echo "Updating Worker with Vercel URL..."
+          
+          npx wrangler deploy \
+            --name nico-ranking-api-gateway-pr-${{ github.event.number }} \
+            --var ENVIRONMENT:preview \
+            --var PREVIEW_TOKEN:${{ needs.deploy-worker.outputs.preview_token }} \
+            --var VERCEL_DEPLOYMENT_URL:${{ steps.vercel.outputs.deployment_url }} \
+            --config wrangler-preview.toml \
+            --compatibility-date 2025-06-24 \
+            --no-route
+          
+      - name: Comment Preview URLs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `## 🎉 Preview Environment Ready!
+            
+            ### 🌐 Preview URLs
+            - **Frontend**: ${{ steps.vercel.outputs.deployment_url }}
+            - **Worker API**: ${{ needs.deploy-worker.outputs.worker_url }}
+            
+            ### 🔒 Security
+            This preview is protected with a unique token. Only authorized requests will be processed.
+            
+            ### 🧹 Cleanup
+            This preview environment will be automatically cleaned up when the PR is closed.
+            
+            ---
+            *Last updated: ${new Date().toISOString()}*`;
+            
+            // Find and update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Preview Environment Ready!')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }

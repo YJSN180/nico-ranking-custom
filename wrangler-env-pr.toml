@@ -1,0 +1,29 @@
+# PR環境用の動的設定テンプレート
+# GitHub Actionsで環境変数を使って動的に値を設定
+name = "nico-ranking-api-gateway"
+main = "workers/api-gateway-dynamic-cache.ts"
+compatibility_date = "2025-06-24"
+compatibility_flags = ["nodejs_compat"]
+
+# 環境名はGitHub Actionsで --env pr-{PR番号} として指定
+# 例: wrangler deploy --env pr-123
+
+# KV namespace（本番データを読み取り専用で参照）
+[[env.pr-*.kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+# R2 bucket（本番データを読み取り専用で参照）
+[[env.pr-*.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# 環境変数（GitHub Actionsで動的に設定）
+[env.pr-*.vars]
+ENVIRONMENT = "preview"
+# VERCEL_DEPLOYMENT_URL = GitHub Actionsで設定
+# PREVIEW_TOKEN = GitHub Actionsで設定
+
+# TypeScript設定
+[build]
+command = ""

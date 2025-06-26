@@ -1,0 +1,19 @@
+name = "nico-ranking-pages"
+compatibility_date = "2025-06-26"
+compatibility_flags = ["nodejs_compat"]
+
+# Pages Functions configuration
+pages_build_output_dir = ".vercel/output/static"
+
+# 既存のR2/KVバインディング継続利用
+[[kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# 環境変数
+[vars]
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
