@@ -247,6 +247,7 @@ export default function ClientPage({
       return
     }
     
+    console.log('[ClientPage] handleConfigChange called:', newConfig)
     setConfig(newConfig)
     setLoading(true)
     setError(null)
@@ -604,7 +605,8 @@ export default function ClientPage({
         setShouldRestore(null)
       }
     }
-  }, [shouldRestore, config, handleConfigChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shouldRestore])
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
@@ -666,9 +668,10 @@ export default function ClientPage({
   const lastUpdated = null
   
   // レンダリング
-  return (
-    <>
-      <div className="selectors-container">
+  try {
+    return (
+      <>
+        <div className="selectors-container">
         <RankingSelector config={config} onConfigChange={handleConfigChange} />
         <TagSelector 
           config={config} 
@@ -808,4 +811,17 @@ export default function ClientPage({
       )}
     </>
   )
+  } catch (error) {
+    console.error('Rendering error in ClientPage:', error)
+    return (
+      <div style={{ textAlign: 'center', padding: '40px' }}>
+        <div style={{ fontSize: '16px', color: 'var(--error-color)' }}>
+          レンダリングエラーが発生しました
+        </div>
+        <pre style={{ marginTop: '20px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+          {error instanceof Error ? error.message : String(error)}
+        </pre>
+      </div>
+    )
+  }
 }
