@@ -109,7 +109,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       next: { revalidate: 300 }, // 5分間キャッシュ
       headers: {
         'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        // SSRから自身のAPIを呼ぶ際も認証が必要
+        'X-Worker-Auth': process.env.WORKER_AUTH_KEY || ''
       }
     })
     
