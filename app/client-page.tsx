@@ -68,44 +68,13 @@ export default function ClientPage({
   })
   
   // ページ状態の管理
-  const [currentPage, setCurrentPage] = useState(() => {
-    // URLパラメータから初期ページを取得
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search)
-      const pageParam = urlParams.get('page')
-      if (pageParam) {
-        const pageNum = parseInt(pageParam, 10)
-        return Math.max(1, pageNum)
-      }
-    }
-    return initialPage
-  })
+  const [currentPage, setCurrentPage] = useState(initialPage)
   
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData.items || initialData as any)
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(
     allRankingData || initialData.items || initialData as any
   )
-  const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(() => {
-    // サーバーサイドでは localStorage を使用しない
-    if (typeof window === 'undefined') {
-      return popularTags
-    }
-    
-    // 人気タグをlocalStorageから復元（ブラウザバック対応）
-    const storageKey = `popular-tags-${initialGenre}-${initialPeriod}`
-    try {
-      const cached = localStorage.getItem(storageKey)
-      if (cached) {
-        const parsed = JSON.parse(cached)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
-        }
-      }
-    } catch {
-      // パースエラーは無視
-    }
-    return popularTags
-  })
+  const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -173,17 +142,39 @@ export default function ClientPage({
   }, [config, currentPopularTags, currentPage])
   
   // sessionStorageから復元する設定を管理
-  const [shouldRestore, setShouldRestore] = useState(() => {
-    // サーバーサイドでは復元しない
-    if (typeof window === 'undefined') return null
+  const [shouldRestore, setShouldRestore] = useState(null)
+  
+  // クライアント側の初期化処理
+  useEffect(() => {
+    // URLパラメータから初期ページを取得
+    const urlParams = new URLSearchParams(window.location.search)
+    const pageParam = urlParams.get('page')
+    if (pageParam) {
+      const pageNum = parseInt(pageParam, 10)
+      setCurrentPage(Math.max(1, pageNum))
+    }
+    
+    // 人気タグをlocalStorageから復元（ブラウザバック対応）
+    const storageKey = `popular-tags-${initialGenre}-${initialPeriod}`
+    try {
+      const cached = localStorage.getItem(storageKey)
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCurrentPopularTags(parsed)
+        }
+      }
+    } catch {
+      // パースエラーは無視
+    }
     
     // URLパラメータがない場合のみ、sessionStorageから復元を試みる
-    const hasUrlParams = new URLSearchParams(window.location.search).has('genre') || 
-                        new URLSearchParams(window.location.search).has('period') || 
-                        new URLSearchParams(window.location.search).has('tag') ||
-                        new URLSearchParams(window.location.search).has('page')
+    const hasUrlParams = urlParams.has('genre') || 
+                        urlParams.has('period') || 
+                        urlParams.has('tag') ||
+                        urlParams.has('page')
     
-    if (!hasUrlParams && typeof window !== 'undefined') {
+    if (!hasUrlParams) {
       try {
         const savedState = sessionStorage.getItem('ranking-navigation-state')
         if (savedState) {
@@ -191,15 +182,15 @@ export default function ClientPage({
           // 30分以内のデータのみ復元（古いデータは無視）
           const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000)
           if (parsed.savedAt && parsed.savedAt > thirtyMinutesAgo) {
-            return parsed
+            setShouldRestore(parsed)
           }
         }
       } catch {
         // エラーは無視
       }
     }
-    return null
-  })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
