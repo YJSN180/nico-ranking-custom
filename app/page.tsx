@@ -99,8 +99,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     
     // Cloudflare Worker のエンドポイントに直接アクセス
     const apiUrl = `https://nico-rank.com/api/ranking?${params.toString()}`
+    // eslint-disable-next-line no-console
     console.log(`[SSR] Fetching directly from Cloudflare Worker: ${apiUrl}`)
+    // eslint-disable-next-line no-console
     console.log(`[SSR] WORKER_AUTH_KEY present: ${!!process.env.WORKER_AUTH_KEY}`)
+    // eslint-disable-next-line no-console
     console.log(`[SSR] WORKER_AUTH_KEY length: ${process.env.WORKER_AUTH_KEY?.length}`)
     
     // SSRでのfetch（Node.js環境）
@@ -117,9 +120,12 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     })
     
     if (!response.ok) {
+      // eslint-disable-next-line no-console
       console.log(`[SSR] Response status: ${response.status}`)
+      // eslint-disable-next-line no-console
       console.log(`[SSR] Response headers:`, Object.fromEntries(response.headers.entries()))
       const errorText = await response.text()
+      // eslint-disable-next-line no-console
       console.log(`[SSR] Error response body:`, errorText.substring(0, 500))
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
@@ -132,12 +138,15 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       data = await response.json()
     } catch (jsonError) {
       // JSONパースに失敗した場合、テキストとして取得して再度パース
+      // eslint-disable-next-line no-console
       console.warn('[SSR] Initial JSON parse failed, trying text approach:', jsonError)
       const text = await response.text()
       try {
         data = JSON.parse(text)
       } catch (parseError) {
+        // eslint-disable-next-line no-console
         console.error('[SSR] Failed to parse response:', parseError)
+        // eslint-disable-next-line no-console
         console.error('[SSR] Response text (first 500 chars):', text.substring(0, 500))
         throw new Error('Invalid JSON response from API')
       }
@@ -149,7 +158,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       return filteredData
     }
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('[SSR] API error:', error)
+    // eslint-disable-next-line no-console
     console.error('[SSR] Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
@@ -279,6 +290,7 @@ export default async function Home({ searchParams }: PageProps) {
     }
     
     // その他のエラーの場合はエラーページを表示
+    // eslint-disable-next-line no-console
     console.error('[SSR] Unexpected error:', error)
     const { notFound } = await import('next/navigation')
     notFound()
