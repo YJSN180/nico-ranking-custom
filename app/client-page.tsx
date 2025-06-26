@@ -70,9 +70,9 @@ export default function ClientPage({
   // ページ状態の管理
   const [currentPage, setCurrentPage] = useState(initialPage)
   
-  const [rankingData, setRankingData] = useState<RankingItem[]>(initialData.items || initialData as any)
+  const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(
-    allRankingData || initialData.items || initialData as any
+    allRankingData || initialData?.items || []
   )
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
@@ -286,13 +286,13 @@ export default function ClientPage({
     
     // Check client-side cache first
     const cached = rankingCache.get(newConfig.genre, newConfig.period, newConfig.tag)
-    if (cached) {
+    if (cached && cached.data) {
       // 全データを保存
       setFullRankingData(cached.data)
       
-      // 現在のページのアイテムのみを表示データとして設定
-      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-      const endIndex = startIndex + ITEMS_PER_PAGE
+      // 設定変更時は必ず1ページ目から表示
+      const startIndex = 0
+      const endIndex = ITEMS_PER_PAGE
       setRankingData(cached.data.slice(startIndex, endIndex))
       
       if (cached.popularTags && !newConfig.tag && newConfig.genre !== 'all') {
@@ -405,9 +405,9 @@ export default function ClientPage({
         // 全データを保存
         setFullRankingData(data.items)
         
-        // 現在のページのアイテムのみを表示データとして設定
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-        const endIndex = startIndex + ITEMS_PER_PAGE
+        // 設定変更時は必ず1ページ目から表示
+        const startIndex = 0
+        const endIndex = ITEMS_PER_PAGE
         setRankingData(data.items.slice(startIndex, endIndex))
         
         // Cache the data
@@ -487,9 +487,9 @@ export default function ClientPage({
         // 全データを保存
         setFullRankingData(data)
         
-        // 現在のページのアイテムのみを表示データとして設定
-        const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-        const endIndex = startIndex + ITEMS_PER_PAGE
+        // 設定変更時は必ず1ページ目から表示
+        const startIndex = 0
+        const endIndex = ITEMS_PER_PAGE
         setRankingData(data.slice(startIndex, endIndex))
         
         // Cache the data (array format)
