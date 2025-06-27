@@ -221,6 +221,15 @@ export default {
         });
       }
       
+      // 特定の静的ファイル（Next.js publicディレクトリのファイル）はVercelから配信
+      const publicFiles = ['/icon.png', '/icon-192.png', '/icon-512.png', '/og-image.png', '/manifest.json', '/robots.txt'];
+      const isPublicFile = publicFiles.includes(url.pathname) || url.pathname.startsWith('/fonts/');
+      
+      if (isPublicFile) {
+        // Next.jsのpublicディレクトリのファイルはVercelから配信
+        return proxyToVercel(request, env);
+      }
+      
       // /api/ パスは選択されたWorkerへリクエストをルーティング
       if (url.pathname.startsWith('/api/')) {
         if (targetWorker === "green" && env.WORKER_GREEN) {
