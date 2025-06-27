@@ -34,6 +34,7 @@ export function useMylistOperations() {
         const allMylists = await mylistManagerRef.current.getAllMylists()
         setMylists(allMylists)
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to initialize mylist operations:', error)
       } finally {
         if (mounted) {
@@ -56,6 +57,7 @@ export function useMylistOperations() {
       await mylistManagerRef.current.addVideoToMylist(mylistId, video)
       return true
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to add video to mylist:', error)
       return false
     }
@@ -68,6 +70,7 @@ export function useMylistOperations() {
       await mylistManagerRef.current.removeVideoFromMylist(mylistId, videoId)
       return true
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to remove video from mylist:', error)
       return false
     }
@@ -86,6 +89,7 @@ export function useMylistOperations() {
       }
       return { inMylist: mylistIds.length > 0, mylistIds }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to check video in mylists:', error)
       return { inMylist: false, mylistIds: [] }
     }

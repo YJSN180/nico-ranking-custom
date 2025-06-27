@@ -48,6 +48,7 @@ export function MylistButton({ video }: MylistButtonProps) {
       setIsInMylist(false)
       setMylistIds([])
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to remove from mylists:', error)
     } finally {
       setIsProcessing(false)
@@ -78,6 +79,7 @@ export function MylistButton({ video }: MylistButtonProps) {
         setShowModal(false)
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to add to mylist:', error)
     } finally {
       setIsProcessing(false)

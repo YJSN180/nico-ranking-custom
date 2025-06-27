@@ -48,6 +48,7 @@ export function MylistDetailClient() {
 
         await loadMylistData()
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to initialize mylist detail:', error)
       } finally {
         if (mounted) {
@@ -77,6 +78,7 @@ export function MylistDetailClient() {
       setVideos(videosData)
       setFilteredVideos(videosData)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to load mylist data:', error)
     }
   }
@@ -130,6 +132,7 @@ export function MylistDetailClient() {
       await mylistManagerRef.current.removeVideoFromMylist(mylistId, videoId)
       await loadMylistData()
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to remove video:', error)
     }
   }
@@ -142,6 +145,7 @@ export function MylistDetailClient() {
       await loadMylistData()
       setEditingVideo(null)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to update memo:', error)
     }
   }
@@ -154,6 +158,7 @@ export function MylistDetailClient() {
       await loadMylistData()
       setShowSettings(false)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to update mylist:', error)
     }
   }
@@ -169,6 +174,7 @@ export function MylistDetailClient() {
       await mylistManagerRef.current.deleteMylist(mylistId)
       router.push('/mylists')
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to delete mylist:', error)
     }
   }

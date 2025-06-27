@@ -57,6 +57,7 @@ export default function TestDBPage() {
         logs.push(`❌ Error: ${errorMsg}`)
         setStatus([...logs])
         setError(errorMsg)
+        // eslint-disable-next-line no-console
         console.error('Test error:', err)
       }
     }

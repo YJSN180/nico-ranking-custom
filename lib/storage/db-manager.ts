@@ -18,30 +18,38 @@ export class DBManager {
   private openDBModule: typeof import('idb') | null = null
 
   async init(): Promise<void> {
+    // eslint-disable-next-line no-console
     console.log('[DBManager] init() called')
     
     // Check if running in browser environment
     if (typeof window === 'undefined') {
+      // eslint-disable-next-line no-console
       console.warn('[DBManager] Not in browser environment, skipping initialization')
       throw new Error('IndexedDB is only available in the browser')
     }
     
     // Check if IndexedDB is available
     if (!('indexedDB' in window)) {
+      // eslint-disable-next-line no-console
       console.error('[DBManager] IndexedDB not available')
       throw new Error('IndexedDB is not available in this browser')
     }
     
     try {
       // Dynamically import idb library
+      // eslint-disable-next-line no-console
       console.log('[DBManager] Dynamically importing idb library...')
       this.openDBModule = await import('idb')
+      // eslint-disable-next-line no-console
       console.log('[DBManager] idb library imported successfully')
       
+      // eslint-disable-next-line no-console
       console.log('[DBManager] Calling openDB...')
       this.db = await this.openDB()
+      // eslint-disable-next-line no-console
       console.log('[DBManager] openDB completed successfully')
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('[DBManager] init() error:', error)
       throw error
     }
@@ -53,9 +61,11 @@ export class DBManager {
     }
     
     const { openDB } = this.openDBModule
+    // eslint-disable-next-line no-console
     console.log(`[DBManager] openDB() called - name: ${this.dbName}, version: ${this.version}`)
     return await openDB(this.dbName, this.version, {
       upgrade(db, oldVersion) {
+        // eslint-disable-next-line no-console
         console.log(`[DBManager] upgrade callback triggered - oldVersion: ${oldVersion}`)
         // お気に入りストア（互換性のため残す）
         if (!db.objectStoreNames.contains('favorites')) {

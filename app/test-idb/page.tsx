@@ -8,6 +8,7 @@ export default function TestIDB() {
 
   const addLog = (message: string) => {
     const timestamp = new Date().toISOString()
+    // eslint-disable-next-line no-console
     console.log(`[${timestamp}] ${message}`)
     setLogs(prev => [...prev, `[${timestamp}] ${message}`])
   }

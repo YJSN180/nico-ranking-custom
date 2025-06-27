@@ -21,10 +21,7 @@ export function MylistsClient() {
     let mounted = true
     
     const init = async () => {
-      console.log('[MylistsClient] useEffect init() started')
-      console.log('[MylistsClient] Document ready state:', document.readyState)
-      console.log('[MylistsClient] typeof window:', typeof window)
-      console.log('[MylistsClient] typeof indexedDB:', typeof window.indexedDB)
+      // Debug logs removed for production
       
       // Wait a bit to ensure hydration is complete
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -33,13 +30,9 @@ export function MylistsClient() {
       
       try {
         if (!dbManagerRef.current) {
-          console.log('[MylistsClient] Creating new DBManager...')
           dbManagerRef.current = new DBManager()
-          console.log('[MylistsClient] DBManager created, calling init()...')
           await dbManagerRef.current.init()
-          console.log('[MylistsClient] DBManager init() completed')
           mylistManagerRef.current = new MylistManager(dbManagerRef.current)
-          console.log('[MylistsClient] MylistManager created')
         }
 
         // デフォルトマイリストを確保
@@ -51,6 +44,7 @@ export function MylistsClient() {
         // ストレージ情報を取得
         await updateStorageInfo()
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to initialize mylists page:', error)
       } finally {
         if (mounted) {
@@ -73,6 +67,7 @@ export function MylistsClient() {
       const allMylists = await mylistManagerRef.current.getAllMylists()
       setMylists(allMylists)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to load mylists:', error)
     }
   }
@@ -86,6 +81,7 @@ export function MylistsClient() {
           quota: estimate.quota || 0
         })
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to get storage info:', error)
       }
     }
@@ -99,6 +95,7 @@ export function MylistsClient() {
       await loadMylists()
       setShowCreateModal(false)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to create mylist:', error)
     }
   }
@@ -111,6 +108,7 @@ export function MylistsClient() {
       await loadMylists()
       setEditingMylist(null)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to update mylist:', error)
     }
   }
@@ -126,6 +124,7 @@ export function MylistsClient() {
       await mylistManagerRef.current.deleteMylist(mylistId)
       await loadMylists()
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to delete mylist:', error)
       if (error instanceof Error && error.message.includes('default')) {
         alert('デフォルトマイリストは削除できません')
