@@ -2,6 +2,35 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import ClientPage from '@/app/client-page'
 
+// 動的インポートのモック
+vi.mock('@/components/pagination', () => ({
+  default: ({ currentPage, totalPages, onPageChange }: any) => (
+    <div data-testid="pagination">
+      Page {currentPage} of {totalPages}
+    </div>
+  )
+}))
+
+vi.mock('@/components/tag-selector', () => ({
+  TagSelector: ({ config, onConfigChange, popularTags = [] }: any) => {
+    if (config.tag) return null
+    const visibleTags = config.genre === 'all' ? [] : popularTags
+    return (
+      <div className="_selectorContainer_933bb3">
+        <div>
+          <h2 className="_selectorTitle_933bb3">人気タグ</h2>
+          <div className="_buttonContainer_933bb3">
+            <button className="_button_933bb3 _buttonSelected_933bb3">すべて</button>
+            {visibleTags.map((tag: string) => (
+              <button key={tag} className="_button_933bb3">{tag}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+}))
+
 // モックの設定
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -81,9 +110,11 @@ describe('NG設定反映後の表示挙動', () => {
     
     render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="all"
         initialPeriod="24h"
+        popularTags={[]}
       />
     )
 
@@ -99,12 +130,15 @@ describe('NG設定反映後の表示挙動', () => {
     }
     
     const mockData = createMockData(150)
+    const filteredData = mockFilterItems(mockData)
     
     render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: filteredData }}
+        allRankingData={filteredData}
         initialGenre="all"
         initialPeriod="24h"
+        popularTags={[]}
       />
     )
 
@@ -125,12 +159,15 @@ describe('NG設定反映後の表示挙動', () => {
     }
     
     const mockData = createMockData(10)
+    const filteredData = mockFilterItems(mockData)
     
     const { container } = render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: filteredData }}
+        allRankingData={filteredData}
         initialGenre="all"
         initialPeriod="24h"
+        popularTags={[]}
       />
     )
 
@@ -162,12 +199,15 @@ describe('NG設定反映後の表示挙動', () => {
     }
     
     const mockData = createMockData(200)
+    const filteredData = mockFilterItems(mockData)
     
     render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: filteredData }}
+        allRankingData={filteredData}
         initialGenre="all"
         initialPeriod="24h"
+        popularTags={[]}
       />
     )
 

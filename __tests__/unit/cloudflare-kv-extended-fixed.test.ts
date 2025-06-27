@@ -53,6 +53,9 @@ describe('Cloudflare KV Integration (Fixed for 3-key split)', () => {
         metadata: mockRankingData.metadata
       }
 
+      // KV_RANKING_IDを設定
+      process.env.KV_RANKING_ID = 'test-ranking-id'
+
       fetchMock
         .mockResolvedValueOnce({
           ok: true,
@@ -78,6 +81,9 @@ describe('Cloudflare KV Integration (Fixed for 3-key split)', () => {
     })
 
     it('単一キーへのフォールバックが機能する', async () => {
+      // KV_RANKING_IDを設定
+      process.env.KV_RANKING_ID = 'test-ranking-id'
+      
       // 3-keyが404を返す (no fallback to single key anymore)
       fetchMock
         .mockResolvedValueOnce({ ok: false, status: 404 })
@@ -98,6 +104,9 @@ describe('Cloudflare KV Integration (Fixed for 3-key split)', () => {
         genres: { all: mockRankingData.genres.all },
         metadata: mockRankingData.metadata
       }
+
+      // KV_RANKING_IDを設定
+      process.env.KV_RANKING_ID = 'test-ranking-id'
 
       fetchMock.mockResolvedValueOnce({
         ok: true,
