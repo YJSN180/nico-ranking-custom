@@ -78,9 +78,8 @@ export function HeaderWithSettings() {
                 position: 'relative',
                 width: isMobile ? '48px' : '106px',
                 height: isMobile ? '48px' : '106px',
-                filter: 'brightness(0) invert(1)', // 白色に変換
-                opacity: 0.95,
-                marginRight: isMobile ? '-5px' : '-20px', // タイトルとやや重なるように
+                flexShrink: 0, // サイズ維持
+                marginRight: isMobile ? '4px' : '8px', // 適切な余白
               }}>
                 <Image
                   src="/icon.png"
@@ -88,9 +87,12 @@ export function HeaderWithSettings() {
                   fill
                   sizes={isMobile ? "48px" : "106px"}
                   style={{
-                    objectFit: 'contain'
+                    objectFit: 'contain',
+                    filter: 'brightness(0) invert(1)', // 白色に変換
+                    opacity: 0.95,
                   }}
                   priority
+                  unoptimized={false} // Next.js最適化を有効化
                 />
               </div>
               <div style={{
