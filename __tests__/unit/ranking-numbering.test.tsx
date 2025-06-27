@@ -35,6 +35,7 @@ describe('ランキング順位のナンバリング検証', () => {
     render(
       <ClientPage
         initialData={{ items: testData }}
+        allRankingData={testData}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -61,6 +62,7 @@ describe('ランキング順位のナンバリング検証', () => {
     render(
       <ClientPage
         initialData={{ items: testData }}
+        allRankingData={testData}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -93,6 +95,7 @@ describe('ランキング順位のナンバリング検証', () => {
     render(
       <ClientPage
         initialData={{ items: testData }}
+        allRankingData={testData}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -135,6 +138,7 @@ describe('ランキング順位のナンバリング検証', () => {
     render(
       <ClientPage
         initialData={{ items: testData }}
+        allRankingData={testData}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
@@ -162,21 +166,33 @@ describe('ランキング順位のナンバリング検証', () => {
       { id: '4', title: 'Video 4', rank: 4, thumbURL: 'https://example.com/4.jpg', views: 700 }
     ]
 
+    // デバッグ用: 入力データを確認
+    console.log('Input testData:', testData.map(item => `${item.title} (rank: ${item.rank})`))
+
     render(
       <ClientPage
         initialData={{ items: testData }}
+        allRankingData={testData}
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
       />
     )
 
-    // DOM上での表示順序を確認
-    const rankingItems = screen.getAllByText(/Video \d/)
-    const titles = rankingItems.map(item => item.textContent)
+    // data-testidを使ってタイトル要素を直接取得し、DOM順序を確認
+    const titleElements = screen.getAllByTestId('video-title')
+    const titles = titleElements.map(element => element.textContent || '')
     
     // デバッグ用: 実際の順序を確認
     console.log('Actual titles order:', titles)
+    
+    // デバッグ用: ランキングアイテムのrank値も確認
+    const rankingItems = screen.getAllByTestId('ranking-item')
+    const ranks = rankingItems.map(item => {
+      const rankElement = item.querySelector('.ranking-item-responsive__rank')
+      return rankElement?.textContent || ''
+    })
+    console.log('Actual ranks order:', ranks)
     
     // rank順でソートされて表示されることを確認
     expect(titles).toEqual(['Video 1', 'Video 2', 'Video 3', 'Video 4', 'Video 5'])
@@ -187,7 +203,7 @@ describe('ランキング順位のナンバリング検証', () => {
     const testData: RankingItem[] = []
     
     // 100件のデータを生成（89-91番目に注目）
-    for (let i = 1; i <= 110; i++) {
+    for (let i = 1; i <= 100; i++) {
       testData.push({
         id: i.toString(),
         title: `Video ${i}`,
@@ -199,12 +215,16 @@ describe('ランキング順位のナンバリング検証', () => {
 
     render(
       <ClientPage
-        initialData={testData.slice(0, 100)} // 最初の100件
+        initialData={{ items: testData }} // 正しい形式でデータを渡す
         initialGenre="all"
         initialPeriod="24h"
         popularTags={[]}
       />
     )
+
+    // ランキングアイテムが表示されていることを確認
+    const rankingItems = screen.getAllByTestId('ranking-item')
+    expect(rankingItems.length).toBeGreaterThan(0)
 
     // 89位、90位、100位がそれぞれ表示されることを確認（デスクトップ・モバイル版で複数表示される可能性あり）
     const rank89Elements = screen.getAllByText('89')

@@ -74,11 +74,13 @@ export default function ClientPage({
   const [currentPage, setCurrentPage] = useState(initialPage)
   
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
-  const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(
-    (allRankingData && Array.isArray(allRankingData)) ? allRankingData : 
-    (initialData?.items && Array.isArray(initialData.items)) ? initialData.items : 
-    []
-  )
+  const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
+    // 初期データをrank順でソートして設定
+    const initialArray = (allRankingData && Array.isArray(allRankingData)) ? allRankingData : 
+                        (initialData?.items && Array.isArray(initialData.items)) ? initialData.items : 
+                        []
+    return [...initialArray].sort((a, b) => a.rank - b.rank)
+  })
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
