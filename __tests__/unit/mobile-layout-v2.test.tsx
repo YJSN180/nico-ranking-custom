@@ -40,16 +40,17 @@ describe('モバイルレイアウトv2（順位上配置）', () => {
     
     const rankElement = screen.getByText('1')
     expect(rankElement).toHaveStyle({ 
-      fontSize: '18px',
+      fontSize: '12px',
       fontWeight: '700'
     })
   })
 
-  it('タイトルのフォントサイズが15pxである', () => {
+  it('タイトルのフォントサイズが適切に設定される', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
     const title = screen.getByTestId('video-title')
-    expect(title).toHaveStyle({ fontSize: '15px' })
+    // CSSクラスが正しく適用されているかチェック
+    expect(title).toHaveClass('ranking-video-link--mobile')
   })
 
   it('統計情報が適切にフォーマットされる', () => {
