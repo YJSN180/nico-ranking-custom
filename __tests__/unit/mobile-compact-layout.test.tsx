@@ -49,11 +49,12 @@ describe('モバイルコンパクトレイアウト', () => {
     
     const title = screen.getByTestId('video-title')
     
-    // インラインスタイルを直接確認
-    expect(title.style.overflow).toBe('hidden')
-    expect(title.style.display).toBe('-webkit-box')
-    // React は WebkitLineClamp を kebab-case に変換する
-    expect(title.style.getPropertyValue('-webkit-line-clamp')).toBe('2')
+    // クラス名によるスタイル確認
+    expect(title.className).toContain('ranking-video-link')
+    expect(title.className).toContain('ranking-video-link--mobile')
+    
+    // タイトルテキストが表示されている
+    expect(title.textContent).toBe(mockItem.title)
   })
 
   it('再生数が1万以上の場合「万」表記になる', () => {

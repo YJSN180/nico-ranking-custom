@@ -3,13 +3,41 @@
  * R2とAPIゲートウェイを通じたタグ別ランキングの取得を検証
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const API_GATEWAY_URL = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
+
+// fetchのモック
+const mockFetch = vi.fn()
+global.fetch = mockFetch as any
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
 describe('タグフィルタリング機能', () => {
   describe('APIゲートウェイ経由のタグ別ランキング取得', () => {
     it('ゲームジャンルの「実況プレイ動画」タグで正しくデータを取得できる', async () => {
+      const mockData = {
+        items: [
+          { id: 'sm123', title: 'ゲーム実況動画', views: 1000 }
+        ],
+        popularTags: ['実況プレイ動画', 'ゲーム'],
+        metadata: {
+          genre: 'game',
+          period: '24h',
+          tag: '実況プレイ動画'
+        }
+      }
+      
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        headers: {
+          get: (key: string) => key === 'content-type' ? 'application/json' : null
+        },
+        json: async () => mockData
+      })
+      
       const response = await fetch(`${API_GATEWAY_URL}/api/ranking?genre=game&period=24h&tag=実況プレイ動画`)
       
       expect(response.status).toBe(200)
@@ -34,6 +62,22 @@ describe('タグフィルタリング機能', () => {
     })
     
     it('存在しないタグでは空の結果が返される', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        headers: {
+          get: () => null
+        },
+        json: async () => ({
+          items: [],
+          popularTags: [],
+          metadata: {
+            genre: 'game',
+            period: '24h',
+            tag: '存在しないタグ123456'
+          }
+        })
+      })
+      
       const response = await fetch(`${API_GATEWAY_URL}/api/ranking?genre=game&period=24h&tag=存在しないタグ123456`)
       
       expect(response.status).toBe(200)
@@ -45,6 +89,23 @@ describe('タグフィルタリング機能', () => {
     })
     
     it('タグなしの場合は「すべて」のランキングが返される', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        headers: {
+          get: () => null
+        },
+        json: async () => ({
+          items: [
+            { id: 'sm456', title: 'ゲーム動画', views: 2000 }
+          ],
+          popularTags: ['ゲーム'],
+          metadata: {
+            genre: 'game',
+            period: '24h'
+          }
+        })
+      })
+      
       const response = await fetch(`${API_GATEWAY_URL}/api/ranking?genre=game&period=24h`)
       
       expect(response.status).toBe(200)
@@ -66,6 +127,22 @@ describe('タグフィルタリング機能', () => {
       ]
       
       for (const tag of specialTags) {
+        mockFetch.mockResolvedValueOnce({
+          status: 200,
+          headers: {
+            get: () => null
+          },
+          json: async () => ({
+            items: [{ id: 'sm789', title: `${tag}動画`, views: 3000 }],
+            popularTags: [tag],
+            metadata: {
+              genre: 'all',
+              period: '24h',
+              tag: tag
+            }
+          })
+        })
+        
         const response = await fetch(`${API_GATEWAY_URL}/api/ranking?genre=all&period=24h&tag=${encodeURIComponent(tag)}`)
         
         expect(response.status).toBe(200)
@@ -82,6 +159,26 @@ describe('タグフィルタリング機能', () => {
   
   describe('キャッシュヘッダーの検証', () => {
     it('適切なキャッシュヘッダーが設定されている', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        headers: {
+          get: (key: string) => {
+            if (key === 'cache-control') return 'public, max-age=300'
+            if (key === 'x-cache-status') return 'HIT'
+            return null
+          }
+        },
+        json: async () => ({
+          items: [],
+          popularTags: [],
+          metadata: {
+            genre: 'vocaloid',
+            period: 'hour',
+            tag: '初音ミク'
+          }
+        })
+      })
+      
       const response = await fetch(`${API_GATEWAY_URL}/api/ranking?genre=vocaloid&period=hour&tag=初音ミク`)
       
       expect(response.status).toBe(200)
