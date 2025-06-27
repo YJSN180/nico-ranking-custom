@@ -123,137 +123,16 @@ function isETagMatch(currentETag: string, ifNoneMatch: string | null): boolean {
   return etags.some(etag => normalizeETag(etag) === normalizedCurrent)
 }
 
-// メンテナンス画面のHTML生成
-function createMaintenanceResponse(): Response {
-  const html = `
-    <!DOCTYPE html>
-    <html lang="ja">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>メンテナンス中 | ニコラン(Re:turn)</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Yu Gothic", sans-serif;
-          background: #f5f5f5;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 100vh;
-          margin: 0;
-          padding: 20px;
-        }
-        .container {
-          background: white;
-          padding: 40px;
-          border-radius: 12px;
-          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-          text-align: center;
-          max-width: 500px;
-          width: 100%;
-        }
-        h1 {
-          color: #333;
-          margin-bottom: 20px;
-          font-size: 28px;
-        }
-        p {
-          color: #666;
-          line-height: 1.6;
-          margin: 15px 0;
-        }
-        .logo {
-          width: 100px;
-          height: 100px;
-          margin-bottom: 20px;
-          filter: brightness(0) invert(0.4);
-        }
-        .progress {
-          background: #e0e0e0;
-          height: 4px;
-          border-radius: 2px;
-          margin: 30px 0;
-          overflow: hidden;
-        }
-        .progress-bar {
-          background: #5567d8;
-          height: 100%;
-          width: 30%;
-          animation: progress 2s ease-in-out infinite;
-        }
-        @keyframes progress {
-          0% { width: 0%; }
-          50% { width: 70%; }
-          100% { width: 100%; }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='40' fill='none' stroke='%23333' stroke-width='4'/%3E%3Cpath d='M30 50 L45 65 L70 40' fill='none' stroke='%23333' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" alt="ニコラン" class="logo">
-        <h1>メンテナンス中</h1>
-        <p>
-          現在、システムメンテナンスを実施しております。<br>
-          より良いサービスをご提供するため、しばらくお待ちください。
-        </p>
-        <div class="progress">
-          <div class="progress-bar"></div>
-        </div>
-        <p><small>ご不便をおかけして申し訳ございません</small></p>
-      </div>
-    </body>
-    </html>
-  `;
-  
-  return new Response(html, {
-    status: 503,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Retry-After': '300', // 5分後に再試行
-      ...securityHeaders
-    }
-  });
-}
+// メンテナンス画面のHTML生成（削除：Smart Routerでのみ使用）
+// この関数は削除され、メンテナンスモードの処理はSmart Routerに統一
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     
-    // メンテナンスモードチェック
-    try {
-      const [maintenanceMode, allowedIPs] = await Promise.all([
-        env.MAINTENANCE_FLAGS.get("maintenance_mode"),
-        env.MAINTENANCE_FLAGS.get("allowed_ips")
-      ]);
-      
-      if (maintenanceMode === "true") {
-        // IPの取得優先順位：X-Forwarded-For（Smart Router経由） > CF-Connecting-IP（直接アクセス）
-        const xForwardedFor = request.headers.get('X-Forwarded-For');
-        const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
-        
-        // X-Forwarded-Forの最初のIPを取得（複数のプロキシ経由の場合）
-        const clientIP = xForwardedFor 
-          ? xForwardedFor.split(',')[0].trim()
-          : cfConnectingIP;
-        
-        const allowedIPList = allowedIPs ? allowedIPs.split(',').map(ip => ip.trim()) : [];
-        
-        console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, X-Forwarded-For: ${xForwardedFor}, CF-Connecting-IP: ${cfConnectingIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
-        console.log(`[Maintenance] Request path: ${url.pathname}`);
-        
-        // IPホワイトリストチェック
-        if (!allowedIPList.includes(clientIP)) {
-          console.log(`[Maintenance] Access denied for IP: ${clientIP}`);
-          return createMaintenanceResponse();
-        }
-        
-        console.log(`[Maintenance] Access allowed for IP: ${clientIP}, continuing to proxy`);
-      }
-    } catch (error) {
-      console.error('Failed to check maintenance mode:', error);
-      // フェイルオープン：エラー時は通常通り処理
-    }
+    // メンテナンスモードチェックは削除
+    // Smart Routerで既にチェック済みのため、ここでの重複チェックは不要
+    // Green WorkerはSmart Router経由でのみアクセスされることを前提とする
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
@@ -302,23 +181,8 @@ export default {
         headers: Object.fromEntries(request.headers.entries()),
         worker: 'api-gateway-r2-with-dynamic-ttl-and-kv-maintenance',
         version: '2025-06-26-dynamic-ttl-kv-maintenance',
-        maintenance: {
-          kv_available: !!env.MAINTENANCE_FLAGS,
-          client_ip: request.headers.get('CF-Connecting-IP') || 'unknown'
-        }
+        note: 'Maintenance mode checks removed - handled by Smart Router'
       };
-      
-      // メンテナンスモードの状態も含める
-      try {
-        const maintenanceMode = await env.MAINTENANCE_FLAGS.get("maintenance_mode");
-        const allowedIPs = await env.MAINTENANCE_FLAGS.get("allowed_ips");
-        debugInfo.maintenance.mode = maintenanceMode || 'not_set';
-        debugInfo.maintenance.mode_raw = maintenanceMode;
-        debugInfo.maintenance.allowed_ips = allowedIPs || 'not_set';
-      } catch (e) {
-        debugInfo.maintenance.mode = 'error';
-        debugInfo.maintenance.error = String(e);
-      }
       
       return new Response(JSON.stringify(debugInfo, null, 2), {
         status: 200,

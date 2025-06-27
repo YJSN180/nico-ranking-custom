@@ -6,7 +6,12 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  preload: true,
+  fallback: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif']
+})
 
 export const metadata: Metadata = {
   title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',

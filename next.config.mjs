@@ -121,8 +121,17 @@ const nextConfig = {
     },
     // メモリ使用量を削減
     workerThreads: false,
-    cpus: 1
+    cpus: 1,
+    // パフォーマンス最適化
+    optimizeCss: true,
   },
+  // パフォーマンス最適化設定
+  swcMinify: true,
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
+  poweredByHeader: false,
+  compress: true,
   // ビルド時のメモリ最適化とJavaScript削減
   webpack: (config, { isServer }) => {
     // クライアントサイドバンドルからサーバー専用モジュールを除外

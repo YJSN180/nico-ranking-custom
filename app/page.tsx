@@ -17,6 +17,9 @@ import { CACHE_DURATIONS } from '@/lib/cache-durations'
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
 
+// Dynamic imports for better code splitting
+export const dynamic = 'force-dynamic'
+
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
 // 動的レンダリングに切り替えてキャッシュヘッダーで対応
