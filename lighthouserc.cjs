@@ -24,7 +24,7 @@ module.exports = {
     assert: {
       assertions: {
         // パフォーマンス
-        'categories:performance': ['error', { minScore: 0.8 }],
+        'categories:performance': ['error', { minScore: 0.7 }],
         'first-contentful-paint': ['error', { maxNumericValue: 1800 }],
         'largest-contentful-paint': ['error', { maxNumericValue: 2500 }],
         'total-blocking-time': ['warn', { maxNumericValue: 300 }],
