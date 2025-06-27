@@ -1,12 +1,14 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
-import { TagSelector } from '@/components/tag-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
-import Pagination from '@/components/pagination'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
+
+// 動的インポートでバンドルサイズを削減
+const Pagination = lazy(() => import('@/components/pagination'))
+const TagSelector = lazy(() => import('@/components/tag-selector').then(mod => ({ default: mod.TagSelector })))
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
@@ -698,11 +700,23 @@ export default function ClientPage({
       <>
         <div className="selectors-container">
         <RankingSelector config={config} onConfigChange={handleConfigChange} />
-        <TagSelector 
-          config={config} 
-          onConfigChange={handleConfigChange} 
-          popularTags={currentPopularTags} 
-        />
+        <Suspense fallback={
+          <div style={{ 
+            minHeight: '100px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)'
+          }}>
+            <span>タグを読み込み中...</span>
+          </div>
+        }>
+          <TagSelector 
+            config={config} 
+            onConfigChange={handleConfigChange} 
+            popularTags={currentPopularTags} 
+          />
+        </Suspense>
       </div>
       
       {loading && (
@@ -786,13 +800,25 @@ export default function ClientPage({
           
           {/* 上部ページネーション（タグ別ランキングでは非表示） */}
           {!config.tag ? (
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalItems}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={handlePageChange}
-            />
+            <Suspense fallback={
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                padding: '20px 0',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '20px'
+              }}>
+                <div style={{ height: '40px' }} />
+              </div>
+            }>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={handlePageChange}
+              />
+            </Suspense>
           ) : (
             /* タグ別ランキングの件数表示 */
             <div style={{
@@ -824,13 +850,25 @@ export default function ClientPage({
           
           {/* 下部ページネーション（タグ別ランキングでは非表示） */}
           {!config.tag && (
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalItems}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={handlePageChange}
-            />
+            <Suspense fallback={
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                padding: '20px 0',
+                borderTop: '1px solid var(--border-color)',
+                marginTop: '20px'
+              }}>
+                <div style={{ height: '40px' }} />
+              </div>
+            }>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={handlePageChange}
+              />
+            </Suspense>
           )}
         </>
       )}

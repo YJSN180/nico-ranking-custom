@@ -9,7 +9,9 @@ import './globals.css'
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
-  preload: true
+  preload: true,
+  adjustFontFallback: true, // フォールバックフォントの最適化
+  variable: '--font-inter'  // CSS変数として使用
 })
 
 export const metadata: Metadata = {
@@ -101,6 +103,12 @@ export default async function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0080ff" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
+        {/* DNS プリフェッチとプリコネクトでAPIレスポンスを高速化 */}
+        <link rel="dns-prefetch" href="https://nicovideo.cdn.nimg.jp" />
+        <link rel="dns-prefetch" href="https://tn.smilevideo.jp" />
+        <link rel="dns-prefetch" href="https://secure-dcdn.cdn.nimg.jp" />
+        <link rel="preconnect" href="https://nicovideo.cdn.nimg.jp" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://tn.smilevideo.jp" crossOrigin="anonymous" />
         {/* フォントのプリロード - WOFF2を最優先で読み込む */}
         <link rel="preload" href="/fonts/nicomoji-plus-v2.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
         <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />

@@ -2,76 +2,29 @@ import { test, expect } from '@playwright/test'
 
 test.describe('リアルタイム更新機能', () => {
   test('動画の統計情報がリアルタイムで更新される', async ({ page }) => {
-    // APIレスポンスをモック
-    await page.route('**/api/ranking/**', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          items: [
-            {
-              rank: 1,
-              id: 'sm40000000',
-              title: 'テスト動画 Part 1',
-              thumbURL: 'https://example.com/thumb1.jpg',
-              views: 1000,
-              comments: 50,
-              mylists: 10,
-              likes: 100,
-              authorName: 'テスト投稿者',
-              registeredAt: new Date().toISOString()
-            },
-            {
-              rank: 2,
-              id: 'sm40000001',
-              title: 'テスト動画 Part 2',
-              thumbURL: 'https://example.com/thumb2.jpg',
-              views: 2000,
-              comments: 100,
-              mylists: 20,
-              likes: 200,
-              authorName: 'テスト投稿者2',
-              registeredAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() // 5時間前
-            }
-          ],
-          popularTags: ['タグ1', 'タグ2']
-        })
-      })
-    })
-
-    // 初回の統計情報APIレスポンスをモック
-    await page.route('**/api/edge/video-stats/**', async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          stats: {
-            sm40000000: { viewCounter: 1500, commentCounter: 75, mylistCounter: 15, likeCounter: 150 },
-            sm40000001: { viewCounter: 2500, commentCounter: 125, mylistCounter: 25, likeCounter: 250 }
-          },
-          timestamp: new Date().toISOString(),
-          count: 2
-        })
-      })
-    })
-
     // ページを開く
     await page.goto('/')
 
     // まずはページが正常にロードされるのを待つ
     await page.waitForLoadState('networkidle')
 
-    // 動画タイトルが表示されることを確認（より柔軟なセレクタを使用）
-    const videoTitle = page.locator('h3:has-text("テスト動画 Part 1"), a:has-text("テスト動画 Part 1")').first()
-    await expect(videoTitle).toBeVisible({ timeout: 10000 })
+    // ランキングアイテムが表示されることを確認
+    const rankingItem = page.locator('[data-testid="ranking-item"]').first()
+    await expect(rankingItem).toBeVisible({ timeout: 10000 })
 
-    // リアルタイム更新を待つ（APIが呼ばれて更新される）
+    // 動画統計情報が含まれているか確認（▶️ 再生数、💬 コメント数などの絵文字が使われている）
+    const statsText = await rankingItem.textContent()
+    expect(statsText).toMatch(/▶️\s*[\d,]+/) // 再生数
+    expect(statsText).toMatch(/💬\s*[\d,]+/) // コメント数
+    expect(statsText).toMatch(/❤️\s*[\d,]+/) // いいね数
+    expect(statsText).toMatch(/📁\s*[\d,]+/) // マイリスト数
+
+    // リアルタイム更新を待つ（実際のAPIが呼ばれる可能性がある）
     await page.waitForTimeout(2000)
 
-    // 統計情報が表示されていることを確認（data-testidまたは実際の統計値で確認）
-    // 再生数・コメント数・マイリスト数・いいね数のいずれかが表示されているか確認
-    const statsContainer = page.locator('text=/[0-9,]+\\s*(▶️|💬|❤️|📁|再生|コメント|マイリスト|いいね)/').first()
-    await expect(statsContainer).toBeVisible({ timeout: 5000 })
+    // 統計情報が依然として表示されていることを確認
+    const updatedStatsText = await rankingItem.textContent()
+    expect(updatedStatsText).toMatch(/▶️\s*[\d,]+/)
   })
 
   test('更新中インジケーターが表示される', async ({ page }) => {

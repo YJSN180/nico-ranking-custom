@@ -159,10 +159,21 @@ const nextConfig = {
       config.optimization.splitChunks = {
         chunks: 'all',
         minSize: 20000,
-        maxSize: 244000,
+        maxSize: 200000, // さらに小さく分割
+        minRemainingSize: 0,
+        minChunks: 1,
+        maxAsyncRequests: 30,
+        maxInitialRequests: 30,
         cacheGroups: {
           default: false,
           vendors: false,
+          framework: {
+            name: 'framework',
+            test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
+            priority: 40,
+            chunks: 'all',
+            enforce: true
+          },
           commons: {
             name: 'commons',
             chunks: 'all',
@@ -172,10 +183,12 @@ const nextConfig = {
           },
           vendor: {
             test: /[\\/]node_modules[\\/]/,
-            name: 'vendors',
+            name(module) {
+              const packageName = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)[1]
+              return `vendor-${packageName.replace('@', '')}`
+            },
             chunks: 'all',
-            priority: 20,
-            maxSize: 244000
+            priority: 20
           }
         }
       }
