@@ -58,6 +58,12 @@
   --card-bg: #ffffff;
   --border: #e5e5e5;
   --text-tertiary: #999999;
+  
+  /* マイリスト関連 */
+  --surface-selected: #e3f2fd;
+  --input-background: #ffffff;
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
 /* ダークテーマ - 継承 */
@@ -108,6 +114,12 @@
   --card-bg: #1e1e1e;
   --border: #333333;
   --text-tertiary: #808080;
+  
+  /* マイリスト関連 */
+  --surface-selected: #1a3a52;
+  --input-background: #2a2a2a;
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.7);
 }
 
 /* ダークブルーテーマ (X/Twitter風) */
@@ -158,6 +170,12 @@
   --card-bg: #192734;
   --border: #38444d;
   --text-tertiary: #8899ac;
+  
+  /* マイリスト関連 */
+  --surface-selected: #1e3a5f;
+  --input-background: #22303c;
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.6);
+  --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.8);
 }
 
 body {

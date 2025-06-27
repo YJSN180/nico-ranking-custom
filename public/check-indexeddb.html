@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check IndexedDB</title>
+</head>
+<body>
+    <h1>IndexedDB Check</h1>
+    <div id="result"></div>
+    <script>
+        const result = document.getElementById('result');
+        
+        // Check if IndexedDB is available
+        if ('indexedDB' in window) {
+            result.innerHTML = '<p style="color: green;">✅ IndexedDB is available</p>';
+            
+            // Try to open a database
+            const request = indexedDB.open('test-db', 1);
+            
+            request.onsuccess = (event) => {
+                result.innerHTML += '<p style="color: green;">✅ Successfully opened database</p>';
+                const db = event.target.result;
+                result.innerHTML += `<p>Database name: ${db.name}</p>`;
+                result.innerHTML += `<p>Database version: ${db.version}</p>`;
+                db.close();
+            };
+            
+            request.onerror = (event) => {
+                result.innerHTML += `<p style="color: red;">❌ Error opening database: ${event.target.error}</p>`;
+            };
+            
+            request.onupgradeneeded = (event) => {
+                result.innerHTML += '<p style="color: blue;">🔄 Database upgrade needed</p>';
+            };
+        } else {
+            result.innerHTML = '<p style="color: red;">❌ IndexedDB is NOT available</p>';
+        }
+    </script>
+</body>
+</html>

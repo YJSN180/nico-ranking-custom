@@ -6,9 +6,9 @@
   gap: 12px;
   padding: 4px;
   
-  /* デスクトップレイアウト: rank + thumbnail + details を横並び */
-  grid-template-columns: auto auto 1fr;
-  grid-template-areas: "rank thumbnail details";
+  /* デスクトップレイアウト: rank + thumbnail + details + mylist-button を横並び */
+  grid-template-columns: auto auto 1fr auto;
+  grid-template-areas: "rank thumbnail details mylist-button";
   align-items: start;
   min-height: 80px;
 }
@@ -110,11 +110,22 @@
   color: var(--text-secondary);
   user-select: none;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .ranking-item-responsive__stat {
   flex-shrink: 0;
 }
+
+/* マイリストボタン専用エリア */
+.ranking-item-responsive__mylist-area {
+  grid-area: mylist-button;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+}
+
 
 /* 再生時間オーバーレイ */
 .ranking-item-responsive__duration {
@@ -140,9 +151,9 @@
   }
   
   .ranking-item-responsive__content {
-    /* モバイルレイアウト: 2カラム（サムネイル + 詳細） */
-    grid-template-columns: 140px 1fr;
-    grid-template-areas: "thumbnail details";
+    /* モバイルレイアウト: 3カラム（サムネイル + 詳細 + マイリストボタン） */
+    grid-template-columns: 140px 1fr auto;
+    grid-template-areas: "thumbnail details mylist-button";
     gap: 8px;
     padding: 2px;
     min-height: 75px;
@@ -210,6 +221,14 @@
   .ranking-item-responsive__stats {
     font-size: 14px;
     gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* モバイルでのマイリストエリア調整 */
+  .ranking-item-responsive__mylist-area {
+    padding: 0 4px;
   }
 }
 
@@ -221,8 +240,8 @@
   }
   
   .ranking-item-responsive__content {
-    grid-template-columns: 100px 1fr;
-    grid-template-areas: "thumbnail details";
+    grid-template-columns: 100px 1fr auto;
+    grid-template-areas: "thumbnail details mylist-button";
     padding: 2px;
     gap: 6px;
     min-height: 70px;
@@ -309,8 +328,8 @@
     }
     
     .ranking-item-responsive__content {
-      grid-template-columns: 140px 1fr;
-      grid-template-areas: "thumbnail details";
+      grid-template-columns: 140px 1fr auto;
+      grid-template-areas: "thumbnail details mylist-button";
       gap: 8px;
       padding: 2px;
       min-height: 75px;

@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
+import { MylistButton } from './mylist-button'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
@@ -209,10 +210,15 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             <span className="ranking-item-responsive__stat">
               ❤️ {formatNumberMobile(item.likes || 0)}
             </span>
-            <span className="ranking-item-responsive__stat ranking-item-responsive__stat--desktop-only">
+            <span className="ranking-item-responsive__stat">
               📁 {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
+        </div>
+        
+        {/* マイリストボタン専用エリア */}
+        <div className="ranking-item-responsive__mylist-area">
+          <MylistButton video={item} />
         </div>
       </div>
     </li>

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ニコラン ナビゲーション デモ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        /* ヘッダー */
+        .header {
+            background: linear-gradient(135deg, #0066CC 0%, #004B99 100%);
+            padding: 8px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 32px;
+            margin: 0;
+            text-align: center;
+        }
+        
+        /* メニューボタン（共通） */
+        .menu-button {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(8px);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .menu-button:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: translateY(-50%) scale(1.05);
+        }
+        
+        /* 設定ボタン */
+        .settings-button {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+            padding: 6px 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(8px);
+            font-size: 18px;
+        }
+        
+        .settings-button:hover {
+            background: rgba(255, 255, 255, 0.35);
+            transform: translateY(-50%) scale(1.05);
+        }
+        
+        /* デスクトップ版ドロップダウン */
+        .desktop-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 8px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            min-width: 200px;
+            padding: 8px;
+            display: none;
+            z-index: 1000;
+        }
+        
+        .desktop-dropdown.show {
+            display: block;
+        }
+        
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            color: #333;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .nav-link:hover {
+            background: #f0f0f0;
+        }
+        
+        .nav-section {
+            margin-bottom: 12px;
+        }
+        
+        .nav-section:not(:last-child) {
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 12px;
+        }
+        
+        /* モバイル版サイドドロワー */
+        .mobile-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(2px);
+        }
+        
+        .mobile-overlay.show {
+            display: block;
+        }
+        
+        .mobile-drawer {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            width: 280px;
+            height: 100%;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            transition: left 0.3s ease;
+            z-index: 1001;
+            overflow-y: auto;
+        }
+        
+        .mobile-drawer.show {
+            left: 0;
+        }
+        
+        .drawer-header {
+            padding: 16px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        .close-button {
+            background: transparent;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 8px;
+        }
+        
+        .drawer-content {
+            padding: 16px;
+        }
+        
+        .mobile-nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #333;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: background-color 0.2s;
+            background: #f5f5f5;
+            margin-bottom: 8px;
+        }
+        
+        .mobile-nav-link:hover {
+            background: #e0e0e0;
+        }
+        
+        /* テーマボタン */
+        .theme-section {
+            padding: 16px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin: 16px 0;
+        }
+        
+        .theme-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .theme-button {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #d0d0d0;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.2s;
+        }
+        
+        .theme-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* コンテンツエリア */
+        .content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* レスポンシブ */
+        .desktop-only {
+            display: block;
+        }
+        
+        .mobile-only {
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none;
+            }
+            
+            .mobile-only {
+                display: block;
+            }
+            
+            .header {
+                padding: 5px 12px;
+            }
+            
+            .header h1 {
+                font-size: 22px;
+            }
+            
+            .menu-button {
+                padding: 4px 8px;
+                left: 12px;
+            }
+            
+            .settings-button {
+                padding: 4px 8px;
+                right: 12px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー -->
+    <header class="header">
+        <!-- デスクトップ版メニューボタン -->
+        <div class="desktop-only" style="position: absolute; left: 16px;">
+            <button class="menu-button" onclick="toggleDesktopMenu()">
+                <span>≡</span>
+                <span>メニュー</span>
+            </button>
+            
+            <!-- デスクトップ版ドロップダウン -->
+            <div id="desktopDropdown" class="desktop-dropdown">
+                <div class="nav-section">
+                    <a href="#" class="nav-link">🏠 ホーム</a>
+                    <a href="/mylists" class="nav-link" style="color: #0066cc;">📁 マイリスト</a>
+                    <a href="#" class="nav-link">⚙️ ランキング設定</a>
+                </div>
+                <div class="nav-section">
+                    <a href="https://www.nicovideo.jp/" class="nav-link" target="_blank">🎥 ニコニコ動画</a>
+                    <a href="https://www.nicochart.jp" class="nav-link" target="_blank">📊 ニコニコチャート</a>
+                </div>
+                <div class="nav-section">
+                    <a href="/about" class="nav-link">ℹ️ このサイトについて</a>
+                    <a href="/contact" class="nav-link">📧 お問い合わせ</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- モバイル版メニューボタン -->
+        <button class="menu-button mobile-only" onclick="toggleMobileMenu()">
+            <span id="mobileMenuIcon">≡</span>
+        </button>
+        
+        <!-- タイトル -->
+        <h1>🎮 ニコラン(Re:turn)</h1>
+        
+        <!-- 設定ボタン -->
+        <button class="settings-button">⚙️</button>
+    </header>
+    
+    <!-- モバイル版サイドドロワー -->
+    <div id="mobileOverlay" class="mobile-overlay" onclick="closeMobileMenu()"></div>
+    <div id="mobileDrawer" class="mobile-drawer">
+        <div class="drawer-header">
+            <button class="close-button" onclick="closeMobileMenu()">×</button>
+        </div>
+        <div class="drawer-content">
+            <div class="nav-section">
+                <a href="#" class="mobile-nav-link">🏠 ホーム</a>
+                <a href="/mylists" class="mobile-nav-link" style="background: #e3f2fd; color: #0066cc;">📁 マイリスト</a>
+                <a href="#" class="mobile-nav-link">⚙️ ランキング設定</a>
+            </div>
+            
+            <div class="theme-section">
+                <div style="display: flex; align-items: center; gap: 8px; color: #666; font-size: 14px;">
+                    <span>🎨</span>
+                    <span>テーマ</span>
+                </div>
+                <div class="theme-buttons">
+                    <button class="theme-button">☀️</button>
+                    <button class="theme-button">🌙</button>
+                    <button class="theme-button">🌌</button>
+                </div>
+            </div>
+            
+            <div class="nav-section">
+                <a href="https://www.nicovideo.jp/" class="mobile-nav-link" target="_blank">🎥 ニコニコ動画</a>
+                <a href="https://www.nicochart.jp" class="mobile-nav-link" target="_blank">📊 ニコニコチャート</a>
+                <a href="https://www.nicolog.jp" class="mobile-nav-link" target="_blank">📝 ニコログ</a>
+            </div>
+            
+            <div class="nav-section">
+                <a href="/about" class="mobile-nav-link">ℹ️ このサイトについて</a>
+                <a href="/contact" class="mobile-nav-link">📧 お問い合わせ</a>
+                <a href="/privacy" class="mobile-nav-link">🔒 プライバシーポリシー</a>
+                <a href="/changelog" class="mobile-nav-link">📋 更新履歴</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- コンテンツ -->
+    <div class="content">
+        <h2>ナビゲーションデモ</h2>
+        <p style="margin-top: 16px;">このページは、ニコランのナビゲーションメニューの動作を示すデモです。</p>
+        
+        <div style="margin-top: 32px; padding: 16px; background: #f0f8ff; border-radius: 8px;">
+            <h3>マイリストへのアクセス方法</h3>
+            <ul style="margin-top: 12px; margin-left: 24px;">
+                <li><strong>デスクトップ版</strong>: 左上の「≡ メニュー」ボタンをクリック → 「📁 マイリスト」を選択</li>
+                <li><strong>モバイル版</strong>: 左上の「≡」ボタンをタップ → サイドメニューから「📁 マイリスト」を選択</li>
+            </ul>
+        </div>
+        
+        <div style="margin-top: 16px; padding: 16px; background: #fff3e0; border-radius: 8px;">
+            <p><strong>注意</strong>: 画面幅を768px以下に縮めると、モバイル版の表示に切り替わります。</p>
+        </div>
+    </div>
+    
+    <script>
+        // デスクトップメニューの開閉
+        function toggleDesktopMenu() {
+            const dropdown = document.getElementById('desktopDropdown');
+            dropdown.classList.toggle('show');
+        }
+        
+        // モバイルメニューの開閉
+        function toggleMobileMenu() {
+            const overlay = document.getElementById('mobileOverlay');
+            const drawer = document.getElementById('mobileDrawer');
+            const icon = document.getElementById('mobileMenuIcon');
+            
+            overlay.classList.add('show');
+            drawer.classList.add('show');
+            icon.textContent = '×';
+        }
+        
+        function closeMobileMenu() {
+            const overlay = document.getElementById('mobileOverlay');
+            const drawer = document.getElementById('mobileDrawer');
+            const icon = document.getElementById('mobileMenuIcon');
+            
+            overlay.classList.remove('show');
+            drawer.classList.remove('show');
+            icon.textContent = '≡';
+        }
+        
+        // 外側クリックでメニューを閉じる
+        document.addEventListener('click', function(e) {
+            const desktopMenu = document.querySelector('.desktop-only');
+            const dropdown = document.getElementById('desktopDropdown');
+            
+            if (desktopMenu && !desktopMenu.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+    </script>
+</body>
+</html>

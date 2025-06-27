@@ -17,6 +17,17 @@ export default defineConfig({
     bypassCSP: true,
     // HTTPSエラーを無視
     ignoreHTTPSErrors: true,
+    // サービスワーカーをブロック（APIモックのため）
+    serviceWorkers: 'block',
+    // タイムアウト設定を調整
+    actionTimeout: 10000,
+    navigationTimeout: 30000,
+  },
+  
+  // グローバルタイムアウト設定
+  timeout: 60000, // 各テストのタイムアウトを60秒に設定
+  expect: {
+    timeout: 10000, // expect のタイムアウトを10秒に設定
   },
   
   projects: [

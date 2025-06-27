@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>IndexedDB テスト</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        button {
+            margin: 5px;
+            padding: 10px;
+        }
+        #log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>IndexedDBの直接テスト</h1>
+    
+    <button onclick="testDirect()">Direct IndexedDB Test</button>
+    <button onclick="testWithIdb()">Test with idb library</button>
+    <button onclick="clearAll()">Clear All Databases</button>
+    
+    <div id="log"></div>
+
+    <script type="module">
+        function log(msg) {
+            document.getElementById('log').textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        window.testDirect = async function() {
+            try {
+                log('=== Direct IndexedDB Test ===');
+                
+                // 既存のDBを削除
+                const deleteReq = indexedDB.deleteDatabase('nicoran-db');
+                await new Promise((resolve, reject) => {
+                    deleteReq.onsuccess = () => {
+                        log('✅ Database deleted successfully');
+                        resolve();
+                    };
+                    deleteReq.onerror = () => {
+                        log('❌ Failed to delete database');
+                        reject(deleteReq.error);
+                    };
+                });
+                
+                // 新しいDBを開く
+                const openReq = indexedDB.open('nicoran-db', 2);
+                
+                await new Promise((resolve, reject) => {
+                    openReq.onupgradeneeded = (event) => {
+                        log('🔄 Upgrade needed');
+                        const db = event.target.result;
+                        
+                        // mylists store
+                        if (!db.objectStoreNames.contains('mylists')) {
+                            const store = db.createObjectStore('mylists', { keyPath: 'id' });
+                            store.createIndex('isDefault', 'isDefault');
+                            log('✅ Created mylists store');
+                        }
+                        
+                        // mylistVideos store
+                        if (!db.objectStoreNames.contains('mylistVideos')) {
+                            const store = db.createObjectStore('mylistVideos', { 
+                                keyPath: ['mylistId', 'id'] 
+                            });
+                            store.createIndex('mylistId', 'mylistId');
+                            log('✅ Created mylistVideos store');
+                        }
+                    };
+                    
+                    openReq.onsuccess = (event) => {
+                        const db = event.target.result;
+                        log('✅ Database opened successfully');
+                        log(`Version: ${db.version}`);
+                        log(`Stores: ${Array.from(db.objectStoreNames).join(', ')}`);
+                        db.close();
+                        resolve();
+                    };
+                    
+                    openReq.onerror = () => {
+                        log('❌ Failed to open database: ' + openReq.error);
+                        reject(openReq.error);
+                    };
+                });
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        };
+
+        window.testWithIdb = async function() {
+            try {
+                log('=== Test with idb library ===');
+                
+                // Import idb from CDN
+                const { openDB, deleteDB } = await import('https://unpkg.com/idb@7/build/esm/index.js');
+                
+                // Delete existing database
+                await deleteDB('nicoran-db');
+                log('✅ Database deleted');
+                
+                // Open database
+                const db = await openDB('nicoran-db', 2, {
+                    upgrade(db, oldVersion) {
+                        log(`🔄 Upgrading from version ${oldVersion} to 2`);
+                        
+                        if (!db.objectStoreNames.contains('mylists')) {
+                            const store = db.createObjectStore('mylists', { keyPath: 'id' });
+                            store.createIndex('isDefault', 'isDefault');
+                            log('✅ Created mylists store');
+                        }
+                        
+                        if (!db.objectStoreNames.contains('mylistVideos')) {
+                            const store = db.createObjectStore('mylistVideos', { 
+                                keyPath: ['mylistId', 'id'] 
+                            });
+                            store.createIndex('mylistId', 'mylistId');
+                            log('✅ Created mylistVideos store');
+                        }
+                    }
+                });
+                
+                log('✅ Database opened with idb');
+                log(`Version: ${db.version}`);
+                log(`Stores: ${Array.from(db.objectStoreNames).join(', ')}`);
+                
+                // Test creating a default mylist
+                const tx = db.transaction('mylists', 'readwrite');
+                const store = tx.objectStore('mylists');
+                
+                const defaultMylist = {
+                    id: 'default',
+                    name: 'とりあえずマイリスト',
+                    description: 'デフォルトのマイリスト',
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                    videoCount: 0,
+                    isDefault: true
+                };
+                
+                await store.add(defaultMylist);
+                await tx.done;
+                
+                log('✅ Created default mylist');
+                log(JSON.stringify(defaultMylist, null, 2));
+                
+                db.close();
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+                log(error.stack);
+            }
+        };
+
+        window.clearAll = async function() {
+            try {
+                log('=== Clearing all databases ===');
+                
+                const databases = await indexedDB.databases();
+                for (const db of databases) {
+                    await indexedDB.deleteDatabase(db.name);
+                    log(`✅ Deleted: ${db.name}`);
+                }
+                
+                log('✅ All databases cleared');
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        };
+    </script>
+</body>
+</html>

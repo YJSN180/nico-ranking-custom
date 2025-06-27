@@ -2,6 +2,7 @@
 
 import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
+import { MylistButton } from './mylist-button'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact } from '@/lib/format-utils'
 import { useMobileLayout } from '@/hooks/use-mobile-layout'
@@ -267,6 +268,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
             </div>
           </div>
         </div>
+        
+        {/* マイリストボタン（モバイル） */}
+        <MylistButton video={item} />
       </li>
     )
   }
@@ -467,6 +471,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           </div>
         </div>
       </div>
+      
+      {/* マイリストボタン */}
+      <MylistButton video={item} />
     </li>
   )
 }, (prevProps, nextProps) => {
