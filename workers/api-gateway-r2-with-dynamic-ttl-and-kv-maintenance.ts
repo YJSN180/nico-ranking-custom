@@ -9,6 +9,8 @@ interface Env {
   R2_BUCKET: R2Bucket
   RANKING_DATA: KVNamespace
   MAINTENANCE_FLAGS: KVNamespace
+  VERCEL_DEPLOYMENT_URL: string
+  WORKER_AUTH_KEY?: string
 }
 
 // セキュリティヘッダー定義
@@ -226,10 +228,18 @@ export default {
       ]);
       
       if (maintenanceMode === "true") {
-        const clientIP = request.headers.get('CF-Connecting-IP') || '';
+        // IPの取得優先順位：X-Forwarded-For（Smart Router経由） > CF-Connecting-IP（直接アクセス）
+        const xForwardedFor = request.headers.get('X-Forwarded-For');
+        const cfConnectingIP = request.headers.get('CF-Connecting-IP') || '';
+        
+        // X-Forwarded-Forの最初のIPを取得（複数のプロキシ経由の場合）
+        const clientIP = xForwardedFor 
+          ? xForwardedFor.split(',')[0].trim()
+          : cfConnectingIP;
+        
         const allowedIPList = allowedIPs ? allowedIPs.split(',').map(ip => ip.trim()) : [];
         
-        console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
+        console.log(`[Maintenance] Mode: ON, Client IP: ${clientIP}, X-Forwarded-For: ${xForwardedFor}, CF-Connecting-IP: ${cfConnectingIP}, Allowed IPs: ${allowedIPList.join(', ')}`);
         console.log(`[Maintenance] Request path: ${url.pathname}`);
         
         // IPホワイトリストチェック
@@ -468,9 +478,73 @@ export default {
       return response
     }
     
+    // 静的ファイルのリクエストをチェック（先にR2から試す）
+    const pathname = url.pathname
+    const staticFiles = ['/icon.png', '/icon-192.png', '/icon-512.png', '/og-image.png', '/manifest.json', '/robots.txt'];
+    const isStaticFile = staticFiles.includes(pathname) || pathname.startsWith('/fonts/') || /\.(png|jpg|jpeg|gif|webp|svg|ico|css|js|woff|woff2|ttf|otf|eot)$/i.test(pathname)
+    
+    if (isStaticFile) {
+      // まずR2から静的ファイルを探す
+      try {
+        // staticプレフィックスを追加してR2キーを構築
+        const r2Key = pathname.startsWith('/') ? `static${pathname}` : `static/${pathname}`
+        console.log(`[Static File] Trying to fetch from R2: ${r2Key}`)
+        const object = await env.R2_BUCKET.get(r2Key)
+        
+        if (object) {
+          // R2から見つかった場合
+          const extension = pathname.split('.').pop()?.toLowerCase() || ''
+          const contentType = getContentType(extension)
+          
+          const headers = new Headers()
+          headers.set('Content-Type', contentType)
+          headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+          headers.set('ETag', object.etag)
+          headers.set('X-Data-Source', 'r2-static')
+          
+          // セキュリティヘッダーを追加
+          Object.entries(securityHeaders).forEach(([key, value]) => {
+            headers.set(key, value)
+          })
+          
+          return new Response(object.body, {
+            status: 200,
+            headers
+          })
+        }
+      } catch (error) {
+        console.error(`[Static File] Error fetching from R2:`, error)
+      }
+      
+      // R2に見つからない場合はVercelにフォールバック
+      console.log(`[Static File] Not found in R2, proxying to Vercel: ${pathname}`)
+      return proxyToVercel(request, env)
+    }
+    
     // その他のリクエストはVercelにプロキシ
     return proxyToVercel(request, env)
   }
+}
+
+// Content-Type推測用のヘルパー関数
+function getContentType(extension: string): string {
+  const mimeTypes: Record<string, string> = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    'ico': 'image/x-icon',
+    'css': 'text/css',
+    'js': 'application/javascript',
+    'woff': 'font/woff',
+    'woff2': 'font/woff2',
+    'ttf': 'font/ttf',
+    'otf': 'font/otf',
+    'eot': 'application/vnd.ms-fontobject'
+  }
+  return mimeTypes[extension] || 'application/octet-stream'
 }
 
 // Vercelへのプロキシ関数（フォールバック用）
