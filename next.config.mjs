@@ -123,7 +123,7 @@ const nextConfig = {
     workerThreads: false,
     cpus: 1,
     // パフォーマンス最適化
-    optimizeCss: false, // critters依存関係エラーを回避
+    optimizeCss: true, // crittersをインストールしたため有効化
   },
   // パフォーマンス最適化設定
   compiler: {
