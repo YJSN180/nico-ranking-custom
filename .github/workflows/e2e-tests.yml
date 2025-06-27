@@ -163,6 +163,7 @@ jobs:
         ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
         ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         NEXT_PUBLIC_API_BASE_URL: http://localhost:3000
+        NEXT_PUBLIC_API_GATEWAY_URL: https://nico-ranking-api-gateway.yjsn180180.workers.dev
 
     - name: Start dev server
       run: |
@@ -183,6 +184,8 @@ jobs:
         WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
         ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
         ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3000
+        NEXT_PUBLIC_API_GATEWAY_URL: https://nico-ranking-api-gateway.yjsn180180.workers.dev
 
     - name: Run E2E tests
       id: test-execution
@@ -209,6 +212,8 @@ jobs:
         ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
         ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         NODE_ENV: test
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3000
+        NEXT_PUBLIC_API_GATEWAY_URL: https://nico-ranking-api-gateway.yjsn180180.workers.dev
 
     - name: Generate test summary
       id: test-summary
