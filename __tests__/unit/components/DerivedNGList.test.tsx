@@ -150,7 +150,7 @@ describe('DerivedNGList', () => {
       
       await waitFor(() => {
         expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
-          '/api/edge/admin/ng-list-derived/sm12345',
+          '/api/admin/ng-list/derived/sm12345',
           expect.objectContaining({
             method: 'DELETE'
           })

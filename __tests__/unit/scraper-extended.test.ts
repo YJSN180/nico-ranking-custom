@@ -3,7 +3,7 @@ import type { RankingItem } from '@/types/ranking'
 
 // fetch モック
 const mockFetch = vi.fn()
-global.fetch = mockFetch
+global.fetch = mockFetch as any
 
 describe('scraper.ts - Extended Coverage', () => {
   beforeEach(() => {
@@ -32,19 +32,32 @@ describe('scraper.ts - Extended Coverage', () => {
 
   describe('scrapeRankingPage', () => {
     it('ランキングページを正しくスクレイピング', async () => {
+      // nvapi レスポンスをモック
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockRankingHTML
+        json: async () => ({
+          meta: { status: 200 },
+          data: {
+            items: [{
+              id: 'sm123',
+              title: 'Test Video',
+              thumbnail: { largeUrl: 'https://example.com/thumb.L' },
+              count: { view: 1000, comment: 100, mylist: 50, like: 200 },
+              owner: { id: 'user123', name: 'Test User', iconUrl: 'https://example.com/icon.jpg' },
+              registeredAt: '2024-01-01T00:00:00Z'
+            }]
+          }
+        })
       })
 
       const module = await import('@/lib/scraper')
       const result = await module.scrapeRankingPage('all', '24h')
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.nicovideo.jp/ranking/genre/e9uj2uks?term=24h',
+        'https://nvapi.nicovideo.jp/v1/ranking/genre/all?term=24h',
         expect.objectContaining({
           headers: expect.objectContaining({
-            'User-Agent': expect.stringContaining('Googlebot')
+            'X-Frontend-Id': '6'
           })
         })
       )
@@ -143,7 +156,7 @@ describe('scraper.ts - Extended Coverage', () => {
       })
 
       const module = await import('@/lib/scraper')
-      await expect(module.scrapeRankingPage('all', '24h')).rejects.toThrow('Fetch failed: 403')
+      await expect(module.scrapeRankingPage('all', '24h')).rejects.toThrow('Failed to fetch ranking data: 403')
     })
 
     it('サムネイルURLを.Mから.Lに変換', async () => {
