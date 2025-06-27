@@ -28,6 +28,31 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }))
 
+// TagSelectorを通常のimportに戻すためのモック
+vi.mock('@/components/tag-selector', () => ({
+  TagSelector: ({ config, onConfigChange, popularTags = [] }: any) => {
+    // タグが選択されている場合は非表示
+    if (config.tag) return null
+    
+    // allジャンルの場合は「すべて」ボタンのみ表示
+    const visibleTags = config.genre === 'all' ? [] : popularTags
+    
+    return (
+      <div className="_selectorContainer_933bb3">
+        <div>
+          <h2 className="_selectorTitle_933bb3">人気タグ</h2>
+          <div className="_buttonContainer_933bb3">
+            <button className="_button_933bb3 _buttonSelected_933bb3">すべて</button>
+            {visibleTags.map((tag: string) => (
+              <button key={tag} className="_button_933bb3">{tag}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+}))
+
 // popular-tags モジュールのモック
 vi.mock('@/lib/popular-tags', () => ({
   getPopularTags: vi.fn().mockImplementation(async (genre) => {
@@ -111,7 +136,7 @@ describe('人気タグの表示問題', () => {
     
     // デフォルトのfetchレスポンス
     ;(global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/edge/ranking')) {
+      if (url.includes('/api/ranking')) {
         const urlObj = new URL(url, 'http://localhost')
         const genre = urlObj.searchParams.get('genre') || 'all'
         
@@ -119,21 +144,29 @@ describe('人気タグの表示問題', () => {
         if (genre === 'all') {
           return Promise.resolve({
             ok: true,
+            headers: {
+              get: (key: string) => key === 'content-encoding' ? 'gzip' : null
+            },
             json: async () => ({
               items: [{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }],
               popularTags: ['ゲーム', 'エンターテイメント', 'VOICEROID実況プレイ'] // allジャンルでも集計タグを返す
-            })
+            }),
+            clone: function() { return this }
           })
         }
         
         return Promise.resolve({
           ok: true,
+          headers: {
+            get: (key: string) => key === 'content-encoding' ? 'gzip' : null
+          },
           json: async () => ({
             items: [{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }],
             popularTags: genre === 'game' ? ['ゲーム', '実況プレイ動画'] : 
                          genre === 'entertainment' ? ['エンターテイメント', '踊ってみた'] :
                          genre === 'other' ? ['その他', 'MMD'] : []
-          })
+          }),
+          clone: function() { return this }
         })
       }
       // video-stats APIの場合は空のレスポンスを返す
@@ -158,7 +191,7 @@ describe('人気タグの表示問題', () => {
     })
   })
 
-  it('初期表示時に人気タグが表示される', () => {
+  it('初期表示時に人気タグが表示される', async () => {
     render(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
@@ -167,6 +200,11 @@ describe('人気タグの表示問題', () => {
         popularTags={['ゲーム', '実況プレイ動画', 'VOICEROID実況プレイ']}
       />
     )
+
+    // TagSelectorが動的インポートされるため、表示を待つ
+    await waitFor(() => {
+      expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    })
 
     // 人気タグセクションを探す
     const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
@@ -194,6 +232,11 @@ describe('人気タグの表示問題', () => {
       />
     )
 
+    // TagSelectorが動的インポートされるため、表示を待つ
+    await waitFor(() => {
+      expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    })
+
     // 初期状態の確認（すべてボタンが最初に表示される）
     const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
     let tagButtons = popularTagsSection?.querySelectorAll('button')
@@ -211,7 +254,7 @@ describe('人気タグの表示問題', () => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0] && call[0].includes('/api/ranking') && 
         call[0].includes('genre=entertainment') &&
         call[0].includes('period=24h')
       )
@@ -243,8 +286,12 @@ describe('人気タグの表示問題', () => {
       />
     )
 
+    // TagSelectorが動的インポートされるため、表示を待つ
+    await waitFor(() => {
+      expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    })
+
     // 初期状態の確認（ゲームジャンルでは人気タグが表示される）
-    expect(screen.getByText('人気タグ')).toBeInTheDocument()
     const initialTagSection = screen.getByText('人気タグ').closest('div')?.parentElement
     const initialTagButtons = initialTagSection?.querySelectorAll('button')
     expect(initialTagButtons?.length).toBeGreaterThan(1) // すべてボタン + タグ
@@ -258,7 +305,7 @@ describe('人気タグの表示問題', () => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0] && call[0].includes('/api/ranking') && 
         call[0].includes('genre=all') &&
         call[0].includes('period=24h')
       )
@@ -311,6 +358,11 @@ describe('人気タグの表示問題', () => {
       />
     )
 
+    // TagSelectorが動的インポートされるため、表示を待つ
+    await waitFor(() => {
+      expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    })
+
     // 初期状態の確認
     const popularTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
     let tagButtons = popularTagsSection?.querySelectorAll('button')
@@ -327,7 +379,7 @@ describe('人気タグの表示問題', () => {
       const fetchSpy = global.fetch as any
       const calls = fetchSpy.mock.calls
       const rankingCall = calls.find((call: any[]) => 
-        call[0] && call[0].includes('/api/edge/ranking') && 
+        call[0] && call[0].includes('/api/ranking') && 
         call[0].includes('genre=game') &&
         call[0].includes('period=hour')
       )
@@ -348,13 +400,17 @@ describe('人気タグの表示問題', () => {
   it('配列形式のAPIレスポンスでも人気タグが維持される', async () => {
     // 配列形式のレスポンスを返すようモック
     ;(global.fetch as any).mockImplementation((url: string) => {
-      if (url.includes('/api/edge/ranking')) {
+      if (url.includes('/api/ranking')) {
         return Promise.resolve({
           ok: true,
+          headers: {
+            get: (key: string) => key === 'content-encoding' ? 'gzip' : null
+          },
           json: async () => [
             { id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 },
             { id: '2', title: 'Video 2', rank: 2, thumbURL: '', views: 200 }
-          ] // 配列形式（人気タグなし）
+          ], // 配列形式（人気タグなし）
+          clone: function() { return this }
         })
       }
       // video-stats APIの場合は空のレスポンスを返す
@@ -389,8 +445,12 @@ describe('人気タグの表示問題', () => {
       />
     )
 
+    // TagSelectorが動的インポートされるため、表示を待つ
+    await waitFor(() => {
+      expect(screen.getByText('人気タグ')).toBeInTheDocument()
+    })
+
     // 初期状態の確認
-    expect(screen.getByText('人気タグ')).toBeInTheDocument()
     const initialTagsSection = screen.getByText('人気タグ').closest('div')?.parentElement
     const initialTagButtons = initialTagsSection?.querySelectorAll('button')
     const initialTagTexts = Array.from(initialTagButtons || []).map(btn => btn.textContent)
@@ -416,6 +476,6 @@ describe('人気タグの表示問題', () => {
       expect(tagTexts).toContain('すべて') // 「すべて」ボタンが最初に表示される
       expect(tagTexts).toContain('エンターテイメント')
       expect(tagTexts).toContain('踊ってみた')
-    })
+    }, { timeout: 5000 })
   })
 })

@@ -524,18 +524,34 @@ export default function ClientPage({
         
         // 配列形式のレスポンスの場合も人気タグを動的に取得
         if (newConfig.genre !== 'all') {
-          // タグ指定の有無に関わらず、人気タグが空の場合は取得
-          if (currentPopularTags.length === 0) {
-            try {
-              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
-              if (!tagsController.signal.aborted && tags && tags.length > 0) {
-                setCurrentPopularTags(tags)
-                savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+          // 配列形式の場合は常に新しいタグを取得（ジャンルが変わった可能性があるため）
+          try {
+            const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
+            if (!tagsController.signal.aborted && tags && tags.length > 0) {
+              setCurrentPopularTags(tags)
+              savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
+            }
+          } catch {
+            // エラー時は現在の値を維持（または空の場合のみ）
+            if (currentPopularTags.length === 0) {
+              // エラー時でもキャッシュから取得を試みる
+              const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
+              const cached = localStorage.getItem(storageKey)
+              if (cached) {
+                try {
+                  const parsed = JSON.parse(cached)
+                  if (Array.isArray(parsed) && parsed.length > 0) {
+                    setCurrentPopularTags(parsed)
+                  }
+                } catch {
+                  // パースエラーは無視
+                }
               }
-            } catch {
-              // エラー時は現在の値を維持
             }
           }
+        } else {
+          // allジャンルの場合は空配列
+          setCurrentPopularTags([])
         }
       } else {
         setFullRankingData([])
