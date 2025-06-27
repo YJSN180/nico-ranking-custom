@@ -34,7 +34,7 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
     vi.clearAllMocks()
     // 環境変数設定
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
-    process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
+    process.env.KV_RANKING_ID = 'test-namespace'
     process.env.CLOUDFLARE_API_TOKEN = 'test-token'
     
     // グローバル変数をリセット
@@ -43,7 +43,7 @@ describe('cloudflare-kv.ts - 3-key split implementation', () => {
 
   afterEach(() => {
     delete process.env.CLOUDFLARE_ACCOUNT_ID
-    delete process.env.CLOUDFLARE_KV_NAMESPACE_ID
+    delete process.env.KV_RANKING_ID
     delete process.env.CLOUDFLARE_API_TOKEN
   })
 

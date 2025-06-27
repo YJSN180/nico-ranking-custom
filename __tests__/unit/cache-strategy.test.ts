@@ -9,7 +9,7 @@ describe('Cache Strategy Improvements', () => {
   describe('Multi-layer Caching', () => {
     it('should implement browser cache with appropriate headers', () => {
       const setCacheHeaders = (response: Response, maxAge: number = 30) => {
-        const headers = new Headers(response.headers)
+        const headers = new Headers(response.headers || {})
         
         // ブラウザキャッシュ設定
         headers.set('Cache-Control', 'public, max-age=' + maxAge + ', stale-while-revalidate=60')
@@ -17,8 +17,8 @@ describe('Cache Strategy Improvements', () => {
         headers.set('Last-Modified', new Date().toUTCString())
         
         return new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
+          status: response.status || 200,
+          statusText: response.statusText || 'OK',
           headers
         })
       }

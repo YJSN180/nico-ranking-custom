@@ -22,19 +22,6 @@ afterAll(() => {
   process.env = originalEnv
 })
 
-// Mock cloudflare-kv compression/decompression
-vi.mock('@/lib/cloudflare-kv', () => ({
-  compressData: vi.fn((data: string) => {
-    // Simulate compression by converting to Uint8Array
-    return Promise.resolve(new TextEncoder().encode(data))
-  }),
-  decompressData: vi.fn((data: Uint8Array) => {
-    // Simulate decompression by parsing JSON
-    const jsonString = new TextDecoder().decode(data)
-    return Promise.resolve(JSON.parse(jsonString))
-  })
-}))
-
 describe('getVideoStatsFromKV', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -91,11 +78,9 @@ describe('getVideoStatsFromKV', () => {
       }
     }
 
-    // Mock compressed data
-    const { compressData } = await import('@/lib/cloudflare-kv')
-    const compressedData = await compressData(JSON.stringify(kvData))
+    // Mock plain text response (no compression)
     vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(compressedData, { status: 200 })
+      new Response(JSON.stringify(kvData), { status: 200 })
     )
 
     // Act
@@ -136,11 +121,9 @@ describe('getVideoStatsFromKV', () => {
       }
     }
 
-    // Mock compressed data
-    const { compressData } = await import('@/lib/cloudflare-kv')
-    const compressedData = await compressData(JSON.stringify(kvData))
+    // Mock plain text response (no compression)
     vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(compressedData, { status: 200 })
+      new Response(JSON.stringify(kvData), { status: 200 })
     )
 
     // Act
@@ -158,13 +141,10 @@ describe('getVideoStatsFromKV', () => {
     })
   })
 
-  it('should handle decompression errors gracefully', async () => {
-    // Arrange
-    const { decompressData } = await import('@/lib/cloudflare-kv')
-    vi.mocked(decompressData).mockRejectedValueOnce(new Error('Decompression failed'))
-
+  it('should handle JSON parse errors gracefully', async () => {
+    // Arrange - Return invalid JSON
     vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(new Uint8Array([1, 2, 3]), { status: 200 })
+      new Response('invalid json', { status: 200 })
     )
 
     // Act
@@ -174,13 +154,10 @@ describe('getVideoStatsFromKV', () => {
     expect(result).toEqual({})
   })
 
-  it('should handle malformed JSON gracefully', async () => {
-    // Arrange
-    const { decompressData } = await import('@/lib/cloudflare-kv')
-    vi.mocked(decompressData).mockResolvedValueOnce('invalid json')
-
+  it('should handle malformed JSON data structure gracefully', async () => {
+    // Arrange - Return JSON but without expected structure
     vi.mocked(global.fetch).mockResolvedValueOnce(
-      new Response(new TextEncoder().encode('invalid json'), { status: 200 })
+      new Response(JSON.stringify({ invalid: 'structure' }), { status: 200 })
     )
 
     // Act

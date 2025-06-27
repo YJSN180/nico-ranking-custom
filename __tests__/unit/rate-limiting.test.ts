@@ -1,5 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from 'next/server'
+
+// Mock NextResponse with json method
+const NextResponse = {
+  json: (data: any, init?: ResponseInit) => {
+    // Convert Headers to plain object if necessary
+    const headers: any = init?.headers || {}
+    const headerObj: Record<string, string> = {
+      'content-type': 'application/json'
+    }
+    
+    if (headers instanceof Headers) {
+      headers.forEach((value: string, key: string) => {
+        headerObj[key] = value
+      })
+    } else if (typeof headers === 'object') {
+      Object.assign(headerObj, headers)
+    }
+    
+    const response = new Response(JSON.stringify(data), {
+      ...init,
+      headers: headerObj
+    })
+    // Add json method to the response
+    response.json = async () => JSON.parse(await response.text())
+    return response
+  }
+}
 
 // レート制限ミドルウェアのモック
 class RateLimiter {

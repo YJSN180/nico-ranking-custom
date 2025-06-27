@@ -33,7 +33,11 @@ describe('モバイル版リンク挙動の統一', () => {
   it('モバイル版でも動画タイトルが新しいタブで開く', () => {
     render(<RankingItemComponent item={mockItem} isMobile={true} />)
     
-    const titleLink = screen.getByTestId('video-title')
+    const titleLinks = screen.getAllByTestId('video-title')
+    expect(titleLinks.length).toBeGreaterThan(0)
+    
+    // 最初の要素をチェック
+    const titleLink = titleLinks[0]
     expect(titleLink).toHaveAttribute('target', '_blank')
     expect(titleLink).toHaveAttribute('rel', 'noopener noreferrer')
     expect(titleLink).toHaveAttribute('href', 'https://www.nicovideo.jp/watch/sm12345')

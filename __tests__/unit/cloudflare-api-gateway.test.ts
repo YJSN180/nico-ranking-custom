@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Mock Response.json() if not available
+if (!Response.prototype.json) {
+  Response.prototype.json = async function() {
+    const text = await this.text()
+    return JSON.parse(text)
+  }
+}
+
 // Cloudflare WorkersのAPIゲートウェイテスト
 describe('Cloudflare Workers API Gateway', () => {
   beforeEach(() => {

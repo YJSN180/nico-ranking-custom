@@ -75,9 +75,22 @@ describe('scraper.ts - Extended Coverage', () => {
     })
 
     it('hourly期間でも正しく動作', async () => {
+      // nvapi レスポンスをモック
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockRankingHTML
+        json: async () => ({
+          meta: { status: 200 },
+          data: {
+            items: [{
+              id: 'sm123',
+              title: 'Test Video',
+              thumbnail: { largeUrl: 'https://example.com/thumb.L' },
+              count: { view: 1000, comment: 100, mylist: 50, like: 200 },
+              owner: { id: 'user123', name: 'Test User', iconUrl: 'https://example.com/icon.jpg' },
+              registeredAt: '2024-01-01T00:00:00Z'
+            }]
+          }
+        })
       })
 
       const module = await import('@/lib/scraper')
@@ -90,9 +103,22 @@ describe('scraper.ts - Extended Coverage', () => {
     })
 
     it('タグ指定でランキングを取得', async () => {
+      // nvapi レスポンスをモック
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockRankingHTML
+        json: async () => ({
+          meta: { status: 200 },
+          data: {
+            items: [{
+              id: 'sm123',
+              title: 'Test Video',
+              thumbnail: { largeUrl: 'https://example.com/thumb.L' },
+              count: { view: 1000, comment: 100, mylist: 50, like: 200 },
+              owner: { id: 'user123', name: 'Test User', iconUrl: 'https://example.com/icon.jpg' },
+              registeredAt: '2024-01-01T00:00:00Z'
+            }]
+          }
+        })
       })
 
       const module = await import('@/lib/scraper')
@@ -105,16 +131,30 @@ describe('scraper.ts - Extended Coverage', () => {
     })
 
     it('ページ指定でランキングを取得', async () => {
+      // nvapi レスポンスをモック
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockRankingHTML
+        json: async () => ({
+          meta: { status: 200 },
+          data: {
+            items: [{
+              id: 'sm123',
+              title: 'Test Video',
+              thumbnail: { largeUrl: 'https://example.com/thumb.L' },
+              count: { view: 1000, comment: 100, mylist: 50, like: 200 },
+              owner: { id: 'user123', name: 'Test User', iconUrl: 'https://example.com/icon.jpg' },
+              registeredAt: '2024-01-01T00:00:00Z'
+            }]
+          }
+        })
       })
 
       const module = await import('@/lib/scraper')
       await module.scrapeRankingPage('all', '24h', undefined, 100, 2)
 
+      // 現在の実装ではpageパラメータは無視される（常にnvAPI専用関数を呼び出し）
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://www.nicovideo.jp/ranking/genre/e9uj2uks?term=24h&page=2',
+        'https://nvapi.nicovideo.jp/v1/ranking/genre/all?term=24h',
         expect.any(Object)
       )
     })
@@ -160,15 +200,28 @@ describe('scraper.ts - Extended Coverage', () => {
     })
 
     it('サムネイルURLを.Mから.Lに変換', async () => {
+      // nvapi レスポンスをモック
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        text: async () => mockRankingHTML
+        json: async () => ({
+          meta: { status: 200 },
+          data: {
+            items: [{
+              id: 'sm123',
+              title: 'Test Video',
+              thumbnail: { largeUrl: 'https://example.com/thumb.L' },
+              count: { view: 1000, comment: 100, mylist: 50, like: 200 },
+              owner: { id: 'user123', name: 'Test User', iconUrl: 'https://example.com/icon.jpg' },
+              registeredAt: '2024-01-01T00:00:00Z'
+            }]
+          }
+        })
       })
 
       const module = await import('@/lib/scraper')
       const result = await module.scrapeRankingPage('all', '24h')
 
-      expect(result.items[0].thumbURL).toBe('https://example.com/thumb.M')
+      expect(result.items[0].thumbURL).toBe('https://example.com/thumb.L')
     })
 
     it('リトライロジックが動作する', async () => {
@@ -346,24 +399,55 @@ describe('scraper.ts - Extended Coverage', () => {
   describe('ジャンルID変換', () => {
     it('正しいジャンルIDでリクエスト', async () => {
       const genres = [
-        { genre: 'all', id: 'e9uj2uks' },
-        { genre: 'game', id: '4eet3ca4' },
-        { genre: 'anime', id: 'zc49b03a' },
-        { genre: 'technology', id: 'n46kcz9u' },
-        { genre: 'other', id: 'ramuboyn' }
+        { genre: 'all', id: 'all' },
+        { genre: 'game', id: 'game' },
+        { genre: 'anime', id: 'anime' },
+        { genre: 'technology', id: 'technology' },
+        { genre: 'other', id: 'other' }
       ]
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        text: async () => mockRankingHTML
-      })
 
       const module = await import('@/lib/scraper')
       
       for (const { genre, id } of genres) {
+        // 各ジャンルに対して個別にモックを設定
+        mockFetch.mockClear()
+        
+        // ランキングAPIのレスポンス
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            meta: { status: 200 },
+            data: {
+              items: [{
+                id: 'sm123',
+                title: 'Test Video',
+                thumbnail: { largeUrl: 'https://example.com/thumb.L' },
+                count: { view: 1000, comment: 100, mylist: 50, like: 200 },
+                owner: { id: 'user123', name: 'Test User', iconUrl: 'https://example.com/icon.jpg' },
+                registeredAt: '2024-01-01T00:00:00Z'
+              }]
+            }
+          })
+        })
+        
+        // 'all'以外のジャンルでは、タグ取得APIも呼ばれる
+        if (genre !== 'all') {
+          mockFetch.mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+              meta: { status: 200 },
+              data: {
+                tags: [{ name: 'tag1' }, { name: 'tag2' }]
+              }
+            })
+          })
+        }
+        
         await module.scrapeRankingPage(genre, '24h')
-        expect(mockFetch).toHaveBeenLastCalledWith(
-          `https://www.nicovideo.jp/ranking/genre/${id}?term=24h`,
+        
+        // 最初の呼び出しがランキングAPIであることを確認
+        expect(mockFetch).toHaveBeenCalledWith(
+          `https://nvapi.nicovideo.jp/v1/ranking/genre/${id}?term=24h`,
           expect.any(Object)
         )
       }

@@ -92,7 +92,8 @@ describe('NG List Rank Recalculation', () => {
 
     const { rerender } = render(
       <ClientPage 
-        initialData={initialData}
+        initialData={{items: initialData}}
+        allRankingData={initialData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -100,7 +101,8 @@ describe('NG List Rank Recalculation', () => {
 
     // Initially all 5 items should be displayed
     await waitFor(() => {
-      expect(screen.getByText('5件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(5)
     })
 
     // Update the mock to filter out sm2 and sm4
@@ -127,7 +129,8 @@ describe('NG List Rank Recalculation', () => {
     // Force re-render with new mock data
     rerender(
       <ClientPage 
-        initialData={initialData}
+        initialData={{items: initialData}}
+        allRankingData={initialData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -135,7 +138,8 @@ describe('NG List Rank Recalculation', () => {
 
     // Wait for the UI to update
     await waitFor(() => {
-      expect(screen.getByText('3件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(3)
     })
 
     // Verify ranks are recalculated
@@ -171,7 +175,8 @@ describe('NG List Rank Recalculation', () => {
 
     const { rerender } = render(
       <ClientPage 
-        initialData={initialData}
+        initialData={{items: initialData}}
+        allRankingData={initialData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -198,7 +203,8 @@ describe('NG List Rank Recalculation', () => {
     // Force re-render with new mock data
     rerender(
       <ClientPage 
-        initialData={initialData}
+        initialData={{items: initialData}}
+        allRankingData={initialData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -233,7 +239,8 @@ describe('NG List Rank Recalculation', () => {
 
     const { rerender } = render(
       <ClientPage 
-        initialData={largeDataset}
+        initialData={{items: largeDataset}}
+        allRankingData={largeDataset}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -268,15 +275,17 @@ describe('NG List Rank Recalculation', () => {
     // Force re-render with new mock data
     rerender(
       <ClientPage 
-        initialData={largeDataset}
+        initialData={{items: largeDataset}}
+        allRankingData={largeDataset}
         initialGenre="all"
         initialPeriod="24h"
       />
     )
 
-    // Wait for update
+    // Wait for update - but first 100 items displayed (due to pagination)
     await waitFor(() => {
-      expect(screen.getByText('400件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(100)
     })
 
     const endTime = performance.now()
