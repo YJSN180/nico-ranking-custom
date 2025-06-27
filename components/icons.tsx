@@ -388,7 +388,7 @@ export function GuideIcon({ size = 20, color = 'currentColor', className }: Icon
   )
 }
 
-export function MylistIcon({ size = 20, color = "currentColor", className }: IconProps) {
+export function MylistIcon({ size = 20, color = 'currentColor', className }: IconProps) {
   return (
     <svg
       width={size}

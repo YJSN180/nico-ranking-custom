@@ -95,11 +95,30 @@ export function useMylistOperations() {
     }
   }
 
+  const createMylist = async (name: string, description?: string): Promise<string | null> => {
+    if (!mylistManagerRef.current) return null
+
+    try {
+      const newMylistId = await mylistManagerRef.current.createMylist(name, description)
+      
+      // Reload mylists
+      const allMylists = await mylistManagerRef.current.getAllMylists()
+      setMylists(allMylists)
+      
+      return newMylistId
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to create mylist:', error)
+      return null
+    }
+  }
+
   return {
     mylists,
     isLoading,
     addVideoToMylist,
     removeVideoFromMylist,
-    isVideoInAnyMylist
+    isVideoInAnyMylist,
+    createMylist
   }
 }

@@ -130,11 +130,11 @@ export class MylistManager {
   async deleteMylist(mylistId: string): Promise<void> {
     const db = this.dbManager.getDB()
     
-    // デフォルトマイリストも削除可能にする（ユーザーの判断に任せる）
-    const mylist = await this.getMylist(mylistId)
-    if (!mylist) {
-      throw new Error('Mylist not found')
-    }
+    // デフォルトマイリストも削除可能にする（ユーザーリクエストに基づく）
+    // const mylist = await this.getMylist(mylistId)
+    // if (mylist?.isDefault) {
+    //   throw new Error('Cannot delete default mylist')
+    // }
     
     // トランザクション開始
     const tx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')

@@ -1,15 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import type { Mylist } from '@/lib/storage/types'
 import styles from './mylist-modal.module.css'
+import type { Mylist } from '@/lib/storage/types'
 
 interface MylistModalProps {
   mylists: Mylist[]
   selectedMylistIds: string[]
-  onAddToMylist: (mylistId: string) => void
+  onAddToMylist: (mylistId: string) => Promise<void>
   onClose: () => void
-  onCreateMylist?: () => void
+  onCreateMylist?: (name: string, description?: string) => Promise<void>
   isProcessing?: boolean
 }
 
@@ -21,126 +21,131 @@ export function MylistModal({
   onCreateMylist,
   isProcessing = false
 }: MylistModalProps) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [showNewForm, setShowNewForm] = useState(false)
+  const [newMylistName, setNewMylistName] = useState('')
+  const [newMylistDescription, setNewMylistDescription] = useState('')
+  const [isCreating, setIsCreating] = useState(false)
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose()
-    }
-  }
+  const handleCreateMylist = async () => {
+    if (!newMylistName.trim() || !onCreateMylist) return
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose()
+    setIsCreating(true)
+    try {
+      await onCreateMylist(newMylistName.trim(), newMylistDescription.trim())
+      setNewMylistName('')
+      setNewMylistDescription('')
+      setShowNewForm(false)
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to create mylist:', error)
+    } finally {
+      setIsCreating(false)
     }
   }
 
   return (
-    <div 
-      className={styles.overlay} 
-      onClick={handleOverlayClick}
-      onKeyDown={handleKeyDown}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="mylist-modal-title"
-    >
+    <>
+      <div className={styles.overlay} onClick={onClose} />
       <div className={styles.modal}>
-        {/* ヘッダー */}
         <div className={styles.header}>
-          <h2 id="mylist-modal-title" className={styles.title}>
-            マイリストに追加
-          </h2>
-          <button
+          <h2 className={styles.title}>マイリストに追加</h2>
+          <button 
             className={styles.closeButton}
             onClick={onClose}
             aria-label="閉じる"
-            disabled={isProcessing}
           >
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            ✕
           </button>
         </div>
 
-        {/* コンテンツ */}
         <div className={styles.content}>
-          {mylists.length === 0 ? (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyIcon}>📁</div>
-              <p className={styles.emptyText}>マイリストがありません</p>
-              {onCreateMylist && (
-                <button
-                  className={styles.createButton}
-                  onClick={onCreateMylist}
-                  disabled={isProcessing}
-                >
-                  <span>＋</span>
-                  新規マイリストを作成
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className={styles.mylistList}>
-              {mylists.map((mylist) => {
-                const isSelected = selectedMylistIds.includes(mylist.id)
-                return (
-                  <button
-                    key={mylist.id}
-                    className={`${styles.mylistItem} ${isSelected ? styles.selected : ''} ${mylist.isDefault ? styles.default : ''}`}
-                    onClick={() => onAddToMylist(mylist.id)}
-                    onMouseEnter={() => setHoveredId(mylist.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    disabled={isProcessing || isSelected}
-                    aria-pressed={isSelected}
-                  >
-                    <div className={styles.iconArea}>
-                      {isSelected ? '✓' : mylist.isDefault ? '⭐' : '📁'}
-                    </div>
-                    <div className={styles.textArea}>
-                      <div className={styles.mylistName}>
-                        {mylist.name}
-                        {isSelected && <span className={styles.checkIcon}>✓</span>}
-                      </div>
-                      {mylist.description && (
-                        <div className={styles.mylistDescription}>
-                          {mylist.description}
-                        </div>
-                      )}
-                      <div className={styles.mylistMeta}>
-                        <span>{mylist.videoCount || 0}件の動画</span>
-                        {mylist.isDefault && (
-                          <span className={styles.defaultBadge}>デフォルト</span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          {mylists.map((mylist) => (
+            <button
+              key={mylist.id}
+              className={`${styles.mylistItem} ${selectedMylistIds.includes(mylist.id) ? styles.selected : ''}`}
+              onClick={() => onAddToMylist(mylist.id)}
+              disabled={isProcessing || selectedMylistIds.includes(mylist.id)}
+            >
+              <div className={styles.mylistIcon}>
+                {selectedMylistIds.includes(mylist.id) ? '✓' : '📁'}
+              </div>
+              <div className={styles.mylistInfo}>
+                <div className={styles.mylistName}>
+                  {mylist.name}
+                  {mylist.isDefault && <span className={styles.defaultBadge}>デフォルト</span>}
+                </div>
+                <div className={styles.mylistMeta}>
+                  {mylist.videoCount}件の動画
+                </div>
+              </div>
+            </button>
+          ))}
         </div>
 
-        {/* フッター */}
         <div className={styles.footer}>
-          {onCreateMylist && mylists.length > 0 && (
-            <button
-              className={styles.createButton}
-              onClick={onCreateMylist}
-              disabled={isProcessing}
-            >
-              <span>＋</span>
-              新規マイリスト作成
-            </button>
+          {!showNewForm ? (
+            <>
+              <button
+                className={styles.primaryButton}
+                onClick={() => setShowNewForm(true)}
+                disabled={!onCreateMylist}
+              >
+                ＋ 新規マイリスト作成
+              </button>
+              <button
+                className={styles.secondaryButton}
+                onClick={onClose}
+              >
+                閉じる
+              </button>
+            </>
+          ) : (
+            <div className={styles.newForm}>
+              <input
+                type="text"
+                className={styles.input}
+                placeholder="マイリスト名"
+                value={newMylistName}
+                onChange={(e) => setNewMylistName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleCreateMylist()
+                  }
+                }}
+                autoFocus
+              />
+              <textarea
+                className={styles.textarea}
+                placeholder="説明（任意）"
+                value={newMylistDescription}
+                onChange={(e) => setNewMylistDescription(e.target.value)}
+                rows={2}
+              />
+              <div className={styles.formButtons}>
+                <button
+                  className={styles.primaryButton}
+                  onClick={handleCreateMylist}
+                  disabled={!newMylistName.trim() || isCreating}
+                >
+                  作成
+                </button>
+                <button
+                  className={styles.secondaryButton}
+                  onClick={() => {
+                    setShowNewForm(false)
+                    setNewMylistName('')
+                    setNewMylistDescription('')
+                  }}
+                  disabled={isCreating}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
           )}
-          <button
-            className={styles.cancelButton}
-            onClick={onClose}
-            disabled={isProcessing}
-          >
-            閉じる
-          </button>
         </div>
       </div>
-    </div>
+    </>
   )
 }

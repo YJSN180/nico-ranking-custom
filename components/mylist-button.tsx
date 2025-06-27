@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { useMylistOperations } from '@/hooks/use-mylist-operations'
 import { MylistModal } from './mylist-modal'
 import type { RankingItem } from '@/types/ranking'
@@ -12,8 +11,7 @@ interface MylistButtonProps {
 }
 
 export function MylistButton({ video }: MylistButtonProps) {
-  const router = useRouter()
-  const { mylists, isLoading, addVideoToMylist, removeVideoFromMylist, isVideoInAnyMylist } = useMylistOperations()
+  const { mylists, isLoading, addVideoToMylist, removeVideoFromMylist, isVideoInAnyMylist, createMylist } = useMylistOperations()
   const [isInMylist, setIsInMylist] = useState(false)
   const [mylistIds, setMylistIds] = useState<string[]>([])
   const [showModal, setShowModal] = useState(false)
@@ -139,11 +137,15 @@ export function MylistButton({ video }: MylistButtonProps) {
         <MylistModal
           mylists={mylists}
           selectedMylistIds={mylistIds}
-          onAddToMylist={handleAddToMylist}
+          onAddToMylist={async (mylistId) => {
+            await handleAddToMylist(mylistId)
+          }}
           onClose={() => setShowModal(false)}
-          onCreateMylist={() => {
-            setShowModal(false)
-            router.push('/mylists')
+          onCreateMylist={async (name, description) => {
+            const newMylistId = await createMylist(name, description)
+            if (newMylistId) {
+              await handleAddToMylist(newMylistId)
+            }
           }}
           isProcessing={isProcessing}
         />
