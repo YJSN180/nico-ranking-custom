@@ -123,10 +123,9 @@ const nextConfig = {
     workerThreads: false,
     cpus: 1,
     // パフォーマンス最適化
-    optimizeCss: true,
+    optimizeCss: false, // critters依存関係エラーを回避
   },
   // パフォーマンス最適化設定
-  swcMinify: true,
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
