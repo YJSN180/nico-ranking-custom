@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useMylistOperations } from '@/hooks/use-mylist-operations'
+import { MylistModal } from './mylist-modal'
 import type { RankingItem } from '@/types/ranking'
 import type { Video } from '@/lib/storage/types'
 
@@ -10,6 +12,7 @@ interface MylistButtonProps {
 }
 
 export function MylistButton({ video }: MylistButtonProps) {
+  const router = useRouter()
   const { mylists, isLoading, addVideoToMylist, removeVideoFromMylist, isVideoInAnyMylist } = useMylistOperations()
   const [isInMylist, setIsInMylist] = useState(false)
   const [mylistIds, setMylistIds] = useState<string[]>([])
@@ -133,95 +136,17 @@ export function MylistButton({ video }: MylistButtonProps) {
 
       {/* マイリスト選択モーダル */}
       {showModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
+        <MylistModal
+          mylists={mylists}
+          selectedMylistIds={mylistIds}
+          onAddToMylist={handleAddToMylist}
+          onClose={() => setShowModal(false)}
+          onCreateMylist={() => {
+            setShowModal(false)
+            router.push('/mylists')
           }}
-          onClick={() => setShowModal(false)}
-        >
-          <div
-            style={{
-              background: 'var(--bg-primary)',
-              borderRadius: '8px',
-              padding: '20px',
-              maxWidth: '400px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              boxShadow: 'var(--shadow-lg)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 style={{ margin: '0 0 16px', fontSize: '18px' }}>マイリストに追加</h2>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {mylists.map((mylist) => (
-                <button
-                  key={mylist.id}
-                  onClick={() => handleAddToMylist(mylist.id)}
-                  disabled={isProcessing || mylistIds.includes(mylist.id)}
-                  style={{
-                    padding: '12px 16px',
-                    background: mylistIds.includes(mylist.id) ? 'var(--bg-secondary)' : 'var(--surface-color)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '4px',
-                    textAlign: 'left',
-                    cursor: isProcessing || mylistIds.includes(mylist.id) ? 'default' : 'pointer',
-                    opacity: mylistIds.includes(mylist.id) ? 0.6 : 1,
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isProcessing && !mylistIds.includes(mylist.id)) {
-                      e.currentTarget.style.background = 'var(--surface-hover)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isProcessing && !mylistIds.includes(mylist.id)) {
-                      e.currentTarget.style.background = 'var(--surface-color)'
-                    }
-                  }}
-                >
-                  <div style={{ fontWeight: '500' }}>
-                    {mylist.name}
-                    {mylistIds.includes(mylist.id) && ' ✓'}
-                  </div>
-                  {mylist.description && (
-                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      {mylist.description}
-                    </div>
-                  )}
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    {mylist.videoCount}件の動画
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                marginTop: '16px',
-                padding: '8px 16px',
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                width: '100%',
-              }}
-            >
-              キャンセル
-            </button>
-          </div>
-        </div>
+          isProcessing={isProcessing}
+        />
       )}
     </>
   )

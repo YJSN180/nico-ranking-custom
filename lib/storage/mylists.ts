@@ -34,12 +34,26 @@ export class MylistManager {
    */
   async getOrCreateDefaultMylist(): Promise<Mylist> {
     const db = this.dbManager.getDB()
-    const tx = db.transaction('mylists', 'readonly')
-    const mylists = await tx.store.getAll()
-    const defaultMylist = mylists.find(m => m.isDefault === true)
     
-    if (defaultMylist) {
-      return defaultMylist
+    // isDefaultインデックスを使用して効率的に検索
+    const tx = db.transaction('mylists', 'readonly')
+    const index = tx.store.index('isDefault')
+    const defaultMylists = await index.getAll(IDBKeyRange.only(true))
+    
+    // 既存のデフォルトマイリストがある場合は最初のものを返す
+    if (defaultMylists.length > 0) {
+      // 複数のデフォルトマイリストがある場合は、最初の1つを残して他は削除
+      if (defaultMylists.length > 1) {
+        const writeTx = db.transaction('mylists', 'readwrite')
+        // 最初の1つ以外のisDefaultをfalseに更新
+        for (let i = 1; i < defaultMylists.length; i++) {
+          const mylist = defaultMylists[i]
+          mylist.isDefault = false
+          await writeTx.store.put(mylist)
+        }
+        await writeTx.done
+      }
+      return defaultMylists[0]
     }
     
     // デフォルトマイリストが存在しない場合は作成
@@ -116,10 +130,10 @@ export class MylistManager {
   async deleteMylist(mylistId: string): Promise<void> {
     const db = this.dbManager.getDB()
     
-    // デフォルトマイリストは削除不可
+    // デフォルトマイリストも削除可能にする（ユーザーの判断に任せる）
     const mylist = await this.getMylist(mylistId)
-    if (mylist?.isDefault) {
-      throw new Error('Cannot delete default mylist')
+    if (!mylist) {
+      throw new Error('Mylist not found')
     }
     
     // トランザクション開始
