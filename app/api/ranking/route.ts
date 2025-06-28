@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Edge Runtimeで実行（より高速）
+export const runtime = 'edge'
+
+// キャッシュの設定
+export const revalidate = 1800 // 30分
+
 // プレビュー環境ではプロキシとして動作し、本番環境ではCloudflare Workerにリダイレクトします。
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   
   // プレビュー環境かどうかを判定
   const host = request.headers.get('host') || ''
-  // プレビュー環境: nico-ranking-custom-[ランダム文字列]-yjsns-projects.vercel.app
-  // 本番環境: nico-ranking-custom-yjsns-projects.vercel.app
   const isVercelApp = host.includes('.vercel.app')
   const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(host)
   const isPreview = isVercelApp && hasRandomString
-  
-  // eslint-disable-next-line no-console
-  console.log('[API Route] Environment check:', { host, isPreview, isVercelApp, hasRandomString })
   
   if (isPreview) {
     // プレビュー環境ではプロキシとして動作
@@ -26,54 +27,67 @@ export async function GET(request: NextRequest) {
         url.searchParams.set(key, value)
       })
       
+      // ETagヘッダーを転送（条件付きリクエスト）
+      const ifNoneMatch = request.headers.get('if-none-match')
+      const headers: HeadersInit = {
+        'Accept': 'application/json',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'User-Agent': 'nico-ranking-preview/1.0',
+        'X-Forwarded-Host': host,
+        'X-Forwarded-Proto': 'https'
+      }
+      
+      if (ifNoneMatch) {
+        headers['If-None-Match'] = ifNoneMatch
+      }
+      
       // Cloudflare Workerにリクエストを転送
       const response = await fetch(url.toString(), {
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'User-Agent': 'nico-ranking-preview/1.0',
-          // オリジナルのホストを転送（CORS対応のため）
-          'X-Forwarded-Host': host,
-          'X-Forwarded-Proto': 'https'
-        }
+        headers,
+        // キャッシュ制御
+        next: { revalidate: 1800 }
       })
+      
+      // 304 Not Modifiedの場合はそのまま返す
+      if (response.status === 304) {
+        return new NextResponse(null, {
+          status: 304,
+          headers: {
+            'cache-control': 'public, max-age=1800, s-maxage=3600',
+            'etag': response.headers.get('etag') || ''
+          }
+        })
+      }
       
       // レスポンスボディを取得（自動的に解凍される）
       const data = await response.text()
       
-      // レスポンスヘッダーをコピー（一部調整）
-      const headers = new Headers()
-      response.headers.forEach((value, key) => {
-        const lowerKey = key.toLowerCase()
-        // CORSとセキュリティヘッダー、Content-Encodingは除外
-        // （解凍済みのデータを返すため）
-        if (!lowerKey.startsWith('access-control-') &&
-            !lowerKey.includes('x-frame-options') &&
-            !lowerKey.includes('x-content-type-options') &&
-            lowerKey !== 'content-encoding' &&
-            lowerKey !== 'content-length') {
-          headers.set(key, value)
-        }
-      })
+      // レスポンスヘッダーをコピー（最小限に）
+      const responseHeaders = new Headers()
       
-      // Content-Typeが設定されていない場合は追加
-      if (!headers.has('content-type')) {
-        headers.set('content-type', 'application/json')
-      }
+      // 必要なヘッダーのみコピー
+      const etag = response.headers.get('etag')
+      const lastModified = response.headers.get('last-modified')
+      const cacheControl = response.headers.get('cache-control')
       
-      // キャッシュヘッダーを追加（Cloudflare Workersと同様）
-      if (!headers.has('cache-control')) {
-        headers.set('cache-control', 'public, max-age=1800, s-maxage=3600')
-      }
+      if (etag) responseHeaders.set('etag', etag)
+      if (lastModified) responseHeaders.set('last-modified', lastModified)
+      
+      // Content-Type
+      responseHeaders.set('content-type', 'application/json')
+      
+      // キャッシュヘッダー（Vercel Edge Cacheも活用）
+      responseHeaders.set('cache-control', cacheControl || 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
+      
+      // CDN-Cache-Control（Vercel専用）
+      responseHeaders.set('cdn-cache-control', 'max-age=3600, stale-while-revalidate=86400')
       
       return new NextResponse(data, {
         status: response.status,
         statusText: response.statusText,
-        headers
+        headers: responseHeaders
       })
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('[Preview Proxy] Error fetching from Cloudflare Worker:', error)
       return NextResponse.json(
         { error: 'Failed to fetch ranking data' },
         { status: 500 }

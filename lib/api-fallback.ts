@@ -15,44 +15,58 @@ export class APIFallback {
     const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(hostname)
     const isPreview = isVercelApp && hasRandomString
     
-    // デバッグログ
-    // eslint-disable-next-line no-console
-    console.log('[APIFallback] Preview environment check:', {
-      hostname,
-      isPreview,
-      isVercelApp,
-      hasRandomString
-    })
-    
     return isPreview
   }
+  
+  // ETagキャッシュストア
+  private static etagCache = new Map<string, string>()
   
   static async fetchWithFallback(
     params: URLSearchParams,
     signal?: AbortSignal
   ): Promise<Response> {
+    const cacheKey = params.toString()
+    const cachedEtag = this.etagCache.get(cacheKey)
+    
+    const headers: HeadersInit = {
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip, deflate, br'
+    }
+    
+    // キャッシュされたETagがあれば条件付きリクエスト
+    if (cachedEtag) {
+      headers['If-None-Match'] = cachedEtag
+    }
+    
     // プレビュー環境では相対パスでVercel Functionプロキシを使用
     if (this.isPreviewEnvironment()) {
       const response = await fetch(`/api/ranking?${params.toString()}`, {
         signal,
-        headers: {
-          'Accept': 'application/json',
-          'Accept-Encoding': 'gzip, deflate, br'
-        }
+        headers
       })
+      
+      // ETagを保存
+      const etag = response.headers.get('etag')
+      if (etag && response.ok) {
+        this.etagCache.set(cacheKey, etag)
+      }
+      
       return response
     }
     
     // 本番環境ではCloudflare Worker に直接接続
+    headers['Origin'] = typeof window !== 'undefined' ? window.location.origin : ''
+    
     const response = await fetch(`${this.CLOUDFLARE_ENDPOINT}?${params.toString()}`, {
       signal,
-      headers: {
-        'Accept': 'application/json',
-        'Accept-Encoding': 'gzip, deflate, br',
-        // CORS対応のため Origin を設定
-        'Origin': typeof window !== 'undefined' ? window.location.origin : ''
-      }
+      headers
     })
+    
+    // ETagを保存
+    const etag = response.headers.get('etag')
+    if (etag && response.ok) {
+      this.etagCache.set(cacheKey, etag)
+    }
     
     return response
   }
