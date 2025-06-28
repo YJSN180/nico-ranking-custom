@@ -228,10 +228,16 @@
 @media (max-width: 640px) {
   .modal {
     width: 100%;
-    height: 100%;
+    height: 80vh; /* 設定モーダルより少し小さめ */
     max-width: none;
     max-height: none;
-    border-radius: 0;
+    border-radius: 16px 16px 0 0; /* 上部のみ角丸 */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto; /* 上書き */
+    transform: none; /* transformをリセット */
     animation: slideUpMobile 0.3s ease-out;
   }
   
@@ -263,9 +269,11 @@
 
 @keyframes slideUpMobile {
   from {
-    transform: translateY(100%);
+    opacity: 0;
+    transform: translateY(20px); /* 20pxだけ下から開始 */
   }
   to {
+    opacity: 1;
     transform: translateY(0);
   }
 }
