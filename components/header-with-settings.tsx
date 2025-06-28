@@ -82,17 +82,16 @@ export function HeaderWithSettings() {
                 marginRight: isMobile ? '4px' : '8px', // 適切な余白
               }}>
                 <Image
-                  src="/icon.png"
+                  src="/icon.svg"
                   alt="ニコラン(Re:turn) ロゴ"
                   fill
                   sizes={isMobile ? "48px" : "106px"}
                   style={{
                     objectFit: 'contain',
-                    filter: 'brightness(0) invert(1)', // 白色に変換
                     opacity: 0.95,
                   }}
                   priority
-                  unoptimized={true} // Next.js最適化を無効化（402エラー回避）
+                  unoptimized={true}
                 />
               </div>
               <div style={{
