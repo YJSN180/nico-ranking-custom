@@ -43,10 +43,19 @@ export function MylistModal({
     }
   }
 
+  const handleModalClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+  }
+
   return (
     <>
-      <div className={styles.overlay} onClick={onClose} />
-      <div className={styles.modal} role="dialog" aria-labelledby="mylist-modal-title">
+      <div className={styles.overlay} onClick={onClose} data-testid="modal-overlay" />
+      <div 
+        className={styles.modal} 
+        role="dialog" 
+        aria-labelledby="mylist-modal-title"
+        onClick={handleModalClick}
+      >
         <div className={styles.header}>
           <h2 id="mylist-modal-title" className={styles.title}>マイリストに追加</h2>
           <button 
