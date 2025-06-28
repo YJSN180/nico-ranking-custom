@@ -11,7 +11,7 @@ import 'fake-indexeddb/auto'
 // Mock the hooks
 vi.mock('@/hooks/use-mylist-operations')
 
-describe('デフォルトマイリスト作成 - 単一保証', () => {
+describe('初期マイリスト作成 - 単一保証', () => {
   let dbManager: DBManager
   let mylistManager: MylistManager
 
@@ -52,7 +52,7 @@ describe('デフォルトマイリスト作成 - 単一保証', () => {
     await dbManager.deleteDatabase()
   })
 
-  it('複数のマイリストボタンが同時に初期化されても、デフォルトマイリストは1つだけ作成される', async () => {
+  it('複数のマイリストボタンが同時に初期化されても、初期マイリストは1つだけ作成される', async () => {
     // 複数のマイリストボタンをレンダリング（100個）
     const videoCount = 100
     const videos: RankingItem[] = Array.from({ length: videoCount }, (_, i) => ({
@@ -87,46 +87,46 @@ describe('デフォルトマイリスト作成 - 単一保証', () => {
     // すべての初期化が完了するまで待つ
     await Promise.all(initPromises)
 
-    // デフォルトマイリストの数を確認
+    // マイリストの数を確認
     const allMylists = await mylistManager.getAllMylists()
-    const defaultMylists = allMylists.filter(m => m.isDefault)
 
-    expect(defaultMylists).toHaveLength(1)
-    expect(defaultMylists[0].name).toBe('とりあえずマイリスト')
+    expect(allMylists).toHaveLength(1)
+    expect(allMylists[0].name).toBe('とりあえずマイリスト')
   })
 
-  it('デフォルトマイリストが既に存在する場合は新しく作成されない', async () => {
-    // 最初のデフォルトマイリストを作成
-    const firstDefault = await mylistManager.getOrCreateDefaultMylist()
-    expect(firstDefault.name).toBe('とりあえずマイリスト')
+  it('初期マイリストが既に存在する場合は新しく作成されない', async () => {
+    // 最初の初期マイリストを作成
+    const firstInitial = await mylistManager.getOrCreateDefaultMylist()
+    expect(firstInitial.name).toBe('とりあえずマイリスト')
 
     // 再度取得を試みる
-    const secondDefault = await mylistManager.getOrCreateDefaultMylist()
+    const secondInitial = await mylistManager.getOrCreateDefaultMylist()
     
     // 同じIDであることを確認
-    expect(secondDefault.id).toBe(firstDefault.id)
+    expect(secondInitial.id).toBe(firstInitial.id)
 
     // マイリストの総数が1つであることを確認
     const allMylists = await mylistManager.getAllMylists()
     expect(allMylists).toHaveLength(1)
   })
 
-  it('デフォルトマイリストは常にリストの最初に表示される', async () => {
-    // デフォルトマイリストを作成
+  it('マイリストは作成日時の新しい順に表示される', async () => {
+    // 初期マイリストを作成
     await mylistManager.getOrCreateDefaultMylist()
 
-    // 通常のマイリストを追加
+    // 遅延を入れて作成日時を異ならせる
+    await new Promise(resolve => setTimeout(resolve, 10))
     await mylistManager.createMylist('お気に入り', 'お気に入りの動画')
+    await new Promise(resolve => setTimeout(resolve, 10))
     await mylistManager.createMylist('後で見る', '後で見る動画')
 
     // すべてのマイリストを取得
     const allMylists = await mylistManager.getAllMylists()
 
-    // デフォルトマイリストが最初にあることを確認
+    // 新しい順に表示されることを確認
     expect(allMylists).toHaveLength(3)
-    expect(allMylists[0].isDefault).toBe(true)
-    expect(allMylists[0].name).toBe('とりあえずマイリスト')
-    expect(allMylists[1].isDefault).toBeFalsy()
-    expect(allMylists[2].isDefault).toBeFalsy()
+    expect(allMylists[0].name).toBe('後で見る')
+    expect(allMylists[1].name).toBe('お気に入り')
+    expect(allMylists[2].name).toBe('とりあえずマイリスト')
   })
 })

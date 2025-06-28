@@ -20,8 +20,7 @@ export class MylistManager {
       description,
       createdAt: now,
       updatedAt: now,
-      videoCount: 0,
-      isDefault: false
+      videoCount: 0
     }
     
     const tx = db.transaction('mylists', 'readwrite')
@@ -32,7 +31,7 @@ export class MylistManager {
   }
 
   /**
-   * デフォルトマイリスト（とりあえずマイリスト）を取得または作成
+   * 初期マイリスト（とりあえずマイリスト）を取得または作成
    */
   async getOrCreateDefaultMylist(): Promise<Mylist> {
     // 既に進行中のPromiseがある場合はそれを返す（重複作成を防ぐ）
@@ -53,50 +52,37 @@ export class MylistManager {
   }
 
   /**
-   * デフォルトマイリストの内部実装（同期制御されたメソッド）
+   * 初期マイリストの内部実装（同期制御されたメソッド）
    */
   private async _getOrCreateDefaultMylistInternal(): Promise<Mylist> {
     const db = this.dbManager.getDB()
     
-    // fake-indexeddbとの互換性のため、インデックスを使わずに全件取得してフィルタリング
+    // 既存のマイリストを確認
     const tx = db.transaction('mylists', 'readonly')
     const allMylists = await tx.store.getAll()
-    const defaultMylists = allMylists.filter(m => m.isDefault === true)
     
-    // 既存のデフォルトマイリストがある場合は最初のものを返す
-    if (defaultMylists.length > 0) {
-      // 複数のデフォルトマイリストがある場合は、最初の1つを残して他は削除
-      if (defaultMylists.length > 1) {
-        const writeTx = db.transaction('mylists', 'readwrite')
-        // 最初の1つ以外のisDefaultをfalseに更新
-        for (let i = 1; i < defaultMylists.length; i++) {
-          const mylist = defaultMylists[i]
-          mylist.isDefault = false
-          await writeTx.store.put(mylist)
-        }
-        await writeTx.done
+    // マイリストが1つもない場合は初期マイリストを作成
+    if (allMylists.length === 0) {
+      const now = Date.now()
+      const id = crypto.randomUUID()
+      const newInitialMylist: Mylist = {
+        id,
+        name: 'とりあえずマイリスト',
+        description: '',
+        createdAt: now,
+        updatedAt: now,
+        videoCount: 0
       }
-      return defaultMylists[0]
+      
+      const writeTx = db.transaction('mylists', 'readwrite')
+      await writeTx.store.add(newInitialMylist)
+      await writeTx.done
+      
+      return newInitialMylist
     }
     
-    // デフォルトマイリストが存在しない場合は作成
-    const now = Date.now()
-    const id = crypto.randomUUID()
-    const newDefaultMylist: Mylist = {
-      id,
-      name: 'とりあえずマイリスト',
-      description: 'デフォルトのマイリスト',
-      createdAt: now,
-      updatedAt: now,
-      videoCount: 0,
-      isDefault: true
-    }
-    
-    const writeTx = db.transaction('mylists', 'readwrite')
-    await writeTx.store.add(newDefaultMylist)
-    await writeTx.done
-    
-    return newDefaultMylist
+    // 既存のマイリストがある場合は最初のものを返す（互換性のため）
+    return allMylists.sort((a, b) => a.createdAt - b.createdAt)[0]
   }
 
   /**
@@ -108,12 +94,7 @@ export class MylistManager {
     const mylists = await tx.store.getAll()
     
     // 作成日時の新しい順にソート
-    return mylists.sort((a, b) => {
-      // デフォルトマイリストは常に最初
-      if (a.isDefault) return -1
-      if (b.isDefault) return 1
-      return b.createdAt - a.createdAt
-    })
+    return mylists.sort((a, b) => b.createdAt - a.createdAt)
   }
 
   /**
@@ -152,12 +133,6 @@ export class MylistManager {
    */
   async deleteMylist(mylistId: string): Promise<void> {
     const db = this.dbManager.getDB()
-    
-    // デフォルトマイリストの削除を防ぐ
-    const mylist = await this.getMylist(mylistId)
-    if (mylist?.isDefault) {
-      throw new Error('Cannot delete default mylist')
-    }
     
     // トランザクション開始
     const tx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')

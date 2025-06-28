@@ -14,7 +14,7 @@ export interface StoreInfo {
 export class DBManager {
   private db: IDBPDatabase | null = null
   private readonly dbName = 'nicoran-db'
-  private readonly version = 2  // バージョンアップ
+  private readonly version = 3  // isDefault削除
   private openDBModule: typeof import('idb') | null = null
 
   async init(): Promise<void> {
@@ -64,7 +64,7 @@ export class DBManager {
     // eslint-disable-next-line no-console
     console.log(`[DBManager] openDB() called - name: ${this.dbName}, version: ${this.version}`)
     return await openDB(this.dbName, this.version, {
-      upgrade(db, oldVersion) {
+      upgrade(db, oldVersion, _newVersion, transaction) {
         // eslint-disable-next-line no-console
         console.log(`[DBManager] upgrade callback triggered - oldVersion: ${oldVersion}`)
         // お気に入りストア（互換性のため残す）
@@ -92,17 +92,12 @@ export class DBManager {
           mylistStore.createIndex('name', 'name')
           mylistStore.createIndex('createdAt', 'createdAt')
           mylistStore.createIndex('updatedAt', 'updatedAt')
-          mylistStore.createIndex('isDefault', 'isDefault')
-        } else if (oldVersion < 2) {
-          // 既存のmylistsストアを削除して再作成
-          db.deleteObjectStore('mylists')
-          const mylistStore = db.createObjectStore('mylists', {
-            keyPath: 'id'
-          })
-          mylistStore.createIndex('name', 'name')
-          mylistStore.createIndex('createdAt', 'createdAt')
-          mylistStore.createIndex('updatedAt', 'updatedAt')
-          mylistStore.createIndex('isDefault', 'isDefault')
+        } else if (oldVersion < 3) {
+          // isDefaultインデックスを削除
+          const mylistStore = transaction.objectStore('mylists')
+          if (mylistStore.indexNames.contains('isDefault')) {
+            mylistStore.deleteIndex('isDefault')
+          }
         }
 
         // マイリスト内動画ストア（v2で新規作成）

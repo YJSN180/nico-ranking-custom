@@ -46,7 +46,6 @@ export interface Mylist {
   createdAt: number    // 作成日時（タイムスタンプ）
   updatedAt: number    // 更新日時（タイムスタンプ）
   videoCount: number   // 動画数
-  isDefault?: boolean  // デフォルトマイリスト（とりあえずマイリスト）
 }
 
 // マイリスト内の動画

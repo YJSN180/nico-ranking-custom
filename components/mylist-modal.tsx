@@ -104,7 +104,6 @@ export function MylistModal({
                   <div className={styles.mylistInfo}>
                     <div className={styles.mylistName}>
                       <span>{mylist.name}</span>
-                      {mylist.isDefault && <span className={styles.defaultBadge}>デフォルト</span>}
                     </div>
                     <div className={styles.mylistMeta}>
                       {mylist.videoCount}件の動画

@@ -36,20 +36,18 @@ describe('MylistManager', () => {
       expect(mylist?.name).toBe('音楽コレクション')
       expect(mylist?.description).toBe('お気に入りの音楽')
       expect(mylist?.videoCount).toBe(0)
-      expect(mylist?.isDefault).toBe(false)
     })
 
-    it('デフォルトマイリストを取得または作成できる', async () => {
+    it('初期マイリストを取得または作成できる', async () => {
       // Act
-      const defaultMylist = await mylistManager.getOrCreateDefaultMylist()
+      const initialMylist = await mylistManager.getOrCreateDefaultMylist()
 
       // Assert
-      expect(defaultMylist.name).toBe('とりあえずマイリスト')
-      expect(defaultMylist.isDefault).toBe(true)
+      expect(initialMylist.name).toBe('とりあえずマイリスト')
 
       // 再度呼び出しても同じものが返る
       const sameMylist = await mylistManager.getOrCreateDefaultMylist()
-      expect(sameMylist.id).toBe(defaultMylist.id)
+      expect(sameMylist.id).toBe(initialMylist.id)
     })
   })
 
@@ -67,9 +65,10 @@ describe('MylistManager', () => {
 
       // Assert
       expect(mylists).toHaveLength(3)
-      expect(mylists[0].isDefault).toBe(true) // デフォルトが最初
-      expect(mylists[1].name).toBe('ゲーム') // 新しい順
-      expect(mylists[2].name).toBe('音楽')
+      // 新しい順（作成日時の降順）
+      expect(mylists[0].name).toBe('ゲーム')
+      expect(mylists[1].name).toBe('音楽')
+      expect(mylists[2].name).toBe('とりあえずマイリスト')
     })
 
     it('マイリストを更新できる', async () => {
@@ -102,13 +101,16 @@ describe('MylistManager', () => {
       expect(deleted).toBeUndefined()
     })
 
-    it('デフォルトマイリストは削除できない', async () => {
+    it('すべてのマイリストを削除できる', async () => {
       // Arrange
-      const defaultMylist = await mylistManager.getOrCreateDefaultMylist()
+      const initialMylist = await mylistManager.getOrCreateDefaultMylist()
 
-      // Act & Assert
-      await expect(mylistManager.deleteMylist(defaultMylist.id))
-        .rejects.toThrow('Cannot delete default mylist')
+      // Act
+      await mylistManager.deleteMylist(initialMylist.id)
+
+      // Assert
+      const deleted = await mylistManager.getMylist(initialMylist.id)
+      expect(deleted).toBeUndefined()
     })
   })
 

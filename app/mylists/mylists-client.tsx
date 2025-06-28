@@ -126,9 +126,7 @@ export function MylistsClient() {
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to delete mylist:', error)
-      if (error instanceof Error && error.message.includes('default')) {
-        alert('デフォルトマイリストは削除できません')
-      }
+      // エラーハンドリング
     }
   }
 
@@ -174,7 +172,7 @@ export function MylistsClient() {
         {mylists.map(mylist => (
           <div
             key={mylist.id}
-            className={`${styles.mylistCard} ${mylist.isDefault ? styles.defaultMylist : ''}`}
+            className={styles.mylistCard}
             onClick={() => router.push(`/mylists/${mylist.id}`)}
           >
             <div className={styles.mylistInfo}>
@@ -192,28 +190,24 @@ export function MylistsClient() {
               </div>
             </div>
             <div className={styles.mylistActions}>
-              {!mylist.isDefault && (
-                <>
-                  <button
-                    className={styles.editButton}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setEditingMylist(mylist)
-                    }}
-                  >
-                    編集
-                  </button>
-                  <button
-                    className={styles.deleteButton}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDeleteMylist(mylist.id)
-                    }}
-                  >
-                    削除
-                  </button>
-                </>
-              )}
+              <button
+                className={styles.editButton}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setEditingMylist(mylist)
+                }}
+              >
+                編集
+              </button>
+              <button
+                className={styles.deleteButton}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDeleteMylist(mylist.id)
+                }}
+              >
+                削除
+              </button>
             </div>
           </div>
         ))}
