@@ -2,6 +2,8 @@ import { DBManager } from './db-manager'
 import type { Mylist, MylistVideo } from './types'
 
 export class MylistManager {
+  private static defaultMylistPromise: Promise<Mylist> | null = null
+  
   constructor(private dbManager: DBManager) {}
 
   /**
@@ -33,6 +35,27 @@ export class MylistManager {
    * デフォルトマイリスト（とりあえずマイリスト）を取得または作成
    */
   async getOrCreateDefaultMylist(): Promise<Mylist> {
+    // 既に進行中のPromiseがある場合はそれを返す（重複作成を防ぐ）
+    if (MylistManager.defaultMylistPromise) {
+      return MylistManager.defaultMylistPromise
+    }
+
+    // 新しいPromiseを作成して保存
+    MylistManager.defaultMylistPromise = this._getOrCreateDefaultMylistInternal()
+    
+    try {
+      const result = await MylistManager.defaultMylistPromise
+      return result
+    } finally {
+      // 完了後はPromiseをクリア（次回は再チェック可能にする）
+      MylistManager.defaultMylistPromise = null
+    }
+  }
+
+  /**
+   * デフォルトマイリストの内部実装（同期制御されたメソッド）
+   */
+  private async _getOrCreateDefaultMylistInternal(): Promise<Mylist> {
     const db = this.dbManager.getDB()
     
     // fake-indexeddbとの互換性のため、インデックスを使わずに全件取得してフィルタリング
