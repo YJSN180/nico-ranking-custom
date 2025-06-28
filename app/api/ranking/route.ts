@@ -6,8 +6,13 @@ export async function GET(request: NextRequest) {
   
   // プレビュー環境かどうかを判定
   const host = request.headers.get('host') || ''
-  const isPreview = host.includes('.vercel.app') && 
-                   !host.includes('nico-ranking-custom-yjsns-projects')
+  // プレビュー環境: nico-ranking-custom-[ランダム文字列]-yjsns-projects.vercel.app
+  // 本番環境: nico-ranking-custom-yjsns-projects.vercel.app
+  const isVercelApp = host.includes('.vercel.app')
+  const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(host)
+  const isPreview = isVercelApp && hasRandomString
+  
+  console.log('[API Route] Environment check:', { host, isPreview, isVercelApp, hasRandomString })
   
   if (isPreview) {
     // プレビュー環境ではプロキシとして動作
@@ -32,16 +37,20 @@ export async function GET(request: NextRequest) {
         }
       })
       
-      // レスポンスボディを取得
+      // レスポンスボディを取得（自動的に解凍される）
       const data = await response.text()
       
       // レスポンスヘッダーをコピー（一部調整）
       const headers = new Headers()
       response.headers.forEach((value, key) => {
-        // CORSとセキュリティヘッダーは除外（Next.jsが設定するため）
-        if (!key.toLowerCase().startsWith('access-control-') &&
-            !key.toLowerCase().includes('x-frame-options') &&
-            !key.toLowerCase().includes('x-content-type-options')) {
+        const lowerKey = key.toLowerCase()
+        // CORSとセキュリティヘッダー、Content-Encodingは除外
+        // （解凍済みのデータを返すため）
+        if (!lowerKey.startsWith('access-control-') &&
+            !lowerKey.includes('x-frame-options') &&
+            !lowerKey.includes('x-content-type-options') &&
+            lowerKey !== 'content-encoding' &&
+            lowerKey !== 'content-length') {
           headers.set(key, value)
         }
       })
@@ -49,6 +58,11 @@ export async function GET(request: NextRequest) {
       // Content-Typeが設定されていない場合は追加
       if (!headers.has('content-type')) {
         headers.set('content-type', 'application/json')
+      }
+      
+      // キャッシュヘッダーを追加（Cloudflare Workersと同様）
+      if (!headers.has('cache-control')) {
+        headers.set('cache-control', 'public, max-age=1800, s-maxage=3600')
       }
       
       return new NextResponse(data, {

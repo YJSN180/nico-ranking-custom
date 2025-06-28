@@ -6,7 +6,24 @@ export class APIFallback {
   private static isPreviewEnvironment(): boolean {
     if (typeof window === 'undefined') return false
     const hostname = window.location.hostname
-    return hostname.includes('.vercel.app') && !hostname.includes('nico-ranking-custom-yjsns-projects')
+    
+    // プレビュー環境のパターン:
+    // - nico-ranking-custom-[ランダム文字列]-yjsns-projects.vercel.app
+    // 本番環境のパターン:
+    // - nico-ranking-custom-yjsns-projects.vercel.app (ランダム文字列なし)
+    const isVercelApp = hostname.includes('.vercel.app')
+    const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(hostname)
+    const isPreview = isVercelApp && hasRandomString
+    
+    // デバッグログ
+    console.log('[APIFallback] Preview environment check:', {
+      hostname,
+      isPreview,
+      isVercelApp,
+      hasRandomString
+    })
+    
+    return isPreview
   }
   
   static async fetchWithFallback(
