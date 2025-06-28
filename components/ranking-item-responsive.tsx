@@ -124,16 +124,23 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         
         {/* コンテンツエリア */}
         <div className="ranking-item-responsive__details">
-          {/* タイトル */}
-          <a
-            href={`https://www.nicovideo.jp/watch/${item.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ranking-item-responsive__title"
-            data-testid="video-title"
-          >
-            {item.title}
-          </a>
+          {/* タイトル行（モバイルではマイリストボタンを含む） */}
+          <div className="ranking-item-responsive__title-row">
+            {/* タイトル */}
+            <a
+              href={`https://www.nicovideo.jp/watch/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ranking-item-responsive__title"
+              data-testid="video-title"
+            >
+              {item.title}
+            </a>
+            {/* モバイル用マイリストボタン（CSSで表示制御） */}
+            <div className="ranking-item-responsive__mylist-button">
+              <MylistButton video={item} />
+            </div>
+          </div>
           
           {/* 投稿者情報 */}
           <div className="ranking-item-responsive__author">

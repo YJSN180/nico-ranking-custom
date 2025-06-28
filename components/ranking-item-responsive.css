@@ -49,6 +49,11 @@
   overflow: hidden;
 }
 
+/* タイトル行（デスクトップでは通常のレイアウト） */
+.ranking-item-responsive__title-row {
+  margin-bottom: 6px;
+}
+
 /* タイトル */
 .ranking-item-responsive__title {
   color: var(--link-color);
@@ -60,8 +65,12 @@
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin-bottom: 6px;
   word-break: break-word;
+}
+
+/* モバイル用マイリストボタン（デスクトップでは非表示） */
+.ranking-item-responsive__mylist-button {
+  display: none;
 }
 
 .ranking-item-responsive__title:visited {
@@ -151,9 +160,9 @@
   }
   
   .ranking-item-responsive__content {
-    /* モバイルレイアウト: 3カラム（サムネイル + 詳細 + マイリストボタン） */
-    grid-template-columns: 140px 1fr auto;
-    grid-template-areas: "thumbnail details mylist-button";
+    /* モバイルレイアウト: 2カラム（サムネイル + 詳細） */
+    grid-template-columns: 140px 1fr;
+    grid-template-areas: "thumbnail details";
     gap: 8px;
     padding: 2px;
     min-height: 75px;
@@ -196,15 +205,25 @@
     overflow: hidden;
   }
   
+  /* モバイルでタイトル行を追加 */
+  .ranking-item-responsive__title-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    margin-bottom: 4px;
+  }
+  
   .ranking-item-responsive__title {
     font-size: 15px;
-    margin-bottom: 4px;
+    margin-bottom: 0;
     /* モバイルでは2行まで表示 */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.3;
+    flex: 1;
+    min-width: 0; /* flexbox内でのtext-overflow対応 */
   }
   
   .ranking-item-responsive__author {
@@ -221,14 +240,20 @@
   .ranking-item-responsive__stats {
     font-size: 14px;
     gap: 8px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: wrap; /* 横スクロールを削除、折り返しを許可 */
+    overflow-x: visible;
   }
   
   /* モバイルでのマイリストエリア調整 */
   .ranking-item-responsive__mylist-area {
-    padding: 0 4px;
+    /* グリッドから外れてタイトル行内に配置されるため、特別な調整は不要 */
+    display: none; /* 元のグリッドエリアは非表示 */
+  }
+  
+  /* モバイルでタイトル行内のマイリストボタンを表示 */
+  .ranking-item-responsive__mylist-button {
+    display: block;
+    flex-shrink: 0;
   }
 }
 
@@ -240,8 +265,8 @@
   }
   
   .ranking-item-responsive__content {
-    grid-template-columns: 100px 1fr auto;
-    grid-template-areas: "thumbnail details mylist-button";
+    grid-template-columns: 100px 1fr;
+    grid-template-areas: "thumbnail details";
     padding: 2px;
     gap: 6px;
     min-height: 70px;
@@ -278,6 +303,11 @@
   }
   
   /* 超モバイルでもマイリスト数を表示 */
+  
+  /* 超モバイルでのマイリストエリア非表示 */
+  .ranking-item-responsive__mylist-area {
+    display: none;
+  }
 }
 
 /* ランク1-3位の特別スタイル（Container Query対応） */
@@ -328,8 +358,8 @@
     }
     
     .ranking-item-responsive__content {
-      grid-template-columns: 140px 1fr auto;
-      grid-template-areas: "thumbnail details mylist-button";
+      grid-template-columns: 140px 1fr;
+      grid-template-areas: "thumbnail details";
       gap: 8px;
       padding: 2px;
       min-height: 75px;
@@ -365,12 +395,28 @@
       margin-top: 0;
     }
     
+    /* モバイルでタイトル行を追加 */
+    .ranking-item-responsive__title-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      margin-bottom: 4px;
+    }
+    
     .ranking-item-responsive__title {
       font-size: 15px;
       display: -webkit-box;
       -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      flex: 1;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    
+    /* モバイルでのマイリストエリア非表示 */
+    .ranking-item-responsive__mylist-area {
+      display: none;
     }
   }
   
