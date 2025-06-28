@@ -40,18 +40,34 @@ export class APIFallback {
     
     // プレビュー環境では相対パスでVercel Functionプロキシを使用
     if (this.isPreviewEnvironment()) {
-      const response = await fetch(`/api/ranking?${params.toString()}`, {
-        signal,
-        headers
-      })
-      
-      // ETagを保存
-      const etag = response.headers.get('etag')
-      if (etag && response.ok) {
-        this.etagCache.set(cacheKey, etag)
+      try {
+        const response = await fetch(`/api/ranking?${params.toString()}`, {
+          signal,
+          headers
+        })
+        
+        // エラーレスポンスの場合は詳細をログ出力
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('[api-fallback] Preview API error:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText,
+            url: `/api/ranking?${params.toString()}`
+          })
+        }
+        
+        // ETagを保存
+        const etag = response.headers.get('etag')
+        if (etag && response.ok) {
+          this.etagCache.set(cacheKey, etag)
+        }
+        
+        return response
+      } catch (error) {
+        console.error('[api-fallback] Fetch error in preview:', error)
+        throw error
       }
-      
-      return response
     }
     
     // 本番環境ではCloudflare Worker に直接接続

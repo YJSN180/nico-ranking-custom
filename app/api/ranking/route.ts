@@ -41,11 +41,17 @@ export async function GET(request: NextRequest) {
         headers['If-None-Match'] = ifNoneMatch
       }
       
-      // Cloudflare Workerにリクエストを転送
+      // Cloudflare Workerにリクエストを転送（タイムアウト付き）
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒タイムアウト
+      
       const response = await fetch(url.toString(), {
         headers,
+        signal: controller.signal,
         // キャッシュ制御
         next: { revalidate: 1800 }
+      }).finally(() => {
+        clearTimeout(timeoutId)
       })
       
       // 304 Not Modifiedの場合はそのまま返す
@@ -88,8 +94,19 @@ export async function GET(request: NextRequest) {
         headers: responseHeaders
       })
     } catch (error) {
+      console.error('[API/ranking] Proxy error:', error)
+      console.error('[API/ranking] Target URL:', apiGatewayUrl)
+      console.error('[API/ranking] Preview host:', host)
+      
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const isTimeout = errorMessage.includes('abort') || errorMessage.includes('timeout')
+      
       return NextResponse.json(
-        { error: 'Failed to fetch ranking data' },
+        { 
+          error: 'Failed to fetch ranking data',
+          details: isTimeout ? 'Request timeout (30s)' : errorMessage,
+          type: 'proxy_error'
+        },
         { status: 500 }
       )
     }

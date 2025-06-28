@@ -210,6 +210,11 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
   const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
   
   if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    console.warn('[cloudflare-kv] Missing credentials:', {
+      hasAccountId: Boolean(CF_ACCOUNT_ID),
+      hasNamespaceId: Boolean(CF_NAMESPACE_ID),
+      hasApiToken: Boolean(CF_API_TOKEN)
+    })
     // Cloudflare KV credentials not configured - returning null
     return null
   }
@@ -240,6 +245,7 @@ async function getRankingFromKVSingleKey(): Promise<KVRankingData | null> {
     // Parse data using unified compression library
     return await parseBufferAsJSON(data)
   } catch (error) {
+    console.error('[cloudflare-kv] Failed to read from Cloudflare KV:', error)
     // Failed to read from Cloudflare KV - returning null
     // Failed to read RANKING_LATEST: error
     return null
