@@ -63,6 +63,11 @@ export function useMylistOperations() {
 
     try {
       await mylistManagerRef.current.addVideoToMylist(mylistId, video)
+      
+      // マイリストを再読み込みしてカウントを更新
+      const allMylists = await mylistManagerRef.current.getAllMylists()
+      setMylists(allMylists)
+      
       return true
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -76,6 +81,11 @@ export function useMylistOperations() {
 
     try {
       await mylistManagerRef.current.removeVideoFromMylist(mylistId, videoId)
+      
+      // マイリストを再読み込みしてカウントを更新
+      const allMylists = await mylistManagerRef.current.getAllMylists()
+      setMylists(allMylists)
+      
       return true
     } catch (error) {
       // eslint-disable-next-line no-console
