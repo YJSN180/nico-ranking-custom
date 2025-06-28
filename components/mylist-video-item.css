@@ -6,29 +6,16 @@
   gap: 12px;
   padding: 4px;
   
-  /* デスクトップレイアウト: rank + thumbnail + details + actions を横並び */
-  grid-template-columns: auto auto 1fr auto;
-  grid-template-areas: "rank thumbnail details actions";
+  /* デスクトップレイアウト: thumbnail + details を横並び、actionsは下部 */
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 
+    "thumbnail details"
+    "actions actions";
   align-items: start;
   min-height: 80px;
 }
 
-/* 順位表示 */
-.mylist-video-item__rank {
-  min-width: 44px;
-  height: 44px;
-  font-size: 24px;
-}
-
-/* デスクトップ順位のみgrid-areaを設定 */
-.mylist-video-item__rank--desktop {
-  grid-area: rank;
-}
-
-/* デスクトップでのみモバイル順位を非表示 */
-.mylist-video-item__rank--mobile {
-  display: none;
-}
+/* 順位関連のスタイルは削除 */
 
 /* サムネイル */
 .mylist-video-item__thumbnail {
@@ -153,12 +140,14 @@
 /* アクションボタンエリア */
 .mylist-video-item__actions {
   grid-area: actions;
+  grid-column: 1 / -1; /* 全幅を使用 */
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
-  justify-content: center;
-  padding: 0 8px;
+  flex-direction: row;
+  gap: 8px;
+  justify-content: flex-start;
+  padding: 8px 4px 4px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
 }
 
 .mylist-video-item__edit-button,
@@ -180,10 +169,16 @@
   border-color: var(--primary-color);
 }
 
+.mylist-video-item__delete-button {
+  background-color: var(--danger-color, var(--error-color));
+  color: white;
+  border-color: var(--danger-color, var(--error-color));
+}
+
 .mylist-video-item__delete-button:hover {
-  background: var(--error-color);
-  color: var(--button-text-active);
-  border-color: var(--error-color);
+  background: color-mix(in srgb, var(--danger-color, var(--error-color)) 85%, black);
+  color: white;
+  border-color: color-mix(in srgb, var(--danger-color, var(--error-color)) 85%, black);
 }
 
 /* 再生時間オーバーレイ */
@@ -210,37 +205,17 @@
   }
   
   .mylist-video-item__content {
-    /* モバイルレイアウト: 3カラム（サムネイル + 詳細 + アクション） */
-    grid-template-columns: 120px 1fr auto;
-    grid-template-areas: "thumbnail details actions";
+    /* モバイルレイアウト: サムネイル + 詳細、アクションは下部 */
+    grid-template-columns: 120px 1fr;
+    grid-template-areas: 
+      "thumbnail details"
+      "actions actions";
     gap: 8px;
     padding: 2px;
     min-height: 75px;
   }
   
-  /* デスクトップ順位を非表示 */
-  .mylist-video-item__rank--desktop {
-    display: none !important;
-  }
-  
-  /* モバイル順位を表示 */
-  .mylist-video-item__rank--mobile {
-    /* 順位をサムネイルの左上にオーバーレイ */
-    display: flex !important;
-    position: absolute;
-    top: 0;
-    left: 0;
-    min-width: 18px;
-    height: 18px;
-    font-size: 12px;
-    font-weight: 700;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0 0 4px 0;
-    /* モバイルでは背景色を適用（不透明） */
-    background: var(--mobile-rank-bg) !important;
-    color: var(--mobile-rank-color) !important;
-  }
+  /* 順位関連のスタイルは削除 */
   
   .mylist-video-item__thumbnail {
     grid-area: thumbnail;
@@ -295,8 +270,9 @@
   
   /* モバイルでのアクションエリア調整 */
   .mylist-video-item__actions {
-    padding: 0 4px;
-    gap: 4px;
+    padding: 4px;
+    gap: 6px;
+    margin-top: 4px;
   }
   
   .mylist-video-item__edit-button,
@@ -323,11 +299,7 @@
     min-height: auto;
   }
   
-  .mylist-video-item__rank--mobile {
-    min-width: 16px !important;
-    height: 16px !important;
-    font-size: 10px !important;
-  }
+  /* 順位関連のスタイルは削除 */
   
   .mylist-video-item__thumbnail {
     width: 100px;
@@ -362,7 +334,7 @@
   
   .mylist-video-item__edit-button,
   .mylist-video-item__delete-button {
-    flex: 0 0 auto;
+    flex: 1;
   }
 }
 
@@ -376,35 +348,16 @@
     }
     
     .mylist-video-item__content {
-      grid-template-columns: 120px 1fr auto;
-      grid-template-areas: "thumbnail details actions";
+      grid-template-columns: 120px 1fr;
+      grid-template-areas: 
+        "thumbnail details"
+        "actions actions";
       gap: 8px;
       padding: 2px;
       min-height: 75px;
     }
     
-    /* デスクトップ順位を非表示 */
-    .mylist-video-item__rank--desktop {
-      display: none !important;
-    }
-    
-    /* モバイル順位を表示 */
-    .mylist-video-item__rank--mobile {
-      display: flex !important;
-      position: absolute;
-      top: 0;
-      left: 0;
-      min-width: 18px;
-      height: 18px;
-      font-size: 12px;
-      font-weight: 700;
-      align-items: center;
-      justify-content: center;
-      border-radius: 0 0 4px 0;
-      /* モバイルでは背景色を適用（不透明） */
-      background: var(--mobile-rank-bg) !important;
-      color: var(--mobile-rank-color) !important;
-    }
+    /* 順位関連のスタイルは削除 */
     
     .mylist-video-item__thumbnail {
       grid-area: thumbnail;

@@ -120,7 +120,7 @@ describe('MylistVideoItem', () => {
     expect(screen.getByText('これはメモです')).toBeInTheDocument()
   })
 
-  it('順位が1〜3位の場合、特別な色で表示される', () => {
+  it('順位が表示されない', () => {
     const { container } = render(
       <MylistVideoItem
         video={mockVideo}
@@ -130,9 +130,78 @@ describe('MylistVideoItem', () => {
       />
     )
 
-    const rankingItem = container.querySelector('.mylist-video-item')
-    expect(rankingItem).toHaveStyle({
-      border: '2px solid var(--rank-gold)'
+    // 順位を表示する要素が存在しないことを確認
+    const rankElements = container.querySelectorAll('.mylist-video-item__rank')
+    expect(rankElements.length).toBe(0)
+    
+    // 数字の1が表示されていないことを確認（テキストとして）
+    expect(screen.queryByText('1')).not.toBeInTheDocument()
+  })
+  
+  it('削除ボタンが赤色で表示される', () => {
+    render(
+      <MylistVideoItem
+        video={mockVideo}
+        rank={1}
+        onEdit={mockOnEdit}
+        onRemove={mockOnRemove}
+      />
+    )
+
+    const deleteButton = screen.getByText('削除')
+    // 削除ボタンが赤色のスタイルを持っていることを確認
+    expect(deleteButton).toHaveClass('mylist-video-item__delete-button')
+    // 色が白であることを確認
+    const buttonStyle = window.getComputedStyle(deleteButton)
+    expect(buttonStyle.color).toBe('rgb(255, 255, 255)') // white
+  })
+  
+  it('編集・削除ボタンが動画ボックスの最下部に配置される', () => {
+    const { container } = render(
+      <MylistVideoItem
+        video={mockVideo}
+        rank={1}
+        onEdit={mockOnEdit}
+        onRemove={mockOnRemove}
+      />
+    )
+
+    const content = container.querySelector('.mylist-video-item__content')
+    const lastChild = content?.lastElementChild
+    
+    // 最後の要素がアクションエリアであることを確認
+    expect(lastChild).toHaveClass('mylist-video-item__actions')
+    
+    // アクションエリアが動画ボックスの下部に配置されていることを確認
+    const actions = container.querySelector('.mylist-video-item__actions')
+    expect(actions).toHaveStyle({
+      gridColumn: '1 / -1' // グリッドの全幅を使用
     })
+  })
+
+  it('追加日が編集・削除ボタンと同じ行に表示される', () => {
+    const { container } = render(
+      <MylistVideoItem
+        video={mockVideo}
+        rank={1}
+        onEdit={mockOnEdit}
+        onRemove={mockOnRemove}
+      />
+    )
+    
+    // アクションエリアを取得
+    const actionsArea = container.querySelector('.mylist-video-item__actions')
+    expect(actionsArea).toBeTruthy()
+    
+    // アクションエリア内に追加日が含まれることを確認
+    const addedDate = actionsArea.querySelector('.mylist-video-item__added-date')
+    expect(addedDate).toBeTruthy()
+    expect(addedDate.textContent).toContain('追加日:')
+    
+    // 編集・削除ボタンも同じエリアにあることを確認
+    const editButton = actionsArea.querySelector('.mylist-video-item__edit-button')
+    const deleteButton = actionsArea.querySelector('.mylist-video-item__delete-button')
+    expect(editButton).toBeTruthy()
+    expect(deleteButton).toBeTruthy()
   })
 })

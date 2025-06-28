@@ -29,6 +29,8 @@ export function MylistDetailClient() {
   const [editingVideo, setEditingVideo] = useState<MylistVideo | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [deletedVideoIds, setDeletedVideoIds] = useState<Set<string>>(new Set())
+  const [isReorderMode, setIsReorderMode] = useState(false)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
@@ -78,7 +80,7 @@ export function MylistDetailClient() {
       }
       setMylist(mylistData)
       
-      const videosData = await mylistManagerRef.current.getVideosInMylist(mylistId)
+      const videosData = await mylistManagerRef.current.getVideosInMylistWithOrder(mylistId)
       setVideos(videosData)
       setFilteredVideos(videosData)
     } catch (error) {
@@ -183,6 +185,67 @@ export function MylistDetailClient() {
     }
   }
 
+  // ドラッグ＆ドロップハンドラー
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    if (!isReorderMode) return
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', index.toString())
+    // ドラッグ中のスタイルを適用
+    const target = e.currentTarget as HTMLElement
+    target.classList.add('dragging')
+  }
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement
+    target.classList.remove('dragging')
+    setDraggedIndex(null)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isReorderMode) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    // ドロップ可能なインジケーターを表示
+    const target = e.currentTarget as HTMLElement
+    target.classList.add('drag-over')
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    const target = e.currentTarget as HTMLElement
+    target.classList.remove('drag-over')
+  }
+
+  const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+    if (!isReorderMode || !mylistManagerRef.current) return
+    e.preventDefault()
+    
+    const target = e.currentTarget as HTMLElement
+    target.classList.remove('drag-over')
+    
+    const dragIndex = parseInt(e.dataTransfer.getData('text/plain'))
+    if (dragIndex === dropIndex) return
+    
+    // 新しい順序を計算
+    const newVideos = [...filteredVideos]
+    const [draggedVideo] = newVideos.splice(dragIndex, 1)
+    newVideos.splice(dropIndex, 0, draggedVideo)
+    
+    // 各動画に新しいorderIndexを設定
+    const videoOrders = newVideos.map((video, index) => ({
+      id: video.id,
+      orderIndex: index
+    }))
+    
+    try {
+      await mylistManagerRef.current.updateVideoOrder(mylistId, videoOrders)
+      await loadMylistData()
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update video order:', error)
+    }
+  }
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('ja-JP', {
       year: 'numeric',
@@ -249,6 +312,7 @@ export function MylistDetailClient() {
           className={styles.sortSelect}
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+          disabled={isReorderMode}
         >
           <option value="addedAt-desc">追加日（新しい順）</option>
           <option value="addedAt-asc">追加日（古い順）</option>
@@ -256,6 +320,13 @@ export function MylistDetailClient() {
           <option value="title-desc">タイトル（降順）</option>
           <option value="views-desc">再生数（多い順）</option>
         </select>
+        <button
+          className={`${styles.reorderButton} ${isReorderMode ? styles.active : ''}`}
+          onClick={() => setIsReorderMode(!isReorderMode)}
+          data-testid="toggle-reorder-mode"
+        >
+          {isReorderMode ? '並び替え完了' : '並び替え'}
+        </button>
       </div>
 
       {/* 動画一覧 */}
@@ -275,17 +346,45 @@ export function MylistDetailClient() {
       ) : (
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {filteredVideos.map((video, index) => (
-            <MylistVideoItem
+            <li
               key={video.id}
-              video={video}
-              rank={index + 1}
-              onEdit={setEditingVideo}
-              onRemove={handleRemoveVideo}
-              isDeleted={deletedVideoIds.has(video.id)}
-              onImageError={(videoId) => {
-                setDeletedVideoIds(prev => new Set([...prev, videoId]))
-              }}
-            />
+              draggable={isReorderMode}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              style={{ position: 'relative' }}
+            >
+              {isReorderMode && (
+                <div 
+                  className={styles.dragHandle} 
+                  data-testid="drag-handle"
+                  style={{
+                    position: 'absolute',
+                    left: '-30px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    cursor: 'grab',
+                    padding: '8px',
+                    fontSize: '20px',
+                    userSelect: 'none'
+                  }}
+                >
+                  ⋮⋮
+                </div>
+              )}
+              <MylistVideoItem
+                video={video}
+                rank={index + 1}
+                onEdit={setEditingVideo}
+                onRemove={handleRemoveVideo}
+                isDeleted={deletedVideoIds.has(video.id)}
+                onImageError={(videoId) => {
+                  setDeletedVideoIds(prev => new Set([...prev, videoId]))
+                }}
+              />
+            </li>
           ))}
         </ul>
       )}

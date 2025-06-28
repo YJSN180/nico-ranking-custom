@@ -4,10 +4,11 @@ import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { formatNumberMobile } from '@/lib/format-utils'
 import type { MylistVideo } from '@/lib/storage/types'
+import './mylist-video-item.css'
 
 interface MylistVideoItemProps {
   video: MylistVideo
-  rank: number
+  rank: number // 互換性のため残すが使用しない
   onEdit: (video: MylistVideo) => void
   onRemove: (videoId: string) => void
   isDeleted?: boolean
@@ -24,11 +25,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
   isDeleted = false,
   onImageError
 }: MylistVideoItemProps) {
-  const rankColors: Record<number, string> = {
-    1: 'var(--rank-gold)',
-    2: 'var(--rank-silver)', 
-    3: 'var(--rank-bronze)'
-  }
+  // rank propは互換性のため受け取るが使用しない
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('ja-JP', {
@@ -51,7 +48,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
         borderRadius: '8px',
         overflow: 'hidden',
         boxShadow: 'var(--shadow-md)',
-        border: rank <= 3 ? `2px solid ${rankColors[rank]}` : '1px solid var(--border-color)',
+        border: '1px solid var(--border-color)',
         marginBottom: '8px',
         cursor: 'pointer',
         transition: 'background-color 0.2s',
@@ -73,39 +70,8 @@ const MylistVideoItem = memo(function MylistVideoItem({
       }}
     >
       <div className="mylist-video-item__content">
-        {/* デスクトップ用順位（モバイルでは非表示） */}
-        <div 
-          className="mylist-video-item__rank mylist-video-item__rank--desktop"
-          style={{
-            background: rank <= 3 ? rankColors[rank] : 'var(--surface-secondary)',
-            color: rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '6px',
-            fontWeight: '700',
-            userSelect: 'none',
-            '--mobile-rank-bg': rank <= 3 ? rankColors[rank] : 'var(--surface-secondary)',
-            '--mobile-rank-color': rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
-          } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
-        >
-          {rank}
-        </div>
-        
         {/* サムネイル */}
         <div className="mylist-video-item__thumbnail">
-          {/* モバイル用順位オーバーレイ */}
-          <div 
-            className="mylist-video-item__rank mylist-video-item__rank--mobile"
-            style={{
-              background: rank <= 3 ? rankColors[rank] : 'var(--surface-secondary)',
-              color: rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
-              fontWeight: '700',
-              userSelect: 'none'
-            }}
-          >
-            {rank}
-          </div>
           {isDeleted ? (
             <div style={{ display: 'block', cursor: 'default' }}>
               <OptimizedImage
@@ -171,46 +137,40 @@ const MylistVideoItem = memo(function MylistVideoItem({
           )}
           
           {/* 投稿者情報 */}
-          <div className="mylist-video-item__author">
-            {video.authorName && !isDeleted && (
-              <>
-                <a
-                  href={video.authorId ? `https://www.nicovideo.jp/user/${video.authorId}` : '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (!video.authorId) e.preventDefault()
-                  }}
-                  style={{ 
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    padding: '3px 6px',
-                    margin: '-3px -6px',
-                    borderRadius: '4px',
-                    transition: 'background-color 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent'
-                  }}
-                >
-                  <span className="mylist-video-item__author-name">
-                    {video.authorName}
-                  </span>
-                </a>
-                <span className="mylist-video-item__separator">·</span>
-              </>
-            )}
-            <span className="mylist-video-item__date">
-              追加日: {formatDate(video.addedAt)}
-            </span>
-          </div>
+          {video.authorName && !isDeleted && (
+            <div className="mylist-video-item__author">
+              <a
+                href={video.authorId ? `https://www.nicovideo.jp/user/${video.authorId}` : '#'}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!video.authorId) e.preventDefault()
+                }}
+                style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  padding: '3px 6px',
+                  margin: '-3px -6px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
+              >
+                <span className="mylist-video-item__author-name">
+                  {video.authorName}
+                </span>
+              </a>
+            </div>
+          )}
           
           {isDeleted && (
             <p className="mylist-video-item__deleted-message">
@@ -254,25 +214,43 @@ const MylistVideoItem = memo(function MylistVideoItem({
         </div>
         
         {/* アクションボタンエリア */}
-        <div className="mylist-video-item__actions">
-          <button
-            className="mylist-video-item__edit-button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onEdit(video)
-            }}
-          >
-            編集
-          </button>
-          <button
-            className="mylist-video-item__delete-button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemove(video.id)
-            }}
-          >
-            削除
-          </button>
+        <div 
+          className="mylist-video-item__actions"
+          style={{
+            gridColumn: '1 / -1',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '12px'
+          }}
+        >
+          <span className="mylist-video-item__added-date">
+            追加日: {formatDate(video.addedAt)}
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="mylist-video-item__edit-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(video)
+              }}
+            >
+              編集
+            </button>
+            <button
+              className="mylist-video-item__delete-button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove(video.id)
+              }}
+              style={{
+                backgroundColor: 'var(--danger-color, var(--error-color))',
+                color: 'white'
+              }}
+            >
+              削除
+            </button>
+          </div>
         </div>
       </div>
     </li>

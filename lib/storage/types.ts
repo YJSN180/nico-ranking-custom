@@ -56,6 +56,7 @@ export interface MylistVideo {
   thumbURL: string     // サムネイルURL
   addedAt: number      // 追加日時（タイムスタンプ）
   memo?: string        // メモ（オプション）
+  orderIndex?: number  // 並び順インデックス（オプション）
   
   // 追加情報（オプション）
   views?: number       // 再生数

@@ -304,4 +304,47 @@ export class MylistManager {
       (video.authorName && video.authorName.toLowerCase().includes(lowerQuery))
     )
   }
+
+  /**
+   * 動画の順序を更新
+   */
+  async updateVideoOrder(mylistId: string, videoOrders: { id: string; orderIndex: number }[]): Promise<void> {
+    const db = this.dbManager.getDB()
+    const tx = db.transaction('mylistVideos', 'readwrite')
+    
+    for (const { id: videoId, orderIndex } of videoOrders) {
+      const video = await tx.store.get([mylistId, videoId])
+      if (video) {
+        video.orderIndex = orderIndex
+        await tx.store.put(video)
+      }
+    }
+    
+    await tx.done
+  }
+
+  /**
+   * マイリスト内の動画を順序付きで取得
+   */
+  async getVideosInMylistWithOrder(mylistId: string, limit?: number): Promise<MylistVideo[]> {
+    const videos = await this.getVideosInMylist(mylistId, limit)
+    
+    // orderIndexでソート（未設定の動画は最後に配置）
+    return videos.sort((a, b) => {
+      // 両方にorderIndexがある場合
+      if (a.orderIndex !== undefined && b.orderIndex !== undefined) {
+        return a.orderIndex - b.orderIndex
+      }
+      // aのみorderIndexがある場合（aが先）
+      if (a.orderIndex !== undefined) {
+        return -1
+      }
+      // bのみorderIndexがある場合（bが先）
+      if (b.orderIndex !== undefined) {
+        return 1
+      }
+      // 両方orderIndexがない場合は追加日時の新しい順
+      return b.addedAt - a.addedAt
+    })
+  }
 }

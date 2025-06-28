@@ -147,6 +147,54 @@
   border-color: var(--primary-color);
 }
 
+.sortSelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reorderButton {
+  padding: 10px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.reorderButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+}
+
+.reorderButton.active {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  border-color: var(--primary-color);
+}
+
+.dragHandle {
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.dragHandle:hover {
+  color: var(--text-primary);
+}
+
+/* ドラッグ＆ドロップ用スタイル */
+:global(.dragging) {
+  opacity: 0.5;
+  cursor: move;
+}
+
+:global(.drag-over) {
+  background: var(--surface-hover);
+  border: 2px dashed var(--primary-color);
+}
+
 /* 空の状態 */
 .emptyState {
   text-align: center;
