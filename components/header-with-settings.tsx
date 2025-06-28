@@ -92,7 +92,7 @@ export function HeaderWithSettings() {
                     opacity: 0.95,
                   }}
                   priority
-                  unoptimized={false} // Next.js最適化を有効化
+                  unoptimized={true} // Next.js最適化を無効化（402エラー回避）
                 />
               </div>
               <div style={{

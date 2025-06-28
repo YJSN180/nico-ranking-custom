@@ -91,6 +91,8 @@ export default function ClientPage({
   const abortControllerRef = useRef<AbortController | null>(null)
   // 人気タグ取得用のAbortController
   const tagsAbortControllerRef = useRef<AbortController | null>(null)
+  // 404エラーフォールバック処理中フラグ
+  const isFallbackInitiatedRef = useRef(false)
   
   // 人気タグのキャッシュ保存用
   const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
@@ -271,6 +273,7 @@ export default function ClientPage({
     setConfig(newConfig)
     setLoading(true)
     setError(null)
+    isFallbackInitiatedRef.current = false
     
     // ユーザー設定を更新（useUserPreferencesで自動的にlocalStorageに保存される）
     updatePreferences({
@@ -364,6 +367,7 @@ export default function ClientPage({
           // タグが見つからない場合は、タグなしの状態に自動遷移
           // タグなしの設定で再度リクエスト
           const taglessConfig = { ...newConfig, tag: undefined }
+          isFallbackInitiatedRef.current = true
           handleConfigChange(taglessConfig)
           return // 現在の処理を終了
         } else if (response.status >= 400) {
@@ -568,7 +572,7 @@ export default function ClientPage({
       setRankingData([])
     } finally {
       // AbortErrorの場合はローディング状態を維持
-      if (abortControllerRef.current?.signal.aborted !== true) {
+      if (!isFallbackInitiatedRef.current && abortControllerRef.current?.signal.aborted !== true) {
         setLoading(false)
       }
     }
