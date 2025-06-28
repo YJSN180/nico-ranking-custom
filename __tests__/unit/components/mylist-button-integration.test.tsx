@@ -93,7 +93,7 @@ describe('MylistButton Integration', () => {
     expect(videoClickHandler).not.toHaveBeenCalled()
   })
 
-  it('モーダルの背景が黒色不透明である', async () => {
+  it('モーダルの背景が半透明で、コンテンツが不透明である', async () => {
     render(
       <MylistButton 
         video={mockVideo}

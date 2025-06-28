@@ -95,14 +95,14 @@ describe('MylistModal Event Handling', () => {
   })
 
   describe('モーダル背景スタイル', () => {
-    it('オーバーレイが不透明である', () => {
+    it('オーバーレイが半透明である', () => {
       render(<MylistModal {...defaultProps} />)
       
       // オーバーレイ要素を取得
       const overlay = screen.getByTestId('modal-overlay')
       expect(overlay).toBeInTheDocument()
       
-      // スタイルを確認（不透明: background が #000000）
+      // スタイルを確認（半透明: background が rgba(0, 0, 0, 0.6)）
       const computedStyle = window.getComputedStyle(overlay)
       // テスト環境では実際のCSSが適用されないため、クラス名の存在を確認
       expect(overlay.className).toMatch(/overlay/)
