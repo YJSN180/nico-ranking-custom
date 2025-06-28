@@ -244,7 +244,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
                 onRemove(video.id)
               }}
               style={{
-                backgroundColor: 'var(--danger-color, var(--error-color))',
+                backgroundColor: 'var(--danger-color, #dc3545)',
                 color: 'white'
               }}
             >
