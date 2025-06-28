@@ -46,9 +46,9 @@ export function MylistModal({
   return (
     <>
       <div className={styles.overlay} onClick={onClose} />
-      <div className={styles.modal}>
+      <div className={styles.modal} role="dialog" aria-labelledby="mylist-modal-title">
         <div className={styles.header}>
-          <h2 className={styles.title}>マイリストに追加</h2>
+          <h2 id="mylist-modal-title" className={styles.title}>マイリストに追加</h2>
           <button 
             className={styles.closeButton}
             onClick={onClose}
@@ -65,13 +65,14 @@ export function MylistModal({
               className={`${styles.mylistItem} ${selectedMylistIds.includes(mylist.id) ? styles.selected : ''}`}
               onClick={() => onAddToMylist(mylist.id)}
               disabled={isProcessing || selectedMylistIds.includes(mylist.id)}
+              aria-label={mylist.name}
             >
               <div className={styles.mylistIcon}>
                 {selectedMylistIds.includes(mylist.id) ? '✓' : '📁'}
               </div>
               <div className={styles.mylistInfo}>
                 <div className={styles.mylistName}>
-                  {mylist.name}
+                  <span>{mylist.name}</span>
                   {mylist.isDefault && <span className={styles.defaultBadge}>デフォルト</span>}
                 </div>
                 <div className={styles.mylistMeta}>

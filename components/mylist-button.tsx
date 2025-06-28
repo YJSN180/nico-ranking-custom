@@ -19,9 +19,17 @@ export function MylistButton({ video }: MylistButtonProps) {
 
   useEffect(() => {
     const checkStatus = async () => {
-      const result = await isVideoInAnyMylist(video.id)
-      setIsInMylist(result.inMylist)
-      setMylistIds(result.mylistIds)
+      try {
+        const result = await isVideoInAnyMylist(video.id)
+        setIsInMylist(result.inMylist)
+        setMylistIds(result.mylistIds)
+      } catch (error) {
+        // エラーが発生してもUIは正常に表示
+        // eslint-disable-next-line no-console
+        console.error('Failed to check mylist status:', error)
+        setIsInMylist(false)
+        setMylistIds([])
+      }
     }
     
     if (!isLoading) {
@@ -87,8 +95,23 @@ export function MylistButton({ video }: MylistButtonProps) {
     }
   }
 
+  // ローディング中はプレースホルダーを表示
   if (isLoading) {
-    return null
+    return (
+      <div 
+        data-testid="mylist-button-placeholder"
+        style={{
+          width: '32px',
+          height: '32px',
+          borderRadius: '20px',
+          background: 'var(--surface-secondary)',
+          opacity: 0.5,
+          flexShrink: 0,
+          animation: 'pulse 1.5s ease-in-out infinite',
+        }}
+        title="読み込み中..."
+      />
+    )
   }
 
   return (

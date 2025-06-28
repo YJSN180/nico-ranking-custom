@@ -319,3 +319,13 @@ button,
   margin-bottom: 6px;
   word-break: break-word;
 }
+
+/* ローディングアニメーション */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
