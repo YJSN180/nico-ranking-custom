@@ -47,10 +47,23 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
       }}
       onMouseEnter={(e) => {
+        // タッチデバイスではホバー効果を適用しない
+        if ('ontouchstart' in window) return;
         e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
       }}
       onMouseLeave={(e) => {
+        // タッチデバイスではホバー効果を適用しない
+        if ('ontouchstart' in window) return;
         e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+      }}
+      onTouchEnd={(e) => {
+        // タッチ終了時に背景色をリセット
+        const element = e.currentTarget;
+        setTimeout(() => {
+          if (element) {
+            element.style.backgroundColor = 'var(--surface-color)';
+          }
+        }, 100);
       }}
     >
       <div className="ranking-item-responsive__content">

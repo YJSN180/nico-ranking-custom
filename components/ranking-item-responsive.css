@@ -1,6 +1,20 @@
 /* CSS-only レスポンシブランキングアイテム - Container Queries版 */
 /* CLSを完全に回避するため、JavaScript不要のレイアウト切り替え */
 
+/* タッチデバイスでホバー効果を無効化 */
+@media (hover: none) and (pointer: coarse) {
+  .ranking-item-responsive:hover {
+    background-color: var(--surface-color) !important;
+  }
+}
+
+/* 非タッチデバイスのみホバー効果を適用 */
+@media (hover: hover) and (pointer: fine) {
+  .ranking-item-responsive:hover {
+    background-color: var(--surface-hover);
+  }
+}
+
 .ranking-item-responsive__content {
   display: grid;
   gap: 12px;

@@ -127,6 +127,10 @@ export function MylistButton({ video }: MylistButtonProps) {
       <button
         aria-label={isInMylist ? "マイリストから削除" : "マイリストに追加"}
         onClick={handleClick}
+        onTouchEnd={(e) => {
+          e.stopPropagation()
+          e.preventDefault()
+        }}
         disabled={isProcessing}
         style={{
           background: isInMylist ? 'var(--success-color)' : 'var(--surface-color)',

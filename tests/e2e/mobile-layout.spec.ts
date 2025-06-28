@@ -5,7 +5,7 @@ test.describe('Mobile Layout - Mylist Button Position', () => {
     // モバイルビューポートに設定
     await page.setViewportSize({ width: 375, height: 667 })
     // ランキングページに移動
-    await page.goto('/ranking/all?term=24h')
+    await page.goto('/?genre=all&term=24h')
     await page.waitForSelector('[data-testid="ranking-item"]')
   })
 
