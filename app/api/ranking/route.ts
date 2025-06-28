@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       })
     } catch (error) {
       console.error('[API/ranking] Proxy error:', error)
-      console.error('[API/ranking] Target URL:', apiGatewayUrl)
+      console.error('[API/ranking] Target URL:', 'https://nico-rank.com/api/ranking')
       console.error('[API/ranking] Preview host:', host)
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
