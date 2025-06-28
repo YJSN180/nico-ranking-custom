@@ -89,8 +89,8 @@ export async function waitForMylistButtons(page: Page) {
   // 最初のランキングアイテムを待つ
   await page.waitForSelector('.ranking-item-responsive', { timeout: 10000 });
   
-  // マイリストボタンが表示されるまで待つ
-  await page.waitForSelector('button[aria-label*="マイリスト"]', { timeout: 5000 });
+  // マイリストボタンが表示されるまで待つ（完全一致）
+  await page.waitForSelector('button[aria-label="マイリストに追加"], button[aria-label="マイリストから削除"]', { timeout: 5000 });
 }
 
 /**
@@ -124,12 +124,26 @@ export async function logDebugInfo(page: Page, message: string) {
  * テスト用のマイリストを作成
  */
 export async function createTestMylist(page: Page, name: string, description: string = '') {
+  // 新規マイリスト作成ボタンをクリック
   await page.click('button:has-text("新規マイリスト作成")');
-  await page.fill('input[placeholder*="お気に入りの音楽"]', name);
+  
+  // モーダルが表示されるまで待つ
+  await page.waitForSelector('text=新規マイリスト作成', { timeout: 5000 });
+  
+  // 名前を入力（プレースホルダー違い修正）
+  await page.fill('input[placeholder="例: お気に入りの音楽"]', name);
+  
+  // 説明があれば入力
   if (description) {
-    await page.fill('textarea[placeholder*="説明を入力"]', description);
+    await page.fill('textarea[placeholder="このマイリストの説明を入力..."]', description);
   }
-  await page.click('button:has-text("作成")');
+  
+  // 作成ボタンをクリック（フォーム内のsubmitボタン）
+  await page.locator('form button[type="submit"]:has-text("作成")').click();
+  
+  // モーダルが閉じるまで待つ
+  await page.waitForSelector('text=新規マイリスト作成', { state: 'hidden', timeout: 5000 });
+  
   await page.waitForTimeout(200); // 作成処理を待つ
 }
 
@@ -138,7 +152,10 @@ export async function createTestMylist(page: Page, name: string, description: st
  */
 export async function addVideoToMylist(page: Page, videoIndex: number = 0, mylistName: string = 'とりあえずマイリスト') {
   const rankingItem = page.locator('.ranking-item-responsive').nth(videoIndex);
-  await rankingItem.locator('button[aria-label*="マイリストに追加"]').click();
+  
+  // マイリストボタンをクリック（aria-labelを使用）
+  const mylistButton = rankingItem.locator('button[aria-label="マイリストに追加"]');
+  await mylistButton.click();
   
   // モーダルが表示されるまで待つ
   await page.waitForSelector('text=マイリストに追加', { timeout: 5000 });

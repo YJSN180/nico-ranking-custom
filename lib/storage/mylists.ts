@@ -35,10 +35,10 @@ export class MylistManager {
   async getOrCreateDefaultMylist(): Promise<Mylist> {
     const db = this.dbManager.getDB()
     
-    // isDefaultインデックスを使用して効率的に検索
+    // fake-indexeddbとの互換性のため、インデックスを使わずに全件取得してフィルタリング
     const tx = db.transaction('mylists', 'readonly')
-    const index = tx.store.index('isDefault')
-    const defaultMylists = await index.getAll(IDBKeyRange.only(true))
+    const allMylists = await tx.store.getAll()
+    const defaultMylists = allMylists.filter(m => m.isDefault === true)
     
     // 既存のデフォルトマイリストがある場合は最初のものを返す
     if (defaultMylists.length > 0) {
@@ -130,11 +130,11 @@ export class MylistManager {
   async deleteMylist(mylistId: string): Promise<void> {
     const db = this.dbManager.getDB()
     
-    // デフォルトマイリストも削除可能にする（ユーザーリクエストに基づく）
-    // const mylist = await this.getMylist(mylistId)
-    // if (mylist?.isDefault) {
-    //   throw new Error('Cannot delete default mylist')
-    // }
+    // デフォルトマイリストの削除を防ぐ
+    const mylist = await this.getMylist(mylistId)
+    if (mylist?.isDefault) {
+      throw new Error('Cannot delete default mylist')
+    }
     
     // トランザクション開始
     const tx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')

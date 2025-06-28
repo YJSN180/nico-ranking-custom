@@ -11,11 +11,18 @@ interface MylistButtonProps {
 }
 
 export function MylistButton({ video }: MylistButtonProps) {
+  // SSR時はnullを返す
+  const [isClient, setIsClient] = useState(false)
   const { mylists, isLoading, addVideoToMylist, removeVideoFromMylist, isVideoInAnyMylist, createMylist } = useMylistOperations()
   const [isInMylist, setIsInMylist] = useState(false)
   const [mylistIds, setMylistIds] = useState<string[]>([])
   const [showModal, setShowModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
+
+  // クライアントサイドでのみ実行
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -39,6 +46,12 @@ export function MylistButton({ video }: MylistButtonProps) {
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+    e.preventDefault()
+    
+    // デバッグログ
+    // eslint-disable-next-line no-console
+    console.log('[MylistButton] clicked', { isInMylist, mylists, isLoading })
+    
     if (isInMylist) {
       // Remove from all mylists
       handleRemoveFromAll()
@@ -95,8 +108,8 @@ export function MylistButton({ video }: MylistButtonProps) {
     }
   }
 
-  // ローディング中はプレースホルダーを表示
-  if (isLoading) {
+  // SSR時またはクライアント側の初期化前はプレースホルダーを表示
+  if (!isClient || isLoading) {
     return (
       <div 
         data-testid="mylist-button-placeholder"

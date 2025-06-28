@@ -15,12 +15,18 @@ export function useMylistOperations() {
     let mounted = true
 
     const init = async () => {
+      // SSR環境では実行しない
+      if (typeof window === 'undefined') {
+        return
+      }
+
       // Wait for hydration
       await new Promise(resolve => setTimeout(resolve, 100))
       
       if (!mounted) return
 
       try {
+        // ブラウザ環境でのみ初期化
         if (!dbManagerRef.current) {
           dbManagerRef.current = new DBManager()
           await dbManagerRef.current.init()
@@ -36,6 +42,8 @@ export function useMylistOperations() {
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Failed to initialize mylist operations:', error)
+        // エラー時でも空のマイリストリストを設定
+        setMylists([])
       } finally {
         if (mounted) {
           setIsLoading(false)

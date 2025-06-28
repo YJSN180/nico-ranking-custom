@@ -208,7 +208,7 @@ export default {
       try {
         // R2からデータを取得
         const r2Key = tag 
-          ? `rankings/${genre}/${period}/${encodeURIComponent(tag)}.json`
+          ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
           : `rankings/${genre}/${period}/all.json`
         
         console.log(`[Worker] Fetching from R2: ${r2Key}`)

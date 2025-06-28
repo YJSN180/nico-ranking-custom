@@ -52,7 +52,7 @@ describe('MylistButton', () => {
   })
 
   describe('ローディング状態', () => {
-    it('ローディング中はプレースホルダーを表示する', () => {
+    it('ローディング中はプレースホルダーを表示する', async () => {
       vi.mocked(useMylistOperations).mockReturnValue({
         ...mockOperations,
         isLoading: true
@@ -60,7 +60,7 @@ describe('MylistButton', () => {
 
       render(<MylistButton video={mockVideo} />)
 
-      // プレースホルダーが表示されることを確認
+      // SSR時はプレースホルダーが表示される
       const placeholder = screen.getByTestId('mylist-button-placeholder')
       expect(placeholder).toBeInTheDocument()
       expect(placeholder).toHaveStyle({

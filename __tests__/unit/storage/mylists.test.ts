@@ -58,6 +58,8 @@ describe('MylistManager', () => {
       // Arrange
       await mylistManager.getOrCreateDefaultMylist()
       const id1 = await mylistManager.createMylist('音楽')
+      // 作成時刻を確実に異なるようにする
+      await new Promise(resolve => setTimeout(resolve, 10))
       const id2 = await mylistManager.createMylist('ゲーム')
 
       // Act

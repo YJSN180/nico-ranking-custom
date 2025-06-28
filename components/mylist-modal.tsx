@@ -59,7 +59,19 @@ export function MylistModal({
         </div>
 
         <div className={styles.content}>
-          {mylists.map((mylist) => (
+          {mylists.length === 0 ? (
+            <div style={{ 
+              padding: '32px', 
+              textAlign: 'center', 
+              color: 'var(--text-secondary)' 
+            }}>
+              <p>マイリストがありません</p>
+              <p style={{ marginTop: '8px', fontSize: '14px' }}>
+                下の「新規マイリスト作成」ボタンから作成してください
+              </p>
+            </div>
+          ) : (
+            mylists.map((mylist) => (
             <button
               key={mylist.id}
               className={`${styles.mylistItem} ${selectedMylistIds.includes(mylist.id) ? styles.selected : ''}`}
@@ -80,7 +92,8 @@ export function MylistModal({
                 </div>
               </div>
             </button>
-          ))}
+            ))
+          )}
         </div>
 
         <div className={styles.footer}>

@@ -44,7 +44,7 @@ test.describe('マイリスト機能', () => {
     
     // ランキングページの最初の動画を取得
     const firstVideo = page.locator('.ranking-item-responsive').first()
-    const videoTitle = await firstVideo.locator('h3').textContent()
+    const videoTitle = await firstVideo.locator('[data-testid="video-title"]').textContent()
     
     // 動画をマイリストに追加
     await addVideoToMylist(page, 0)
@@ -147,7 +147,7 @@ test.describe('マイリスト機能', () => {
     
     // 動画を追加
     const firstVideo = page.locator('.ranking-item-responsive').first()
-    const videoTitle = await firstVideo.locator('h3').textContent()
+    const videoTitle = await firstVideo.locator('[data-testid="video-title"]').textContent()
     await addVideoToMylist(page, 0)
     
     // マイリストページに移動

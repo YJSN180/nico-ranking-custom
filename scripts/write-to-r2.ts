@@ -243,10 +243,16 @@ async function writeToR2() {
           const tagKey = `rankings/${genre}/${period}/tags/${encodedTag}.json`
           const tagBody = JSON.stringify(tagDataToStore)
           
+          console.log(`  📝 Preparing to upload tag: ${tagKey}`)
           uploadPromises.push(
             uploadIfChanged(tagKey, tagBody, 'application/json', 'public, max-age=1800', true) // gzip圧縮を有効化
               .then(uploaded => {
-                if (uploaded) uploadCount++
+                if (uploaded) {
+                  uploadCount++
+                  console.log(`  ✅ Successfully uploaded tag: ${tagKey}`)
+                } else {
+                  console.log(`  ⏭️ Skipped tag (no changes): ${tagKey}`)
+                }
               })
               .catch(error => {
                 console.error(`❌ Failed to upload ${tagKey}:`, error)
