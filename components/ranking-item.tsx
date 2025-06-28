@@ -81,8 +81,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
           position: 'relative'
         }}
         onClick={(e) => {
-          // 投稿者リンクなどの子要素のクリックは除外
-          if ((e.target as HTMLElement).closest('a')) return;
+          // 投稿者リンクやボタンなどの子要素のクリックは除外
+          const target = e.target as HTMLElement;
+          if (target.closest('a') || target.closest('button')) return;
           window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
         }}
         onMouseEnter={(e) => {
@@ -291,8 +292,9 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
       position: 'relative'
     }}
     onClick={(e) => {
-      // 投稿者リンクなどの子要素のクリックは除外
-      if ((e.target as HTMLElement).closest('a')) return;
+      // 投稿者リンクやボタンなどの子要素のクリックは除外
+      const target = e.target as HTMLElement;
+      if (target.closest('a') || target.closest('button')) return;
       window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
     }}
     onMouseEnter={(e) => {
