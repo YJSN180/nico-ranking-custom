@@ -8,8 +8,10 @@ import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import { formatNumberMobile } from '@/lib/format-utils'
 import { BackLink } from '@/components/back-link'
+import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'
 import styles from './mylist-detail.module.css'
+import '@/components/mylist-video-item.css'
 
 type SortOrder = 'addedAt-desc' | 'addedAt-asc' | 'title-asc' | 'title-desc' | 'views-desc'
 
@@ -271,130 +273,21 @@ export function MylistDetailClient() {
           )}
         </div>
       ) : (
-        <div className={styles.videoList}>
-          {filteredVideos.map(video => (
-            <div key={video.id} className={styles.videoItem}>
-              <div className={styles.videoContent}>
-                {/* サムネイル */}
-                {deletedVideoIds.has(video.id) ? (
-                  <div className={styles.thumbnail}>
-                    <OptimizedImage
-                      src={video.thumbURL}
-                      alt={video.title}
-                      width={160}
-                      height={90}
-                      style={{ objectFit: 'cover', opacity: 0.7 }}
-                      onError={() => {
-                        setDeletedVideoIds(prev => new Set([...prev, video.id]))
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <a
-                    href={`https://www.nicovideo.jp/watch/${video.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={styles.thumbnail}
-                  >
-                    <OptimizedImage
-                      src={video.thumbURL}
-                      alt={video.title}
-                      width={160}
-                      height={90}
-                      style={{ objectFit: 'cover' }}
-                      onError={() => {
-                        setDeletedVideoIds(prev => new Set([...prev, video.id]))
-                      }}
-                    />
-                  </a>
-                )}
-                
-                {/* 動画情報 */}
-                <div className={styles.videoInfo}>
-                  {deletedVideoIds.has(video.id) ? (
-                    <span className={styles.deletedVideoTitle}>
-                      {video.title}
-                      <span className={styles.deletedBadge}>（削除済み）</span>
-                    </span>
-                  ) : (
-                    <a
-                      href={`https://www.nicovideo.jp/watch/${video.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.videoTitle}
-                      data-testid="video-title"
-                    >
-                      {video.title}
-                    </a>
-                  )}
-                  
-                  {video.authorName && !deletedVideoIds.has(video.id) && (
-                    <p className={styles.author}>
-                      {video.authorId ? (
-                        <a
-                          href={`https://www.nicovideo.jp/user/${video.authorId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {video.authorName}
-                        </a>
-                      ) : (
-                        video.authorName
-                      )}
-                    </p>
-                  )}
-                  
-                  {deletedVideoIds.has(video.id) && (
-                    <p className={styles.deletedMessage}>
-                      この動画は削除されたか、非公開になっています
-                    </p>
-                  )}
-                  
-                  <div className={styles.stats}>
-                    {video.views !== undefined && (
-                      <span>▶️ {formatNumberMobile(video.views)}</span>
-                    )}
-                    {video.comments !== undefined && (
-                      <span>💬 {formatNumberMobile(video.comments)}</span>
-                    )}
-                    {video.likes !== undefined && (
-                      <span>❤️ {formatNumberMobile(video.likes)}</span>
-                    )}
-                    {video.mylists !== undefined && (
-                      <span>📁 {formatNumberMobile(video.mylists)}</span>
-                    )}
-                  </div>
-                  
-                  {video.memo && (
-                    <div className={styles.memo}>
-                      {video.memo}
-                    </div>
-                  )}
-                  
-                  <p className={styles.addedAt}>
-                    追加日: {formatDate(video.addedAt)}
-                  </p>
-                </div>
-              </div>
-              
-              {/* アクション */}
-              <div className={styles.videoActions}>
-                <button
-                  className={styles.editButton}
-                  onClick={() => setEditingVideo(video)}
-                >
-                  編集
-                </button>
-                <button
-                  className={styles.deleteButton}
-                  onClick={() => handleRemoveVideo(video.id)}
-                >
-                  削除
-                </button>
-              </div>
-            </div>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {filteredVideos.map((video, index) => (
+            <MylistVideoItem
+              key={video.id}
+              video={video}
+              rank={index + 1}
+              onEdit={setEditingVideo}
+              onRemove={handleRemoveVideo}
+              isDeleted={deletedVideoIds.has(video.id)}
+              onImageError={(videoId) => {
+                setDeletedVideoIds(prev => new Set([...prev, videoId]))
+              }}
+            />
           ))}
-        </div>
+        </ul>
       )}
 
       {/* メモ編集モーダル */}

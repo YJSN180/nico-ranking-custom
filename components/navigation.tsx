@@ -543,15 +543,11 @@ export function Navigation() {
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-          if (e.currentTarget.parentElement) {
-            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1.05)'
-          }
+          e.currentTarget.style.transform = 'scale(1.05)'
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-          if (e.currentTarget.parentElement) {
-            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1)'
-          }
+          e.currentTarget.style.transform = 'scale(1)'
         }}
       >
         <HamburgerIcon size={18} />

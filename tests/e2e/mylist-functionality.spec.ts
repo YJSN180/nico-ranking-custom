@@ -29,7 +29,7 @@ test.describe('マイリスト機能', () => {
     
     // マイリストページが表示されることを確認
     await expect(page).toHaveURL('/mylists')
-    await expect(page.locator('h1')).toContainText('マイリスト')
+    await expect(page.locator('h2')).toContainText('マイリスト管理')
     
     // ページが完全に読み込まれるまで待機
     await waitForPageReady(page)
