@@ -184,16 +184,7 @@
   color: var(--text-primary);
 }
 
-/* ドラッグ＆ドロップ用スタイル */
-:global(.dragging) {
-  opacity: 0.5;
-  cursor: move;
-}
-
-:global(.drag-over) {
-  background: var(--surface-hover);
-  border: 2px dashed var(--primary-color);
-}
+/* ドラッグ＆ドロップ用スタイルはmylist-video-item.cssに移動しました */
 
 /* 空の状態 */
 .emptyState {

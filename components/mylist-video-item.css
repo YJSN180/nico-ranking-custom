@@ -391,3 +391,14 @@
     }
   }
 }
+
+/* ドラッグ＆ドロップ用グローバルスタイル */
+.dragging {
+  opacity: 0.5;
+  cursor: move;
+}
+
+.drag-over {
+  background: var(--surface-hover);
+  border: 2px dashed var(--primary-color);
+}
