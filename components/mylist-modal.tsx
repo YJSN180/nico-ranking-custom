@@ -8,6 +8,7 @@ interface MylistModalProps {
   mylists: Mylist[]
   selectedMylistIds: string[]
   onAddToMylist: (mylistId: string) => Promise<void>
+  onRemoveFromMylist?: (mylistId: string) => Promise<void>
   onClose: () => void
   onCreateMylist?: (name: string, description?: string) => Promise<void>
   isProcessing?: boolean
@@ -17,6 +18,7 @@ export function MylistModal({
   mylists,
   selectedMylistIds,
   onAddToMylist,
+  onRemoveFromMylist,
   onClose,
   onCreateMylist,
   isProcessing = false
@@ -80,28 +82,37 @@ export function MylistModal({
               </p>
             </div>
           ) : (
-            mylists.map((mylist) => (
-            <button
-              key={mylist.id}
-              className={`${styles.mylistItem} ${selectedMylistIds.includes(mylist.id) ? styles.selected : ''}`}
-              onClick={() => onAddToMylist(mylist.id)}
-              disabled={isProcessing || selectedMylistIds.includes(mylist.id)}
-              aria-label={mylist.name}
-            >
-              <div className={styles.mylistIcon}>
-                {selectedMylistIds.includes(mylist.id) ? '✓' : '📁'}
-              </div>
-              <div className={styles.mylistInfo}>
-                <div className={styles.mylistName}>
-                  <span>{mylist.name}</span>
-                  {mylist.isDefault && <span className={styles.defaultBadge}>デフォルト</span>}
-                </div>
-                <div className={styles.mylistMeta}>
-                  {mylist.videoCount}件の動画
-                </div>
-              </div>
-            </button>
-            ))
+            mylists.map((mylist) => {
+              const isSelected = selectedMylistIds.includes(mylist.id)
+              return (
+                <button
+                  key={mylist.id}
+                  className={`${styles.mylistItem} ${isSelected ? styles.selected : ''}`}
+                  onClick={async () => {
+                    if (isSelected && onRemoveFromMylist) {
+                      await onRemoveFromMylist(mylist.id)
+                    } else {
+                      await onAddToMylist(mylist.id)
+                    }
+                  }}
+                  disabled={isProcessing}
+                  aria-label={mylist.name}
+                >
+                  <div className={styles.mylistIcon}>
+                    {isSelected ? '✓' : '📁'}
+                  </div>
+                  <div className={styles.mylistInfo}>
+                    <div className={styles.mylistName}>
+                      <span>{mylist.name}</span>
+                      {mylist.isDefault && <span className={styles.defaultBadge}>デフォルト</span>}
+                    </div>
+                    <div className={styles.mylistMeta}>
+                      {mylist.videoCount}件の動画
+                    </div>
+                  </div>
+                </button>
+              )
+            })
           )}
         </div>
 

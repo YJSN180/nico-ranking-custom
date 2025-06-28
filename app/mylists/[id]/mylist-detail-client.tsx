@@ -25,6 +25,7 @@ export function MylistDetailClient() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('addedAt-desc')
   const [editingVideo, setEditingVideo] = useState<MylistVideo | null>(null)
   const [showSettings, setShowSettings] = useState(false)
+  const [deletedVideoIds, setDeletedVideoIds] = useState<Set<string>>(new Set())
   
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
@@ -278,34 +279,59 @@ export function MylistDetailClient() {
             <div key={video.id} className={styles.videoItem}>
               <div className={styles.videoContent}>
                 {/* サムネイル */}
-                <a
-                  href={`https://www.nicovideo.jp/watch/${video.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={styles.thumbnail}
-                >
-                  <OptimizedImage
-                    src={video.thumbURL}
-                    alt={video.title}
-                    width={160}
-                    height={90}
-                    style={{ objectFit: 'cover' }}
-                  />
-                </a>
-                
-                {/* 動画情報 */}
-                <div className={styles.videoInfo}>
+                {deletedVideoIds.has(video.id) ? (
+                  <div className={styles.thumbnail}>
+                    <OptimizedImage
+                      src={video.thumbURL}
+                      alt={video.title}
+                      width={160}
+                      height={90}
+                      style={{ objectFit: 'cover', opacity: 0.7 }}
+                      onError={() => {
+                        setDeletedVideoIds(prev => new Set([...prev, video.id]))
+                      }}
+                    />
+                  </div>
+                ) : (
                   <a
                     href={`https://www.nicovideo.jp/watch/${video.id}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={styles.videoTitle}
-                    data-testid="video-title"
+                    className={styles.thumbnail}
                   >
-                    {video.title}
+                    <OptimizedImage
+                      src={video.thumbURL}
+                      alt={video.title}
+                      width={160}
+                      height={90}
+                      style={{ objectFit: 'cover' }}
+                      onError={() => {
+                        setDeletedVideoIds(prev => new Set([...prev, video.id]))
+                      }}
+                    />
                   </a>
+                )}
+                
+                {/* 動画情報 */}
+                <div className={styles.videoInfo}>
+                  {deletedVideoIds.has(video.id) ? (
+                    <span className={styles.deletedVideoTitle}>
+                      {video.title}
+                      <span className={styles.deletedBadge}>（削除済み）</span>
+                    </span>
+                  ) : (
+                    <a
+                      href={`https://www.nicovideo.jp/watch/${video.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.videoTitle}
+                      data-testid="video-title"
+                    >
+                      {video.title}
+                    </a>
+                  )}
                   
-                  {video.authorName && (
+                  {video.authorName && !deletedVideoIds.has(video.id) && (
                     <p className={styles.author}>
                       {video.authorId ? (
                         <a
@@ -318,6 +344,12 @@ export function MylistDetailClient() {
                       ) : (
                         video.authorName
                       )}
+                    </p>
+                  )}
+                  
+                  {deletedVideoIds.has(video.id) && (
+                    <p className={styles.deletedMessage}>
+                      この動画は削除されたか、非公開になっています
                     </p>
                   )}
                   

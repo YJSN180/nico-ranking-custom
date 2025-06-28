@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useState } from 'react'
 
 interface OptimizedImageProps {
   src: string
@@ -14,6 +15,8 @@ interface OptimizedImageProps {
   priority?: boolean
   className?: string
   onClick?: () => void
+  fallbackSrc?: string
+  onError?: () => void
 }
 
 /**
@@ -32,17 +35,30 @@ export function OptimizedImage({
   loading,
   priority,
   className,
-  onClick
+  onClick,
+  fallbackSrc = '/cantwatch.jpg',
+  onError
 }: OptimizedImageProps) {
+  const [imgSrc, setImgSrc] = useState(src)
+  const [hasError, setHasError] = useState(false)
+  
   // ローカル画像の判定
-  const isLocalImage = src.startsWith('/')
+  const isLocalImage = imgSrc.startsWith('/')
+  
+  const handleError = () => {
+    if (!hasError && fallbackSrc) {
+      setImgSrc(fallbackSrc)
+      setHasError(true)
+    }
+    onError?.()
+  }
   
   if (isLocalImage) {
     // ローカル画像：Next.js最適化を使用
     return (
       <Image
-        src={src}
-        alt={alt}
+        src={imgSrc}
+        alt={hasError ? '視聴できません' : alt}
         width={width}
         height={height}
         fill={fill}
@@ -52,6 +68,7 @@ export function OptimizedImage({
         priority={priority}
         className={className}
         onClick={onClick}
+        onError={handleError}
       />
     )
   }
@@ -59,8 +76,8 @@ export function OptimizedImage({
   // 外部画像：最適化を無効化
   return (
     <Image
-      src={src}
-      alt={alt}
+      src={imgSrc}
+      alt={hasError ? '視聴できません' : alt}
       width={width}
       height={height}
       fill={fill}
@@ -71,6 +88,7 @@ export function OptimizedImage({
       className={className}
       onClick={onClick}
       unoptimized
+      onError={handleError}
     />
   )
 }

@@ -52,13 +52,8 @@ export function MylistButton({ video }: MylistButtonProps) {
     // eslint-disable-next-line no-console
     console.log('[MylistButton] clicked', { isInMylist, mylists, isLoading })
     
-    if (isInMylist) {
-      // Remove from all mylists
-      handleRemoveFromAll()
-    } else {
-      // Show mylist selection modal
-      setShowModal(true)
-    }
+    // 常にモーダルを表示（登録済みでも未登録でも）
+    setShowModal(true)
   }
 
   const handleRemoveFromAll = async () => {
@@ -98,7 +93,7 @@ export function MylistButton({ video }: MylistButtonProps) {
       if (success) {
         setIsInMylist(true)
         setMylistIds([...mylistIds, mylistId])
-        setShowModal(false)
+        // モーダルは開いたままにする（削除）
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -175,6 +170,22 @@ export function MylistButton({ video }: MylistButtonProps) {
           selectedMylistIds={mylistIds}
           onAddToMylist={async (mylistId) => {
             await handleAddToMylist(mylistId)
+            // モーダルは開いたままにする
+          }}
+          onRemoveFromMylist={async (mylistId) => {
+            setIsProcessing(true)
+            try {
+              await removeVideoFromMylist(mylistId, video.id)
+              setMylistIds(mylistIds.filter(id => id !== mylistId))
+              if (mylistIds.length === 1) {
+                setIsInMylist(false)
+              }
+            } catch (error) {
+              // eslint-disable-next-line no-console
+              console.error('Failed to remove from mylist:', error)
+            } finally {
+              setIsProcessing(false)
+            }
           }}
           onClose={() => setShowModal(false)}
           onCreateMylist={async (name, description) => {
