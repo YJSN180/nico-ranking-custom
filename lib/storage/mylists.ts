@@ -191,6 +191,10 @@ export class MylistManager {
       throw new Error('Mylist not found')
     }
     
+    // 既存の動画を確認
+    const existingVideo = await tx.objectStore('mylistVideos').get([mylistId, video.id!])
+    const isNewVideo = !existingVideo
+    
     // 動画データを作成
     const mylistVideo: MylistVideo = {
       id: video.id!,
@@ -209,11 +213,13 @@ export class MylistManager {
       registeredAt: video.registeredAt
     }
     
-    // 動画を追加
+    // 動画を追加（既存の場合は上書き）
     await tx.objectStore('mylistVideos').put(mylistVideo)
     
-    // マイリストの動画数と更新日時を更新
-    mylist.videoCount++
+    // マイリストの更新日時を更新、新規の場合のみ動画数を増やす
+    if (isNewVideo) {
+      mylist.videoCount++
+    }
     mylist.updatedAt = Date.now()
     await tx.objectStore('mylists').put(mylist)
     

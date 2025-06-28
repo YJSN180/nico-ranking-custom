@@ -214,22 +214,26 @@ export function MylistDetailClient() {
     <div className={styles.container}>
       {/* ヘッダー */}
       <div className={styles.header}>
-        <div className={styles.headerInfo}>
+        <div className={styles.headerTop}>
           <Link href="/mylists" className={styles.backButton}>
-            ← マイリスト一覧
+            ← マイリスト一覧に戻る
           </Link>
-          <h1 className={styles.title}>{mylist.name}</h1>
-          <p className={styles.videoCount}>{mylist.videoCount} 件の動画</p>
-          {mylist.description && (
-            <p className={styles.description}>{mylist.description}</p>
-          )}
         </div>
-        <button
-          className={styles.settingsButton}
-          onClick={() => setShowSettings(true)}
-        >
-          マイリスト設定
-        </button>
+        <div className={styles.headerMain}>
+          <div className={styles.headerInfo}>
+            <h2 className={styles.title}>{mylist.name}</h2>
+            <p className={styles.videoCount}>{mylist.videoCount} 件の動画</p>
+            {mylist.description && (
+              <p className={styles.description}>{mylist.description}</p>
+            )}
+          </div>
+          <button
+            className={styles.settingsButton}
+            onClick={() => setShowSettings(true)}
+          >
+            マイリスト設定
+          </button>
+        </div>
       </div>
 
       {/* 検索・ソート */}

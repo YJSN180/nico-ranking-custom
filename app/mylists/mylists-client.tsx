@@ -159,13 +159,15 @@ export function MylistsClient() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1 className={styles.title}>マイリスト</h1>
-        <button
-          className={styles.createButton}
-          onClick={() => setShowCreateModal(true)}
-        >
-          ＋ 新規マイリスト作成
-        </button>
+        <div className={styles.headerContent}>
+          <h2 className={styles.title}>マイリスト管理</h2>
+          <button
+            className={styles.createButton}
+            onClick={() => setShowCreateModal(true)}
+          >
+            ＋ 新規マイリスト作成
+          </button>
+        </div>
       </div>
 
       <div className={styles.mylistGrid}>

@@ -1,4 +1,6 @@
 import { MylistsClient } from './mylists-client'
+import { HeaderWithSettings } from '@/components/header-with-settings'
+import { Footer } from '@/components/footer'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -7,5 +9,11 @@ export const metadata: Metadata = {
 }
 
 export default function MylistsPage() {
-  return <MylistsClient />
+  return (
+    <>
+      <HeaderWithSettings />
+      <MylistsClient />
+      <Footer />
+    </>
+  )
 }
