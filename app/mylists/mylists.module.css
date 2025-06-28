@@ -10,6 +10,10 @@
   color: var(--text-secondary);
 }
 
+.headerTop {
+  margin-bottom: 24px;
+}
+
 .header {
   margin-bottom: 32px;
 }

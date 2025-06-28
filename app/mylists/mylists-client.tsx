@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import type { Mylist } from '@/lib/storage/types'
+import { BackLink } from '@/components/back-link'
 import styles from './mylists.module.css'
 
 export function MylistsClient() {
@@ -156,6 +157,9 @@ export function MylistsClient() {
 
   return (
     <div className={styles.container}>
+      <div className={styles.headerTop}>
+        <BackLink />
+      </div>
       <div className={styles.header}>
         <div className={styles.headerContent}>
           <h2 className={styles.title}>マイリスト管理</h2>

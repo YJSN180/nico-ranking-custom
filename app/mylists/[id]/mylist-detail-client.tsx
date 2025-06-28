@@ -7,6 +7,7 @@ import { OptimizedImage } from '@/components/optimized-image'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import { formatNumberMobile } from '@/lib/format-utils'
+import { BackLink } from '@/components/back-link'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'
 import styles from './mylist-detail.module.css'
 
@@ -203,9 +204,7 @@ export function MylistDetailClient() {
       <div className={styles.container}>
         <div className={styles.notFound}>
           <p>マイリストが見つかりません</p>
-          <Link href="/mylists" className={styles.backLink}>
-            マイリスト一覧に戻る
-          </Link>
+          <BackLink href="/mylists" text="マイリスト一覧に戻る" />
         </div>
       </div>
     )
@@ -216,9 +215,7 @@ export function MylistDetailClient() {
       {/* ヘッダー */}
       <div className={styles.header}>
         <div className={styles.headerTop}>
-          <Link href="/mylists" className={styles.backButton}>
-            ← マイリスト一覧に戻る
-          </Link>
+          <BackLink href="/mylists" text="マイリスト一覧に戻る" />
         </div>
         <div className={styles.headerMain}>
           <div className={styles.headerInfo}>
