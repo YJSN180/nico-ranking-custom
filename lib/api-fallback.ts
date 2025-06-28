@@ -1,12 +1,31 @@
-// Direct connection to Cloudflare Worker (Vercel Function を使わない)
+// Direct connection to Cloudflare Worker (本番環境) or Vercel Function proxy (プレビュー環境)
 export class APIFallback {
   private static readonly CLOUDFLARE_ENDPOINT = 'https://nico-rank.com/api/ranking'
+  
+  // プレビュー環境の検出
+  private static isPreviewEnvironment(): boolean {
+    if (typeof window === 'undefined') return false
+    const hostname = window.location.hostname
+    return hostname.includes('.vercel.app') && !hostname.includes('nico-ranking-custom-yjsns-projects')
+  }
   
   static async fetchWithFallback(
     params: URLSearchParams,
     signal?: AbortSignal
   ): Promise<Response> {
-    // Cloudflare Worker に直接接続（Vercel Function をバイパス）
+    // プレビュー環境では相対パスでVercel Functionプロキシを使用
+    if (this.isPreviewEnvironment()) {
+      const response = await fetch(`/api/ranking?${params.toString()}`, {
+        signal,
+        headers: {
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate, br'
+        }
+      })
+      return response
+    }
+    
+    // 本番環境ではCloudflare Worker に直接接続
     const response = await fetch(`${this.CLOUDFLARE_ENDPOINT}?${params.toString()}`, {
       signal,
       headers: {
