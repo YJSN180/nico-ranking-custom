@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(host)
   const isPreview = isVercelApp && hasRandomString
   
+  // eslint-disable-next-line no-console
   console.log('[API Route] Environment check:', { host, isPreview, isVercelApp, hasRandomString })
   
   if (isPreview) {
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
         headers
       })
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('[Preview Proxy] Error fetching from Cloudflare Worker:', error)
       return NextResponse.json(
         { error: 'Failed to fetch ranking data' },

@@ -16,6 +16,7 @@ export class APIFallback {
     const isPreview = isVercelApp && hasRandomString
     
     // デバッグログ
+    // eslint-disable-next-line no-console
     console.log('[APIFallback] Preview environment check:', {
       hostname,
       isPreview,
