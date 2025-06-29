@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
-import RankingItemResponsive from '@/components/ranking-item-responsive'
+import RankingItemResponsiveOptimized from '@/components/ranking-item-responsive-optimized'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 
 // 動的インポートでバンドルサイズを削減
@@ -861,7 +861,7 @@ export default function ClientPage({
           {/* ランキングリスト */}
           <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
-              <RankingItemResponsive 
+              <RankingItemResponsiveOptimized 
                 key={item.id} 
                 item={item}
               />
