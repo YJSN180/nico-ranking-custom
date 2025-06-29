@@ -39,15 +39,13 @@ jobs:
         run: npm run lint
 
       - name: Run unit and integration tests
+        env:
+          NODE_OPTIONS: '--max-old-space-size=4096'
         run: |
-          # Run unit tests for unified compression system
-          npm run test:unit -- unified-compression
-          # Run integration tests for unified compression system
-          npm run test:integration -- unified-compression
-          # Run backward compatibility tests
-          npm run test:integration -- backward-compatibility
-          # Run worker integration tests  
-          npm run test:integration -- worker-unified-compression
+          # Run all unit tests with memory limit
+          npm run test:unit
+          # Run all integration tests with memory limit
+          npm run test:integration
 
       # Codecov upload disabled - requires token configuration
       # - name: Upload coverage reports
