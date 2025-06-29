@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useState, useEffect } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatDuration } from '@/lib/format-utils'
@@ -19,7 +19,15 @@ const RankingItemResponsiveOptimized = memo(function RankingItemResponsiveOptimi
   }
   
   const isNew = isWithin24Hours(item.registeredAt)
-  const dateDisplay = formatRegisteredDate(item.registeredAt)
+  
+  // ハイドレーションエラーを防ぐため、日付表示は初期値を固定
+  // ハイドレーション後に実際の値に更新
+  const [dateDisplay, setDateDisplay] = useState(() => formatRegisteredDate(item.registeredAt))
+  
+  useEffect(() => {
+    // ハイドレーション後に日付を再計算
+    setDateDisplay(formatRegisteredDate(item.registeredAt))
+  }, [item.registeredAt])
 
   // Determine rank class
   let rankClass = 'ranking-item-responsive'
