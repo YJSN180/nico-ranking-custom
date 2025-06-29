@@ -69,7 +69,8 @@ describe('NG List Immediate Update', () => {
 
     render(
       <ClientPage 
-        initialData={initialData}
+        initialData={{ items: initialData }}
+        allRankingData={initialData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -77,7 +78,8 @@ describe('NG List Immediate Update', () => {
 
     // Initially all 5 items should be displayed
     await waitFor(() => {
-      expect(screen.getByText('5件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(5)
     })
 
     // Simulate NG list update by dispatching the event
@@ -102,7 +104,8 @@ describe('NG List Immediate Update', () => {
 
     // Should immediately update to show only 3 items
     await waitFor(() => {
-      expect(screen.getByText('3件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(3)
     }, { timeout: 1000 })
 
     // Verify the filtered items are displayed
@@ -122,7 +125,8 @@ describe('NG List Immediate Update', () => {
 
     render(
       <ClientPage 
-        initialData={initialData}
+        initialData={{ items: initialData }}
+        allRankingData={initialData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -130,7 +134,8 @@ describe('NG List Immediate Update', () => {
 
     // Initially 3 items
     await waitFor(() => {
-      expect(screen.getByText('3件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(3)
     })
 
     // Add one item to NG list
@@ -150,7 +155,8 @@ describe('NG List Immediate Update', () => {
 
     // Should immediately show 2 items
     await waitFor(() => {
-      expect(screen.getByText('2件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(2)
     }, { timeout: 500 })
 
     // Add another item to NG list
@@ -170,12 +176,9 @@ describe('NG List Immediate Update', () => {
 
     // Should immediately show 1 item
     await waitFor(() => {
-      expect(screen.getByText('1件表示')).toBeInTheDocument()
+      const items = screen.getAllByRole('listitem')
+      expect(items).toHaveLength(1)
+      expect(items[0]).toHaveTextContent('Video sm2')
     }, { timeout: 500 })
-
-    // Verify only sm2 is displayed
-    const items = screen.getAllByRole('listitem')
-    expect(items).toHaveLength(1)
-    expect(items[0]).toHaveTextContent('Video sm2')
   })
 })
