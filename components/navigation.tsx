@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMobileDetect } from '@/hooks/use-mobile-detect'
+import { cn } from '@/lib/responsive-utils'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { 
   HamburgerIcon, 
@@ -59,7 +59,6 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
-  const isMobile = useMobileDetect()
   const pathname = usePathname()
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -74,9 +73,9 @@ export function Navigation() {
     }
   }
 
-  // モバイルメニューの外側クリックで閉じる
+  // メニューの外側クリックで閉じる
   useEffect(() => {
-    if (!isMobile || !isOpen) return
+    if (!isOpen) return
 
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -91,7 +90,7 @@ export function Navigation() {
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isMobile, isOpen])
+  }, [isOpen])
 
   // Escapeキーで閉じる
   useEffect(() => {
@@ -108,9 +107,12 @@ export function Navigation() {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [isOpen])
 
-  // モバイルメニューのボディスクロール制御
+  // メニューオープン時のボディスクロール制御
   useEffect(() => {
-    if (isMobile && isOpen) {
+    // モバイルメニューが開いている時のみスクロールを無効化
+    const mediaQuery = window.matchMedia('(max-width: 640px)')
+    
+    if (mediaQuery.matches && isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
@@ -119,12 +121,19 @@ export function Navigation() {
     return () => {
       document.body.style.overflow = ''
     }
-  }, [isMobile, isOpen])
+  }, [isOpen])
 
-  // 768px以下でモバイル表示 (SSR中はfalseとする)
-  const shouldShowMobile = isMobile || (typeof window !== 'undefined' && window.innerWidth <= 768)
+  return (
+    <>
+      {/* モバイル版ナビゲーション */}
+      <div className="mobile-only">{renderMobileNavigation()}</div>
+      
+      {/* デスクトップ版ナビゲーション */}
+      <div className="desktop-only">{renderDesktopNavigation()}</div>
+    </>
+  )
 
-  if (shouldShowMobile) {
+  function renderMobileNavigation() {
     return (
       <>
         {/* ハンバーガーメニューボタン */}
@@ -138,13 +147,13 @@ export function Navigation() {
             position: 'absolute',
             top: '50%',
             transform: 'translateY(-50%)',
-            left: isMobile ? '12px' : '16px',
+            left: '12px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
             borderRadius: '6px',
-            padding: isMobile ? '4px 8px' : '6px 10px',
+            padding: '4px 8px',
             color: 'white',
-            fontSize: isMobile ? '16px' : '18px',
+            fontSize: '16px',
             cursor: 'pointer',
             transition: 'all 0.2s',
             backdropFilter: 'blur(8px)',
@@ -157,16 +166,12 @@ export function Navigation() {
             height: '36px',
           }}
           onMouseEnter={(e) => {
-            if (!isMobile) {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-              e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
-            }
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
           }}
           onMouseLeave={(e) => {
-            if (!isMobile) {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-              e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
-            }
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
           }}
         >
           <HamburgerIcon size={20} color="white" />
@@ -515,9 +520,9 @@ export function Navigation() {
     )
   }
 
-  // デスクトップ版（ドロップダウンメニュー）
-  return (
-    <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px', zIndex: 20 }}>
+  function renderDesktopNavigation() {
+    return (
+      <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px', zIndex: 20 }}>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
@@ -769,4 +774,5 @@ export function Navigation() {
       `}</style>
     </div>
   )
+  }
 }

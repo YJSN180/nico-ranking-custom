@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 
 export function useMobileDetect() {
+  // SSRとの一貫性のため、初期値は常にfalse
   const [isMobile, setIsMobile] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -25,7 +27,11 @@ export function useMobileDetect() {
       timeoutId = setTimeout(checkMobile, 150)
     }
 
+    // 初回のチェックを実行
     checkMobile()
+    // ハイドレーション完了をマーク
+    setIsHydrated(true)
+    
     window.addEventListener('resize', handleResize)
     
     return () => {

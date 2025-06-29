@@ -5,11 +5,11 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { SettingsModal } from './settings-modal'
 import { Navigation } from './navigation'
-import { useMobileDetect } from '@/hooks/use-mobile-detect'
+import { cn } from '@/lib/responsive-utils'
+import styles from './header-with-settings.module.css'
 
 export function HeaderWithSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const isMobile = useMobileDetect()
   
   // Listen for openSettings event from Navigation
   useEffect(() => {
@@ -23,20 +23,10 @@ export function HeaderWithSettings() {
 
   return (
     <>
-      <header role="banner" className="header-container" style={{
-        background: 'var(--header-bg)',
-        padding: isMobile ? '5px 12px' : '8px 20px',
-        boxShadow: 'var(--shadow-md)',
-        marginBottom: '20px',
-        position: 'relative'
-      }}>
+      <header role="banner" className={styles.headerContainer}>
         <Navigation />
         
-        <div style={{ 
-          maxWidth: '1200px', 
-          margin: '0 auto',
-          padding: isMobile ? '0 60px' : '0 120px' // 両サイドのボタンのスペースを確保
-        }}>
+        <div className={styles.headerContent}>
           <Link 
             href="/" 
             style={{ 
@@ -44,48 +34,13 @@ export function HeaderWithSettings() {
               display: 'block'
             }}
           >
-            <h1 style={{ 
-              color: '#ffffff', 
-              margin: 0,
-              textAlign: 'center',
-              fontSize: isMobile ? '22px' : '48px',
-              fontWeight: '700',
-              textShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-              letterSpacing: '0.02em',
-              userSelect: 'none',
-              WebkitUserSelect: 'none',
-              MozUserSelect: 'none',
-              msUserSelect: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: isMobile ? '4px' : '12px',
-              cursor: 'pointer',
-              transition: 'opacity 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.opacity = '0.9'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isMobile) {
-                e.currentTarget.style.opacity = '1'
-              }
-            }}
-            >
-              <div style={{
-                position: 'relative',
-                width: isMobile ? '48px' : '106px',
-                height: isMobile ? '48px' : '106px',
-                flexShrink: 0, // サイズ維持
-                marginRight: isMobile ? '4px' : '8px', // 適切な余白
-              }}>
+            <h1 className={styles.headerTitle}>
+              <div className={styles.logoWrapper}>
                 <Image
                   src="/icon.png"
                   alt="ニコラン(Re:turn) ロゴ"
                   fill
-                  sizes={isMobile ? "48px" : "106px"}
+                  sizes="(max-width: 640px) 48px, 106px"
                   style={{
                     objectFit: 'contain',
                     filter: 'brightness(0) invert(1)', // 白色に変換
@@ -117,31 +72,7 @@ export function HeaderWithSettings() {
         
         <button
           onClick={() => setIsSettingsOpen(true)}
-          style={{
-            position: 'absolute',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            right: isMobile ? '12px' : '16px',
-            background: 'rgba(255, 255, 255, 0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            borderRadius: '6px',
-            padding: isMobile ? '4px 8px' : '6px 10px',
-            color: 'white',
-            fontSize: isMobile ? '16px' : '18px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            zIndex: 10
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-            e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-            e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
-          }}
+          className={styles.settingsButton}
           aria-label="設定"
         >
           ⚙️

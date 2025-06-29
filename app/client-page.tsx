@@ -122,7 +122,7 @@ export default function ClientPage({
         tag: config.tag,
         page: currentPage,
         popularTags: currentPopularTags,
-        savedAt: Date.now()
+        savedAt: typeof window !== 'undefined' ? Date.now() : 0
       }
       sessionStorage.setItem('ranking-navigation-state', JSON.stringify(stateToSave))
     }

@@ -301,3 +301,48 @@ button,
   margin-bottom: 6px;
   word-break: break-word;
 }
+
+/* レスポンシブユーティリティクラス */
+@media (max-width: 640px) {
+  .desktop-only {
+    display: none !important;
+  }
+  
+  .is-mobile {
+    /* モバイル用スタイルをここに適用 */
+  }
+}
+
+@media (min-width: 641px) {
+  .mobile-only {
+    display: none !important;
+  }
+  
+  .is-desktop {
+    /* デスクトップ用スタイルをここに適用 */
+  }
+}
+
+/* ナビゲーションボタンのレスポンシブスタイル */
+.nav-button {
+  padding: 6px 10px;
+  font-size: 18px;
+}
+
+@media (max-width: 640px) {
+  .nav-button {
+    padding: 4px 8px;
+    font-size: 16px;
+  }
+}
+
+/* ハンバーガーメニューの位置調整 */
+.hamburger-button {
+  left: 16px;
+}
+
+@media (max-width: 640px) {
+  .hamburger-button {
+    left: 12px;
+  }
+}
