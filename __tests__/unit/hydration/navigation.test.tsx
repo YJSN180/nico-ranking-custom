@@ -31,15 +31,15 @@ describe('Navigation hydration test', () => {
     expect(desktopVersion).toBeInTheDocument()
   })
   
-  it('CSS Media Queriesで表示制御されるべき', () => {
+  it('TailwindクラスでSSR安全な表示制御されるべき', () => {
     const { container } = render(<Navigation />)
     
-    // CSSクラスが正しく適用されているか確認
-    const mobileOnly = container.querySelector('.mobile-only')
-    const desktopOnly = container.querySelector('.desktop-only')
+    // Tailwindレスポンシブクラスが正しく適用されているか確認
+    const mobileOnly = container.querySelector('.sm\\\\:hidden') // モバイル表示用
+    const desktopOnly = container.querySelector('.hidden.sm\\\\:block') // デスクトップ表示用
     
-    // クラスが存在することを確認（実際の表示/非表示はCSSで制御）
-    expect(mobileOnly).toHaveClass('mobile-only')
-    expect(desktopOnly).toHaveClass('desktop-only')
+    // Tailwindクラスが存在することを確認（SSR安全）
+    expect(mobileOnly).toBeInTheDocument()
+    expect(desktopOnly).toBeInTheDocument()
   })
 })
