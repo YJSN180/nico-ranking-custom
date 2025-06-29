@@ -1,21 +1,24 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 // Edge Runtime環境をモック
-const fetchVideoStatsMock = vi.fn()
-const getVideoStatsFromKVMock = vi.fn()
+const originalEnv = process.env
 
-vi.mock('@/lib/snapshot-api', () => ({
-  fetchVideoStats: fetchVideoStatsMock
-}))
-
-vi.mock('@/lib/video-stats-kv', () => ({
-  getVideoStatsFromKV: getVideoStatsFromKVMock
-}))
+// Global fetchのモック
+global.fetch = vi.fn()
 
 describe('Edge Video Stats API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset environment variables
+    process.env = { ...originalEnv }
+    // Mock fetch globally
+    ;(global.fetch as any) = vi.fn()
+  })
+
+  afterEach(() => {
+    // Restore original environment
+    process.env = originalEnv
   })
 
   describe('GET /api/edge/video-stats', () => {
@@ -45,7 +48,45 @@ describe('Edge Video Stats API', () => {
     })
 
     it('should fetch and return video stats', async () => {
+      // Set environment variables
+      process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
+      process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
+      process.env.CLOUDFLARE_API_TOKEN = 'test-token'
+      
       const mockStats = {
+        stats: {
+          'sm123': {
+            viewCounter: 1000,
+            commentCounter: 50,
+            mylistCounter: 10,
+            likeCounter: 100
+          },
+          'sm456': {
+            viewCounter: 2000,
+            commentCounter: 100,
+            mylistCounter: 20,
+            likeCounter: 200
+          }
+        },
+        metadata: {
+          updatedAt: '2024-01-01T00:00:00Z'
+        }
+      }
+      
+      // Mock KV fetch
+      ;(global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockStats
+      })
+      
+      const { GET } = await import('@/app/api/edge/video-stats/route')
+      const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm123,sm456')
+      
+      const response = await GET(request)
+      const data = await response.json()
+      
+      expect(response.status).toBe(200)
+      expect(data.stats).toEqual({
         'sm123': {
           viewCounter: 1000,
           commentCounter: 50,
@@ -58,23 +99,9 @@ describe('Edge Video Stats API', () => {
           mylistCounter: 20,
           likeCounter: 200
         }
-      }
-      
-      // Mock KV to return empty (fallback to Snapshot API)
-      getVideoStatsFromKVMock.mockResolvedValue({})
-      fetchVideoStatsMock.mockResolvedValue(mockStats)
-      
-      const { GET } = await import('@/app/api/edge/video-stats/route')
-      const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm123,sm456')
-      
-      const response = await GET(request)
-      const data = await response.json()
-      
-      expect(response.status).toBe(200)
-      expect(data.stats).toEqual(mockStats)
-      expect(data.timestamp).toBeDefined()
+      })
+      expect(data.timestamp).toBe('2024-01-01T00:00:00Z')
       expect(data.count).toBe(2)
-      expect(fetchVideoStatsMock).toHaveBeenCalledWith(['sm123', 'sm456'])
     })
 
     it('should handle fetch errors gracefully', async () => {
@@ -173,17 +200,30 @@ describe('Edge Video Stats API', () => {
     })
 
     it('should set longer cache headers when using KV data', async () => {
-      const kvStats = {
-        'sm123': {
-          viewCounter: 1000,
-          commentCounter: 50,
-          mylistCounter: 10,
-          likeCounter: 100
+      // Set environment variables
+      process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account'
+      process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace'
+      process.env.CLOUDFLARE_API_TOKEN = 'test-token'
+      
+      const kvData = {
+        stats: {
+          'sm123': {
+            viewCounter: 1000,
+            commentCounter: 50,
+            mylistCounter: 10,
+            likeCounter: 100
+          }
+        },
+        metadata: {
+          updatedAt: '2024-01-01T00:00:00Z'
         }
       }
       
-      getVideoStatsFromKVMock.mockResolvedValue(kvStats)
-      fetchVideoStatsMock.mockResolvedValue({})
+      // Mock KV fetch
+      ;(global.fetch as any).mockResolvedValueOnce({
+        ok: true,
+        json: async () => kvData
+      })
       
       const { GET } = await import('@/app/api/edge/video-stats/route')
       const request = new NextRequest('http://localhost/api/edge/video-stats?ids=sm123')

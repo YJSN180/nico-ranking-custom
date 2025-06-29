@@ -107,9 +107,11 @@ describe('スクロールロック防止', () => {
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
     // 初期データは100件
+    const mockData = createMockData(100)
     render(
       <ClientPage 
-        initialData={createMockData(100)}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="game"
         initialPeriod="24h"
       />
@@ -147,9 +149,11 @@ describe('スクロールロック防止', () => {
     // APIエラーをモック
     ;(global.fetch as any).mockRejectedValue(new Error('Network error'))
     
+    const mockData = createMockData(100)
     render(
       <ClientPage 
-        initialData={createMockData(100)}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="game"
         initialPeriod="24h"
       />
@@ -182,9 +186,11 @@ describe('スクロールロック防止', () => {
     }
     ;(useSearchParams as any).mockReturnValue(searchParams)
     
+    const mockData = createMockData(100)
     const { container } = render(
       <ClientPage 
-        initialData={createMockData(100)}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="game"
         initialPeriod="24h"
       />
