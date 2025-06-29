@@ -168,9 +168,9 @@ export async function middleware(request: NextRequest) {
   
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
-    // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
+    // リソースヒントの追加でTTFBを改善
+    // 注意: nicomoji-plus-v2.woff2 は現在使用されていないため除外
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
       '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
