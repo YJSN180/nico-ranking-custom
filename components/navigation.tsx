@@ -140,7 +140,7 @@ export function Navigation() {
         <button
           ref={buttonRef}
           onClick={() => setIsOpen(!isOpen)}
-          aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
+          aria-label="メニュー"
           aria-expanded={isOpen}
           aria-controls="navigation-menu"
           style={{

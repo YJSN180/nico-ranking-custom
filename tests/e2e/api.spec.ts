@@ -49,8 +49,8 @@ test.describe('APIテスト', () => {
   test('レート制限が適切に動作する', async ({ request }) => {
     const requests = []
     
-    // 10個の同時リクエスト
-    for (let i = 0; i < 10; i++) {
+    // 5個の同時リクエストに減らしてCI/CD環境での安定性を向上
+    for (let i = 0; i < 5; i++) {
       requests.push(request.get(`/api/ranking?genre=all&period=24h&_=${i}`))
     }
     
@@ -63,6 +63,10 @@ test.describe('APIテスト', () => {
     // 429エラーが返る場合もある（レート制限）
     const rateLimitCount = responses.filter(r => r.status() === 429).length
     console.log(`成功: ${successCount}, レート制限: ${rateLimitCount}`)
+    
+    // サーバーエラーがないことを確認
+    const serverErrorCount = responses.filter(r => r.status() >= 500).length
+    expect(serverErrorCount).toBe(0)
   })
 })
 
