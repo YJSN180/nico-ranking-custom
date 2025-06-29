@@ -9,7 +9,7 @@ import './globals.css'
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
-  preload: true,
+  preload: false, // LCP改善のためプリロードを無効化
   adjustFontFallback: true, // フォールバックフォントの最適化
   variable: '--font-inter'  // CSS変数として使用
 })
@@ -111,7 +111,7 @@ export default async function RootLayout({
         <link rel="preconnect" href="https://tn.smilevideo.jp" crossOrigin="anonymous" />
         {/* フォントのプリロード - WOFF2を最優先で読み込む */}
         <link rel="preload" href="/fonts/nicomoji-plus-v2.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
-        <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
+        <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* クリティカルCSSをインライン化 */}
         <style dangerouslySetInnerHTML={{ __html: `
           /* クリティカルフォント定義 - WOFF2優先フォールバック戦略 */
@@ -122,15 +122,9 @@ export default async function RootLayout({
           /* テーマのデフォルトスタイル - ちらつき防止 */
           [data-theme="dark"] body{color:#fff;background-color:#121212}
           [data-theme="darkblue"] body{color:#fff;background-color:#15202b}
-          .header-container{background:linear-gradient(135deg,#0066CC 0%,#004B99 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
-          .selectors-container{min-height:200px}
-          .ranking-video-link{color:#0066cc;text-decoration:none}
-          .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}
-          .ranking-item-responsive__title{color:var(--link-color);text-decoration:none;font-size:16px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;word-break:break-word}
+          .header-container{background:linear-gradient(135deg,#0066CC 0%,#004B99 100%);padding:8px 20px;margin-bottom:20px}
           [data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:12px;padding:16px}
-          .skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite alternate}
-          @keyframes skeleton-pulse{0%{opacity:0.6}100%{opacity:1}}
-          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}.ranking-item-responsive__title{font-size:15px;line-height:1.3;-webkit-line-clamp:2}}
+          @media(max-width:640px){.header-container{padding:5px 12px}}
         ` }} />
         <script
           type="application/ld+json"
