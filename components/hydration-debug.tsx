@@ -7,15 +7,15 @@ export function HydrationDebug({ name, value }: { name: string; value: any }) {
   
   useEffect(() => {
     setMounted(true)
-    console.log(`[Hydration Debug] ${name}:`, {
-      server: value,
-      client: typeof window !== 'undefined' ? value : 'N/A',
-      mounted: true
-    })
+    // console.log(`[Hydration Debug] ${name}:`, {
+    //   server: value,
+    //   client: typeof window !== 'undefined' ? value : 'N/A',
+    //   mounted: true
+    // })
   }, [name, value])
   
   if (!mounted) {
-    console.log(`[Hydration Debug] ${name} (SSR):`, value)
+    // console.log(`[Hydration Debug] ${name} (SSR):`, value)
   }
   
   return null

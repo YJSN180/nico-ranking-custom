@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 'use client'
 
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
@@ -22,44 +23,9 @@ import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
 // 本番環境でのハイドレーションデバッグ用
-const HYDRATION_DEBUG = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || 
-   window.location.hostname === 'nico-rank.com' ||
-   window.location.hostname.includes('vercel.app'))
+const HYDRATION_DEBUG = false // デバッグを無効化
 
-if (HYDRATION_DEBUG) {
-  // React 18のハイドレーションエラーを捕捉
-  if (typeof window !== 'undefined') {
-    const originalError = console.error
-    console.error = (...args) => {
-      const errorString = args[0]?.toString() || ''
-      if (errorString.includes('418') || errorString.includes('Hydration')) {
-        console.log('%c[Hydration Error Detected]', 'color: red; font-weight: bold')
-        console.log('Stack trace:', new Error().stack)
-        console.log('Current time:', new Date().toISOString())
-        console.log('User agent:', navigator.userAgent)
-        console.log('Window dimensions:', { width: window.innerWidth, height: window.innerHeight })
-        
-        // DOM要素の状態をチェック
-        setTimeout(() => {
-          const rankingItems = document.querySelectorAll('[data-testid="ranking-item"]')
-          console.log('Ranking items count:', rankingItems.length)
-          
-          // 最初のアイテムの内容を確認
-          if (rankingItems.length > 0) {
-            const firstItem = rankingItems[0]
-            console.log('First item HTML (truncated):', firstItem.innerHTML.substring(0, 200))
-          }
-          
-          // Suspenseの境界を確認
-          const suspenseBoundaries = document.querySelectorAll('[data-suspense-boundary]')
-          console.log('Suspense boundaries:', suspenseBoundaries.length)
-        }, 100)
-      }
-      originalError.apply(console, args)
-    }
-  }
-}
+// デバッグコードは無効化
 
 // サーバーサイドとクライアントサイドの差異を検出
 let hydrationMismatchDetector: any = null

@@ -59,6 +59,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
   const pathname = usePathname()
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -72,6 +73,11 @@ export function Navigation() {
       window.dispatchEvent(new Event('openSettings'))
     }
   }
+
+  // マウント状態を管理
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   // メニューの外側クリックで閉じる
   useEffect(() => {
@@ -123,13 +129,28 @@ export function Navigation() {
     }
   }, [isOpen])
 
+  // CSSメディアクエリでレスポンシブに対応
+  // ハイドレーションエラーを回避するため、両方をレンダリングしCSSで制御
   return (
     <>
-      {/* モバイル版ナビゲーション */}
-      <div className="mobile-only">{renderMobileNavigation()}</div>
-      
-      {/* デスクトップ版ナビゲーション */}
-      <div className="desktop-only">{renderDesktopNavigation()}</div>
+      <div 
+        className="sm:hidden" 
+        style={{ 
+          opacity: isMounted ? '1' : '0',
+          transition: 'opacity 0.2s'
+        }}
+      >
+        {renderMobileNavigation()}
+      </div>
+      <div 
+        className="hidden sm:block" 
+        style={{ 
+          opacity: isMounted ? '1' : '0',
+          transition: 'opacity 0.2s'
+        }}
+      >
+        {renderDesktopNavigation()}
+      </div>
     </>
   )
 
