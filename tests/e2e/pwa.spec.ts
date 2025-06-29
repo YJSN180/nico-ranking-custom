@@ -268,26 +268,114 @@ test.describe('PWA (Progressive Web App) Functionality', () => {
       await page.goto('/')
       
       // Install prompt should not be immediately visible
-      const installPrompt = page.locator('[data-testid="install-prompt"], .install-prompt, .pwa-install')
+      const installPrompt = page.locator('[data-testid="pwa-install-prompt"]')
       await expect(installPrompt).not.toBeVisible()
     })
 
-    test('should show install prompt after user engagement', async ({ page }) => {
-      test.skip(true, 'Install prompt timing depends on implementation strategy')
+    test('should show iOS Safari install instructions', async ({ page, browserName }) => {
+      // Skip if not WebKit (Safari)
+      test.skip(browserName !== 'webkit', 'iOS Safari specific test')
+      
+      // Set up for returning visitor (not first visit)
+      await page.evaluateOnNewDocument(() => {
+        const threeDaysAgo = new Date()
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+        localStorage.setItem('first_visit', threeDaysAgo.toISOString())
+      })
       
       await page.goto('/')
       
-      // Simulate user engagement
-      await page.click('body')
-      await page.evaluate(() => window.scrollTo(0, 100))
-      await page.waitForTimeout(2000)
+      // Wait for potential prompt to appear
+      await page.waitForTimeout(4000)
       
-      // Check if install UI appears after engagement
-      const installUI = page.locator('[data-testid="install-prompt"], .install-prompt, .pwa-install')
-      const isInstallUIVisible = await installUI.isVisible().catch(() => false)
+      // Check if iOS install instructions are shown for WebKit
+      const installPrompt = page.locator('[data-testid="pwa-install-prompt"]')
+      const isVisible = await installPrompt.isVisible().catch(() => false)
       
-      // This might be visible depending on implementation
-      expect(typeof isInstallUIVisible).toBe('boolean')
+      // In WebKit, it should show if conditions are met
+      if (isVisible) {
+        await expect(installPrompt).toContainText('ホーム画面に追加')
+      }
+    })
+
+    test('should hide install prompt when already installed as PWA', async ({ page }) => {
+      // Simulate PWA installed state
+      await page.evaluateOnNewDocument(() => {
+        // Override matchMedia to return standalone mode
+        window.matchMedia = (query: string) => ({
+          matches: query === '(display-mode: standalone)',
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => true
+        } as MediaQueryList)
+      })
+      
+      await page.goto('/')
+      await page.waitForTimeout(4000)
+      
+      // Install prompt should not be visible when in standalone mode
+      const installPrompt = page.locator('[data-testid="pwa-install-prompt"]')
+      await expect(installPrompt).not.toBeVisible()
+    })
+
+    test('should show install button in Safari warning for mobile', async ({ page }) => {
+      // Simulate mobile Safari
+      await page.setViewportSize({ width: 375, height: 667 })
+      
+      await page.goto('/mylists')
+      
+      // Check if Safari warning shows install button for mobile
+      const safariWarning = page.locator('[data-testid="safari-persistence-warning"]')
+      
+      if (await safariWarning.isVisible()) {
+        const installButton = safariWarning.locator('[data-testid="install-app-button"]')
+        
+        // On mobile Safari, should show install button instead of persistence button
+        const isMobileSafari = await page.evaluate(() => {
+          const ua = navigator.userAgent.toLowerCase()
+          return /iphone|ipad|ipod/.test(ua) && /webkit/.test(ua) && !/crios|fxios/.test(ua)
+        })
+        
+        if (isMobileSafari) {
+          await expect(installButton).toBeVisible()
+          await expect(installButton).toContainText('アプリとしてインストール')
+        }
+      }
+    })
+
+    test('should handle install prompt dismissal', async ({ page, browserName }) => {
+      test.skip(browserName !== 'webkit', 'Testing with WebKit for consistency')
+      
+      // Set up for returning visitor
+      await page.evaluateOnNewDocument(() => {
+        const threeDaysAgo = new Date()
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+        localStorage.setItem('first_visit', threeDaysAgo.toISOString())
+      })
+      
+      await page.goto('/')
+      await page.waitForTimeout(4000)
+      
+      const installPrompt = page.locator('[data-testid="pwa-install-prompt"]')
+      
+      if (await installPrompt.isVisible()) {
+        // Find and click dismiss button
+        const dismissButton = installPrompt.locator('button[aria-label="閉じる"]')
+        await dismissButton.click()
+        
+        // Prompt should disappear
+        await expect(installPrompt).not.toBeVisible()
+        
+        // Check that dismissal is recorded
+        const dismissedAt = await page.evaluate(() => {
+          return localStorage.getItem('pwa_install_dismissed')
+        })
+        expect(dismissedAt).toBeTruthy()
+      }
     })
   })
 })

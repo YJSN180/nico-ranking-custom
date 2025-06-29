@@ -2,16 +2,30 @@
 
 import { useEffect, useState } from 'react'
 import { isSafari, requestPersistentStorage, checkPersistentStorage } from '@/lib/storage/persistence'
+import { isIOSSafari, isPWAInstalled, isMobile } from '@/lib/pwa/detection'
 
 export function SafariPersistenceWarning() {
   const [showWarning, setShowWarning] = useState(false)
   const [isPersisted, setIsPersisted] = useState(false)
   const [requesting, setRequesting] = useState(false)
+  const [isInstalled, setIsInstalled] = useState(false)
+  const [isMobileSafari, setIsMobileSafari] = useState(false)
 
   useEffect(() => {
     const checkSafari = async () => {
+      // PWAとしてインストール済みの場合は警告を表示しない
+      const installed = isPWAInstalled()
+      setIsInstalled(installed)
+      
+      if (installed) {
+        setShowWarning(false)
+        return
+      }
+
+      // Safariかどうかチェック
       if (isSafari()) {
         setShowWarning(true)
+        setIsMobileSafari(isIOSSafari() && isMobile())
         const persisted = await checkPersistentStorage()
         setIsPersisted(persisted)
       }
@@ -50,23 +64,46 @@ export function SafariPersistenceWarning() {
         <h4>Safariをご利用の方へ</h4>
         <p>
           Safariでは、7日間アクセスがないとマイリストデータが自動削除される場合があります。
-          大切なデータを守るため、定期的なバックアップをお勧めします。
+          {isMobileSafari ? (
+            <>アプリとしてインストールすることで、この制限を回避できます。</>
+          ) : (
+            <>大切なデータを守るため、定期的なバックアップをお勧めします。</>
+          )}
         </p>
         <div className="warning-actions">
-          {!isPersisted && (
+          {isMobileSafari ? (
             <button
-              onClick={handleRequestPersistence}
-              disabled={requesting}
-              className="persistence-button"
-              data-testid="request-persistence-button"
+              onClick={() => {
+                // PWAインストールプロンプトを表示するイベントを発火
+                window.dispatchEvent(new CustomEvent('show-pwa-install-prompt'))
+              }}
+              className="install-app-button"
+              data-testid="install-app-button"
             >
-              {requesting ? '確認中...' : 'データ永続化を要求'}
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                      d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.632 4.684C18.114 15.938 18 15.482 18 15c0-.482.114-.938.316-1.342m0 2.684a3 3 0 110-2.684M5.25 7.5A2.25 2.25 0 013 5.25v-1.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 3.75v1.5a2.25 2.25 0 01-2.25 2.25H5.25z" />
+              </svg>
+              アプリとしてインストール
             </button>
-          )}
-          {isPersisted && (
-            <div className="persistence-status" data-testid="persistence-result-message">
-              ✓ データ永続化が有効です
-            </div>
+          ) : (
+            <>
+              {!isPersisted && (
+                <button
+                  onClick={handleRequestPersistence}
+                  disabled={requesting}
+                  className="persistence-button"
+                  data-testid="request-persistence-button"
+                >
+                  {requesting ? '確認中...' : 'データ永続化を要求'}
+                </button>
+              )}
+              {isPersisted && (
+                <div className="persistence-status" data-testid="persistence-result-message">
+                  ✓ データ永続化が有効です
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -142,6 +179,30 @@ export function SafariPersistenceWarning() {
           color: rgb(34, 197, 94);
           font-size: 0.875rem;
           font-weight: 500;
+        }
+
+        .install-app-button {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 1rem;
+          border: 1px solid var(--primary-color);
+          border-radius: 6px;
+          background: var(--primary-color);
+          color: white;
+          font-size: 0.875rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .install-app-button:hover {
+          background: var(--primary-hover);
+          border-color: var(--primary-hover);
+        }
+
+        .install-app-button svg {
+          flex-shrink: 0;
         }
 
         @media (max-width: 768px) {
