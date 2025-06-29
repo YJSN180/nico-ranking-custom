@@ -138,7 +138,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     // 初回レンダリング
     render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -170,7 +171,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     // 再レンダリング（ブラウザバックを模擬）- cleanupして新しいインスタンスを作成
     const { unmount } = render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -187,7 +189,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     
     const { rerender } = render(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="game"
         initialPeriod="24h"
         initialTag="ゲーム"
@@ -210,7 +213,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
     // ページを再レンダリング
     rerender(
       <ClientPage 
-        initialData={mockData}
+        initialData={{ items: mockData }}
+        allRankingData={mockData}
         initialGenre="game"
         initialPeriod="24h"
         initialTag="ゲーム"
