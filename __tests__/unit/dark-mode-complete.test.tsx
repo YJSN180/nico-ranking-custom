@@ -120,11 +120,18 @@ describe('ダークモード完全対応', () => {
       <TagSelector config={mockConfig} onConfigChange={onConfigChange} />
     )
     
-    // タグセレクターのコンテナを確認
-    const tagContainer = container.querySelector('div') as HTMLElement
-    if (tagContainer && tagContainer.style.background) {
-      expect(tagContainer.style.background).toContain('var(--surface-color)')
-    }
+    // TagSelectorはCSS Modulesを使用しているため、インラインスタイルではなく
+    // 実際にレンダリングされたHTMLに含まれるCSS変数を確認
+    const html = container.innerHTML
+    
+    // ハードコードされた色がないことを確認
+    expect(html).not.toContain("background: 'white'")
+    expect(html).not.toContain("background: white;")
+    expect(html).not.toContain("color: '#333'")
+    expect(html).not.toContain("color: '#666'")
+    
+    // CSS変数が使用されていることを確認（タグ読み込み中のテキスト）
+    expect(html).toContain('var(--text-secondary)')
   })
 
   it('RankingItemがハードコードされた色を使用していない', () => {
@@ -137,7 +144,8 @@ describe('ダークモード完全対応', () => {
     // ランク1-3はランク色を使用
     expect(html1).toContain('var(--rank-gold)')
     expect(html1).toContain('var(--button-text-active)')
-    expect(html1).toContain('var(--link-color)')
+    // リンクの色はCSSクラスで適用されるため、クラス名を確認
+    expect(html1).toContain('ranking-video-link')
     expect(html1).toContain('var(--text-secondary)')
     // ランク1-3はボーダーにもランク色を使用
     expect(html1).toContain('border: 2px solid var(--rank-gold)')
@@ -151,7 +159,8 @@ describe('ダークモード完全対応', () => {
     // ランク4以降はsurface-secondaryとtext-primaryを使用
     expect(html4).toContain('var(--surface-secondary)')
     expect(html4).toContain('var(--text-primary)')
-    expect(html4).toContain('var(--link-color)')
+    // リンクの色はCSSクラスで適用されるため、クラス名を確認
+    expect(html4).toContain('ranking-video-link')
     expect(html4).toContain('var(--text-secondary)')
     expect(html4).toContain('var(--border-color)')
     

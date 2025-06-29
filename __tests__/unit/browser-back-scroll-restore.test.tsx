@@ -145,8 +145,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       />
     )
 
-    // 500件表示されている（ジャンル別ランキングの最大表示数）
-    expect(screen.getAllByTestId('ranking-item')).toHaveLength(500)
+    // 100件表示されている（1ページあたりの表示数）
+    expect(screen.getAllByTestId('ranking-item')).toHaveLength(100)
 
     // スクロール位置を設定（300位あたり）
     act(() => {
@@ -197,8 +197,8 @@ describe('ブラウザバック時のスクロール位置復元', () => {
       />
     )
 
-    // 300件表示されている（タグ別ランキングの最大表示数）
-    expect(screen.getAllByTestId('ranking-item')).toHaveLength(300)
+    // 100件表示されている（1ページあたりの表示数）
+    expect(screen.getAllByTestId('ranking-item')).toHaveLength(100)
 
     // スクロール位置を設定
     act(() => {
