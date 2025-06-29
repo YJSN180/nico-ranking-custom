@@ -6,7 +6,7 @@
  * @returns フォーマットされた日時文字列
  */
 export function formatRegisteredDate(registeredAt: string | undefined): string {
-  if (!registeredAt) return ''
+  if (!registeredAt) return '未設定'
   
   const date = new Date(registeredAt)
   const now = new Date()
