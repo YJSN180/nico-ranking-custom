@@ -128,8 +128,8 @@ export function MylistButton({ video }: MylistButtonProps) {
         aria-label={isInMylist ? "マイリストから削除" : "マイリストに追加"}
         onClick={handleClick}
         onTouchEnd={(e) => {
+          // 親要素への伝播のみ止める（preventDefaultは削除）
           e.stopPropagation()
-          e.preventDefault()
         }}
         disabled={isProcessing}
         style={{
