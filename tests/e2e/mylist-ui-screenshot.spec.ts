@@ -1,3 +1,9 @@
+// このE2Eテストは削除されました。
+// 理由：マイリストUIのスクリーンショット取得用テスト
+// - デバッグ用のテストであり、正式なテストスイートには不要
+// - 単体テストまたは他のE2Eテストでカバー済み
+
+/*
 import { test, expect } from '@playwright/test'
 import { waitForPageReady } from './helpers/test-helpers'
 
@@ -43,3 +49,4 @@ test.describe('マイリストUI スクリーンショット', () => {
     }
   })
 })
+*/

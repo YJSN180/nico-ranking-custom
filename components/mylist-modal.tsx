@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
+import { SafariPersistenceWarning } from './safari-persistence-warning'
 
 interface MylistModalProps {
   mylists: Mylist[]
@@ -57,6 +58,7 @@ export function MylistModal({
         role="dialog" 
         aria-labelledby="mylist-modal-title"
         onClick={handleModalClick}
+        data-testid="mylist-modal"
       >
         <div className={styles.header}>
           <h2 id="mylist-modal-title" className={styles.title}>マイリストに追加</h2>
@@ -64,10 +66,13 @@ export function MylistModal({
             className={styles.closeButton}
             onClick={onClose}
             aria-label="閉じる"
+            data-testid="mylist-modal-close"
           >
             ✕
           </button>
         </div>
+
+        <SafariPersistenceWarning />
 
         <div className={styles.content}>
           {mylists.length === 0 ? (
@@ -97,6 +102,7 @@ export function MylistModal({
                   }}
                   disabled={isProcessing}
                   aria-label={mylist.name}
+                  data-testid="mylist-item-checkbox"
                 >
                   <div className={styles.mylistIcon}>
                     {isSelected ? '✓' : '📁'}

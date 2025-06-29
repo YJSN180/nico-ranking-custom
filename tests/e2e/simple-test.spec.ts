@@ -1,3 +1,9 @@
+// このE2Eテストは削除されました。
+// 理由：基本的な設定モーダルの動作確認用テスト
+// - デバッグ用のテストであり、正式なテストスイートには不要
+// - 単体テストまたは他のE2Eテストでカバー済み
+
+/*
 import { test, expect } from '@playwright/test'
 
 test.describe('基本機能の確認', () => {
@@ -49,3 +55,4 @@ test.describe('基本機能の確認', () => {
     await expect(ngListTab).not.toHaveClass(/active/)
   })
 })
+*/

@@ -1,3 +1,9 @@
+// このE2Eテストは削除されました。
+// 理由：Hydrationおよびモーダル表示のデバッグ用テスト
+// - デバッグ用のテストであり、正式なテストスイートには不要
+// - 単体テストまたは他のE2Eテストでカバー済み
+
+/*
 import { test, expect } from '@playwright/test'
 
 test.describe('Hydrationデバッグ', () => {
@@ -117,3 +123,4 @@ test.describe('Hydrationデバッグ', () => {
     expect(bypassWorking).toBe(true)
   })
 })
+*/

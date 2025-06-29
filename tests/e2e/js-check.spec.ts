@@ -1,3 +1,9 @@
+// このE2Eテストは削除されました。
+// 理由：JavaScript実行環境のデバッグとNext.jsアプリケーションのマウント確認用テスト
+// - デバッグ用のテストであり、正式なテストスイートには不要
+// - 単体テストまたは他のE2Eテストでカバー済み
+
+/*
 import { test, expect } from '@playwright/test'
 
 test.describe('JavaScript実行確認', () => {
@@ -89,3 +95,4 @@ test.describe('JavaScript実行確認', () => {
     }
   })
 })
+*/

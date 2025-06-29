@@ -24,6 +24,14 @@ export function MylistButton({ video }: MylistButtonProps) {
     setIsClient(true)
   }, [])
 
+  // テスト環境では即座にクライアント状態にする
+  useEffect(() => {
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.__TEST_ENV__) {
+      setIsClient(true)
+    }
+  }, [])
+
   useEffect(() => {
     const checkStatus = async () => {
       try {
@@ -103,6 +111,13 @@ export function MylistButton({ video }: MylistButtonProps) {
     }
   }
 
+  // テスト環境でのデバッグログ
+  // @ts-ignore
+  if (typeof window !== 'undefined' && window.__TEST_ENV__) {
+    // eslint-disable-next-line no-console
+    console.log('[MylistButton] Debug:', { isClient, isLoading, mylists: mylists.length })
+  }
+
   // SSR時またはクライアント側の初期化前はプレースホルダーを表示
   if (!isClient || isLoading) {
     return (
@@ -125,6 +140,7 @@ export function MylistButton({ video }: MylistButtonProps) {
   return (
     <>
       <button
+        data-testid="mylist-button"
         aria-label={isInMylist ? "マイリストから削除" : "マイリストに追加"}
         onClick={handleClick}
         onTouchEnd={(e) => {

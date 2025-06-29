@@ -4,6 +4,8 @@ import Script from 'next/script'
 import { cookies } from 'next/headers'
 import { ThemeProvider } from '@/components/theme-provider'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
+import { PWARegister } from '@/components/pwa-register'
+import { OfflineIndicator } from '@/components/offline-indicator'
 import './globals.css'
 
 const inter = Inter({ 
@@ -140,6 +142,8 @@ export default async function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider>
           <ClientOnlyWebVitals />
+          <PWARegister />
+          <OfflineIndicator />
           {children}
         </ThemeProvider>
       </body>
