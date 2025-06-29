@@ -170,27 +170,53 @@
   background: var(--surface-secondary);
   border-radius: 12px;
   padding: 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 24px;
 }
 
 .storageInfo {
-  flex: 1;
-  min-width: 200px;
+  width: 100%;
 }
 
 .storageInfo h3 {
-  margin: 0 0 12px 0;
-  font-size: 16px;
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
   color: var(--text-primary);
+}
+
+/* バックアップセクション */
+.backupSection {
+  margin-bottom: 32px;
+}
+
+.sectionDescription {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+/* ストレージセクション */
+.storageSection {
+  border-top: 1px solid var(--border-color);
+  padding-top: 24px;
+}
+
+.storageSection h4 {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.storageDescription {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .storageBar {
   width: 100%;
-  max-width: 300px;
+  max-width: 400px;
   height: 8px;
   background: var(--border-color);
   border-radius: 4px;
@@ -204,16 +230,13 @@
   transition: width 0.3s ease;
 }
 
-.storageInfo p {
+.storageStats {
   margin: 0;
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
-.dataActions {
-  display: flex;
-  gap: 12px;
-}
 
 .exportButton,
 .importButton {
@@ -388,16 +411,14 @@
 
   .dataManagement {
     padding: 20px;
-    flex-direction: column;
-    align-items: stretch;
   }
 
-  .storageInfo {
-    margin-bottom: 16px;
+  .backupSection {
+    margin-bottom: 24px;
   }
 
-  .dataActions {
-    justify-content: center;
+  .storageSection {
+    padding-top: 20px;
   }
 
   .modal {

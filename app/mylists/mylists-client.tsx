@@ -270,19 +270,33 @@ export function MylistsClient() {
       {/* データ管理セクション */}
       <div className={styles.dataManagement}>
         <div className={styles.storageInfo}>
-          <h3>ストレージ使用量</h3>
-          <div className={styles.storageBar}>
-            <div 
-              className={styles.storageUsed}
-              style={{ width: `${(storageInfo.used / storageInfo.quota) * 100}%` }}
-            />
+          <h3>データ管理</h3>
+          
+          {/* バックアップセクション */}
+          <div className={styles.backupSection}>
+            <p className={styles.sectionDescription}>
+              大切なマイリストを守るため、定期的にバックアップをダウンロードしてください。
+              特にSafariをご利用の場合は重要です。
+            </p>
+            <MylistBackup />
           </div>
-          <p>
-            {formatBytes(storageInfo.used)} / {formatBytes(storageInfo.quota)} 使用中
-          </p>
-        </div>
-        <div className={styles.dataActions}>
-          <MylistBackup />
+          
+          {/* ストレージ使用量セクション */}
+          <div className={styles.storageSection}>
+            <h4>ストレージ使用量</h4>
+            <p className={styles.storageDescription}>
+              ブラウザ内に保存されているマイリストデータの容量です
+            </p>
+            <div className={styles.storageBar}>
+              <div 
+                className={styles.storageUsed}
+                style={{ width: `${(storageInfo.used / storageInfo.quota) * 100}%` }}
+              />
+            </div>
+            <p className={styles.storageStats}>
+              {formatBytes(storageInfo.used)} / {formatBytes(storageInfo.quota)} 使用中
+            </p>
+          </div>
         </div>
       </div>
 

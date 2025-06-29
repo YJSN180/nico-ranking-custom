@@ -196,18 +196,33 @@ export function MylistBackup() {
         }
 
         .backup-dialog {
-          background: var(--bg-primary);
+          background: var(--surface-color);
           border-radius: 12px;
-          padding: 2rem;
+          padding: 1.5rem;
           max-width: 400px;
           width: 100%;
-          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+          box-shadow: var(--shadow-xl);
+          animation: modalSlideIn 0.2s ease-out;
+        }
+        
+        @keyframes modalSlideIn {
+          from {
+            opacity: 0;
+            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .backup-dialog h3 {
           margin: 0 0 1rem;
-          font-size: 1.25rem;
+          font-size: 1.125rem;
+          font-weight: 600;
           color: var(--text-primary);
+          padding-bottom: 0.75rem;
+          border-bottom: 1px solid var(--border-color);
         }
 
         .backup-dialog p {
@@ -239,12 +254,12 @@ export function MylistBackup() {
         }
 
         .cancel-button {
-          background: var(--bg-secondary);
+          background: var(--surface-secondary);
           color: var(--text-primary);
         }
 
         .cancel-button:hover {
-          background: var(--bg-hover);
+          background: var(--surface-hover);
         }
 
         .confirm-button {
@@ -253,7 +268,8 @@ export function MylistBackup() {
         }
 
         .confirm-button:hover:not(:disabled) {
-          opacity: 0.9;
+          background: var(--primary-color-hover);
+          transform: translateY(-1px);
         }
 
         .confirm-button:disabled {

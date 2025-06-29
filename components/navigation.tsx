@@ -136,6 +136,7 @@ export function Navigation() {
           aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
           aria-expanded={isOpen}
           aria-controls="navigation-menu"
+          className="mobile-menu-button"
           style={{
             position: 'absolute',
             top: '50%',
@@ -148,7 +149,7 @@ export function Navigation() {
             color: 'white',
             fontSize: isMobile ? '16px' : '18px',
             cursor: 'pointer',
-            transition: 'all 0.2s',
+            transition: 'all 0.2s ease',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
             zIndex: 20,
@@ -157,6 +158,7 @@ export function Navigation() {
             justifyContent: 'center',
             width: '36px',
             height: '36px',
+            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
           }}
           onMouseEnter={(e) => {
             if (!isMobile) {
@@ -170,8 +172,38 @@ export function Navigation() {
               e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
             }
           }}
+          onTouchStart={(e) => {
+            e.currentTarget.style.transform = 'translateY(-50%) scale(0.9)'
+            e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)'
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.4)'
+          }}
+          onTouchEnd={(e) => {
+            e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
+            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)'
+            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
+          }}
+          onMouseDown={(e) => {
+            if (!isMobile) {
+              e.currentTarget.style.transform = 'translateY(-50%) scale(0.95)'
+              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.2)'
+            }
+          }}
+          onMouseUp={(e) => {
+            if (!isMobile) {
+              e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
+              e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)'
+            }
+          }}
         >
-          <HamburgerIcon size={20} color="white" />
+          <span 
+            style={{
+              display: 'inline-block',
+              transition: 'transform 0.3s ease',
+              transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+            }}
+          >
+            <HamburgerIcon size={20} color="white" />
+          </span>
         </button>
 
         {/* モバイルメニュー（サイドドロワー） */}
@@ -763,6 +795,22 @@ export function Navigation() {
         
         .nav-link-desktop:hover {
           background-color: var(--bg-hover) !important;
+        }
+        
+        /* モバイルメニューボタンのアクティブ状態 */
+        .mobile-menu-button:active {
+          transform: translateY(-50%) scale(0.9) !important;
+        }
+        
+        /* ハンバーガーアイコンの開閉アニメーション */
+        @keyframes hamburgerRotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(90deg); }
+        }
+        
+        @keyframes hamburgerRotateBack {
+          from { transform: rotate(90deg); }
+          to { transform: rotate(0deg); }
         }
       `}</style>
     </div>
