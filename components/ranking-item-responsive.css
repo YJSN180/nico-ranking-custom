@@ -356,7 +356,8 @@
   }
   
   @media (max-width: 375px) {
-    .ranking-item-responsive__stat--desktop-only {
+    /* デスクトップのみ表示の統計はTailwindクラスで制御 */
+    .ranking-item-responsive__stat--hidden-on-tiny {
       display: none;
     }
   }

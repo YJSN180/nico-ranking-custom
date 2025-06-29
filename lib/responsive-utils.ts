@@ -12,13 +12,14 @@ export const BREAKPOINTS = {
 export type Breakpoint = keyof typeof BREAKPOINTS
 
 /**
- * CSS Media Query用のクラス名を生成
+ * Tailwind CSS レスポンシブクラス（ハイドレーションエラー対応）
+ * 旧mobile-only/desktop-onlyクラスをTailwindクラスに置換
  */
 export const responsiveClasses = {
-  // モバイルのみ表示
-  mobileOnly: 'mobile-only',
-  // デスクトップのみ表示
-  desktopOnly: 'desktop-only',
+  // モバイルのみ表示（640px未満）
+  mobileOnly: 'sm:hidden',
+  // デスクトップのみ表示（640px以上）
+  desktopOnly: 'hidden sm:block',
   // モバイル時のスタイル
   mobile: 'is-mobile',
   // デスクトップ時のスタイル

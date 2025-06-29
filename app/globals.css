@@ -302,25 +302,15 @@ button,
   word-break: break-word;
 }
 
-/* レスポンシブユーティリティクラス */
-@media (max-width: 640px) {
-  .desktop-only {
-    display: none !important;
-  }
-  
-  .is-mobile {
-    /* モバイル用スタイルをここに適用 */
-  }
+/* レスポンシブユーティリティクラス（Tailwind使用に移行） */
+/* mobile-only/desktop-onlyクラスは削除済み - Tailwindのsm:hidden/hidden sm:blockを使用 */
+
+.is-mobile {
+  /* モバイル用スタイルをここに適用 */
 }
 
-@media (min-width: 641px) {
-  .mobile-only {
-    display: none !important;
-  }
-  
-  .is-desktop {
-    /* デスクトップ用スタイルをここに適用 */
-  }
+.is-desktop {
+  /* デスクトップ用スタイルをここに適用 */
 }
 
 /* ランキングアイテムのスタイル（LCP最適化） */
@@ -526,15 +516,7 @@ button,
   white-space: nowrap;
 }
 
-.ranking-item-responsive__stat--desktop-only {
-  display: inline;
-}
-
-@media (max-width: 640px) {
-  .ranking-item-responsive__stat--desktop-only {
-    display: none;
-  }
-}
+/* デスクトップのみ表示の統計表示はTailwindクラス（hidden sm:inline）を使用 */
 
 /* ナビゲーションボタンのレスポンシブスタイル */
 .nav-button {

@@ -23,12 +23,12 @@ describe('Navigation hydration test', () => {
   it('モバイルとデスクトップ両方のバージョンをレンダリングすべき', () => {
     const { container } = render(<Navigation />)
     
-    // モバイル版とデスクトップ版の両方が存在することを確認
-    const mobileOnly = container.querySelector('.mobile-only')
-    const desktopOnly = container.querySelector('.desktop-only')
+    // Tailwindクラスを使用したモバイル版とデスクトップ版の両方が存在することを確認
+    const mobileVersion = container.querySelector('.sm\\:hidden')  // モバイル版（640px未満）
+    const desktopVersion = container.querySelector('.hidden.sm\\:block')  // デスクトップ版（640px以上）
     
-    expect(mobileOnly).toBeInTheDocument()
-    expect(desktopOnly).toBeInTheDocument()
+    expect(mobileVersion).toBeInTheDocument()
+    expect(desktopVersion).toBeInTheDocument()
   })
   
   it('CSS Media Queriesで表示制御されるべき', () => {

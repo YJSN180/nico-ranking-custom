@@ -217,7 +217,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             <span className="ranking-item-responsive__stat">
               ❤️ {formatNumberMobile(item.likes || 0)}
             </span>
-            <span className="ranking-item-responsive__stat ranking-item-responsive__stat--desktop-only">
+            <span className="ranking-item-responsive__stat hidden sm:inline">
               📁 {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
