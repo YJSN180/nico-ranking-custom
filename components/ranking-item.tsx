@@ -1,6 +1,6 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useState, useEffect } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact } from '@/lib/format-utils'
@@ -58,7 +58,17 @@ const RankingItemComponent = memo(function RankingItemComponent({ item, isMobile
   }
 
   const isNew = isWithin24Hours(item.registeredAt)
-  const dateDisplay = isMobile ? formatTimeAgo(item.registeredAt || '') : formatRegisteredDate(item.registeredAt)
+  
+  // ハイドレーションエラーを防ぐため、日付表示は一旦デスクトップ版で統一
+  // ハイドレーション後にモバイル用表示に切り替える
+  const [dateDisplay, setDateDisplay] = useState(formatRegisteredDate(item.registeredAt))
+  
+  useEffect(() => {
+    // ハイドレーション後に適切な表示形式に更新
+    if (isMobile) {
+      setDateDisplay(formatTimeAgo(item.registeredAt || ''))
+    }
+  }, [isMobile, item.registeredAt])
 
   // モバイル用新レイアウト（順位をサムネイル上にオーバーレイ）
   if (isMobile) {
