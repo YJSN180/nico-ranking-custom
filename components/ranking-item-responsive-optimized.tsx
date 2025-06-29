@@ -20,13 +20,24 @@ const RankingItemResponsiveOptimized = memo(function RankingItemResponsiveOptimi
   
   const isNew = isWithin24Hours(item.registeredAt)
   
-  // ハイドレーションエラーを防ぐため、日付表示は初期値を固定
-  // ハイドレーション後に実際の値に更新
+  // SSR時は絶対日付表示、クライアントサイドでのみ相対時間表示
   const [dateDisplay, setDateDisplay] = useState(() => formatRegisteredDate(item.registeredAt))
   
   useEffect(() => {
-    // ハイドレーション後に日付を再計算
-    setDateDisplay(formatRegisteredDate(item.registeredAt))
+    // クライアントサイドでのみ相対時間を計算
+    if (typeof window !== 'undefined') {
+      const updateDateDisplay = () => {
+        setDateDisplay(formatRegisteredDate(item.registeredAt, new Date()))
+      }
+      
+      // 初回更新
+      updateDateDisplay()
+      
+      // 1分ごとに更新（オプション）
+      const interval = setInterval(updateDateDisplay, 60000)
+      
+      return () => clearInterval(interval)
+    }
   }, [item.registeredAt])
 
   // Determine rank class

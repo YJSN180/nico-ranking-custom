@@ -129,29 +129,16 @@ export function Navigation() {
     }
   }, [isOpen])
 
-  // CSSメディアクエリでレスポンシブに対応
-  // ハイドレーションエラーを回避するため、両方をレンダリングしCSSで制御
+  // モバイル版UIに統一（全画面サイズで使用）
   return (
-    <>
-      <div 
-        className="sm:hidden" 
-        style={{ 
-          opacity: isMounted ? '1' : '0',
-          transition: 'opacity 0.2s'
-        }}
-      >
-        {renderMobileNavigation()}
-      </div>
-      <div 
-        className="hidden sm:block" 
-        style={{ 
-          opacity: isMounted ? '1' : '0',
-          transition: 'opacity 0.2s'
-        }}
-      >
-        {renderDesktopNavigation()}
-      </div>
-    </>
+    <div 
+      style={{ 
+        opacity: isMounted ? '1' : '0',
+        transition: 'opacity 0.2s'
+      }}
+    >
+      {renderMobileNavigation()}
+    </div>
   )
 
   function renderMobileNavigation() {
@@ -166,8 +153,7 @@ export function Navigation() {
           aria-controls="navigation-menu"
           style={{
             position: 'absolute',
-            top: '50%',
-            transform: 'translateY(-50%)',
+            top: '10px',
             left: '12px',
             background: 'rgba(255, 255, 255, 0.25)',
             border: '1px solid rgba(255, 255, 255, 0.3)',
@@ -188,11 +174,11 @@ export function Navigation() {
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-            e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
+            e.currentTarget.style.transform = 'scale(1.05)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-            e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
+            e.currentTarget.style.transform = 'scale(1)'
           }}
         >
           <HamburgerIcon size={20} color="white" />
@@ -541,259 +527,4 @@ export function Navigation() {
     )
   }
 
-  function renderDesktopNavigation() {
-    return (
-      <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px', zIndex: 20 }}>
-      <button
-        ref={buttonRef}
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="メニュー"
-        aria-expanded={isOpen}
-        aria-controls="navigation-dropdown"
-        style={{
-          background: 'rgba(255, 255, 255, 0.25)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-          borderRadius: '6px',
-          padding: '6px 12px',
-          color: 'white',
-          fontSize: '16px',
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-          if (e.currentTarget.parentElement) {
-            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1.05)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-          if (e.currentTarget.parentElement) {
-            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1)'
-          }
-        }}
-      >
-        <HamburgerIcon size={18} />
-        <span>メニュー</span>
-      </button>
-
-      {/* ドロップダウンメニュー */}
-      {isOpen && (
-        <nav
-          ref={menuRef}
-          id="navigation-dropdown"
-          role="navigation"
-          aria-label="メインナビゲーション"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            marginTop: '8px',
-            background: 'var(--menu-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            boxShadow: 'var(--shadow-lg)',
-            minWidth: '200px',
-            padding: '8px',
-            animation: 'dropIn 0.15s ease-out',
-          }}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* メインセクション */}
-            <section>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {NAV_ITEMS.filter(item => item.section === 'main').map((item) => (
-                  <li key={item.href}>
-                    {item.href === '#settings' ? (
-                      <button
-                        onClick={openSettings}
-                        className="nav-link-desktop"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          width: '100%',
-                          padding: '8px 12px',
-                          color: 'var(--text-primary)',
-                          textDecoration: 'none',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s',
-                          fontSize: '14px',
-                          background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
-                      >
-                        <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
-                        <span>{item.label}</span>
-                      </button>
-                    ) : (
-                      <Link
-                        href={item.href}
-                        onClick={() => setIsOpen(false)}
-                        className="nav-link-desktop"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          color: 'var(--text-primary)',
-                          textDecoration: 'none',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s',
-                          fontSize: '14px',
-                          background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
-                        }}
-                      >
-                        <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
-                        <span>{item.label}</span>
-                      </Link>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            {/* 外部リンクセクション */}
-            <section>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {NAV_ITEMS.filter(item => item.section === 'external').map((item) => (
-                  <li key={item.href}>
-                    <a
-                      href={item.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => setIsOpen(false)}
-                      className="nav-link-desktop"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        color: 'var(--text-primary)',
-                        textDecoration: 'none',
-                        borderRadius: '4px',
-                        transition: 'background-color 0.2s',
-                        fontSize: '14px',
-                      }}
-                    >
-                      <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
-                      <span style={{ flex: 1 }}>{item.label}</span>
-                      <ExternalLinkIcon size={14} />
-                    </a>
-                    {item.subItems && (
-                      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 0 16px' }}>
-                        {item.subItems.map((subItem) => (
-                          <li key={subItem.href}>
-                            <a
-                              href={subItem.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => setIsOpen(false)}
-                              className="nav-link-desktop"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                padding: '6px 10px',
-                                color: 'var(--text-secondary)',
-                                textDecoration: 'none',
-                                borderRadius: '4px',
-                                transition: 'background-color 0.2s',
-                                fontSize: '13px',
-                              }}
-                            >
-                              <span>↳</span>
-                              <span style={{ flex: 1 }}>{subItem.label}</span>
-                              <ExternalLinkIcon size={12} />
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            {/* 区切り線 */}
-            <hr style={{ 
-              border: 'none', 
-              borderTop: '1px solid var(--border-color)', 
-              margin: '0' 
-            }} />
-
-            {/* 情報セクション */}
-            <section>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {NAV_ITEMS.filter(item => item.section === 'info').map((item) => (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={() => setIsOpen(false)}
-                      className="nav-link-desktop"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '8px 12px',
-                        color: 'var(--text-primary)',
-                        textDecoration: 'none',
-                        borderRadius: '4px',
-                        transition: 'background-color 0.2s',
-                        fontSize: '14px',
-                        background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
-                      }}
-                    >
-                      <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
-                      <span>{item.label}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </div>
-        </nav>
-      )}
-
-      {/* アニメーションのスタイル */}
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideIn {
-          from { transform: translateX(-100%); }
-          to { transform: translateX(0); }
-        }
-        
-        @keyframes dropIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        .nav-link-mobile:hover {
-          background-color: var(--bg-hover) !important;
-        }
-        
-        .nav-link-desktop:hover {
-          background-color: var(--bg-hover) !important;
-        }
-      `}</style>
-    </div>
-  )
-  }
 }

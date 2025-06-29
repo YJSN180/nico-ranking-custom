@@ -11,6 +11,21 @@ vi.mock('next/navigation', () => ({
   }),
 }))
 
+// window.matchMediaのモック
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+})
+
 // User preferencesのモック
 vi.mock('@/hooks/use-user-preferences', () => ({
   useUserPreferences: () => ({
@@ -20,26 +35,24 @@ vi.mock('@/hooks/use-user-preferences', () => ({
 }))
 
 describe('Navigation hydration test', () => {
-  it('モバイルとデスクトップ両方のバージョンをレンダリングすべき', () => {
+  it('モバイルナビゲーションをレンダリングすべき', () => {
     const { container } = render(<Navigation />)
     
-    // Tailwindクラスを使用したモバイル版とデスクトップ版の両方が存在することを確認
-    const mobileVersion = container.querySelector('.sm\\:hidden')  // モバイル版（640px未満）
-    const desktopVersion = container.querySelector('.hidden.sm\\:block')  // デスクトップ版（640px以上）
+    // メニューボタンが存在することを確認
+    const menuButton = container.querySelector('button[aria-label="メニュー"]')
     
-    expect(mobileVersion).toBeInTheDocument()
-    expect(desktopVersion).toBeInTheDocument()
+    expect(menuButton).toBeInTheDocument()
+    expect(menuButton).toHaveAttribute('aria-expanded', 'false')
+    expect(menuButton).toHaveAttribute('aria-controls', 'navigation-menu')
   })
   
-  it('TailwindクラスでSSR安全な表示制御されるべき', () => {
+  it('SSR安全な方法でレンダリングされるべき', () => {
     const { container } = render(<Navigation />)
     
-    // Tailwindレスポンシブクラスが正しく適用されているか確認
-    const mobileOnly = container.querySelector('.sm\\\\:hidden') // モバイル表示用
-    const desktopOnly = container.querySelector('.hidden.sm\\\\:block') // デスクトップ表示用
+    // ナビゲーションコンテナが存在することを確認
+    const navContainer = container.firstChild
     
-    // Tailwindクラスが存在することを確認（SSR安全）
-    expect(mobileOnly).toBeInTheDocument()
-    expect(desktopOnly).toBeInTheDocument()
+    expect(navContainer).toBeInTheDocument()
+    expect(navContainer).toHaveStyle('opacity: 0') // 初期状態では透明
   })
 })
