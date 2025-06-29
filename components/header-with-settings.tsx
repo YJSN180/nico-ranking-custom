@@ -59,7 +59,7 @@ export function HeaderWithSettings() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: isMobile ? '4px' : '12px',
+              gap: isMobile ? '2px' : '6px',
               cursor: 'pointer',
               transition: 'opacity 0.2s',
             }}
@@ -79,7 +79,7 @@ export function HeaderWithSettings() {
                 width: isMobile ? '48px' : '106px',
                 height: isMobile ? '48px' : '106px',
                 flexShrink: 0, // サイズ維持
-                marginRight: isMobile ? '4px' : '8px', // 適切な余白
+                marginRight: isMobile ? '2px' : '4px', // 適切な余白
               }}>
                 <Image
                   src="/icon.svg"

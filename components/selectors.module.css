@@ -33,6 +33,10 @@
 
 /* ボタンコンテナ - モバイル */
 @media (max-width: 640px) {
+  .selectorContainer {
+    margin-bottom: 12px; /* モバイルでは余白を削減 */
+  }
+
   .buttonContainer {
     display: flex;
     flex-wrap: nowrap;

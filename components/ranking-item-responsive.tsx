@@ -23,9 +23,17 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
   const isNew = isWithin24Hours(item.registeredAt)
   const dateDisplay = formatRegisteredDate(item.registeredAt)
 
+  // ホバー状態をリセットする関数を外部に公開するために、data属性を使用
+  const resetHoverState = (element: HTMLElement | null) => {
+    if (element) {
+      element.style.backgroundColor = 'var(--surface-color)';
+    }
+  }
+
   return (
     <li 
       data-testid="ranking-item"
+      data-video-id={item.id}
       className="ranking-item-responsive"
       style={{
         // Container Queries用のcontainment設定

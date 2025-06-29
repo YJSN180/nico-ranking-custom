@@ -268,6 +268,11 @@
   .ranking-item-responsive__mylist-button {
     display: block;
     flex-shrink: 0;
+    /* タッチターゲットを拡大 */
+    position: relative;
+    /* 見た目よりも大きなタッチ領域を作成 */
+    padding: 6px;
+    margin: -6px;
   }
 }
 

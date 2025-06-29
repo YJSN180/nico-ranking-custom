@@ -191,7 +191,14 @@ export function MylistButton({ video }: MylistButtonProps) {
               setIsProcessing(false)
             }
           }}
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            setShowModal(false)
+            // モーダルを閉じるときに親要素のホバー状態をリセット
+            const rankingItem = document.querySelector(`[data-video-id="${video.id}"]`) as HTMLElement
+            if (rankingItem && !('ontouchstart' in window)) {
+              rankingItem.style.backgroundColor = 'var(--surface-color)'
+            }
+          }}
           onCreateMylist={async (name, description) => {
             const newMylistId = await createMylist(name, description)
             if (newMylistId) {

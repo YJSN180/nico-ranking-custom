@@ -3,13 +3,15 @@
 /* セレクターコンテナの高さを固定 */
 .selectors-container {
   /* RankingSelectorとTagSelectorの高さを事前に確保 */
-  min-height: 200px; /* デスクトップ */
+  min-height: auto; /* 内容に応じて自動調整 */
   position: relative;
 }
 
 @media (max-width: 640px) {
   .selectors-container {
-    min-height: 250px; /* モバイルはより多くのスペースが必要 */
+    min-height: auto; /* 内容に応じて自動調整 */
+    /* 総合ジャンルで人気タグセレクターがない場合の余白調整 */
+    margin-bottom: -12px;
   }
 }
 
