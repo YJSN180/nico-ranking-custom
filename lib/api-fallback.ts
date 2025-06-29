@@ -1,13 +1,16 @@
 // Direct connection to Cloudflare Worker (Vercel Function を使わない)
 export class APIFallback {
-  private static readonly CLOUDFLARE_ENDPOINT = 'https://nico-rank.com/api/ranking'
+  private static readonly CLOUDFLARE_ENDPOINT = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com/api/ranking'
   
   static async fetchWithFallback(
     params: URLSearchParams,
     signal?: AbortSignal
   ): Promise<Response> {
-    // Cloudflare Worker に直接接続（Vercel Function をバイパス）
-    const response = await fetch(`${this.CLOUDFLARE_ENDPOINT}?${params.toString()}`, {
+    // プレビュー環境などでは相対URLを使用
+    const isPreview = typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')
+    const endpoint = isPreview ? '/api/ranking' : this.CLOUDFLARE_ENDPOINT
+    
+    const response = await fetch(`${endpoint}?${params.toString()}`, {
       signal,
       headers: {
         'Accept': 'application/json',
