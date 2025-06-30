@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
-import type { Mylist, Video } from '@/lib/storage/types'
+import type { Mylist, Video, MylistVideo } from '@/lib/storage/types'
 
 export function useMylistOperations() {
   const [mylists, setMylists] = useState<Mylist[]>([])
@@ -68,7 +68,7 @@ export function useMylistOperations() {
     }
   }, [])
 
-  const addVideoToMylist = async (mylistId: string, video: Video): Promise<boolean> => {
+  const addVideoToMylist = async (mylistId: string, video: Partial<MylistVideo>): Promise<boolean> => {
     // テスト環境ではモック動作
     // @ts-ignore
     if (typeof window !== 'undefined' && window.__TEST_ENV__) {

@@ -83,21 +83,23 @@ export function MylistButton({ video }: MylistButtonProps) {
   const handleAddToMylist = async (mylistId: string) => {
     setIsProcessing(true)
     try {
-      const videoData: Video = {
+      // RankingItemから直接MylistVideo構造を構築（型の不整合を解決）
+      const mylistVideoData = {
         id: video.id,
         title: video.title,
         thumbURL: video.thumbURL || '',
-        viewCount: video.views || 0,
-        commentCount: video.comments || 0,
-        mylistCount: video.mylists || 0,
-        duration: video.duration || 0,
+        // MylistVideo型に合わせたフィールド名を使用
+        views: video.views || 0,
+        comments: video.comments || 0,
+        mylists: video.mylists || 0,
+        likes: video.likes || 0,
         authorName: video.authorName || '',
         authorId: video.authorId || '',
-        registeredAt: video.registeredAt,
-        tags: video.tags || []
+        authorIcon: video.authorIcon || undefined, // 重要: authorIconを含める
+        registeredAt: video.registeredAt || undefined
       }
       
-      const success = await addVideoToMylist(mylistId, videoData)
+      const success = await addVideoToMylist(mylistId, mylistVideoData)
       if (success) {
         setIsInMylist(true)
         setMylistIds([...mylistIds, mylistId])
