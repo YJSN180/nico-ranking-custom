@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import type { RankingConfig } from '@/types/ranking-config'
 import styles from './selectors.module.css'
 
@@ -13,8 +13,6 @@ interface TagSelectorProps {
 export function TagSelector({ config, onConfigChange, popularTags: propsTags = [] }: TagSelectorProps) {
   const [popularTags, setPopularTags] = useState<string[]>(propsTags)
   const [loading, setLoading] = useState(false)
-  const tagScrollRef = useRef<HTMLDivElement>(null)
-  const selectedTagRef = useRef<HTMLButtonElement>(null)
 
   // propsから渡されたタグを優先的に使用
   useEffect(() => {
@@ -33,25 +31,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     }
   }
 
-  // 選択されたタグを中央にスクロール（モバイルのみ）
-  useEffect(() => {
-    if (selectedTagRef.current && tagScrollRef.current) {
-      const container = tagScrollRef.current
-      const selected = selectedTagRef.current
-      
-      // モバイルかどうかをCSSメディアクエリで判定
-      const isMobile = window.matchMedia('(max-width: 640px)').matches
-      
-      if (isMobile) {
-        const containerWidth = container.offsetWidth
-        const selectedLeft = selected.offsetLeft
-        const selectedWidth = selected.offsetWidth
-        const scrollPosition = selectedLeft - (containerWidth / 2) + (selectedWidth / 2)
-        
-        container.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-      }
-    }
-  }, [config.tag])
 
   const clearTag = () => {
     onConfigChange({ ...config, tag: undefined })
@@ -101,13 +80,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       )}
 
       <div className={styles.scrollContainer}>
-        <div
-          ref={tagScrollRef}
-          className={styles.buttonContainer}
-        >
+        <div className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}>
           {/* 「すべて」タグを最初に表示 */}
           <button
-            ref={!config.tag ? selectedTagRef : null}
             onClick={() => handleTagSelect('すべて')}
             className={`${styles.button} ${styles.tagButton} ${!config.tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
           >
@@ -118,7 +93,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           {popularTags.map((tag) => (
             <button
               key={tag}
-              ref={config.tag === tag ? selectedTagRef : null}
               onClick={() => handleTagSelect(tag)}
               className={`${styles.button} ${styles.tagButton} ${config.tag === tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
             >

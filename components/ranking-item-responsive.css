@@ -1,6 +1,15 @@
 /* CSS-only レスポンシブランキングアイテム - Container Queries版 */
 /* CLSを完全に回避するため、JavaScript不要のレイアウト切り替え */
 
+/* 最適化: 共通値をCSS変数で定義（重複削減） */
+:root {
+  --mobile-thumbnail-width: 140px;
+  --mobile-rank-size: 18px;
+  --mobile-title-size: 15px;
+  --mobile-gap: 8px;
+  --mobile-duration-size: 11px;
+}
+
 /* タッチデバイスでホバー効果を無効化 */
 @media (hover: none) and (pointer: coarse) {
   .ranking-item-responsive:hover {
@@ -170,14 +179,14 @@
 @container (max-width: 600px) {
   /* モバイルでの再生時間フォントサイズ調整 */
   .ranking-item-responsive__duration {
-    font-size: 11px;
+    font-size: var(--mobile-duration-size);
   }
   
   .ranking-item-responsive__content {
     /* モバイルレイアウト: 2カラム（サムネイル + 詳細） */
-    grid-template-columns: 140px 1fr;
+    grid-template-columns: var(--mobile-thumbnail-width) 1fr;
     grid-template-areas: "thumbnail details";
-    gap: 8px;
+    gap: var(--mobile-gap);
     padding: 2px;
     min-height: 75px;
   }
@@ -194,8 +203,8 @@
     position: absolute;
     top: 0;
     left: 0;
-    min-width: 18px;
-    height: 18px;
+    min-width: var(--mobile-rank-size);
+    height: var(--mobile-rank-size);
     font-size: 12px;
     font-weight: 700;
     align-items: center;
@@ -208,7 +217,7 @@
   
   .ranking-item-responsive__thumbnail {
     grid-area: thumbnail;
-    width: 140px;
+    width: var(--mobile-thumbnail-width);
     position: relative;
     margin-top: 0;
   }
@@ -222,13 +231,13 @@
   /* モバイルでタイトル行を追加 */
   .ranking-item-responsive__title-row {
     display: flex;
-    gap: 8px;
+    gap: var(--mobile-gap);
     align-items: flex-start;
     margin-bottom: 4px;
   }
   
   .ranking-item-responsive__title {
-    font-size: 15px;
+    font-size: var(--mobile-title-size);
     margin-bottom: 0;
     /* モバイルでは2行まで表示 */
     display: -webkit-box;
@@ -253,7 +262,7 @@
   
   .ranking-item-responsive__stats {
     font-size: 14px;
-    gap: 8px;
+    gap: var(--mobile-gap);
     flex-wrap: wrap; /* 横スクロールを削除、折り返しを許可 */
     overflow-x: visible;
   }

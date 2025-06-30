@@ -73,6 +73,35 @@
     display: none;
   }
 
+  /* タグセレクター専用のスクロールコンテナ */
+  .tagScrollContainer {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 2px;
+    position: relative;
+    /* CSS Scroll Snap - タグセレクター用 */
+    scroll-snap-type: x mandatory;
+    scroll-padding: 50%; /* 中央にスナップするための余白 */
+    /* スムーススクロール（reduced-motionに対応） */
+    scroll-behavior: smooth;
+  }
+
+  .tagScrollContainer::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* reduced-motion対応 */
+  @media (prefers-reduced-motion: reduce) {
+    .tagScrollContainer {
+      scroll-behavior: auto;
+    }
+  }
+
   /* スクロールインジケーター（グラデーション） */
   .scrollContainer {
     position: relative;
@@ -151,10 +180,17 @@
 }
 
 @media (max-width: 640px) {
+  .tagButton {
+    /* CSS Scroll Snap - 各タグボタンを中央にスナップ */
+    scroll-snap-align: center;
+  }
+
   .tagButtonSelected {
     padding: 8px 16px;
     font-size: 14px;
     transform: scale(1.05);
+    /* 選択されたタグボタンも中央にスナップ */
+    scroll-snap-align: center;
   }
 }
 
