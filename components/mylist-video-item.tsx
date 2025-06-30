@@ -37,6 +37,19 @@ const MylistVideoItem = memo(function MylistVideoItem({
     })
   }
 
+  const formatRegisteredDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('ja-JP', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+    } catch {
+      return '日付不明'
+    }
+  }
+
   return (
     <li 
       data-testid="mylist-video-item"
@@ -150,11 +163,11 @@ const MylistVideoItem = memo(function MylistVideoItem({
                 style={{ 
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: '8px',
                   textDecoration: 'none',
                   color: 'inherit',
-                  padding: '3px 6px',
-                  margin: '-3px -6px',
+                  padding: '4px 6px',
+                  margin: '-4px -6px',
                   borderRadius: '4px',
                   transition: 'background-color 0.2s'
                 }}
@@ -165,9 +178,38 @@ const MylistVideoItem = memo(function MylistVideoItem({
                   e.currentTarget.style.backgroundColor = 'transparent'
                 }}
               >
-                <span className="mylist-video-item__author-name">
-                  {video.authorName}
-                </span>
+                {/* 投稿者アイコン */}
+                {video.authorIcon && (
+                  <OptimizedImage
+                    src={video.authorIcon}
+                    alt={`${video.authorName}のアイコン`}
+                    width={24}
+                    height={24}
+                    style={{ 
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      flexShrink: 0
+                    }}
+                  />
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <span className="mylist-video-item__author-name">
+                    {video.authorName}
+                  </span>
+                  {/* 投稿日時 */}
+                  {video.registeredAt && (
+                    <span 
+                      className="mylist-video-item__registered-date"
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--text-muted)',
+                        marginTop: '2px'
+                      }}
+                    >
+                      投稿: {formatRegisteredDate(video.registeredAt)}
+                    </span>
+                  )}
+                </div>
               </a>
             </div>
           )}
@@ -264,6 +306,8 @@ const MylistVideoItem = memo(function MylistVideoItem({
     prevProps.video.mylists === nextProps.video.mylists &&
     prevProps.video.likes === nextProps.video.likes &&
     prevProps.video.memo === nextProps.video.memo &&
+    prevProps.video.authorIcon === nextProps.video.authorIcon &&
+    prevProps.video.registeredAt === nextProps.video.registeredAt &&
     prevProps.isDeleted === nextProps.isDeleted &&
     prevProps.rank === nextProps.rank
   )
