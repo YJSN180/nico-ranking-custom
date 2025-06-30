@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>モバイル版パフォーマンステスト</title>
+  <style>
+    /* layout.tsxのクリティカルCSSを再現 */
+    @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
+    @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:swap;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
+    body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+    .header-container{background:linear-gradient(135deg,#0066CC 0%,#004B99 100%);padding:5px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
+    .title{color:#fff;margin:0;font-size:22px;display:flex;align-items:center;justify-content:center;gap:2px}
+    .title-main{font-family:"Nicomoji Plus v2","Hiragino Kaku Gothic ProN","Hiragino Sans","Meiryo",sans-serif}
+    .title-sub{font-family:"Comic Sans MS Bold",Arial,sans-serif;font-size:85%;margin-left:0.05em}
+    
+    /* パフォーマンス測定用 */
+    #metrics{padding:20px;font-family:monospace}
+    .metric{margin:10px 0;padding:10px;background:#f0f0f0;border-radius:4px}
+    .metric.error{background:#fee;color:#c00}
+    .metric.warning{background:#ffc;color:#660}
+    .metric.good{background:#efe;color:#060}
+  </style>
+</head>
+<body>
+  <header class="header-container">
+    <h1 class="title">
+      <span class="title-main">ニコラン</span>
+      <span class="title-sub">(Re:turn)</span>
+    </h1>
+  </header>
+  
+  <div id="metrics">
+    <h2>パフォーマンス測定結果</h2>
+  </div>
+  
+  <script>
+    const metrics = {};
+    const metricsDiv = document.getElementById('metrics');
+    
+    // パフォーマンスマーク
+    performance.mark('page-start');
+    
+    // フォント読み込み監視
+    if ('fonts' in document) {
+      const fontLoadPromises = [
+        document.fonts.load('normal 1em "Nicomoji Plus v2"'),
+        document.fonts.load('bold 1em "Comic Sans MS Bold"')
+      ];
+      
+      const fontStartTime = performance.now();
+      
+      Promise.all(fontLoadPromises).then(() => {
+        const fontLoadTime = performance.now() - fontStartTime;
+        addMetric('Font Load Time', fontLoadTime, 'ms', fontLoadTime > 1000 ? 'error' : fontLoadTime > 500 ? 'warning' : 'good');
+        
+        // フォント適用後のレイアウトシフト測定
+        measureLayoutShift();
+      }).catch(err => {
+        addMetric('Font Load Error', err.message, '', 'error');
+      });
+    }
+    
+    // レイアウトシフト測定
+    function measureLayoutShift() {
+      if ('LayoutShift' in window) {
+        let clsValue = 0;
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) {
+              clsValue += entry.value;
+            }
+          }
+        });
+        observer.observe({ type: 'layout-shift', buffered: true });
+        
+        setTimeout(() => {
+          observer.disconnect();
+          addMetric('Cumulative Layout Shift (CLS)', clsValue.toFixed(4), '', clsValue > 0.25 ? 'error' : clsValue > 0.1 ? 'warning' : 'good');
+        }, 2000);
+      }
+    }
+    
+    // ペイントタイミング測定
+    if ('PerformancePaintTiming' in window) {
+      const observer = new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => {
+          if (entry.name === 'first-contentful-paint') {
+            addMetric('First Contentful Paint (FCP)', entry.startTime, 'ms', entry.startTime > 1800 ? 'error' : entry.startTime > 1000 ? 'warning' : 'good');
+          }
+        });
+      });
+      observer.observe({ entryTypes: ['paint'] });
+    }
+    
+    // LCP測定
+    if ('LargestContentfulPaint' in window) {
+      const observer = new PerformanceObserver((list) => {
+        const entries = list.getEntries();
+        const lastEntry = entries[entries.length - 1];
+        addMetric('Largest Contentful Paint (LCP)', lastEntry.startTime, 'ms', lastEntry.startTime > 2500 ? 'error' : lastEntry.startTime > 1500 ? 'warning' : 'good');
+      });
+      observer.observe({ entryTypes: ['largest-contentful-paint'] });
+    }
+    
+    // モバイル検出シミュレーション
+    function simulateMobileDetection() {
+      const startTime = performance.now();
+      const isMobile = window.innerWidth <= 640;
+      
+      // React風の再レンダリングシミュレーション
+      setTimeout(() => {
+        if (isMobile) {
+          document.querySelector('.header-container').style.padding = '5px 12px';
+          document.querySelector('.title').style.fontSize = '22px';
+        }
+        const reRenderTime = performance.now() - startTime;
+        addMetric('Mobile Detection + Re-render', reRenderTime, 'ms', reRenderTime > 100 ? 'error' : reRenderTime > 50 ? 'warning' : 'good');
+      }, 100);
+    }
+    
+    // メトリクス表示
+    function addMetric(name, value, unit, status = '') {
+      const metric = document.createElement('div');
+      metric.className = 'metric ' + status;
+      metric.innerHTML = `<strong>${name}:</strong> ${value}${unit}`;
+      metricsDiv.appendChild(metric);
+    }
+    
+    // 画面サイズ情報
+    addMetric('Screen Width', window.innerWidth, 'px');
+    addMetric('Device Pixel Ratio', window.devicePixelRatio, '');
+    addMetric('Is Mobile (≤640px)', window.innerWidth <= 640 ? 'Yes' : 'No', '');
+    
+    // ページロード完了時
+    window.addEventListener('load', () => {
+      performance.mark('page-load');
+      const loadTime = performance.measure('page-load-time', 'page-start', 'page-load').duration;
+      addMetric('Total Page Load Time', loadTime, 'ms', loadTime > 3000 ? 'error' : loadTime > 1500 ? 'warning' : 'good');
+      
+      // モバイル検出シミュレーション実行
+      simulateMobileDetection();
+      
+      // リソースタイミング
+      const resources = performance.getEntriesByType('resource');
+      const fontResources = resources.filter(r => r.name.includes('.woff2') || r.name.includes('.ttf'));
+      
+      fontResources.forEach(resource => {
+        const name = resource.name.split('/').pop();
+        addMetric(`Font Resource: ${name}`, resource.duration, 'ms', resource.duration > 500 ? 'error' : resource.duration > 200 ? 'warning' : 'good');
+      });
+    });
+  </script>
+</body>
+</html>
