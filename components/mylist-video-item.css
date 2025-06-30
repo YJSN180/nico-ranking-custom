@@ -111,21 +111,6 @@
   font-size: 13px;
 }
 
-/* 統計情報 */
-.mylist-video-item__stats {
-  display: flex;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--text-secondary);
-  user-select: none;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.mylist-video-item__stat {
-  flex-shrink: 0;
-}
-
 /* メモ */
 .mylist-video-item__memo {
   background: var(--surface-secondary);
@@ -263,14 +248,6 @@
     font-size: 12px;
   }
   
-  .mylist-video-item__stats {
-    font-size: 13px;
-    gap: 6px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  
   .mylist-video-item__memo {
     font-size: 13px;
     padding: 4px 8px;
@@ -329,11 +306,6 @@
   
   .mylist-video-item__author-name {
     max-width: 60px;
-  }
-  
-  .mylist-video-item__stats {
-    font-size: 11px;
-    gap: 4px;
   }
   
   /* アクションボタンを横並びに */

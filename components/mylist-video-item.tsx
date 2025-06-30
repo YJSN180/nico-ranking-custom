@@ -229,32 +229,6 @@ const MylistVideoItem = memo(function MylistVideoItem({
             </p>
           )}
           
-          {/* 統計情報 */}
-          <div 
-            className="mylist-video-item__stats"
-            data-testid="video-stats"
-          >
-            {video.views !== undefined && (
-              <span className="mylist-video-item__stat">
-                ▶️ {formatNumberMobile(video.views)}
-              </span>
-            )}
-            {video.comments !== undefined && (
-              <span className="mylist-video-item__stat">
-                💬 {formatNumberMobile(video.comments || 0)}
-              </span>
-            )}
-            {video.likes !== undefined && (
-              <span className="mylist-video-item__stat">
-                ❤️ {formatNumberMobile(video.likes || 0)}
-              </span>
-            )}
-            {video.mylists !== undefined && (
-              <span className="mylist-video-item__stat">
-                📁 {formatNumberMobile(video.mylists || 0)}
-              </span>
-            )}
-          </div>
           
           {/* メモ */}
           {video.memo && (
