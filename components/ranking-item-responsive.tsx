@@ -1,8 +1,9 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useRef, useEffect } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
+import { useWatchHistory } from '@/hooks/use-watch-history'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
@@ -14,6 +15,8 @@ interface RankingItemProps {
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Container Queriesとflexbox/gridを活用してCLSを完全に回避
 const RankingItemResponsive = memo(function RankingItemResponsive({ item }: RankingItemProps) {
+  const { addToHistory } = useWatchHistory()
+  
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
     2: 'var(--rank-silver)', 
@@ -28,6 +31,32 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
     if (element) {
       element.style.backgroundColor = 'var(--surface-color)';
     }
+  }
+  
+  // 動画クリック時に視聴履歴に追加
+  const handleVideoClick = async () => {
+    try {
+      await addToHistory({
+        id: item.id,
+        title: item.title,
+        thumbURL: item.thumbURL,
+        views: item.viewCount,
+        comments: item.commentCount,
+        mylists: item.mylistCount,
+        likes: item.likeCount,
+        authorId: item.authorId,
+        authorName: item.authorName,
+        authorIcon: item.authorIcon,
+        registeredAt: item.registeredAt
+      })
+    } catch (error) {
+      // エラーは静かに処理（視聴履歴の記録失敗はユーザー体験を妨げない）
+      // eslint-disable-next-line no-console
+      console.error('Failed to add to watch history:', error)
+    }
+    
+    // 動画ページを開く
+    window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank')
   }
 
   return (
@@ -52,7 +81,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         // 投稿者リンクやボタンなどの子要素のクリックは除外
         const target = e.target as HTMLElement;
         if (target.closest('a') || target.closest('button')) return;
-        window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
+        handleVideoClick();
       }}
       onMouseEnter={(e) => {
         // タッチデバイスではホバー効果を適用しない

@@ -38,6 +38,25 @@ export interface WatchHistory {
   registeredAt?: string // 動画投稿日時
 }
 
+// 視聴履歴エントリ（DBに保存する実際の構造）
+export interface WatchHistoryEntry {
+  videoId: string      // 動画ID（プライマリキー）
+  title: string        // 動画タイトル
+  thumbURL: string     // サムネイルURL
+  watchedAt: number    // 視聴日時（タイムスタンプ）
+  watchCount: number   // 総視聴回数
+  
+  // 追加の動画情報（視聴時に保存）
+  views?: number       // 再生数
+  comments?: number    // コメント数
+  mylists?: number     // マイリスト数
+  likes?: number       // いいね数
+  authorId?: string    // 投稿者ID
+  authorName?: string  // 投稿者名
+  authorIcon?: string  // 投稿者アイコン
+  registeredAt?: string // 動画投稿日時
+}
+
 // マイリスト構造
 export interface Mylist {
   id: string           // マイリストID (UUID)
