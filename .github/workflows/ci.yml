@@ -40,8 +40,8 @@ jobs:
 
       - name: Run unit and integration tests
         run: |
-          # Run unit tests for unified compression system
-          npm run test:unit -- unified-compression
+          # Run all unit tests (including new backup-restore and mylist tests)
+          npm run test:unit
           # Run integration tests for unified compression system
           npm run test:integration -- unified-compression
           # Run backward compatibility tests
