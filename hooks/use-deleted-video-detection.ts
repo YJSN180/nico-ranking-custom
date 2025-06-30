@@ -2,10 +2,17 @@ import { useEffect, useState, useRef } from 'react'
 import type { MylistVideo } from '@/lib/storage/types'
 import { detectDeletedVideos } from '@/lib/deleted-video-detector'
 
+// 削除チェックに必要な最小限のインターフェース
+interface VideoForCheck {
+  id: string
+  title: string
+  thumbURL: string
+}
+
 interface UseDeletedVideoDetectionResult {
   deletedVideoIds: Set<string>
   isChecking: boolean
-  checkVideos: (videos: MylistVideo[]) => Promise<void>
+  checkVideos: (videos: VideoForCheck[]) => Promise<void>
 }
 
 /**
@@ -25,7 +32,7 @@ export function useDeletedVideoDetection(): UseDeletedVideoDetectionResult {
     }
   }, [])
 
-  const checkVideos = async (videos: MylistVideo[]) => {
+  const checkVideos = async (videos: VideoForCheck[]) => {
     // 既に検査中の場合はキャンセル
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -40,8 +47,25 @@ export function useDeletedVideoDetection(): UseDeletedVideoDetectionResult {
     abortControllerRef.current = new AbortController()
 
     try {
+      // MylistVideo型に変換（detectDeletedVideosの要求に合わせる）
+      const videosForDetection: MylistVideo[] = videos.map(v => ({
+        id: v.id,
+        mylistId: '',  // ダミー値
+        title: v.title,
+        thumbURL: v.thumbURL,
+        addedAt: Date.now(),  // ダミー値
+        viewCount: 0,
+        commentCount: 0,
+        mylistCount: 0,
+        duration: 0,
+        authorName: '',
+        authorId: '',
+        registeredAt: '',
+        tags: []
+      }))
+      
       // 削除済み動画を検出
-      const results = await detectDeletedVideos(videos)
+      const results = await detectDeletedVideos(videosForDetection)
       
       // 削除済み動画のIDのセットを作成
       const deletedIds = new Set<string>()

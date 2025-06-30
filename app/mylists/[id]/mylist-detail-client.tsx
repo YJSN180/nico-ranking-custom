@@ -466,15 +466,13 @@ function MylistSettingsModal({ mylist, onClose, onUpdate, onDelete }: MylistSett
           </div>
 
           <div className={styles.modalFooter}>
-            {!mylist.isDefault && (
-              <button
-                type="button"
-                className={styles.btnDanger}
-                onClick={onDelete}
-              >
-                マイリストを削除
-              </button>
-            )}
+            <button
+              type="button"
+              className={styles.btnDanger}
+              onClick={onDelete}
+            >
+              マイリストを削除
+            </button>
             <div className={styles.modalActions}>
               <button
                 type="button"

@@ -33,42 +33,32 @@ export class WatchHistoryManager {
     // 古い履歴を削除
     await this.cleanupOldEntries()
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(this.STORE_NAME)
-      
-      // 既存のエントリを確認
-      const getRequest = store.get(video.id)
-      
-      getRequest.onsuccess = (event) => {
-        const existingEntry = (event.target as IDBRequest).result
-        
-        const entry: WatchHistoryEntry = {
-          videoId: video.id,
-          title: video.title,
-          thumbURL: video.thumbURL,
-          watchedAt: Date.now(),
-          watchCount: existingEntry ? existingEntry.watchCount + 1 : 1,
-          views: video.views,
-          comments: video.comments,
-          mylists: video.mylists,
-          likes: video.likes,
-          authorId: video.authorId,
-          authorName: video.authorName,
-          authorIcon: video.authorIcon,
-          registeredAt: video.registeredAt
-        }
-        
-        const putRequest = store.put(entry)
-        putRequest.onsuccess = () => {
-          // 最大件数チェック
-          this.enforceMaxEntries().then(resolve).catch(reject)
-        }
-        putRequest.onerror = () => reject(putRequest.error)
-      }
-      
-      getRequest.onerror = () => reject(getRequest.error)
-    })
+    const transaction = db.transaction([this.STORE_NAME], 'readwrite')
+    const store = transaction.objectStore(this.STORE_NAME)
+    
+    // 既存のエントリを確認
+    const existingEntry = await store.get(video.id)
+    
+    const entry: WatchHistoryEntry = {
+      videoId: video.id,
+      title: video.title,
+      thumbURL: video.thumbURL,
+      watchedAt: Date.now(),
+      watchCount: existingEntry ? existingEntry.watchCount + 1 : 1,
+      views: video.views,
+      comments: video.comments,
+      mylists: video.mylists,
+      likes: video.likes,
+      authorId: video.authorId,
+      authorName: video.authorName,
+      authorIcon: video.authorIcon,
+      registeredAt: video.registeredAt
+    }
+    
+    await store.put(entry)
+    
+    // 最大件数チェック
+    await this.enforceMaxEntries()
   }
   
   /**
@@ -78,26 +68,18 @@ export class WatchHistoryManager {
     const db = this.dbManager.getDB()
     if (!db) throw new Error('Database not initialized')
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readonly')
-      const store = transaction.objectStore(this.STORE_NAME)
-      const request = store.getAll()
-      
-      request.onsuccess = (event) => {
-        const entries = (event.target as IDBRequest).result as WatchHistoryEntry[]
-        
-        // 新しい順にソート
-        entries.sort((a, b) => b.watchedAt - a.watchedAt)
-        
-        // ページネーション
-        const start = offset || 0
-        const end = limit ? start + limit : undefined
-        
-        resolve(entries.slice(start, end))
-      }
-      
-      request.onerror = () => reject(request.error)
-    })
+    const transaction = db.transaction([this.STORE_NAME], 'readonly')
+    const store = transaction.objectStore(this.STORE_NAME)
+    const entries = await store.getAll()
+    
+    // 新しい順にソート
+    entries.sort((a, b) => b.watchedAt - a.watchedAt)
+    
+    // ページネーション
+    const start = offset || 0
+    const end = limit ? start + limit : undefined
+    
+    return entries.slice(start, end)
   }
   
   /**
@@ -109,28 +91,20 @@ export class WatchHistoryManager {
     
     const normalizedQuery = query.toLowerCase()
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readonly')
-      const store = transaction.objectStore(this.STORE_NAME)
-      const request = store.getAll()
-      
-      request.onsuccess = (event) => {
-        const entries = (event.target as IDBRequest).result as WatchHistoryEntry[]
-        
-        const filtered = entries.filter(entry => {
-          const titleMatch = entry.title.toLowerCase().includes(normalizedQuery)
-          const authorMatch = entry.authorName?.toLowerCase().includes(normalizedQuery) || false
-          return titleMatch || authorMatch
-        })
-        
-        // 新しい順にソート
-        filtered.sort((a, b) => b.watchedAt - a.watchedAt)
-        
-        resolve(filtered)
-      }
-      
-      request.onerror = () => reject(request.error)
+    const transaction = db.transaction([this.STORE_NAME], 'readonly')
+    const store = transaction.objectStore(this.STORE_NAME)
+    const entries = await store.getAll()
+    
+    const filtered = entries.filter(entry => {
+      const titleMatch = entry.title.toLowerCase().includes(normalizedQuery)
+      const authorMatch = entry.authorName?.toLowerCase().includes(normalizedQuery) || false
+      return titleMatch || authorMatch
     })
+    
+    // 新しい順にソート
+    filtered.sort((a, b) => b.watchedAt - a.watchedAt)
+    
+    return filtered
   }
   
   /**
@@ -142,26 +116,11 @@ export class WatchHistoryManager {
     
     const ids = Array.isArray(videoIds) ? videoIds : [videoIds]
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(this.STORE_NAME)
-      
-      let completed = 0
-      const total = ids.length
-      
-      ids.forEach(id => {
-        const request = store.delete(id)
-        
-        request.onsuccess = () => {
-          completed++
-          if (completed === total) resolve()
-        }
-        
-        request.onerror = () => reject(request.error)
-      })
-      
-      if (total === 0) resolve()
-    })
+    const transaction = db.transaction([this.STORE_NAME], 'readwrite')
+    const store = transaction.objectStore(this.STORE_NAME)
+    
+    // すべての削除をPromiseで実行
+    await Promise.all(ids.map(id => store.delete(id)))
   }
   
   /**
@@ -171,14 +130,9 @@ export class WatchHistoryManager {
     const db = this.dbManager.getDB()
     if (!db) throw new Error('Database not initialized')
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(this.STORE_NAME)
-      const request = store.clear()
-      
-      request.onsuccess = () => resolve()
-      request.onerror = () => reject(request.error)
-    })
+    const transaction = db.transaction([this.STORE_NAME], 'readwrite')
+    const store = transaction.objectStore(this.STORE_NAME)
+    await store.clear()
   }
   
   /**
@@ -192,34 +146,25 @@ export class WatchHistoryManager {
     const db = this.dbManager.getDB()
     if (!db) throw new Error('Database not initialized')
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readonly')
-      const store = transaction.objectStore(this.STORE_NAME)
-      const request = store.getAll()
-      
-      request.onsuccess = (event) => {
-        const entries = (event.target as IDBRequest).result as WatchHistoryEntry[]
-        
-        if (entries.length === 0) {
-          resolve({
-            totalCount: 0,
-            oldestWatchedAt: null,
-            newestWatchedAt: null
-          })
-          return
-        }
-        
-        const watchedAts = entries.map(e => e.watchedAt)
-        
-        resolve({
-          totalCount: entries.length,
-          oldestWatchedAt: Math.min(...watchedAts),
-          newestWatchedAt: Math.max(...watchedAts)
-        })
+    const transaction = db.transaction([this.STORE_NAME], 'readonly')
+    const store = transaction.objectStore(this.STORE_NAME)
+    const entries = await store.getAll()
+    
+    if (entries.length === 0) {
+      return {
+        totalCount: 0,
+        oldestWatchedAt: null,
+        newestWatchedAt: null
       }
-      
-      request.onerror = () => reject(request.error)
-    })
+    }
+    
+    const watchedAts = entries.map(e => e.watchedAt)
+    
+    return {
+      totalCount: entries.length,
+      oldestWatchedAt: Math.min(...watchedAts),
+      newestWatchedAt: Math.max(...watchedAts)
+    }
   }
   
   /**
@@ -231,29 +176,21 @@ export class WatchHistoryManager {
     
     const cutoffTime = Date.now() - (this.MAX_AGE_DAYS * 24 * 60 * 60 * 1000)
     
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction([this.STORE_NAME], 'readwrite')
-      const store = transaction.objectStore(this.STORE_NAME)
-      const cursorRequest = store.openCursor()
-      
-      cursorRequest.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result
-        
-        if (cursor) {
-          const entry = cursor.value as WatchHistoryEntry
-          
-          if (entry.watchedAt < cutoffTime) {
-            cursor.delete()
-          }
-          
-          cursor.continue()
-        } else {
-          resolve()
-        }
-      }
-      
-      cursorRequest.onerror = () => reject(cursorRequest.error)
-    })
+    const transaction = db.transaction([this.STORE_NAME], 'readwrite')
+    const store = transaction.objectStore(this.STORE_NAME)
+    
+    // すべてのエントリを取得
+    const entries = await store.getAll()
+    
+    // 古いエントリのIDを抽出
+    const toDelete = entries
+      .filter(entry => entry.watchedAt < cutoffTime)
+      .map(entry => entry.videoId)
+    
+    // 削除
+    if (toDelete.length > 0) {
+      await Promise.all(toDelete.map(id => store.delete(id)))
+    }
   }
   
   /**

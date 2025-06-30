@@ -116,16 +116,17 @@ export function WatchHistoryPage() {
     try {
       await mylistManagerRef.current.addVideoToMylist(mylistId, {
         id: selectedVideo.videoId,
+        mylistId: mylistId,
         title: selectedVideo.title,
         thumbURL: selectedVideo.thumbURL,
-        viewCount: selectedVideo.views || 0,
-        commentCount: selectedVideo.comments || 0,
-        mylistCount: selectedVideo.mylists || 0,
-        duration: 0,
-        authorName: selectedVideo.authorName || '',
-        authorId: selectedVideo.authorId || '',
-        registeredAt: selectedVideo.registeredAt || '',
-        tags: []
+        addedAt: Date.now(),
+        views: selectedVideo.views,
+        comments: selectedVideo.comments,
+        mylists: selectedVideo.mylists,
+        likes: selectedVideo.likes,
+        authorName: selectedVideo.authorName,
+        authorId: selectedVideo.authorId,
+        registeredAt: selectedVideo.registeredAt
       })
       
       setShowMylistModal(false)
