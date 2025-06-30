@@ -476,7 +476,7 @@ jobs:
         ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
 
     - name: Run Lighthouse CI
-      uses: treosh/lighthouse-ci-action@v11
+      uses: treosh/lighthouse-ci-action@v12
       with:
         urls: |
           http://localhost:3000
