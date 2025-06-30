@@ -1,0 +1,169 @@
+/* Pagination CSS Module */
+
+/* コンテナ */
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border-color);
+  margin-top: 20px;
+}
+
+/* ページ情報 */
+.pageInfo {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ボタンコンテナ */
+.buttonContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ページ番号リスト（デスクトップ） */
+.pageNumbers {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ページサマリー（モバイル） */
+.pageSummary {
+  display: none;
+  font-size: 16px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* 基本ボタンスタイル */
+.pageButton {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 40px;
+  font-weight: 400;
+}
+
+/* 前後ボタン */
+.navButton {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+/* アクティブ状態 */
+.pageButton.active {
+  background: var(--primary-color);
+  color: white;
+  font-weight: 600;
+}
+
+/* ホバー状態 */
+.pageButton:hover:not(.active):not(:disabled),
+.navButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 無効状態 */
+.pageButton:disabled,
+.navButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ドット */
+.dots {
+  padding: 8px 4px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* モバイルドロップダウン */
+.mobileDropdown {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pageSelect {
+  padding: 6px 10px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--surface-color);
+  color: var(--text-primary);
+}
+
+/* モバイル対応 (600px以下) */
+@media (max-width: 600px) {
+  .container {
+    padding: 16px 0;
+    gap: 12px;
+  }
+
+  /* ページ番号を非表示 */
+  .pageNumbers {
+    display: none;
+  }
+
+  /* ページサマリーを表示 */
+  .pageSummary {
+    display: block;
+  }
+
+  /* ボタンコンテナの調整 */
+  .buttonContainer {
+    width: 100%;
+    padding: 0 16px;
+    justify-content: space-between;
+  }
+
+  /* モバイルドロップダウンを表示 */
+  .mobileDropdown {
+    display: flex;
+  }
+
+  /* ボタンサイズ調整 */
+  .navButton {
+    padding: 10px 16px;
+    font-size: 16px;
+  }
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.container {
+  animation: fadeIn 0.3s ease-out;
+}
