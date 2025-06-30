@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { OptimizedImage } from '@/components/optimized-image'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { useParams, useRouter } from 'next/navigation'
+import { useDeletedVideoDetection } from '@/hooks/use-deleted-video-detection'
 
 // Next.js navigation モック
 vi.mock('next/navigation', () => ({
@@ -18,6 +19,12 @@ vi.mock('@/lib/storage/db-manager', () => ({
   }))
 }))
 
+// 削除済み動画検出フックのモック
+vi.mock('@/hooks/use-deleted-video-detection', () => ({
+  useDeletedVideoDetection: vi.fn(),
+  getDeletedVideoThumbnail: vi.fn().mockReturnValue('/cantwatch.jpg')
+}))
+
 vi.mock('@/lib/storage/mylists', () => ({
   MylistManager: vi.fn().mockImplementation(() => ({
     getMylist: vi.fn().mockResolvedValue({
@@ -26,20 +33,37 @@ vi.mock('@/lib/storage/mylists', () => ({
       description: 'テスト用',
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      videoCount: 1
+      videoCount: 3
     }),
-    getVideosInMylist: vi.fn().mockResolvedValue([{
-      id: 'sm12345',
-      mylistId: 'test-mylist',
-      title: '削除された動画',
-      thumbURL: 'https://example.com/deleted-thumb.jpg',
-      addedAt: Date.now(),
-      views: 1000,
-      comments: 10,
-      likes: 50,
-      authorName: 'テスト投稿者',
-      authorId: '123456'
-    }]),
+    getVideosInMylistWithOrder: vi.fn().mockResolvedValue([
+      {
+        id: 'sm12345',
+        mylistId: 'test-mylist',
+        title: '通常の動画',
+        thumbURL: 'https://example.com/thumb1.jpg',
+        addedAt: Date.now(),
+        authorName: 'テスト投稿者',
+        authorId: '123456'
+      },
+      {
+        id: 'sm99999',
+        mylistId: 'test-mylist',
+        title: '削除された動画',
+        thumbURL: 'https://example.com/deleted-thumb.jpg',
+        addedAt: Date.now(),
+        authorName: 'テスト投稿者2',
+        authorId: '789012'
+      },
+      {
+        id: 'sm88888',
+        mylistId: 'test-mylist',
+        title: '動画3',
+        thumbURL: 'https://example.com/thumb3.jpg',
+        addedAt: Date.now(),
+        authorName: 'テスト投稿者3',
+        authorId: '345678'
+      }
+    ]),
     searchVideosInMylist: vi.fn().mockResolvedValue([])
   }))
 }))
@@ -88,6 +112,13 @@ describe('削除済み動画の表示', () => {
         forward: vi.fn(),
         prefetch: vi.fn()
       } as any)
+      
+      // 削除済み動画検出フックのモック設定
+      vi.mocked(useDeletedVideoDetection).mockReturnValue({
+        deletedVideoIds: new Set(['sm99999', 'sm88888']),
+        isChecking: false,
+        checkVideos: vi.fn()
+      })
     })
 
     it('削除済み動画のタイトルに（削除済み）バッジが表示される', async () => {
@@ -98,13 +129,10 @@ describe('削除済み動画の表示', () => {
         expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument()
       })
 
-      // 動画サムネイルを取得してエラーを発生させる
-      const img = screen.getByRole('img', { name: '削除された動画' })
-      fireEvent.error(img)
-
-      // 削除済みバッジが表示されることを確認
+      // 視聴できませんバッジが表示されることを確認（2つの削除済み動画）
       await waitFor(() => {
-        expect(screen.getByText('（削除済み）')).toBeInTheDocument()
+        const badges = screen.getAllByText('（視聴できません）')
+        expect(badges).toHaveLength(2)
       })
     })
 
@@ -116,19 +144,15 @@ describe('削除済み動画の表示', () => {
         expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument()
       })
 
-      // 初期状態ではリンクが存在する
-      const initialLink = screen.getByTestId('video-title')
-      expect(initialLink.tagName).toBe('A')
+      // 通常の動画（sm12345）はリンクが存在する
+      const normalLink = screen.getAllByTestId('video-title')[0]
+      expect(normalLink.tagName).toBe('A')
+      expect(normalLink).toHaveAttribute('href', 'https://www.nicovideo.jp/watch/sm12345')
 
-      // 動画サムネイルを取得してエラーを発生させる
-      const img = screen.getByRole('img', { name: '削除された動画' })
-      fireEvent.error(img)
-
-      // リンクがspanに変わることを確認
-      await waitFor(() => {
-        expect(screen.queryByTestId('video-title')).not.toBeInTheDocument()
-        expect(screen.getByText('削除された動画')).toBeInTheDocument()
-      })
+      // 削除済み動画（sm99999）はリンクではなくspanタグ
+      const deletedTitle = screen.getByText('削除された動画')
+      expect(deletedTitle.tagName).toBe('SPAN')
+      expect(deletedTitle).toHaveClass('mylist-video-item__title--deleted')
     })
 
     it('削除済み動画には削除メッセージが表示される', async () => {
@@ -139,13 +163,10 @@ describe('削除済み動画の表示', () => {
         expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument()
       })
 
-      // 動画サムネイルを取得してエラーを発生させる
-      const img = screen.getByRole('img', { name: '削除された動画' })
-      fireEvent.error(img)
-
-      // 削除メッセージが表示されることを確認
+      // 削除メッセージが表示されることを確認（2つの削除済み動画）
       await waitFor(() => {
-        expect(screen.getByText('この動画は削除されたか、非公開になっています')).toBeInTheDocument()
+        const messages = screen.getAllByText('この動画は削除されたか、非公開になっています')
+        expect(messages).toHaveLength(2)
       })
     })
 
@@ -157,16 +178,33 @@ describe('削除済み動画の表示', () => {
         expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument()
       })
 
-      // 初期状態では投稿者情報が表示される
+      // 通常の動画（sm12345）の投稿者情報は表示される
       expect(screen.getByText('テスト投稿者')).toBeInTheDocument()
 
-      // 動画サムネイルを取得してエラーを発生させる
-      const img = screen.getByRole('img', { name: '削除された動画' })
-      fireEvent.error(img)
+      // 削除済み動画（sm99999, sm88888）の投稿者情報は表示されない
+      expect(screen.queryByText('テスト投稿者2')).not.toBeInTheDocument()
+      expect(screen.queryByText('テスト投稿者3')).not.toBeInTheDocument()
+    })
 
-      // 投稿者情報が非表示になることを確認
+    it('削除済み動画のサムネイルにcantwatch.jpgが使用される', async () => {
+      render(<MylistDetailClient />)
+
+      // コンポーネントの初期化を待つ
       await waitFor(() => {
-        expect(screen.queryByText('テスト投稿者')).not.toBeInTheDocument()
+        expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument()
+      })
+
+      // 削除済み動画のサムネイルがcantwatch.jpgになっていることを確認
+      const deletedVideoImages = screen.getAllByAltText('削除された動画')
+        .concat(screen.getAllByAltText('動画3'))
+        .filter(img => {
+          const parent = img.closest('[data-testid="mylist-video-item"]')
+          const title = parent?.querySelector('.mylist-video-item__title--deleted')
+          return title !== null
+        })
+      
+      deletedVideoImages.forEach(img => {
+        expect(img).toHaveAttribute('src', '/cantwatch.jpg')
       })
     })
   })

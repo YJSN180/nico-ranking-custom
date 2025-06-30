@@ -9,6 +9,7 @@ import { MylistManager } from '@/lib/storage/mylists'
 import { BackLink } from '@/components/back-link'
 import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'
+import { useDeletedVideoDetection, getDeletedVideoThumbnail } from '@/hooks/use-deleted-video-detection'
 import styles from './mylist-detail.module.css'
 import '@/components/mylist-video-item.css'
 
@@ -27,10 +28,12 @@ export function MylistDetailClient() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('addedAt-desc')
   const [editingVideo, setEditingVideo] = useState<MylistVideo | null>(null)
   const [showSettings, setShowSettings] = useState(false)
-  const [deletedVideoIds, setDeletedVideoIds] = useState<Set<string>>(new Set())
   
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
+  
+  // 削除済み動画検出フック
+  const { deletedVideoIds, isChecking, checkVideos } = useDeletedVideoDetection()
 
   // 初期化とデータ読み込み
   useEffect(() => {
@@ -80,6 +83,11 @@ export function MylistDetailClient() {
       const videosData = await mylistManagerRef.current.getVideosInMylistWithOrder(mylistId)
       setVideos(videosData)
       setFilteredVideos(videosData)
+      
+      // 削除済み動画の検出を実行
+      if (videosData.length > 0) {
+        checkVideos(videosData)
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to load mylist data:', error)
@@ -258,6 +266,21 @@ export function MylistDetailClient() {
         </select>
       </div>
 
+      {/* 削除済み動画検出中の表示 */}
+      {isChecking && (
+        <div style={{
+          padding: '8px 16px',
+          backgroundColor: 'var(--info-bg, #e3f2fd)',
+          color: 'var(--info-color, #1976d2)',
+          borderRadius: '4px',
+          marginBottom: '16px',
+          fontSize: '14px',
+          textAlign: 'center'
+        }}>
+          視聴できない動画を確認しています...
+        </div>
+      )}
+
       {/* 動画一覧 */}
       {filteredVideos.length === 0 ? (
         <div className={styles.emptyState}>
@@ -285,9 +308,6 @@ export function MylistDetailClient() {
                 onEdit={setEditingVideo}
                 onRemove={handleRemoveVideo}
                 isDeleted={deletedVideoIds.has(video.id)}
-                onImageError={(videoId) => {
-                  setDeletedVideoIds(prev => new Set([...prev, videoId]))
-                }}
               />
             </li>
           ))}
@@ -446,13 +466,15 @@ function MylistSettingsModal({ mylist, onClose, onUpdate, onDelete }: MylistSett
           </div>
 
           <div className={styles.modalFooter}>
-            <button
-              type="button"
-              className={styles.btnDanger}
-              onClick={onDelete}
-            >
-              マイリストを削除
-            </button>
+            {!mylist.isDefault && (
+              <button
+                type="button"
+                className={styles.btnDanger}
+                onClick={onDelete}
+              >
+                マイリストを削除
+              </button>
+            )}
             <div className={styles.modalActions}>
               <button
                 type="button"

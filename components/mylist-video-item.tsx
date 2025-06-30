@@ -88,7 +88,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
           {isDeleted ? (
             <div style={{ display: 'block', cursor: 'default' }}>
               <OptimizedImage
-                src={video.thumbURL}
+                src="/cantwatch.jpg"
                 alt={video.title}
                 width={160}
                 height={90}
@@ -135,7 +135,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
           {isDeleted ? (
             <span className="mylist-video-item__title mylist-video-item__title--deleted">
               {video.title}
-              <span className="mylist-video-item__deleted-badge">（削除済み）</span>
+              <span className="mylist-video-item__deleted-badge">（視聴できません）</span>
             </span>
           ) : (
             <a

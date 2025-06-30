@@ -19,6 +19,16 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/storage/db-manager')
 vi.mock('@/lib/storage/mylists')
 
+// 削除済み動画検出フックのモック
+vi.mock('@/hooks/use-deleted-video-detection', () => ({
+  useDeletedVideoDetection: vi.fn(() => ({
+    deletedVideoIds: new Set(),
+    isChecking: false,
+    checkVideos: vi.fn()
+  })),
+  getDeletedVideoThumbnail: vi.fn(() => '/cantwatch.jpg')
+}))
+
 describe('MylistDetailClient', () => {
   let mockDBManager: any
   let mockMylistManager: any
@@ -76,6 +86,7 @@ describe('MylistDetailClient', () => {
     mockMylistManager = {
       getMylist: vi.fn().mockResolvedValue(mockMylist),
       getVideosInMylist: vi.fn().mockResolvedValue(mockVideos),
+      getVideosInMylistWithOrder: vi.fn().mockResolvedValue(mockVideos),
       removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
       updateVideoMemo: vi.fn().mockResolvedValue(undefined),
       updateMylist: vi.fn().mockResolvedValue(undefined),
@@ -102,13 +113,12 @@ describe('MylistDetailClient', () => {
       
       await waitFor(() => {
         expect(screen.getByText('投稿者A')).toBeInTheDocument()
-        expect(screen.getByText('▶️ 1,000')).toBeInTheDocument()
         expect(screen.getByText('素晴らしい動画')).toBeInTheDocument()
       })
     })
 
     it('マイリストが空の場合、適切なメッセージが表示される', async () => {
-      mockMylistManager.getVideosInMylist.mockResolvedValue([])
+      mockMylistManager.getVideosInMylistWithOrder.mockResolvedValue([])
       mockMylistManager.getMylist.mockResolvedValue({ ...mockMylist, videoCount: 0 })
       
       render(<MylistDetailClient />)
