@@ -306,6 +306,17 @@
   gap: 20px;
 }
 
+/* モバイルメニューのリストスタイル削除 */
+.drawerSections ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.drawerSections li {
+  margin-bottom: 0;
+}
+
 /* Theme section */
 .themeSection {
   padding: 16px;

@@ -134,25 +134,6 @@ const Pagination = memo(function Pagination({
         </button>
       </div>
 
-      {/* モバイル用: ドロップダウン */}
-      <div className={styles.mobileDropdown}>
-        <label htmlFor="page-select" style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-          ページ:
-        </label>
-        <select
-          id="page-select"
-          className={styles.pageSelect}
-          value={currentPage}
-          onChange={(e) => onPageChange(Number(e.target.value))}
-          aria-label="ページを選択"
-        >
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-            <option key={page} value={page}>
-              {page}
-            </option>
-          ))}
-        </select>
-      </div>
     </nav>
   )
 })
