@@ -88,20 +88,6 @@ export interface MylistVideo {
   registeredAt?: string // 動画投稿日時
 }
 
-// 動画データ（マイリストに追加する際の構造）
-export interface Video {
-  id: string           // 動画ID
-  title: string        // 動画タイトル
-  thumbURL: string     // サムネイルURL
-  viewCount: number    // 再生数
-  commentCount: number // コメント数
-  mylistCount: number  // マイリスト数
-  duration: number     // 再生時間（秒）
-  authorName: string   // 投稿者名
-  authorId: string     // 投稿者ID
-  registeredAt: string // 動画投稿日時
-  tags: string[]       // タグ
-}
 
 // ストレージ統計情報
 export interface StorageStats {

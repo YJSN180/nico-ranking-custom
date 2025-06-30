@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useMylistOperations } from '@/hooks/use-mylist-operations'
 import { MylistModal } from './mylist-modal'
 import type { RankingItem } from '@/types/ranking'
-import type { Video } from '@/lib/storage/types'
 
 interface MylistButtonProps {
   video: RankingItem

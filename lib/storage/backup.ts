@@ -125,7 +125,7 @@ export function validateBackupData(data: unknown): data is BackupData {
     }
     
     const mvRecord = mv as Record<string, unknown>
-    if (typeof mvRecord.mylistId !== 'string' || typeof mvRecord.videoId !== 'string') {
+    if (typeof mvRecord.mylistId !== 'string' || typeof mvRecord.id !== 'string') {
       return false
     }
   }

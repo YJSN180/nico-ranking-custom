@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
-import type { Mylist, Video, MylistVideo } from '@/lib/storage/types'
+import type { Mylist, MylistVideo } from '@/lib/storage/types'
 
 export function useMylistOperations() {
   const [mylists, setMylists] = useState<Mylist[]>([])

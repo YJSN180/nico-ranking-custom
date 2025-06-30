@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { OptimizedImage } from '@/components/optimized-image'
-import { BackLink } from '@/components/back-link'
 import { useWatchHistory } from '@/hooks/use-watch-history'
 import { useDeletedVideoDetection } from '@/hooks/use-deleted-video-detection'
 import { DBManager } from '@/lib/storage/db-manager'
@@ -158,15 +157,15 @@ export function WatchHistoryPage() {
   }
   
   return (
-    <div className={styles.container}>
-      {/* ヘッダー */}
-      <div className={styles.header}>
-        <BackLink href="/" text="ホームに戻る" />
-        <h1 className={styles.title}>視聴履歴</h1>
-        {stats && (
-          <p className={styles.stats}>全{stats.totalCount}件の視聴履歴</p>
-        )}
-      </div>
+    <main className={styles.main}>
+      <div className={styles.container}>
+        {/* ヘッダー */}
+        <div className={styles.header}>
+          <h1 className={styles.title}>視聴履歴</h1>
+          {stats && (
+            <p className={styles.stats}>全{stats.totalCount}件の視聴履歴</p>
+          )}
+        </div>
       
       {/* コントロール */}
       <div className={styles.controls}>
@@ -417,6 +416,7 @@ export function WatchHistoryPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </main>
   )
 }

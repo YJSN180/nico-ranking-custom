@@ -53,15 +53,7 @@ export function useDeletedVideoDetection(): UseDeletedVideoDetectionResult {
         mylistId: '',  // ダミー値
         title: v.title,
         thumbURL: v.thumbURL,
-        addedAt: Date.now(),  // ダミー値
-        viewCount: 0,
-        commentCount: 0,
-        mylistCount: 0,
-        duration: 0,
-        authorName: '',
-        authorId: '',
-        registeredAt: '',
-        tags: []
+        addedAt: Date.now()  // ダミー値
       }))
       
       // 削除済み動画を検出
