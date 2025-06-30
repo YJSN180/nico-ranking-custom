@@ -583,7 +583,6 @@ export function Navigation() {
         }}
       >
         <HamburgerIcon size={18} />
-        <span>メニュー</span>
       </button>
 
       {/* ドロップダウンメニュー */}
