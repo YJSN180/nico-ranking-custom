@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { GENRE_LABELS, PERIOD_LABELS } from '@/types/ranking-config'
 import type { RankingGenre, RankingPeriod, RankingConfig } from '@/types/ranking-config'
 import styles from './selectors.module.css'
@@ -22,7 +22,34 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
     onConfigChange({ ...config, genre, tag: undefined })
   }
 
-  // JavaScriptのscrollToを削除し、CSS Scroll Snapに任せる
+  // 初回マウント時に選択されたジャンルが見えるようにスクロール
+  useEffect(() => {
+    if (!genreScrollRef.current) return
+    
+    // 選択されたジャンルのボタンを探す
+    const selectedButton = genreScrollRef.current.querySelector(`.${styles.genreButtonSelected}`)
+    if (selectedButton && selectedButton instanceof HTMLElement) {
+      // ボタンを中央に表示するようにスクロール
+      const container = genreScrollRef.current
+      const buttonLeft = selectedButton.offsetLeft
+      const buttonWidth = selectedButton.offsetWidth
+      const containerWidth = container.offsetWidth
+      
+      // ボタンの中心を計算
+      const buttonCenter = buttonLeft + buttonWidth / 2
+      // コンテナの中心を計算
+      const containerCenter = containerWidth / 2
+      // スクロール位置を計算
+      const scrollLeft = buttonCenter - containerCenter
+      
+      // reduced-motion設定を考慮してスクロール
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      container.scrollTo({
+        left: scrollLeft,
+        behavior: prefersReducedMotion ? 'auto' : 'smooth'
+      })
+    }
+  }, []) // 初回マウント時のみ実行
 
   return (
     <div className={styles.selectorContainer}>
