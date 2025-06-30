@@ -41,10 +41,22 @@ export function MylistBackup() {
       const result = await importMylistData(data)
 
       if (result.success) {
+        let message = `インポート完了: ${result.imported.mylists}個のマイリスト、${result.imported.videos}個の動画`
+        if (result.overwritten > 0) {
+          message += `\n（うち${result.overwritten}個のマイリストが上書きされました）`
+        }
+        message += '\n\n⚠️ 変更を反映するにはページをリロードしてください'
+        
         setImportResult({
           success: true,
-          message: `インポート完了: ${result.imported.mylists}個のマイリスト、${result.imported.videos}個の動画`
+          message
         })
+        // 3秒後にリロードを促すボタンを表示
+        setTimeout(() => {
+          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+            window.location.reload()
+          }
+        }, 1500)
       } else {
         setImportResult({
           success: false,
@@ -282,6 +294,8 @@ export function MylistBackup() {
           padding: 0.75rem 1rem;
           border-radius: 8px;
           font-size: 0.9rem;
+          white-space: pre-line;
+          line-height: 1.5;
         }
 
         .import-result.success {

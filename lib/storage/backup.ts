@@ -143,10 +143,12 @@ export async function importMylistData(data: BackupData): Promise<{
     videos: number
   }
   errors: string[]
+  overwritten: number
 }> {
   const errors: string[] = []
   let importedMylists = 0
   let importedVideos = 0
+  let overwrittenMylists = 0
   
   try {
     const dbManager = new DBManager()
@@ -163,6 +165,12 @@ export async function importMylistData(data: BackupData): Promise<{
     // マイリストをインポート
     for (const mylist of data.mylists) {
       try {
+        // 既存のマイリストを確認
+        const existing = await tx.objectStore('mylists').get(mylist.id)
+        if (existing) {
+          overwrittenMylists++
+        }
+        
         await tx.objectStore('mylists').put(mylist)
         importedMylists++
       } catch (error) {
@@ -188,7 +196,8 @@ export async function importMylistData(data: BackupData): Promise<{
         mylists: importedMylists,
         videos: importedVideos
       },
-      errors
+      errors,
+      overwritten: overwrittenMylists
     }
   } catch (error) {
     return {
@@ -197,7 +206,8 @@ export async function importMylistData(data: BackupData): Promise<{
         mylists: 0,
         videos: 0
       },
-      errors: [`インポート処理中にエラーが発生しました: ${error}`]
+      errors: [`インポート処理中にエラーが発生しました: ${error}`],
+      overwritten: 0
     }
   }
 }

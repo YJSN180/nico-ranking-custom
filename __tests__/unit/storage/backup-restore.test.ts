@@ -344,6 +344,7 @@ describe('Import Mylist Data Tests', () => {
     const mockDB = {
       transaction: vi.fn().mockReturnValue({
         objectStore: vi.fn(() => ({
+          get: vi.fn().mockResolvedValue(null), // 既存のマイリストはない
           put: vi.fn().mockResolvedValue(undefined)
         })),
         done: Promise.resolve()
@@ -363,10 +364,43 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.mylists).toBe(2)
     expect(result.imported.videos).toBe(3)
     expect(result.errors).toHaveLength(0)
+    expect(result.overwritten).toBe(0)
+  })
+  
+  it('should detect and count overwritten mylists', async () => {
+    const mockGet = vi.fn()
+      .mockResolvedValueOnce({ id: 'test-mylist-1', name: '既存のマイリスト1' }) // 既存
+      .mockResolvedValueOnce(null) // 新規
+    
+    const mockDB = {
+      transaction: vi.fn().mockReturnValue({
+        objectStore: vi.fn(() => ({
+          get: mockGet,
+          put: vi.fn().mockResolvedValue(undefined)
+        })),
+        done: Promise.resolve()
+      })
+    }
+    
+    const mockDBManager = {
+      init: vi.fn().mockResolvedValue(undefined),
+      getDB: vi.fn().mockReturnValue(mockDB)
+    }
+    
+    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    
+    const result = await importMylistData(validBackupData)
+    
+    expect(result.success).toBe(true)
+    expect(result.imported.mylists).toBe(2)
+    expect(result.imported.videos).toBe(3)
+    expect(result.errors).toHaveLength(0)
+    expect(result.overwritten).toBe(1) // 1つのマイリストが上書きされた
   })
   
   it('should handle partial import with errors', async () => {
     const mockObjectStore = vi.fn((storeName) => ({
+      get: vi.fn().mockResolvedValue(null), // 既存のマイリストはない
       put: vi.fn().mockImplementation((data) => {
         if (storeName === 'mylists' && data.id === 'test-mylist-2') {
           throw new Error('Failed to put mylist')
@@ -400,6 +434,7 @@ describe('Import Mylist Data Tests', () => {
     expect(result.errors).toHaveLength(2)
     expect(result.errors[0]).toContain('テストマイリスト2')
     expect(result.errors[1]).toContain('動画関連データ')
+    expect(result.overwritten).toBe(0)
   })
   
   it('should handle database initialization error during import', async () => {
@@ -417,6 +452,7 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.videos).toBe(0)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]).toContain('Database not initialized')
+    expect(result.overwritten).toBe(0)
   })
   
   it('should handle complete import failure', async () => {
@@ -434,6 +470,7 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.videos).toBe(0)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]).toContain('DB init failed')
+    expect(result.overwritten).toBe(0)
   })
 })
 
