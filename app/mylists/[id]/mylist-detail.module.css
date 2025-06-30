@@ -577,7 +577,8 @@
 
   .modalActions {
     width: 100%;
-    justify-content: flex-end;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
   }
 
   .btnDanger {

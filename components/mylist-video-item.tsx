@@ -168,6 +168,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
                   height={20}
                   style={{ 
                     borderRadius: '50%',
+                    border: '1px solid var(--border-color)',
                     objectFit: 'cover',
                     flexShrink: 0
                   }}

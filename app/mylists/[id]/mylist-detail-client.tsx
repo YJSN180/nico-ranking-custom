@@ -360,8 +360,17 @@ function MemoEditModal({ video, onClose, onSave }: MemoEditModalProps) {
               onChange={(e) => setMemo(e.target.value)}
               placeholder="この動画についてのメモを入力..."
               rows={5}
+              maxLength={500}
               autoFocus
             />
+            <div style={{ 
+              textAlign: 'right', 
+              fontSize: '12px', 
+              color: 'var(--text-secondary)',
+              marginTop: '4px'
+            }}>
+              {memo.length}/500文字
+            </div>
           </div>
 
           <div className={styles.modalFooter}>
