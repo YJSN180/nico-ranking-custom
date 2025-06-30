@@ -9,7 +9,7 @@ jobs:
     steps:
       # Option 1: Slack公式のGitHub Action（推奨）
       - name: Send Slack notification (Official)
-        uses: slackapi/slack-github-action@v2.0.0
+        uses: slackapi/slack-github-action@v2.1.0
         with:
           webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
