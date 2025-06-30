@@ -53,6 +53,26 @@
     display: none;
   }
 
+  /* ジャンルセレクター専用のスクロールコンテナ */
+  .genreScrollContainer {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding-bottom: 2px;
+    position: relative;
+    /* CSS Scroll Snap */
+    scroll-snap-type: x mandatory;
+    scroll-padding: 50%; /* 中央にスナップするための余白 */
+  }
+
+  .genreScrollContainer::-webkit-scrollbar {
+    display: none;
+  }
+
   /* スクロールインジケーター（グラデーション） */
   .scrollContainer {
     position: relative;
@@ -110,12 +130,16 @@
 @media (max-width: 640px) {
   .genreButton {
     border-radius: 20px;
+    /* CSS Scroll Snap - 各ボタンを中央にスナップ */
+    scroll-snap-align: center;
   }
 
   .genreButtonSelected {
     padding: 10px 20px;
     font-size: 15px;
     transform: scale(1.05);
+    /* 選択されたボタンも中央にスナップ */
+    scroll-snap-align: center;
   }
 }
 

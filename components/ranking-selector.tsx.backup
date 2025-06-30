@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { GENRE_LABELS, PERIOD_LABELS } from '@/types/ranking-config'
 import type { RankingGenre, RankingPeriod, RankingConfig } from '@/types/ranking-config'
 import styles from './selectors.module.css'
@@ -12,6 +12,7 @@ interface RankingSelectorProps {
 
 export function RankingSelector({ config, onConfigChange }: RankingSelectorProps) {
   const genreScrollRef = useRef<HTMLDivElement>(null)
+  const selectedGenreRef = useRef<HTMLButtonElement>(null)
 
   const handlePeriodChange = (period: RankingPeriod) => {
     onConfigChange({ ...config, period })
@@ -22,7 +23,25 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
     onConfigChange({ ...config, genre, tag: undefined })
   }
 
-  // JavaScriptのscrollToを削除し、CSS Scroll Snapに任せる
+  // 選択されたジャンルを中央にスクロール（モバイルのみ）
+  useEffect(() => {
+    if (selectedGenreRef.current && genreScrollRef.current) {
+      const container = genreScrollRef.current
+      const selected = selectedGenreRef.current
+      
+      // モバイルかどうかをCSSメディアクエリで判定
+      const isMobile = window.matchMedia('(max-width: 640px)').matches
+      
+      if (isMobile) {
+        const containerWidth = container.offsetWidth
+        const selectedLeft = selected.offsetLeft
+        const selectedWidth = selected.offsetWidth
+        const scrollPosition = selectedLeft - (containerWidth / 2) + (selectedWidth / 2)
+        
+        container.scrollTo({ left: scrollPosition, behavior: 'smooth' })
+      }
+    }
+  }, [config.genre])
 
   return (
     <div className={styles.selectorContainer}>
@@ -51,12 +70,12 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
         </h2>
           <div 
             ref={genreScrollRef}
-            className={`${styles.buttonContainer} ${styles.genreScrollContainer}`}
+            className={styles.buttonContainer}
           >
             {(Object.entries(GENRE_LABELS) as [RankingGenre, string][]).map(([value, label]) => (
               <button
                 key={value}
-                // refを削除（CSS Scroll Snapに任せる）
+                ref={config.genre === value ? selectedGenreRef : null}
                 onClick={() => handleGenreChange(value)}
                 className={`${styles.button} ${styles.genreButton} ${config.genre === value ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
               >
