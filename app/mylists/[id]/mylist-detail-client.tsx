@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { OptimizedImage } from '@/components/optimized-image'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
-import { formatNumberMobile } from '@/lib/format-utils'
 import { BackLink } from '@/components/back-link'
 import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'

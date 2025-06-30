@@ -295,14 +295,13 @@ export class MylistManager {
    * マイリスト内動画を検索
    */
   async searchVideosInMylist(mylistId: string, query: string): Promise<MylistVideo[]> {
+    const { searchMylistVideos } = await import('@/lib/search/video-search')
     const videos = await this.getVideosInMylist(mylistId)
-    const lowerQuery = query.toLowerCase()
     
-    return videos.filter(video => 
-      video.title.toLowerCase().includes(lowerQuery) ||
-      (video.memo && video.memo.toLowerCase().includes(lowerQuery)) ||
-      (video.authorName && video.authorName.toLowerCase().includes(lowerQuery))
-    )
+    return searchMylistVideos(videos, {
+      searchQuery: query,
+      searchFields: ['title', 'author', 'memo']
+    })
   }
 
   /**
