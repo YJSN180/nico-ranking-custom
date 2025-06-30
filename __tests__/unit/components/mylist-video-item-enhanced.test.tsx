@@ -37,7 +37,7 @@ describe('MylistVideoItem Enhanced Features', () => {
   it('投稿日時が表示される', () => {
     render(<MylistVideoItem {...defaultProps} />)
     
-    const registeredDate = screen.getByText(/投稿: 2023\/12\/01/)
+    const registeredDate = screen.getByText('2023/12/01')
     expect(registeredDate).toBeInTheDocument()
   })
 
@@ -53,29 +53,33 @@ describe('MylistVideoItem Enhanced Features', () => {
     const videoWithoutDate = { ...mockVideo, registeredAt: undefined }
     render(<MylistVideoItem {...defaultProps} video={videoWithoutDate} />)
     
-    const registeredDate = screen.queryByText(/投稿:/)
-    expect(registeredDate).not.toBeInTheDocument()
+    const separator = screen.queryByText('•')
+    expect(separator).not.toBeInTheDocument()
   })
 
-  it('投稿者名、アイコン、投稿日時が縦並びで表示される', () => {
+  it('投稿者名、アイコン、投稿日時が横並びで表示される（ランキング画面と同様）', () => {
     render(<MylistVideoItem {...defaultProps} />)
     
-    // 投稿者名とアイコンを含む要素を確認
+    // 投稿者名のリンクを確認
     const authorLink = screen.getByText('テスト投稿者').closest('a')
     expect(authorLink).toBeInTheDocument()
     
-    // 投稿日時が同じリンク内にあることを確認
-    const registeredDate = screen.getByText(/投稿: 2023\/12\/01/)
-    expect(authorLink).toContainElement(registeredDate)
+    // 投稿日時が投稿者名の横に表示されることを確認
+    const registeredDate = screen.getByText('2023/12/01')
+    expect(registeredDate).toBeInTheDocument()
+    
+    // セパレーターが存在することを確認
+    const separator = screen.getByText('•')
+    expect(separator).toBeInTheDocument()
   })
 
   it('削除済み動画では投稿者情報が表示されない', () => {
     render(<MylistVideoItem {...defaultProps} isDeleted={true} />)
     
     const authorIcon = screen.queryByAltText(/のアイコン/)
-    const registeredDate = screen.queryByText(/投稿:/)
+    const separator = screen.queryByText('•')
     
     expect(authorIcon).not.toBeInTheDocument()
-    expect(registeredDate).not.toBeInTheDocument()
+    expect(separator).not.toBeInTheDocument()
   })
 })

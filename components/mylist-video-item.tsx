@@ -149,9 +149,33 @@ const MylistVideoItem = memo(function MylistVideoItem({
             </a>
           )}
           
-          {/* 投稿者情報 */}
+          {/* 投稿者情報 - ランキング画面と同じ横並びレイアウト */}
           {video.authorName && !isDeleted && (
-            <div className="mylist-video-item__author">
+            <div className="mylist-video-item__author" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '14px',
+              color: 'var(--text-secondary)',
+              marginBottom: '6px'
+            }}>
+              {/* 投稿者アイコン */}
+              {video.authorIcon && (
+                <OptimizedImage
+                  src={video.authorIcon}
+                  alt={`${video.authorName}のアイコン`}
+                  width={20}
+                  height={20}
+                  style={{ 
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    flexShrink: 0
+                  }}
+                  onError={() => {
+                    // アイコン読み込みエラー時はOptimizedImageの内部でhandleErrorが呼ばれる
+                  }}
+                />
+              )}
               <a
                 href={video.authorId ? `https://www.nicovideo.jp/user/${video.authorId}` : '#'}
                 target="_blank"
@@ -160,57 +184,41 @@ const MylistVideoItem = memo(function MylistVideoItem({
                   e.stopPropagation()
                   if (!video.authorId) e.preventDefault()
                 }}
-                style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
+                className="mylist-video-item__author-name"
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '200px',
                   textDecoration: 'none',
-                  color: 'inherit',
-                  padding: '4px 6px',
-                  margin: '-4px -6px',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s'
+                  color: 'inherit'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                  e.currentTarget.style.textDecoration = 'underline'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
+                  e.currentTarget.style.textDecoration = 'none'
                 }}
               >
-                {/* 投稿者アイコン */}
-                {video.authorIcon && (
-                  <OptimizedImage
-                    src={video.authorIcon}
-                    alt={`${video.authorName}のアイコン`}
-                    width={24}
-                    height={24}
-                    style={{ 
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      flexShrink: 0
-                    }}
-                  />
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span className="mylist-video-item__author-name">
-                    {video.authorName}
-                  </span>
-                  {/* 投稿日時 */}
-                  {video.registeredAt && (
-                    <span 
-                      className="mylist-video-item__registered-date"
-                      style={{
-                        fontSize: '12px',
-                        color: 'var(--text-muted)',
-                        marginTop: '2px'
-                      }}
-                    >
-                      投稿: {formatRegisteredDate(video.registeredAt)}
-                    </span>
-                  )}
-                </div>
+                {video.authorName}
               </a>
+              {/* 投稿日時を右側に配置 */}
+              {video.registeredAt && (
+                <>
+                  <span className="mylist-video-item__separator" style={{ color: 'var(--text-secondary)' }}>
+                    •
+                  </span>
+                  <span 
+                    className="mylist-video-item__date"
+                    style={{
+                      flexShrink: 0,
+                      fontSize: '13px'
+                    }}
+                  >
+                    {formatRegisteredDate(video.registeredAt)}
+                  </span>
+                </>
+              )}
             </div>
           )}
           
