@@ -118,8 +118,8 @@ export default async function RootLayout({
         {/* クリティカルCSSをインライン化 */}
         <style dangerouslySetInnerHTML={{ __html: `
           /* クリティカルフォント定義 - WOFF2優先フォールバック戦略 */
-          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:swap;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
-          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:swap;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
+          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:fallback;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
+          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:fallback;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
           /* クリティカルCSS - LCPに必要な最小限のスタイル */
           body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
           /* テーマのデフォルトスタイル - ちらつき防止 */

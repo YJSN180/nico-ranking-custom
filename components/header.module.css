@@ -1,0 +1,129 @@
+/* ヘッダーコンテナ */
+.headerResponsive {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 0;
+  position: relative;
+}
+
+/* ヘッダータイトルリンク */
+.headerTitle {
+  display: inline-flex;
+  align-items: baseline;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: transform 0.2s ease;
+  
+  /* デスクトップのデフォルトスタイル */
+  font-size: 48px;
+  padding: 8px 20px;
+}
+
+.headerTitle:hover {
+  transform: scale(1.05);
+}
+
+/* ニコランのメインタイトル */
+.titleMain {
+  font-weight: 800;
+  font-family: 'Comic Sans MS Bold', 'Chalkboard SE', 'Arial Rounded MT Bold', 'ヒラギノ丸ゴ ProN', sans-serif;
+  color: var(--primary-color);
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* (Re:turn)のサブタイトル */
+.titleSub {
+  font-weight: 700;
+  font-family: 'Nicomoji Plus v2', 'Nico Moji', 'ヒラギノ丸ゴ ProN', sans-serif;
+  color: var(--text-secondary);
+  margin-left: 8px;
+}
+
+/* ヘッダーコンテンツ */
+.headerContent {
+  position: relative;
+}
+
+/* ロゴコンテナ */
+.logoContainer {
+  position: relative;
+  width: 106px;
+  height: 106px;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+/* 設定ボタン */
+.settingsButton {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 16px;
+  background: rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.settingsButton:hover {
+  background-color: rgba(255, 255, 255, 0.35);
+  transform: translateY(-50%) scale(1.05);
+}
+
+/* コントロールボタンコンテナ */
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* モバイルレスポンシブ */
+@media (max-width: 640px) {
+  .headerResponsive {
+    padding: 12px 0;
+  }
+  
+  .headerTitle {
+    font-size: 22px;
+    padding: 5px 12px;
+  }
+  
+  .titleSub {
+    margin-left: 4px;
+  }
+  
+  .controls {
+    gap: 8px;
+  }
+  
+  .logoContainer {
+    width: 48px;
+    height: 48px;
+    margin-right: 2px;
+  }
+  
+  .headerContent {
+    padding: 0 60px;
+  }
+  
+  .settingsButton {
+    right: 12px;
+    padding: 4px 8px;
+    font-size: 16px;
+  }
+}
+
+/* フォント読み込み最適化 */
+.titleMain,
+.titleSub {
+  /* フォントが読み込まれるまでの間、レイアウトシフトを防ぐ */
+  font-display: fallback;
+}
