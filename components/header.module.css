@@ -12,12 +12,17 @@
   display: inline-flex;
   align-items: baseline;
   text-decoration: none;
-  color: var(--text-primary);
+  color: white;
   transition: transform 0.2s ease;
   
   /* デスクトップのデフォルトスタイル */
-  font-size: 48px;
   padding: 8px 20px;
+}
+
+/* h1要素のフォントサイズ設定 */
+.headerTitle h1 {
+  font-size: 48px;
+  color: white;
 }
 
 .headerTitle:hover {
@@ -27,17 +32,19 @@
 /* ニコランのメインタイトル */
 .titleMain {
   font-weight: 800;
-  font-family: 'Comic Sans MS Bold', 'Chalkboard SE', 'Arial Rounded MT Bold', 'ヒラギノ丸ゴ ProN', sans-serif;
-  color: var(--primary-color);
+  font-family: 'Nicomoji Plus v2', 'Nico Moji', 'ヒラギノ丸ゴ ProN', sans-serif;
+  color: white;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  font-size: inherit; /* 親要素のフォントサイズを継承 */
 }
 
 /* (Re:turn)のサブタイトル */
 .titleSub {
   font-weight: 700;
-  font-family: 'Nicomoji Plus v2', 'Nico Moji', 'ヒラギノ丸ゴ ProN', sans-serif;
-  color: var(--text-secondary);
+  font-family: 'Comic Sans MS Bold', 'Chalkboard SE', 'Arial Rounded MT Bold', sans-serif;
+  color: white;
   margin-left: 8px;
+  font-size: 85%; /* 親要素の85%サイズ */
 }
 
 /* ヘッダーコンテンツ */
@@ -108,6 +115,10 @@
     width: 48px;
     height: 48px;
     margin-right: 2px;
+  }
+  
+  .headerTitle h1 {
+    font-size: 22px; /* モバイルでは親要素のfont-sizeを継承 */
   }
   
   .headerContent {

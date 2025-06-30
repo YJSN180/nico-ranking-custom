@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 
@@ -104,6 +104,90 @@ describe('ヘッダーCSS-onlyレスポンシブ対応', () => {
         expect(style).not.toContain('font-size')
         expect(style).not.toContain('padding')
       }
+    })
+  })
+
+  describe('ヘッダースタイルの正確性', () => {
+    it('ニコランにtitleMainクラスが適用されてNicomoji Plus v2フォントが設定される', () => {
+      render(<HeaderWithSettings />)
+      
+      const titleMain = screen.getByText('ニコラン')
+      expect(titleMain.className).toContain('titleMain')
+      
+      // CSSファイルでtitleMainにNicomoji Plus v2が設定されているかをテスト
+      // 現在は逆になっているため、このテストは失敗するはず
+      const fs = require('fs')
+      const path = require('path')
+      const cssContent = fs.readFileSync(path.join(process.cwd(), 'components/header.module.css'), 'utf-8')
+      
+      // titleMainクラスの定義を探す
+      const titleMainRegex = /\.titleMain\s*{[^}]+font-family:[^}]+}/s
+      const titleMainMatch = cssContent.match(titleMainRegex)
+      expect(titleMainMatch).toBeTruthy()
+      expect(titleMainMatch[0]).toContain('Nicomoji Plus v2')
+    })
+
+    it('(Re:turn)にtitleSubクラスが適用されてComic Sans MS Boldフォントが設定される', () => {
+      render(<HeaderWithSettings />)
+      
+      const titleSub = screen.getByText('(Re:turn)')
+      expect(titleSub.className).toContain('titleSub')
+      
+      // CSSファイルでtitleSubにComic Sans MS Boldが設定されているかをテスト
+      const fs = require('fs')
+      const path = require('path')
+      const cssContent = fs.readFileSync(path.join(process.cwd(), 'components/header.module.css'), 'utf-8')
+      
+      // titleSubクラスの定義を探す
+      const titleSubRegex = /\.titleSub\s*{[^}]+font-family:[^}]+}/s
+      const titleSubMatch = cssContent.match(titleSubRegex)
+      expect(titleSubMatch).toBeTruthy()
+      expect(titleSubMatch[0]).toContain('Comic Sans MS Bold')
+    })
+
+    it('ヘッダーテキストの色が白色である', () => {
+      render(<HeaderWithSettings />)
+      
+      const titleMain = screen.getByText('ニコラン')
+      const titleSub = screen.getByText('(Re:turn)')
+      
+      // CSSファイルで白色が設定されているかをテスト
+      const fs = require('fs')
+      const path = require('path')
+      const cssContent = fs.readFileSync(path.join(process.cwd(), 'components/header.module.css'), 'utf-8')
+      
+      // titleMainとtitleSubのcolor設定を確認
+      const titleMainRegex = /\.titleMain\s*{[^}]+}/s
+      const titleMainMatch = cssContent.match(titleMainRegex)
+      expect(titleMainMatch).toBeTruthy()
+      expect(titleMainMatch[0]).toContain('color: white') // または color: #ffffff
+    })
+
+    it('モバイルでh1要素にフォントサイズが設定される', () => {
+      // モバイルサイズに設定
+      Object.defineProperty(window, 'innerWidth', {
+        writable: true,
+        configurable: true,
+        value: 375
+      })
+      
+      render(<HeaderWithSettings />)
+      
+      // h1要素がheaderTitleクラスを持つことを確認
+      const h1Element = screen.getByRole('heading', { level: 1 })
+      const linkElement = screen.getByRole('link', { name: /ニコラン/ })
+      
+      // CSSファイルで.headerTitleに対してフォントサイズが設定されているかを確認
+      const fs = require('fs')
+      const path = require('path')
+      const cssContent = fs.readFileSync(path.join(process.cwd(), 'components/header.module.css'), 'utf-8')
+      
+      // h1要素にフォントサイズが適用されるように、h1セレクタも必要
+      const h1FontSizeRegex = /\.headerTitle\s+h1.*{[^}]*font-size:[^}]+}/s
+      const h1Match = cssContent.match(h1FontSizeRegex)
+      
+      // 現在の実装では、.headerTitleがlinkに適用されているため、h1に直接フォントサイズが設定されていない
+      expect(h1Match).toBeTruthy()
     })
   })
 })
