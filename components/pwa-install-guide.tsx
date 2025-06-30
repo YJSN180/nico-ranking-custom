@@ -1,17 +1,27 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { isPWAInstalled } from '@/lib/pwa/detection'
+import { isPWAInstalled, isIOS, isAndroid } from '@/lib/pwa/detection'
 
 export function PWAInstallGuide() {
   const [isInstalled, setIsInstalled] = useState(false)
   const [showGuide, setShowGuide] = useState(false)
+  const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop')
 
   useEffect(() => {
     // PWAとしてインストール済みの場合は表示しない
     const installed = isPWAInstalled()
     setIsInstalled(installed)
     setShowGuide(!installed)
+    
+    // プラットフォームを判定
+    if (isIOS()) {
+      setPlatform('ios')
+    } else if (isAndroid()) {
+      setPlatform('android')
+    } else {
+      setPlatform('desktop')
+    }
   }, [])
 
   if (!showGuide) {
@@ -27,38 +37,75 @@ export function PWAInstallGuide() {
         </h4>
         <p className="description">
           ホーム画面に追加すると、アプリのように快適に利用できます。
-          オフラインでもマイリストを確認できるようになります。
+          一度読み込んだデータはキャッシュされ、より高速に表示されます。
         </p>
         
         <div className="install-steps">
           <h5>インストール方法：</h5>
-          <ol>
-            <li>
-              <span className="step-icon">1️⃣</span>
-              ブラウザの共有ボタン
-              <span className="share-icon">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                        d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.632 4.684C18.114 15.938 18 15.482 18 15c0-.482.114-.938.316-1.342m0 2.684a3 3 0 110-2.684M5.25 7.5A2.25 2.25 0 013 5.25v-1.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 3.75v1.5a2.25 2.25 0 01-2.25 2.25H5.25z" />
-                </svg>
-              </span>
-              をタップ
-            </li>
-            <li>
-              <span className="step-icon">2️⃣</span>
-              「ホーム画面に追加」を選択
-            </li>
-            <li>
-              <span className="step-icon">3️⃣</span>
-              「追加」をタップして完了
-            </li>
-          </ol>
+          {platform === 'ios' ? (
+            <ol>
+              <li>
+                <span className="step-icon">1️⃣</span>
+                Safari下部の共有ボタン
+                <span className="share-icon">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.632 4.684C18.114 15.938 18 15.482 18 15c0-.482.114-.938.316-1.342m0 2.684a3 3 0 110-2.684M5.25 7.5A2.25 2.25 0 013 5.25v-1.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 3.75v1.5a2.25 2.25 0 01-2.25 2.25H5.25z" />
+                  </svg>
+                </span>
+                をタップ
+              </li>
+              <li>
+                <span className="step-icon">2️⃣</span>
+                「ホーム画面に追加」を選択
+              </li>
+              <li>
+                <span className="step-icon">3️⃣</span>
+                右上の「追加」をタップ
+              </li>
+            </ol>
+          ) : platform === 'android' ? (
+            <ol>
+              <li>
+                <span className="step-icon">1️⃣</span>
+                Chrome右上のメニュー（︙）をタップ
+              </li>
+              <li>
+                <span className="step-icon">2️⃣</span>
+                「ホーム画面に追加」を選択
+              </li>
+              <li>
+                <span className="step-icon">3️⃣</span>
+                「追加」をタップして完了
+              </li>
+            </ol>
+          ) : (
+            <ol>
+              <li>
+                <span className="step-icon">1️⃣</span>
+                ブラウザのアドレスバー右端のインストールアイコンをクリック
+              </li>
+              <li>
+                <span className="step-icon">2️⃣</span>
+                「インストール」をクリック
+              </li>
+              <li>
+                <span className="step-icon">3️⃣</span>
+                インストール完了後、アプリとして起動可能
+              </li>
+            </ol>
+          )}
+          {platform === 'ios' && (
+            <p className="notice">
+              ※ iOS/iPadOSではSafariブラウザからのみインストール可能です
+            </p>
+          )}
         </div>
 
         <div className="benefits">
           <h5>メリット：</h5>
           <ul>
-            <li>✅ オフラインでもマイリストを閲覧可能</li>
+            <li>✅ キャッシュによる高速表示</li>
             <li>✅ アプリのような快適な操作性</li>
             <li>✅ ホーム画面から素早くアクセス</li>
           </ul>
@@ -153,6 +200,16 @@ export function PWAInstallGuide() {
           font-size: 0.9rem;
           color: var(--text-secondary);
           line-height: 1.5;
+        }
+
+        .notice {
+          margin: 0.75rem 0 0;
+          padding: 0.5rem 0.75rem;
+          background: rgba(var(--warning-rgb, 251, 191, 36), 0.1);
+          border-left: 3px solid var(--warning-color, #fbbf24);
+          font-size: 0.85rem;
+          color: var(--text-secondary);
+          border-radius: 4px;
         }
 
         @media (max-width: 768px) {
