@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
-import { PWAInstallGuide } from './pwa-install-guide'
+import Link from 'next/link'
 
 interface MylistModalProps {
   mylists: Mylist[]
@@ -72,7 +72,15 @@ export function MylistModal({
           </button>
         </div>
 
-        <PWAInstallGuide />
+        <div className={styles.navigationSection}>
+          <Link 
+            href="/mylists" 
+            className={styles.navigationLink}
+            onClick={(e) => e.stopPropagation()}
+          >
+            📁 マイリスト一覧に移動
+          </Link>
+        </div>
 
         <div className={styles.content}>
           {mylists.length === 0 ? (

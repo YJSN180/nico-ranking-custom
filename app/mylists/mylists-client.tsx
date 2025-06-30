@@ -6,10 +6,10 @@ import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import type { Mylist } from '@/lib/storage/types'
 import { BackLink } from '@/components/back-link'
-import { PWAInstallGuide } from '@/components/pwa-install-guide'
+// PWAInstallGuide removed - custom implementation added at bottom
 import { BackupReminder } from '@/components/backup-reminder'
 import { LastAccessInfo } from '@/components/last-access-info'
-import { SafariHelpButton } from '@/components/safari-help-modal'
+// SafariHelpButton removed
 import { MylistBackup } from '@/components/mylist-backup'
 import styles from './mylists.module.css'
 
@@ -216,11 +216,10 @@ export function MylistsClient() {
         
         <div className={styles.headerInfo}>
           <LastAccessInfo />
-          <SafariHelpButton />
         </div>
       </div>
       
-      <PWAInstallGuide />
+      {/* PWAInstallGuide moved to bottom */}
 
       <div className={styles.mylistGrid}>
         {mylists.map(mylist => (
@@ -296,6 +295,57 @@ export function MylistsClient() {
             <p className={styles.storageStats}>
               {formatBytes(storageInfo.used)} / {formatBytes(storageInfo.quota)} 使用中
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* PWAインストールガイドセクション */}
+      <div className={styles.pwaSection}>
+        <h3>アプリとしてインストール</h3>
+        <div className={styles.pwaContent}>
+          <p>
+            ホーム画面に追加すると、アプリのように快適に利用できます。
+            特にSafariをご利用の場合、データが7日後に削除される可能性があるため、
+            定期的なアクセスとバックアップが重要です。
+          </p>
+          
+          <div className={styles.installMethods}>
+            <div className={styles.methodCard}>
+              <h4>📱 iOS/iPadOS (Safari)</h4>
+              <ol>
+                <li>Safari下部の共有ボタンをタップ</li>
+                <li>「ホーム画面に追加」を選択</li>
+                <li>右上の「追加」をタップ</li>
+              </ol>
+            </div>
+            
+            <div className={styles.methodCard}>
+              <h4>🤖 Android (Chrome)</h4>
+              <ol>
+                <li>Chrome右上のメニュー（︙）をタップ</li>
+                <li>「ホーム画面に追加」を選択</li>
+                <li>「追加」をタップして完了</li>
+              </ol>
+            </div>
+            
+            <div className={styles.methodCard}>
+              <h4>💻 デスクトップ</h4>
+              <ol>
+                <li>アドレスバー右端のインストールアイコンをクリック</li>
+                <li>「インストール」をクリック</li>
+                <li>アプリとして起動可能に</li>
+              </ol>
+            </div>
+          </div>
+          
+          <div className={styles.benefits}>
+            <h4>メリット</h4>
+            <ul>
+              <li>✅ キャッシュによる高速表示</li>
+              <li>✅ ホーム画面から素早くアクセス</li>
+              <li>✅ アプリのような快適な操作性</li>
+              <li>✅ データ削除リスクの軽減（定期的なアクセスにより）</li>
+            </ul>
           </div>
         </div>
       </div>

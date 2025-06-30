@@ -277,3 +277,27 @@
     transform: translateY(0);
   }
 }
+
+/* ナビゲーションセクション */
+.navigationSection {
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  margin: 16px;
+}
+
+.navigationLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.navigationLink:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
