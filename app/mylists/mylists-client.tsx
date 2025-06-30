@@ -7,8 +7,6 @@ import { MylistManager } from '@/lib/storage/mylists'
 import type { Mylist } from '@/lib/storage/types'
 import { BackLink } from '@/components/back-link'
 // PWAInstallGuide removed - custom implementation added at bottom
-import { BackupReminder } from '@/components/backup-reminder'
-import { LastAccessInfo } from '@/components/last-access-info'
 // SafariHelpButton removed
 import { MylistBackup } from '@/components/mylist-backup'
 import styles from './mylists.module.css'
@@ -198,8 +196,6 @@ export function MylistsClient() {
 
   return (
     <div className={styles.container}>
-      <BackupReminder />
-      
       <div className={styles.headerTop}>
         <BackLink />
       </div>
@@ -212,10 +208,6 @@ export function MylistsClient() {
           >
             ＋ 新規マイリスト作成
           </button>
-        </div>
-        
-        <div className={styles.headerInfo}>
-          <LastAccessInfo />
         </div>
       </div>
       
@@ -231,7 +223,7 @@ export function MylistsClient() {
             <div className={styles.mylistInfo}>
               <div className={styles.mylistIcon}>📁</div>
               <div className={styles.mylistDetails}>
-                <h3>{mylist.name}</h3>
+                <h3 className={styles.mylistName}>{mylist.name}</h3>
                 {mylist.description && (
                   <p className={styles.description}>{mylist.description}</p>
                 )}
