@@ -6,7 +6,7 @@ import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import type { Mylist } from '@/lib/storage/types'
 import { BackLink } from '@/components/back-link'
-import { SafariPersistenceWarning } from '@/components/safari-persistence-warning'
+import { PWAInstallGuide } from '@/components/pwa-install-guide'
 import { BackupReminder } from '@/components/backup-reminder'
 import { LastAccessInfo } from '@/components/last-access-info'
 import { SafariHelpButton } from '@/components/safari-help-modal'
@@ -220,7 +220,7 @@ export function MylistsClient() {
         </div>
       </div>
       
-      <SafariPersistenceWarning />
+      <PWAInstallGuide />
 
       <div className={styles.mylistGrid}>
         {mylists.map(mylist => (

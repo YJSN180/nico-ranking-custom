@@ -6,7 +6,6 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { PWARegister } from '@/components/pwa-register'
 import { OfflineIndicator } from '@/components/offline-indicator'
-import { PWAInstallPrompt } from '@/components/pwa-install-prompt'
 import './globals.css'
 
 const inter = Inter({ 
@@ -145,7 +144,6 @@ export default async function RootLayout({
           <ClientOnlyWebVitals />
           <PWARegister />
           <OfflineIndicator />
-          <PWAInstallPrompt />
           {children}
         </ThemeProvider>
       </body>

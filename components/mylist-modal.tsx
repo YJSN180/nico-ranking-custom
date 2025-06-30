@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
-import { SafariPersistenceWarning } from './safari-persistence-warning'
+import { PWAInstallGuide } from './pwa-install-guide'
 
 interface MylistModalProps {
   mylists: Mylist[]
@@ -72,7 +72,7 @@ export function MylistModal({
           </button>
         </div>
 
-        <SafariPersistenceWarning />
+        <PWAInstallGuide />
 
         <div className={styles.content}>
           {mylists.length === 0 ? (
