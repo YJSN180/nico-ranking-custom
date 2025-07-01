@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { OptimizedImage } from '@/components/optimized-image'
@@ -31,6 +31,27 @@ export function MylistDetailClient() {
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
   
+
+  const loadMylistData = useCallback(async () => {
+    if (!mylistManagerRef.current) return
+    
+    try {
+      const mylistData = await mylistManagerRef.current.getMylist(mylistId)
+      if (!mylistData) {
+        router.push('/mylists')
+        return
+      }
+      setMylist(mylistData)
+      
+      const videosData = await mylistManagerRef.current.getVideosInMylistWithOrder(mylistId)
+      setVideos(videosData)
+      setFilteredVideos(videosData)
+      
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load mylist data:', error)
+    }
+  }, [mylistId, router])
 
   // 初期化とデータ読み込み
   useEffect(() => {
@@ -64,66 +85,44 @@ export function MylistDetailClient() {
     return () => {
       mounted = false
     }
-  }, [mylistId])
+  }, [mylistId, loadMylistData])
 
-  const loadMylistData = async () => {
-    if (!mylistManagerRef.current) return
-    
-    try {
-      const mylistData = await mylistManagerRef.current.getMylist(mylistId)
-      if (!mylistData) {
-        router.push('/mylists')
-        return
-      }
-      setMylist(mylistData)
-      
-      const videosData = await mylistManagerRef.current.getVideosInMylistWithOrder(mylistId)
-      setVideos(videosData)
-      setFilteredVideos(videosData)
-      
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to load mylist data:', error)
-    }
-  }
-
-  // 検索処理
+  // 検索とソート処理を統合
   useEffect(() => {
-    const search = async () => {
+    const searchAndSort = async () => {
       if (!mylistManagerRef.current) return
       
+      let searchResults
       if (searchQuery) {
-        const results = await mylistManagerRef.current.searchVideosInMylist(mylistId, searchQuery)
-        setFilteredVideos(results)
+        searchResults = await mylistManagerRef.current.searchVideosInMylist(mylistId, searchQuery)
       } else {
-        setFilteredVideos(videos)
+        searchResults = videos
       }
+
+      // ソート処理
+      const sorted = [...searchResults].sort((a, b) => {
+        switch (sortOrder) {
+          case 'addedAt-desc':
+            return b.addedAt - a.addedAt
+          case 'addedAt-asc':
+            return a.addedAt - b.addedAt
+          case 'title-asc':
+            return a.title.localeCompare(b.title, 'ja')
+          case 'title-desc':
+            return b.title.localeCompare(a.title, 'ja')
+          case 'views-desc':
+            return (b.views || 0) - (a.views || 0)
+          default:
+            return 0
+        }
+      })
+      
+      setFilteredVideos(sorted)
     }
     
-    const debounce = setTimeout(search, 300)
+    const debounce = setTimeout(searchAndSort, 300)
     return () => clearTimeout(debounce)
-  }, [searchQuery, videos, mylistId])
-
-  // ソート処理
-  useEffect(() => {
-    const sorted = [...filteredVideos].sort((a, b) => {
-      switch (sortOrder) {
-        case 'addedAt-desc':
-          return b.addedAt - a.addedAt
-        case 'addedAt-asc':
-          return a.addedAt - b.addedAt
-        case 'title-asc':
-          return a.title.localeCompare(b.title, 'ja')
-        case 'title-desc':
-          return b.title.localeCompare(a.title, 'ja')
-        case 'views-desc':
-          return (b.views || 0) - (a.views || 0)
-        default:
-          return 0
-      }
-    })
-    setFilteredVideos(sorted)
-  }, [sortOrder])
+  }, [searchQuery, videos, mylistId, sortOrder])
 
   const handleRemoveVideo = async (videoId: string) => {
     if (!mylistManagerRef.current) return

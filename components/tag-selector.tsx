@@ -49,7 +49,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         behavior: prefersReducedMotion ? 'auto' : 'smooth'
       })
     }
-  }, []) // 初回マウント時のみ実行
+  }, [config.tag]) // config.tagが変更されたときに実行
 
   const handleTagSelect = (tag: string) => {
     if (tag === 'すべて') {

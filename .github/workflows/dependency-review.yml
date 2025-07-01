@@ -26,4 +26,7 @@ jobs:
           license-check: true
           
           # Allowed licenses (common open source licenses)
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, CC-BY-3.0, CC-BY-4.0, Unlicense
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, CC-BY-3.0, CC-BY-4.0, Unlicense, LicenseRef-scancode-unicode
+          
+          # Allow dependencies without detected licenses (workaround for terser)
+          allow-dependencies-licenses: LicenseRef-scancode-unicode AND MIT
