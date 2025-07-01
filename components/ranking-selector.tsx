@@ -43,7 +43,9 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
       const scrollLeft = buttonCenter - containerCenter
       
       // reduced-motion設定を考慮してスクロール
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia 
+        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
+        : false
       container.scrollTo({
         left: scrollLeft,
         behavior: prefersReducedMotion ? 'auto' : 'smooth'

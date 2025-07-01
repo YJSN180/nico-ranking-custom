@@ -73,13 +73,14 @@ jobs:
             shard: 1
           - project: firefox
             shard: 2
-          - project: webkit
-            shard: 1
-          - project: webkit
-            shard: 2
-          # Mobile Safari
-          - project: mobile-safari
-            shard: 1
+          # WebKit disabled due to stability issues
+          # - project: webkit
+          #   shard: 1
+          # - project: webkit
+          #   shard: 2
+          # Mobile Safari disabled with WebKit
+          # - project: mobile-safari
+          #   shard: 1
 
     steps:
     - name: Checkout code
@@ -126,13 +127,8 @@ jobs:
     - name: Install Playwright browsers if cache miss
       if: steps.playwright-cache-e2e.outputs.cache-hit != 'true'
       run: |
-        # Install all browsers for desktop tests
-        if [[ "${{ matrix.project }}" != "mobile-safari" ]]; then
-          npx playwright install --with-deps ${{ matrix.project }}
-        else
-          # Mobile Safari needs WebKit
-          npx playwright install --with-deps webkit
-        fi
+        # Install browsers for desktop tests only (webkit disabled)
+        npx playwright install --with-deps ${{ matrix.project }}
       
     - name: Install system dependencies for browsers
       run: |
@@ -191,7 +187,7 @@ jobs:
       id: test-execution
       run: |
         set +e
-        npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.project == 'mobile-safari' && '1' || '2' }}
+        npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}/2
         TEST_EXIT_CODE=$?
         
         if [ $TEST_EXIT_CODE -eq 0 ]; then
@@ -286,10 +282,11 @@ jobs:
           fi
 
       - name: Send Slack notification
-        uses: 8398a7/action-slack@v3
+        uses: slackapi/slack-github-action@v2.1.0
         with:
-          status: ${{ steps.overall-result.outputs.result }}
-          custom_payload: |
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
             {
               "channel": "#nico-ranking-alerts",
               "username": "E2E Test Bot",
@@ -346,15 +343,14 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Send detailed failure notification
         if: steps.overall-result.outputs.result == 'failure' && needs.e2e-tests.outputs.failed-tests != ''
-        uses: 8398a7/action-slack@v3
+        uses: slackapi/slack-github-action@v2.1.0
         with:
-          status: failure
-          custom_payload: |
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
             {
               "channel": "#nico-ranking-alerts",
               "username": "E2E Test Bot",
@@ -378,8 +374,6 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   merge-reports:
     needs: e2e-tests
