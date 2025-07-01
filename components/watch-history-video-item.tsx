@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
+import { useWatchHistory } from '@/hooks/use-watch-history'
 import { formatNumberMobile } from '@/lib/format-utils'
 import type { WatchHistoryEntry } from '@/lib/storage/types'
 import './mylist-video-item.css'
@@ -18,6 +19,7 @@ const WatchHistoryVideoItem = memo(function WatchHistoryVideoItem({
   video, 
   onImageError
 }: WatchHistoryVideoItemProps) {
+  const { addToHistory } = useWatchHistory()
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString('ja-JP', {
@@ -76,10 +78,29 @@ const WatchHistoryVideoItem = memo(function WatchHistoryVideoItem({
         transition: 'background-color 0.2s',
         position: 'relative'
       }}
-      onClick={(e) => {
+      onClick={async (e) => {
         // リンクやボタンのクリックは除外
         const target = e.target as HTMLElement;
         if (target.closest('a') || target.closest('button')) return;
+        
+        try {
+          await addToHistory({
+            id: video.videoId,
+            title: video.title,
+            thumbURL: video.thumbURL,
+            views: video.views,
+            comments: video.comments,
+            mylists: video.mylists,
+            likes: video.likes,
+            authorId: video.authorId,
+            authorName: video.authorName,
+            authorIcon: video.authorIcon,
+            registeredAt: video.registeredAt
+          })
+        } catch (error) {
+          console.error('Failed to add to watch history:', error)
+        }
+        
         window.open(`https://www.nicovideo.jp/watch/${video.videoId}`, '_blank');
       }}
       onMouseEnter={(e) => {
@@ -97,6 +118,26 @@ const WatchHistoryVideoItem = memo(function WatchHistoryVideoItem({
             target="_blank"
             rel="noopener noreferrer"
             style={{ display: 'block', cursor: 'pointer' }}
+            onClick={async (e) => {
+              e.stopPropagation()
+              try {
+                await addToHistory({
+                  id: video.videoId,
+                  title: video.title,
+                  thumbURL: video.thumbURL,
+                  views: video.views,
+                  comments: video.comments,
+                  mylists: video.mylists,
+                  likes: video.likes,
+                  authorId: video.authorId,
+                  authorName: video.authorName,
+                  authorIcon: video.authorIcon,
+                  registeredAt: video.registeredAt
+                })
+              } catch (error) {
+                console.error('Failed to add to watch history:', error)
+              }
+            }}
           >
             <OptimizedImage
               src={video.thumbURL}
@@ -124,6 +165,26 @@ const WatchHistoryVideoItem = memo(function WatchHistoryVideoItem({
             rel="noopener noreferrer"
             className="mylist-video-item__title"
             data-testid="video-title"
+            onClick={async (e) => {
+              e.stopPropagation()
+              try {
+                await addToHistory({
+                  id: video.videoId,
+                  title: video.title,
+                  thumbURL: video.thumbURL,
+                  views: video.views,
+                  comments: video.comments,
+                  mylists: video.mylists,
+                  likes: video.likes,
+                  authorId: video.authorId,
+                  authorName: video.authorName,
+                  authorIcon: video.authorIcon,
+                  registeredAt: video.registeredAt
+                })
+              } catch (error) {
+                console.error('Failed to add to watch history:', error)
+              }
+            }}
           >
             {video.title}
           </a>
