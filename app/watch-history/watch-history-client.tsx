@@ -1,12 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { OptimizedImage } from '@/components/optimized-image'
+import { WatchHistoryVideoItem } from '@/components/watch-history-video-item'
 import { useWatchHistory } from '@/hooks/use-watch-history'
-import { DBManager } from '@/lib/storage/db-manager'
-import { MylistManager } from '@/lib/storage/mylists'
-import type { WatchHistoryEntry, Mylist } from '@/lib/storage/types'
+import type { WatchHistoryEntry } from '@/lib/storage/types'
 import styles from './watch-history.module.css'
 
 type SortOrder = 'watchedAt-desc' | 'watchedAt-asc' | 'watchCount-desc' | 'title-asc' | 'title-desc'
@@ -29,31 +27,8 @@ export function WatchHistoryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('watchedAt-desc')
   const [isSelectionMode, setIsSelectionMode] = useState(false)
-  const [showMylistModal, setShowMylistModal] = useState(false)
-  const [selectedVideo, setSelectedVideo] = useState<WatchHistoryEntry | null>(null)
-  const [mylists, setMylists] = useState<Mylist[]>([])
   const [sortedHistory, setSortedHistory] = useState<WatchHistoryEntry[]>([])
   
-  const dbManagerRef = useRef<DBManager | null>(null)
-  const mylistManagerRef = useRef<MylistManager | null>(null)
-  
-  // マイリストマネージャーの初期化
-  useEffect(() => {
-    const init = async () => {
-      if (!dbManagerRef.current) {
-        dbManagerRef.current = new DBManager()
-        await dbManagerRef.current.init()
-        mylistManagerRef.current = new MylistManager(dbManagerRef.current)
-      }
-      
-      // マイリスト一覧を取得
-      if (mylistManagerRef.current) {
-        const allMylists = await mylistManagerRef.current.getAllMylists()
-        setMylists(allMylists)
-      }
-    }
-    init()
-  }, [])
   
   // 統計情報の読み込み
   useEffect(() => {
@@ -96,44 +71,6 @@ export function WatchHistoryPage() {
     setSortedHistory(sorted)
   }, [history, sortOrder])
   
-  const handleAddToMylist = async (mylistId: string) => {
-    if (!mylistManagerRef.current || !selectedVideo) return
-    
-    try {
-      await mylistManagerRef.current.addVideoToMylist(mylistId, {
-        id: selectedVideo.videoId,
-        mylistId: mylistId,
-        title: selectedVideo.title,
-        thumbURL: selectedVideo.thumbURL,
-        addedAt: Date.now(),
-        views: selectedVideo.views,
-        comments: selectedVideo.comments,
-        mylists: selectedVideo.mylists,
-        likes: selectedVideo.likes,
-        authorName: selectedVideo.authorName,
-        authorId: selectedVideo.authorId,
-        registeredAt: selectedVideo.registeredAt
-      })
-      
-      setShowMylistModal(false)
-      setSelectedVideo(null)
-      
-      // 成功メッセージ（実装は省略）
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to add to mylist:', error)
-    }
-  }
-  
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
   
   if (isLoading) {
     return (
@@ -237,137 +174,27 @@ export function WatchHistoryPage() {
         <ul className={styles.historyList}>
           {sortedHistory.map((item) => {
             return (
-              <li key={item.videoId} className={styles.historyItem}>
+              <div key={item.videoId} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
                 {isSelectionMode && (
                   <input
                     type="checkbox"
                     checked={selectedItems.has(item.videoId)}
                     onChange={() => toggleSelection(item.videoId)}
                     className={styles.checkbox}
+                    style={{ marginTop: '12px' }}
                   />
                 )}
-                
-                <div className={styles.itemContent}>
-                  {/* サムネイル */}
-                  <div className={styles.thumbnail}>
-                    <a
-                      href={`https://www.nicovideo.jp/watch/${item.videoId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <OptimizedImage
-                        src={item.thumbURL}
-                        alt={item.title}
-                        width={160}
-                        height={90}
-                      />
-                    </a>
-                  </div>
-                  
-                  {/* 詳細 */}
-                  <div className={styles.details}>
-                    <a
-                      href={`https://www.nicovideo.jp/watch/${item.videoId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.videoTitle}
-                    >
-                      {item.title}
-                    </a>
-                    
-                    {item.authorName && (
-                      <div className={styles.author}>
-                        <a
-                          href={`https://www.nicovideo.jp/user/${item.authorId}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          {item.authorName}
-                        </a>
-                      </div>
-                    )}
-                    
-                    <div className={styles.meta}>
-                      <span className={styles.watchCount}>視聴回数: {item.watchCount}回</span>
-                      <span className={styles.separator}>•</span>
-                      <span className={styles.watchedAt}>最終視聴: {formatDate(item.watchedAt)}</span>
-                    </div>
-                    
-                    {item.views !== undefined && (
-                      <div className={styles.stats}>
-                        <span>再生: {item.views.toLocaleString()}</span>
-                        <span>コメント: {item.comments?.toLocaleString() || 0}</span>
-                        <span>マイリスト: {item.mylists?.toLocaleString() || 0}</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* アクション */}
-                  <div className={styles.itemActions}>
-                    <button
-                      className={styles.btnPrimary}
-                      onClick={() => {
-                        setSelectedVideo(item)
-                        setShowMylistModal(true)
-                      }}
-                    >
-                      マイリストに追加
-                    </button>
-                  </div>
-                </div>
-              </li>
+                <WatchHistoryVideoItem 
+                  video={item}
+                  onImageError={(videoId) => {
+                    // Handle image error if needed
+                    console.warn(`Failed to load thumbnail for video: ${videoId}`)
+                  }}
+                />
+              </div>
             )
           })}
         </ul>
-      )}
-      
-      {/* マイリスト選択モーダル */}
-      {showMylistModal && selectedVideo && (
-        <div className={styles.modalOverlay} onClick={() => setShowMylistModal(false)}>
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>マイリストに追加</h2>
-              <button
-                className={styles.closeButton}
-                onClick={() => setShowMylistModal(false)}
-              >
-                ×
-              </button>
-            </div>
-            
-            <div className={styles.modalContent}>
-              <div className={styles.videoPreview}>
-                <OptimizedImage
-                  src={selectedVideo.thumbURL}
-                  alt={selectedVideo.title}
-                  width={120}
-                  height={67}
-                />
-                <p className={styles.previewTitle}>{selectedVideo.title}</p>
-              </div>
-              
-              <ul className={styles.mylistList}>
-                {mylists.map((mylist) => (
-                  <li key={mylist.id}>
-                    <button
-                      className={styles.mylistItem}
-                      onClick={() => handleAddToMylist(mylist.id)}
-                    >
-                      <span className={styles.mylistName}>{mylist.name}</span>
-                      <span className={styles.videoCount}>{mylist.videoCount}件</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              
-              <div className={styles.modalFooter}>
-                <Link href="/mylists" className={styles.createNewLink}>
-                  新しいマイリストを作成
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )
