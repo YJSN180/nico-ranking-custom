@@ -85,9 +85,7 @@ export function useWatchHistory(): UseWatchHistoryResult {
     if (!watchHistoryManagerRef.current) return
     
     try {
-      console.log('[useWatchHistory] Loading history...')
       const entries = await watchHistoryManagerRef.current.getHistory(limit, offset)
-      console.log('[useWatchHistory] Loaded entries:', entries.length, 'items', entries)
       setHistory(entries)
     } catch (error) {
       // eslint-disable-next-line no-console

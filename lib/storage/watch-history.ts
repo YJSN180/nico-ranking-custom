@@ -30,8 +30,6 @@ export class WatchHistoryManager {
     const db = this.dbManager.getDB()
     if (!db) throw new Error('Database not initialized')
     
-    console.log('[WatchHistoryManager] Adding to history:', video.id, video.title)
-    
     // 古い履歴を削除
     await this.cleanupOldEntries()
     
@@ -40,7 +38,6 @@ export class WatchHistoryManager {
     
     // 既存のエントリを確認
     const existingEntry = await store.get(video.id)
-    console.log('[WatchHistoryManager] Existing entry:', existingEntry)
     
     const entry: WatchHistoryEntry = {
       videoId: video.id,
@@ -58,12 +55,10 @@ export class WatchHistoryManager {
       registeredAt: video.registeredAt
     }
     
-    console.log('[WatchHistoryManager] Saving entry:', entry)
     await store.put(entry)
     
     // 最大件数チェック
     await this.enforceMaxEntries()
-    console.log('[WatchHistoryManager] Entry saved successfully')
   }
   
   /**
@@ -73,17 +68,12 @@ export class WatchHistoryManager {
     const db = this.dbManager.getDB()
     if (!db) throw new Error('Database not initialized')
     
-    console.log('[WatchHistoryManager] Getting history from store:', this.STORE_NAME)
     const transaction = db.transaction([this.STORE_NAME], 'readonly')
     const store = transaction.objectStore(this.STORE_NAME)
     const entries = await store.getAll()
     
-    console.log('[WatchHistoryManager] Raw entries from DB:', entries)
-    
     // 配列かチェック
     const entriesArray = Array.isArray(entries) ? entries : []
-    
-    console.log('[WatchHistoryManager] Entries array:', entriesArray.length, 'items')
     
     // 新しい順にソート
     entriesArray.sort((a, b) => b.watchedAt - a.watchedAt)
@@ -93,8 +83,6 @@ export class WatchHistoryManager {
     const end = limit ? start + limit : undefined
     
     const result = entriesArray.slice(start, end)
-    console.log('[WatchHistoryManager] Returning:', result.length, 'items')
-    
     return result
   }
   

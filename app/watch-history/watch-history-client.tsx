@@ -52,7 +52,6 @@ export function WatchHistoryPage() {
   
   // ソート処理
   useEffect(() => {
-    console.log('WatchHistoryPage - history updated:', history.length, 'items', history)
     const sorted = [...history].sort((a, b) => {
       switch (sortOrder) {
         case 'watchedAt-desc':
@@ -70,7 +69,6 @@ export function WatchHistoryPage() {
       }
     })
     setSortedHistory(sorted)
-    console.log('WatchHistoryPage - sortedHistory:', sorted.length, 'items')
   }, [history, sortOrder])
   
   
