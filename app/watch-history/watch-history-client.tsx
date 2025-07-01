@@ -52,6 +52,7 @@ export function WatchHistoryPage() {
   
   // ソート処理
   useEffect(() => {
+    console.log('WatchHistoryPage - history updated:', history.length, 'items', history)
     const sorted = [...history].sort((a, b) => {
       switch (sortOrder) {
         case 'watchedAt-desc':
@@ -69,6 +70,7 @@ export function WatchHistoryPage() {
       }
     })
     setSortedHistory(sorted)
+    console.log('WatchHistoryPage - sortedHistory:', sorted.length, 'items')
   }, [history, sortOrder])
   
   
@@ -171,7 +173,7 @@ export function WatchHistoryPage() {
           </Link>
         </div>
       ) : (
-        <ul className={styles.historyList}>
+        <div className={styles.historyList}>
           {sortedHistory.map((item) => {
             return (
               <div key={item.videoId} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
@@ -194,7 +196,7 @@ export function WatchHistoryPage() {
               </div>
             )
           })}
-        </ul>
+        </div>
       )}
     </div>
   )

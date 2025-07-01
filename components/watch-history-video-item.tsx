@@ -62,7 +62,7 @@ const WatchHistoryVideoItem = memo(function WatchHistoryVideoItem({
   }
 
   return (
-    <li 
+    <div 
       data-testid="watch-history-video-item"
       className="mylist-video-item"
       style={{
@@ -313,7 +313,7 @@ const WatchHistoryVideoItem = memo(function WatchHistoryVideoItem({
           <MylistButton video={rankingItem} />
         </div>
       </div>
-    </li>
+    </div>
   )
 }, (prevProps, nextProps) => {
   // メモ化の比較関数
