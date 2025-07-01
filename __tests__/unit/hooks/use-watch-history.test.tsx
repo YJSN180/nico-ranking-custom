@@ -4,6 +4,23 @@ import { useWatchHistory } from '@/hooks/use-watch-history'
 import { WatchHistoryManager } from '@/lib/storage/watch-history'
 import { DBManager } from '@/lib/storage/db-manager'
 
+// モック用の変数
+const mockAddToHistory = vi.fn()
+const mockGetHistory = vi.fn()
+const mockSearchHistory = vi.fn()
+const mockRemoveFromHistory = vi.fn()
+const mockClearHistory = vi.fn()
+const mockGetHistoryStats = vi.fn()
+
+// デフォルトのモック値を設定
+mockGetHistory.mockResolvedValue([])
+mockSearchHistory.mockResolvedValue([])
+mockGetHistoryStats.mockResolvedValue({
+  totalCount: 0,
+  oldestWatchedAt: null,
+  newestWatchedAt: null
+})
+
 // DBManagerのモック
 vi.mock('@/lib/storage/db-manager', () => ({
   DBManager: vi.fn().mockImplementation(() => ({
@@ -15,16 +32,12 @@ vi.mock('@/lib/storage/db-manager', () => ({
 // WatchHistoryManagerのモック
 vi.mock('@/lib/storage/watch-history', () => ({
   WatchHistoryManager: vi.fn().mockImplementation(() => ({
-    addToHistory: vi.fn().mockResolvedValue(undefined),
-    getHistory: vi.fn().mockResolvedValue([]),
-    searchHistory: vi.fn().mockResolvedValue([]),
-    removeFromHistory: vi.fn().mockResolvedValue(undefined),
-    clearHistory: vi.fn().mockResolvedValue(undefined),
-    getHistoryStats: vi.fn().mockResolvedValue({
-      totalCount: 0,
-      oldestWatchedAt: null,
-      newestWatchedAt: null
-    })
+    addToHistory: mockAddToHistory,
+    getHistory: mockGetHistory,
+    searchHistory: mockSearchHistory,
+    removeFromHistory: mockRemoveFromHistory,
+    clearHistory: mockClearHistory,
+    getHistoryStats: mockGetHistoryStats
   }))
 }))
 
@@ -33,6 +46,14 @@ describe('useWatchHistory', () => {
   
   beforeEach(() => {
     vi.clearAllMocks()
+    // デフォルトのモック値をリセット
+    mockGetHistory.mockResolvedValue([])
+    mockSearchHistory.mockResolvedValue([])
+    mockGetHistoryStats.mockResolvedValue({
+      totalCount: 0,
+      oldestWatchedAt: null,
+      newestWatchedAt: null
+    })
     mockWatchHistoryManager = new WatchHistoryManager(new DBManager())
   })
   
@@ -78,7 +99,7 @@ describe('useWatchHistory', () => {
         await result.current.addToHistory(video)
       })
       
-      expect(mockWatchHistoryManager.addToHistory).toHaveBeenCalledWith(video)
+      expect(mockAddToHistory).toHaveBeenCalledWith(video)
     })
     
     it('動画再生ページでのみ自動記録される', async () => {
@@ -108,7 +129,7 @@ describe('useWatchHistory', () => {
         await result.current.addToHistory(video)
       })
       
-      expect(mockWatchHistoryManager.addToHistory).toHaveBeenCalled()
+      expect(mockAddToHistory).toHaveBeenCalled()
       
       // locationを元に戻す
       window.location = originalLocation
@@ -134,7 +155,8 @@ describe('useWatchHistory', () => {
         }
       ]
       
-      mockWatchHistoryManager.getHistory.mockResolvedValueOnce(mockHistory)
+      // 初期化時と明示的なloadHistory呼び出し時の両方で返される
+      mockGetHistory.mockResolvedValue(mockHistory)
       
       const { result } = renderHook(() => useWatchHistory())
       
@@ -143,10 +165,7 @@ describe('useWatchHistory', () => {
         await new Promise(resolve => setTimeout(resolve, 150))
       })
       
-      await act(async () => {
-        await result.current.loadHistory()
-      })
-      
+      // 初期化時に既に履歴が読み込まれているはず
       expect(result.current.history).toEqual(mockHistory)
     })
   })
@@ -163,7 +182,7 @@ describe('useWatchHistory', () => {
         }
       ]
       
-      mockWatchHistoryManager.searchHistory.mockResolvedValueOnce(mockSearchResults)
+      mockSearchHistory.mockResolvedValueOnce(mockSearchResults)
       
       const { result } = renderHook(() => useWatchHistory())
       
@@ -176,7 +195,7 @@ describe('useWatchHistory', () => {
         await result.current.searchHistory('ボカロ')
       })
       
-      expect(mockWatchHistoryManager.searchHistory).toHaveBeenCalledWith('ボカロ')
+      expect(mockSearchHistory).toHaveBeenCalledWith('ボカロ')
       expect(result.current.history).toEqual(mockSearchResults)
     })
   })
@@ -202,7 +221,7 @@ describe('useWatchHistory', () => {
         await result.current.removeSelected()
       })
       
-      expect(mockWatchHistoryManager.removeFromHistory).toHaveBeenCalledWith(['sm12345', 'sm67890'])
+      expect(mockRemoveFromHistory).toHaveBeenCalledWith(['sm12345', 'sm67890'])
       expect(result.current.selectedItems).toEqual(new Set())
     })
   })
@@ -220,7 +239,7 @@ describe('useWatchHistory', () => {
         await result.current.clearAllHistory()
       })
       
-      expect(mockWatchHistoryManager.clearHistory).toHaveBeenCalled()
+      expect(mockClearHistory).toHaveBeenCalled()
     })
   })
   
@@ -264,17 +283,14 @@ describe('useWatchHistory', () => {
         }
       ]
       
-      mockWatchHistoryManager.getHistory.mockResolvedValueOnce(mockHistory)
+      // 初期化時に履歴が読み込まれる
+      mockGetHistory.mockResolvedValue(mockHistory)
       
       const { result } = renderHook(() => useWatchHistory())
       
       // 初期化完了を待つ
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 150))
-      })
-      
-      await act(async () => {
-        await result.current.loadHistory()
       })
       
       // すべて選択
@@ -301,7 +317,7 @@ describe('useWatchHistory', () => {
         newestWatchedAt: Date.now()
       }
       
-      mockWatchHistoryManager.getHistoryStats.mockResolvedValueOnce(mockStats)
+      mockGetHistoryStats.mockResolvedValueOnce(mockStats)
       
       const { result } = renderHook(() => useWatchHistory())
       

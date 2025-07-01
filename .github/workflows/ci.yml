@@ -40,14 +40,10 @@ jobs:
 
       - name: Run unit and integration tests
         run: |
-          # Run all unit tests (including new backup-restore and mylist tests)
+          # Run all unit tests
           npm run test:unit
-          # Run integration tests for unified compression system
-          npm run test:integration -- unified-compression
-          # Run backward compatibility tests
-          npm run test:integration -- backward-compatibility
-          # Run worker integration tests  
-          npm run test:integration -- worker-unified-compression
+          # Run all integration tests
+          npm run test:integration
 
       # Codecov upload disabled - requires token configuration
       # - name: Upload coverage reports

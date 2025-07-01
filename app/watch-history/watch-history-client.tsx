@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { OptimizedImage } from '@/components/optimized-image'
 import { useWatchHistory } from '@/hooks/use-watch-history'
-import { useDeletedVideoDetection } from '@/hooks/use-deleted-video-detection'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import type { WatchHistoryEntry, Mylist } from '@/lib/storage/types'
@@ -26,7 +25,6 @@ export function WatchHistoryPage() {
     loadStats
   } = useWatchHistory()
   
-  const { deletedVideoIds, isChecking, checkVideos } = useDeletedVideoDetection()
   
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('watchedAt-desc')
@@ -62,17 +60,6 @@ export function WatchHistoryPage() {
     loadStats()
   }, [loadStats])
   
-  // 削除済み動画の検出
-  useEffect(() => {
-    if (history.length > 0) {
-      const videos = history.map(item => ({
-        id: item.videoId,
-        title: item.title,
-        thumbURL: item.thumbURL
-      }))
-      checkVideos(videos)
-    }
-  }, [history, checkVideos])
   
   // 検索処理
   useEffect(() => {
@@ -157,8 +144,7 @@ export function WatchHistoryPage() {
   }
   
   return (
-    <main className={styles.main}>
-      <div className={styles.container}>
+    <div className={styles.container}>
         {/* ヘッダー */}
         <div className={styles.header}>
           <h1 className={styles.title}>視聴履歴</h1>
@@ -237,12 +223,6 @@ export function WatchHistoryPage() {
         </div>
       </div>
       
-      {/* 削除済み動画検出中の表示 */}
-      {isChecking && (
-        <div className={styles.checkingMessage}>
-          視聴できない動画を確認しています...
-        </div>
-      )}
       
       {/* 視聴履歴一覧 */}
       {sortedHistory.length === 0 ? (
@@ -256,8 +236,6 @@ export function WatchHistoryPage() {
       ) : (
         <ul className={styles.historyList}>
           {sortedHistory.map((item) => {
-            const isDeleted = deletedVideoIds.has(item.videoId)
-            
             return (
               <li key={item.videoId} className={styles.historyItem}>
                 {isSelectionMode && (
@@ -272,57 +250,32 @@ export function WatchHistoryPage() {
                 <div className={styles.itemContent}>
                   {/* サムネイル */}
                   <div className={styles.thumbnail}>
-                    {isDeleted ? (
-                      <div className={styles.deletedThumbnail}>
-                        <OptimizedImage
-                          src="/cantwatch.jpg"
-                          alt={item.title}
-                          width={160}
-                          height={90}
-                          style={{ opacity: 0.7 }}
-                        />
-                      </div>
-                    ) : (
-                      <a
-                        href={`https://www.nicovideo.jp/watch/${item.videoId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <OptimizedImage
-                          src={item.thumbURL}
-                          alt={item.title}
-                          width={160}
-                          height={90}
-                        />
-                      </a>
-                    )}
+                    <a
+                      href={`https://www.nicovideo.jp/watch/${item.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <OptimizedImage
+                        src={item.thumbURL}
+                        alt={item.title}
+                        width={160}
+                        height={90}
+                      />
+                    </a>
                   </div>
                   
                   {/* 詳細 */}
                   <div className={styles.details}>
-                    {isDeleted ? (
-                      <span className={styles.deletedTitle}>
-                        {item.title}
-                        <span className={styles.deletedBadge}>（視聴できません）</span>
-                      </span>
-                    ) : (
-                      <a
-                        href={`https://www.nicovideo.jp/watch/${item.videoId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.videoTitle}
-                      >
-                        {item.title}
-                      </a>
-                    )}
+                    <a
+                      href={`https://www.nicovideo.jp/watch/${item.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.videoTitle}
+                    >
+                      {item.title}
+                    </a>
                     
-                    {isDeleted && (
-                      <p className={styles.deletedMessage}>
-                        この動画は削除されたか、非公開になっています
-                      </p>
-                    )}
-                    
-                    {!isDeleted && item.authorName && (
+                    {item.authorName && (
                       <div className={styles.author}>
                         <a
                           href={`https://www.nicovideo.jp/user/${item.authorId}`}
@@ -416,7 +369,6 @@ export function WatchHistoryPage() {
           </div>
         </div>
       )}
-      </div>
-    </main>
+    </div>
   )
 }

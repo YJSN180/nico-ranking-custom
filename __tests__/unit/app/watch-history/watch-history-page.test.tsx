@@ -2,13 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { WatchHistoryPage } from '@/app/watch-history/watch-history-client'
 import { useWatchHistory } from '@/hooks/use-watch-history'
-import { useDeletedVideoDetection } from '@/hooks/use-deleted-video-detection'
 import { MylistManager } from '@/lib/storage/mylists'
 import { DBManager } from '@/lib/storage/db-manager'
 
 // フックのモック
 vi.mock('@/hooks/use-watch-history')
-vi.mock('@/hooks/use-deleted-video-detection')
 
 // ストレージのモック
 vi.mock('@/lib/storage/db-manager', () => ({
@@ -88,12 +86,6 @@ describe('WatchHistoryPage', () => {
       loadStats: vi.fn()
     })
 
-    // useDeletedVideoDetectionのデフォルトモック
-    vi.mocked(useDeletedVideoDetection).mockReturnValue({
-      deletedVideoIds: new Set(),
-      isChecking: false,
-      checkVideos: vi.fn()
-    })
   })
 
   describe('基本的な表示', () => {
@@ -308,39 +300,14 @@ describe('WatchHistoryPage', () => {
       fireEvent.click(addButton)
       
       await waitFor(() => {
-        expect(screen.getByText('マイリストに追加')).toBeInTheDocument()
+        // モーダル内のh2を確認
+        expect(screen.getByRole('heading', { name: 'マイリストに追加' })).toBeInTheDocument()
         expect(screen.getByText('マイリスト1')).toBeInTheDocument()
         expect(screen.getByText('マイリスト2')).toBeInTheDocument()
       })
     })
   })
 
-  describe('削除済み動画の表示', () => {
-    it('削除済み動画が特別な表示になる', () => {
-      vi.mocked(useDeletedVideoDetection).mockReturnValue({
-        deletedVideoIds: new Set(['sm67890']),
-        isChecking: false,
-        checkVideos: vi.fn()
-      })
-
-      render(<WatchHistoryPage />)
-      
-      expect(screen.getByText('（視聴できません）')).toBeInTheDocument()
-      expect(screen.getByText('この動画は削除されたか、非公開になっています')).toBeInTheDocument()
-    })
-
-    it('削除済み動画の確認中メッセージが表示される', () => {
-      vi.mocked(useDeletedVideoDetection).mockReturnValue({
-        deletedVideoIds: new Set(),
-        isChecking: true,
-        checkVideos: vi.fn()
-      })
-
-      render(<WatchHistoryPage />)
-      
-      expect(screen.getByText('視聴できない動画を確認しています...')).toBeInTheDocument()
-    })
-  })
 
   describe('ソート機能', () => {
     it('ソート選択が表示される', () => {

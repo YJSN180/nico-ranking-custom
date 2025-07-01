@@ -146,6 +146,26 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
               target="_blank"
               rel="noopener noreferrer"
               style={{ display: 'block', cursor: 'pointer' }}
+              onClick={async (e) => {
+                e.stopPropagation()
+                try {
+                  await addToHistory({
+                    id: item.id,
+                    title: item.title,
+                    thumbURL: item.thumbURL,
+                    views: item.views,
+                    comments: item.comments,
+                    mylists: item.mylists,
+                    likes: item.likes,
+                    authorId: item.authorId,
+                    authorName: item.authorName,
+                    authorIcon: item.authorIcon,
+                    registeredAt: item.registeredAt
+                  })
+                } catch (error) {
+                  console.error('Failed to add to watch history:', error)
+                }
+              }}
             >
               <OptimizedImage
                 src={item.thumbURL}
@@ -183,6 +203,26 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
               rel="noopener noreferrer"
               className="ranking-item-responsive__title"
               data-testid="video-title"
+              onClick={async (e) => {
+                e.stopPropagation()
+                try {
+                  await addToHistory({
+                    id: item.id,
+                    title: item.title,
+                    thumbURL: item.thumbURL,
+                    views: item.views,
+                    comments: item.comments,
+                    mylists: item.mylists,
+                    likes: item.likes,
+                    authorId: item.authorId,
+                    authorName: item.authorName,
+                    authorIcon: item.authorIcon,
+                    registeredAt: item.registeredAt
+                  })
+                } catch (error) {
+                  console.error('Failed to add to watch history:', error)
+                }
+              }}
             >
               {item.title}
             </a>

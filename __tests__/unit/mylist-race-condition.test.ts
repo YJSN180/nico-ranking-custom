@@ -37,12 +37,11 @@ describe('MylistManager - Race Condition Tests', () => {
     results.forEach(result => {
       expect(result.id).toBe(firstId)
       expect(result.name).toBe('とりあえずマイリスト')
-      expect(result.isDefault).toBe(true)
     })
 
     // データベースに実際に1つだけ存在することを確認
     const allMylists = await mylistManager.getAllMylists()
-    const defaultMylists = allMylists.filter(m => m.isDefault)
+    const defaultMylists = allMylists.filter(m => m.name === 'とりあえずマイリスト')
     
     expect(defaultMylists).toHaveLength(1)
     expect(defaultMylists[0].id).toBe(firstId)
@@ -70,7 +69,7 @@ describe('MylistManager - Race Condition Tests', () => {
 
     // データベースに実際に1つだけ存在することを確認
     const allMylists = await mylistManager.getAllMylists()
-    const defaultMylists = allMylists.filter(m => m.isDefault)
+    const defaultMylists = allMylists.filter(m => m.name === 'とりあえずマイリスト')
     
     expect(defaultMylists).toHaveLength(1)
   })

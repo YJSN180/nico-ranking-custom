@@ -71,11 +71,13 @@ describe('タグ別ランキング300件制限', () => {
   }
 
   it('タグ別ランキングは300件すべて表示される', () => {
-    const mockData = createMockData(300)
+    const mockItems = createMockData(300)
+    const mockData = { items: mockItems }
     
     render(
       <ClientPage 
         initialData={mockData}
+        allRankingData={mockItems}
         initialGenre="all"
         initialPeriod="24h"
         initialTag="MMD"
@@ -95,11 +97,13 @@ describe('タグ別ランキング300件制限', () => {
   })
 
   it('タグ別ランキングが300件未満の場合も正しく表示される', () => {
-    const mockData = createMockData(150)
+    const mockItems = createMockData(150)
+    const mockData = { items: mockItems }
     
     render(
       <ClientPage 
         initialData={mockData}
+        allRankingData={mockItems}
         initialGenre="all"
         initialPeriod="24h"
         initialTag="ゲーム実況"

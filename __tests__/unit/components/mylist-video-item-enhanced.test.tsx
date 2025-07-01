@@ -73,13 +73,4 @@ describe('MylistVideoItem Enhanced Features', () => {
     expect(separator).toBeInTheDocument()
   })
 
-  it('削除済み動画では投稿者情報が表示されない', () => {
-    render(<MylistVideoItem {...defaultProps} isDeleted={true} />)
-    
-    const authorIcon = screen.queryByAltText(/のアイコン/)
-    const separator = screen.queryByText('•')
-    
-    expect(authorIcon).not.toBeInTheDocument()
-    expect(separator).not.toBeInTheDocument()
-  })
 })

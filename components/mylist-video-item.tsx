@@ -11,7 +11,6 @@ interface MylistVideoItemProps {
   rank: number // 互換性のため残すが使用しない
   onEdit: (video: MylistVideo) => void
   onRemove: (videoId: string) => void
-  isDeleted?: boolean
   onImageError?: (videoId: string) => void
 }
 
@@ -22,7 +21,6 @@ const MylistVideoItem = memo(function MylistVideoItem({
   rank, 
   onEdit, 
   onRemove,
-  isDeleted = false,
   onImageError
 }: MylistVideoItemProps) {
   // rank propは互換性のため受け取るが使用しない
@@ -71,9 +69,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
         // リンクやボタンのクリックは除外
         const target = e.target as HTMLElement;
         if (target.closest('a') || target.closest('button')) return;
-        if (!isDeleted) {
-          window.open(`https://www.nicovideo.jp/watch/${video.id}`, '_blank');
-        }
+        window.open(`https://www.nicovideo.jp/watch/${video.id}`, '_blank');
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
@@ -85,72 +81,45 @@ const MylistVideoItem = memo(function MylistVideoItem({
       <div className="mylist-video-item__content">
         {/* サムネイル */}
         <div className="mylist-video-item__thumbnail">
-          {isDeleted ? (
-            <div style={{ display: 'block', cursor: 'default' }}>
-              <OptimizedImage
-                src="/cantwatch.jpg"
-                alt={video.title}
-                width={160}
-                height={90}
-                style={{ 
-                  objectFit: 'cover',
-                  borderRadius: '4px',
-                  width: '100%',
-                  height: 'auto',
-                  aspectRatio: '16 / 9',
-                  opacity: 0.7
-                }}
-                onError={() => onImageError?.(video.id)}
-              />
-            </div>
-          ) : (
-            <a
-              href={`https://www.nicovideo.jp/watch/${video.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'block', cursor: 'pointer' }}
-            >
-              <OptimizedImage
-                src={video.thumbURL}
-                alt={video.title}
-                width={160}
-                height={90}
-                style={{ 
-                  objectFit: 'cover',
-                  borderRadius: '4px',
-                  width: '100%',
-                  height: 'auto',
-                  aspectRatio: '16 / 9'
-                }}
-                onError={() => onImageError?.(video.id)}
-              />
-            </a>
-          )}
+          <a
+            href={`https://www.nicovideo.jp/watch/${video.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ display: 'block', cursor: 'pointer' }}
+          >
+            <OptimizedImage
+              src={video.thumbURL}
+              alt={video.title}
+              width={160}
+              height={90}
+              style={{ 
+                objectFit: 'cover',
+                borderRadius: '4px',
+                width: '100%',
+                height: 'auto',
+                aspectRatio: '16 / 9'
+              }}
+              onError={() => onImageError?.(video.id)}
+            />
+          </a>
           {/* 再生時間オーバーレイ（将来的に追加される可能性） */}
         </div>
         
         {/* コンテンツエリア */}
         <div className="mylist-video-item__details">
           {/* タイトル */}
-          {isDeleted ? (
-            <span className="mylist-video-item__title mylist-video-item__title--deleted">
-              {video.title}
-              <span className="mylist-video-item__deleted-badge">（視聴できません）</span>
-            </span>
-          ) : (
-            <a
-              href={`https://www.nicovideo.jp/watch/${video.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mylist-video-item__title"
-              data-testid="video-title"
-            >
-              {video.title}
-            </a>
-          )}
+          <a
+            href={`https://www.nicovideo.jp/watch/${video.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mylist-video-item__title"
+            data-testid="video-title"
+          >
+            {video.title}
+          </a>
           
           {/* 投稿者情報 - ランキング画面と同じ横並びレイアウト */}
-          {video.authorName && !isDeleted && (
+          {video.authorName && (
             <div className="mylist-video-item__author" style={{
               display: 'flex',
               alignItems: 'center',
@@ -223,13 +192,6 @@ const MylistVideoItem = memo(function MylistVideoItem({
             </div>
           )}
           
-          {isDeleted && (
-            <p className="mylist-video-item__deleted-message">
-              この動画は削除されたか、非公開になっています
-            </p>
-          )}
-          
-          
           {/* メモ */}
           {video.memo && (
             <div className="mylist-video-item__memo">
@@ -291,7 +253,6 @@ const MylistVideoItem = memo(function MylistVideoItem({
     prevProps.video.memo === nextProps.video.memo &&
     prevProps.video.authorIcon === nextProps.video.authorIcon &&
     prevProps.video.registeredAt === nextProps.video.registeredAt &&
-    prevProps.isDeleted === nextProps.isDeleted &&
     prevProps.rank === nextProps.rank
   )
 })

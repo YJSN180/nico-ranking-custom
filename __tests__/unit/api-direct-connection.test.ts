@@ -5,6 +5,16 @@ describe('API Direct Connection', () => {
   beforeEach(() => {
     // グローバルfetchをモック
     global.fetch = vi.fn()
+    
+    // window.locationのデフォルトモック
+    Object.defineProperty(window, 'location', {
+      value: { 
+        hostname: 'nico-ranking-custom-yjsns-projects.vercel.app',
+        origin: 'https://nico-ranking-custom-yjsns-projects.vercel.app'
+      },
+      writable: true,
+      configurable: true
+    })
   })
 
   afterEach(() => {
@@ -36,8 +46,12 @@ describe('API Direct Connection', () => {
     it('ブラウザ環境ではOriginヘッダーを送信する', async () => {
       // window.locationをモック
       Object.defineProperty(window, 'location', {
-        value: { origin: 'https://nico-ranking-custom.vercel.app' },
-        writable: true
+        value: { 
+          hostname: 'nico-ranking-custom.vercel.app',
+          origin: 'https://nico-ranking-custom.vercel.app' 
+        },
+        writable: true,
+        configurable: true
       })
 
       const mockResponse = new Response(JSON.stringify({ items: [] }), {

@@ -70,3 +70,13 @@ if (typeof window !== 'undefined') {
     })),
   })
 }
+
+// Mock Element.scrollTo for JSDOM
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollTo = vi.fn()
+}
+
+// Mock window.confirm for JSDOM
+if (typeof window !== 'undefined') {
+  window.confirm = vi.fn(() => true)
+}

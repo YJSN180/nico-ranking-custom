@@ -72,14 +72,17 @@ export class WatchHistoryManager {
     const store = transaction.objectStore(this.STORE_NAME)
     const entries = await store.getAll()
     
+    // 配列かチェック
+    const entriesArray = Array.isArray(entries) ? entries : []
+    
     // 新しい順にソート
-    entries.sort((a, b) => b.watchedAt - a.watchedAt)
+    entriesArray.sort((a, b) => b.watchedAt - a.watchedAt)
     
     // ページネーション
     const start = offset || 0
     const end = limit ? start + limit : undefined
     
-    return entries.slice(start, end)
+    return entriesArray.slice(start, end)
   }
   
   /**
@@ -95,7 +98,10 @@ export class WatchHistoryManager {
     const store = transaction.objectStore(this.STORE_NAME)
     const entries = await store.getAll()
     
-    const filtered = entries.filter(entry => {
+    // 配列かチェック
+    const entriesArray = Array.isArray(entries) ? entries : []
+    
+    const filtered = entriesArray.filter(entry => {
       const titleMatch = entry.title.toLowerCase().includes(normalizedQuery)
       const authorMatch = entry.authorName?.toLowerCase().includes(normalizedQuery) || false
       return titleMatch || authorMatch
@@ -150,7 +156,10 @@ export class WatchHistoryManager {
     const store = transaction.objectStore(this.STORE_NAME)
     const entries = await store.getAll()
     
-    if (entries.length === 0) {
+    // 配列かチェック
+    const entriesArray = Array.isArray(entries) ? entries : []
+    
+    if (entriesArray.length === 0) {
       return {
         totalCount: 0,
         oldestWatchedAt: null,
@@ -158,10 +167,10 @@ export class WatchHistoryManager {
       }
     }
     
-    const watchedAts = entries.map(e => e.watchedAt)
+    const watchedAts = entriesArray.map(e => e.watchedAt)
     
     return {
-      totalCount: entries.length,
+      totalCount: entriesArray.length,
       oldestWatchedAt: Math.min(...watchedAts),
       newestWatchedAt: Math.max(...watchedAts)
     }
@@ -182,9 +191,12 @@ export class WatchHistoryManager {
     // すべてのエントリを取得
     const entries = await store.getAll()
     
+    // 配列でない場合は空配列として処理
+    const entriesArray = Array.isArray(entries) ? entries : []
+    
     // 古いエントリのIDを抽出
-    const toDelete = entries
-      .filter(entry => entry.watchedAt < cutoffTime)
+    const toDelete = entriesArray
+      .filter(entry => entry && entry.watchedAt < cutoffTime)
       .map(entry => entry.videoId)
     
     // 削除

@@ -48,11 +48,11 @@ describe('MylistVideoItem', () => {
     // 投稿者
     expect(screen.getByText('投稿者名')).toBeInTheDocument()
     
-    // 統計情報
-    expect(screen.getByText(/▶️ 1万/)).toBeInTheDocument()
-    expect(screen.getByText(/💬 500/)).toBeInTheDocument()
-    expect(screen.getByText(/❤️ 300/)).toBeInTheDocument()
-    expect(screen.getByText(/📁 100/)).toBeInTheDocument()
+    // 統計情報は削除されたため、存在しないことを確認
+    expect(screen.queryByText(/▶️ 1万/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/💬 500/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/❤️ 300/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/📁 100/)).not.toBeInTheDocument()
   })
 
   it('編集ボタンをクリックするとonEditが呼ばれる', () => {
@@ -87,23 +87,6 @@ describe('MylistVideoItem', () => {
     expect(mockOnRemove).toHaveBeenCalledWith('sm12345')
   })
 
-  it('削除済み動画の場合、適切に表示される', () => {
-    render(
-      <MylistVideoItem
-        video={mockVideo}
-        rank={1}
-        onEdit={mockOnEdit}
-        onRemove={mockOnRemove}
-        isDeleted={true}
-      />
-    )
-
-    // 削除済みバッジが表示される
-    expect(screen.getByText('（削除済み）')).toBeInTheDocument()
-    
-    // 削除済みメッセージが表示される
-    expect(screen.getByText('この動画は削除されたか、非公開になっています')).toBeInTheDocument()
-  })
 
   it('メモがある場合、メモが表示される', () => {
     const videoWithMemo = { ...mockVideo, memo: 'これはメモです' }

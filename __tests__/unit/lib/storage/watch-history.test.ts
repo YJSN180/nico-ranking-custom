@@ -1,15 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { WatchHistoryManager } from '@/lib/storage/watch-history'
-import { DBManager } from '@/lib/storage/db-manager'
 import type { WatchHistoryEntry } from '@/lib/storage/types'
 
-// DBManagerのモック
-vi.mock('@/lib/storage/db-manager', () => ({
-  DBManager: vi.fn().mockImplementation(() => ({
-    init: vi.fn().mockResolvedValue(true),
-    getDB: vi.fn().mockReturnValue(null)
-  }))
-}))
+// DBManagerのモックは使わず、テスト内で直接モックを作成
 
 // IndexedDBのモック実装
 const createMockDB = () => {
@@ -26,39 +19,27 @@ const createMockDB = () => {
         
         const store = stores.get(storeName)!
         const mockStore = {
-          add: vi.fn((value: any) => {
+          add: vi.fn(async (value: any) => {
             store.set(value.videoId, value)
-            return { onsuccess: null, onerror: null }
+            return value.videoId
           }),
-          put: vi.fn((value: any) => {
+          put: vi.fn(async (value: any) => {
             store.set(value.videoId, value)
-            return { onsuccess: null, onerror: null }
+            return value.videoId
           }),
-          get: vi.fn((key: string) => {
-            const request = {
-              result: store.get(key),
-              onsuccess: null,
-              onerror: null
-            }
-            setTimeout(() => request.onsuccess?.({ target: request } as any), 0)
-            return request
+          get: vi.fn(async (key: string) => {
+            return store.get(key)
           }),
-          getAll: vi.fn(() => {
-            const request = {
-              result: Array.from(store.values()),
-              onsuccess: null,
-              onerror: null
-            }
-            setTimeout(() => request.onsuccess?.({ target: request } as any), 0)
-            return request
+          getAll: vi.fn(async () => {
+            return Array.from(store.values())
           }),
-          delete: vi.fn((key: string) => {
+          delete: vi.fn(async (key: string) => {
             store.delete(key)
-            return { onsuccess: null, onerror: null }
+            return undefined
           }),
-          clear: vi.fn(() => {
+          clear: vi.fn(async () => {
             store.clear()
-            return { onsuccess: null, onerror: null }
+            return undefined
           }),
           openCursor: vi.fn(() => {
             const entries = Array.from(store.entries())
@@ -311,9 +292,24 @@ describe('WatchHistoryManager', () => {
     })
     
     it('大文字小文字を区別しない', async () => {
-      const results = await manager.searchHistory('ボカロ')
-      const resultsLower = await manager.searchHistory('ぼかろ')
-      expect(results).toEqual(resultsLower)
+      // Add a video with English title for proper case testing
+      await manager.addToHistory({ 
+        id: 'sm4', 
+        title: 'VOCALOID Cover Song', 
+        thumbURL: 'url4',
+        authorName: 'Producer'
+      })
+      
+      const resultsUpper = await manager.searchHistory('VOCALOID')
+      const resultsLower = await manager.searchHistory('vocaloid')
+      const resultsMixed = await manager.searchHistory('VocaLoid')
+      
+      expect(resultsUpper).toHaveLength(1)
+      expect(resultsLower).toHaveLength(1) 
+      expect(resultsMixed).toHaveLength(1)
+      expect(resultsUpper[0].videoId).toBe('sm4')
+      expect(resultsLower[0].videoId).toBe('sm4')
+      expect(resultsMixed[0].videoId).toBe('sm4')
     })
   })
   

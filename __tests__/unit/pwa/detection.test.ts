@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { 
   isIOS, 
   isIOSSafari, 
@@ -24,16 +25,23 @@ describe('PWA Detection', () => {
     localStorage.clear()
     
     // デフォルトのmatchMediaモック
-    global.matchMedia = jest.fn().mockImplementation((query: string) => ({
+    global.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
       onchange: null,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
     }))
+    
+    // navigatorのデフォルト値を設定
+    Object.defineProperty(global.navigator, 'maxTouchPoints', {
+      writable: true,
+      configurable: true,
+      value: 0
+    })
   })
 
   afterEach(() => {
@@ -90,15 +98,15 @@ describe('PWA Detection', () => {
 
   describe('isPWAInstalled', () => {
     it('should detect standalone mode', () => {
-      global.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      global.matchMedia = vi.fn().mockImplementation((query: string) => ({
         matches: query === '(display-mode: standalone)',
         media: query,
         onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       }))
       
       expect(isPWAInstalled()).toBe(true)
@@ -111,6 +119,9 @@ describe('PWA Detection', () => {
     })
 
     it('should return false when not installed', () => {
+      // navigator.standaloneを明示的にfalseに設定
+      // @ts-ignore
+      global.navigator.standalone = false
       expect(isPWAInstalled()).toBe(false)
     })
   })
@@ -154,20 +165,22 @@ describe('PWA Detection', () => {
       })
       // @ts-ignore
       window.ontouchstart = {}
+      // @ts-ignore
+      global.navigator.standalone = false
       
       expect(canInstallPWA()).toBe(true)
     })
 
     it('should return false if already installed', () => {
-      global.matchMedia = jest.fn().mockImplementation((query: string) => ({
+      global.matchMedia = vi.fn().mockImplementation((query: string) => ({
         matches: query === '(display-mode: standalone)',
         media: query,
         onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       }))
       
       expect(canInstallPWA()).toBe(false)
@@ -191,6 +204,8 @@ describe('PWA Detection', () => {
       })
       // @ts-ignore
       window.ontouchstart = {}
+      // @ts-ignore
+      global.navigator.standalone = false
       
       expect(shouldShowInstallPrompt()).toBe(false)
     })
@@ -207,6 +222,8 @@ describe('PWA Detection', () => {
       })
       // @ts-ignore
       window.ontouchstart = {}
+      // @ts-ignore
+      global.navigator.standalone = false
       
       // 3日前の日付を設定
       const threeDaysAgo = new Date()
@@ -228,6 +245,8 @@ describe('PWA Detection', () => {
       })
       // @ts-ignore
       window.ontouchstart = {}
+      // @ts-ignore
+      global.navigator.standalone = false
       
       // 初回訪問を3日前に設定
       const threeDaysAgo = new Date()
@@ -254,6 +273,8 @@ describe('PWA Detection', () => {
       })
       // @ts-ignore
       window.ontouchstart = {}
+      // @ts-ignore
+      global.navigator.standalone = false
       
       // 初回訪問を3日前に設定
       const threeDaysAgo = new Date()

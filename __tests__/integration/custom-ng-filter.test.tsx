@@ -95,7 +95,7 @@ describe('カスタムNGフィルタリング統合テスト', () => {
 
     render(
       <ClientPage
-        initialData={mockRankingData}
+        initialData={{ items: mockRankingData }}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -126,7 +126,7 @@ describe('カスタムNGフィルタリング統合テスト', () => {
 
     render(
       <ClientPage
-        initialData={mockRankingData}
+        initialData={{ items: mockRankingData }}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -157,7 +157,7 @@ describe('カスタムNGフィルタリング統合テスト', () => {
 
     render(
       <ClientPage
-        initialData={mockRankingData}
+        initialData={{ items: mockRankingData }}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -188,7 +188,7 @@ describe('カスタムNGフィルタリング統合テスト', () => {
 
     render(
       <ClientPage
-        initialData={mockRankingData}
+        initialData={{ items: mockRankingData }}
         initialGenre="all"
         initialPeriod="24h"
       />
@@ -219,7 +219,7 @@ describe('カスタムNGフィルタリング統合テスト', () => {
 
     render(
       <ClientPage
-        initialData={mockRankingData}
+        initialData={{ items: mockRankingData }}
         initialGenre="all"
         initialPeriod="24h"
       />

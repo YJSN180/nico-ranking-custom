@@ -127,18 +127,24 @@ const mockMylists: Mylist[] = [
 
 const mockMylistVideos: MylistVideo[] = [
   {
+    id: 'sm12345',
     mylistId: 'test-mylist-1',
-    videoId: 'sm12345',
+    title: 'テスト動画1',
+    thumbURL: 'https://example.com/thumb1.jpg',
     addedAt: 1640995200000
   },
   {
+    id: 'sm67890',
     mylistId: 'test-mylist-1',
-    videoId: 'sm67890',
+    title: 'テスト動画2',
+    thumbURL: 'https://example.com/thumb2.jpg',
     addedAt: 1640995200000
   },
   {
+    id: 'sm11111',
     mylistId: 'test-mylist-2',
-    videoId: 'sm11111',
+    title: 'テスト動画3',
+    thumbURL: 'https://example.com/thumb3.jpg',
     addedAt: 1640995200000
   }
 ]
@@ -405,7 +411,7 @@ describe('Import Mylist Data Tests', () => {
         if (storeName === 'mylists' && data.id === 'test-mylist-2') {
           throw new Error('Failed to put mylist')
         }
-        if (storeName === 'mylistVideos' && data.videoId === 'sm67890') {
+        if (storeName === 'mylistVideos' && data.id === 'sm67890') {
           throw new Error('Failed to put video')
         }
         return Promise.resolve()

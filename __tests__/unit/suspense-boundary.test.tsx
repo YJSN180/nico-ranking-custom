@@ -58,18 +58,20 @@ vi.mock('@/hooks/use-realtime-stats', () => ({
 describe('Suspense Boundary Error', () => {
 
   it('should work correctly when wrapped in Suspense boundary', () => {
-    const mockData = [
-      {
-        rank: 1,
-        id: 'sm1',
-        title: 'Test Video',
-        thumbURL: 'https://example.com/thumb.jpg',
-        views: 1000,
-        comments: 10,
-        mylists: 5,
-        likes: 20
-      }
-    ]
+    const mockData = {
+      items: [
+        {
+          rank: 1,
+          id: 'sm1',
+          title: 'Test Video',
+          thumbURL: 'https://example.com/thumb.jpg',
+          views: 1000,
+          comments: 10,
+          mylists: 5,
+          likes: 20
+        }
+      ]
+    }
 
     // Suspense boundary でラップするとエラーにならない
     render(
@@ -87,18 +89,20 @@ describe('Suspense Boundary Error', () => {
   })
 
   it('should work with SuspenseWrapper component', () => {
-    const mockData = [
-      {
-        rank: 1,
-        id: 'sm1',
-        title: 'Test Video',
-        thumbURL: 'https://example.com/thumb.jpg',
-        views: 1000,
-        comments: 10,
-        mylists: 5,
-        likes: 20
-      }
-    ]
+    const mockData = {
+      items: [
+        {
+          rank: 1,
+          id: 'sm1',
+          title: 'Test Video',
+          thumbURL: 'https://example.com/thumb.jpg',
+          views: 1000,
+          comments: 10,
+          mylists: 5,
+          likes: 20
+        }
+      ]
+    }
 
     // SuspenseWrapper でラップしてもエラーにならない
     render(

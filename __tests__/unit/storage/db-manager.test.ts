@@ -18,7 +18,7 @@ describe('DBManager', () => {
       await expect(dbManager.init()).resolves.not.toThrow()
     })
 
-    it('データベースのバージョンが1である', async () => {
+    it('データベースのバージョンが4である', async () => {
       // Arrange
       const dbManager = new DBManager()
       
@@ -26,7 +26,7 @@ describe('DBManager', () => {
       await dbManager.init()
       
       // Assert
-      expect(dbManager.getVersion()).toBe(1)
+      expect(dbManager.getVersion()).toBe(4)
     })
 
     it('必要なオブジェクトストアが作成される', async () => {
@@ -41,6 +41,8 @@ describe('DBManager', () => {
       expect(storeNames).toContain('favorites')
       expect(storeNames).toContain('history')
       expect(storeNames).toContain('mylists')
+      expect(storeNames).toContain('mylistVideos')
+      expect(storeNames).toContain('watchHistory')
     })
   })
 
@@ -86,7 +88,7 @@ describe('DBManager', () => {
   })
 
   describe('マイリストストア', () => {
-    it('マイリストストアがautoIncrementである', async () => {
+    it('マイリストストアがautoIncrementではない', async () => {
       // Arrange
       const dbManager = new DBManager()
       
@@ -95,10 +97,11 @@ describe('DBManager', () => {
       
       // Assert
       const storeInfo = await dbManager.getStoreInfo('mylists')
-      expect(storeInfo.autoIncrement).toBe(true)
+      expect(storeInfo.autoIncrement).toBe(false)
+      expect(storeInfo.keyPath).toBe('id')
     })
 
-    it('マイリストストアにnameインデックスが作成される', async () => {
+    it('マイリストストアに必要なインデックスが作成される', async () => {
       // Arrange
       const dbManager = new DBManager()
       
@@ -108,6 +111,8 @@ describe('DBManager', () => {
       // Assert
       const indexes = await dbManager.getStoreIndexes('mylists')
       expect(indexes).toContain('name')
+      expect(indexes).toContain('createdAt')
+      expect(indexes).toContain('updatedAt')
     })
   })
 
