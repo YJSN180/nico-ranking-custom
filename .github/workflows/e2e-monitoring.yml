@@ -19,7 +19,6 @@ on:
 
 env:
   NODE_VERSION: '20'
-  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
 jobs:
   smoke-tests:
@@ -72,12 +71,6 @@ jobs:
         npx playwright test tests/e2e/performance.spec.ts --project=chromium
       continue-on-error: true
 
-    - name: Send notification on failure
-      if: failure() || steps.smoke-tests.outcome == 'failure' || steps.api-health.outcome == 'failure'
-      env:
-        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
-      run: |
-        node .github/scripts/notify-slack.js failure "Smoke Tests: ${{ steps.smoke-tests.outcome }}, API Health: ${{ steps.api-health.outcome }}"
 
     - name: Create issue on repeated failures
       if: failure()

@@ -43,10 +43,22 @@ async function queryGraphQL(query, variables, apiToken) {
 }
 
 // R2のメトリクスを取得
-async function getR2Metrics(accountTag, apiToken) {
+async function getR2Metrics(accountTag, apiToken, timeRange = '30d') {
   const now = new Date();
   const endDate = now.toISOString();
-  const startDate = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(); // 3時間前
+  
+  // 時間範囲を設定（正確なデータ取得のため）
+  let hoursBack;
+  switch (timeRange) {
+    case '1h': hoursBack = 1; break;
+    case '3h': hoursBack = 3; break;
+    case '24h': hoursBack = 24; break;
+    case '7d': hoursBack = 24 * 7; break;
+    case '30d': hoursBack = 24 * 30; break;
+    default: hoursBack = 24 * 30; // デフォルト30日
+  }
+  
+  const startDate = new Date(now.getTime() - hoursBack * 60 * 60 * 1000).toISOString();
 
   // R2ストレージクエリ
   const storageQuery = `
@@ -137,10 +149,22 @@ async function getR2Metrics(accountTag, apiToken) {
 }
 
 // KVのメトリクスを取得
-async function getKVMetrics(accountTag, apiToken) {
+async function getKVMetrics(accountTag, apiToken, timeRange = '30d') {
   const now = new Date();
   const endDate = now.toISOString().split('T')[0]; // YYYY-MM-DD形式
-  const startDate = new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString().split('T')[0];
+  
+  // 時間範囲を設定（正確なデータ取得のため）
+  let daysBack;
+  switch (timeRange) {
+    case '1h': 
+    case '3h': 
+    case '24h': daysBack = 1; break; // KVは日単位のため最低1日
+    case '7d': daysBack = 7; break;
+    case '30d': daysBack = 30; break;
+    default: daysBack = 30; // デフォルト30日
+  }
+  
+  const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   // KVストレージクエリ
   const storageQuery = `
@@ -222,7 +246,7 @@ async function getKVMetrics(accountTag, apiToken) {
 }
 
 // メトリクスを収集
-async function collectAllMetrics() {
+async function collectAllMetrics(timeRange = '30d') {
   const accountTag = process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken = process.env.CLOUDFLARE_API_TOKEN;
   
@@ -231,12 +255,13 @@ async function collectAllMetrics() {
   }
 
   const [r2Metrics, kvMetrics] = await Promise.all([
-    getR2Metrics(accountTag, apiToken),
-    getKVMetrics(accountTag, apiToken)
+    getR2Metrics(accountTag, apiToken, timeRange),
+    getKVMetrics(accountTag, apiToken, timeRange)
   ]);
 
   return {
     timestamp: new Date().toISOString(),
+    timeRange,
     r2: r2Metrics,
     kv: kvMetrics
   };
@@ -266,7 +291,11 @@ const FREE_TIER_LIMITS = {
 // メイン処理
 async function main() {
   try {
-    const metrics = await collectAllMetrics();
+    // コマンドライン引数から時間範囲を取得（デフォルト：30日）
+    const timeRange = process.argv[2] || '30d';
+    console.error(`Collecting metrics for time range: ${timeRange}`);
+    
+    const metrics = await collectAllMetrics(timeRange);
     
     // メトリクス取得が失敗した場合はエラーとして扱う
     if (!metrics.r2 || !metrics.kv) {
@@ -274,11 +303,7 @@ async function main() {
       process.exit(1);
     }
     
-    // 月間予測を計算（3時間のデータから）
-    const hoursInMonth = 24 * 30;
-    const scaleFactor = hoursInMonth / 3; // 3時間のデータを月間に拡大
-    
-    // R2の月間予測
+    // 実際のデータを使用（推定なし）
     let r2MonthlyClassA = 0;
     let r2MonthlyClassB = 0;
     
@@ -288,25 +313,26 @@ async function main() {
       
       for (const [op, count] of Object.entries(metrics.r2.operations.byType)) {
         if (classAOps.includes(op)) {
-          r2MonthlyClassA += count * scaleFactor;
+          r2MonthlyClassA += count;
         } else if (classBOps.includes(op)) {
-          r2MonthlyClassB += count * scaleFactor;
+          r2MonthlyClassB += count;
         }
       }
     }
     
-    // KVの日次予測（KVは日次制限）
-    const kvDailyFactor = 24 / 3; // 3時間のデータを1日に拡大
+    // KVの実際のデータを使用
     let kvDailyReads = 0;
     let kvDailyWrites = 0;
     let kvDailyDeletes = 0;
     let kvDailyLists = 0;
     
     if (metrics.kv) {
-      kvDailyReads = (metrics.kv.operations.byType.read || 0) * kvDailyFactor;
-      kvDailyWrites = (metrics.kv.operations.byType.write || 0) * kvDailyFactor;
-      kvDailyDeletes = (metrics.kv.operations.byType.delete || 0) * kvDailyFactor;
-      kvDailyLists = (metrics.kv.operations.byType.list || 0) * kvDailyFactor;
+      // KVは期間内の合計値を日平均に変換
+      const daysInPeriod = timeRange === '30d' ? 30 : timeRange === '7d' ? 7 : 1;
+      kvDailyReads = Math.round((metrics.kv.operations.byType.read || 0) / daysInPeriod);
+      kvDailyWrites = Math.round((metrics.kv.operations.byType.write || 0) / daysInPeriod);
+      kvDailyDeletes = Math.round((metrics.kv.operations.byType.delete || 0) / daysInPeriod);
+      kvDailyLists = Math.round((metrics.kv.operations.byType.list || 0) / daysInPeriod);
     }
     
     // 使用率を計算
@@ -328,18 +354,21 @@ async function main() {
     // 結果を出力
     const result = {
       metrics,
-      projections: {
+      timeRange,
+      actualUsage: {
         r2: {
-          monthlyClassA: Math.round(r2MonthlyClassA),
-          monthlyClassB: Math.round(r2MonthlyClassB),
-          storageGB: metrics.r2 ? (metrics.r2.storage.totalSize / (1024 * 1024 * 1024)).toFixed(2) : '0'
+          actualClassA: Math.round(r2MonthlyClassA),
+          actualClassB: Math.round(r2MonthlyClassB),
+          storageGB: metrics.r2 ? (metrics.r2.storage.totalSize / (1024 * 1024 * 1024)).toFixed(2) : '0',
+          objectCount: metrics.r2 ? metrics.r2.storage.objectCount : 0
         },
         kv: {
-          dailyReads: Math.round(kvDailyReads),
-          dailyWrites: Math.round(kvDailyWrites),
-          dailyDeletes: Math.round(kvDailyDeletes),
-          dailyLists: Math.round(kvDailyLists),
-          storageGB: metrics.kv ? (metrics.kv.storage.totalSize / (1024 * 1024 * 1024)).toFixed(3) : '0'
+          dailyAvgReads: Math.round(kvDailyReads),
+          dailyAvgWrites: Math.round(kvDailyWrites),
+          dailyAvgDeletes: Math.round(kvDailyDeletes),
+          dailyAvgLists: Math.round(kvDailyLists),
+          storageGB: metrics.kv ? (metrics.kv.storage.totalSize / (1024 * 1024 * 1024)).toFixed(3) : '0',
+          keyCount: metrics.kv ? metrics.kv.storage.keyCount : 0
         }
       },
       usage,
@@ -360,19 +389,20 @@ async function main() {
     if (process.env.GITHUB_OUTPUT) {
       const fs = require('fs');
       const output = [
-        `r2_storage_gb=${result.projections.r2.storageGB}`,
+        `time_range=${timeRange}`,
+        `r2_storage_gb=${result.actualUsage.r2.storageGB}`,
         `r2_storage_usage=${usage.r2.storage}`,
-        `r2_object_count=${metrics.r2 ? metrics.r2.storage.objectCount : 0}`,
-        `r2_classA_monthly=${result.projections.r2.monthlyClassA}`,
+        `r2_object_count=${result.actualUsage.r2.objectCount}`,
+        `r2_classA_actual=${result.actualUsage.r2.actualClassA}`,
         `r2_classA_usage=${usage.r2.classA}`,
-        `r2_classB_monthly=${result.projections.r2.monthlyClassB}`,
+        `r2_classB_actual=${result.actualUsage.r2.actualClassB}`,
         `r2_classB_usage=${usage.r2.classB}`,
-        `kv_storage_gb=${result.projections.kv.storageGB}`,
+        `kv_storage_gb=${result.actualUsage.kv.storageGB}`,
         `kv_storage_usage=${usage.kv.storage}`,
-        `kv_key_count=${metrics.kv ? metrics.kv.storage.keyCount : 0}`,
-        `kv_reads_daily=${result.projections.kv.dailyReads}`,
+        `kv_key_count=${result.actualUsage.kv.keyCount}`,
+        `kv_reads_daily_avg=${result.actualUsage.kv.dailyAvgReads}`,
         `kv_reads_usage=${usage.kv.reads}`,
-        `kv_writes_daily=${result.projections.kv.dailyWrites}`,
+        `kv_writes_daily_avg=${result.actualUsage.kv.dailyAvgWrites}`,
         `kv_writes_usage=${usage.kv.writes}`,
         `warnings=${result.warnings.length}`,
         `warning_messages=${result.warnings.join('; ')}`,

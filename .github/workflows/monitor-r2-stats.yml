@@ -25,93 +25,10 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          # リソース使用状況を収集
-          node .github/scripts/monitor-resources.cjs
+          # リソース使用状況を収集（30日間の実データ）
+          node .github/scripts/monitor-resources.cjs 30d
       
-      - name: Send Slack Notification
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          timestamp: ${{ steps.metrics.outputs.timestamp }}
-          warning_messages: ${{ steps.metrics.outputs.warning_messages }}
-          r2_storage_gb: ${{ steps.metrics.outputs.r2_storage_gb }}
-          r2_storage_usage: ${{ steps.metrics.outputs.r2_storage_usage }}
-          r2_classA_monthly: ${{ steps.metrics.outputs.r2_classA_monthly }}
-          r2_classA_usage: ${{ steps.metrics.outputs.r2_classA_usage }}
-          r2_classB_monthly: ${{ steps.metrics.outputs.r2_classB_monthly }}
-          r2_classB_usage: ${{ steps.metrics.outputs.r2_classB_usage }}
-          kv_storage_gb: ${{ steps.metrics.outputs.kv_storage_gb }}
-          kv_storage_usage: ${{ steps.metrics.outputs.kv_storage_usage }}
-          kv_reads_daily: ${{ steps.metrics.outputs.kv_reads_daily }}
-          kv_reads_usage: ${{ steps.metrics.outputs.kv_reads_usage }}
-          kv_writes_daily: ${{ steps.metrics.outputs.kv_writes_daily }}
-          kv_writes_usage: ${{ steps.metrics.outputs.kv_writes_usage }}
-        run: |
-          # Slack通知を送信
-          node .github/scripts/notify-resource-usage.cjs
       
-      - name: Send Critical Alert on High Usage
-        if: steps.metrics.outputs.warnings > 0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          cat << EOF > critical-alert.js
-          const https = require('https');
-          
-          async function sendSlackMessage(message) {
-            const webhookUrl = process.env.SLACK_WEBHOOK_URL;
-            if (!webhookUrl) return;
-
-            const data = JSON.stringify(message);
-            const url = new URL(webhookUrl);
-            const options = {
-              hostname: url.hostname,
-              port: 443,
-              path: url.pathname,
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(data)
-              }
-            };
-
-            return new Promise((resolve, reject) => {
-              const req = https.request(options, (res) => {
-                let responseData = '';
-                res.on('data', chunk => responseData += chunk);
-                res.on('end', () => resolve(JSON.parse(responseData)));
-              });
-              req.on('error', reject);
-              req.write(data);
-              req.end();
-            });
-          }
-
-          const alertMessage = {
-            channel: 'C092SFGUSKC',
-            blocks: [
-              {
-                type: "header",
-                text: {
-                  type: "plain_text",
-                  text: "🚨 リソース使用量警告"
-                }
-              },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: "無料枠の使用量が上限に近づいています。詳細は定期レポートをご確認ください。"
-                }
-              }
-            ]
-          };
-
-          sendSlackMessage(alertMessage).then(() => {
-            console.log('Critical alert sent');
-          }).catch(console.error);
-          EOF
-          
-          node critical-alert.js
       
       - name: Store Resource Usage Statistics
         run: |
@@ -120,31 +37,34 @@ jobs:
           cat << EOF > stats/resource-usage-$(date +%Y%m%d-%H%M%S).json
           {
             "timestamp": "${{ steps.metrics.outputs.timestamp }}",
+            "timeRange": "${{ steps.metrics.outputs.time_range }}",
             "r2": {
               "storage": {
                 "gb": ${{ steps.metrics.outputs.r2_storage_gb }},
-                "usage_percent": ${{ steps.metrics.outputs.r2_storage_usage }}
+                "usage_percent": ${{ steps.metrics.outputs.r2_storage_usage }},
+                "object_count": ${{ steps.metrics.outputs.r2_object_count }}
               },
               "classA": {
-                "monthly_projected": ${{ steps.metrics.outputs.r2_classA_monthly }},
+                "actual_usage": ${{ steps.metrics.outputs.r2_classA_actual }},
                 "usage_percent": ${{ steps.metrics.outputs.r2_classA_usage }}
               },
               "classB": {
-                "monthly_projected": ${{ steps.metrics.outputs.r2_classB_monthly }},
+                "actual_usage": ${{ steps.metrics.outputs.r2_classB_actual }},
                 "usage_percent": ${{ steps.metrics.outputs.r2_classB_usage }}
               }
             },
             "kv": {
               "storage": {
                 "gb": ${{ steps.metrics.outputs.kv_storage_gb }},
-                "usage_percent": ${{ steps.metrics.outputs.kv_storage_usage }}
+                "usage_percent": ${{ steps.metrics.outputs.kv_storage_usage }},
+                "key_count": ${{ steps.metrics.outputs.kv_key_count }}
               },
               "reads": {
-                "daily_projected": ${{ steps.metrics.outputs.kv_reads_daily }},
+                "daily_average": ${{ steps.metrics.outputs.kv_reads_daily_avg }},
                 "usage_percent": ${{ steps.metrics.outputs.kv_reads_usage }}
               },
               "writes": {
-                "daily_projected": ${{ steps.metrics.outputs.kv_writes_daily }},
+                "daily_average": ${{ steps.metrics.outputs.kv_writes_daily_avg }},
                 "usage_percent": ${{ steps.metrics.outputs.kv_writes_usage }}
               }
             },
