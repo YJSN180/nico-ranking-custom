@@ -42,7 +42,6 @@ describe('DBManager', () => {
       expect(storeNames).toContain('history')
       expect(storeNames).toContain('mylists')
       expect(storeNames).toContain('mylistVideos')
-      expect(storeNames).toContain('watchHistory')
     })
   })
 

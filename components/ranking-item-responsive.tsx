@@ -3,7 +3,6 @@
 import { memo, useRef, useEffect } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
-import { useWatchHistory } from '@/hooks/use-watch-history'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
@@ -15,8 +14,6 @@ interface RankingItemProps {
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Container Queriesとflexbox/gridを活用してCLSを完全に回避
 const RankingItemResponsive = memo(function RankingItemResponsive({ item }: RankingItemProps) {
-  const { addToHistory } = useWatchHistory()
-  
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
     2: 'var(--rank-silver)', 
@@ -33,29 +30,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
     }
   }
   
-  // 動画クリック時に視聴履歴に追加
-  const handleVideoClick = async () => {
-    try {
-      await addToHistory({
-        id: item.id,
-        title: item.title,
-        thumbURL: item.thumbURL,
-        views: item.views,
-        comments: item.comments,
-        mylists: item.mylists,
-        likes: item.likes,
-        authorId: item.authorId,
-        authorName: item.authorName,
-        authorIcon: item.authorIcon,
-        registeredAt: item.registeredAt
-      })
-    } catch (error) {
-      // エラーは静かに処理（視聴履歴の記録失敗はユーザー体験を妨げない）
-      // eslint-disable-next-line no-console
-      console.error('Failed to add to watch history:', error)
-    }
-    
-    // 動画ページを開く
+  // 動画クリック時に動画ページを開く
+  const handleVideoClick = () => {
     window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank')
   }
 
@@ -146,25 +122,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
               target="_blank"
               rel="noopener noreferrer"
               style={{ display: 'block', cursor: 'pointer' }}
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation()
-                try {
-                  await addToHistory({
-                    id: item.id,
-                    title: item.title,
-                    thumbURL: item.thumbURL,
-                    views: item.views,
-                    comments: item.comments,
-                    mylists: item.mylists,
-                    likes: item.likes,
-                    authorId: item.authorId,
-                    authorName: item.authorName,
-                    authorIcon: item.authorIcon,
-                    registeredAt: item.registeredAt
-                  })
-                } catch (error) {
-                  console.error('Failed to add to watch history:', error)
-                }
               }}
             >
               <OptimizedImage
@@ -203,25 +162,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
               rel="noopener noreferrer"
               className="ranking-item-responsive__title"
               data-testid="video-title"
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation()
-                try {
-                  await addToHistory({
-                    id: item.id,
-                    title: item.title,
-                    thumbURL: item.thumbURL,
-                    views: item.views,
-                    comments: item.comments,
-                    mylists: item.mylists,
-                    likes: item.likes,
-                    authorId: item.authorId,
-                    authorName: item.authorName,
-                    authorIcon: item.authorIcon,
-                    registeredAt: item.registeredAt
-                  })
-                } catch (error) {
-                  console.error('Failed to add to watch history:', error)
-                }
               }}
             >
               {item.title}

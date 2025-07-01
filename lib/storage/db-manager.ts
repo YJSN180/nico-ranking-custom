@@ -14,7 +14,7 @@ export interface StoreInfo {
 export class DBManager {
   private db: IDBPDatabase | null = null
   private readonly dbName = 'nicoran-db'
-  private readonly version = 4  // watchHistory追加
+  private readonly version = 5  // watchHistory削除
   private openDBModule: typeof import('idb') | null = null
 
   async init(): Promise<void> {
@@ -111,13 +111,9 @@ export class DBManager {
           mylistVideosStore.createIndex('mylistId-addedAt', ['mylistId', 'addedAt'])
         }
         
-        // 視聴履歴ストア（v4で新規作成）
-        if (!db.objectStoreNames.contains('watchHistory')) {
-          const watchHistoryStore = db.createObjectStore('watchHistory', {
-            keyPath: 'videoId'
-          })
-          watchHistoryStore.createIndex('watchedAt', 'watchedAt')
-          watchHistoryStore.createIndex('title', 'title')
+        // 視聴履歴ストアを削除（v5で削除）
+        if (db.objectStoreNames.contains('watchHistory')) {
+          db.deleteObjectStore('watchHistory')
         }
       }
     })

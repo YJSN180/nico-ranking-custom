@@ -34,7 +34,6 @@ const NAV_ITEMS: NavItem[] = [
   // メインセクション
   { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
   { href: '/mylists', label: 'マイリスト', icon: <MylistIcon />, section: 'main' },
-  { href: '/watch-history', label: '視聴履歴', icon: <HistoryIcon />, section: 'main' },
   { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
   
   // 外部リンクセクション  
