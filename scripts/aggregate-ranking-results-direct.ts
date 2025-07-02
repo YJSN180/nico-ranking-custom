@@ -344,11 +344,11 @@ async function main() {
     await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));
     console.log(`\nSaved aggregated data to ${backupPath}`);
 
-    // Write to Cloudflare KV (NGリストのみ、RANKING_LATESTは不要)
-    console.log('\nWriting to Cloudflare KV...');
-    // await writeToCloudflareKV(rankingData); // R2移行済みのため不要
+    // Write to Cloudflare KV (3-key分割でWorkerのフォールバック用)
+    console.log('\nWriting to Cloudflare KV (3-group split)...');
     
-    // RANKING_LATEST への書き込みは不要（3-key分割のみ使用）
+    // KVは3-key分割で書き込み（Workerのフォールバック機能用）
+    await writeToCloudflareKVGroups(rankingData);
     
     // Clean up temp files
     console.log('\nCleaning up temporary files...');
