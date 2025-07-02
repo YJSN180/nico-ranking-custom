@@ -24,6 +24,8 @@ export function MylistModal({
   onCreateMylist,
   isProcessing = false
 }: MylistModalProps) {
+  // mylistsが配列であることを確認
+  const safeMylistArray = Array.isArray(mylists) ? mylists : []
   const [showNewForm, setShowNewForm] = useState(false)
   const [newMylistName, setNewMylistName] = useState('')
   const [newMylistDescription, setNewMylistDescription] = useState('')
@@ -83,7 +85,7 @@ export function MylistModal({
         </div>
 
         <div className={styles.content}>
-          {mylists.length === 0 ? (
+          {safeMylistArray.length === 0 ? (
             <div style={{ 
               padding: '32px', 
               textAlign: 'center', 
@@ -95,7 +97,7 @@ export function MylistModal({
               </p>
             </div>
           ) : (
-            mylists.map((mylist) => {
+            safeMylistArray.map((mylist) => {
               const isSelected = selectedMylistIds.includes(mylist.id)
               return (
                 <button

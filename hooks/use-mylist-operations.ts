@@ -48,7 +48,13 @@ export function useMylistOperations() {
         
         // Load all mylists
         const allMylists = await mylistManagerRef.current.getAllMylists()
-        setMylists(allMylists)
+        // 配列であることを確認
+        if (Array.isArray(allMylists)) {
+          setMylists(allMylists)
+        } else {
+          console.error('getAllMylists did not return an array:', allMylists)
+          setMylists([])
+        }
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Failed to initialize mylist operations:', error)
@@ -82,7 +88,9 @@ export function useMylistOperations() {
       
       // マイリストを再読み込みしてカウントを更新
       const allMylists = await mylistManagerRef.current.getAllMylists()
-      setMylists(allMylists)
+      if (Array.isArray(allMylists)) {
+        setMylists(allMylists)
+      }
       
       return true
     } catch (error) {
@@ -106,7 +114,9 @@ export function useMylistOperations() {
       
       // マイリストを再読み込みしてカウントを更新
       const allMylists = await mylistManagerRef.current.getAllMylists()
-      setMylists(allMylists)
+      if (Array.isArray(allMylists)) {
+        setMylists(allMylists)
+      }
       
       return true
     } catch (error) {
@@ -155,7 +165,9 @@ export function useMylistOperations() {
       
       // Reload mylists
       const allMylists = await mylistManagerRef.current.getAllMylists()
-      setMylists(allMylists)
+      if (Array.isArray(allMylists)) {
+        setMylists(allMylists)
+      }
       
       return newMylistId
     } catch (error) {

@@ -15,6 +15,7 @@ export function MylistButton({ video }: MylistButtonProps) {
   const { mylists, isLoading, addVideoToMylist, removeVideoFromMylist, isVideoInAnyMylist, createMylist } = useMylistOperations()
   const [isInMylist, setIsInMylist] = useState(false)
   const [mylistIds, setMylistIds] = useState<string[]>([])
+  const [checkError, setCheckError] = useState<Error | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
 
@@ -43,6 +44,7 @@ export function MylistButton({ video }: MylistButtonProps) {
         console.error('Failed to check mylist status:', error)
         setIsInMylist(false)
         setMylistIds([])
+        setCheckError(error instanceof Error ? error : new Error('Unknown error'))
       }
     }
     
@@ -57,7 +59,12 @@ export function MylistButton({ video }: MylistButtonProps) {
     
     // デバッグログ
     // eslint-disable-next-line no-console
-    console.log('[MylistButton] clicked', { isInMylist, mylists, isLoading })
+    console.log('[MylistButton] clicked', { 
+      isInMylist, 
+      mylists: mylists?.length || 0, 
+      mylistIds: Array.isArray(mylistIds) ? mylistIds : [],
+      isLoading 
+    })
     
     // 常にモーダルを表示（登録済みでも未登録でも）
     setShowModal(true)
