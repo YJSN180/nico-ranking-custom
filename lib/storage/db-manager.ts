@@ -1,5 +1,6 @@
-// Import only types at compile time
+// Import types and functions
 import type { IDBPDatabase } from 'idb'
+import { openDB, deleteDB } from 'idb'
 
 export interface IndexInfo {
   multiEntry: boolean
@@ -15,7 +16,6 @@ export class DBManager {
   private db: IDBPDatabase | null = null
   private readonly dbName = 'nicoran-db'
   private readonly version = 5  // watchHistory削除
-  private openDBModule: typeof import('idb') | null = null
 
   async init(): Promise<void> {
     // eslint-disable-next-line no-console
@@ -36,13 +36,6 @@ export class DBManager {
     }
     
     try {
-      // Dynamically import idb library
-      // eslint-disable-next-line no-console
-      console.log('[DBManager] Dynamically importing idb library...')
-      this.openDBModule = await import('idb')
-      // eslint-disable-next-line no-console
-      console.log('[DBManager] idb library imported successfully')
-      
       // eslint-disable-next-line no-console
       console.log('[DBManager] Calling openDB...')
       this.db = await this.openDB()
@@ -56,11 +49,6 @@ export class DBManager {
   }
 
   private async openDB(): Promise<IDBPDatabase> {
-    if (!this.openDBModule) {
-      throw new Error('idb module not loaded')
-    }
-    
-    const { openDB } = this.openDBModule
     // eslint-disable-next-line no-console
     console.log(`[DBManager] openDB() called - name: ${this.dbName}, version: ${this.version}`)
     return await openDB(this.dbName, this.version, {
@@ -173,8 +161,7 @@ export class DBManager {
     }
     
     // Only delete if in browser environment
-    if (typeof window !== 'undefined' && this.openDBModule) {
-      const { deleteDB } = this.openDBModule
+    if (typeof window !== 'undefined') {
       await deleteDB(this.dbName)
     }
   }

@@ -29,9 +29,6 @@ export function useMylistOperations() {
         setIsLoading(false)
         return
       }
-
-      // Wait for hydration
-      await new Promise(resolve => setTimeout(resolve, 100))
       
       if (!mounted) return
 

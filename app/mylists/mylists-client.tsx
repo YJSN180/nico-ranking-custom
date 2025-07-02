@@ -63,9 +63,6 @@ export function MylistsClient() {
       }
       
       // 本番環境での通常の初期化
-      // Wait a bit to ensure hydration is complete
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
       if (!mounted) return
       
       try {

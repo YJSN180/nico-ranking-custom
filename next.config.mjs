@@ -244,19 +244,6 @@ const pwaConfig = withPWA({
         }
       }
     },
-    // Mylist API - NetworkFirst for data integrity
-    {
-      urlPattern: /^\/api\/mylists/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'mylist-api',
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 5 * 60 // 5 minutes
-        },
-        networkTimeoutSeconds: 3
-      }
-    },
     // External API (Niconico)
     {
       urlPattern: /^https:\/\/(nicovideo\.cdn\.nimg\.jp|tn\.smilevideo\.jp|secure-dcdn\.cdn\.nimg\.jp)/i,
