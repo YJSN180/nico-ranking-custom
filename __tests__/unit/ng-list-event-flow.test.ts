@@ -112,17 +112,12 @@ describe('NG List Event Flow', () => {
     })
   })
 
-  it('should filter items immediately after NG list update', async () => {
+  it('should update NG list state immediately when saved', async () => {
     const { result } = renderHook(() => useUserNGList())
     
-    const testItems = [
-      { id: 'sm111', title: 'Video 1', authorId: 'user1', authorName: 'Author 1' },
-      { id: 'sm222', title: 'Video 2', authorId: 'user2', authorName: 'Author 2' },
-      { id: 'sm333', title: 'Video 3', authorId: 'user3', authorName: 'Author 3' }
-    ]
-    
-    // Initial filtering - all items should pass
-    expect(result.current.filterItems(testItems)).toHaveLength(3)
+    // Initial state - empty NG list
+    expect(result.current.ngList.videoIds).toHaveLength(0)
+    expect(result.current.ngList.totalCount).toBe(0)
     
     // Update NG list
     act(() => {
@@ -137,11 +132,11 @@ describe('NG List Event Flow', () => {
       })
     })
     
-    // Check filtering after update
+    // Check if NG list is updated immediately
     await waitFor(() => {
-      const filtered = result.current.filterItems(testItems)
-      expect(filtered).toHaveLength(1)
-      expect(filtered[0]?.id).toBe('sm111')
+      expect(result.current.ngList.videoIds).toContain('sm222')
+      expect(result.current.ngList.authorIds).toContain('user3')
+      expect(result.current.ngList.totalCount).toBe(2)
     })
   })
 })

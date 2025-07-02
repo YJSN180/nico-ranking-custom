@@ -1,0 +1,26 @@
+.backLink {
+  color: var(--link);
+  text-decoration: none;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: text-decoration 0.2s ease;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.backLink:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .backLink {
+    font-size: 13px;
+  }
+}

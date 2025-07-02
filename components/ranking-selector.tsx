@@ -12,7 +12,6 @@ interface RankingSelectorProps {
 
 export function RankingSelector({ config, onConfigChange }: RankingSelectorProps) {
   const genreScrollRef = useRef<HTMLDivElement>(null)
-  const selectedGenreRef = useRef<HTMLButtonElement>(null)
 
   const handlePeriodChange = (period: RankingPeriod) => {
     onConfigChange({ ...config, period })
@@ -23,25 +22,36 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
     onConfigChange({ ...config, genre, tag: undefined })
   }
 
-  // 選択されたジャンルを中央にスクロール（モバイルのみ）
+  // 初回マウント時に選択されたジャンルが見えるようにスクロール
   useEffect(() => {
-    if (selectedGenreRef.current && genreScrollRef.current) {
+    if (!genreScrollRef.current) return
+    
+    // 選択されたジャンルのボタンを探す
+    const selectedButton = genreScrollRef.current.querySelector(`.${styles.genreButtonSelected}`)
+    if (selectedButton && selectedButton instanceof HTMLElement) {
+      // ボタンを中央に表示するようにスクロール
       const container = genreScrollRef.current
-      const selected = selectedGenreRef.current
+      const buttonLeft = selectedButton.offsetLeft
+      const buttonWidth = selectedButton.offsetWidth
+      const containerWidth = container.offsetWidth
       
-      // モバイルかどうかをCSSメディアクエリで判定
-      const isMobile = window.matchMedia('(max-width: 640px)').matches
+      // ボタンの中心を計算
+      const buttonCenter = buttonLeft + buttonWidth / 2
+      // コンテナの中心を計算
+      const containerCenter = containerWidth / 2
+      // スクロール位置を計算
+      const scrollLeft = buttonCenter - containerCenter
       
-      if (isMobile) {
-        const containerWidth = container.offsetWidth
-        const selectedLeft = selected.offsetLeft
-        const selectedWidth = selected.offsetWidth
-        const scrollPosition = selectedLeft - (containerWidth / 2) + (selectedWidth / 2)
-        
-        container.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-      }
+      // reduced-motion設定を考慮してスクロール
+      const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia 
+        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
+        : false
+      container.scrollTo({
+        left: scrollLeft,
+        behavior: prefersReducedMotion ? 'auto' : 'smooth'
+      })
     }
-  }, [config.genre])
+  }, []) // 初回マウント時のみ実行
 
   return (
     <div className={styles.selectorContainer}>
@@ -70,12 +80,12 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
         </h2>
           <div 
             ref={genreScrollRef}
-            className={styles.buttonContainer}
+            className={`${styles.buttonContainer} ${styles.genreScrollContainer}`}
           >
             {(Object.entries(GENRE_LABELS) as [RankingGenre, string][]).map(([value, label]) => (
               <button
                 key={value}
-                ref={config.genre === value ? selectedGenreRef : null}
+                // refを削除（CSS Scroll Snapに任せる）
                 onClick={() => handleGenreChange(value)}
                 className={`${styles.button} ${styles.genreButton} ${config.genre === value ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
               >

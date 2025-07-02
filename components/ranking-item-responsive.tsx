@@ -1,7 +1,8 @@
 'use client'
 
-import { memo } from 'react'
+import { memo, useRef, useEffect } from 'react'
 import { OptimizedImage } from './optimized-image'
+import { MylistButton } from './mylist-button'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
@@ -22,9 +23,22 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
   const isNew = isWithin24Hours(item.registeredAt)
   const dateDisplay = formatRegisteredDate(item.registeredAt)
 
+  // ホバー状態をリセットする関数を外部に公開するために、data属性を使用
+  const resetHoverState = (element: HTMLElement | null) => {
+    if (element) {
+      element.style.backgroundColor = 'var(--surface-color)';
+    }
+  }
+  
+  // 動画クリック時に動画ページを開く
+  const handleVideoClick = () => {
+    window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank')
+  }
+
   return (
     <li 
       data-testid="ranking-item"
+      data-video-id={item.id}
       className="ranking-item-responsive"
       style={{
         // Container Queries用のcontainment設定
@@ -40,15 +54,29 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         position: 'relative'
       }}
       onClick={(e) => {
-        // 投稿者リンクなどの子要素のクリックは除外
-        if ((e.target as HTMLElement).closest('a')) return;
-        window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank');
+        // 投稿者リンクやボタンなどの子要素のクリックは除外
+        const target = e.target as HTMLElement;
+        if (target.closest('a') || target.closest('button')) return;
+        handleVideoClick();
       }}
       onMouseEnter={(e) => {
+        // タッチデバイスではホバー効果を適用しない
+        if ('ontouchstart' in window) return;
         e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
       }}
       onMouseLeave={(e) => {
+        // タッチデバイスではホバー効果を適用しない
+        if ('ontouchstart' in window) return;
         e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+      }}
+      onTouchEnd={(e) => {
+        // タッチ終了時に背景色をリセット
+        const element = e.currentTarget;
+        setTimeout(() => {
+          if (element) {
+            element.style.backgroundColor = 'var(--surface-color)';
+          }
+        }, 100);
       }}
     >
       <div className="ranking-item-responsive__content">
@@ -94,6 +122,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
               target="_blank"
               rel="noopener noreferrer"
               style={{ display: 'block', cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
             >
               <OptimizedImage
                 src={item.thumbURL}
@@ -122,16 +153,26 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         
         {/* コンテンツエリア */}
         <div className="ranking-item-responsive__details">
-          {/* タイトル */}
-          <a
-            href={`https://www.nicovideo.jp/watch/${item.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ranking-item-responsive__title"
-            data-testid="video-title"
-          >
-            {item.title}
-          </a>
+          {/* タイトル行（モバイルではマイリストボタンを含む） */}
+          <div className="ranking-item-responsive__title-row">
+            {/* タイトル */}
+            <a
+              href={`https://www.nicovideo.jp/watch/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ranking-item-responsive__title"
+              data-testid="video-title"
+              onClick={(e) => {
+                e.stopPropagation()
+              }}
+            >
+              {item.title}
+            </a>
+            {/* モバイル用マイリストボタン（CSSで表示制御） */}
+            <div className="ranking-item-responsive__mylist-button">
+              <MylistButton video={item} />
+            </div>
+          </div>
           
           {/* 投稿者情報 */}
           <div className="ranking-item-responsive__author">
@@ -209,10 +250,15 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             <span className="ranking-item-responsive__stat">
               ❤️ {formatNumberMobile(item.likes || 0)}
             </span>
-            <span className="ranking-item-responsive__stat ranking-item-responsive__stat--desktop-only">
+            <span className="ranking-item-responsive__stat">
               📁 {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
+        </div>
+        
+        {/* マイリストボタン専用エリア */}
+        <div className="ranking-item-responsive__mylist-area">
+          <MylistButton video={item} />
         </div>
       </div>
     </li>

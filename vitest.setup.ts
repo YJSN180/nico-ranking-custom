@@ -3,6 +3,25 @@ import { vi } from 'vitest'
 import './__tests__/mocks/next-router'
 import React from 'react'
 
+// Mock IndexedDB for tests
+import FDBFactory from 'fake-indexeddb/lib/FDBFactory'
+import FDBKeyRange from 'fake-indexeddb/lib/FDBKeyRange'
+import FDBRequest from 'fake-indexeddb/lib/FDBRequest'
+import FDBDatabase from 'fake-indexeddb/lib/FDBDatabase'
+import FDBTransaction from 'fake-indexeddb/lib/FDBTransaction'
+import FDBObjectStore from 'fake-indexeddb/lib/FDBObjectStore'
+import FDBIndex from 'fake-indexeddb/lib/FDBIndex'
+import FDBCursor from 'fake-indexeddb/lib/FDBCursor'
+
+global.indexedDB = new FDBFactory()
+global.IDBKeyRange = FDBKeyRange
+global.IDBRequest = FDBRequest
+global.IDBDatabase = FDBDatabase
+global.IDBTransaction = FDBTransaction
+global.IDBObjectStore = FDBObjectStore
+global.IDBIndex = FDBIndex
+global.IDBCursor = FDBCursor
+
 // Mock Next.js Image component
 vi.mock('next/image', () => ({
   default: (props: any) => {
@@ -50,4 +69,14 @@ if (typeof window !== 'undefined') {
       dispatchEvent: vi.fn(),
     })),
   })
+}
+
+// Mock Element.scrollTo for JSDOM
+if (typeof Element !== 'undefined') {
+  Element.prototype.scrollTo = vi.fn()
+}
+
+// Mock window.confirm for JSDOM
+if (typeof window !== 'undefined') {
+  window.confirm = vi.fn(() => true)
 }

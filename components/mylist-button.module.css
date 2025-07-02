@@ -1,0 +1,296 @@
+.container {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+}
+
+/* メインボタン */
+.button {
+  width: 36px;
+  height: 36px;
+  background: var(--surface-color);
+  border: 2px solid var(--primary-color);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--primary-color);
+  transition: all 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.button:hover {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  transform: scale(1.05);
+}
+
+.button.added {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ドロップダウン */
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  width: 250px;
+  overflow: hidden;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownHeader {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.mylistOptions {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.mylistOption {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.2s;
+  color: var(--text-primary);
+}
+
+.mylistOption:hover {
+  background: var(--surface-hover);
+}
+
+.mylistOption.selected {
+  background: var(--surface-selected);
+}
+
+.mylistName {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.videoCount {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.check {
+  color: var(--primary-color);
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.createNew {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-color);
+  color: var(--primary-color);
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.createNew:hover {
+  background: var(--surface-hover);
+}
+
+/* モーダル */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal {
+  background: var(--surface-color);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: var(--shadow-xl);
+  animation: scaleIn 0.2s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.modalHeader {
+  font-size: 18px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.formGroup {
+  margin-bottom: 20px;
+}
+
+.formLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.formInput,
+.formTextarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--input-background);
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.formInput:focus,
+.formTextarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.formTextarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.modalFooter {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+/* ボタン共通 */
+.btnPrimary,
+.btnSecondary {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btnPrimary {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: var(--primary-color-hover);
+  transform: translateY(-1px);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnSecondary {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.btnSecondary:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+/* モバイル対応 */
+@media (max-width: 640px) {
+  .container {
+    top: 8px;
+    right: 8px;
+  }
+
+  .button {
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+  }
+
+  .dropdown {
+    width: 220px;
+    font-size: 14px;
+  }
+
+  .dropdownHeader {
+    padding: 10px;
+  }
+
+  .mylistOption {
+    padding: 8px 10px;
+  }
+
+  .modal {
+    padding: 20px;
+  }
+
+  .modalHeader {
+    font-size: 16px;
+  }
+}

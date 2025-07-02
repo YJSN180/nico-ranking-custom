@@ -10,7 +10,10 @@ describe('Direct Cloudflare Connection Integration', () => {
   it('クライアントサイドからCloudflare Workerに直接接続する', async () => {
     // window.locationをモック
     Object.defineProperty(window, 'location', {
-      value: { origin: 'https://nico-ranking-custom.vercel.app' },
+      value: { 
+        origin: 'https://nico-ranking-custom.vercel.app',
+        hostname: 'nico-ranking-custom.vercel.app'
+      },
       writable: true
     })
 
@@ -55,6 +58,15 @@ describe('Direct Cloudflare Connection Integration', () => {
   })
 
   it('Vercel Functionを経由しないことを確認', async () => {
+    // window.locationをモック
+    Object.defineProperty(window, 'location', {
+      value: { 
+        origin: 'https://nico-ranking-custom.vercel.app',
+        hostname: 'nico-ranking-custom.vercel.app'
+      },
+      writable: true
+    })
+
     const mockResponse = new Response(JSON.stringify({ items: [] }), { status: 200 })
     vi.mocked(global.fetch).mockResolvedValueOnce(mockResponse)
 

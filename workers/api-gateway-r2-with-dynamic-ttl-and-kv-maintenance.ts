@@ -5,6 +5,8 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
+import { decodeRankingData } from './utils/html-decode'
+
 interface Env {
   R2_BUCKET: R2Bucket
   RANKING_DATA: KVNamespace
@@ -208,7 +210,7 @@ export default {
       try {
         // R2からデータを取得
         const r2Key = tag 
-          ? `rankings/${genre}/${period}/${encodeURIComponent(tag)}.json`
+          ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
           : `rankings/${genre}/${period}/all.json`
         
         console.log(`[Worker] Fetching from R2: ${r2Key}`)
@@ -304,18 +306,73 @@ export default {
         
         // R2オブジェクトのメタデータから圧縮情報を取得
         const r2ContentEncoding = r2Object.httpMetadata?.contentEncoding
-        if (r2ContentEncoding) {
-          headers.set('Content-Encoding', r2ContentEncoding)
-          headers.set('Vary', 'Accept-Encoding')
-          // Cloudflareの変換を防ぐためno-transformを追加
-          headers.set('Cache-Control', `${cacheControl}, no-transform`)
-        }
         
-        response = new Response(r2Object.body, {
-          status: 200,
-          headers,
-          encodeBody: r2ContentEncoding ? "manual" : "auto"
-        } as ResponseInit)
+        // HTMLエンティティのデコード処理
+        const [passthroughStream, workStream] = r2Object.body.tee()
+        
+        if (r2ContentEncoding === 'gzip') {
+          // gzip圧縮されたデータの場合
+          console.log(`[Worker] Data is gzipped, decompressing and decoding HTML entities`)
+          headers.set('X-Original-Encoding', 'gzip')
+          
+          try {
+            // ストリーム全体を読み込んで解凍
+            const compressedData = await new Response(passthroughStream).arrayBuffer()
+            const decompressedData = await new Response(
+              new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
+            ).text()
+            
+            // JSONをパースしてHTMLエンティティをデコード
+            try {
+              const jsonData = JSON.parse(decompressedData)
+              const decodedData = decodeRankingData(jsonData)
+              
+              // デコード済みデータを返す（Cloudflareが必要に応じて再圧縮）
+              response = new Response(JSON.stringify(decodedData), {
+                status: 200,
+                headers
+              })
+            } catch (parseError) {
+              console.error('[Worker] Failed to parse or decode JSON:', parseError)
+              // パースに失敗した場合は元のデータをそのまま返す
+              response = new Response(decompressedData, {
+                status: 200,
+                headers
+              })
+            }
+          } catch (decompressError) {
+            console.error('[Worker] Failed to decompress gzipped data:', decompressError)
+            // 解凍に失敗した場合は、元のストリームをそのまま返す
+            response = new Response(workStream, {
+              status: 200,
+              headers,
+              encodeBody: "manual"
+            } as ResponseInit)
+          }
+        } else {
+          // 非圧縮データの場合
+          console.log(`[Worker] Data is not gzipped, decoding HTML entities`)
+          
+          try {
+            // データを読み込んでJSONパース
+            const textData = await new Response(passthroughStream).text()
+            const jsonData = JSON.parse(textData)
+            const decodedData = decodeRankingData(jsonData)
+            
+            // デコード済みデータを返す（Cloudflareが自動圧縮する）
+            response = new Response(JSON.stringify(decodedData), {
+              status: 200,
+              headers
+            })
+          } catch (error) {
+            console.error('[Worker] Failed to parse or decode JSON:', error)
+            // エラーの場合は元のストリームをそのまま返す
+            response = new Response(workStream, {
+              status: 200,
+              headers
+            })
+          }
+        }
         
         console.log('[Worker] Successfully served from R2')
         

@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { BackLink } from '@/components/back-link'
 
 export const metadata: Metadata = {
   title: 'プライバシーポリシー | ニコラン(Re:turn)',
@@ -16,20 +17,7 @@ export default function PrivacyPage() {
       <div style={{
         marginBottom: '24px',
       }}>
-        <Link
-          href="/"
-          style={{
-            color: 'var(--link)',
-            textDecoration: 'none',
-            fontSize: '14px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
-          className="hover-underline"
-        >
-          ← トップページに戻る
-        </Link>
+        <BackLink />
       </div>
       
       <h1 style={{ 

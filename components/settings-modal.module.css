@@ -4,11 +4,12 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6); /* マイリストモーダルと統一 */
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
 }
 
 .modal {
@@ -16,10 +17,21 @@
   border-radius: 12px;
   width: 90%;
   max-width: 600px;
-  max-height: 80vh;
+  height: 70vh; /* 固定高さを設定 */
+  max-height: 600px; /* 最大高さを制限 */
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* マイリストモーダルと統一 */
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ダークモード対応 */
+[data-theme="dark"] .modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="darkblue"] .modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 }
 
 .header {
@@ -78,15 +90,18 @@
 }
 
 .content {
-  flex: 1;
+  height: 100%; /* 利用可能な高さをすべて使用 */
   overflow-y: auto;
   padding: 20px;
 }
 
 .displaySettings {
   color: var(--text-secondary);
-  text-align: center;
-  padding: 40px 0;
+  text-align: left;
+  padding: 0;
+  height: 100%; /* 親要素の高さに合わせる */
+  display: flex;
+  flex-direction: column;
 }
 
 .ngListSettings {
@@ -98,7 +113,7 @@
 .section {
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
 }
 
 .section h3 {
@@ -225,4 +240,56 @@
 
 .footer .closeButton:hover {
   background: var(--primary-color-hover);
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* モバイル対応 */
+@media (max-width: 640px) {
+  .modal {
+    width: 100%;
+    height: 90vh; /* フルスクリーンではなく90vhに */
+    max-width: none;
+    max-height: none;
+    border-radius: 16px 16px 0 0; /* 上部のみ角丸 */
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    animation: slideUpMobile 0.3s ease-out;
+  }
+  
+  .content {
+    height: calc(100% - 140px); /* ヘッダーとフッターの高さを考慮 */
+  }
+}
+
+@keyframes slideUpMobile {
+  from {
+    opacity: 0;
+    transform: translateY(20px); /* 20pxだけ下から開始 */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

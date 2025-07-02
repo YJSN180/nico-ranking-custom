@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useMobileDetect } from '@/hooks/use-mobile-detect'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
+import styles from './navigation.module.css'
 import { 
   HamburgerIcon, 
   CloseIcon, 
@@ -17,7 +17,8 @@ import {
   VideoIcon,
   ExternalLinkIcon,
   ThemeIcon,
-  GuideIcon
+  GuideIcon,
+  MylistIcon
 } from './icons'
 
 type NavItem = {
@@ -32,6 +33,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   // メインセクション
   { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
+  { href: '/mylists', label: 'マイリスト', icon: <MylistIcon />, section: 'main' },
   { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
   
   // 外部リンクセクション  
@@ -59,7 +61,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
-  const isMobile = useMobileDetect()
+  const [isTouching, setIsTouching] = useState(false)
   const pathname = usePathname()
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
@@ -74,9 +76,9 @@ export function Navigation() {
     }
   }
 
-  // モバイルメニューの外側クリックで閉じる
+  // メニューの外側クリックで閉じる
   useEffect(() => {
-    if (!isMobile || !isOpen) return
+    if (!isOpen) return
 
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -91,7 +93,7 @@ export function Navigation() {
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isMobile, isOpen])
+  }, [isOpen])
 
   // Escapeキーで閉じる
   useEffect(() => {
@@ -108,9 +110,12 @@ export function Navigation() {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [isOpen])
 
-  // モバイルメニューのボディスクロール制御
+  // サイドドロワー表示時のボディスクロール制御
   useEffect(() => {
-    if (isMobile && isOpen) {
+    // CSSメディアクエリでモバイル判定
+    const mediaQuery = window.matchMedia('(max-width: 768px)')
+    
+    if (mediaQuery.matches && isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''
@@ -119,12 +124,25 @@ export function Navigation() {
     return () => {
       document.body.style.overflow = ''
     }
-  }, [isMobile, isOpen])
+  }, [isOpen])
 
-  // 768px以下でモバイル表示 (SSR中はfalseとする)
-  const shouldShowMobile = isMobile || (typeof window !== 'undefined' && window.innerWidth <= 768)
+  // メディアクエリによるモバイル判定（CSS-only対応のため、JavaScriptでの判定は最小限に）
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  
+  useEffect(() => {
+    // メディアクエリでモバイル判定
+    const mediaQuery = window.matchMedia('(max-width: 768px)')
+    setShowMobileMenu(mediaQuery.matches)
+    
+    const handleMediaChange = (e: MediaQueryListEvent) => {
+      setShowMobileMenu(e.matches)
+    }
+    
+    mediaQuery.addEventListener('change', handleMediaChange)
+    return () => mediaQuery.removeEventListener('change', handleMediaChange)
+  }, [])
 
-  if (shouldShowMobile) {
+  if (showMobileMenu) {
     return (
       <>
         {/* ハンバーガーメニューボタン */}
@@ -134,42 +152,13 @@ export function Navigation() {
           aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
           aria-expanded={isOpen}
           aria-controls="navigation-menu"
-          style={{
-            position: 'absolute',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            left: isMobile ? '12px' : '16px',
-            background: 'rgba(255, 255, 255, 0.25)',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-            borderRadius: '6px',
-            padding: isMobile ? '4px 8px' : '6px 10px',
-            color: 'white',
-            fontSize: isMobile ? '16px' : '18px',
-            cursor: 'pointer',
-            transition: 'all 0.2s',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            zIndex: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '36px',
-            height: '36px',
-          }}
-          onMouseEnter={(e) => {
-            if (!isMobile) {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-              e.currentTarget.style.transform = 'translateY(-50%) scale(1.05)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isMobile) {
-              e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-              e.currentTarget.style.transform = 'translateY(-50%) scale(1)'
-            }
-          }}
+          className={`${styles.menuButton} ${isTouching ? styles.touching : ''}`}
+          onTouchStart={() => setIsTouching(true)}
+          onTouchEnd={() => setIsTouching(false)}
         >
-          <HamburgerIcon size={20} color="white" />
+          <span className={`${styles.hamburgerIcon} ${isOpen ? styles.open : ''}`}>
+            <HamburgerIcon color="white" />
+          </span>
         </button>
 
         {/* モバイルメニュー（サイドドロワー） */}
@@ -186,19 +175,7 @@ export function Navigation() {
                 }
               }}
               aria-label="メニューを閉じる（背景をタップ）"
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'rgba(0, 0, 0, 0.7)',
-                zIndex: 30,
-                animation: 'fadeIn 0.2s ease-in-out',
-                backdropFilter: 'blur(2px)',
-                WebkitBackdropFilter: 'blur(2px)',
-                cursor: 'pointer',
-              }}
+              className={styles.overlay}
             />
 
             {/* サイドメニュー */}
@@ -207,112 +184,42 @@ export function Navigation() {
               id="navigation-menu"
               role="navigation"
               aria-label="メインナビゲーション"
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                bottom: 0,
-                width: '280px',
-                maxWidth: '80vw',
-                background: 'var(--menu-bg)',
-                boxShadow: '2px 0 10px rgba(0, 0, 0, 0.2)',
-                zIndex: 40,
-                transform: 'translateX(0)',
-                animation: 'slideIn 0.2s ease-out',
-                overflowY: 'auto',
-              }}
+              className={styles.drawer}
             >
-              <div style={{ padding: '20px' }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '20px',
-                }}>
-                  <h2 style={{
-                    color: 'var(--text-primary)',
-                    fontSize: '20px',
-                    fontWeight: 'bold',
-                    margin: 0,
-                  }}>
+              <div className={styles.drawerContent}>
+                <div className={styles.drawerHeader}>
+                  <h2 className={styles.drawerTitle}>
                     メニュー
                   </h2>
                   <button
                     onClick={() => setIsOpen(false)}
                     aria-label="メニューを閉じる"
-                    style={{
-                      background: 'transparent',
-                      border: '2px solid var(--text-secondary)',
-                      borderRadius: '50%',
-                      width: '40px',
-                      height: '40px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      fontSize: '24px',
-                      color: 'var(--text-primary)',
-                      transition: 'all 0.2s',
-                    }}
-                    onTouchStart={(e) => {
-                      e.currentTarget.style.background = 'var(--menu-item-bg)'
-                      e.currentTarget.style.transform = 'scale(0.95)'
-                    }}
-                    onTouchEnd={(e) => {
-                      e.currentTarget.style.background = 'transparent'
-                      e.currentTarget.style.transform = 'scale(1)'
-                    }}
+                    className={styles.closeButton}
                   >
                     <CloseIcon size={20} />
                   </button>
                 </div>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className={styles.drawerSections}>
                   {/* メインセクション */}
                   <section>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    <ul>
                       {NAV_ITEMS.filter(item => item.section === 'main').map((item) => (
-                        <li key={item.href} style={{ marginBottom: '8px' }}>
+                        <li key={item.href}>
                           {item.href === '#settings' ? (
                             <button
                               onClick={openSettings}
-                              className="nav-link-mobile"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                width: '100%',
-                                padding: '12px 16px',
-                                color: 'var(--text-primary)',
-                                textDecoration: 'none',
-                                borderRadius: '8px',
-                                transition: 'background-color 0.2s',
-                                background: pathname === item.href ? 'var(--bg-hover)' : 'var(--bg-secondary)',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: '16px',
-                                textAlign: 'left',
-                              }}
+                              className={`${styles.navLinkMobile} ${pathname === item.href ? styles.active : ''}`}
+                              style={{ width: '100%', border: 'none', textAlign: 'left' }}
                             >
-                              <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                              <span className={styles.iconWrapper}>{item.icon}</span>
                               <span>{item.label}</span>
                             </button>
                           ) : (
                             <Link
                               href={item.href}
                               onClick={() => setIsOpen(false)}
-                              className="nav-link-mobile"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px',
-                                padding: '12px 16px',
-                                color: 'var(--text-primary)',
-                                textDecoration: 'none',
-                                borderRadius: '8px',
-                                transition: 'background-color 0.2s',
-                                background: pathname === item.href ? 'var(--bg-hover)' : 'var(--bg-secondary)',
-                              }}
+                              className={`${styles.navLinkMobile} ${pathname === item.href ? styles.active : ''}`}
                             >
                               <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
                               <span>{item.label}</span>
@@ -324,24 +231,12 @@ export function Navigation() {
                   </section>
 
                   {/* テーマ切り替えセクション */}
-                  <section style={{ 
-                    padding: '16px', 
-                    background: 'var(--bg-secondary)', 
-                    borderRadius: '8px' 
-                  }}>
-                    <div style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: '8px', 
-                      marginBottom: '12px',
-                      color: 'var(--text-secondary)',
-                      fontSize: '14px',
-                      fontWeight: '600'
-                    }}>
+                  <section className={styles.themeSection}>
+                    <div className={styles.themeSectionHeader}>
                       <ThemeIcon size={16} />
                       <span>テーマ</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div className={styles.themeSectionButtons}>
                       <button
                         onClick={() => {
                           updatePreferences({ theme: 'light' })
@@ -349,17 +244,7 @@ export function Navigation() {
                             document.documentElement.setAttribute('data-theme', 'light')
                           }
                         }}
-                        style={{
-                          flex: 1,
-                          padding: '8px 12px',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '4px',
-                          background: preferences.theme === 'light' ? 'var(--bg-hover)' : 'transparent',
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          transition: 'all 0.2s',
-                        }}
+                        className={`${styles.themeButton} ${preferences.theme === 'light' ? styles.active : ''}`}
                       >
                         ☀️
                       </button>
@@ -370,17 +255,7 @@ export function Navigation() {
                             document.documentElement.setAttribute('data-theme', 'dark')
                           }
                         }}
-                        style={{
-                          flex: 1,
-                          padding: '8px 12px',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '4px',
-                          background: preferences.theme === 'dark' ? 'var(--bg-hover)' : 'transparent',
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          transition: 'all 0.2s',
-                        }}
+                        className={`${styles.themeButton} ${preferences.theme === 'dark' ? styles.active : ''}`}
                       >
                         🌙
                       </button>
@@ -391,17 +266,7 @@ export function Navigation() {
                             document.documentElement.setAttribute('data-theme', 'darkblue')
                           }
                         }}
-                        style={{
-                          flex: 1,
-                          padding: '8px 12px',
-                          border: '1px solid var(--border-color)',
-                          borderRadius: '4px',
-                          background: preferences.theme === 'darkblue' ? 'var(--bg-hover)' : 'transparent',
-                          color: 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          transition: 'all 0.2s',
-                        }}
+                        className={`${styles.themeButton} ${preferences.theme === 'darkblue' ? styles.active : ''}`}
                       >
                         🌌
                       </button>
@@ -410,9 +275,9 @@ export function Navigation() {
 
                   {/* 外部リンクセクション */}
                   <section>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    <ul>
                       {NAV_ITEMS.filter(item => item.section === 'external').map((item) => (
-                        <li key={item.href} style={{ marginBottom: '8px' }}>
+                        <li key={item.href}>
                           <a
                             href={item.href}
                             target="_blank"
@@ -472,17 +337,13 @@ export function Navigation() {
                   </section>
 
                   {/* 区切り線 */}
-                  <hr style={{ 
-                    border: 'none', 
-                    borderTop: '1px solid var(--border-color)', 
-                    margin: '0' 
-                  }} />
+                  <hr className={styles.divider} />
 
                   {/* 情報セクション */}
                   <section>
-                    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                    <ul>
                       {NAV_ITEMS.filter(item => item.section === 'info').map((item) => (
-                        <li key={item.href} style={{ marginBottom: '8px' }}>
+                        <li key={item.href}>
                           <Link
                             href={item.href}
                             onClick={() => setIsOpen(false)}
@@ -499,7 +360,7 @@ export function Navigation() {
                               background: pathname === item.href ? 'var(--bg-hover)' : 'var(--bg-secondary)',
                             }}
                           >
-                            <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                            <span className={styles.iconWrapper}>{item.icon}</span>
                             <span>{item.label}</span>
                           </Link>
                         </li>
@@ -517,43 +378,18 @@ export function Navigation() {
 
   // デスクトップ版（ドロップダウンメニュー）
   return (
-    <div style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '16px', zIndex: 20 }}>
+    <div className={styles.desktopContainer}>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="メニュー"
         aria-expanded={isOpen}
         aria-controls="navigation-dropdown"
-        style={{
-          background: 'rgba(255, 255, 255, 0.25)',
-          border: '1px solid rgba(255, 255, 255, 0.3)',
-          borderRadius: '6px',
-          padding: '6px 12px',
-          color: 'white',
-          fontSize: '16px',
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.35)'
-          if (e.currentTarget.parentElement) {
-            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1.05)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.25)'
-          if (e.currentTarget.parentElement) {
-            e.currentTarget.parentElement.style.transform = 'translateY(-50%) scale(1)'
-          }
-        }}
+        className={styles.menuButton}
       >
-        <HamburgerIcon size={18} />
-        <span>メニュー</span>
+        <span className={`${styles.hamburgerIcon} ${isOpen ? styles.open : ''}`}>
+          <HamburgerIcon />
+        </span>
       </button>
 
       {/* ドロップダウンメニュー */}
@@ -563,69 +399,30 @@ export function Navigation() {
           id="navigation-dropdown"
           role="navigation"
           aria-label="メインナビゲーション"
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            marginTop: '8px',
-            background: 'var(--menu-bg)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            boxShadow: 'var(--shadow-lg)',
-            minWidth: '200px',
-            padding: '8px',
-            animation: 'dropIn 0.15s ease-out',
-          }}
+          className={styles.dropdown}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div className={styles.menuContent}>
             {/* メインセクション */}
             <section>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul>
                 {NAV_ITEMS.filter(item => item.section === 'main').map((item) => (
                   <li key={item.href}>
                     {item.href === '#settings' ? (
                       <button
                         onClick={openSettings}
-                        className="nav-link-desktop"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          width: '100%',
-                          padding: '8px 12px',
-                          color: 'var(--text-primary)',
-                          textDecoration: 'none',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s',
-                          fontSize: '14px',
-                          background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                        }}
+                        className={`${styles.navLinkDesktop} ${pathname === item.href ? styles.active : ''}`}
+                        style={{ width: '100%', border: 'none', textAlign: 'left', background: 'transparent' }}
                       >
-                        <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
+                        <span className={`${styles.iconWrapper} ${styles.desktop}`}>{item.icon}</span>
                         <span>{item.label}</span>
                       </button>
                     ) : (
                       <Link
                         href={item.href}
                         onClick={() => setIsOpen(false)}
-                        className="nav-link-desktop"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
-                          color: 'var(--text-primary)',
-                          textDecoration: 'none',
-                          borderRadius: '4px',
-                          transition: 'background-color 0.2s',
-                          fontSize: '14px',
-                          background: pathname === item.href ? 'var(--bg-hover)' : 'transparent',
-                        }}
+                        className={`${styles.navLinkDesktop} ${pathname === item.href ? styles.active : ''}`}
                       >
-                        <span style={{ width: '16px', height: '16px', flexShrink: 0 }}>{item.icon}</span>
+                        <span className={`${styles.iconWrapper} ${styles.desktop}`}>{item.icon}</span>
                         <span>{item.label}</span>
                       </Link>
                     )}
@@ -636,7 +433,7 @@ export function Navigation() {
 
             {/* 外部リンクセクション */}
             <section>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul>
                 {NAV_ITEMS.filter(item => item.section === 'external').map((item) => (
                   <li key={item.href}>
                     <a
@@ -697,15 +494,11 @@ export function Navigation() {
             </section>
 
             {/* 区切り線 */}
-            <hr style={{ 
-              border: 'none', 
-              borderTop: '1px solid var(--border-color)', 
-              margin: '0' 
-            }} />
+            <hr className={styles.divider} />
 
             {/* 情報セクション */}
             <section>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              <ul>
                 {NAV_ITEMS.filter(item => item.section === 'info').map((item) => (
                   <li key={item.href}>
                     <Link
@@ -736,37 +529,6 @@ export function Navigation() {
         </nav>
       )}
 
-      {/* アニメーションのスタイル */}
-      <style jsx global>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideIn {
-          from { transform: translateX(-100%); }
-          to { transform: translateX(0); }
-        }
-        
-        @keyframes dropIn {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        .nav-link-mobile:hover {
-          background-color: var(--bg-hover) !important;
-        }
-        
-        .nav-link-desktop:hover {
-          background-color: var(--bg-hover) !important;
-        }
-      `}</style>
     </div>
   )
 }

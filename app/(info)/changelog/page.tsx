@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { BackLink } from '@/components/back-link'
 
 export const metadata: Metadata = {
   title: '更新履歴 | ニコラン(Re:turn)',
@@ -21,17 +21,14 @@ type ChangelogEntry = {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    date: '2025-06-17',
+    date: '2025-07-02',
     version: 'v1.0.0',
     changes: [
       { type: 'feature', description: 'ニコニコ動画ランキングの基本表示機能' },
       { type: 'feature', description: 'サムネイル・再生数・コメント数の表示' },
       { type: 'feature', description: 'NGフィルター機能（動画・投稿者ブロック）' },
-      { type: 'feature', description: '24時間・毎時ランキングの切り替え機能' },
-      { type: 'feature', description: '人気タグ別ランキング機能' },
+      { type: 'feature', description: 'マイリスト機能（保存・エクスポート・インポート）' },
       { type: 'feature', description: 'テーマ切り替え機能（ライト/ダーク/ダークブルー）' },
-      { type: 'feature', description: 'モバイル対応レスポンシブデザイン' },
-      { type: 'feature', description: 'リアルタイム統計更新（1分ごと）' },
     ],
   },
 ]
@@ -66,20 +63,7 @@ export default function ChangelogPage() {
       <div style={{
         marginBottom: '24px',
       }}>
-        <Link
-          href="/"
-          style={{
-            color: 'var(--link)',
-            textDecoration: 'none',
-            fontSize: '14px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
-          className="hover-underline"
-        >
-          ← トップページに戻る
-        </Link>
+        <BackLink />
       </div>
       
       <h1 style={{

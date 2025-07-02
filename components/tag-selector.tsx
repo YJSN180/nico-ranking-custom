@@ -14,7 +14,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const [popularTags, setPopularTags] = useState<string[]>(propsTags)
   const [loading, setLoading] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
-  const selectedTagRef = useRef<HTMLButtonElement>(null)
 
   // propsから渡されたタグを優先的に使用
   useEffect(() => {
@@ -22,6 +21,35 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     setPopularTags(propsTags)
     setLoading(false)
   }, [propsTags])
+
+  // 初回マウント時に選択されたタグが見えるようにスクロール
+  useEffect(() => {
+    if (!tagScrollRef.current || !config.tag) return
+    
+    // 選択されたタグのボタンを探す
+    const selectedButton = tagScrollRef.current.querySelector(`.${styles.tagButtonSelected}`)
+    if (selectedButton && selectedButton instanceof HTMLElement) {
+      // ボタンを中央に表示するようにスクロール
+      const container = tagScrollRef.current
+      const buttonLeft = selectedButton.offsetLeft
+      const buttonWidth = selectedButton.offsetWidth
+      const containerWidth = container.offsetWidth
+      
+      // ボタンの中心を計算
+      const buttonCenter = buttonLeft + buttonWidth / 2
+      // コンテナの中心を計算
+      const containerCenter = containerWidth / 2
+      // スクロール位置を計算
+      const scrollLeft = buttonCenter - containerCenter
+      
+      // reduced-motion設定を考慮してスクロール
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      container.scrollTo({
+        left: scrollLeft,
+        behavior: prefersReducedMotion ? 'auto' : 'smooth'
+      })
+    }
+  }, [config.tag]) // config.tagが変更されたときに実行
 
   const handleTagSelect = (tag: string) => {
     if (tag === 'すべて') {
@@ -33,25 +61,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     }
   }
 
-  // 選択されたタグを中央にスクロール（モバイルのみ）
-  useEffect(() => {
-    if (selectedTagRef.current && tagScrollRef.current) {
-      const container = tagScrollRef.current
-      const selected = selectedTagRef.current
-      
-      // モバイルかどうかをCSSメディアクエリで判定
-      const isMobile = window.matchMedia('(max-width: 640px)').matches
-      
-      if (isMobile) {
-        const containerWidth = container.offsetWidth
-        const selectedLeft = selected.offsetLeft
-        const selectedWidth = selected.offsetWidth
-        const scrollPosition = selectedLeft - (containerWidth / 2) + (selectedWidth / 2)
-        
-        container.scrollTo({ left: scrollPosition, behavior: 'smooth' })
-      }
-    }
-  }, [config.tag])
 
   const clearTag = () => {
     onConfigChange({ ...config, tag: undefined })
@@ -101,13 +110,12 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       )}
 
       <div className={styles.scrollContainer}>
-        <div
+        <div 
           ref={tagScrollRef}
-          className={styles.buttonContainer}
+          className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
         >
           {/* 「すべて」タグを最初に表示 */}
           <button
-            ref={!config.tag ? selectedTagRef : null}
             onClick={() => handleTagSelect('すべて')}
             className={`${styles.button} ${styles.tagButton} ${!config.tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
           >
@@ -118,7 +126,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           {popularTags.map((tag) => (
             <button
               key={tag}
-              ref={config.tag === tag ? selectedTagRef : null}
               onClick={() => handleTagSelect(tag)}
               className={`${styles.button} ${styles.tagButton} ${config.tag === tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
             >

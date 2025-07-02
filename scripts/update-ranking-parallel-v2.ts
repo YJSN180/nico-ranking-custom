@@ -41,6 +41,18 @@ const GENRE_ID_MAP: Record<RankingGenre, string> = {
   other: 'ramuboyn'
 };
 
+// Custom group definitions for 8-group strategy
+const CUSTOM_GROUPS: string[][] = [
+  ['all', 'game'],                              // Group 1
+  ['anime', 'vocaloid'],                        // Group 2  
+  ['voicesynthesis', 'entertainment'],          // Group 3
+  ['music', 'sing'],                            // Group 4
+  ['dance', 'play', 'commentary', 'cooking'],   // Group 5 (old Group 3)
+  ['travel', 'nature', 'vehicle', 'technology'],// Group 6 (old Group 4)
+  ['society', 'mmd', 'vtuber', 'radio'],       // Group 7 (old Group 5)
+  ['sports', 'animal', 'other']                 // Group 8 (old Group 6)
+];
+
 // NG list interface (matching frontend structure)
 interface NGList {
   videoIds: string[]
@@ -638,20 +650,27 @@ async function main() {
 if (process.argv[2] === '--group') {
   // Group mode for GitHub Actions matrix strategy
   const groupId = parseInt(process.argv[3]);
-  const totalGroups = parseInt(process.argv[4] || '6');
+  const totalGroups = parseInt(process.argv[4] || '8');
   
   if (!groupId || groupId < 1 || groupId > totalGroups) {
     console.error('Invalid group ID. Usage: --group <groupId> [totalGroups]');
     process.exit(1);
   }
   
-  // Divide genres among groups
-  const genresPerGroup = Math.ceil(ALL_GENRES.length / totalGroups);
-  const startIdx = (groupId - 1) * genresPerGroup;
-  const endIdx = Math.min(startIdx + genresPerGroup, ALL_GENRES.length);
-  const groupGenres = ALL_GENRES.slice(startIdx, endIdx);
-  
-  console.log(`Running group ${groupId}/${totalGroups} with genres: ${groupGenres.join(', ')}`);
+  // Use custom groups for better load distribution
+  let groupGenres: RankingGenre[];
+  if (totalGroups === 8 && groupId <= CUSTOM_GROUPS.length) {
+    // Use custom group definitions
+    groupGenres = CUSTOM_GROUPS[groupId - 1] as RankingGenre[];
+    console.log(`Using custom group ${groupId}/${totalGroups} with genres: ${groupGenres.join(', ')}`);
+  } else {
+    // Fallback to mechanical division
+    const genresPerGroup = Math.ceil(ALL_GENRES.length / totalGroups);
+    const startIdx = (groupId - 1) * genresPerGroup;
+    const endIdx = Math.min(startIdx + genresPerGroup, ALL_GENRES.length);
+    groupGenres = ALL_GENRES.slice(startIdx, endIdx);
+    console.log(`Running mechanical group ${groupId}/${totalGroups} with genres: ${groupGenres.join(', ')}`);
+  }
   
   // Run only for this group and save partial results
   (async () => {

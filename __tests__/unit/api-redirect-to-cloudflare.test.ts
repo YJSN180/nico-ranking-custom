@@ -23,8 +23,14 @@ describe('API Ranking Route Redirect', () => {
 
   it('/api/rankingへのリクエストをCloudflare Workerにリダイレクトする', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking?genre=all&period=24h'
-    } as NextRequest
+      url: 'http://localhost:3000/api/ranking?genre=all&period=24h',
+      headers: {
+        get: vi.fn((name) => {
+          if (name === 'host') return 'localhost:3000'
+          return null
+        })
+      }
+    } as unknown as NextRequest
 
     const response = await GET(mockRequest)
 
@@ -41,8 +47,14 @@ describe('API Ranking Route Redirect', () => {
 
   it('クエリパラメータを保持してリダイレクトする', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking?genre=game&period=hour&tag=実況プレイ動画'
-    } as NextRequest
+      url: 'http://localhost:3000/api/ranking?genre=game&period=hour&tag=実況プレイ動画',
+      headers: {
+        get: vi.fn((name) => {
+          if (name === 'host') return 'localhost:3000'
+          return null
+        })
+      }
+    } as unknown as NextRequest
 
     await GET(mockRequest)
 
@@ -56,8 +68,14 @@ describe('API Ranking Route Redirect', () => {
     delete process.env.NEXT_PUBLIC_API_GATEWAY_URL
 
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking'
-    } as NextRequest
+      url: 'http://localhost:3000/api/ranking',
+      headers: {
+        get: vi.fn((name) => {
+          if (name === 'host') return 'localhost:3000'
+          return null
+        })
+      }
+    } as unknown as NextRequest
 
     await GET(mockRequest)
 
@@ -69,8 +87,14 @@ describe('API Ranking Route Redirect', () => {
 
   it('パラメータなしのリクエストもリダイレクトする', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking'
-    } as NextRequest
+      url: 'http://localhost:3000/api/ranking',
+      headers: {
+        get: vi.fn((name) => {
+          if (name === 'host') return 'localhost:3000'
+          return null
+        })
+      }
+    } as unknown as NextRequest
 
     await GET(mockRequest)
 
@@ -82,8 +106,14 @@ describe('API Ranking Route Redirect', () => {
 
   it('301 Moved Permanentlyステータスを返す', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking?genre=all'
-    } as NextRequest
+      url: 'http://localhost:3000/api/ranking?genre=all',
+      headers: {
+        get: vi.fn((name) => {
+          if (name === 'host') return 'localhost:3000'
+          return null
+        })
+      }
+    } as unknown as NextRequest
 
     const response = await GET(mockRequest)
 

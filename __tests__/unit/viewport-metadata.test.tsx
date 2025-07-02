@@ -30,7 +30,7 @@ describe('Viewport Metadata', () => {
   it('should have proper metadata structure', async () => {
     const { metadata } = await import('@/app/layout')
     
-    expect(metadata.title).toBe('ニコラン(Re:turn)')
-    expect(metadata.description).toBe('ニコニコ動画のランキングを今すぐチェック！')
+    expect(metadata.title).toBe('ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示')
+    expect(metadata.description).toBe('ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！')
   })
 })

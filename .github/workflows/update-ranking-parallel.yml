@@ -2,10 +2,10 @@ name: Update Nico Ranking Data (Parallel)
 
 on:
   schedule:
-    # Run at 5 and 25 minutes past every hour (JST: 日本時間の毎時5分と25分)
+    # Run at 0, 20, and 40 minutes past every hour (JST: 日本時間の毎時0分・20分・40分)
     # GitHub Actions uses UTC, so JST-9 hours
-    # UTC 16:05,16:25 = JST 01:05,01:25 (翌日)
-    - cron: '5,25 * * * *'
+    # UTC 15:00,15:20,15:40 = JST 00:00,00:20,00:40 (翌日)
+    - cron: '0,20,40 * * *'
   workflow_dispatch: # Allow manual trigger
 
 # 同時実行を防ぐ
@@ -22,10 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Split 23 genres into 6 groups (about 4 genres per group)
-        # This provides good parallelization while respecting rate limits
-        group: [1, 2, 3, 4, 5, 6]
-      max-parallel: 6
+        # Split 23 genres into 8 groups for better load distribution
+        # Group 1-2: Split heavy all/game/anime/vocaloid
+        # Group 3-4: Split music/entertainment genres
+        # Group 5-8: Keep existing groups 3-6
+        group: [1, 2, 3, 4, 5, 6, 7, 8]
+      max-parallel: 8
       fail-fast: false # Continue other groups even if one fails
     
     steps:
@@ -64,7 +66,7 @@ jobs:
         fi
         
         # Use improved version with better error handling and retry logic
-        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 6
+        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
     
     - name: Upload partial results
       uses: actions/upload-artifact@v4
@@ -161,7 +163,7 @@ jobs:
         CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
       run: |
         echo "Aggregating results and writing to KV..."
-        echo "Expected 6 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
+        echo "Expected 8 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
         
         # Use fallback if KV_NAMESPACE_ID is not set
         if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then

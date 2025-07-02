@@ -1,0 +1,383 @@
+/* マイリスト動画アイテム - ランキングリストと統一されたデザイン */
+/* Container Queriesによるレスポンシブ対応 */
+
+.mylist-video-item__content {
+  display: grid;
+  gap: 12px;
+  padding: 4px;
+  
+  /* デスクトップレイアウト: thumbnail + details を横並び、actionsは下部 */
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 
+    "thumbnail details"
+    "actions actions";
+  align-items: start;
+  min-height: 80px;
+}
+
+/* 順位関連のスタイルは削除 */
+
+/* サムネイル */
+.mylist-video-item__thumbnail {
+  grid-area: thumbnail;
+  width: 160px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* コンテンツエリア */
+.mylist-video-item__details {
+  grid-area: details;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0; /* text-overflow: ellipsis のため */
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+/* タイトル */
+.mylist-video-item__title {
+  color: var(--link-color);
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+.mylist-video-item__title:visited {
+  color: var(--link-visited-color);
+}
+
+.mylist-video-item__title:hover {
+  text-decoration: underline;
+}
+
+/* 削除済みタイトル */
+.mylist-video-item__title--deleted {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  cursor: default;
+}
+
+.mylist-video-item__deleted-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 14px;
+  color: var(--error-color);
+  text-decoration: none;
+}
+
+.mylist-video-item__deleted-message {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 4px 0;
+  font-style: italic;
+}
+
+/* 投稿者情報 */
+.mylist-video-item__author {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.mylist-video-item__author-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.mylist-video-item__author-name:hover {
+  text-decoration: underline;
+}
+
+.mylist-video-item__separator {
+  color: var(--text-secondary);
+}
+
+.mylist-video-item__date {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+/* メモ */
+.mylist-video-item__memo {
+  background: var(--surface-secondary);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+
+/* アクションボタンエリア */
+.mylist-video-item__actions {
+  grid-area: actions;
+  grid-column: 1 / -1; /* 全幅を使用 */
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 4px 4px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 8px;
+}
+
+/* 追加日表示 */
+.mylist-video-item__added-date {
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.mylist-video-item__edit-button,
+.mylist-video-item__delete-button {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.mylist-video-item__edit-button:hover {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  border-color: var(--primary-color);
+}
+
+.mylist-video-item__delete-button {
+  background-color: var(--danger-color, #dc3545) !important;
+  color: white !important;
+  border-color: var(--danger-color, #dc3545) !important;
+}
+
+.mylist-video-item__delete-button:hover {
+  background: color-mix(in srgb, var(--danger-color, var(--error-color)) 85%, black);
+  color: white;
+  border-color: color-mix(in srgb, var(--danger-color, var(--error-color)) 85%, black);
+}
+
+/* 再生時間オーバーレイ */
+.mylist-video-item__duration {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Container Query: 600px以下でモバイルレイアウト */
+@container (max-width: 600px) {
+  /* モバイルでの再生時間フォントサイズ調整 */
+  .mylist-video-item__duration {
+    font-size: 11px;
+  }
+  
+  .mylist-video-item__content {
+    /* モバイルレイアウト: サムネイル + 詳細、アクションは下部 */
+    grid-template-columns: 120px 1fr;
+    grid-template-areas: 
+      "thumbnail details"
+      "actions actions";
+    gap: 8px;
+    padding: 2px;
+    min-height: 75px;
+  }
+  
+  /* 順位関連のスタイルは削除 */
+  
+  .mylist-video-item__thumbnail {
+    grid-area: thumbnail;
+    width: 120px;
+    position: relative;
+    margin-top: 0;
+  }
+  
+  .mylist-video-item__details {
+    grid-area: details;
+    gap: 4px;
+    overflow: hidden;
+  }
+  
+  .mylist-video-item__title {
+    font-size: 15px;
+    margin-bottom: 4px;
+    /* モバイルでは2行まで表示 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+  }
+  
+  .mylist-video-item__author {
+    font-size: 13px;
+    gap: 4px;
+    margin-bottom: 4px;
+  }
+  
+  .mylist-video-item__author-name {
+    max-width: 100px;
+  }
+  
+  .mylist-video-item__date {
+    font-size: 12px;
+  }
+  
+  .mylist-video-item__memo {
+    font-size: 13px;
+    padding: 4px 8px;
+  }
+  
+  /* モバイルでのアクションエリア調整 */
+  .mylist-video-item__actions {
+    padding: 4px;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  
+  .mylist-video-item__added-date {
+    font-size: 12px;
+  }
+  
+  .mylist-video-item__edit-button,
+  .mylist-video-item__delete-button {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+}
+
+/* Container Query: 400px以下で超モバイルレイアウト */
+@container (max-width: 400px) {
+  /* 超モバイルでの再生時間フォントサイズ調整 */
+  .mylist-video-item__duration {
+    font-size: 10px;
+  }
+  
+  .mylist-video-item__content {
+    grid-template-columns: 100px 1fr;
+    grid-template-areas: 
+      "thumbnail details"
+      "actions actions";
+    padding: 2px;
+    gap: 6px;
+    min-height: auto;
+  }
+  
+  /* 順位関連のスタイルは削除 */
+  
+  .mylist-video-item__thumbnail {
+    width: 100px;
+    margin-top: 0;
+    position: relative;
+  }
+  
+  .mylist-video-item__title {
+    font-size: 13px;
+  }
+  
+  .mylist-video-item__author {
+    font-size: 11px;
+  }
+  
+  .mylist-video-item__author-name {
+    max-width: 60px;
+  }
+  
+  /* アクションボタンを横並びに */
+  .mylist-video-item__actions {
+    grid-area: actions;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 4px 0 0;
+  }
+  
+  .mylist-video-item__added-date {
+    font-size: 10px;
+  }
+  
+  .mylist-video-item__edit-button,
+  .mylist-video-item__delete-button {
+    flex: 1;
+    max-width: 60px;
+  }
+}
+
+/* フォールバック: Container Queriesをサポートしていないブラウザ用 */
+@supports not (container-type: inline-size) {
+  /* 従来のMedia Queriesで対応 */
+  @media (max-width: 640px) {
+    /* モバイルでの再生時間フォントサイズ調整 */
+    .mylist-video-item__duration {
+      font-size: 11px;
+    }
+    
+    .mylist-video-item__content {
+      grid-template-columns: 120px 1fr;
+      grid-template-areas: 
+        "thumbnail details"
+        "actions actions";
+      gap: 8px;
+      padding: 2px;
+      min-height: 75px;
+    }
+    
+    /* 順位関連のスタイルは削除 */
+    
+    .mylist-video-item__thumbnail {
+      grid-area: thumbnail;
+      width: 120px;
+      position: relative;
+      margin-top: 0;
+    }
+    
+    .mylist-video-item__title {
+      font-size: 15px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  }
+  
+  @media (max-width: 375px) {
+    .mylist-video-item__content {
+      grid-template-columns: 100px 1fr;
+      grid-template-areas: 
+        "thumbnail details"
+        "actions actions";
+    }
+    
+    .mylist-video-item__actions {
+      grid-area: actions;
+      flex-direction: row;
+      justify-content: flex-start;
+      padding: 4px 0 0;
+    }
+  }
+}
+

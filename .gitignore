@@ -73,6 +73,16 @@ doc/
 /blob-report/
 /playwright/.cache/
 
+# PWA generated files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/worker-*.js
+public/worker-*.js.map
+public/fallback-*.js
+public/fallback-*.js.map
+
 # tools
 .tools/
 gh
@@ -108,6 +118,13 @@ scripts/*
 !scripts/aggregate-ranking-results-direct.ts
 !scripts/update-ranking-parallel-v2.ts
 !scripts/fetch-ng-list.ts
+!scripts/deploy-green-worker.sh
+!scripts/update-kv-routing.js
+!scripts/update-routing-config.sh
+!scripts/manual-deploy-workers.sh
+!scripts/switch-to-blue.js
+!scripts/switch-to-green.js
+!scripts/emergency-rollback.js
 test-ng-persistence.js
 
 # Documentation and temporary files
@@ -136,3 +153,4 @@ venv/
 .venv/
 __pycache__/
 *.pyc
+SuperClaude/
