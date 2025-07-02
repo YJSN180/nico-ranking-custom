@@ -1,4 +1,5 @@
 name: Update Nico Ranking Data (Parallel)
+# Last updated: 2025-07-02 to reactivate cron scheduler
 
 on:
   schedule:
@@ -24,8 +25,8 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        group: [1, 2, 3, 4, 5, 6, 7, 8]
-      max-parallel: 8
+        group: [1, 2, 3, 4, 5, 6]
+      max-parallel: 6
       fail-fast: false # Continue other groups even if one fails
     
     steps:
@@ -64,7 +65,7 @@ jobs:
         fi
         
         # Use improved version with better error handling and retry logic
-        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
+        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 6
     
     - name: Upload partial results
       uses: actions/upload-artifact@v4
