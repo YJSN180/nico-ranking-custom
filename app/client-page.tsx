@@ -10,11 +10,9 @@ import { useUserPreferences } from '@/hooks/use-user-preferences'
 const Pagination = lazy(() => import('@/components/pagination'))
 const TagSelector = lazy(() => import('@/components/tag-selector').then(mod => ({ default: mod.TagSelector })))
 import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useRankingData } from '@/hooks/use-ranking-data'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
-import { rankingCache } from '@/lib/ranking-cache'
-import { requestThrottle } from '@/lib/request-throttle'
-import { filterWithNGList } from '@/lib/filter-with-ng-list'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
@@ -60,6 +58,28 @@ export default function ClientPage({
     return JSON.stringify(ngList)
   }, [ngList])
   
+  // ランキングデータ管理フック
+  const {
+    rankingData,
+    fullRankingData,
+    currentPopularTags,
+    loading,
+    error,
+    fetchRankingData,
+    setCurrentPopularTags,
+    setRankingData,
+    setFullRankingData,
+    setError,
+    abortControllerRef,
+    tagsAbortControllerRef,
+    isFallbackInitiatedRef
+  } = useRankingData({
+    initialData,
+    allRankingData,
+    ngList,
+    ngListVersion
+  })
+  
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
     return {
@@ -75,36 +95,6 @@ export default function ClientPage({
   // ページ状態の管理
   const [currentPage, setCurrentPage] = useState(initialPage)
   
-  const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
-  const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
-    // 初期データをrank順でソートして設定
-    const initialArray = (allRankingData && Array.isArray(allRankingData)) ? allRankingData : 
-                        (initialData?.items && Array.isArray(initialData.items)) ? initialData.items : 
-                        []
-    return [...initialArray].sort((a, b) => a.rank - b.rank)
-  })
-  const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(popularTags)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  
-  // リクエストキャンセル用のAbortController
-  const abortControllerRef = useRef<AbortController | null>(null)
-  // 人気タグ取得用のAbortController
-  const tagsAbortControllerRef = useRef<AbortController | null>(null)
-  // 404エラーフォールバック処理中フラグ
-  const isFallbackInitiatedRef = useRef(false)
-  
-  // 人気タグのキャッシュ保存用
-  const savePopularTagsToCache = useCallback((tags: string[], genre: string, period: string) => {
-    if (tags && tags.length > 0) {
-      const storageKey = `popular-tags-${genre}-${period}`
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(tags))
-      } catch (error) {
-        // ストレージエラーは無視
-      }
-    }
-  }, [])
   
   // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
   
@@ -216,7 +206,6 @@ export default function ClientPage({
         .then(tags => {
           if (!controller.signal.aborted && tags && tags.length > 0) {
             setCurrentPopularTags(tags)
-            savePopularTagsToCache(tags, config.genre, config.period)
           }
         })
         .catch(() => {
@@ -249,7 +238,7 @@ export default function ClientPage({
   // 理由: 動画リンクは target="_blank" で別タブで開くため、
   // 元のタブのスクロール位置は自動的に保持される
   
-  // 設定変更時の処理
+  // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
     // 初回ロードの場合はSSRのデータをそのまま使用
     if (isInitialLoad && 
@@ -271,9 +260,7 @@ export default function ClientPage({
     }
     
     setConfig(newConfig)
-    setLoading(true)
-    setError(null)
-    isFallbackInitiatedRef.current = false
+    setCurrentPage(1) // 設定変更時はページ1にリセット
     
     // ユーザー設定を更新（useUserPreferencesで自動的にlocalStorageに保存される）
     updatePreferences({
@@ -287,297 +274,16 @@ export default function ClientPage({
     if (newConfig.genre !== 'all') params.set('genre', newConfig.genre)
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
-    // 設定変更時はページ1にリセット
-    setCurrentPage(1)
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
-    // 前のリクエストをキャンセル
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    if (tagsAbortControllerRef.current) {
-      tagsAbortControllerRef.current.abort()
-    }
-    
-    // 新しいAbortControllerを作成
-    const controller = new AbortController()
-    abortControllerRef.current = controller
-    
-    // 人気タグ取得用のAbortControllerも新規作成
-    const tagsController = new AbortController()
-    tagsAbortControllerRef.current = tagsController
-    
-    // Check client-side cache first
-    const cached = rankingCache.get(newConfig.genre, newConfig.period, newConfig.tag)
-    if (cached && cached.data) {
-      // 全データを保存（安全性チェック付き）
-      setFullRankingData(Array.isArray(cached.data) ? cached.data : [])
-      
-      // 設定変更時は必ず1ページ目から表示
-      const startIndex = 0
-      const endIndex = ITEMS_PER_PAGE
-      setRankingData(cached.data.slice(startIndex, endIndex))
-      
-      if (cached.popularTags && !newConfig.tag && newConfig.genre !== 'all') {
-        setCurrentPopularTags(cached.popularTags)
-      }
-      setLoading(false)
-      return
-    }
-    
+    // フックのfetchRankingData関数を使用してデータ取得
     try {
-      const apiParams = new URLSearchParams({
-        genre: newConfig.genre,
-        period: newConfig.period,
-      })
-      if (newConfig.tag) {
-        apiParams.append('tag', newConfig.tag)
-      }
-      
-      // Use fallback mechanism to handle rate limits
-      const { APIFallback } = await import('@/lib/api-fallback')
-      
-      // Apply client-side rate limiting
-      await requestThrottle.throttle('ranking-api')
-      
-      const response = await APIFallback.fetchWithFallback(apiParams, controller.signal)
-      
-      if (!response.ok) {
-        // より詳細なエラーメッセージ
-        if (response.status === 429) {
-          throw new Error('リクエストが多すぎます。少し待ってから再度お試しください。')
-        } else if (response.status >= 500) {
-          // 500エラーでも続行を試みる
-          console.error(`[Client] Server error ${response.status}, attempting to parse response`)
-          // レスポンスボディを確認
-          try {
-            const errorText = await response.text()
-            console.error(`[Client] Error response body:`, errorText)
-            // JSONとしてパースを試みる
-            const errorData = JSON.parse(errorText)
-            if (errorData.error) {
-              throw new Error(errorData.error)
-            }
-          } catch (e) {
-            // パースエラーの場合はデフォルトメッセージ
-            throw new Error(`サーバーエラーが発生しました (${response.status})`)
-          }
-        } else if (response.status === 404 && newConfig.tag) {
-          // タグが見つからない場合は、タグなしの状態に自動遷移
-          // タグなしの設定で再度リクエスト
-          const taglessConfig = { ...newConfig, tag: undefined }
-          isFallbackInitiatedRef.current = true
-          handleConfigChange(taglessConfig)
-          return // 現在の処理を終了
-        } else if (response.status >= 400) {
-          throw new Error(`データの取得に失敗しました (${response.status})`)
-        }
-      }
-      
-      // レスポンスのパース
-      // 本番環境でWorkerがContent-Encoding: gzipを設定している場合、
-      // ブラウザが自動的に解凍するので通常のJSONパースでOK
-      let data: any
-      
-      // Content-Encodingヘッダーが設定されていない場合の対策
-      const contentEncoding = response.headers.get('content-encoding')
-      if (contentEncoding === 'gzip') {
-        // 正常：ブラウザが自動的に解凍
-        data = await response.json()
-      } else {
-        // Content-Encodingヘッダーがない場合、生データをチェック
-        try {
-          // まず通常のJSONパースを試みる
-          const clonedResponse = response.clone()
-          data = await clonedResponse.json()
-        } catch (jsonError) {
-          // JSONパースに失敗した場合、gzip圧縮データの可能性をチェック
-          console.error('[Client] JSON parse error, checking if data is gzipped:', jsonError)
-          
-          const arrayBuffer = await response.arrayBuffer()
-          const uint8Array = new Uint8Array(arrayBuffer)
-          
-          // gzipマジックナンバーチェック (0x1f, 0x8b)
-          if (uint8Array.length >= 2 && uint8Array[0] === 0x1f && uint8Array[1] === 0x8b) {
-            console.warn('[Client] Detected gzipped data without Content-Encoding header!')
-            
-            // ブラウザ環境でgzipを解凍
-            try {
-              const decompressionStream = new DecompressionStream('gzip')
-              const writer = decompressionStream.writable.getWriter()
-              writer.write(uint8Array)
-              writer.close()
-              
-              const decompressedStream = decompressionStream.readable
-              const decompressedResponse = new Response(decompressedStream)
-              const decompressedText = await decompressedResponse.text()
-              data = JSON.parse(decompressedText)
-              
-              // console.log('[Client] Successfully decompressed gzipped data')
-            } catch (decompressError) {
-              console.error('[Client] Failed to decompress:', decompressError)
-              throw new Error('データの解凍に失敗しました')
-            }
-          } else {
-            // gzipでもない場合は元のエラーを再スロー
-            throw jsonError
-          }
-        }
-      }
-      
-      if (data.items && Array.isArray(data.items)) {
-        // 全データを保存（安全性チェック付き）
-        setFullRankingData(Array.isArray(data.items) ? data.items : [])
-        
-        // 設定変更時は必ず1ページ目から表示
-        const startIndex = 0
-        const endIndex = ITEMS_PER_PAGE
-        setRankingData(data.items.slice(startIndex, endIndex))
-        
-        // Cache the data
-        rankingCache.set(
-          newConfig.genre, 
-          newConfig.period, 
-          data.items, 
-          data.popularTags || currentPopularTags,
-          newConfig.tag
-        )
-        
-        // 人気タグの処理
-        if (!newConfig.tag && newConfig.genre !== 'all') {
-          if (data.popularTags && data.popularTags.length > 0) {
-            // APIから人気タグが返ってきた場合
-            setCurrentPopularTags(data.popularTags)
-            savePopularTagsToCache(data.popularTags, newConfig.genre, newConfig.period)
-          } else {
-            // APIから人気タグが返ってこなかった場合、動的に取得
-            try {
-              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
-              if (!tagsController.signal.aborted && tags && tags.length > 0) {
-                setCurrentPopularTags(tags)
-                savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
-              }
-            } catch {
-              // エラー時はキャッシュから取得を試みる
-              if (typeof window !== 'undefined') {
-                const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
-                const cached = localStorage.getItem(storageKey)
-                if (cached) {
-                  try {
-                    const parsed = JSON.parse(cached)
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                      setCurrentPopularTags(parsed)
-                    }
-                  } catch {
-                    // パースエラーは無視
-                  }
-                }
-              }
-            }
-          }
-        } else if (newConfig.genre === 'all') {
-          // allジャンルの場合のみ空配列
-          setCurrentPopularTags([])
-        } else if (newConfig.tag) {
-          // タグ指定時でも人気タグが空の場合は取得を試みる（allジャンルは上で処理済み）
-          if (currentPopularTags.length === 0) {
-            try {
-              const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
-              if (!tagsController.signal.aborted && tags && tags.length > 0) {
-                setCurrentPopularTags(tags)
-                savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
-              }
-            } catch {
-              // エラー時はキャッシュから取得
-              if (typeof window !== 'undefined') {
-                const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
-                const cached = localStorage.getItem(storageKey)
-                if (cached) {
-                  try {
-                    const parsed = JSON.parse(cached)
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                      setCurrentPopularTags(parsed)
-                    }
-                  } catch {
-                    // パースエラーは無視
-                  }
-                }
-              }
-            }
-          }
-          // 人気タグが既にある場合は維持
-        }
-      } else if (Array.isArray(data)) {
-        // 全データを保存（安全性チェック付き）
-        setFullRankingData(Array.isArray(data) ? data : [])
-        
-        // 設定変更時は必ず1ページ目から表示
-        const startIndex = 0
-        const endIndex = ITEMS_PER_PAGE
-        setRankingData(data.slice(startIndex, endIndex))
-        
-        // Cache the data (array format)
-        rankingCache.set(
-          newConfig.genre, 
-          newConfig.period, 
-          data,
-          currentPopularTags,
-          newConfig.tag
-        )
-        
-        // 配列形式のレスポンスの場合も人気タグを動的に取得
-        if (newConfig.genre !== 'all') {
-          // 配列形式の場合は常に新しいタグを取得（ジャンルが変わった可能性があるため）
-          try {
-            const tags = await getPopularTagsClient(newConfig.genre, newConfig.period, tagsController.signal)
-            if (!tagsController.signal.aborted && tags && tags.length > 0) {
-              setCurrentPopularTags(tags)
-              savePopularTagsToCache(tags, newConfig.genre, newConfig.period)
-            }
-          } catch {
-            // エラー時は現在の値を維持（または空の場合のみ）
-            if (currentPopularTags.length === 0) {
-              // エラー時でもキャッシュから取得を試みる
-              const storageKey = `popular-tags-${newConfig.genre}-${newConfig.period}`
-              const cached = localStorage.getItem(storageKey)
-              if (cached) {
-                try {
-                  const parsed = JSON.parse(cached)
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setCurrentPopularTags(parsed)
-                  }
-                } catch {
-                  // パースエラーは無視
-                }
-              }
-            }
-          }
-        } else {
-          // allジャンルの場合は空配列
-          setCurrentPopularTags([])
-        }
-      } else {
-        setFullRankingData([])
-        setRankingData([])
-      }
-    } catch (err: any) {
-      // AbortErrorは無視（前のリクエストがキャンセルされた場合）
-      if (err.name === 'AbortError') {
-        return
-      }
-      
-      setError(err instanceof Error ? err.message : 'データの取得に失敗しました')
-      setFullRankingData([])
-      setRankingData([])
-    } finally {
-      // AbortErrorの場合はローディング状態を維持
-      if (!isFallbackInitiatedRef.current && abortControllerRef.current?.signal.aborted !== true) {
-        setLoading(false)
-      }
+      await fetchRankingData(newConfig)
+    } catch (error) {
+      // エラーはフック内で処理済み
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [config, router, updatePreferences, savePopularTagsToCache, isInitialLoad, initialGenre, initialPeriod, initialTag])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
   
   // ページ変更時の処理
   const handlePageChange = useCallback((page: number) => {
@@ -650,28 +356,10 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // フィルタリングとページネーション
+  // ページネーション処理 (NGフィルタリングはフック内で実行済み)
   const { displayItems, totalPages, totalItems } = useMemo(() => {
-    // 取得件数の上限
-    const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
-    
-    // UserNGListをNGList形式に変換（useUserNGListフック内のconvertToNGListロジックを展開）
-    const ngListForFilter: NGList = {
-      videoIds: ngList?.videoIds || [],
-      videoTitles: ngList?.videoTitles || { exact: [], partial: [] },
-      authorIds: ngList?.authorIds || [],
-      authorNames: ngList?.authorNames || { exact: [], partial: [] },
-      derivedVideoIds: [] // クライアント側では派生IDは使用しない
-    }
-    
-    // フルデータに対してフィルタリングを適用
-    const { filteredItems } = filterWithNGList(fullRankingData, ngListForFilter)
-    
-    // ランク順でソート（重要：テストで期待される順序）
-    const sortedItems = [...filteredItems].sort((a, b) => a.rank - b.rank)
-    
-    // 全取得件数を制限
-    const allItems = sortedItems.slice(0, limit)
+    // フックで既にNGフィルタリング済みのrankingDataを使用
+    const allItems = rankingData
     
     // タグ別ランキングの場合はページネーションなしで全件表示
     let pageItems: RankingItem[]
@@ -694,7 +382,7 @@ export default function ClientPage({
       const startRank = config.tag ? 1 : (currentPage - 1) * ITEMS_PER_PAGE + 1
       return {
         ...item,
-        originalRank: fullRankingData.find(original => original.id === item.id)?.rank || item.rank,
+        originalRank: item.rank, // 既にランク順でソート済み
         rank: startRank + index // 連続した表示用ランク番号
       }
     })
@@ -704,7 +392,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItems: allItems.length
     }
-  }, [fullRankingData, config.tag, ngList, currentPage])
+  }, [rankingData, config.tag, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

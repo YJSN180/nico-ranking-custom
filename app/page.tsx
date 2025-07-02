@@ -113,10 +113,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     // eslint-disable-next-line no-console
     console.log(`[SSR] WORKER_AUTH_KEY length: ${process.env.WORKER_AUTH_KEY?.length}`)
     // eslint-disable-next-line no-console
-    console.log(`[SSR] Headers to send:`, {
-      'X-Worker-Auth': process.env.WORKER_AUTH_KEY ? `${process.env.WORKER_AUTH_KEY.substring(0, 10)}...` : 'missing',
-      'X-SSR-Request': 'true'
-    })
+    console.log(`[SSR] Headers to send: X-Worker-Auth=${process.env.WORKER_AUTH_KEY ? `${process.env.WORKER_AUTH_KEY.substring(0, 10)}...` : 'missing'}, X-SSR-Request=true`)
     
     // SSRでのfetch（Node.js環境）
     const response = await fetch(apiUrl, {
@@ -135,7 +132,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       // eslint-disable-next-line no-console
       console.log(`[SSR] Response status: ${response.status}`)
       // eslint-disable-next-line no-console
-      console.log(`[SSR] Response headers:`, Object.fromEntries(response.headers.entries()))
+      console.log(`[SSR] Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
       const errorText = await response.text()
       // eslint-disable-next-line no-console
       console.log(`[SSR] Error response body:`, errorText.substring(0, 500))
@@ -171,12 +168,12 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     }
   } catch (error) {
     // eslint-disable-next-line no-console
-    console.error('[SSR] API error:', error)
+    console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
     // eslint-disable-next-line no-console
-    console.error('[SSR] Error details:', {
+    console.error(`[SSR] Error details: ${JSON.stringify({
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
-    })
+    })}`)
   }
 
   // エラーの場合は空のデータを返す
@@ -303,7 +300,7 @@ export default async function Home({ searchParams }: PageProps) {
     
     // その他のエラーの場合はエラーページを表示
     // eslint-disable-next-line no-console
-    console.error('[SSR] Unexpected error:', error)
+    console.error('[SSR] Unexpected error:', error instanceof Error ? error.message : String(error))
     const { notFound } = await import('next/navigation')
     notFound()
   }
