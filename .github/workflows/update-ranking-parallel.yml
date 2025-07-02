@@ -22,10 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Split 23 genres into 8 groups for better load distribution
-        # Group 1-2: Split heavy all/game/anime/vocaloid
-        # Group 3-4: Split music/entertainment genres
-        # Group 5-8: Keep existing groups 3-6
         group: [1, 2, 3, 4, 5, 6, 7, 8]
       max-parallel: 8
       fail-fast: false # Continue other groups even if one fails
