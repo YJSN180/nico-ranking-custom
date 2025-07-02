@@ -1,5 +1,5 @@
 name: Update Nico Ranking Data (Parallel)
-# Last updated: 2025-07-02 to reactivate cron scheduler
+# Last updated: 2025-07-02 to reactivate cron scheduler - retry fix
 
 on:
   schedule:
