@@ -215,10 +215,10 @@ export function MylistDetailClient() {
   return (
     <div className={styles.container}>
       {/* ヘッダー */}
+      <div className={styles.headerTop}>
+        <BackLink href="/mylists" text="マイリスト一覧に戻る" />
+      </div>
       <div className={styles.header}>
-        <div className={styles.headerTop}>
-          <BackLink href="/mylists" text="マイリスト一覧に戻る" />
-        </div>
         <div className={styles.headerMain}>
           <div className={styles.headerInfo}>
             <h2 className={styles.title}>{mylist.name}</h2>
