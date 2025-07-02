@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import type { RankingData, RankingItem } from '@/types/ranking'
-import ClientPage from './client-page'
+// Use optimized version for better performance
+import ClientPage from './client-page-optimized'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'

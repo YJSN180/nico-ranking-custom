@@ -127,6 +127,10 @@ const nextConfig = {
     cpus: 1,
     // パフォーマンス最適化
     optimizeCss: true, // crittersをインストールしたため有効化
+    // Script Evaluation最適化
+    optimizePackageImports: ['react-icons', 'lodash', 'date-fns'],
+    // 実験的な最適化機能
+    webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
   },
   // パフォーマンス最適化設定
   compiler: {
@@ -161,43 +165,80 @@ const nextConfig = {
       
       config.optimization.splitChunks = {
         chunks: 'all',
-        minSize: 20000,
-        maxSize: 200000, // さらに小さく分割
+        minSize: 10000, // より小さなチャンクを許可
+        maxSize: 50000, // より積極的な分割（50KB）
         minRemainingSize: 0,
         minChunks: 1,
-        maxAsyncRequests: 30,
-        maxInitialRequests: 30,
+        maxAsyncRequests: 50, // 並列リクエスト数を増加
+        maxInitialRequests: 50,
+        automaticNameDelimiter: '-',
         cacheGroups: {
           default: false,
           vendors: false,
+          // React関連の基本フレームワーク
           framework: {
             name: 'framework',
             test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
-            priority: 40,
+            priority: 50,
+            chunks: 'all',
+            enforce: true,
+            reuseExistingChunk: true
+          },
+          // Next.js関連
+          nextjs: {
+            name: 'nextjs',
+            test: /[\\/]node_modules[\\/](next|@next)[\\/]/,
+            priority: 45,
             chunks: 'all',
             enforce: true
           },
+          // ポリフィル（初期ロードで必要）
+          polyfills: {
+            name: 'polyfills',
+            test: /[\\/]node_modules[\\/](core-js|regenerator-runtime|@babel\/runtime)[\\/]/,
+            priority: 40,
+            chunks: 'initial',
+            enforce: true
+          },
+          // 共通ライブラリ
           commons: {
             name: 'commons',
             chunks: 'all',
             minChunks: 2,
             priority: 10,
-            reuseExistingChunk: true
+            reuseExistingChunk: true,
+            maxSize: 30000 // 30KB以下に分割
           },
+          // ベンダーライブラリ（遅延ロード可能）
           vendor: {
             test: /[\\/]node_modules[\\/]/,
             name(module) {
-              // module.contextがない場合のフォールバック
               if (!module.context) return 'vendor'
               
               const match = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)
               if (!match) return 'vendor'
               
               const packageName = match[1]
-              return `vendor-${packageName.replace('@', '')}`
+              // 重要なパッケージは個別チャンクに
+              const importantPackages = ['lodash', 'date-fns', 'axios', 'swr']
+              if (importantPackages.some(pkg => packageName.includes(pkg))) {
+                return `vendor-${packageName.replace('@', '')}`
+              }
+              
+              // その他は vendor-misc にまとめる
+              return 'vendor-misc'
             },
+            chunks: 'async', // 非同期チャンクのみ
+            priority: 20,
+            maxSize: 30000 // 30KB以下に分割
+          },
+          // スタイル（CSS in JS）
+          styles: {
+            name: 'styles',
+            test: /\.(css|scss|sass)$/,
             chunks: 'all',
-            priority: 20
+            priority: 15,
+            enforce: true
           }
         }
       }
@@ -206,6 +247,50 @@ const nextConfig = {
       if (process.env.NODE_ENV === 'production') {
         config.optimization.usedExports = true
         config.optimization.sideEffects = false
+        
+        // より積極的な最適化
+        config.optimization.minimize = true
+        config.optimization.concatenateModules = true
+        config.optimization.innerGraph = true
+        config.optimization.providedExports = true
+        config.optimization.realContentHash = true
+        
+        // TerserPlugin設定のカスタマイズ
+        const TerserPlugin = config.optimization.minimizer?.find(
+          (plugin) => plugin.constructor.name === 'TerserPlugin'
+        )
+        
+        if (TerserPlugin) {
+          TerserPlugin.options.terserOptions = {
+            ...TerserPlugin.options.terserOptions,
+            compress: {
+              ...TerserPlugin.options.terserOptions?.compress,
+              drop_console: true,
+              drop_debugger: true,
+              pure_funcs: ['console.log', 'console.info', 'console.debug'],
+              passes: 3, // より積極的な圧縮
+              ecma: 2020,
+              module: true,
+              toplevel: true,
+              unsafe_math: true,
+              unsafe_methods: true,
+              unsafe_proto: true,
+              unsafe_regexp: true,
+            },
+            mangle: {
+              ...TerserPlugin.options.terserOptions?.mangle,
+              safari10: true,
+              properties: {
+                regex: /^_/,
+              },
+            },
+            format: {
+              ...TerserPlugin.options.terserOptions?.format,
+              comments: false,
+              ecma: 2020,
+            },
+          }
+        }
       }
     }
     return config
