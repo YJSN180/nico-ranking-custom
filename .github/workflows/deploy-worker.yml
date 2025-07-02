@@ -1,0 +1,59 @@
+name: Deploy Cloudflare Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      worker_name:
+        description: 'Worker name to deploy (e.g., nico-ranking-v1-stable)'
+        required: true
+        type: string
+      worker_file:
+        description: 'Worker file path (e.g., workers/api-gateway-r2.ts)'
+        required: true
+        type: string
+      wrangler_config:
+        description: 'Wrangler config file (e.g., wrangler-green.toml)'
+        required: false
+        default: 'wrangler.toml'
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Deploy Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ "${{ inputs.wrangler_config }}" != "wrangler.toml" ]; then
+            wrangler deploy ${{ inputs.worker_file }} \
+              --name ${{ inputs.worker_name }} \
+              -c ${{ inputs.wrangler_config }}
+          else
+            wrangler deploy ${{ inputs.worker_file }} \
+              --name ${{ inputs.worker_name }}
+          fi
+      
+      - name: Verify deployment
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "Worker deployed: ${{ inputs.worker_name }}"
+          wrangler tail ${{ inputs.worker_name }} --format=pretty &
+          TAIL_PID=$!
+          sleep 10
+          kill $TAIL_PID || true
