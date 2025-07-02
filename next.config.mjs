@@ -227,6 +227,7 @@ const pwaConfig = withPWA({
   additionalManifestEntries: [
     { url: '/offline.html', revision: '1' }
   ],
+  buildExcludes: [/app-build-manifest\.json$/],
   // Workbox configuration
   runtimeCaching: [
     // API routes - StaleWhileRevalidate for ranking data

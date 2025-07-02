@@ -756,7 +756,7 @@ export default function ClientPage({
             fontSize: '16px', 
             color: 'var(--error-color)'
           }}>
-            エラー: {error}
+            エラー: {typeof error === 'string' ? error : JSON.stringify(error)}
           </div>
         </div>
       )}
