@@ -3,6 +3,8 @@ import withPWA from 'next-pwa'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // 本番でのソースマップ無効化（セキュリティ・パフォーマンス向上）
+  productionBrowserSourceMaps: false,
   images: {
     // ローカル画像（ロゴ等）は最適化を有効にしてWebP/AVIF変換
     // 外部画像（ニコニコ動画サムネイル）のみ最適化を無効化
