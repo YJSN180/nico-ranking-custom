@@ -47,11 +47,11 @@ export default function ContactPage() {
           marginBottom: '20px',
           color: 'var(--text-secondary)',
         }}>
-          ニコラン(Re:turn)に関するご意見・ご要望・バグ報告は、管理者のXアカウント(@yjmnpi)にてお寄せください。
+          ニコラン(Re:turn)に関するご意見・ご要望・バグ報告は、管理者のXアカウント(@yjmnsub)にてお寄せください。
         </p>
         
         <a
-          href="https://twitter.com/yjmnpi"
+          href="https://twitter.com/yjmnsub"
           target="_blank"
           rel="noopener noreferrer"
           className="contact-link"
@@ -70,7 +70,7 @@ export default function ContactPage() {
         >
           <div>
             <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-              @yjmnpi
+              @yjmnsub
             </div>
             <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
               管理者のXアカウント

@@ -36,86 +36,26 @@ export default function PrivacyPage() {
           color: 'var(--text-primary)',
           fontWeight: 'bold'
         }}>
-          基本方針
+          収集・利用する情報
         </h2>
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.8',
+          marginBottom: '16px'
+        }}>
+          <li>アクセスログ（サービス改善・セキュリティ向上のため）</li>
+          <li>ユーザー設定（NGリスト、表示設定等をブラウザに保存）</li>
+          <li>Cookie（設定の保持、管理画面セッション管理）</li>
+        </ul>
         <p style={{
           lineHeight: '1.8',
           color: 'var(--text-secondary)',
-          marginBottom: '16px'
+          fontSize: '0.9rem'
         }}>
-          ニコラン(Re:turn)は、ユーザーのプライバシーを尊重し、個人情報の保護に努めます。
-          本サービスでは、ユーザー登録や個人情報の収集は行いません。
+          ※個人情報の収集・ユーザー登録は行いません。
         </p>
-      </section>
-      
-      <section style={{ marginBottom: '32px' }}>
-        <h2 style={{
-          fontSize: '1.5rem',
-          marginBottom: '16px',
-          color: 'var(--text-primary)',
-          fontWeight: 'bold'
-        }}>
-          収集する情報
-        </h2>
-        <ul style={{
-          listStyle: 'disc',
-          paddingLeft: '20px',
-          color: 'var(--text-secondary)',
-          lineHeight: '1.8'
-        }}>
-          <li>アクセスログ（IPアドレス、ブラウザ情報、アクセス日時等）</li>
-          <li>ユーザーが設定したNGリスト（ブラウザのローカルストレージに保存）</li>
-          <li>表示設定（テーマ、表示件数等）</li>
-        </ul>
-      </section>
-      
-      <section style={{ marginBottom: '32px' }}>
-        <h2 style={{
-          fontSize: '1.5rem',
-          marginBottom: '16px',
-          color: 'var(--text-primary)',
-          fontWeight: 'bold'
-        }}>
-          情報の利用目的
-        </h2>
-        <ul style={{
-          listStyle: 'disc',
-          paddingLeft: '20px',
-          color: 'var(--text-secondary)',
-          lineHeight: '1.8'
-        }}>
-          <li>サービスの提供・改善</li>
-          <li>セキュリティの向上</li>
-          <li>不正アクセスの防止</li>
-        </ul>
-      </section>
-      
-      <section style={{ marginBottom: '32px' }}>
-        <h2 style={{
-          fontSize: '1.5rem',
-          marginBottom: '16px',
-          color: 'var(--text-primary)',
-          fontWeight: 'bold'
-        }}>
-          Cookie（クッキー）の使用
-        </h2>
-        <p style={{
-          lineHeight: '1.8',
-          color: 'var(--text-secondary)',
-          marginBottom: '16px'
-        }}>
-          本サービスでは、以下の目的でCookieを使用します：
-        </p>
-        <ul style={{
-          listStyle: 'disc',
-          paddingLeft: '20px',
-          color: 'var(--text-secondary)',
-          lineHeight: '1.8'
-        }}>
-          <li>表示設定（テーマ、ジャンル、期間）</li>
-          <li>NGリスト設定</li>
-          <li>セッション情報（管理画面アクセス時）</li>
-        </ul>
       </section>
       
       <section style={{ marginBottom: '32px' }}>
@@ -144,7 +84,7 @@ export default function PrivacyPage() {
         fontSize: '0.875rem',
         marginTop: '40px'
       }}>
-        最終更新日: 2025年6月17日
+        最終更新日: 2025年7月2日
       </p>
     </div>
   )

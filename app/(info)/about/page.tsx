@@ -99,7 +99,7 @@ export default function AboutPage() {
           lineHeight: '1.8',
           marginBottom: '20px',
         }}>
-          <li>毎時0分・30分更新。</li>
+          <li>毎時ランキング・24時間ランキングを確認できます。</li>
           <li>ニコニコ動画のランキング更新時間より遅れる場合があります。</li>
         </ul>
 
@@ -142,6 +142,26 @@ export default function AboutPage() {
           <li>明確に「荒らし」と判定される動画は、管理者側で常にフィルタリングしています。要望がある場合はお問い合わせください。</li>
           <li>サイト右上の設定ボタンから「NGリスト管理」を開いてください。</li>
           <li>ここから見たくない動画をブロックすると、ランキングからその動画が消えるようになり、順位もそれに合わせて変更されます。</li>
+        </ul>
+
+        <h3 style={{
+          fontSize: '1.2rem',
+          marginTop: '24px',
+          marginBottom: '12px',
+          color: 'var(--text-primary)',
+          fontWeight: 'bold',
+        }}>
+          マイリスト機能
+        </h3>
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.8',
+          marginBottom: '20px',
+        }}>
+          <li>気になった動画をマイリストに追加して後で見返すことができます。</li>
+          <li>動画のハートアイコンをクリックするか、設定から「マイリスト管理」で確認できます。</li>
         </ul>
       </section>
 
