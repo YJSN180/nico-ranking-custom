@@ -902,7 +902,7 @@ export default function ClientPage({
           レンダリングエラーが発生しました
         </div>
         <pre style={{ marginTop: '20px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          {error instanceof Error ? error.message : String(error)}
+          {error instanceof Error ? error.message : JSON.stringify(error)}
         </pre>
       </div>
     )
