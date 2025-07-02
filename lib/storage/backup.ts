@@ -5,11 +5,22 @@
 import { DBManager } from './db-manager'
 import type { Mylist, MylistVideo } from './types'
 
+// エクスポート時の動画データ（統計情報を除外）
+interface ExportMylistVideo {
+  id: string
+  mylistId: string
+  title: string
+  thumbURL: string
+  addedAt: number
+  memo?: string
+  orderIndex?: number
+}
+
 export interface BackupData {
   version: string
   exportDate: string
   mylists: Mylist[]
-  mylistVideos: MylistVideo[]
+  mylistVideos: ExportMylistVideo[]
   metadata: {
     totalMylists: number
     totalVideos: number
@@ -36,9 +47,20 @@ export async function exportMylistData(): Promise<BackupData> {
   const mylists = await tx.objectStore('mylists').getAll()
   
   // 全マイリスト動画関連を取得
-  const mylistVideos = await tx.objectStore('mylistVideos').getAll()
+  const allMylistVideos = await tx.objectStore('mylistVideos').getAll()
   
   await tx.done
+  
+  // 動画統計情報を除外して必要最小限の情報のみ保持
+  const mylistVideos = allMylistVideos.map(video => ({
+    id: video.id,
+    mylistId: video.mylistId,
+    title: video.title,
+    thumbURL: video.thumbURL,
+    addedAt: video.addedAt,
+    ...(video.memo && { memo: video.memo }),
+    ...(video.orderIndex !== undefined && { orderIndex: video.orderIndex })
+  }))
   
   // バックアップデータを構築
   const backupData: BackupData = {
