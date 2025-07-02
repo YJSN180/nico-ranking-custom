@@ -36,8 +36,7 @@ const MylistsClient = dynamic(
           </div>
         </div>
       </div>
-    ),
-    ssr: false  // クライアントサイドのみでレンダリング（IndexedDB依存のため）
+    )
   }
 )
 
