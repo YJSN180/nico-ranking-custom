@@ -122,6 +122,9 @@ scripts/*
 !scripts/update-kv-routing.js
 !scripts/update-routing-config.sh
 !scripts/manual-deploy-workers.sh
+!scripts/switch-to-blue.js
+!scripts/switch-to-green.js
+!scripts/emergency-rollback.js
 test-ng-persistence.js
 
 # Documentation and temporary files
