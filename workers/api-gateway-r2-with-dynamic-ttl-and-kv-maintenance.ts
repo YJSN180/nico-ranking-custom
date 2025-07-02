@@ -149,10 +149,31 @@ export default {
       try {
         const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json')
         if (metadataObject) {
-          const metadata = await metadataObject.text()
           const { cacheControl } = calculateDynamicTTL()
           
-          return new Response(metadata, {
+          // gzip圧縮チェック
+          const contentEncoding = metadataObject.httpMetadata?.contentEncoding
+          let metadataText: string
+          
+          if (contentEncoding === 'gzip') {
+            console.log('[Worker] Metadata is gzipped, decompressing...')
+            try {
+              // gzip解凍
+              const compressedData = await metadataObject.arrayBuffer()
+              metadataText = await new Response(
+                new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
+              ).text()
+            } catch (decompressError) {
+              console.error('[Worker] Failed to decompress metadata:', decompressError)
+              // 解凍失敗時は生データを返す
+              metadataText = await metadataObject.text()
+            }
+          } else {
+            // 非圧縮データ
+            metadataText = await metadataObject.text()
+          }
+          
+          return new Response(metadataText, {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
