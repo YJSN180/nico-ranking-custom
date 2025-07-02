@@ -209,8 +209,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                   <OptimizedImage
                     src={item.authorIcon}
                     alt={item.authorName || ''}
-                    width={20}
-                    height={20}
+                    width={18}
+                    height={18}
+                    sizes="18px"
                     style={{ 
                       borderRadius: '50%',
                       border: '1px solid var(--border-color)',

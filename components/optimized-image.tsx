@@ -20,9 +20,9 @@ interface OptimizedImageProps {
 }
 
 /**
- * 画像最適化の有無を自動判定するImageコンポーネント
+ * 画像最適化Imageコンポーネント
  * - ローカル画像（/で始まる）: Next.js最適化を使用（WebP/AVIF変換）
- * - 外部画像（https://で始まる）: 最適化を無効化（CORS対応）
+ * - 外部画像（https://で始まる）: Next.js最適化を使用（remotePatterns設定済み）
  */
 export function OptimizedImage({
   src,
@@ -42,8 +42,8 @@ export function OptimizedImage({
   const [imgSrc, setImgSrc] = useState(src)
   const [hasError, setHasError] = useState(false)
   
-  // ローカル画像の判定
-  const isLocalImage = imgSrc.startsWith('/')
+  // 画像最適化の設定
+  // Note: remotePatterns設定により外部画像も最適化可能
   
   const handleError = () => {
     if (!hasError && fallbackSrc) {
@@ -53,27 +53,7 @@ export function OptimizedImage({
     onError?.()
   }
   
-  if (isLocalImage) {
-    // ローカル画像：Next.js最適化を使用
-    return (
-      <Image
-        src={imgSrc}
-        alt={hasError ? '視聴できません' : alt}
-        width={width}
-        height={height}
-        fill={fill}
-        sizes={sizes}
-        style={style}
-        loading={loading}
-        priority={priority}
-        className={className}
-        onClick={onClick}
-        onError={handleError}
-      />
-    )
-  }
-  
-  // 外部画像：最適化を無効化
+  // すべての画像に対してNext.js最適化を使用
   return (
     <Image
       src={imgSrc}
@@ -87,7 +67,6 @@ export function OptimizedImage({
       priority={priority}
       className={className}
       onClick={onClick}
-      unoptimized
       onError={handleError}
     />
   )
