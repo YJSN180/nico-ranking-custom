@@ -50,9 +50,16 @@ export function decodeRankingData(data: any): any {
   return {
     ...data,
     items: data.items ? data.items.map(decodeRankingItem) : [],
-    popularTags: data.popularTags ? data.popularTags.map((tag: any) => ({
-      ...tag,
-      name: tag.name ? decodeHtmlEntities(tag.name) : tag.name
-    })) : []
+    popularTags: data.popularTags ? data.popularTags.map((tag: any) => {
+      // タグがオブジェクト形式 {"0": "東", "1": "方"} の場合、文字列に変換
+      if (typeof tag === 'object' && !Array.isArray(tag) && tag !== null) {
+        // オブジェクトのキーを数値順にソートして値を結合
+        const keys = Object.keys(tag).sort((a, b) => parseInt(a) - parseInt(b))
+        const tagString = keys.map(key => tag[key]).join('')
+        return decodeHtmlEntities(tagString)
+      }
+      // 既に文字列の場合はそのままデコード
+      return typeof tag === 'string' ? decodeHtmlEntities(tag) : tag
+    }) : []
   }
 }
