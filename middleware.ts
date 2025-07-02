@@ -34,16 +34,17 @@ export async function middleware(request: NextRequest) {
     }
   }
   
-  // 認証がない場合、Vercel URLへの直接アクセスかチェック
-  if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
-    const xForwardedHost = request.headers.get('x-forwarded-host')
-    const workerAuth = request.headers.get('X-Worker-Auth')
-    
-    // CloudflareのWorker経由でない場合のみリダイレクト（Worker認証キーがない場合）
-    if (!workerAuth && (!xForwardedHost || !xForwardedHost.includes('nico-rank.com'))) {
-      return NextResponse.redirect('https://nico-rank.com' + pathname)
-    }
-  }
+  // 緊急修復：リダイレクトロジックを一時的に無効化
+  // Vercel URLへの直接アクセスチェックを無効化（無限リダイレクト対策）
+  // if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
+  //   const xForwardedHost = request.headers.get('x-forwarded-host')
+  //   const workerAuth = request.headers.get('X-Worker-Auth')
+  //   
+  //   // CloudflareのWorker経由でない場合のみリダイレクト（Worker認証キーがない場合）
+  //   if (!workerAuth && (!xForwardedHost || !xForwardedHost.includes('nico-rank.com'))) {
+  //     return NextResponse.redirect('https://nico-rank.com' + pathname)
+  //   }
+  // }
   
   // プレビューデプロイメントの保護を無効化
   // Vercelのスタンダードプロテクションに依存
@@ -221,6 +222,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico).*)',
+    '/admin/:path*',
+    '/api/admin/:path*'
   ]
 }
