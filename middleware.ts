@@ -199,10 +199,19 @@ export async function middleware(request: NextRequest) {
     response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
   }
   
-  // フォントファイルの長期キャッシュ
+  // 静的アセットの長期キャッシュ設定
   if (request.nextUrl.pathname.startsWith('/fonts/')) {
+    // フォントファイル: 1年キャッシュ + immutable
     response.headers.set('Cache-Control', 'public, max-age=31536000, immutable')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=31536000, immutable')
+  } else if (request.nextUrl.pathname.match(/\.(png|jpg|jpeg|gif|webp|avif|svg|ico)$/)) {
+    // 画像ファイル: 24時間キャッシュ（更新可能性を考慮）
+    response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
+    response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400')
+  } else if (request.nextUrl.pathname.match(/\.(css|js)$/)) {
+    // CSS/JSファイル: 24時間キャッシュ + ETag活用
+    response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
+    response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
   }
   
   // セキュリティヘッダーを追加
