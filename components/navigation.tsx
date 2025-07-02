@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import styles from './navigation.module.css'
 import { 
@@ -63,6 +63,7 @@ export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
   const [isTouching, setIsTouching] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -219,6 +220,11 @@ export function Navigation() {
                             <Link
                               href={item.href}
                               onClick={() => setIsOpen(false)}
+                              onMouseEnter={() => {
+                                if (item.href === '/mylists') {
+                                  router.prefetch('/mylists')
+                                }
+                              }}
                               className={`${styles.navLinkMobile} ${pathname === item.href ? styles.active : ''}`}
                             >
                               <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
@@ -420,6 +426,11 @@ export function Navigation() {
                       <Link
                         href={item.href}
                         onClick={() => setIsOpen(false)}
+                        onMouseEnter={() => {
+                          if (item.href === '/mylists') {
+                            router.prefetch('/mylists')
+                          }
+                        }}
                         className={`${styles.navLinkDesktop} ${pathname === item.href ? styles.active : ''}`}
                       >
                         <span className={`${styles.iconWrapper} ${styles.desktop}`}>{item.icon}</span>
