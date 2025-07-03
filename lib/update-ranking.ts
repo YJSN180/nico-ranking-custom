@@ -66,8 +66,8 @@ export async function updateRankingData(): Promise<UpdateResult> {
     try {
       // スキップ（ESLintエラー回避）
       
-      // 1000件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
-      const targetCount = 1000
+      // 500件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
+      const targetCount = 500
       const allItems: RankingItem[] = []
       let popularTags: string[] = []
       let page = 1
@@ -124,7 +124,7 @@ export async function updateRankingData(): Promise<UpdateResult> {
         }
       }
       
-      // 1000件に切り詰め、ランク番号を振り直す
+      // 500件に切り詰め、ランク番号を振り直す
       const items = allItems.slice(0, targetCount).map((item, index) => ({
         ...item,
         rank: index + 1

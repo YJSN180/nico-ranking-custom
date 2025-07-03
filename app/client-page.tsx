@@ -361,25 +361,15 @@ export default function ClientPage({
     // フックで既にNGフィルタリング済みのrankingDataを使用
     const allItems = rankingData
     
-    // タグ別ランキングの場合はページネーションなしで全件表示
-    let pageItems: RankingItem[]
-    let calculatedTotalPages: number
-    
-    if (config.tag) {
-      // タグ別ランキングは全300件を表示
-      pageItems = allItems
-      calculatedTotalPages = 1
-    } else {
-      // ジャンル別ランキングは通常のページネーション
-      const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-      const endIndex = startIndex + ITEMS_PER_PAGE
-      pageItems = allItems.slice(startIndex, endIndex)
-      calculatedTotalPages = Math.ceil(allItems.length / ITEMS_PER_PAGE)
-    }
+    // 全てのランキング（ジャンル・タグ共に）でページネーションを有効化
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    const pageItems = allItems.slice(startIndex, endIndex)
+    const calculatedTotalPages = Math.ceil(allItems.length / ITEMS_PER_PAGE)
     
     // originalRankを追加（元のランク番号を保持）し、連続したランク番号を割り当て
     const result = pageItems.map((item, index) => {
-      const startRank = config.tag ? 1 : (currentPage - 1) * ITEMS_PER_PAGE + 1
+      const startRank = (currentPage - 1) * ITEMS_PER_PAGE + 1
       return {
         ...item,
         originalRank: item.rank, // 既にランク順でソート済み
@@ -506,29 +496,8 @@ export default function ClientPage({
             )}
           </div>
           
-          {/* 上部ページネーション（タグ別ランキングでは非表示） */}
-          {!config.tag ? (
-            <Suspense fallback={
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                padding: '20px 0',
-                borderTop: '1px solid var(--border-color)',
-                marginTop: '20px'
-              }}>
-                <div style={{ height: '40px' }} />
-              </div>
-            }>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={handlePageChange}
-              />
-            </Suspense>
-          ) : (
-            /* タグ別ランキングの件数表示 */
+          {/* 上部ページネーション */}
+          <Suspense fallback={
             <div style={{
               display: 'flex',
               justifyContent: 'center',
@@ -536,15 +505,17 @@ export default function ClientPage({
               borderTop: '1px solid var(--border-color)',
               marginTop: '20px'
             }}>
-              <div style={{
-                fontSize: '14px',
-                color: 'var(--text-secondary)',
-                textAlign: 'center'
-              }}>
-                {totalItems}件表示
-              </div>
+              <div style={{ height: '40px' }} />
             </div>
-          )}
+          }>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={handlePageChange}
+            />
+          </Suspense>
           
           {/* ランキングリスト */}
           <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -556,28 +527,26 @@ export default function ClientPage({
             ))}
           </ul>
           
-          {/* 下部ページネーション（タグ別ランキングでは非表示） */}
-          {!config.tag && (
-            <Suspense fallback={
-              <div style={{
-                display: 'flex',
-                justifyContent: 'center',
-                padding: '20px 0',
-                borderTop: '1px solid var(--border-color)',
-                marginTop: '20px'
-              }}>
-                <div style={{ height: '40px' }} />
-              </div>
-            }>
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={ITEMS_PER_PAGE}
-                onPageChange={handlePageChange}
-              />
-            </Suspense>
-          )}
+          {/* 下部ページネーション */}
+          <Suspense fallback={
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              padding: '20px 0',
+              borderTop: '1px solid var(--border-color)',
+              marginTop: '20px'
+            }}>
+              <div style={{ height: '40px' }} />
+            </div>
+          }>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={ITEMS_PER_PAGE}
+              onPageChange={handlePageChange}
+            />
+          </Suspense>
         </>
       )}
     </>
