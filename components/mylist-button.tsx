@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useMylistOperations } from '@/hooks/use-mylist-operations'
 import { MylistModal } from './mylist-modal'
 import type { RankingItem } from '@/types/ranking'
+import './mylist-button.css'
 
 interface MylistButtonProps {
   video: RankingItem
@@ -131,15 +132,7 @@ export function MylistButton({ video }: MylistButtonProps) {
     return (
       <div 
         data-testid="mylist-button-placeholder"
-        style={{
-          width: '32px',
-          height: '32px',
-          borderRadius: '20px',
-          background: 'var(--surface-secondary)',
-          opacity: 0.5,
-          flexShrink: 0,
-          animation: 'pulse 1.5s ease-in-out infinite',
-        }}
+        className="mylist-button-placeholder"
         title="読み込み中..."
       />
     )
@@ -156,39 +149,14 @@ export function MylistButton({ video }: MylistButtonProps) {
           e.stopPropagation()
         }}
         disabled={isProcessing}
-        style={{
-          background: isInMylist ? 'var(--success-color)' : 'var(--surface-color)',
-          border: `1px solid ${isInMylist ? 'var(--success-color)' : 'var(--border-color)'}`,
-          borderRadius: '20px',
-          padding: '6px',
-          cursor: isProcessing ? 'wait' : 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: isInMylist ? 'white' : 'var(--text-secondary)',
-          transition: 'all 0.2s',
-          opacity: isProcessing ? 0.6 : 1,
-          width: '32px',
-          height: '32px',
-          flexShrink: 0,
-        }}
-        onMouseEnter={(e) => {
-          if (!isProcessing && !isInMylist) {
-            e.currentTarget.style.background = 'var(--surface-hover)'
-            e.currentTarget.style.borderColor = 'var(--primary-color)'
-            e.currentTarget.style.color = 'var(--primary-color)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!isProcessing && !isInMylist) {
-            e.currentTarget.style.background = 'var(--surface-color)'
-            e.currentTarget.style.borderColor = 'var(--border-color)'
-            e.currentTarget.style.color = 'var(--text-secondary)'
-          }
-        }}
+        className={`mylist-button ${
+          isInMylist 
+            ? 'mylist-button--active' 
+            : 'mylist-button--normal'
+        } ${isProcessing ? 'mylist-button--processing' : ''}`}
         title={isInMylist ? "マイリストから削除" : "マイリストに追加"}
       >
-        <span style={{ fontSize: '16px', lineHeight: 1 }}>{isInMylist ? '✓' : '+'}</span>
+        <span className="mylist-button__icon">{isInMylist ? '✓' : '+'}</span>
       </button>
 
       {/* マイリスト選択モーダル */}

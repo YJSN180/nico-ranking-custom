@@ -1,0 +1,88 @@
+/* MylistButton パフォーマンス最適化版 - デザイン完全維持 */
+
+.mylist-button {
+  /* 基本スタイル（既存のinline styleと同じ） */
+  border-radius: 20px;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  
+  /* パフォーマンス最適化 - 視覚的変更なし */
+  contain: layout style paint; /* レイアウト封じ込め */
+  will-change: background-color, border-color, color; /* GPU最適化 */
+  transform: translateZ(0); /* ハードウェアアクセラレーション */
+}
+
+/* 通常状態 */
+.mylist-button--normal {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 1;
+}
+
+/* アクティブ状態（マイリスト登録済み） */
+.mylist-button--active {
+  background: var(--success-color);
+  border: 1px solid var(--success-color);
+  color: white;
+  cursor: pointer;
+  opacity: 1;
+}
+
+/* 処理中状態 */
+.mylist-button--processing {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* ホバー状態（通常のみ） */
+.mylist-button--normal:hover:not(.mylist-button--processing) {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* アクティブ状態はホバー効果なし */
+.mylist-button--active:hover {
+  background: var(--success-color);
+  border-color: var(--success-color);
+  color: white;
+}
+
+/* プレースホルダー（ローディング中） */
+.mylist-button-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 20px;
+  background: var(--surface-secondary);
+  opacity: 0.5;
+  flex-shrink: 0;
+  animation: pulse 1.5s ease-in-out infinite;
+  
+  /* パフォーマンス最適化 */
+  contain: layout style paint;
+  will-change: opacity;
+}
+
+/* アニメーション定義（既存のpulseと同じ） */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* ボタン内のアイコン */
+.mylist-button__icon {
+  font-size: 16px;
+  line-height: 1;
+}

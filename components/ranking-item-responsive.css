@@ -34,6 +34,10 @@
   grid-template-areas: "rank thumbnail details mylist-button";
   align-items: start;
   min-height: 80px;
+  
+  /* パフォーマンス最適化 - 視覚的変更なし */
+  contain: layout style paint; /* レイアウト封じ込めでスラッシング防止 */
+  will-change: transform; /* GPU合成レイヤー分離 */
 }
 
 /* 順位表示 */
