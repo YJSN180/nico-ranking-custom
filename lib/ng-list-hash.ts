@@ -14,19 +14,23 @@ export function generateNGListHash(ngList: NGList): number {
   let hash = 0
   
   // 各配列のアイテム数をハッシュに含める
-  hash = hash * 31 + (ngList.words?.length || 0)
-  hash = hash * 31 + (ngList.titles?.length || 0)
-  hash = hash * 31 + (ngList.tags?.length || 0)
-  hash = hash * 31 + (ngList.contributors?.length || 0)
-  hash = hash * 31 + (ngList.channels?.length || 0)
+  hash = hash * 31 + (ngList.videoIds?.length || 0)
+  hash = hash * 31 + (ngList.videoTitles?.exact?.length || 0)
+  hash = hash * 31 + (ngList.videoTitles?.partial?.length || 0)
+  hash = hash * 31 + (ngList.authorIds?.length || 0)
+  hash = hash * 31 + (ngList.authorNames?.exact?.length || 0)
+  hash = hash * 31 + (ngList.authorNames?.partial?.length || 0)
+  hash = hash * 31 + (ngList.derivedVideoIds?.length || 0)
   
   // 各配列の最初と最後の要素をハッシュに含める（高速化のため全要素は見ない）
   const arrays = [
-    ngList.words,
-    ngList.titles,
-    ngList.tags,
-    ngList.contributors,
-    ngList.channels
+    ngList.videoIds,
+    ngList.videoTitles?.exact,
+    ngList.videoTitles?.partial,
+    ngList.authorIds,
+    ngList.authorNames?.exact,
+    ngList.authorNames?.partial,
+    ngList.derivedVideoIds
   ]
   
   arrays.forEach((arr) => {

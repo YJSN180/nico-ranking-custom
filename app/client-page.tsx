@@ -22,7 +22,6 @@ import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
-  totalItems: number
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -39,7 +38,6 @@ const DISPLAY_LIMITS = {
 
 export default function ClientPage({ 
   initialData, 
-  totalItems,
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
@@ -285,22 +283,23 @@ export default function ClientPage({
     }
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
   
-  // ページ変更時の処理
+  // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
     if (page === currentPage) return
     
     setCurrentPage(page)
     
-    // サーバーサイドページネーション: ページ遷移はリロードで行う
+    // クライアントサイドページネーション: URLのみ更新（データ再取得なし）
     const params = new URLSearchParams()
     if (config.genre !== 'all') params.set('genre', config.genre)
     if (config.period !== '24h') params.set('period', config.period)
     if (config.tag) params.set('tag', config.tag)
     if (page > 1) params.set('page', page.toString())
     
-    // Next.js App Routerを使用してクライアントサイドでページ遷移
-    // scroll: falseでスクロール位置を維持
-    router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
+    // URLを更新するが、データの再取得は行わない
+    // window.history.replaceStateを使用してブラウザ履歴に追加しない
+    const newUrl = params.toString() ? `?${params.toString()}` : '/'
+    window.history.replaceState(null, '', newUrl)
   }, [currentPage, config])
   
   // sessionStorageから設定を復元
@@ -351,30 +350,36 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // ページネーション処理 (NGフィルタリングはフック内で実行済み)
+  // クライアントサイドページネーション処理 (NGフィルタリング済みデータを使用)
   const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
-    // サーバーサイドページネーション：totalItemsを使用して総ページ数を計算
-    const calculatedTotalPages = Math.ceil(totalItems / ITEMS_PER_PAGE)
+    // フィルタリング済みのランキングデータを使用
+    const filteredData = rankingData
+    const totalCount = filteredData.length
     
-    // 現在のページのアイテムを取得（既にSSRで設定済み）
-    const pageItems = rankingData
+    // 総ページ数を計算
+    const calculatedTotalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
     
-    // originalRankを追加（元のランク番号を保持）し、連続したランク番号を割り当て
+    // 現在のページのアイテムを抽出
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    const pageItems = filteredData.slice(startIndex, endIndex)
+    
+    // 表示用ランク番号を割り当て（NGフィルタリング後の連続番号）
     const result = pageItems.map((item, index) => {
-      const startRank = (currentPage - 1) * ITEMS_PER_PAGE + 1
+      const displayRank = startIndex + index + 1
       return {
         ...item,
-        originalRank: item.rank, // 既にランク順でソート済み
-        rank: startRank + index // 連続した表示用ランク番号
+        originalRank: item.rank, // 元のランク番号を保持
+        rank: displayRank // フィルタリング後の連続した表示用ランク番号
       }
     })
     
     return {
       displayItems: result,
       totalPages: calculatedTotalPages,
-      totalItemsCount: totalItems
+      totalItemsCount: totalCount
     }
-  }, [rankingData, totalItems, config.tag, currentPage])
+  }, [rankingData, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

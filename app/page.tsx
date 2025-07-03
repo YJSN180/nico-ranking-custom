@@ -14,18 +14,13 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
-import dynamic from 'next/dynamic'
-
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
 
 // Dynamic imports for better code splitting
 export const dynamic = 'force-dynamic'
 
-// Browser recommendation component (client-side only)
-const BrowserRecommendation = dynamic(() => import('@/components/browser-recommendation').then(mod => ({ default: mod.BrowserRecommendation })), {
-  ssr: false // クライアントサイドのみでレンダリング
-})
+// Browser recommendation component is temporarily disabled due to missing lucide-react dependency
 
 // Prefetch hints
 export const fetchCache = 'default-cache'
@@ -261,11 +256,8 @@ export default async function Home({ searchParams }: PageProps) {
       return <EmptyRankingPage tag={tag} />
     }
 
-    // 真のページネーション: 現在のページのアイテムのみをSSRで送信
-    const ITEMS_PER_PAGE = 100
-    const startIndex = (page - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    const currentPageItems = rankingData.slice(startIndex, endIndex)
+    // クライアントサイドページネーション: 全件データをクライアントに送信
+    // NGリスト即座反映とパフォーマンス向上のため
 
     return (
       <main style={{ 
@@ -275,10 +267,10 @@ export default async function Home({ searchParams }: PageProps) {
         background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />
-        <SuspenseWrapper>
-          {/* ブラウザ推奨案内（クライアントサイドのみ） */}
+        {/* <SuspenseWrapper>
+          ブラウザ推奨案内（クライアントサイドのみ）
           <BrowserRecommendation />
-        </SuspenseWrapper>
+        </SuspenseWrapper> */}
         
         <div 
           className="main-container-responsive"
@@ -290,8 +282,7 @@ export default async function Home({ searchParams }: PageProps) {
           }}>
           <SuspenseWrapper>
             <ClientPage 
-              initialData={{ items: currentPageItems, popularTags }} 
-              totalItems={rankingData.length}
+              initialData={{ items: rankingData, popularTags }} 
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}
