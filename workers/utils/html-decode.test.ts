@@ -80,8 +80,8 @@ describe('HTML Decode Utilities', () => {
           }
         ],
         popularTags: [
-          { name: 'Tag &amp; Name', count: 10 },
-          { name: 'It&#039;s Popular', count: 5 }
+          'Tag &amp; Name',
+          'It&#039;s Popular'
         ],
         metadata: {
           version: 1,
@@ -95,8 +95,8 @@ describe('HTML Decode Utilities', () => {
       expect(decoded.items[0].authorName).toBe("Author's Name")
       expect(decoded.items[1].title).toBe('<Test> Video')
       expect(decoded.items[1].authorName).toBe('"Quoted" Author')
-      expect(decoded.popularTags[0].name).toBe('Tag & Name')
-      expect(decoded.popularTags[1].name).toBe("It's Popular")
+      expect(decoded.popularTags[0]).toBe('Tag & Name')
+      expect(decoded.popularTags[1]).toBe("It's Popular")
       expect(decoded.metadata).toEqual(data.metadata) // メタデータはそのまま
     })
 
@@ -110,6 +110,30 @@ describe('HTML Decode Utilities', () => {
       
       expect(decoded.items).toEqual([])
       expect(decoded.popularTags).toEqual([])
+    })
+
+    it('should limit items to maximum 500', () => {
+      // 600件のテストデータを作成
+      const items = Array.from({ length: 600 }, (_, i) => ({
+        id: `sm${i + 1}`,
+        title: `Video ${i + 1} &amp; Title`,
+        authorName: `Author ${i + 1}`
+      }))
+
+      const data = {
+        items,
+        popularTags: [],
+        totalCount: 600
+      }
+
+      const decoded = decodeRankingData(data)
+      
+      // 500件に制限されていることを確認
+      expect(decoded.items).toHaveLength(500)
+      expect(decoded.items[0].title).toBe('Video 1 & Title')
+      expect(decoded.items[499].title).toBe('Video 500 & Title')
+      // 元のtotalCountは保持される
+      expect(decoded.totalCount).toBe(600)
     })
   })
 })

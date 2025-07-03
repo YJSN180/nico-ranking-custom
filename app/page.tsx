@@ -281,7 +281,7 @@ export default async function Home({ searchParams }: PageProps) {
           <SuspenseWrapper>
             <ClientPage 
               initialData={{ items: currentPageItems, popularTags }} 
-              allRankingData={rankingData}
+              totalItems={rankingData.length}
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}

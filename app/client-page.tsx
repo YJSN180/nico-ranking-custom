@@ -21,7 +21,7 @@ import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
-  allRankingData?: RankingItem[]
+  totalItems: number
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -38,7 +38,7 @@ const DISPLAY_LIMITS = {
 
 export default function ClientPage({ 
   initialData, 
-  allRankingData,
+  totalItems,
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
@@ -75,7 +75,6 @@ export default function ClientPage({
     isFallbackInitiatedRef
   } = useRankingData({
     initialData,
-    allRankingData,
     ngList,
     ngListVersion
   })
@@ -291,22 +290,16 @@ export default function ClientPage({
     
     setCurrentPage(page)
     
-    // フルデータから現在のページのアイテムを抽出
-    if (fullRankingData.length > 0) {
-      const startIndex = (page - 1) * ITEMS_PER_PAGE
-      const endIndex = startIndex + ITEMS_PER_PAGE
-      setRankingData(fullRankingData.slice(startIndex, endIndex))
-    }
-    
-    // URLを更新（ページパラメータを追加）
+    // サーバーサイドページネーション: ページ遷移はリロードで行う
     const params = new URLSearchParams()
     if (config.genre !== 'all') params.set('genre', config.genre)
     if (config.period !== '24h') params.set('period', config.period)
     if (config.tag) params.set('tag', config.tag)
     if (page > 1) params.set('page', page.toString())
     
-    router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
-  }, [currentPage, config, router, fullRankingData])
+    // ページ全体をリロード（サーバーから新しいページのデータを取得）
+    window.location.href = params.toString() ? `?${params.toString()}` : '/'
+  }, [currentPage, config])
   
   // sessionStorageから設定を復元
   useEffect(() => {
@@ -357,12 +350,11 @@ export default function ClientPage({
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
   // ページネーション処理 (NGフィルタリングはフック内で実行済み)
-  const { displayItems, totalPages, totalItems } = useMemo(() => {
-    // 総ページ数計算は全データ(fullRankingData)を使用
-    // 表示データ計算は現在ページデータ(rankingData)を使用
-    const calculatedTotalPages = Math.ceil(fullRankingData.length / ITEMS_PER_PAGE)
+  const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
+    // サーバーサイドページネーション：totalItemsを使用して総ページ数を計算
+    const calculatedTotalPages = Math.ceil(totalItems / ITEMS_PER_PAGE)
     
-    // 現在のページのアイテムを取得（既にhandlePageChangeで設定済み）
+    // 現在のページのアイテムを取得（既にSSRで設定済み）
     const pageItems = rankingData
     
     // originalRankを追加（元のランク番号を保持）し、連続したランク番号を割り当て
@@ -378,9 +370,9 @@ export default function ClientPage({
     return {
       displayItems: result,
       totalPages: calculatedTotalPages,
-      totalItems: fullRankingData.length
+      totalItemsCount: totalItems
     }
-  }, [rankingData, fullRankingData, config.tag, currentPage])
+  }, [rankingData, totalItems, config.tag, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -509,14 +501,14 @@ export default function ClientPage({
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={totalItems}
+              totalItems={totalItemsCount}
               itemsPerPage={ITEMS_PER_PAGE}
               onPageChange={handlePageChange}
             />
           </Suspense>
           
           {/* 件数表示（ページネーションなしの場合） */}
-          {totalPages <= 1 && totalItems > 0 && (
+          {totalPages <= 1 && totalItemsCount > 0 && (
             <div style={{
               textAlign: 'center',
               padding: '10px 0',
@@ -525,7 +517,7 @@ export default function ClientPage({
               borderTop: '1px solid var(--border-color)',
               marginTop: '20px'
             }}>
-              全 {totalItems} 件
+              全 {totalItemsCount} 件
             </div>
           )}
           
@@ -554,14 +546,14 @@ export default function ClientPage({
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}
-              totalItems={totalItems}
+              totalItems={totalItemsCount}
               itemsPerPage={ITEMS_PER_PAGE}
               onPageChange={handlePageChange}
             />
           </Suspense>
           
           {/* 件数表示（ページネーションなしの場合） */}
-          {totalPages <= 1 && totalItems > 0 && (
+          {totalPages <= 1 && totalItemsCount > 0 && (
             <div style={{
               textAlign: 'center',
               padding: '10px 0',
@@ -570,7 +562,7 @@ export default function ClientPage({
               borderTop: '1px solid var(--border-color)',
               marginTop: '20px'
             }}>
-              全 {totalItems} 件
+              全 {totalItemsCount} 件
             </div>
           )}
         </>

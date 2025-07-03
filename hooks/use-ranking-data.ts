@@ -11,7 +11,6 @@ import type { NGList } from '@/types/ng-list'
 
 interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
-  allRankingData?: RankingItem[]
   ngList: NGList
   ngListVersion: string
 }
@@ -39,16 +38,13 @@ const DISPLAY_LIMITS = {
 
 export function useRankingData({
   initialData,
-  allRankingData,
   ngList,
   ngListVersion
 }: UseRankingDataProps): UseRankingDataReturn {
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
     // 初期データをrank順でソートして設定
-    const initialArray = (allRankingData && Array.isArray(allRankingData)) ? allRankingData : 
-                        (initialData?.items && Array.isArray(initialData.items)) ? initialData.items : 
-                        []
+    const initialArray = (initialData?.items && Array.isArray(initialData.items)) ? initialData.items : []
     return [...initialArray].sort((a, b) => a.rank - b.rank)
   })
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(initialData?.popularTags || [])

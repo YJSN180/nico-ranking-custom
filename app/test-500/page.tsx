@@ -45,6 +45,7 @@ export default async function Test500Page() {
       <SuspenseWrapper>
         <ClientPage 
           initialData={items} 
+          totalItems={items.items.length}
           initialGenre="other"
           initialPeriod="24h"
           popularTags={popularTags}

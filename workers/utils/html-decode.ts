@@ -42,14 +42,18 @@ export function decodeRankingItem(item: any): any {
 /**
  * ランキングデータ全体のHTMLエンティティをデコード
  * @param data ランキングデータ
- * @returns デコード済みのランキングデータ
+ * @returns デコード済みのランキングデータ（最大500件）
  */
 export function decodeRankingData(data: any): any {
   if (!data) return data
   
+  // パフォーマンス最適化: 最大500件に制限
+  const MAX_ITEMS = 500
+  const items = data.items ? data.items.slice(0, MAX_ITEMS) : []
+  
   return {
     ...data,
-    items: data.items ? data.items.map(decodeRankingItem) : [],
+    items: items.map(decodeRankingItem),
     popularTags: data.popularTags ? data.popularTags.map((tag: any) => {
       // タグがオブジェクト形式 {"0": "東", "1": "方"} の場合、文字列に変換
       if (typeof tag === 'object' && !Array.isArray(tag) && tag !== null) {
