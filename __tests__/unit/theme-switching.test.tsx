@@ -54,8 +54,8 @@ vi.mock('@/hooks/use-user-ng-list', () => ({
   })
 }))
 
-// TODO: このテストはタイムアウトするため一時的にスキップ
-// 原因: ThemeProviderまたはSettingsModalのレンダリングに関する問題
+// TODO: このテストはメモリリークが原因でヒープ不足エラーが発生するため一時的にスキップ
+// 原因: ThemeProviderまたはSettingsModalのレンダリングでメモリリーク
 describe.skip('テーマ切り替え機能', () => {
   beforeEach(() => {
     vi.clearAllMocks()

@@ -32,18 +32,13 @@ export default defineConfig({
       '__tests__/unit/mobile-layout-v2.test.tsx',
       '__tests__/tag-filtering.test.ts',
       // Re-enabled tests with proper window.matchMedia mock (vitest.setup.ts L57-72)
-      // '__tests__/unit/ng-filter-display-behavior.test.tsx',
-      // '__tests__/unit/ranking-numbering.test.tsx', 
-      // '__tests__/unit/theme-switching.test.tsx',
       // '__tests__/unit/theme-instant-apply.test.tsx',
-      // '__tests__/unit/suspense-boundary.test.tsx',
       // '__tests__/unit/ng-list-rank-recalculation.test.tsx',
       // '__tests__/unit/dark-mode-complete.test.tsx',
-      // '__tests__/unit/popular-tags-display.test.tsx',
+      // '__tests__/unit/popular-tags-display.test.tsx', // RESTORED: MylistOperationsProvider fix applied
       // '__tests__/unit/tag-ranking-300-limit.test.tsx',
       // '__tests__/unit/url-update-on-config-change.test.tsx',
       // '__tests__/unit/scroll-lock-prevention.test.tsx',
-      // '__tests__/unit/popular-tags-cache.test.tsx',
       // '__tests__/unit/duplicate-rank-bug.test.tsx',
       // '__tests__/unit/browser-back-scroll-restore.test.tsx',
       // Tests with import errors - DELETE trend-tags-extraction (obsolete function)

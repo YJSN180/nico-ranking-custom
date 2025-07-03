@@ -1,7 +1,9 @@
+import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { vi } from 'vitest'
+import { vi, beforeAll } from 'vitest'
 import ClientPage from '@/app/client-page'
+import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 
 // Request throttle のモック
 vi.mock('@/lib/request-throttle', () => ({
@@ -128,6 +130,27 @@ vi.mock('@/hooks/use-user-ng-list', () => ({
 // fetchのモック
 global.fetch = vi.fn()
 
+// MylistOperationsProvider テスト環境セットアップ
+beforeAll(() => {
+  // @ts-ignore
+  global.window = global.window || {}
+  // @ts-ignore
+  window.__TEST_ENV__ = true
+  // @ts-ignore
+  window.__MOCK_MYLIST_DATA__ = {
+    mylists: []
+  }
+})
+
+// MylistOperationsProvider付きのrenderヘルパー
+const renderWithProviders = (component: React.ReactElement) => {
+  return render(
+    <MylistOperationsProvider>
+      {component}
+    </MylistOperationsProvider>
+  )
+}
+
 describe('人気タグの表示問題', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -192,7 +215,7 @@ describe('人気タグの表示問題', () => {
   })
 
   it('初期表示時に人気タグが表示される', async () => {
-    render(
+    renderWithProviders(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
         initialGenre="game"
@@ -223,7 +246,7 @@ describe('人気タグの表示問題', () => {
   it('ジャンル切り替え時に人気タグが更新される', async () => {
     const user = userEvent.setup()
 
-    render(
+    renderWithProviders(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
         initialGenre="game"
@@ -277,7 +300,7 @@ describe('人気タグの表示問題', () => {
   it('allジャンルでは人気タグセクションが表示されるが空になる', async () => {
     const user = userEvent.setup()
 
-    render(
+    renderWithProviders(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
         initialGenre="game"
@@ -324,7 +347,7 @@ describe('人気タグの表示問題', () => {
   })
 
   it('初期表示でpopularTagsが空の場合、動的に取得される', async () => {
-    render(
+    renderWithProviders(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
         initialGenre="other"
@@ -349,7 +372,7 @@ describe('人気タグの表示問題', () => {
   it('period切り替え時も人気タグが更新される', async () => {
     const user = userEvent.setup()
 
-    render(
+    renderWithProviders(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
         initialGenre="game"
@@ -436,7 +459,7 @@ describe('人気タグの表示問題', () => {
 
     const user = userEvent.setup()
 
-    render(
+    renderWithProviders(
       <ClientPage
         initialData={[{ id: '1', title: 'Video 1', rank: 1, thumbURL: '', views: 100 }]}
         initialGenre="game"
