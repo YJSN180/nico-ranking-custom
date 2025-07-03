@@ -13,6 +13,7 @@ interface OptimizedImageProps {
   style?: React.CSSProperties
   loading?: 'lazy' | 'eager'
   priority?: boolean
+  fetchPriority?: 'high' | 'low' | 'auto'
   className?: string
   onClick?: () => void
   fallbackSrc?: string
@@ -34,6 +35,7 @@ export function OptimizedImage({
   style,
   loading,
   priority,
+  fetchPriority,
   className,
   onClick,
   fallbackSrc = '/cantwatch.jpg',
@@ -65,6 +67,8 @@ export function OptimizedImage({
       style={style}
       loading={loading}
       priority={priority}
+      // @ts-ignore - Next.js 14ではfetchPriorityをサポートしているが、型定義に含まれていない場合がある
+      fetchPriority={fetchPriority}
       className={className}
       onClick={onClick}
       onError={handleError}

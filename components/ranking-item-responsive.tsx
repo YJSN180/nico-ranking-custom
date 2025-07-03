@@ -138,8 +138,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                   height: 'auto',
                   aspectRatio: '16 / 9'
                 }}
-                loading={item.rank <= 3 ? undefined : "lazy"}
-                priority={item.rank <= 3}
+                loading={item.rank <= 2 ? undefined : "lazy"}
+                priority={item.rank <= 2}
+                fetchPriority={item.rank <= 2 ? "high" : item.rank <= 5 ? "low" : undefined}
               />
             </a>
             {/* 再生時間オーバーレイ */}
