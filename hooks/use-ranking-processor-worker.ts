@@ -22,12 +22,11 @@ export function useRankingProcessorWorker() {
     }
     
     try {
-      // Create worker with webpack 5 worker syntax
+      // Create worker with proper webpack configuration
       workerRef.current = new Worker(
         new URL('../workers/ranking-processor.worker.ts', import.meta.url),
         { type: 'module' }
       )
-      console.log('Web Worker created successfully')
     } catch (error) {
       console.error('Failed to create Worker:', error)
       return

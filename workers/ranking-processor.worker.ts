@@ -156,5 +156,5 @@ self.onmessage = (event: MessageEvent<ProcessingMessage>) => {
   }
 }
 
-// Default export for worker-loader
-export default null as any
+// Export empty object to satisfy TypeScript
+export {}
