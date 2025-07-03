@@ -14,12 +14,18 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
+import dynamic from 'next/dynamic'
 
 // ISRを使用してFunction Invocationsを削減
 export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
 
 // Dynamic imports for better code splitting
 export const dynamic = 'force-dynamic'
+
+// Browser recommendation component (client-side only)
+const BrowserRecommendation = dynamic(() => import('@/components/browser-recommendation').then(mod => ({ default: mod.BrowserRecommendation })), {
+  ssr: false // クライアントサイドのみでレンダリング
+})
 
 // Prefetch hints
 export const fetchCache = 'default-cache'
@@ -269,6 +275,10 @@ export default async function Home({ searchParams }: PageProps) {
         background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />
+        <SuspenseWrapper>
+          {/* ブラウザ推奨案内（クライアントサイドのみ） */}
+          <BrowserRecommendation />
+        </SuspenseWrapper>
         
         <div 
           className="main-container-responsive"

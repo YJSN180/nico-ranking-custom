@@ -1,0 +1,209 @@
+/* ブラウザ推奨バナー */
+.browser-recommendation {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  max-width: 400px;
+  background: var(--surface-color);
+  border: 2px solid var(--warning-color, #f59e0b);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 20px;
+  z-index: 1000;
+  animation: slideInUp 0.3s ease-out;
+}
+
+/* モバイル対応 */
+@media (max-width: 768px) {
+  .browser-recommendation {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    max-width: 100%;
+    border-radius: 12px 12px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+}
+
+/* アニメーション */
+@keyframes slideInUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* コンテンツラッパー */
+.browser-recommendation-content {
+  position: relative;
+}
+
+/* 閉じるボタン */
+.browser-recommendation-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 32px;
+  height: 32px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-secondary);
+}
+
+.browser-recommendation-close:hover {
+  background: var(--surface-hover);
+  transform: scale(1.1);
+}
+
+.browser-recommendation-close:active {
+  transform: scale(0.95);
+}
+
+/* アイコン */
+.browser-recommendation-icon {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 12px;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* テキストエリア */
+.browser-recommendation-text {
+  text-align: center;
+}
+
+.browser-recommendation-text h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.browser-recommendation-text p {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.browser-recommendation-text strong {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* リンクエリア */
+.browser-recommendation-links {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* ダウンロードボタン */
+.browser-recommendation-button {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--primary-color);
+  color: var(--button-text);
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.browser-recommendation-button:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.browser-recommendation-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* 注記 */
+.browser-recommendation-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ダークモード対応 */
+[data-theme="dark"] .browser-recommendation {
+  background: var(--surface-color);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .browser-recommendation-close {
+  background: var(--surface-secondary);
+  border-color: var(--border-color);
+}
+
+/* ダークブルーテーマ対応 */
+[data-theme="dark-blue"] .browser-recommendation {
+  background: var(--surface-color);
+  border-color: #1a8cd8;
+}
+
+[data-theme="dark-blue"] .browser-recommendation-button {
+  background: #1a8cd8;
+}
+
+[data-theme="dark-blue"] .browser-recommendation-button:hover {
+  background: #1577c3;
+}
+
+/* アクセシビリティ */
+@media (prefers-reduced-motion: reduce) {
+  .browser-recommendation {
+    animation: none;
+  }
+  
+  .browser-recommendation-icon {
+    animation: none;
+  }
+}
+
+/* フォーカススタイル */
+.browser-recommendation-close:focus,
+.browser-recommendation-button:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* 高コントラストモード */
+@media (prefers-contrast: high) {
+  .browser-recommendation {
+    border-width: 3px;
+  }
+  
+  .browser-recommendation-button {
+    border: 2px solid currentColor;
+  }
+}

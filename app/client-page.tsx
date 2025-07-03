@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
+import { generateNGListHash } from '@/lib/ng-list-hash'
 
 // 動的インポートでバンドルサイズを削減
 const Pagination = lazy(() => import('@/components/pagination'))
@@ -54,8 +55,8 @@ export default function ClientPage({
   
   // NGリストのバージョンを追跡（更新時に強制再レンダリング）
   const ngListVersion = useMemo(() => {
-    // ngListオブジェクト全体をJSON文字列化してハッシュ値として使用
-    return JSON.stringify(ngList)
+    // 軽量なハッシュ関数を使用（JSON.stringifyよりも高速）
+    return generateNGListHash(ngList).toString()
   }, [ngList])
   
   // ランキングデータ管理フック
@@ -297,8 +298,9 @@ export default function ClientPage({
     if (config.tag) params.set('tag', config.tag)
     if (page > 1) params.set('page', page.toString())
     
-    // ページ全体をリロード（サーバーから新しいページのデータを取得）
-    window.location.href = params.toString() ? `?${params.toString()}` : '/'
+    // Next.js App Routerを使用してクライアントサイドでページ遷移
+    // scroll: falseでスクロール位置を維持
+    router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
   }, [currentPage, config])
   
   // sessionStorageから設定を復元
