@@ -1,7 +1,17 @@
 name: Unified CI Pipeline
 
 on:
-  # Phase 1: Manual trigger only for validation
+  # Automatic triggers for production workflow
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily monitoring (9:00 JST = 0:00 UTC)
+    - cron: '0 0 * * *'
+    # Weekly comprehensive (Monday 18:00 JST = 9:00 UTC)  
+    - cron: '0 9 * * 1'
+  # Manual trigger for all levels
   workflow_dispatch:
     inputs:
       run_level:
@@ -14,16 +24,28 @@ on:
           - full
           - monitoring
 
+# Phase 0/1 optimizations integrated
 env:
   NODE_VERSION: '20'
+  NODE_OPTIONS: '--max-old-space-size=2048'  # Phase 0: Memory optimization
+  PLAYWRIGHT_BASE_URL: 'http://localhost:3001'  # Phase 0: Port fix
   REGISTRY_URL: https://npm.pkg.github.com/
 
+# Cloudflare environment variables (consolidated from all workflows)
+x-cloudflare-env: &cloudflare-env
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  KV_RANKING_ID: ${{ secrets.KV_RANKING_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CRON_SECRET: ${{ secrets.CRON_SECRET }}
+  WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+  ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+  ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
 jobs:
-  # Job 1: Fast CI Tests (Unit + Lint + Type)
+  # Job 1: Fast CI Tests (Unit + Lint + Type) - Always runs
   fast-tests:
     name: Fast Tests
     runs-on: ubuntu-latest
-    if: inputs.run_level == 'fast' || inputs.run_level == 'full' || inputs.run_level == 'monitoring'
     
     steps:
       - name: Checkout
@@ -48,16 +70,20 @@ jobs:
         run: npm run test:ci
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=4096'
 
       - name: Build check
         run: npm run build
 
   # Job 2: E2E Tests with Matrix Sharding
+  # Runs on: PR (fast level), push to main (full level), schedule (monitoring level), manual trigger
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
-    if: inputs.run_level == 'full' || inputs.run_level == 'monitoring'
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.run_level == 'full' || inputs.run_level == 'monitoring')) ||
+      (github.event_name == 'pull_request' && (inputs.run_level == 'fast' || inputs.run_level == 'full' || inputs.run_level == 'monitoring' || inputs.run_level == null))
     needs: fast-tests
     
     strategy:
@@ -88,7 +114,6 @@ jobs:
         run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           CI: true
-          PLAYWRIGHT_BASE_URL: ${{ secrets.PLAYWRIGHT_BASE_URL || 'http://localhost:3000' }}
 
       - name: Upload blob report
         uses: actions/upload-artifact@v4
@@ -136,11 +161,15 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # Job 4: Security & Quality (Full level only)
+  # Job 4: Security & Quality
+  # Runs on: push to main, schedule, manual full/monitoring
   security-quality:
     name: Security & Quality
     runs-on: ubuntu-latest
-    if: inputs.run_level == 'full' || inputs.run_level == 'monitoring'
+    if: |
+      github.event_name == 'push' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && (inputs.run_level == 'full' || inputs.run_level == 'monitoring'))
     needs: fast-tests
     
     steps:
@@ -171,11 +200,13 @@ jobs:
       - name: CodeQL analyze
         uses: github/codeql-action/analyze@v3
 
-  # Job 5: Performance & Lighthouse (Monitoring level only)
+  # Job 5: Performance & Lighthouse (Schedule and manual monitoring only)
   performance-monitoring:
     name: Performance Monitoring
     runs-on: ubuntu-latest
-    if: inputs.run_level == 'monitoring'
+    if: |
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.run_level == 'monitoring')
     needs: [fast-tests, e2e-tests]
     
     steps:
@@ -218,12 +249,16 @@ jobs:
           echo "=== Test Execution Time ==="
           date
 
-  # Job 6: Benchmark Reporting
+  # Job 6: Benchmark Reporting (Schedule and manual monitoring only)
   benchmark-report:
     name: Benchmark Report
     runs-on: ubuntu-latest
     needs: [fast-tests, e2e-tests, merge-reports, security-quality, performance-monitoring]
-    if: always() && inputs.run_level == 'monitoring'
+    if: |
+      always() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && inputs.run_level == 'monitoring')
+      )
     
     steps:
       - name: Checkout
