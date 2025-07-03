@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X } from 'lucide-react'
+// Note: This component is deprecated in favor of browser-recommendation-ssr.tsx
 import './browser-recommendation.css'
 
 export function BrowserRecommendation() {
@@ -53,7 +53,7 @@ export function BrowserRecommendation() {
           className="browser-recommendation-close"
           aria-label="閉じる"
         >
-          <X size={20} />
+          ×
         </button>
         
         <div className="browser-recommendation-icon">

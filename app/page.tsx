@@ -5,6 +5,7 @@ import ClientPage from './client-page'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
+import { BrowserRecommendationSSR } from '@/components/browser-recommendation-ssr'
 import { cookies } from 'next/headers'
 import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
 import { getPopularTags } from '@/lib/popular-tags'
@@ -267,10 +268,8 @@ export default async function Home({ searchParams }: PageProps) {
         background: 'var(--background-color)'
       }}>
         <HeaderWithSettings />
-        {/* <SuspenseWrapper>
-          ブラウザ推奨案内（クライアントサイドのみ）
-          <BrowserRecommendation />
-        </SuspenseWrapper> */}
+        {/* ブラウザ推奨案内（SSR対応） */}
+        <BrowserRecommendationSSR />
         
         <div 
           className="main-container-responsive"

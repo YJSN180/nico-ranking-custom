@@ -67,6 +67,19 @@ export async function middleware(request: NextRequest) {
              request.headers.get('x-real-ip') || 
              'unknown'
 
+  // ブラウザ推奨設定の判定（後でCookieを設定）
+  const userAgent = request.headers.get('user-agent') || ''
+  const ua = userAgent.toLowerCase()
+  const isIPad = ua.includes('ipad') || (ua.includes('macintosh') && ua.includes('mobile'))
+  const isIPhone = ua.includes('iphone')
+  const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios')
+  const isLowEndAndroid = ua.includes('android') && (
+    ua.includes('android 4') || ua.includes('android 5') || ua.includes('android 6') ||
+    /\b(sm-|gt-|sch-|sgh-|sc-|galaxy|nexus|pixel)\w*\b/i.test(ua)
+  )
+  const isSamsungBrowser = ua.includes('samsungbrowser')
+  const shouldShowRecommendation = (isIPad || isIPhone || isLowEndAndroid) && (isSafari || isSamsungBrowser)
+
   // APIエンドポイントのレート制限
   if (request.nextUrl.pathname.startsWith('/api/')) {
     // デバッグエンドポイントを本番環境で無効化
@@ -173,6 +186,25 @@ export async function middleware(request: NextRequest) {
   
   const response = NextResponse.next()
   
+  // Browser recommendation cookieを設定
+  if (shouldShowRecommendation) {
+    response.cookies.set('browser-recommendation', 'show', {
+      httpOnly: false, // クライアントサイドからアクセス可能
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24, // 24時間
+      path: '/'
+    })
+  } else {
+    response.cookies.set('browser-recommendation', 'hide', {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production', 
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24,
+      path: '/'
+    })
+  }
+  
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
@@ -232,6 +264,8 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     '/admin/:path*',
-    '/api/admin/:path*'
+    '/api/admin/:path*',
+    '/', // ホームページでブラウザ検出を実行
+    '/((?!_next/static|_next/image|favicon.ico|fonts|icon|og-image.png|manifest.json).*)', // その他のページ
   ]
 }

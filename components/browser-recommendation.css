@@ -207,3 +207,181 @@
     border: 2px solid currentColor;
   }
 }
+
+/* ヘッダー下バナー版 */
+.browser-recommendation-banner {
+  width: 100%;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-bottom: 2px solid #f59e0b;
+  padding: 12px 20px;
+  position: relative;
+  animation: slideInDown 0.3s ease-out;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+@keyframes slideInDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.browser-recommendation-banner__content {
+  display: flex;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  gap: 16px;
+}
+
+.browser-recommendation-banner__icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.browser-recommendation-banner__text {
+  flex: 1;
+}
+
+.browser-recommendation-banner__title {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.browser-recommendation-banner__message {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #78350f;
+}
+
+.browser-recommendation-banner__message strong {
+  font-weight: 600;
+  color: #451a03;
+}
+
+.browser-recommendation-banner__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.browser-recommendation-banner__button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.browser-recommendation-banner__button--primary {
+  background: #dc2626;
+  color: white;
+}
+
+.browser-recommendation-banner__button--primary:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.browser-recommendation-banner__button--secondary {
+  background: rgba(120, 53, 15, 0.1);
+  color: #78350f;
+  border: 1px solid rgba(120, 53, 15, 0.3);
+}
+
+.browser-recommendation-banner__button--secondary:hover {
+  background: rgba(120, 53, 15, 0.2);
+}
+
+/* モバイル対応 */
+@media (max-width: 768px) {
+  .browser-recommendation-banner {
+    padding: 12px;
+  }
+  
+  .browser-recommendation-banner__content {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+  
+  .browser-recommendation-banner__actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .browser-recommendation-banner__message {
+    font-size: 13px;
+  }
+}
+
+/* ダークモード対応 */
+[data-theme="dark"] .browser-recommendation-banner {
+  background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
+  border-bottom-color: #f59e0b;
+}
+
+[data-theme="dark"] .browser-recommendation-banner__title {
+  color: #fed7aa;
+}
+
+[data-theme="dark"] .browser-recommendation-banner__message {
+  color: #fdba74;
+}
+
+[data-theme="dark"] .browser-recommendation-banner__message strong {
+  color: #fed7aa;
+}
+
+[data-theme="dark"] .browser-recommendation-banner__button--secondary {
+  background: rgba(253, 186, 116, 0.1);
+  color: #fdba74;
+  border-color: rgba(253, 186, 116, 0.3);
+}
+
+[data-theme="dark"] .browser-recommendation-banner__button--secondary:hover {
+  background: rgba(253, 186, 116, 0.2);
+}
+
+/* ダークブルーテーマ対応 */
+[data-theme="darkblue"] .browser-recommendation-banner {
+  background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+  border-bottom-color: #1a8cd8;
+}
+
+[data-theme="darkblue"] .browser-recommendation-banner__title {
+  color: #93c5fd;
+}
+
+[data-theme="darkblue"] .browser-recommendation-banner__message {
+  color: #bfdbfe;
+}
+
+[data-theme="darkblue"] .browser-recommendation-banner__button--primary {
+  background: #1a8cd8;
+}
+
+[data-theme="darkblue"] .browser-recommendation-banner__button--primary:hover {
+  background: #1577c3;
+}
+
+/* アクセシビリティ */
+@media (prefers-reduced-motion: reduce) {
+  .browser-recommendation-banner {
+    animation: none;
+  }
+}
+
+.browser-recommendation-banner__button:focus {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 2px;
+}
