@@ -358,14 +358,12 @@ export default function ClientPage({
 
   // ページネーション処理 (NGフィルタリングはフック内で実行済み)
   const { displayItems, totalPages, totalItems } = useMemo(() => {
-    // フックで既にNGフィルタリング済みのrankingDataを使用
-    const allItems = rankingData
+    // 総ページ数計算は全データ(fullRankingData)を使用
+    // 表示データ計算は現在ページデータ(rankingData)を使用
+    const calculatedTotalPages = Math.ceil(fullRankingData.length / ITEMS_PER_PAGE)
     
-    // 全てのランキング（ジャンル・タグ共に）でページネーションを有効化
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    const endIndex = startIndex + ITEMS_PER_PAGE
-    const pageItems = allItems.slice(startIndex, endIndex)
-    const calculatedTotalPages = Math.ceil(allItems.length / ITEMS_PER_PAGE)
+    // 現在のページのアイテムを取得（既にhandlePageChangeで設定済み）
+    const pageItems = rankingData
     
     // originalRankを追加（元のランク番号を保持）し、連続したランク番号を割り当て
     const result = pageItems.map((item, index) => {
@@ -380,9 +378,9 @@ export default function ClientPage({
     return {
       displayItems: result,
       totalPages: calculatedTotalPages,
-      totalItems: allItems.length
+      totalItems: fullRankingData.length
     }
-  }, [rankingData, config.tag, currentPage])
+  }, [rankingData, fullRankingData, config.tag, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
