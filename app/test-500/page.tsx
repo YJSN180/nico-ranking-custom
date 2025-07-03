@@ -1,33 +1,35 @@
-import ClientPage from '../client-page'
-import { kv } from '@/lib/simple-kv'
+import dynamic from 'next/dynamic'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
+import { getOtherGenre500Items } from './utils/data-fetcher'
 
-async function getOtherGenre500Items() {
-  try {
-    // KVから直接「その他」ジャンルのデータを取得
-    const data = await kv.get('ranking-other-24h') as any
-    
-    if (data && data.items) {
-      return {
-        items: data.items,
-        popularTags: data.popularTags || []
-      }
-    }
-  } catch (error) {
-    // KVエラーは無視してフォールバックを使用
-  }
-  
-  // フォールバック: テストデータ
-  const response = await fetch('http://localhost:3000/api/test-500-items', {
-    cache: 'no-store'
-  })
-  
-  if (!response.ok) {
-    return { items: [], popularTags: [] }
-  }
-  
-  return await response.json()
-}
+// ClientPage を動的インポートで遅延ロード
+const ClientPage = dynamic(() => import('../client-page'), {
+  loading: () => (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '400px',
+      color: 'var(--text-secondary)'
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ 
+          fontSize: '18px',
+          fontWeight: '500',
+          marginBottom: '8px'
+        }}>
+          ランキングデータを読み込んでいます
+        </div>
+        <div style={{ 
+          fontSize: '14px',
+          opacity: 0.7
+        }}>
+          500件のデータを処理中...
+        </div>
+      </div>
+    </div>
+  )
+})
 
 export default async function Test500Page() {
   const { items, popularTags } = await getOtherGenre500Items()
