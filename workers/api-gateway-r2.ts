@@ -82,7 +82,7 @@ export default {
         time: new Date().toISOString(),
         headers: Object.fromEntries(request.headers.entries()),
         worker: 'api-gateway-r2',
-        version: '2025-06-25-debug-v2'
+        version: '2025-07-03-fetch-api'
       }), {
         status: 200,
         headers: {
@@ -170,20 +170,6 @@ export default {
           cacheKeySuffix = `${genre}/${period}/all`
         }
         
-        // キャッシュキー（オリジナルURLを使用してクエリパラメータを保持）
-        const cacheKey = new Request(request.url, {
-          method: 'GET'
-        })
-        const cache = caches.default
-        
-        // キャッシュチェック
-        let response = await cache.match(cacheKey)
-        if (response) {
-          response = new Response(response.body, response)
-          response.headers.set('X-Cache-Status', 'HIT')
-          return response
-        }
-        
         // R2から読み取り
         console.log(`[Worker] Attempting to read from R2: ${r2Key}`)
         const r2Object = await env.R2_BUCKET.get(r2Key)
@@ -235,12 +221,13 @@ export default {
         const headers = new Headers()
         headers.set('Content-Type', 'application/json')
         
-        // キャッシュ設定
-        headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
+        // キャッシュ設定 (Vercel設定と統一: 20分TTL)
+        // Cloudflare CDNとTiered Cachingが自動的に適用される
+        headers.set('Cache-Control', 'public, max-age=1200, s-maxage=1200, stale-while-revalidate=2400')
         
-        headers.set('CDN-Cache-Control', 'public, max-age=3600')
+        // Cloudflare固有のキャッシュ設定
+        headers.set('CDN-Cache-Control', 'public, max-age=1200')
         headers.set('X-Data-Source', 'r2-direct')
-        headers.set('X-Cache-Status', 'MISS')
         
         // CORSとセキュリティヘッダーを追加
         Object.entries(corsHeaders).forEach(([key, value]) => {
@@ -288,14 +275,14 @@ export default {
               const decodedData = decodeRankingData(jsonData)
               
               // デコード済みデータを返す（Cloudflareが必要に応じて再圧縮）
-              response = new Response(JSON.stringify(decodedData), {
+              return new Response(JSON.stringify(decodedData), {
                 status: 200,
                 headers
               })
             } catch (parseError) {
               console.error('[Worker] Failed to parse or decode JSON:', parseError)
               // パースに失敗した場合は元のデータをそのまま返す
-              response = new Response(decompressedData, {
+              return new Response(decompressedData, {
                 status: 200,
                 headers
               })
@@ -303,7 +290,7 @@ export default {
           } catch (decompressError) {
             console.error('[Worker] Failed to decompress gzipped data:', decompressError)
             // 解凍に失敗した場合は、元のストリームをそのまま返す
-            response = new Response(passthroughStream, {
+            return new Response(passthroughStream, {
               status: 200,
               headers
             })
@@ -319,24 +306,19 @@ export default {
             const decodedData = decodeRankingData(jsonData)
             
             // デコード済みデータを返す（Cloudflareが自動圧縮する）
-            response = new Response(JSON.stringify(decodedData), {
+            return new Response(JSON.stringify(decodedData), {
               status: 200,
               headers
             })
           } catch (error) {
             console.error('[Worker] Failed to parse or decode JSON:', error)
             // エラーの場合は元のストリームをそのまま返す
-            response = new Response(passthroughStream, {
+            return new Response(passthroughStream, {
               status: 200,
               headers
             })
           }
         }
-        
-        // キャッシュに保存
-        ctx.waitUntil(cache.put(cacheKey, response.clone()))
-        
-        return response
         
       } catch (error) {
         console.error('R2 read error:', error)
