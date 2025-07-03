@@ -1,5 +1,6 @@
-/* CSS-only レスポンシブランキングアイテム - Container Queries版 */
+/* CSS-only レスポンシブランキングアイテム - Media Queries最適化版 */
 /* CLSを完全に回避するため、JavaScript不要のレイアウト切り替え */
+/* パフォーマンス最適化: Container Query → Media Query移行（O(n) → O(1)） */
 
 /* 最適化: 共通値をCSS変数で定義（重複削減） */
 :root {
@@ -177,8 +178,8 @@
   z-index: 1;
 }
 
-/* Container Query: 600px以下でモバイルレイアウト */
-@container (max-width: 600px) {
+/* Media Query: 640px以下でモバイルレイアウト (Container Query → Media Query最適化) */
+@media (max-width: 640px) {
   /* モバイルでの再生時間フォントサイズ調整 */
   .ranking-item-responsive__duration {
     font-size: var(--mobile-duration-size);
@@ -287,8 +288,8 @@
   }
 }
 
-/* Container Query: 400px以下で超モバイルレイアウト */
-@container (max-width: 400px) {
+/* Media Query: 420px以下で超モバイルレイアウト (Container Query → Media Query最適化) */
+@media (max-width: 420px) {
   /* 超モバイルでの再生時間フォントサイズ調整 */
   .ranking-item-responsive__duration {
     font-size: 10px;
@@ -378,81 +379,5 @@
   }
 } */
 
-/* フォールバック: Container Queriesをサポートしていないブラウザ用 */
-@supports not (container-type: inline-size) {
-  /* 従来のMedia Queriesで対応 */
-  @media (max-width: 640px) {
-    /* モバイルでの再生時間フォントサイズ調整 */
-    .ranking-item-responsive__duration {
-      font-size: 11px;
-    }
-    
-    .ranking-item-responsive__content {
-      grid-template-columns: 140px 1fr;
-      grid-template-areas: "thumbnail details";
-      gap: 8px;
-      padding: 2px;
-      min-height: 75px;
-    }
-    
-    /* デスクトップ順位を非表示 */
-    .ranking-item-responsive__rank--desktop {
-      display: none !important;
-    }
-    
-    /* モバイル順位を表示 */
-    .ranking-item-responsive__rank--mobile {
-      display: flex !important;
-      position: absolute;
-      top: 0;
-      left: 0;
-      min-width: 18px;
-      height: 18px;
-      font-size: 12px;
-      font-weight: 700;
-      align-items: center;
-      justify-content: center;
-      border-radius: 0 0 4px 0;
-      /* モバイルでは背景色を適用（不透明） */
-      background: var(--mobile-rank-bg) !important;
-      color: var(--mobile-rank-color) !important;
-    }
-    
-    .ranking-item-responsive__thumbnail {
-      grid-area: thumbnail;
-      width: 140px;
-      position: relative;
-      margin-top: 0;
-    }
-    
-    /* モバイルでタイトル行を追加 */
-    .ranking-item-responsive__title-row {
-      display: flex;
-      gap: 8px;
-      align-items: flex-start;
-      margin-bottom: 4px;
-    }
-    
-    .ranking-item-responsive__title {
-      font-size: 15px;
-      display: -webkit-box;
-      -webkit-line-clamp: 3;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      flex: 1;
-      min-width: 0;
-      margin-bottom: 0;
-    }
-    
-    /* モバイルでのマイリストエリア非表示 */
-    .ranking-item-responsive__mylist-area {
-      display: none;
-    }
-  }
-  
-  @media (max-width: 375px) {
-    .ranking-item-responsive__stat--desktop-only {
-      display: none;
-    }
-  }
-}
+/* Container Query → Media Query最適化完了 */
+/* フォールバックは不要（Media Queriesは全ブラウザで対応済み） */

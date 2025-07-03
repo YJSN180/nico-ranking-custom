@@ -12,7 +12,8 @@ interface RankingItemProps {
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
-// Container Queriesとflexbox/gridを活用してCLSを完全に回避
+// Media Queriesとflexbox/gridを活用してCLSを完全に回避
+// パフォーマンス最適化: Container Query → Media Query移行完了
 const RankingItemResponsive = memo(function RankingItemResponsive({ item }: RankingItemProps) {
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
@@ -41,8 +42,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
       data-video-id={item.id}
       className="ranking-item-responsive"
       style={{
-        // Container Queries用のcontainment設定
-        containerType: 'inline-size',
+        // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
         background: 'var(--surface-color)',
         borderRadius: '8px',
         overflow: 'hidden',
