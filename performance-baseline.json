@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-07-03T07:43:00.000Z",
+  "description": "Baseline performance metrics before optimization",
+  "scriptDuration": 37700,
+  "mainThreadWork": 40000,
+  "comment": "Based on PageSpeed Insights screenshot showing 40s main thread work with 37.7s Script Evaluation"
+}

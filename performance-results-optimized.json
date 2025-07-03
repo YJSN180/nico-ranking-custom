@@ -1,0 +1,100 @@
+{
+  "timestamp": "2025-07-02T23:41:11.262Z",
+  "loadTime": 1666,
+  "metrics": {
+    "navigation": {
+      "domContentLoaded": 0,
+      "domComplete": 1162.8999999999069,
+      "loadComplete": 1162.8999999999069,
+      "domInteractive": 596.8999999999069,
+      "responseTime": 510.6999999997206
+    },
+    "paint": {
+      "firstPaint": 0,
+      "firstContentfulPaint": 0
+    },
+    "resources": {
+      "totalJS": 93,
+      "totalCSS": 0,
+      "jsSize": 1964771,
+      "cssSize": 0,
+      "jsDuration": 8192.299999998882,
+      "cssDuration": 0,
+      "topJSFiles": [
+        {
+          "name": "nextjs-node_modules_next_dist_compiled_react-dom_cjs_react-dom-client_development_js-3139057c.js?v=1751499666597",
+          "duration": 146.6999999997206,
+          "size": 441531
+        },
+        {
+          "name": "page-h.js",
+          "duration": 141.1999999997206,
+          "size": 16906
+        },
+        {
+          "name": "page-components_settings-modal_tsx-ed7cc400.js",
+          "duration": 139.5,
+          "size": 19804
+        },
+        {
+          "name": "page-components_navigation_tsx-1277376a.js",
+          "duration": 139.39999999990687,
+          "size": 22616
+        },
+        {
+          "name": "page-components_i.js",
+          "duration": 139.29999999981374,
+          "size": 12470
+        }
+      ]
+    },
+    "memory": {
+      "usedJSHeapSize": 21700000,
+      "totalJSHeapSize": 23100000,
+      "jsHeapSizeLimit": 2330000000
+    },
+    "customData": {
+      "marks": [],
+      "measures": [],
+      "start": 544.3999999999069
+    }
+  },
+  "cdpMetrics": {
+    "Timestamp": 3025.185667,
+    "AudioHandlers": 0,
+    "AudioWorkletProcessors": 0,
+    "Documents": 5,
+    "Frames": 3,
+    "JSEventListeners": 0,
+    "LayoutObjects": 4780,
+    "MediaKeySessions": 0,
+    "MediaKeys": 0,
+    "Nodes": 5859,
+    "Resources": 292,
+    "ContextLifecycleStateObservers": 6,
+    "V8PerContextDatas": 2,
+    "WorkerGlobalScopes": 0,
+    "UACSSResources": 0,
+    "RTCPeerConnections": 0,
+    "ResourceFetchers": 5,
+    "AdSubframes": 0,
+    "DetachedScriptStates": 0,
+    "ArrayBufferContents": 0,
+    "LayoutCount": 0,
+    "RecalcStyleCount": 0,
+    "LayoutDuration": 0,
+    "RecalcStyleDuration": 0,
+    "DevToolsCommandDuration": 0.000011,
+    "ScriptDuration": 0,
+    "V8CompileDuration": 0,
+    "TaskDuration": 0.000014,
+    "TaskOtherDuration": 0.000003,
+    "ThreadTime": 0.000065,
+    "ProcessTime": 0.61,
+    "JSHeapUsedSize": 10798764,
+    "JSHeapTotalSize": 12251136,
+    "FirstMeaningfulPaint": 0,
+    "DomContentLoaded": 3021.104825,
+    "NavigationStart": 3020.507153
+  }
+}
