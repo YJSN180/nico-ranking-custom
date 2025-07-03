@@ -38,15 +38,6 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     
-    // Cloudflare CDNにクエリストリングを含めてキャッシュするよう指示
-    const cacheUrl = new URL(request.url)
-    cacheUrl.hostname = 'nico-rank.com' // 正規化
-    
-    // cf オプションでキャッシュキーを明示的に設定
-    const cfOptions = {
-      cacheEverything: true,
-      cacheKey: cacheUrl.toString() // クエリストリングを含む完全なURL
-    }
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
@@ -179,10 +170,14 @@ export default {
           cacheKeySuffix = `${genre}/${period}/all`
         }
         
-        // キャッシュキー（クエリパラメータを含む完全なURLを使用）
-        const cacheKey = new Request(request.url, {
+        // キャッシュキー（実際のURLベースで作成）
+        const cacheUrl = new URL(request.url)
+        cacheUrl.pathname = `/api/ranking/${cacheKeySuffix}`
+        const cacheKey = new Request(cacheUrl.toString(), {
           method: 'GET',
-          cf: cfOptions
+          headers: {
+            'CF-Cache-Key': cacheKeySuffix
+          }
         })
         const cache = caches.default
         
@@ -247,11 +242,10 @@ export default {
         
         // キャッシュ設定
         headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
-        headers.set('Vary', 'Accept-Encoding, Accept') // クエリパラメータはCFが自動処理
+        
         headers.set('CDN-Cache-Control', 'public, max-age=3600')
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
-        headers.set('CF-Cache-Key', cacheUrl.toString()) // デバッグ用
         
         // CORSとセキュリティヘッダーを追加
         Object.entries(corsHeaders).forEach(([key, value]) => {
@@ -344,18 +338,10 @@ export default {
           }
         }
         
-        // cfオプションを含むレスポンスを作成
-        const cfResponse = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-          cf: cfOptions
-        })
+        // キャッシュに保存（一時的に無効化）
+        // ctx.waitUntil(cache.put(cacheKey, response.clone()))
         
-        // キャッシュに保存
-        ctx.waitUntil(cache.put(cacheKey, cfResponse.clone()))
-        
-        return cfResponse
+        return response
         
       } catch (error) {
         console.error('R2 read error:', error)
