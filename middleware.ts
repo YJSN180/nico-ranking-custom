@@ -75,10 +75,9 @@ export async function middleware(request: NextRequest) {
     (ua.includes('macintosh') && ua.includes('applewebkit') && ua.includes('version/') && ua.includes('safari'))
   const isIPhone = ua.includes('iphone')
   const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios')
-  const isLowEndAndroid = ua.includes('android') && (
-    ua.includes('android 4') || ua.includes('android 5') || ua.includes('android 6') ||
-    /\b(sm-|gt-|sch-|sgh-|sc-|galaxy|nexus|pixel)\w*\b/i.test(ua)
-  )
+  // Modern approach: Samsung Browser users are more likely to have performance issues
+  // Chrome 110+ Android detection is unreliable, so we target Samsung Browser specifically
+  const isLowEndAndroid = ua.includes('android') && ua.includes('samsungbrowser')
   const isSamsungBrowser = ua.includes('samsungbrowser')
   const shouldShowRecommendation = (isIPad || isIPhone || isLowEndAndroid) && (isSafari || isSamsungBrowser)
 
