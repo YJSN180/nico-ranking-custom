@@ -515,6 +515,20 @@ export default function ClientPage({
             />
           </Suspense>
           
+          {/* 件数表示（ページネーションなしの場合） */}
+          {totalPages <= 1 && totalItems > 0 && (
+            <div style={{
+              textAlign: 'center',
+              padding: '10px 0',
+              fontSize: '14px',
+              color: 'var(--text-secondary)',
+              borderTop: '1px solid var(--border-color)',
+              marginTop: '20px'
+            }}>
+              全 {totalItems} 件
+            </div>
+          )}
+          
           {/* ランキングリスト */}
           <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
@@ -545,6 +559,20 @@ export default function ClientPage({
               onPageChange={handlePageChange}
             />
           </Suspense>
+          
+          {/* 件数表示（ページネーションなしの場合） */}
+          {totalPages <= 1 && totalItems > 0 && (
+            <div style={{
+              textAlign: 'center',
+              padding: '10px 0',
+              fontSize: '14px',
+              color: 'var(--text-secondary)',
+              borderTop: '1px solid var(--border-color)',
+              marginTop: '20px'
+            }}>
+              全 {totalItems} 件
+            </div>
+          )}
         </>
       )}
     </>
