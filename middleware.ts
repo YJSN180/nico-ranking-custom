@@ -70,7 +70,9 @@ export async function middleware(request: NextRequest) {
   // ブラウザ推奨設定の判定（後でCookieを設定）
   const userAgent = request.headers.get('user-agent') || ''
   const ua = userAgent.toLowerCase()
-  const isIPad = ua.includes('ipad') || (ua.includes('macintosh') && ua.includes('mobile'))
+  // iOS 17以降のiPadデスクトップモード対応
+  const isIPad = ua.includes('ipad') || 
+    (ua.includes('macintosh') && ua.includes('applewebkit') && ua.includes('version/') && ua.includes('safari'))
   const isIPhone = ua.includes('iphone')
   const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios')
   const isLowEndAndroid = ua.includes('android') && (

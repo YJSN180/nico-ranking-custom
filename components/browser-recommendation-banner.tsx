@@ -18,6 +18,14 @@ export function BrowserRecommendationBanner() {
     
     if (dismissedCookie && dismissedCookie.split('=')[1] === 'true') {
       setIsVisible(false)
+      return
+    }
+
+    // クライアントサイドでの精密化：Macでタッチポイントがある場合はiPad
+    const userAgent = navigator.userAgent.toLowerCase()
+    if (userAgent.includes('macintosh') && navigator.maxTouchPoints > 1) {
+      // これは確実にiPadなので表示
+      setIsVisible(true)
     }
   }, [])
 
