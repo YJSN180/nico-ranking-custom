@@ -170,14 +170,9 @@ export default {
           cacheKeySuffix = `${genre}/${period}/all`
         }
         
-        // キャッシュキー（実際のURLベースで作成）
-        const cacheUrl = new URL(request.url)
-        cacheUrl.pathname = `/api/ranking/${cacheKeySuffix}`
-        const cacheKey = new Request(cacheUrl.toString(), {
-          method: 'GET',
-          headers: {
-            'CF-Cache-Key': cacheKeySuffix
-          }
+        // キャッシュキー（オリジナルURLを使用してクエリパラメータを保持）
+        const cacheKey = new Request(request.url, {
+          method: 'GET'
         })
         const cache = caches.default
         
@@ -338,8 +333,8 @@ export default {
           }
         }
         
-        // キャッシュに保存（一時的に無効化）
-        // ctx.waitUntil(cache.put(cacheKey, response.clone()))
+        // キャッシュに保存
+        ctx.waitUntil(cache.put(cacheKey, response.clone()))
         
         return response
         
