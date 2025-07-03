@@ -11,12 +11,10 @@ import './globals.css'
 
 const inter = Inter({ 
   subsets: ['latin'],
-  display: 'optional', // swapからoptionalに変更（3秒制限でフォント失敗時はフォールバック使用）
+  display: 'swap',
   preload: true,
-  adjustFontFallback: true,
-  variable: '--font-inter',
-  weight: ['400', '600'], // 使用する重みのみを指定（軽量化）
-  style: ['normal'] // normalスタイルのみ
+  adjustFontFallback: true, // フォールバックフォントの最適化
+  variable: '--font-inter'  // CSS変数として使用
 })
 
 export const metadata: Metadata = {
@@ -114,19 +112,16 @@ export default async function RootLayout({
         <link rel="dns-prefetch" href="https://secure-dcdn.cdn.nimg.jp" />
         <link rel="preconnect" href="https://nicovideo.cdn.nimg.jp" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://tn.smilevideo.jp" crossOrigin="anonymous" />
-        {/* Google Fonts最適化 */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* フォントのプリロード - カスタムフォントは低優先度に */}
-        <link rel="preload" href="/fonts/nicomoji-plus-v2.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="low" />
-        <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="low" />
+        {/* フォントのプリロード - WOFF2を最優先で読み込む */}
+        <link rel="preload" href="/fonts/nicomoji-plus-v2.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
+        <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
         {/* クリティカルCSSをインライン化 */}
         <style dangerouslySetInnerHTML={{ __html: `
           /* クリティカルフォント定義 - WOFF2優先フォールバック戦略 */
-          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:optional;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
-          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:optional;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
+          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:fallback;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
+          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:fallback;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
           /* クリティカルCSS - LCPに必要な最小限のスタイル */
-          body{margin:0;padding:0;color:#333;background-color:#fff;font-family:var(--font-inter),-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif}
+          body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
           /* テーマのデフォルトスタイル - ちらつき防止 */
           [data-theme="dark"] body{color:#fff;background-color:#121212}
           [data-theme="darkblue"] body{color:#fff;background-color:#15202b}
