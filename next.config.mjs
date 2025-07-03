@@ -5,8 +5,6 @@ import withPWA from 'next-pwa'
 const nextConfig = {
   // 本番でのソースマップ無効化（セキュリティ・パフォーマンス向上）
   productionBrowserSourceMaps: false,
-  // React Server Components最適化
-  serverExternalPackages: ['pako'],
   images: {
     // ローカル画像（ロゴ等）は最適化を有効にしてWebP/AVIF変換
     // 外部画像（ニコニコ動画サムネイル）のみ最適化を無効化
@@ -130,17 +128,9 @@ const nextConfig = {
     // パフォーマンス最適化
     optimizeCss: true, // crittersをインストールしたため有効化
     // Script Evaluation最適化
-    optimizePackageImports: ['react', 'react-dom', 'react-icons', 'lodash', 'date-fns'],
+    optimizePackageImports: ['react-icons', 'lodash', 'date-fns'],
     // 実験的な最適化機能
     webVitalsAttribution: ['CLS', 'LCP', 'FCP', 'FID', 'TTFB'],
-    // より積極的なツリーシェイキング
-    serverMinification: true,
-    // 新しい最適化フラグ
-    gzipSize: false, // ビルド時間短縮
-    // クライアントキャッシュ最適化
-    optimisticClientCache: true,
-    // モジュール解決最適化
-    fullySpecified: false,
   },
   // パフォーマンス最適化設定
   compiler: {
@@ -149,7 +139,7 @@ const nextConfig = {
   poweredByHeader: false,
   compress: true,
   // ビルド時のメモリ最適化とJavaScript削減
-  webpack: (config, { isServer, webpack }) => {
+  webpack: (config, { isServer }) => {
     // クライアントサイドバンドルからサーバー専用モジュールを除外
     if (!isServer) {
       config.resolve.fallback = {
@@ -166,13 +156,11 @@ const nextConfig = {
         url: false,
       }
       
-      // 不要なモジュールを除外（サーバーサイドのみで使用）
+      // 不要なモジュールを除外
       config.externals = {
         ...config.externals,
         '@cloudflare/workers-types': 'commonjs @cloudflare/workers-types',
         'wrangler': 'commonjs wrangler',
-        '@aws-sdk/client-s3': 'commonjs @aws-sdk/client-s3',
-        'fast-xml-parser': 'commonjs fast-xml-parser',
       }
       
       config.optimization.splitChunks = {
@@ -187,27 +175,11 @@ const nextConfig = {
         cacheGroups: {
           default: false,
           vendors: false,
-          // React関連の基本フレームワーク（さらに分割）
-          react: {
-            name: 'react',
-            test: /[\\/]node_modules[\\/]react[\\/]/,
-            priority: 55,
-            chunks: 'all',
-            enforce: true,
-            reuseExistingChunk: true
-          },
-          'react-dom': {
-            name: 'react-dom',
-            test: /[\\/]node_modules[\\/]react-dom[\\/]/,
-            priority: 54,
-            chunks: 'all',
-            enforce: true,
-            reuseExistingChunk: true
-          },
-          scheduler: {
-            name: 'scheduler',
-            test: /[\\/]node_modules[\\/](scheduler|prop-types|use-sync-external-store)[\\/]/,
-            priority: 53,
+          // React関連の基本フレームワーク
+          framework: {
+            name: 'framework',
+            test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
+            priority: 50,
             chunks: 'all',
             enforce: true,
             reuseExistingChunk: true
@@ -282,12 +254,6 @@ const nextConfig = {
         config.optimization.innerGraph = true
         config.optimization.providedExports = true
         config.optimization.realContentHash = true
-        config.optimization.mangleExports = true
-        config.optimization.removeAvailableModules = true
-        config.optimization.removeEmptyChunks = true
-        config.optimization.runtimeChunk = {
-          name: (entrypoint) => `runtime-${entrypoint.name}`,
-        }
         
         // TerserPlugin設定のカスタマイズ
         const TerserPlugin = config.optimization.minimizer?.find(
@@ -325,32 +291,7 @@ const nextConfig = {
             },
           }
         }
-        
-        // Node.js polyfillsを完全に無効化
-        config.resolve.alias = {
-          ...config.resolve.alias,
-          'process': false,
-          'buffer': false,
-          'stream': false,
-        }
       }
-      
-      // DefinePluginでprocess.envを静的に置換
-      config.plugins.push(
-        new webpack.DefinePlugin({
-          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
-          'process.browser': true,
-          'process': JSON.stringify({ env: { NODE_ENV: process.env.NODE_ENV || 'production' } }),
-        })
-      )
-      
-      // IgnorePluginで不要なモジュールを除外
-      config.plugins.push(
-        new webpack.IgnorePlugin({
-          resourceRegExp: /^(fs|net|tls|crypto|stream|os|path|zlib|http|https|url|util|buffer|querystring|events|child_process|cluster|dgram|dns|domain|readline|repl|tty|vm)$/,
-          contextRegExp: /./,
-        })
-      )
     }
     return config
   },
