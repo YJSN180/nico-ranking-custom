@@ -35,9 +35,7 @@
   align-items: start;
   min-height: 80px;
   
-  /* パフォーマンス最適化 - 視覚的変更なし */
-  contain: layout style paint; /* レイアウト封じ込めでスラッシング防止 */
-  will-change: transform; /* GPU合成レイヤー分離 */
+  /* 軽量最適化のみ - GPU負荷軽減 */
 }
 
 /* 順位表示 */

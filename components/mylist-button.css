@@ -12,10 +12,7 @@
   height: 32px;
   flex-shrink: 0;
   
-  /* パフォーマンス最適化 - 視覚的変更なし */
-  contain: layout style paint; /* レイアウト封じ込め */
-  will-change: background-color, border-color, color; /* GPU最適化 */
-  transform: translateZ(0); /* ハードウェアアクセラレーション */
+  /* 軽量最適化のみ - GPU負荷軽減 */
 }
 
 /* 通常状態 */
@@ -65,10 +62,6 @@
   opacity: 0.5;
   flex-shrink: 0;
   animation: pulse 1.5s ease-in-out infinite;
-  
-  /* パフォーマンス最適化 */
-  contain: layout style paint;
-  will-change: opacity;
 }
 
 /* アニメーション定義（既存のpulseと同じ） */
