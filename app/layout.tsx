@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import { cookies } from 'next/headers'
 import { ThemeProvider } from '@/components/theme-provider'
+import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { PWARegister } from '@/components/pwa-register'
 import { OfflineIndicator } from '@/components/offline-indicator'
@@ -141,10 +142,12 @@ export default async function RootLayout({
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <ThemeProvider>
-          <ClientOnlyWebVitals />
-          <PWARegister />
-          <OfflineIndicator />
-          {children}
+          <MylistOperationsProvider>
+            <ClientOnlyWebVitals />
+            <PWARegister />
+            <OfflineIndicator />
+            {children}
+          </MylistOperationsProvider>
         </ThemeProvider>
       </body>
     </html>

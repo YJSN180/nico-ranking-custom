@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useMylistOperations } from '@/hooks/use-mylist-operations'
+import { useMylistOperations } from '@/context/mylist-operations-context'
 import { MylistModal } from './mylist-modal'
 import type { RankingItem } from '@/types/ranking'
 import './mylist-button.css'
