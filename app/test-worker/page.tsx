@@ -10,20 +10,27 @@ export default function TestWorker() {
   useEffect(() => {
     // Test the Worker
     const testData = [
-      { id: '1', rank: 1, title: 'Test Video 1' },
-      { id: '2', rank: 2, title: 'NG Test Video', authorName: 'Test Author' },
-      { id: '3', rank: 3, title: 'Test Video 3' }
+      { id: '1', rank: 1, title: 'Test Video 1', thumbURL: 'https://example.com/thumb1.jpg', views: 1000 },
+      { id: '2', rank: 2, title: 'NG Test Video', authorName: 'Test Author', thumbURL: 'https://example.com/thumb2.jpg', views: 2000 },
+      { id: '3', rank: 3, title: 'Test Video 3', thumbURL: 'https://example.com/thumb3.jpg', views: 3000 }
     ]
     
     const ngList = {
-      titles: ['NG Test']
+      videoIds: [],
+      videoTitles: {
+        exact: [],
+        partial: ['NG Test']
+      },
+      authorIds: [],
+      authorNames: {
+        exact: [],
+        partial: []
+      }
     }
     
     filterRankings(testData, ngList).then(filtered => {
-      console.log('Worker result:', filtered)
       setResult(`Filtered ${testData.length} items to ${filtered.length} items`)
     }).catch(error => {
-      console.error('Worker error:', error)
       setResult(`Error: ${error.message}`)
     })
   }, [filterRankings])

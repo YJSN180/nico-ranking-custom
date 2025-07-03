@@ -9,6 +9,19 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   
+  // Performance mode check - redirect to static HTML
+  const performanceMode = request.cookies.get('performance-mode')?.value === 'true' ||
+                         request.nextUrl.searchParams.get('fast') === 'true'
+  
+  if (performanceMode && pathname === '/' && !pathname.endsWith('.html')) {
+    const url = new URL('/static.html', request.url)
+    // Preserve query parameters
+    request.nextUrl.searchParams.forEach((value, key) => {
+      if (key !== 'fast') url.searchParams.append(key, value)
+    })
+    return NextResponse.redirect(url, { status: 302 })
+  }
+  
   // /api/ パスは常に許可（内部APIコール）
   if (pathname.startsWith('/api/')) {
     return NextResponse.next()

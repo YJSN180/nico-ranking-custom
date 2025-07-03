@@ -1,15 +1,11 @@
 import type { Metadata } from 'next'
 import type { RankingData, RankingItem } from '@/types/ranking'
-// Use optimized version for better performance
-import ClientPage from './client-page-optimized'
 import { HeaderWithSettings } from '@/components/header-with-settings'
-import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { Footer } from '@/components/footer'
 import { cookies } from 'next/headers'
 import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
 import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingDataServer } from '@/lib/ng-filter-server'
-// import { getGenreRanking } from '@/lib/cloudflare-kv' // R2移行完了により不要
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
@@ -24,6 +20,7 @@ export const dynamic = 'force-dynamic'
 // Prefetch hints
 export const fetchCache = 'default-cache'
 export const preferredRegion = 'auto'
+
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
@@ -261,10 +258,10 @@ export default async function Home({ searchParams }: PageProps) {
     const endIndex = startIndex + ITEMS_PER_PAGE
     const currentPageItems = rankingData.slice(startIndex, endIndex)
 
+    // Server-render the ranking list for optimal performance
     return (
       <main style={{ 
         padding: '0',
-        // CLS対策: フッターマージンを考慮したminHeight
         minHeight: 'calc(100vh - 80px)',
         background: 'var(--background-color)'
       }}>
@@ -276,19 +273,59 @@ export default async function Home({ searchParams }: PageProps) {
             maxWidth: '1200px', 
             margin: '0 auto',
             padding: '20px',
-            minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
+            minHeight: 'calc(100vh - 100px)'
           }}>
-          <SuspenseWrapper>
-            <ClientPage 
-              initialData={{ items: currentPageItems, popularTags }} 
-              allRankingData={rankingData}
-              initialGenre={genre}
-              initialPeriod={period}
-              initialTag={tag}
-              initialPage={page}
-              popularTags={popularTags}
-            />
-          </SuspenseWrapper>
+          {/* Server-rendered ranking list */}
+          <div className="ranking-list">
+            {currentPageItems.map((item, index) => (
+              <article key={item.id} className="ranking-item-responsive" data-rank={startIndex + index + 1}>
+                <div className="ranking-item__rank">{startIndex + index + 1}</div>
+                <div className="ranking-item__content">
+                  <h2 className="ranking-item__title">
+                    <a href={`https://www.nicovideo.jp/watch/${item.id}`} target="_blank" rel="noopener noreferrer">
+                      {item.title}
+                    </a>
+                  </h2>
+                  <div className="ranking-item__meta">
+                    <span>{item.views.toLocaleString()} 再生</span>
+                    <span>{item.comments?.toLocaleString() || 0} コメント</span>
+                    <span>{item.mylists?.toLocaleString() || 0} マイリスト</span>
+                  </div>
+                  <div className="ranking-item__tags">
+                    {item.tags.slice(0, 3).map(tag => (
+                      <span key={tag} className="tag">{tag}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="ranking-item__thumbnail">
+                  <img 
+                    src={item.thumbURL} 
+                    alt={item.title}
+                    loading={index < 3 ? "eager" : "lazy"}
+                    decoding={index < 3 ? "sync" : "async"}
+                    width="150"
+                    height="100"
+                  />
+                </div>
+              </article>
+            ))}
+          </div>
+          
+          {/* Pagination - server rendered for SEO */}
+          <nav className="pagination" aria-label="ページネーション">
+            {page > 1 && (
+              <a href={`?genre=${genre}&period=${period}${tag ? `&tag=${tag}` : ''}&page=${page - 1}`} className="pagination__prev">
+                前のページ
+              </a>
+            )}
+            <span className="pagination__current">ページ {page}</span>
+            {currentPageItems.length === ITEMS_PER_PAGE && (
+              <a href={`?genre=${genre}&period=${period}${tag ? `&tag=${tag}` : ''}&page=${page + 1}`} className="pagination__next">
+                次のページ
+              </a>
+            )}
+          </nav>
+          
         </div>
         <Footer />
       </main>
