@@ -239,15 +239,8 @@ export default {
         const headers = new Headers()
         headers.set('Content-Type', 'application/json')
         
-        // ゲームジャンルの場合は一時的にキャッシュを無効化
-        if (genre === 'game') {
-          headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-          headers.set('Pragma', 'no-cache')
-          headers.set('Expires', '0')
-          headers.set('X-Debug-Note', 'Game genre cache disabled temporarily')
-        } else {
-          headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
-        }
+        // キャッシュ設定
+        headers.set('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
         
         headers.set('CDN-Cache-Control', 'public, max-age=3600')
         headers.set('X-Data-Source', 'r2-direct')
@@ -344,8 +337,8 @@ export default {
           }
         }
         
-        // キャッシュに保存（一時的に無効化してデバッグ）
-        // ctx.waitUntil(cache.put(cacheKey, response.clone()))
+        // キャッシュに保存
+        ctx.waitUntil(cache.put(cacheKey, response.clone()))
         
         return response
         
