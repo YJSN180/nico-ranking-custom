@@ -44,7 +44,7 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
       
       // reduced-motion設定を考慮してスクロール
       const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia 
-        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches 
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')?.matches 
         : false
       container.scrollTo({
         left: scrollLeft,

@@ -74,10 +74,9 @@ export default defineConfig({
     pool: 'forks',
     poolOptions: {
       forks: {
-        maxForks: 1,
+        maxForks: process.env.CI ? 2 : 4,
         minForks: 1,
-        isolate: true,
-        singleFork: true
+        isolate: false
       }
     },
     // メモリ使用量を削減

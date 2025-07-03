@@ -43,7 +43,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       const scrollLeft = buttonCenter - containerCenter
       
       // reduced-motion設定を考慮してスクロール
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)')?.matches
       container.scrollTo({
         left: scrollLeft,
         behavior: prefersReducedMotion ? 'auto' : 'smooth'
