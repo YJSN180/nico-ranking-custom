@@ -59,10 +59,10 @@ export default defineConfig({
     // },
   ],
   
-  webServer: process.env.CI ? undefined : {
-    command: 'PORT=3001 npm run dev',
+  webServer: {
+    command: process.env.CI ? 'PORT=3001 npm start' : 'PORT=3001 npm run dev',
     url: 'http://localhost:3001',
-    reuseExistingServer: true,
-    timeout: 120 * 1000,
+    reuseExistingServer: !process.env.CI,
+    timeout: process.env.CI ? 60 * 1000 : 120 * 1000,
   },
 })
