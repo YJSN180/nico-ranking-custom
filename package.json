@@ -21,6 +21,7 @@
     "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest",
     "test:ci": "NODE_OPTIONS='--max-old-space-size=4096' vitest --run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=16384' vitest --coverage",
+    "test:coverage:shard": "NODE_OPTIONS='--max-old-space-size=8192' vitest --coverage",
     "test:unit": "NODE_OPTIONS='--max-old-space-size=2048' vitest run __tests__/unit",
     "test:integration": "NODE_OPTIONS='--max-old-space-size=2048' vitest run __tests__/integration",
     "test:e2e": "playwright test",

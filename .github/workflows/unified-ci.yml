@@ -61,11 +61,81 @@ jobs:
       - name: Build check
         run: npm run build
 
-      - name: Generate coverage report
-        run: npm run test:coverage
+      - name: Unit tests (without coverage)
+        run: npm run test:ci
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=16384'
+
+  # Job 1.5: Parallel Coverage Generation
+  coverage-tests:
+    name: Coverage Tests
+    runs-on: ubuntu-latest
+    needs: fast-tests
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]  # 4-way sharding for parallel coverage
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage (shard ${{ matrix.shard }})
+        run: |
+          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        env:
+          CI: true
+          NODE_OPTIONS: '--max-old-space-size=8192'
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: coverage/
+          retention-days: 1
+
+  # Job 1.6: Merge Coverage Reports
+  merge-coverage:
+    name: Merge Coverage
+    runs-on: ubuntu-latest
+    needs: coverage-tests
+    if: always()
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: coverage-artifacts
+          pattern: coverage-shard-*
+          merge-multiple: true
+
+      - name: Merge coverage reports
+        run: |
+          mkdir -p coverage
+          # Use vitest's built-in merge functionality
+          npx vitest --coverage --merge-reports --coverage.reportOnFailure false
+          # Generate final reports in required formats
+          cp coverage-artifacts/*/coverage-final.json coverage/ || true
+          cp coverage-artifacts/*/lcov.info coverage/ || true
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -79,7 +149,7 @@ jobs:
         env:
           CODECOV_API_TOKEN: ${{ secrets.CODECOV_API_TOKEN }}
 
-      - name: Upload coverage report as artifact
+      - name: Upload merged coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -95,7 +165,7 @@ jobs:
     name: E2E Tests
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_level == 'full' || github.event.inputs.run_level == 'monitoring'))
-    needs: fast-tests
+    needs: [fast-tests, merge-coverage]
     
     strategy:
       fail-fast: false
@@ -178,7 +248,7 @@ jobs:
     name: Security & Quality
     runs-on: ubuntu-latest
     if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_level == 'full' || github.event.inputs.run_level == 'monitoring'))
-    needs: fast-tests
+    needs: [fast-tests, merge-coverage]
     permissions:
       actions: read
       contents: read
@@ -217,7 +287,7 @@ jobs:
     name: Performance Monitoring
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_level == 'monitoring')
-    needs: [fast-tests, e2e-tests]
+    needs: [fast-tests, merge-coverage, e2e-tests]
     
     steps:
       - name: Checkout
@@ -298,7 +368,7 @@ jobs:
   summary:
     name: Pipeline Summary
     runs-on: ubuntu-latest
-    needs: [fast-tests, e2e-tests, merge-reports, security-quality, performance-monitoring, benchmark-report]
+    needs: [fast-tests, merge-coverage, e2e-tests, merge-reports, security-quality, performance-monitoring, benchmark-report]
     if: always()
     
     steps:
