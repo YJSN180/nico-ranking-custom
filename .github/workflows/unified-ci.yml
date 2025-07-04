@@ -66,6 +66,31 @@ jobs:
       - name: Build check
         run: npm run build
 
+      - name: Generate coverage report
+        run: npm run test:coverage
+        env:
+          CI: true
+          NODE_OPTIONS: '--max-old-space-size=8192'
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage report as artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            !coverage/node_modules
+          retention-days: 30
+
   # Job 2: E2E Tests with Matrix Sharding
   # Runs on: PR (fast level), push to main (full level), schedule (monitoring level), manual trigger
   e2e-tests:
