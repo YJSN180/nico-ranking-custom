@@ -35,6 +35,12 @@ vi.mock('@/context/mylist-operations-context', () => {
   }
 })
 
+// styled-jsx/styleのモック
+vi.mock('styled-jsx/style', () => ({
+  default: () => null
+}))
+
+
 // window.location.reloadのモック
 const mockReload = vi.fn()
 Object.defineProperty(window, 'location', {
