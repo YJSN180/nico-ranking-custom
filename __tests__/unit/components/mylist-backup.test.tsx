@@ -18,6 +18,23 @@ vi.mock('@/lib/storage/backup', () => ({
   importMylistData: vi.fn()
 }))
 
+// useMylistOperationsフックをモック - CI環境対応
+vi.mock('@/context/mylist-operations-context', () => {
+  const mockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+  
+  return {
+    useMylistOperations: vi.fn(() => mockOperations),
+    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+  }
+})
+
 // window.location.reloadのモック
 const mockReload = vi.fn()
 Object.defineProperty(window, 'location', {

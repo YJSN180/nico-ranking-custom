@@ -80,3 +80,15 @@ if (typeof Element !== 'undefined') {
 if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
 }
+
+// Mock styled-jsx for CI environment
+vi.mock('styled-jsx/style', () => ({
+  default: () => null
+}))
+
+// Mock CSS modules
+vi.mock('*.module.css', () => ({
+  default: new Proxy({}, {
+    get: (target, key) => key
+  })
+}))
