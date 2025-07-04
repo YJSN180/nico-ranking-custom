@@ -18,12 +18,8 @@ export default defineConfig({
         resources: 'usable'
       }
     },
-    // TEMPORARY: Include only working mylist tests to fix CI
-    include: [
-      '__tests__/unit/components/mylist-detail.test.tsx',
-      '__tests__/unit/components/mylist-detail-improvements.test.tsx', 
-      '__tests__/unit/components/default-mylist-*.test.tsx'
-    ],
+    // Re-enabled all tests: Fixed IndexedDB mock for DBManager compatibility
+    // include: removed to allow all tests to run
     exclude: [
       '**/node_modules/**', 
       '**/__tests__/e2e/**',
@@ -80,13 +76,12 @@ export default defineConfig({
       'workers/video-stats-updater/test/index.test.js',
       'workers/video-stats-updater/test/integration.test.js',
       // Integration tests re-enabled for proper testing
-      // TEMPORARY: Exclude problematic mylist tests causing CI render failures
-      '__tests__/unit/components/mylist-backup.test.tsx',
-      '__tests__/unit/components/mylist-button.test.tsx',
-      '__tests__/unit/components/mylist-button-*.test.tsx',
-      '__tests__/unit/components/mylist-modal-*.test.tsx',
-      '__tests__/unit/components/mylist-video-*.test.tsx',
-      '__tests__/unit/components/mylist-multi-*.test.tsx'
+      // All mylist tests re-enabled: Fixed IndexedDB mock for DBManager compatibility
+      // '__tests__/unit/components/mylist-button.test.tsx',
+      // '__tests__/unit/components/mylist-button-*.test.tsx',
+      // '__tests__/unit/components/mylist-modal-*.test.tsx',
+      // '__tests__/unit/components/mylist-video-*.test.tsx',
+      // '__tests__/unit/components/mylist-multi-*.test.tsx'
     ],
     testTimeout: 10000,
     pool: 'forks',

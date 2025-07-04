@@ -40,7 +40,10 @@ import FDBObjectStore from 'fake-indexeddb/lib/FDBObjectStore'
 import FDBIndex from 'fake-indexeddb/lib/FDBIndex'
 import FDBCursor from 'fake-indexeddb/lib/FDBCursor'
 
-global.indexedDB = new FDBFactory()
+// Setup IndexedDB mocks for both global and window
+const indexedDB = new FDBFactory()
+
+global.indexedDB = indexedDB
 global.IDBKeyRange = FDBKeyRange
 global.IDBRequest = FDBRequest
 global.IDBDatabase = FDBDatabase
@@ -48,6 +51,18 @@ global.IDBTransaction = FDBTransaction
 global.IDBObjectStore = FDBObjectStore
 global.IDBIndex = FDBIndex
 global.IDBCursor = FDBCursor
+
+// Also set up window.indexedDB for DBManager compatibility
+if (typeof window !== 'undefined') {
+  window.indexedDB = indexedDB
+  window.IDBKeyRange = FDBKeyRange
+  window.IDBRequest = FDBRequest
+  window.IDBDatabase = FDBDatabase
+  window.IDBTransaction = FDBTransaction
+  window.IDBObjectStore = FDBObjectStore
+  window.IDBIndex = FDBIndex
+  window.IDBCursor = FDBCursor
+}
 
 // Mock Next.js Image component
 vi.mock('next/image', () => ({
