@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { Suspense } from 'react'
 import ClientPage from '@/app/client-page'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'

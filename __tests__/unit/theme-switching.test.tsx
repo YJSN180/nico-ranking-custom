@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, renderHook, act, waitFor } from '@testing-library/react'
+import { screen, fireEvent, act, waitFor } from '@testing-library/react'
+import { render, renderHook } from '@/__tests__/test-utils'
 import { SettingsModal } from '@/components/settings-modal'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { ThemeProvider } from '@/components/theme-provider'

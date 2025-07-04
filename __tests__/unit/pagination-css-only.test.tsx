@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import Pagination from '@/components/pagination'
 
 describe('Pagination CSS-onlyレスポンシブ対応', () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
+import { renderHook } from '@/__tests__/test-utils'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 
 describe('NG List Event Flow', () => {

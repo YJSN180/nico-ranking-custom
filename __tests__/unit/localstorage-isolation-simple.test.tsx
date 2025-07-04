@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import ClientPage from '@/app/client-page'
 import type { RankingData } from '@/types/ranking'
 

@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { beforeEach, describe, test, expect, vi } from 'vitest'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
 import type { RankingItem } from '@/types/ranking'

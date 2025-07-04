@@ -1,4 +1,4 @@
-import { render as rtlRender, RenderOptions } from '@testing-library/react'
+import { render as rtlRender, renderHook as rtlRenderHook, RenderOptions, RenderHookOptions } from '@testing-library/react'
 import { ReactElement } from 'react'
 import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 
@@ -19,8 +19,13 @@ const customRender = (
   options?: Omit<RenderOptions, 'wrapper'>
 ) => rtlRender(ui, { wrapper: AllTheProviders, ...options })
 
+const customRenderHook = <TProps, TResult>(
+  hook: (props: TProps) => TResult,
+  options?: Omit<RenderHookOptions<TProps>, 'wrapper'>
+) => rtlRenderHook(hook, { wrapper: AllTheProviders, ...options })
+
 // re-export everything
 export * from '@testing-library/react'
 
 // override render method
-export { customRender as render }
+export { customRender as render, customRenderHook as renderHook }

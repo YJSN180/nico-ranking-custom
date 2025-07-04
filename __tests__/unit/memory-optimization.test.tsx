@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
 

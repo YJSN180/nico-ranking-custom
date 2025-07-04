@@ -1,5 +1,6 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { vi } from 'vitest'
 import ClientPage from '@/app/client-page'
 import { MylistOperationsProvider } from '@/context/mylist-operations-context'

@@ -1,4 +1,5 @@
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
+import { renderHook } from '@/__tests__/test-utils'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useRealtimeStats } from '@/hooks/use-realtime-stats'
 import type { RankingItem } from '@/types/ranking'

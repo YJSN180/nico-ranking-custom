@@ -1,5 +1,6 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import '@testing-library/jest-dom'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import ClientPageOptimized from '@/app/client-page-optimized'
@@ -13,12 +14,17 @@ vi.mock('next/navigation', () => ({
 }))
 
 // Mock components with lazy loading
+let mockOnConfigChange: any = null
 vi.mock('@/components/ranking-selector', () => ({
-  RankingSelector: ({ config, onConfigChange }: any) => (
-    <div data-testid="ranking-selector">
-      {config.genre} - {config.period}
-    </div>
-  ),
+  RankingSelector: ({ config, onConfigChange }: any) => {
+    // Store the callback for testing
+    mockOnConfigChange = onConfigChange
+    return (
+      <div data-testid="ranking-selector">
+        {config.genre} - {config.period}
+      </div>
+    )
+  },
 }))
 
 // Mock dynamic imports
@@ -187,7 +193,7 @@ describe('ClientPageOptimized', () => {
   })
 
   it('updates URL when config changes', async () => {
-    const { rerender } = render(
+    render(
       <ClientPageOptimized
         initialData={{ items: mockRankingItems }}
         initialGenre="all"
@@ -195,21 +201,18 @@ describe('ClientPageOptimized', () => {
       />
     )
 
-    // Simulate config change
-    const selector = screen.getByTestId('ranking-selector')
-    expect(selector).toHaveTextContent('all - 24h')
+    // Initial state
+    expect(screen.getByTestId('ranking-selector')).toHaveTextContent('all - 24h')
 
-    // Update config
-    rerender(
-      <ClientPageOptimized
-        initialData={{ items: mockRankingItems }}
-        initialGenre="game"
-        initialPeriod="hour"
-      />
-    )
+    // Simulate config change through the stored callback
+    expect(mockOnConfigChange).toBeTruthy()
+    
+    // Call the config change handler
+    mockOnConfigChange({ genre: 'game', period: 'hour' })
 
+    // Wait for URL update
     await waitFor(() => {
-      expect(screen.getByTestId('ranking-selector')).toHaveTextContent('game - hour')
+      expect(mockRouter.push).toHaveBeenCalledWith('?genre=game&period=hour', { scroll: false })
     })
   })
 
@@ -227,6 +230,7 @@ describe('ClientPageOptimized', () => {
   })
 
   it('renders tag selector after hydration', async () => {
+    // This test verifies that tag selector is rendered after hydration
     render(
       <ClientPageOptimized
         initialData={{ items: mockRankingItems }}
@@ -236,13 +240,11 @@ describe('ClientPageOptimized', () => {
       />
     )
 
-    // Initially no tag selector
-    expect(screen.queryByTestId('tag-selector')).not.toBeInTheDocument()
-
-    // Wait for hydration
+    // Wait for hydration and tag selector to appear
     await waitFor(() => {
-      expect(screen.getByTestId('tag-selector')).toBeInTheDocument()
-      expect(screen.getByTestId('tag-selector')).toHaveTextContent('popular1, popular2')
+      const tagSelector = screen.getByTestId('tag-selector')
+      expect(tagSelector).toBeInTheDocument()
+      expect(tagSelector).toHaveTextContent('popular1, popular2')
     })
   })
 

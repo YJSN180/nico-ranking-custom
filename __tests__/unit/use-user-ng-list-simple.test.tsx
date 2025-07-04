@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { act } from '@testing-library/react'
+import { renderHook } from '@/__tests__/test-utils'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 
 describe('useUserNGList (Apply Button System)', () => {

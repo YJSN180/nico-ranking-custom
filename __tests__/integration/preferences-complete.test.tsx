@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { act } from '@testing-library/react'
+import { renderHook } from '@/__tests__/test-utils'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 
 // document.cookieのモック

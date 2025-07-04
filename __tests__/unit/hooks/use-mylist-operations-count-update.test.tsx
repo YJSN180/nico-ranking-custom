@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook, act, waitFor } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
+import { renderHook } from '@/__tests__/test-utils'
 import { useMylistOperations } from '@/hooks/use-mylist-operations'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 
 describe('ヘッダーCSS-onlyレスポンシブ対応', () => {

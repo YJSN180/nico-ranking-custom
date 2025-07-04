@@ -3,7 +3,8 @@
  * CSS Scroll Snapによるスクロール制御をテスト
  */
 
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { vi, describe, test, beforeEach, expect } from 'vitest'
 import { TagSelector } from '@/components/tag-selector'
 import type { RankingConfig } from '@/types/ranking-config'

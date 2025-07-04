@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import HomePage from '@/app/page'
 import Test500Page from '@/app/test-500/page'
 
