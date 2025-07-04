@@ -3,6 +3,9 @@ import { vi } from 'vitest'
 import './__tests__/mocks/next-router'
 import React from 'react'
 
+// Ensure React is available globally for all tests
+globalThis.React = React
+
 // Mock IndexedDB for tests
 import FDBFactory from 'fake-indexeddb/lib/FDBFactory'
 import FDBKeyRange from 'fake-indexeddb/lib/FDBKeyRange'
@@ -88,3 +91,20 @@ if (typeof window !== 'undefined') {
 
 // CSS modules mock removed - using individual mocks in test files for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
+
+// Global mock for MylistOperations context - CI compatibility
+vi.mock('@/context/mylist-operations-context', () => {
+  const defaultMockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+  
+  return {
+    useMylistOperations: vi.fn(() => defaultMockOperations),
+    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+  }
+})
