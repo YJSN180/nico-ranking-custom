@@ -80,6 +80,7 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
+          verbose: true
 
       - name: Upload coverage report as artifact
         uses: actions/upload-artifact@v4
