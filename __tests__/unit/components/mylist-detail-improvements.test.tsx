@@ -15,6 +15,23 @@ import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 
+// useMylistOperationsフックをモック - CI環境対応
+vi.mock('@/context/mylist-operations-context', () => {
+  const mockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+  
+  return {
+    useMylistOperations: vi.fn(() => mockOperations),
+    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+  }
+})
+
 // Nextルーターのモック
 vi.mock('next/navigation')
 const mockUseRouter = useRouter as vi.MockedFunction<typeof useRouter>

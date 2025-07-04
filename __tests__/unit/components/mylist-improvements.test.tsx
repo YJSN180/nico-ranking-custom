@@ -13,6 +13,23 @@ import { vi } from 'vitest'
 import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { MylistVideo } from '@/lib/storage/types'
 
+// useMylistOperationsフックをモック - CI環境対応
+vi.mock('@/context/mylist-operations-context', () => {
+  const mockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+  
+  return {
+    useMylistOperations: vi.fn(() => mockOperations),
+    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+  }
+})
+
 // テスト用のモックデータ
 const mockVideo: MylistVideo = {
   id: 'sm12345678',

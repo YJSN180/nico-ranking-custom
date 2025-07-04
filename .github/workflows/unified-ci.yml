@@ -27,7 +27,7 @@ on:
 # Phase 0/1 optimizations integrated
 env:
   NODE_VERSION: '20'
-  NODE_OPTIONS: '--max-old-space-size=2048'  # Phase 0: Memory optimization
+  NODE_OPTIONS: '--max-old-space-size=4096'  # Phase 0: Memory optimization - increased for CI tests
   PLAYWRIGHT_BASE_URL: 'http://localhost:3001'  # Phase 0: Port fix
   REGISTRY_URL: https://npm.pkg.github.com/
 

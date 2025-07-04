@@ -19,7 +19,7 @@
     "update-ranking:group": "tsx scripts/update-ranking-parallel-v2.ts --group",
     "check:all": "npm run typecheck && npm run lint && npm test -- --run && npm run build && npm run build:worker",
     "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest",
-    "test:ci": "NODE_OPTIONS='--max-old-space-size=2048' vitest --config vitest.config.ci.ts --run",
+    "test:ci": "NODE_OPTIONS='--max-old-space-size=4096' vitest --config vitest.config.ci.ts --run",
     "test:coverage": "NODE_OPTIONS='--max-old-space-size=4096' vitest --coverage",
     "test:unit": "NODE_OPTIONS='--max-old-space-size=2048' vitest run __tests__/unit",
     "test:integration": "NODE_OPTIONS='--max-old-space-size=2048' vitest run __tests__/integration",

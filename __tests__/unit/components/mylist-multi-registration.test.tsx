@@ -5,11 +5,22 @@ import { MylistButton } from '@/components/mylist-button'
 import { useMylistOperations } from '@/context/mylist-operations-context'
 import type { RankingItem } from '@/types/ranking'
 
-// useMylistOperationsフックをモック
-vi.mock('@/context/mylist-operations-context', () => ({
-  useMylistOperations: vi.fn(),
-  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
-}))
+// useMylistOperationsフックをモック - CI環境対応
+vi.mock('@/context/mylist-operations-context', () => {
+  const mockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+  
+  return {
+    useMylistOperations: vi.fn(() => mockOperations),
+    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+  }
+})
 
 describe('マイリスト複数登録機能', () => {
   const mockVideo: RankingItem = {
