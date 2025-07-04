@@ -3,12 +3,28 @@
  * インポート/エクスポート機能のUI動作テスト
  */
 
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
-import { render } from '@/__tests__/test-utils'
-import userEvent from '@testing-library/user-event'
-import { MylistBackup } from '@/components/mylist-backup'
-import * as backupModule from '@/lib/storage/backup'
+// CSS modulesをモック - 最初に宣言（ホイスト対応）
+vi.mock('@/components/mylist-backup.module.css', () => ({
+  default: {
+    mylistBackup: 'mylistBackup',
+    backupActions: 'backupActions',
+    backupButton: 'backupButton',
+    exportButton: 'exportButton',
+    importButton: 'importButton',
+    buttonIcon: 'buttonIcon',
+    fileInput: 'fileInput',
+    backupDialogOverlay: 'backupDialogOverlay',
+    backupDialog: 'backupDialog',
+    dialogNote: 'dialogNote',
+    dialogActions: 'dialogActions',
+    dialogButton: 'dialogButton',
+    cancelButton: 'cancelButton',
+    confirmButton: 'confirmButton',
+    importResult: 'importResult',
+    success: 'success',
+    error: 'error'
+  }
+}))
 
 // backupモジュールのモック
 vi.mock('@/lib/storage/backup', () => ({
@@ -17,7 +33,6 @@ vi.mock('@/lib/storage/backup', () => ({
   readBackupFile: vi.fn(),
   importMylistData: vi.fn()
 }))
-
 
 // useMylistOperationsフックをモック - CI環境対応
 vi.mock('@/context/mylist-operations-context', () => {
@@ -36,30 +51,12 @@ vi.mock('@/context/mylist-operations-context', () => {
   }
 })
 
-// CSS modulesをモック
-vi.mock('@/components/mylist-backup.module.css', () => {
-  return {
-    default: {
-      mylistBackup: 'mylistBackup',
-      backupActions: 'backupActions',
-      backupButton: 'backupButton',
-      exportButton: 'exportButton',
-      importButton: 'importButton',
-      buttonIcon: 'buttonIcon',
-      fileInput: 'fileInput',
-      backupDialogOverlay: 'backupDialogOverlay',
-      backupDialog: 'backupDialog',
-      dialogNote: 'dialogNote',
-      dialogActions: 'dialogActions',
-      dialogButton: 'dialogButton',
-      cancelButton: 'cancelButton',
-      confirmButton: 'confirmButton',
-      importResult: 'importResult',
-      success: 'success',
-      error: 'error'
-    }
-  }
-})
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
+import userEvent from '@testing-library/user-event'
+import { MylistBackup } from '@/components/mylist-backup'
+import * as backupModule from '@/lib/storage/backup'
 
 
 

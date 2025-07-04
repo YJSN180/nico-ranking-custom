@@ -1,10 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { screen } from '@testing-library/react'
-import { render } from '@/__tests__/test-utils'
-import { RankingSelector } from '@/components/ranking-selector'
-import type { RankingConfig } from '@/types/ranking-config'
-
-// CSS modulesをモック - CI環境対応
+// CSS modulesをモック - 最初に宣言（ホイスト対応）
 vi.mock('@/components/selectors.module.css', () => ({
   default: {
     genreScrollContainer: 'genreScrollContainer',
@@ -12,6 +6,12 @@ vi.mock('@/components/selectors.module.css', () => ({
     genreButtonSelected: 'genreButtonSelected'
   }
 }))
+
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
+import { RankingSelector } from '@/components/ranking-selector'
+import type { RankingConfig } from '@/types/ranking-config'
 
 describe('RankingSelector CSS-onlyレスポンシブ対応', () => {
   const defaultConfig: RankingConfig = {
