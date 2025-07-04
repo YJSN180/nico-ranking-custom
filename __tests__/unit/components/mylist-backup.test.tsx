@@ -35,28 +35,20 @@ vi.mock('@/lib/storage/backup', () => ({
 }))
 
 // useMylistOperationsフックをモック - CI環境対応
-vi.mock('@/context/mylist-operations-context', () => {
-  const mockOperations = {
-    mylists: [],
-    isLoading: false,
-    addVideoToMylist: vi.fn().mockResolvedValue(true),
-    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
-    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
-    createMylist: vi.fn()
-  }
-  
-  return {
-    useMylistOperations: vi.fn(() => mockOperations),
-    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
-  }
-})
+vi.mock('@/context/mylist-operations-context', () => ({
+  useMylistOperations: vi.fn(),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+}))
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import userEvent from '@testing-library/user-event'
 import { MylistBackup } from '@/components/mylist-backup'
+import { useMylistOperations } from '@/context/mylist-operations-context'
 import * as backupModule from '@/lib/storage/backup'
+
+const mockUseMylistOperations = useMylistOperations as unknown as ReturnType<typeof vi.fn>
 
 
 
@@ -72,9 +64,21 @@ const mockConfirm = vi.fn()
 global.confirm = mockConfirm
 
 describe('MylistBackup Component', () => {
+  const mockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
     mockConfirm.mockReturnValue(true) // デフォルトでconfirmはtrueを返す
+    
+    // useMylistOperationsモックの設定
+    mockUseMylistOperations.mockReturnValue(mockOperations)
   })
 
   afterEach(() => {
