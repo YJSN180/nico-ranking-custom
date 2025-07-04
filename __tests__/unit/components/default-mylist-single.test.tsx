@@ -1,15 +1,19 @@
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { MylistButton } from '@/components/mylist-button'
 import { MylistManager } from '@/lib/storage/mylists'
 import { DBManager } from '@/lib/storage/db-manager'
-import { useMylistOperations } from '@/hooks/use-mylist-operations'
+import { useMylistOperations } from '@/context/mylist-operations-context'
 import type { RankingItem } from '@/types/ranking'
 import 'fake-indexeddb/auto'
 
 // Mock the hooks
-vi.mock('@/hooks/use-mylist-operations')
+vi.mock('@/context/mylist-operations-context', () => ({
+  useMylistOperations: vi.fn(),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+}))
 
 describe('初期マイリスト作成 - 単一保証', () => {
   let dbManager: DBManager

@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { MylistButton } from '@/components/mylist-button'
-import { useMylistOperations } from '@/hooks/use-mylist-operations'
+import { useMylistOperations } from '@/context/mylist-operations-context'
 import type { RankingItem } from '@/types/ranking'
 
 // useMylistOperationsフックをモック
-vi.mock('@/hooks/use-mylist-operations')
+vi.mock('@/context/mylist-operations-context', () => ({
+  useMylistOperations: vi.fn(),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+}))
 
 describe('MylistButton Integration', () => {
   const mockVideo: RankingItem = {

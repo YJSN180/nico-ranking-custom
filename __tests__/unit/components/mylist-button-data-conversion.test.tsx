@@ -1,12 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import userEvent from '@testing-library/user-event'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { MylistButton } from '@/components/mylist-button'
-import { useMylistOperations } from '@/hooks/use-mylist-operations'
+import { useMylistOperations } from '@/context/mylist-operations-context'
 import type { RankingItem } from '@/types/ranking'
 
-// Mock the hook
-vi.mock('@/hooks/use-mylist-operations')
+// Mock the context
+vi.mock('@/context/mylist-operations-context', () => ({
+  useMylistOperations: vi.fn(),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+}))
 
 const mockUseMylistOperations = useMylistOperations as unknown as ReturnType<typeof vi.fn>
 
@@ -74,14 +78,27 @@ describe('MylistButton - Data Conversion Fix', () => {
     isLoading: false,
     addVideoToMylist: vi.fn(),
     removeVideoFromMylist: vi.fn(),
-    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    isVideoInAnyMylist: vi.fn(),
     createMylist: vi.fn()
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
+    
+    // 関数のモックを設定
     mockAddVideoToMylist = vi.fn().mockResolvedValue(true)
+    
+    // すべての操作を再定義して、新しいモックインスタンスを確実に使用
     mockOperations.addVideoToMylist = mockAddVideoToMylist
+    mockOperations.removeVideoFromMylist = vi.fn().mockResolvedValue(true)
+    mockOperations.isVideoInAnyMylist = vi.fn().mockImplementation(async (videoId) => {
+      // デバッグ用ログ
+      console.log('[Test] isVideoInAnyMylist called with:', videoId)
+      return { inMylist: false, mylistIds: [] }
+    })
+    mockOperations.createMylist = vi.fn()
+    
+    // モックを返す前に再度確認
     mockUseMylistOperations.mockReturnValue(mockOperations)
     
     // クライアントサイド環境をシミュレート
@@ -96,6 +113,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       const user = userEvent.setup()
       
       render(<MylistButton video={mockVideoWithFullData} />)
+      
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
       
       // マイリストボタンをクリック
       const button = screen.getByTestId('mylist-button')
@@ -136,6 +164,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       
       render(<MylistButton video={mockVideoWithoutAuthorIcon} />)
       
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
+      
       const button = screen.getByTestId('mylist-button')
       await user.click(button)
       
@@ -165,6 +204,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       const user = userEvent.setup()
       
       render(<MylistButton video={mockVideoWithFullData} />)
+      
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
       
       const button = screen.getByTestId('mylist-button')
       await user.click(button)
@@ -204,6 +254,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       
       render(<MylistButton video={incompleteVideo} />)
       
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
+      
       const button = screen.getByTestId('mylist-button')
       await user.click(button)
       
@@ -233,6 +294,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       const user = userEvent.setup()
       
       render(<MylistButton video={mockVideoWithFullData} />)
+      
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
       
       const button = screen.getByTestId('mylist-button')
       await user.click(button)
@@ -270,6 +342,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       
       render(<MylistButton video={mockVideoWithFullData} />)
       
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
+      
       const button = screen.getByTestId('mylist-button')
       await user.click(button)
       
@@ -303,6 +386,17 @@ describe('MylistButton - Data Conversion Fix', () => {
       const user = userEvent.setup()
       
       render(<MylistButton video={mockVideoWithFullData} />)
+      
+      // プレースホルダーが消えて実際のボタンが表示されるまで待つ
+      await waitFor(() => {
+        expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
+      })
+      
+      // ボタンが正しい状態になるまで待つ（追加ボタンになるはず）
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストに追加')
+      })
       
       const button = screen.getByTestId('mylist-button')
       await user.click(button)

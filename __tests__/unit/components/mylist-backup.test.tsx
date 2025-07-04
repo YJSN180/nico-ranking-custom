@@ -4,7 +4,8 @@
  */
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import userEvent from '@testing-library/user-event'
 import { MylistBackup } from '@/components/mylist-backup'
 import * as backupModule from '@/lib/storage/backup'

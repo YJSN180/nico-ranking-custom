@@ -1,10 +1,11 @@
-import { render, fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { describe, test, expect, vi } from 'vitest'
 import { MylistButton } from '@/components/mylist-button'
 import type { RankingItem } from '@/types/ranking'
 
 // useMylistOperationsをモック
-vi.mock('@/hooks/use-mylist-operations', () => ({
+vi.mock('@/context/mylist-operations-context', () => ({
   useMylistOperations: () => ({
     mylists: [],
     isLoading: false,
@@ -12,7 +13,8 @@ vi.mock('@/hooks/use-mylist-operations', () => ({
     removeVideoFromMylist: vi.fn(),
     isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
     createMylist: vi.fn()
-  })
+  }),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
 }))
 
 describe('MylistButton - モバイルイベント処理', () => {

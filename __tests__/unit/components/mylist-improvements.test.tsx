@@ -7,7 +7,8 @@
  * 3. ドラッグ＆ドロップ機能が無効
  */
 
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { vi } from 'vitest'
 import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { MylistVideo } from '@/lib/storage/types'

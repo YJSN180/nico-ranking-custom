@@ -7,7 +7,8 @@
  * 3. 並び替えモード(isReorderMode)が使用されない
  */
 
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { vi } from 'vitest'
 import { useRouter, useParams } from 'next/navigation'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'

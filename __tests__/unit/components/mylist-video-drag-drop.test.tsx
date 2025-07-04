@@ -1,5 +1,6 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { MylistManager } from '@/lib/storage/mylists'

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { MylistManager } from '@/lib/storage/mylists'
 import { DBManager } from '@/lib/storage/db-manager'

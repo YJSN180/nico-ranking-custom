@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { MylistButton } from '@/components/mylist-button'
-import { useMylistOperations } from '@/hooks/use-mylist-operations'
+import { useMylistOperations } from '@/context/mylist-operations-context'
 import type { RankingItem } from '@/types/ranking'
 
 // useMylistOperationsフックをモック
-vi.mock('@/hooks/use-mylist-operations')
+vi.mock('@/context/mylist-operations-context', () => ({
+  useMylistOperations: vi.fn(),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+}))
 
 describe('マイリスト複数登録機能', () => {
   const mockVideo: RankingItem = {
@@ -83,8 +87,14 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
+      // ボタンの状態が更新されるまで待つ
+      await waitFor(() => {
+        const button = screen.getByTestId('mylist-button')
+        expect(button).toHaveAttribute('aria-label', 'マイリストから削除')
+      })
+
       // チェックマークボタンをクリック
-      const button = screen.getByRole('button', { name: 'マイリストから削除' })
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // モーダルが表示されることを確認
@@ -108,7 +118,7 @@ describe('マイリスト複数登録機能', () => {
       })
 
       // +ボタンをクリック
-      const button = screen.getByRole('button', { name: 'マイリストに追加' })
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // モーダルが表示されることを確認
@@ -133,21 +143,23 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
-      // ボタンをクリックしてモーダルを表示
-      const button = screen.getByRole('button')
+      // ボタンをクリックしてモーダルを表示  
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // モーダル内で登録済みマイリストにチェックマークが表示される
       await waitFor(() => {
-        const mylist1Button = screen.getByRole('button', { name: /お気に入り/ })
+        const mylistItems = screen.getAllByTestId('mylist-item-checkbox')
+        // 最初のマイリスト（お気に入り）は登録済み
+        const mylist1Button = mylistItems[0]
         expect(mylist1Button.className).toContain('selected')
         expect(mylist1Button.textContent).toContain('✓')
+        
+        // 2番目のマイリスト（後で見る）は未登録
+        const mylist2Button = mylistItems[1]
+        expect(mylist2Button.className).not.toContain('selected')
+        expect(mylist2Button.textContent).not.toContain('✓')
       })
-
-      // 未登録のマイリストにはチェックマークが表示されない
-      const mylist2Button = screen.getByRole('button', { name: /後で見る/ })
-      expect(mylist2Button.className).not.toContain('selected')
-      expect(mylist2Button.textContent).not.toContain('✓')
     })
 
     it('複数のマイリストに登録されている場合、すべてにチェックマークが表示される', async () => {
@@ -164,14 +176,16 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
-      // ボタンをクリックしてモーダルを表示
-      const button = screen.getByRole('button')
+      // ボタンをクリックしてモーダルを表示  
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // 両方のマイリストにチェックマークが表示される
       await waitFor(() => {
-        const mylist1Button = screen.getByRole('button', { name: /お気に入り/ })
-        const defaultButton = screen.getByRole('button', { name: /とりあえずマイリスト/ })
+        const mylistItems = screen.getAllByTestId('mylist-item-checkbox')
+        // お気に入りとデフォルトマイリストが登録済み
+        const mylist1Button = mylistItems[0]
+        const defaultButton = mylistItems[2] // とりあえずマイリストは3番目
         
         expect(mylist1Button.className).toContain('selected')
         expect(defaultButton.className).toContain('selected')
@@ -194,13 +208,14 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
-      // ボタンをクリックしてモーダルを表示
-      const button = screen.getByRole('button')
+      // ボタンをクリックしてモーダルを表示  
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // 登録済みのマイリストをクリック
       await waitFor(() => {
-        const mylist1Button = screen.getByRole('button', { name: /お気に入り/ })
+        const mylistItems = screen.getAllByTestId('mylist-item-checkbox')
+        const mylist1Button = mylistItems[0] // お気に入り
         fireEvent.click(mylist1Button)
       })
 
@@ -222,13 +237,14 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
-      // ボタンをクリックしてモーダルを表示
-      const button = screen.getByRole('button')
+      // ボタンをクリックしてモーダルを表示  
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // 未登録のマイリストをクリック
       await waitFor(() => {
-        const mylist2Button = screen.getByRole('button', { name: /後で見る/ })
+        const mylistItems = screen.getAllByTestId('mylist-item-checkbox')
+        const mylist2Button = mylistItems[1] // 後で見る
         fireEvent.click(mylist2Button)
       })
 
@@ -254,8 +270,8 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
-      // ボタンをクリックしてモーダルを表示
-      const button = screen.getByRole('button')
+      // ボタンをクリックしてモーダルを表示  
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // モーダルが表示される
@@ -264,8 +280,8 @@ describe('マイリスト複数登録機能', () => {
       })
 
       // 閉じるボタンをクリック（ヘッダーの×ボタン）
-      const closeButtons = screen.getAllByRole('button', { name: '閉じる' })
-      fireEvent.click(closeButtons[0]) // ヘッダーの閉じるボタン
+      const closeButton = screen.getByTestId('mylist-modal-close')
+      fireEvent.click(closeButton)
 
       // モーダルが閉じる
       await waitFor(() => {
@@ -286,13 +302,14 @@ describe('マイリスト複数登録機能', () => {
         expect(screen.queryByTestId('mylist-button-placeholder')).not.toBeInTheDocument()
       })
 
-      // ボタンをクリックしてモーダルを表示
-      const button = screen.getByRole('button')
+      // ボタンをクリックしてモーダルを表示  
+      const button = screen.getByTestId('mylist-button')
       fireEvent.click(button)
 
       // マイリストに追加
       await waitFor(() => {
-        const mylist1Button = screen.getByRole('button', { name: /お気に入り/ })
+        const mylistItems = screen.getAllByTestId('mylist-item-checkbox')
+        const mylist1Button = mylistItems[0] // お気に入り
         fireEvent.click(mylist1Button)
       })
 
@@ -300,7 +317,8 @@ describe('マイリスト複数登録機能', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
 
       // 別のマイリストにも追加
-      const mylist2Button = screen.getByRole('button', { name: /後で見る/ })
+      const mylistItems = screen.getAllByTestId('mylist-item-checkbox')
+      const mylist2Button = mylistItems[1] // 後で見る
       fireEvent.click(mylist2Button)
 
       // モーダルがまだ開いていることを確認

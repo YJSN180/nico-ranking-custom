@@ -1,5 +1,6 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { screen, fireEvent } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { describe, it, expect, vi } from 'vitest'
 import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { MylistVideo } from '@/lib/storage/types'
