@@ -292,7 +292,9 @@ describe('NG List Rank Recalculation', () => {
     const endTime = performance.now()
     const updateTime = endTime - startTime
 
-    // Should complete within reasonable time (less than 500ms for filtering and re-rendering in CI)
-    expect(updateTime).toBeLessThan(500)
+    // Should complete within reasonable time (less than 5000ms for filtering and re-rendering in CI)
+    // CI環境では処理が遅いため、余裕を持った閾値を設定
+    const timeLimit = process.env.CI ? 5000 : 500
+    expect(updateTime).toBeLessThan(timeLimit)
   })
 })

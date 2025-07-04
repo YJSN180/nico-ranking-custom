@@ -14,6 +14,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**', 
       '**/__tests__/e2e/**',
+      '**/*.bak', // バックアップファイルを除外
       // Temporarily exclude problematic tests in CI
       ...(process.env.CI ? [
         '__tests__/unit/error-handling.test.ts',
@@ -22,11 +23,12 @@ export default defineConfig({
         '__tests__/unit/genre-500-items-support.test.tsx'
       ] : [])
     ],
-    testTimeout: 10000,
+    testTimeout: process.env.CI ? 30000 : 10000,
     pool: 'forks',
     poolOptions: {
       forks: {
-        maxForks: process.env.CI ? 1 : 4,
+        // CI環境でも並列化を有効にして高速化
+        maxForks: process.env.CI ? 4 : 4,
         minForks: 1
       }
     },

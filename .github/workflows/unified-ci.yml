@@ -118,8 +118,8 @@ jobs:
       - name: Run unit tests only
         id: unit-test-results
         run: |
-          # Run tests and capture results
-          npx vitest run __tests__/unit --reporter=json --outputFile=unit-test-results.json || TEST_EXIT_CODE=$?
+          # Run tests and capture results with increased memory
+          NODE_OPTIONS='--max-old-space-size=4096' npx vitest run --reporter=json --outputFile=unit-test-results.json --dir __tests__/unit || TEST_EXIT_CODE=$?
           
           # Parse results using Node.js (more reliable than jq)
           if [ -f unit-test-results.json ]; then
@@ -180,8 +180,8 @@ jobs:
       - name: Run integration tests only
         id: integration-test-results
         run: |
-          # Run tests and capture results
-          npx vitest run __tests__/integration --reporter=json --outputFile=integration-test-results.json || TEST_EXIT_CODE=$?
+          # Run tests and capture results with increased memory
+          NODE_OPTIONS='--max-old-space-size=4096' npx vitest run --reporter=json --outputFile=integration-test-results.json --dir __tests__/integration || TEST_EXIT_CODE=$?
           
           # Parse results using Node.js (more reliable than jq)
           if [ -f integration-test-results.json ]; then
