@@ -71,10 +71,12 @@ export async function middleware(request: NextRequest) {
   const userAgent = request.headers.get('user-agent') || ''
   const ua = userAgent.toLowerCase()
   // iOS 17以降のiPadデスクトップモード対応
+  // Chromeの判定を先に行い、ChromeではiPadと誤判定しないようにする
+  const isChrome = ua.includes('chrome') || ua.includes('crios')
   const isIPad = ua.includes('ipad') || 
-    (ua.includes('macintosh') && ua.includes('applewebkit') && ua.includes('version/') && ua.includes('safari'))
+    (!isChrome && ua.includes('macintosh') && ua.includes('applewebkit') && ua.includes('version/') && ua.includes('safari'))
   const isIPhone = ua.includes('iphone')
-  const isSafari = ua.includes('safari') && !ua.includes('chrome') && !ua.includes('crios')
+  const isSafari = ua.includes('safari') && !isChrome
   // Modern approach: Samsung Browser users are more likely to have performance issues
   // Chrome 110+ Android detection is unreliable, so we target Samsung Browser specifically
   const isLowEndAndroid = ua.includes('android') && ua.includes('samsungbrowser')
