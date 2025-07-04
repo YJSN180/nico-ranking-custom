@@ -110,6 +110,7 @@ export async function scrapeRankingPageNvApiOnly(
       authorName: item.owner?.name,
       authorIcon: item.owner?.iconUrl,
       registeredAt: item.registeredAt,
+      duration: item.duration,
       tags: undefined,
     }))
     
@@ -201,6 +202,7 @@ export async function fetchVideoDetails(videoId: string): Promise<{
   tags?: string[]
   likes?: number
   registeredAt?: string
+  duration?: number
 }> {
   await checkRateLimit()
   
@@ -234,7 +236,8 @@ export async function fetchVideoDetails(videoId: string): Promise<{
     return {
       tags: data.data.tag?.items?.map((tag: any) => tag.name) || [],
       likes: data.data.video?.count?.like,
-      registeredAt: data.data.video?.registeredAt
+      registeredAt: data.data.video?.registeredAt,
+      duration: data.data.video?.duration
     }
     
   } catch (error) {
@@ -248,7 +251,7 @@ export async function fetchVideoDetails(videoId: string): Promise<{
 export async function fetchVideoDetailsBatch(
   videoIds: string[],
   concurrency: number = 3
-): Promise<Map<string, { tags?: string[], likes?: number, registeredAt?: string }>> {
+): Promise<Map<string, { tags?: string[], likes?: number, registeredAt?: string, duration?: number }>> {
   const results = new Map()
   
   // 並列実行数を制限しながら処理

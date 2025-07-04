@@ -185,7 +185,8 @@ export class MylistManager {
       authorName: video.authorName,
       authorId: video.authorId,
       authorIcon: video.authorIcon,
-      registeredAt: video.registeredAt
+      registeredAt: video.registeredAt,
+      duration: video.duration
     }
     
     // 動画を追加（既存の場合は上書き）

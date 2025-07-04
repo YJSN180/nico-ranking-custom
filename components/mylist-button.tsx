@@ -103,7 +103,8 @@ export function MylistButton({ video }: MylistButtonProps) {
         authorName: video.authorName || '',
         authorId: video.authorId || '',
         authorIcon: video.authorIcon || undefined, // 重要: authorIconを含める
-        registeredAt: video.registeredAt || undefined
+        registeredAt: video.registeredAt || undefined,
+        duration: video.duration || undefined
       }
       
       const success = await addVideoToMylist(mylistId, mylistVideoData)

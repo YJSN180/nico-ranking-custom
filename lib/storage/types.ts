@@ -48,6 +48,7 @@ export interface MylistVideo {
   authorId?: string    // 投稿者ID
   authorIcon?: string  // 投稿者アイコンURL
   registeredAt?: string // 動画投稿日時
+  duration?: number    // 動画の再生時間（秒単位）
 }
 
 

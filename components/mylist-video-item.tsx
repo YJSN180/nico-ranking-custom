@@ -2,7 +2,7 @@
 
 import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
-import { formatNumberMobile } from '@/lib/format-utils'
+import { formatNumberMobile, formatDuration } from '@/lib/format-utils'
 import type { MylistVideo } from '@/lib/storage/types'
 import './mylist-video-item.css'
 
@@ -102,7 +102,12 @@ const MylistVideoItem = memo(function MylistVideoItem({
               onError={() => onImageError?.(video.id)}
             />
           </a>
-          {/* 再生時間オーバーレイ（将来的に追加される可能性） */}
+          {/* 再生時間オーバーレイ */}
+          {video.duration && (
+            <div className="mylist-video-item__duration">
+              {formatDuration(video.duration)}
+            </div>
+          )}
         </div>
         
         {/* コンテンツエリア */}

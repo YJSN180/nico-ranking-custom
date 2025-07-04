@@ -14,6 +14,7 @@ interface ExportMylistVideo {
   addedAt: number
   memo?: string
   orderIndex?: number
+  duration?: number
 }
 
 export interface BackupData {
@@ -59,7 +60,8 @@ export async function exportMylistData(): Promise<BackupData> {
     thumbURL: video.thumbURL,
     addedAt: video.addedAt,
     ...(video.memo && { memo: video.memo }),
-    ...(video.orderIndex !== undefined && { orderIndex: video.orderIndex })
+    ...(video.orderIndex !== undefined && { orderIndex: video.orderIndex }),
+    ...(video.duration !== undefined && { duration: video.duration })
   }))
   
   // バックアップデータを構築
