@@ -18,6 +18,29 @@ vi.mock('@/lib/storage/backup', () => ({
   importMylistData: vi.fn()
 }))
 
+// CSS modulesのモック - CI環境対応
+vi.mock('@/components/mylist-backup.module.css', () => ({
+  default: {
+    mylistBackup: 'mylistBackup',
+    backupActions: 'backupActions',
+    backupButton: 'backupButton',
+    exportButton: 'exportButton',
+    importButton: 'importButton',
+    buttonIcon: 'buttonIcon',
+    fileInput: 'fileInput',
+    backupDialogOverlay: 'backupDialogOverlay',
+    backupDialog: 'backupDialog',
+    dialogNote: 'dialogNote',
+    dialogActions: 'dialogActions',
+    dialogButton: 'dialogButton',
+    cancelButton: 'cancelButton',
+    confirmButton: 'confirmButton',
+    importResult: 'importResult',
+    success: 'success',
+    error: 'error'
+  }
+}))
+
 // useMylistOperationsフックをモック - CI環境対応
 vi.mock('@/context/mylist-operations-context', () => {
   const mockOperations = {

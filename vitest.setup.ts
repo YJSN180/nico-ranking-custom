@@ -83,9 +83,5 @@ if (typeof window !== 'undefined') {
 
 // styled-jsx is now properly installed as a dependency
 
-// Mock CSS modules
-vi.mock('*.module.css', () => ({
-  default: new Proxy({}, {
-    get: (target, key) => key
-  })
-}))
+// Mock CSS modules - Using individual mock approach for CI compatibility
+// The wildcard pattern doesn't work reliably in CI environment
