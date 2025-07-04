@@ -130,7 +130,7 @@ test.describe('SEOテスト', () => {
     await expect(page).toHaveTitle(/ニコラン/)
     
     // メタディスクリプション
-    const description = await page.locator('meta[name="description"]').getAttribute('content')
+    const description = await page.locator('meta[name="description"]').first().getAttribute('content')
     expect(description).toBeTruthy()
     console.log(`Meta description content: "${description}"`)
     console.log(`Meta description length: ${description!.length}`)
@@ -138,13 +138,13 @@ test.describe('SEOテスト', () => {
     expect(description!.length).toBeLessThan(160)
     
     // OGPタグ
-    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', /ニコラン/)
-    await expect(page.locator('meta[property="og:description"]')).toHaveAttribute('content', /.+/)
-    await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', /https?:\/\//)
-    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute('content', /https?:\/\//)
+    await expect(page.locator('meta[property="og:title"]').first()).toHaveAttribute('content', /ニコラン/)
+    await expect(page.locator('meta[property="og:description"]').first()).toHaveAttribute('content', /.+/)
+    await expect(page.locator('meta[property="og:image"]').first()).toHaveAttribute('content', /https?:\/\//)
+    await expect(page.locator('meta[property="og:url"]').first()).toHaveAttribute('content', /https?:\/\//)
     
     // Twitter Card
-    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image')
+    await expect(page.locator('meta[name="twitter:card"]').first()).toHaveAttribute('content', 'summary_large_image')
   })
 
   test('構造化データが存在する', async ({ page }) => {
@@ -178,7 +178,7 @@ test.describe('SEOテスト', () => {
     await page.goto('/')
     
     // ビューポートメタタグ
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content')
+    const viewport = await page.locator('meta[name="viewport"]').first().getAttribute('content')
     expect(viewport).toContain('width=device-width')
     expect(viewport).toContain('initial-scale=1')
     
