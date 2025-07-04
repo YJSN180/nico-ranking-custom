@@ -6,6 +6,27 @@ import React from 'react'
 // グローバルCSSをテスト環境でインポート（CSS変数対応）
 import './app/globals.css'
 
+// テスト環境でCSS変数のフォールバック定義
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style')
+  style.textContent = `
+    :root {
+      --bg-secondary: #f5f5f5;
+      --bg-hover: #f0f0f0;
+      --text-primary: #333333;
+      --text-secondary: #595959;
+      --border-color: #e5e5e5;
+      --primary-color: #5567d8;
+      --surface-color: #ffffff;
+      --surface-secondary: #f5f5f5;
+      --surface-hover: #f0f0f0;
+      --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      --primary-color-hover: #4553c7;
+    }
+  `
+  document.head.appendChild(style)
+}
+
 // Ensure React is available globally for all tests
 globalThis.React = React
 

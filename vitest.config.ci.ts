@@ -12,6 +12,12 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './vitest.setup.ts',
+    // CI環境でのJSDOM設定を最適化
+    environmentOptions: {
+      jsdom: {
+        resources: 'usable'
+      }
+    },
     // TEMPORARY: Include only mylist-related tests to fix CI
     include: [
       '__tests__/unit/components/mylist-*.test.tsx',
@@ -98,5 +104,9 @@ export default defineConfig({
     modules: {
       generateScopedName: (name: string) => name
     }
+  },
+  define: {
+    // CSS変数が定義されていない場合のフォールバック
+    'process.env.NODE_ENV': '"test"'
   }
 })
