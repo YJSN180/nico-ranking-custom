@@ -86,11 +86,5 @@ if (typeof window !== 'undefined') {
 // Mock CSS modules - Using individual mock approach for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
 
-// CSS modules mock for components
-vi.mock('*.module.css', () => {
-  return {
-    default: new Proxy({}, {
-      get: (target, prop) => prop
-    })
-  }
-})
+// CSS modules mock removed - using individual mocks in test files for CI compatibility
+// The wildcard pattern doesn't work reliably in CI environment

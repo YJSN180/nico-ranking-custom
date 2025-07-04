@@ -36,6 +36,31 @@ vi.mock('@/context/mylist-operations-context', () => {
   }
 })
 
+// CSS modulesをモック
+vi.mock('@/components/mylist-backup.module.css', () => {
+  return {
+    default: {
+      mylistBackup: 'mylistBackup',
+      backupActions: 'backupActions',
+      backupButton: 'backupButton',
+      exportButton: 'exportButton',
+      importButton: 'importButton',
+      buttonIcon: 'buttonIcon',
+      fileInput: 'fileInput',
+      backupDialogOverlay: 'backupDialogOverlay',
+      backupDialog: 'backupDialog',
+      dialogNote: 'dialogNote',
+      dialogActions: 'dialogActions',
+      dialogButton: 'dialogButton',
+      cancelButton: 'cancelButton',
+      confirmButton: 'confirmButton',
+      importResult: 'importResult',
+      success: 'success',
+      error: 'error'
+    }
+  }
+})
+
 
 
 // window.location.reloadのモック

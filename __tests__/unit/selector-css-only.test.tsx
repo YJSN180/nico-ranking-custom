@@ -4,6 +4,15 @@ import { render } from '@/__tests__/test-utils'
 import { RankingSelector } from '@/components/ranking-selector'
 import type { RankingConfig } from '@/types/ranking-config'
 
+// CSS modulesをモック - CI環境対応
+vi.mock('@/components/selectors.module.css', () => ({
+  default: {
+    genreScrollContainer: 'genreScrollContainer',
+    genreButton: 'genreButton',
+    genreButtonSelected: 'genreButtonSelected'
+  }
+}))
+
 describe('RankingSelector CSS-onlyレスポンシブ対応', () => {
   const defaultConfig: RankingConfig = {
     genre: 'all',
