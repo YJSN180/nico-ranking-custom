@@ -3,6 +3,9 @@ import { vi } from 'vitest'
 import './__tests__/mocks/next-router'
 import React from 'react'
 
+// グローバルCSSをテスト環境でインポート（CSS変数対応）
+import './app/globals.css'
+
 // Ensure React is available globally for all tests
 globalThis.React = React
 
@@ -93,18 +96,31 @@ if (typeof window !== 'undefined') {
 // The wildcard pattern doesn't work reliably in CI environment
 
 // Global mock for MylistOperations context - CI compatibility
+// Enforced mock to prevent undefined returns in CI environment
 vi.mock('@/context/mylist-operations-context', () => {
-  const defaultMockOperations = {
+  const createMockOperations = () => ({
     mylists: [],
     isLoading: false,
     addVideoToMylist: vi.fn().mockResolvedValue(true),
     removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
     isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
     createMylist: vi.fn()
-  }
+  })
+  
+  const mockUseMylistOperations = vi.fn(() => createMockOperations())
+  
+  // Ensure mock never returns undefined by setting a fallback
+  mockUseMylistOperations.mockImplementation(() => {
+    const ops = createMockOperations()
+    if (!ops) {
+      console.warn('[Test] Mock operations fallback triggered')
+      return createMockOperations()
+    }
+    return ops
+  })
   
   return {
-    useMylistOperations: vi.fn(() => defaultMockOperations),
+    useMylistOperations: mockUseMylistOperations,
     MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
   }
 })

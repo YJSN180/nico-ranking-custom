@@ -35,10 +35,22 @@ vi.mock('@/lib/storage/backup', () => ({
 }))
 
 // useMylistOperationsフックをモック - CI環境対応
-vi.mock('@/context/mylist-operations-context', () => ({
-  useMylistOperations: vi.fn(),
-  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
-}))
+// 強制的にundefinedでないことを保証
+vi.mock('@/context/mylist-operations-context', () => {
+  const mockOperations = {
+    mylists: [],
+    isLoading: false,
+    addVideoToMylist: vi.fn().mockResolvedValue(true),
+    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
+    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    createMylist: vi.fn()
+  }
+  
+  return {
+    useMylistOperations: vi.fn(() => mockOperations),
+    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+  }
+})
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor } from '@testing-library/react'

@@ -7,18 +7,31 @@ import { useMylistOperations } from '@/context/mylist-operations-context'
 import type { RankingItem } from '@/types/ranking'
 
 // useMylistOperationsフックをモック - CI環境対応
+// 強制的にundefinedでないことを保証
 vi.mock('@/context/mylist-operations-context', () => {
-  const mockOperations = {
+  const createMockOperations = () => ({
     mylists: [],
     isLoading: false,
     addVideoToMylist: vi.fn().mockResolvedValue(true),
     removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
     isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
     createMylist: vi.fn()
-  }
+  })
+  
+  const mockUseMylistOperations = vi.fn(() => createMockOperations())
+  
+  // Ensure mock never returns undefined in CI environment
+  mockUseMylistOperations.mockImplementation(() => {
+    const ops = createMockOperations()
+    if (!ops) {
+      console.warn('[Test] MylistButton mock operations fallback triggered')
+      return createMockOperations()
+    }
+    return ops
+  })
   
   return {
-    useMylistOperations: vi.fn(() => mockOperations),
+    useMylistOperations: mockUseMylistOperations,
     MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
   }
 })
