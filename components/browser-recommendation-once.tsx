@@ -47,7 +47,7 @@ export function BrowserRecommendationOnce() {
         </div>
         
         <div className="browser-recommendation-text">
-          <h3>パフォーマンス向上のお知らせ</h3>
+          <h3>推奨ブラウザのお知らせ</h3>
           <p>
             特定のブラウザ（Safari/Samsung Browser）では表示が遅くなる場合があります。
             <strong>Google Chrome</strong>での閲覧を推奨します。

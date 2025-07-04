@@ -41,6 +41,14 @@ describe('BrowserRecommendationOnce', () => {
       expect(screen.getByText(/特定のブラウザ（Safari\/Samsung Browser）/)).toBeInTheDocument()
     })
 
+    it('タイトルが「推奨ブラウザのお知らせ」である', () => {
+      // Arrange & Act
+      render(<BrowserRecommendationOnce />)
+      
+      // Assert
+      expect(screen.getByText('推奨ブラウザのお知らせ')).toBeInTheDocument()
+    })
+
     it('「Chromeを開く」ボタンが表示される', () => {
       // Arrange & Act
       render(<BrowserRecommendationOnce />)
