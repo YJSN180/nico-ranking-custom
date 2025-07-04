@@ -81,10 +81,7 @@ if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
 }
 
-// Mock styled-jsx for CI environment
-vi.mock('styled-jsx/style', () => ({
-  default: () => null
-}))
+// styled-jsx is now properly installed as a dependency
 
 // Mock CSS modules
 vi.mock('*.module.css', () => ({
