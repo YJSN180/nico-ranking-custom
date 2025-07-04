@@ -22,7 +22,8 @@ interface OptimizedImageProps {
 /**
  * 画像最適化Imageコンポーネント
  * - ローカル画像（/で始まる）: Next.js最適化を使用（WebP/AVIF変換）
- * - 外部画像（https://で始まる）: Next.js最適化を使用（remotePatterns設定済み）
+ * - ニコニコ動画サムネイル: 直接表示（CDNアクセス制限回避）
+ * - その他外部画像: Next.js最適化を使用（remotePatterns設定済み）
  */
 export function OptimizedImage({
   src,
@@ -42,8 +43,12 @@ export function OptimizedImage({
   const [imgSrc, setImgSrc] = useState(src)
   const [hasError, setHasError] = useState(false)
   
-  // 画像最適化の設定
-  // Note: remotePatterns設定により外部画像も最適化可能
+  // ニコニコ動画CDNのサムネイル判定
+  const isNicoThumbnail = src && (
+    src.includes('tn.smilevideo.jp') ||
+    src.includes('nicovideo.cdn.nimg.jp') ||
+    src.includes('secure-dcdn.cdn.nimg.jp')
+  )
   
   const handleError = () => {
     if (!hasError && fallbackSrc) {
@@ -53,7 +58,25 @@ export function OptimizedImage({
     onError?.()
   }
   
-  // すべての画像に対してNext.js最適化を使用
+  // ニコニコ動画サムネイルは直接表示（Next.js最適化バイパス）
+  if (isNicoThumbnail) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={imgSrc}
+        alt={hasError ? '視聴できません' : alt}
+        width={width}
+        height={height}
+        style={style}
+        loading={loading}
+        className={className}
+        onClick={onClick}
+        onError={handleError}
+      />
+    )
+  }
+  
+  // その他の画像は Next.js最適化を使用
   return (
     <Image
       src={imgSrc}
