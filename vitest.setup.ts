@@ -121,6 +121,8 @@ if (typeof Element !== 'undefined') {
 // Mock window.confirm for JSDOM
 if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
+  // Set test environment flag for MylistButton component
+  ;(window as any).__TEST_ENV__ = true
 }
 
 // styled-jsx is now properly installed as a dependency
@@ -130,6 +132,33 @@ if (typeof window !== 'undefined') {
 
 // CSS modules mock removed - using individual mocks in test files for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
+
+// Global CSS modules mocks for mylist components
+vi.mock('@/components/mylist-modal.module.css', () => ({
+  default: {
+    overlay: 'overlay',
+    modal: 'modal',
+    header: 'header',
+    title: 'title',
+    closeButton: 'closeButton',
+    navigationSection: 'navigationSection',
+    navigationLink: 'navigationLink',
+    content: 'content',
+    mylistItem: 'mylistItem',
+    selected: 'selected',
+    mylistIcon: 'mylistIcon',
+    mylistInfo: 'mylistInfo',
+    mylistName: 'mylistName',
+    mylistMeta: 'mylistMeta',
+    footer: 'footer',
+    primaryButton: 'primaryButton',
+    secondaryButton: 'secondaryButton',
+    newForm: 'newForm',
+    input: 'input',
+    textarea: 'textarea',
+    formButtons: 'formButtons'
+  }
+}))
 
 // Global mock for MylistOperations context - CI compatibility
 // Enforced mock to prevent undefined returns in CI environment
