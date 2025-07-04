@@ -5,6 +5,10 @@ codecov:
   require_ci_to_pass: yes
   notify:
     after_n_builds: 1
+  
+# API settings (uses CODECOV_API_TOKEN environment variable)
+api:
+  enable: true
 
 coverage:
   precision: 2
