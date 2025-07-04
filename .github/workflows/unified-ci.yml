@@ -81,9 +81,9 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'push' ||
+      github.event_name == 'pull_request' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.run_level == 'full' || inputs.run_level == 'monitoring')) ||
-      (github.event_name == 'pull_request' && (inputs.run_level == 'fast' || inputs.run_level == 'full' || inputs.run_level == 'monitoring' || inputs.run_level == null))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_level == 'full' || github.event.inputs.run_level == 'monitoring'))
     needs: fast-tests
     
     strategy:
@@ -128,7 +128,7 @@ jobs:
     name: Merge E2E Reports
     runs-on: ubuntu-latest
     needs: e2e-tests
-    if: always() && (inputs.run_level == 'full' || inputs.run_level == 'monitoring')
+    if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_level == 'full' || github.event.inputs.run_level == 'monitoring')))
     
     steps:
       - name: Checkout
@@ -169,7 +169,7 @@ jobs:
     if: |
       github.event_name == 'push' ||
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && (inputs.run_level == 'full' || inputs.run_level == 'monitoring'))
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_level == 'full' || github.event.inputs.run_level == 'monitoring'))
     needs: fast-tests
     
     steps:
@@ -206,7 +206,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.run_level == 'monitoring')
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_level == 'monitoring')
     needs: [fast-tests, e2e-tests]
     
     steps:
@@ -257,7 +257,7 @@ jobs:
     if: |
       always() && (
         github.event_name == 'schedule' ||
-        (github.event_name == 'workflow_dispatch' && inputs.run_level == 'monitoring')
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.run_level == 'monitoring')
       )
     
     steps:
@@ -267,7 +267,7 @@ jobs:
       - name: Generate benchmark report
         run: |
           echo "=== Unified CI Pipeline Benchmark Report ===" > benchmark-report.md
-          echo "**Run Level:** ${{ inputs.run_level }}" >> benchmark-report.md
+          echo "**Run Level:** ${{ github.event.inputs.run_level || 'auto' }}" >> benchmark-report.md
           echo "**Timestamp:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> benchmark-report.md
           echo "" >> benchmark-report.md
           echo "## Job Results:" >> benchmark-report.md
@@ -299,7 +299,7 @@ jobs:
       - name: Pipeline summary
         run: |
           echo "=== Unified CI Pipeline Summary ==="
-          echo "Run Level: ${{ inputs.run_level }}"
+          echo "Run Level: ${{ github.event.inputs.run_level || 'auto' }}"
           echo "Overall Status: ${{ job.status }}"
           echo ""
           echo "Job Results:"
