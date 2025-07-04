@@ -123,6 +123,20 @@ if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
   // Set test environment flag for MylistButton component
   ;(window as any).__TEST_ENV__ = true
+  // Set mock mylist data for MylistOperationsProvider early return
+  ;(window as any).__MOCK_MYLIST_DATA__ = {
+    mylists: [
+      {
+        id: 'test-mylist-1',
+        name: 'テスト用マイリスト',
+        description: 'テスト用',
+        isDefault: true,
+        videoCount: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ]
+  }
 }
 
 // styled-jsx is now properly installed as a dependency
