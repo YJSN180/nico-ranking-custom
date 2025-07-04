@@ -91,5 +91,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './')
     }
+  },
+  css: {
+    modules: {
+      generateScopedName: (name: string) => name
+    }
   }
 })
