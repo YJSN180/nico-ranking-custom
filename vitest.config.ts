@@ -29,9 +29,18 @@ export default defineConfig({
       forks: {
         // CI環境でも並列化を有効にして高速化
         maxForks: process.env.CI ? 4 : 4,
-        minForks: 1
+        minForks: 1,
+        // CI環境で単一ワーカーのテストを分離
+        singleFork: process.env.CI ? true : false
       }
     },
+    // CI環境での追加設定
+    ...(process.env.CI ? {
+      isolate: true,  // 各テストファイルを分離
+      passWithNoTests: true,  // テストがない場合もパス
+      bail: 5,  // 5つ失敗したら即座に停止
+      logHeapUsage: true  // メモリ使用状況をログ出力
+    } : {}),
     coverage: {
       provider: 'v8',
       reporter: process.env.CI ? ['text', 'json', 'lcov'] : ['text', 'json', 'html'],

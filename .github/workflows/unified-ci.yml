@@ -118,35 +118,29 @@ jobs:
       - name: Run unit tests only
         id: unit-test-results
         run: |
-          # Run tests and capture results with increased memory
-          NODE_OPTIONS='--max-old-space-size=4096' npx vitest run --reporter=json --outputFile=unit-test-results.json --dir __tests__/unit || TEST_EXIT_CODE=$?
+          # Run tests with better configuration
+          echo "Running unit tests..."
+          set -o pipefail
           
-          # Parse results using Node.js (more reliable than jq)
-          if [ -f unit-test-results.json ]; then
-            node -e "
-              const results = require('./unit-test-results.json');
-              console.log('Unit test results:');
-              console.log('Total:', results.numTotalTests || 0);
-              console.log('Passed:', results.numPassedTests || 0);
-              console.log('Failed:', results.numFailedTests || 0);
-              // Set outputs
-              // Write to GITHUB_OUTPUT
-              const fs = require('fs');
-              const output = [
-                'unit_total=' + (results.numTotalTests || 0),
-                'unit_passed=' + (results.numPassedTests || 0),
-                'unit_failed=' + (results.numFailedTests || 0)
-              ].join('\n');
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, output + '\n');
-            " || {
-              echo "unit_total=0" >> $GITHUB_OUTPUT
-              echo "unit_passed=0" >> $GITHUB_OUTPUT
-              echo "unit_failed=0" >> $GITHUB_OUTPUT
-            }
-          else
-            echo "unit_total=0" >> $GITHUB_OUTPUT
-            echo "unit_passed=0" >> $GITHUB_OUTPUT
-            echo "unit_failed=0" >> $GITHUB_OUTPUT
+          # Use npm script for CI-optimized execution
+          npm run test:unit:ci 2>&1 | tee unit-test-output.log || TEST_EXIT_CODE=$?
+          
+          # Extract test counts from output
+          TOTAL=$(grep -E "Test Files.*\(" unit-test-output.log | grep -oE "[0-9]+" | head -1 || echo "0")
+          PASSED=$(grep -E "passed.*\(" unit-test-output.log | grep -oE "[0-9]+" | head -1 || echo "0")
+          FAILED=$(grep -E "failed.*\(" unit-test-output.log | grep -oE "[0-9]+" | head -1 || echo "0")
+          
+          echo "unit_total=${TOTAL}" >> $GITHUB_OUTPUT
+          echo "unit_passed=${PASSED}" >> $GITHUB_OUTPUT
+          echo "unit_failed=${FAILED}" >> $GITHUB_OUTPUT
+          
+          # Show summary
+          echo "Unit test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
+          
+          # If tests failed, show last 50 lines of output for debugging
+          if [ "${TEST_EXIT_CODE:-0}" -ne 0 ]; then
+            echo "=== Last 50 lines of test output ==="
+            tail -50 unit-test-output.log
           fi
           
           # Exit with original test exit code
@@ -180,35 +174,29 @@ jobs:
       - name: Run integration tests only
         id: integration-test-results
         run: |
-          # Run tests and capture results with increased memory
-          NODE_OPTIONS='--max-old-space-size=4096' npx vitest run --reporter=json --outputFile=integration-test-results.json --dir __tests__/integration || TEST_EXIT_CODE=$?
+          # Run tests with better configuration
+          echo "Running integration tests..."
+          set -o pipefail
           
-          # Parse results using Node.js (more reliable than jq)
-          if [ -f integration-test-results.json ]; then
-            node -e "
-              const results = require('./integration-test-results.json');
-              console.log('Integration test results:');
-              console.log('Total:', results.numTotalTests || 0);
-              console.log('Passed:', results.numPassedTests || 0);
-              console.log('Failed:', results.numFailedTests || 0);
-              // Set outputs
-              // Write to GITHUB_OUTPUT
-              const fs = require('fs');
-              const output = [
-                'integration_total=' + (results.numTotalTests || 0),
-                'integration_passed=' + (results.numPassedTests || 0),
-                'integration_failed=' + (results.numFailedTests || 0)
-              ].join('\n');
-              fs.appendFileSync(process.env.GITHUB_OUTPUT, output + '\n');
-            " || {
-              echo "integration_total=0" >> $GITHUB_OUTPUT
-              echo "integration_passed=0" >> $GITHUB_OUTPUT
-              echo "integration_failed=0" >> $GITHUB_OUTPUT
-            }
-          else
-            echo "integration_total=0" >> $GITHUB_OUTPUT
-            echo "integration_passed=0" >> $GITHUB_OUTPUT
-            echo "integration_failed=0" >> $GITHUB_OUTPUT
+          # Use npm script for CI-optimized execution
+          npm run test:integration:ci 2>&1 | tee integration-test-output.log || TEST_EXIT_CODE=$?
+          
+          # Extract test counts from output
+          TOTAL=$(grep -E "Test Files.*\(" integration-test-output.log | grep -oE "[0-9]+" | head -1 || echo "0")
+          PASSED=$(grep -E "passed.*\(" integration-test-output.log | grep -oE "[0-9]+" | head -1 || echo "0")
+          FAILED=$(grep -E "failed.*\(" integration-test-output.log | grep -oE "[0-9]+" | head -1 || echo "0")
+          
+          echo "integration_total=${TOTAL}" >> $GITHUB_OUTPUT
+          echo "integration_passed=${PASSED}" >> $GITHUB_OUTPUT
+          echo "integration_failed=${FAILED}" >> $GITHUB_OUTPUT
+          
+          # Show summary
+          echo "Integration test summary: ${PASSED}/${TOTAL} passed, ${FAILED} failed"
+          
+          # If tests failed, show last 50 lines of output for debugging
+          if [ "${TEST_EXIT_CODE:-0}" -ne 0 ]; then
+            echo "=== Last 50 lines of test output ==="
+            tail -50 integration-test-output.log
           fi
           
           # Exit with original test exit code
