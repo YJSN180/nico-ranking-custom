@@ -67,22 +67,6 @@ export async function middleware(request: NextRequest) {
              request.headers.get('x-real-ip') || 
              'unknown'
 
-  // ブラウザ推奨設定の判定（後でCookieを設定）
-  const userAgent = request.headers.get('user-agent') || ''
-  const ua = userAgent.toLowerCase()
-  // iOS 17以降のiPadデスクトップモード対応
-  // Chromeの判定を先に行い、ChromeではiPadと誤判定しないようにする
-  const isChrome = ua.includes('chrome') || ua.includes('crios')
-  const isIPad = ua.includes('ipad') || 
-    (!isChrome && ua.includes('macintosh') && ua.includes('applewebkit') && ua.includes('version/') && ua.includes('safari'))
-  const isIPhone = ua.includes('iphone')
-  const isSafari = ua.includes('safari') && !isChrome
-  // Modern approach: Samsung Browser users are more likely to have performance issues
-  // Chrome 110+ Android detection is unreliable, so we target Samsung Browser specifically
-  const isLowEndAndroid = ua.includes('android') && ua.includes('samsungbrowser')
-  const isSamsungBrowser = ua.includes('samsungbrowser')
-  const shouldShowRecommendation = (isIPad || isIPhone || isLowEndAndroid) && (isSafari || isSamsungBrowser)
-
   // APIエンドポイントのレート制限
   if (request.nextUrl.pathname.startsWith('/api/')) {
     // デバッグエンドポイントを本番環境で無効化
@@ -189,25 +173,6 @@ export async function middleware(request: NextRequest) {
   
   const response = NextResponse.next()
   
-  // Browser recommendation cookieを設定
-  if (shouldShowRecommendation) {
-    response.cookies.set('browser-recommendation', 'show', {
-      httpOnly: false, // クライアントサイドからアクセス可能
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24, // 24時間
-      path: '/'
-    })
-  } else {
-    response.cookies.set('browser-recommendation', 'hide', {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === 'production', 
-      sameSite: 'strict',
-      maxAge: 60 * 60 * 24,
-      path: '/'
-    })
-  }
-  
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
@@ -268,7 +233,6 @@ export const config = {
   matcher: [
     '/admin/:path*',
     '/api/admin/:path*',
-    '/', // ホームページでブラウザ検出を実行
     '/((?!_next/static|_next/image|favicon.ico|fonts|icon|og-image.png|manifest.json).*)', // その他のページ
   ]
 }

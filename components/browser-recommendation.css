@@ -385,3 +385,13 @@
   outline: 2px solid #1d4ed8;
   outline-offset: 2px;
 }
+
+/* SSR/CSRミスマッチ対策 */
+.browser-recommendation--checking {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.browser-recommendation--hidden {
+  display: none;
+}
