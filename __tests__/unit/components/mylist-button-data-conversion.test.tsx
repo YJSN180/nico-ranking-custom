@@ -21,11 +21,15 @@ const mockUseMylistOperations = useMylistOperations as unknown as ReturnType<typ
  * 1. authorIconフィールドの保存
  * 2. 統計情報（views, comments, mylists, likes）の正しい型変換
  * 3. RankingItem → MylistVideo への完全なデータ変換
+ * 4. durationフィールドの保存（再生時間表示のため）
  * 
  * 修正前の問題：
  * - Video型とMylistVideo型のフィールド名不一致
  * - authorIconフィールドが欠落
  * - 統計情報がundefinedで保存される
+ * 
+ * 注意: MylistVideo型にはdurationフィールドが含まれており、
+ * これは再生時間オーバーレイ表示のために使用される
  */
 describe('MylistButton - Data Conversion Fix', () => {
   const mockVideoWithFullData: RankingItem = {
@@ -328,6 +332,7 @@ describe('MylistButton - Data Conversion Fix', () => {
             comments: 75,
             mylists: 25,
             likes: 200,
+            duration: 300, // durationフィールドも含まれる
             authorName: 'Test Author',
             authorId: '123456',
             authorIcon: 'https://example.com/author-icon.jpg',
@@ -367,9 +372,11 @@ describe('MylistButton - Data Conversion Fix', () => {
         const calledData = mockAddVideoToMylist.mock.calls[0][1]
         
         // MylistVideo型に含まれないフィールドが除外されることを確認
-        expect(calledData).not.toHaveProperty('duration')
         expect(calledData).not.toHaveProperty('tags')
         expect(calledData).not.toHaveProperty('rank')
+        
+        // durationはMylistVideo型に含まれるので、存在することを確認
+        expect(calledData).toHaveProperty('duration')
         
         // 必要なフィールドは含まれることを確認
         expect(calledData).toHaveProperty('id')

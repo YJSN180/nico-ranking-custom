@@ -50,31 +50,36 @@ describe('RankingSelector CSS-onlyレスポンシブ対応', () => {
       )
       const genreContainer = genreButton?.parentElement
       
-      // genreScrollContainerクラスが適用されるか確認（CSSモジュール名を含む）
-      expect(genreContainer?.className).toMatch(/_genreScrollContainer/)
+      // genreScrollContainerクラスが適用されるか確認
+      // CSSモジュールのモックでは単純なクラス名になる
+      expect(genreContainer?.className).toContain('genreScrollContainer')
     })
 
     it('ジャンルボタンにscroll-snap-alignが適用される', () => {
-      render(
+      const { container } = render(
         <RankingSelector config={defaultConfig} onConfigChange={onConfigChange} />
       )
       
-      const genreButtons = screen.getAllByRole('button').filter(
-        button => button.className.includes('genreButton')
+      // ジャンルボタンを取得（総合、音楽など）
+      const genreButtons = Array.from(container.querySelectorAll('button')).filter(
+        button => ['総合', '音楽', 'ゲーム'].includes(button.textContent || '')
       )
       
+      expect(genreButtons.length).toBeGreaterThan(0)
       genreButtons.forEach(button => {
         expect(button.className).toContain('genreButton')
       })
     })
 
     it('選択されたジャンルボタンに特別なスナップクラスが適用される', () => {
-      render(
+      const { container } = render(
         <RankingSelector config={{ ...defaultConfig, genre: 'music' }} onConfigChange={onConfigChange} />
       )
       
-      const musicButton = screen.getByText('音楽')
-      expect(musicButton.className).toContain('genreButtonSelected')
+      const musicButton = container.querySelector('button[class*="genreButtonSelected"]')
+      expect(musicButton).toBeTruthy()
+      expect(musicButton?.textContent).toBe('音楽')
+      expect(musicButton?.className).toContain('genreButtonSelected')
     })
   })
 
