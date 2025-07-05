@@ -39,8 +39,10 @@ export class DBManager {
     if ('storage' in navigator && 'persist' in navigator.storage) {
       try {
         const isPersisted = await navigator.storage.persist()
+        // eslint-disable-next-line no-console
         console.log('[DBManager] Persistent storage:', isPersisted ? 'granted' : 'denied')
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.warn('[DBManager] Failed to request persistent storage:', error)
       }
     }
