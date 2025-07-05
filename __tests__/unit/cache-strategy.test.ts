@@ -1,5 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Web API mocks for Node.js environment
+if (typeof global.Request === 'undefined') {
+  global.Request = class MockRequest {
+    url: string
+    headers: Headers
+    
+    constructor(url: string, init?: { headers?: Record<string, string> }) {
+      this.url = url
+      this.headers = new Headers(init?.headers || {})
+    }
+  } as any
+}
+
+if (typeof global.Response === 'undefined') {
+  global.Response = class MockResponse {
+    status: number
+    body: any
+    headers: Headers
+    
+    constructor(body: any, init?: { status?: number; headers?: Record<string, string> }) {
+      this.body = body
+      this.status = init?.status || 200
+      this.headers = new Headers(init?.headers || {})
+    }
+  } as any
+}
+
+if (typeof global.Headers === 'undefined') {
+  global.Headers = class MockHeaders {
+    private _headers: Map<string, string>
+    
+    constructor(init?: Record<string, string>) {
+      this._headers = new Map()
+      if (init) {
+        Object.entries(init).forEach(([key, value]) => {
+          this._headers.set(key.toLowerCase(), value)
+        })
+      }
+    }
+    
+    get(key: string): string | null {
+      return this._headers.get(key.toLowerCase()) || null
+    }
+    
+    set(key: string, value: string): void {
+      this._headers.set(key.toLowerCase(), value)
+    }
+  } as any
+}
+
 // キャッシュ戦略のテスト
 describe('Cache Strategy Improvements', () => {
   beforeEach(() => {

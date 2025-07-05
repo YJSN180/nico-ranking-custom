@@ -26,10 +26,17 @@ const localStorageMock = {
   key: vi.fn(),
 }
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-  writable: true,
-})
+// Only define localStorage if it doesn't exist or can be redefined
+if (!window.localStorage || Object.getOwnPropertyDescriptor(window, 'localStorage')?.configurable !== false) {
+  Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+    configurable: true,
+  })
+} else {
+  // If can't redefine, replace the methods directly
+  Object.assign(window.localStorage, localStorageMock)
+}
 
 // document.cookieのモック
 const cookieMock = {
