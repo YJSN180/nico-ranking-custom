@@ -53,7 +53,7 @@ vi.mock('@/context/mylist-operations-context', () => {
 })
 
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import userEvent from '@testing-library/user-event'
 import { MylistBackup } from '@/components/mylist-backup'
@@ -94,6 +94,7 @@ describe('MylistBackup Component', () => {
   })
 
   afterEach(() => {
+    cleanup() // DOM cleanup
     vi.restoreAllMocks()
   })
 
