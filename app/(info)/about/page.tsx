@@ -59,6 +59,27 @@ export default function AboutPage() {
           color: 'var(--text-primary)',
           fontWeight: 'bold',
         }}>
+          推奨ブラウザについて
+        </h2>
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.8',
+        }}>
+          <li>最新版のChrome、Edge、Firefox、Safariでの動作を推奨します。</li>
+          <li>Internet Explorer、旧バージョンのブラウザでは正常に動作しない場合があります。</li>
+          <li>一部の機能はモバイルブラウザで最適化されています。</li>
+        </ul>
+      </section>
+
+      <section style={{ marginBottom: '40px' }}>
+        <h2 style={{
+          fontSize: '1.5rem',
+          marginBottom: '16px',
+          color: 'var(--text-primary)',
+          fontWeight: 'bold',
+        }}>
           デザイン・機能
         </h2>
         
@@ -162,6 +183,27 @@ export default function AboutPage() {
         }}>
           <li>気になった動画をマイリストに追加して後で見返すことができます。</li>
           <li>動画のハートアイコンをクリックするか、設定から「マイリスト管理」で確認できます。</li>
+        </ul>
+
+        <h3 style={{
+          fontSize: '1.2rem',
+          marginTop: '24px',
+          marginBottom: '12px',
+          color: 'var(--text-primary)',
+          fontWeight: 'bold',
+        }}>
+          アプリとして使う
+        </h3>
+        <ul style={{
+          listStyle: 'disc',
+          paddingLeft: '20px',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.8',
+          marginBottom: '20px',
+        }}>
+          <li>PWA（Progressive Web App）に対応しており、スマートフォンにアプリとしてインストールできます。</li>
+          <li>Chrome/Edgeではアドレスバーの「インストール」アイコン、iOSではSafariの共有メニューから「ホーム画面に追加」で追加できます。</li>
+          <li>インストールすると、通常のアプリと同様にホーム画面からアクセスできるようになります。</li>
         </ul>
       </section>
 

@@ -21,7 +21,7 @@ type ChangelogEntry = {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    date: '2025-07-02',
+    date: '2025-07-05',
     version: 'v1.0.0',
     changes: [
       { type: 'feature', description: 'ニコニコ動画ランキングの基本表示機能' },
