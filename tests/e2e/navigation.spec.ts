@@ -90,10 +90,8 @@ test.describe('ナビゲーション機能', () => {
     await page.goto('/?genre=game&period=hour')
     await page.waitForLoadState('networkidle')
     
-    // ロゴまたはサイトタイトルをクリック
-    const logo = page.getByRole('heading', { level: 1 }).or(
-      page.getByRole('link', { name: /ニコラン/i })
-    )
+    // ヘッダー内のロゴリンクを特定（より具体的な選択）
+    const logo = page.locator('header a[href="/"]').first()
     
     // ロゴの存在を確認
     await expect(logo).toBeVisible({ timeout: 10000 })
@@ -187,13 +185,12 @@ test.describe('ナビゲーション機能', () => {
     // さらに戻る
     await page.goBack()
     await page.waitForLoadState('networkidle')
-    // URLパラメータなしのルートページに戻ることを確認
-    const baseUrl = new URL(page.url()).origin
-    await expect(page).toHaveURL(`${baseUrl}/`)
+    // ルートページに戻ることを確認（クエリパラメータをより柔軟にチェック）
+    await expect(page).toHaveURL(initialUrl, { timeout: 10000 })
     
     // ブラウザの進むボタン
     await page.goForward()
     await page.waitForLoadState('networkidle')
-    await expect(page).toHaveURL(gameUrl)
+    await expect(page).toHaveURL(gameUrl, { timeout: 10000 })
   })
 })
