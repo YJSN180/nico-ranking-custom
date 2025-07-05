@@ -30,10 +30,6 @@ if (typeof document !== 'undefined') {
 // Ensure React is available globally for all tests
 globalThis.React = React
 
-// Disable React act environment to avoid "Should not already be working" errors
-// This is needed when using React Testing Library with Vitest
-globalThis.IS_REACT_ACT_ENVIRONMENT = false
-
 // Mock IndexedDB for tests
 import FDBFactory from 'fake-indexeddb/lib/FDBFactory'
 import FDBKeyRange from 'fake-indexeddb/lib/FDBKeyRange'
@@ -163,48 +159,28 @@ if (typeof window !== 'undefined') {
 // CSS modules mock removed - using individual mocks in test files for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
 
-// Clean up DOM and React state after each test
-// Note: cleanup is disabled to prevent React 18 concurrent mode conflicts
-// import { cleanup } from '@testing-library/react'
+// Standard React Testing Library cleanup
+import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach } from 'vitest'
 
-// Disable automatic cleanup to prevent React 18 concurrent mode conflicts
+// Use default React Testing Library configuration
 import { configure } from '@testing-library/react'
 configure({ 
-  testIdAttribute: 'data-testid',
-  // Disable auto cleanup - we'll handle it manually when safe
+  testIdAttribute: 'data-testid'
 })
 
-// Ensure complete cleanup after each test
+// Standard cleanup after each test
 afterEach(() => {
-  // Clear all timers
-  vi.clearAllTimers()
+  // Use standard RTL cleanup
+  cleanup()
   
-  // Clear all mocks
+  // Clear all timers and mocks
+  vi.clearAllTimers()
   vi.clearAllMocks()
   
-  // Manual DOM cleanup without interfering with React concurrent work
-  if (typeof document !== 'undefined') {
-    // Only clear body, leave React roots intact to prevent concurrent conflicts
-    const body = document.body
-    while (body?.firstChild) {
-      body.removeChild(body.firstChild)
-    }
-  }
-  
-  // Clear IndexedDB state safely
+  // Reset IndexedDB state
   if (global.indexedDB) {
     try {
-      const databases = global.indexedDB._databases || []
-      databases.forEach((db: any) => {
-        if (db && typeof db.close === 'function') {
-          try {
-            db.close()
-          } catch (e) {
-            // Ignore errors during cleanup
-          }
-        }
-      })
       global.indexedDB = new FDBFactory()
     } catch (e) {
       // Ignore IndexedDB cleanup errors

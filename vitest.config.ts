@@ -7,18 +7,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   plugins: [react({
-    // Disable React Strict Mode in tests to prevent concurrent mode conflicts
-    jsxImportSource: undefined,
+    // Simplified React configuration for test environment
     fastRefresh: false,
-    babel: {
-      plugins: [
-        // Disable React concurrent features in test environment
-        ['@babel/plugin-transform-react-jsx', { 
-          runtime: 'automatic',
-          development: false
-        }]
-      ]
-    }
+    jsxRuntime: 'automatic'
   })],
   test: {
     environment: 'jsdom',

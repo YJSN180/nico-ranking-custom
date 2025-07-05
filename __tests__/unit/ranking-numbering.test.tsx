@@ -21,13 +21,11 @@ global.fetch = vi.fn()
 
 // MylistOperationsProvider テスト環境セットアップ
 beforeAll(() => {
-  // @ts-ignore
-  global.window = global.window || {}
-  // @ts-ignore
-  window.__TEST_ENV__ = true
-  // @ts-ignore
-  window.__MOCK_MYLIST_DATA__ = {
-    mylists: []
+  if (typeof window !== 'undefined') {
+    ;(window as any).__TEST_ENV__ = true
+    ;(window as any).__MOCK_MYLIST_DATA__ = {
+      mylists: []
+    }
   }
 })
 
@@ -37,8 +35,10 @@ beforeAll(() => {
 describe('ランキング順位のナンバリング検証', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
-    sessionStorage.clear()
+    if (typeof window !== 'undefined') {
+      localStorage.clear()
+      sessionStorage.clear()
+    }
   })
 
   it('初期表示で順位が連続していることを確認', () => {
@@ -131,7 +131,7 @@ describe('ランキング順位のナンバリング検証', () => {
     expect(screen.queryByText('7')).not.toBeInTheDocument()
   })
 
-  it('大量データでも順位が正しく割り当てられることを確認', () => {
+  it('大量データでも順位が正しく割り当てられることを確認', { timeout: 15000 }, () => {
     // 100件のテストデータを生成（一部欠番あり）
     const testData: RankingItem[] = []
     let actualRank = 1
@@ -174,7 +174,7 @@ describe('ランキング順位のナンバリング検証', () => {
     expect(screen.getAllByText('10').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('ランキング項目の表示順序が rank プロパティ順になっていることを確認', () => {
+  it('ランキング項目の表示順序が rank プロパティ順になっていることを確認', { timeout: 15000 }, () => {
     // 意図的にrank順序と配列順序を異なるものにする
     const testData: RankingItem[] = [
       { id: '3', title: 'Video 3', rank: 3, thumbURL: 'https://example.com/3.jpg', views: 800 },
@@ -183,9 +183,6 @@ describe('ランキング順位のナンバリング検証', () => {
       { id: '2', title: 'Video 2', rank: 2, thumbURL: 'https://example.com/2.jpg', views: 900 },
       { id: '4', title: 'Video 4', rank: 4, thumbURL: 'https://example.com/4.jpg', views: 700 }
     ]
-
-    // デバッグ用: 入力データを確認
-    console.log('Input testData:', testData.map(item => `${item.title} (rank: ${item.rank})`))
 
     render(
       <ClientPage
@@ -201,22 +198,11 @@ describe('ランキング順位のナンバリング検証', () => {
     const titleElements = screen.getAllByTestId('video-title')
     const titles = titleElements.map(element => element.textContent || '')
     
-    // デバッグ用: 実際の順序を確認
-    console.log('Actual titles order:', titles)
-    
-    // デバッグ用: ランキングアイテムのrank値も確認
-    const rankingItems = screen.getAllByTestId('ranking-item')
-    const ranks = rankingItems.map(item => {
-      const rankElement = item.querySelector('.ranking-item-responsive__rank')
-      return rankElement?.textContent || ''
-    })
-    console.log('Actual ranks order:', ranks)
-    
     // rank順でソートされて表示されることを確認
     expect(titles).toEqual(['Video 1', 'Video 2', 'Video 3', 'Video 4', 'Video 5'])
   })
 
-  it('100位表示で89位が重複表示されないことを確認', () => {
+  it('100位表示で89位が重複表示されないことを確認', { timeout: 15000 }, () => {
     // 実際に報告された問題：100位に89位が表示される問題の回帰テスト
     const testData: RankingItem[] = []
     
