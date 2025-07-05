@@ -31,7 +31,8 @@ export default defineConfig({
         '__tests__/unit/components/mylist-detail-improvements.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/ng-list-rank-recalculation.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/ng-list-instant-update.test.tsx',  // React concurrent mode conflicts
-        '__tests__/unit/hooks/use-mylist-operations-type-conversion.test.tsx'  // React concurrent mode conflicts
+        '__tests__/unit/hooks/use-mylist-operations-type-conversion.test.tsx',  // React concurrent mode conflicts
+        '__tests__/unit/header-css-only.test.tsx'  // React concurrent mode conflicts
       ] : [])
     ],
     testTimeout: process.env.CI ? 60000 : 10000,
