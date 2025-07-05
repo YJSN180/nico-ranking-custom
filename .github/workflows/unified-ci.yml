@@ -80,8 +80,51 @@ jobs:
       - name: Build application
         run: npm run build
 
+      - name: Verify build output
+        run: |
+          echo "Checking .next directory after build..."
+          if [ -d ".next" ]; then
+            echo ".next directory exists"
+            ls -la .next/
+            echo "Checking .next/BUILD_ID..."
+            if [ -f ".next/BUILD_ID" ]; then
+              cat .next/BUILD_ID
+            else
+              echo "BUILD_ID not found!"
+            fi
+            echo ""
+            echo "Calculating .next directory size..."
+            du -sh .next/
+            echo "File count in .next:"
+            find .next -type f | wc -l
+          else
+            echo ".next directory NOT FOUND!"
+            echo "Listing current directory..."
+            ls -la
+          fi
+
       - name: Build Worker
         run: npm run build:worker
+
+      - name: Verify all build outputs before upload
+        run: |
+          echo "=== Pre-upload verification ==="
+          echo "Checking .next directory..."
+          if [ -d ".next" ]; then
+            echo ".next directory size: $(du -sh .next/ | cut -f1)"
+            echo ".next file count: $(find .next -type f | wc -l)"
+          else
+            echo "WARNING: .next directory not found!"
+          fi
+          echo ""
+          echo "Checking dist directory..."
+          if [ -d "dist" ]; then
+            echo "dist directory size: $(du -sh dist/ | cut -f1)"
+            echo "dist file count: $(find dist -type f | wc -l)"
+            ls -la dist/
+          else
+            echo "WARNING: dist directory not found!"
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -91,6 +134,8 @@ jobs:
             .next/
             dist/
           retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true
 
   # Job 4: Parallel Coverage Generation (runs after build succeeds)
   coverage-tests:
@@ -223,10 +268,37 @@ jobs:
         run: |
           echo "Checking downloaded artifacts..."
           ls -la
-          echo "Checking .next directory..."
-          ls -la .next/ || echo ".next directory not found!"
-          echo "Checking for build-id..."
-          ls -la .next/BUILD_ID || echo "BUILD_ID not found!"
+          echo ""
+          echo "=== .next directory verification ==="
+          if [ -d ".next" ]; then
+            echo "✅ .next directory found"
+            echo "Size: $(du -sh .next/ | cut -f1)"
+            echo "File count: $(find .next -type f | wc -l)"
+            ls -la .next/
+            echo ""
+            echo "Checking critical subdirectories..."
+            for dir in "server" "static" "cache"; do
+              if [ -d ".next/$dir" ]; then
+                echo "✅ .next/$dir exists ($(find .next/$dir -type f | wc -l) files)"
+              else
+                echo "❌ .next/$dir missing"
+              fi
+            done
+          else
+            echo "❌ .next directory NOT FOUND!"
+            echo "This will cause E2E tests to fail."
+            echo ""
+            echo "Checking for extraction issues..."
+            find . -name "*.tar" -o -name "*.tar.gz" -o -name "*.zip" | head -10
+          fi
+          echo ""
+          echo "=== dist directory verification ==="
+          if [ -d "dist" ]; then
+            echo "✅ dist directory found"
+            ls -la dist/
+          else
+            echo "⚠️  dist directory not found (Worker build may have failed)"
+          fi
 
       - name: Run E2E tests (sharded)
         run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
@@ -349,6 +421,18 @@ jobs:
         with:
           name: build-artifacts
           path: .
+
+      - name: Verify downloaded artifacts
+        run: |
+          echo "=== Verifying artifacts for performance monitoring ==="
+          if [ -d ".next" ]; then
+            echo "✅ .next directory found"
+            echo "Size: $(du -sh .next/ | cut -f1)"
+          else
+            echo "❌ .next directory NOT FOUND!"
+            echo "Performance monitoring cannot proceed without build artifacts."
+            exit 1
+          fi
 
       - name: Start application
         run: |

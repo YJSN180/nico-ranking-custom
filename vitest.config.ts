@@ -28,10 +28,10 @@ export default defineConfig({
     pool: 'forks',
     poolOptions: {
       forks: {
-        // CI環境でも並列化を有効にして高速化
-        maxForks: process.env.CI ? 4 : 4,
+        // CI環境でのメモリ使用量を制限
+        maxForks: process.env.CI ? 2 : 4,
         minForks: 1,
-        // CI環境で単一ワーカーのテストを分離
+        // CI環境で単一ワーカーのテストを分離してメモリ効率を向上
         singleFork: process.env.CI ? true : false
       }
     },
@@ -52,6 +52,7 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.config.*',
         '__tests__/**',
+        'tests/**',
         'app/admin/**',
         'app/api/admin/**',
         'app/api/debug/**',
@@ -80,9 +81,20 @@ export default defineConfig({
         'public/**',
         '**/*.css',
         '**/*.json',
+        '**/*.md',
+        '**/*.yml',
+        '**/*.yaml',
         'middleware.ts',
         'pages-build-blocker.js',
-        'instrumentation.ts'
+        'instrumentation.ts',
+        'vitest.setup.ts',
+        'next.config.js',
+        'postcss.config.mjs',
+        'tailwind.config.ts',
+        '**/*.spec.ts',
+        '**/*.spec.tsx',
+        '**/*.test.ts',
+        '**/*.test.tsx'
       ],
       thresholds: {
         lines: 32,

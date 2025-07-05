@@ -31,7 +31,9 @@ describe('DerivedNGList', () => {
       render(<DerivedNGList initialData={mockVideoIds} />)
       
       mockVideoIds.forEach(videoId => {
-        expect(screen.getByText(videoId)).toBeInTheDocument()
+        // Use getAllByText and check that at least one exists (for links)
+        const elements = screen.getAllByText(videoId)
+        expect(elements.length).toBeGreaterThan(0)
       })
     })
 
@@ -101,7 +103,8 @@ describe('DerivedNGList', () => {
       await waitFor(() => {
         // Should still display video IDs even if video info fetch fails
         mockVideoIds.forEach(videoId => {
-          expect(screen.getByText(videoId)).toBeInTheDocument()
+          const elements = screen.getAllByText(videoId)
+          expect(elements.length).toBeGreaterThan(0)
         })
       })
     })
@@ -157,7 +160,8 @@ describe('DerivedNGList', () => {
         )
         
         // Should remove the video from the list (optimistic update)
-        expect(screen.queryByText('sm12345')).not.toBeInTheDocument()
+        const remainingElements = screen.queryAllByText('sm12345')
+        expect(remainingElements).toHaveLength(0)
         expect(onUpdate).toHaveBeenCalledWith(['sm67890', 'sm11111'])
       })
     })
@@ -213,7 +217,11 @@ describe('DerivedNGList', () => {
       fireEvent.change(searchInput, { target: { value: '12345' } })
       
       await waitFor(() => {
-        expect(screen.getByText('sm12345')).toBeInTheDocument()
+        // Check that sm12345 is still visible
+        const sm12345Elements = screen.getAllByText('sm12345')
+        expect(sm12345Elements.length).toBeGreaterThan(0)
+        
+        // Check that other IDs are not visible
         expect(screen.queryByText('sm67890')).not.toBeInTheDocument()
         expect(screen.queryByText('sm11111')).not.toBeInTheDocument()
       })
