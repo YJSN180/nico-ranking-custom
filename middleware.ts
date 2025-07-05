@@ -208,8 +208,14 @@ export async function middleware(request: NextRequest) {
     // 画像ファイル: 24時間キャッシュ（更新可能性を考慮）
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400')
-  } else if (request.nextUrl.pathname.match(/\.(css|js)$/)) {
-    // CSS/JSファイル: 24時間キャッシュ + ETag活用
+  } else if (request.nextUrl.pathname.match(/\.css$/)) {
+    // CSSファイル: 正確なMIME type設定 + 24時間キャッシュ + ETag活用
+    response.headers.set('Content-Type', 'text/css; charset=utf-8')
+    response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
+    response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
+  } else if (request.nextUrl.pathname.match(/\.js$/)) {
+    // JSファイル: 正確なMIME type設定 + 24時間キャッシュ + ETag活用
+    response.headers.set('Content-Type', 'application/javascript; charset=utf-8')
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
   }
