@@ -125,6 +125,11 @@ scripts/*
 !scripts/switch-to-blue.js
 !scripts/switch-to-green.js
 !scripts/emergency-rollback.js
+!scripts/blue-green-switch.sh
+!scripts/emergency-rollback.sh
+!scripts/health-check.sh
+!scripts/maintenance-mode.sh
+!scripts/monitor-deployment.sh
 test-ng-persistence.js
 
 # Documentation and temporary files

@@ -24,7 +24,7 @@ export function useRankingProcessorWorker() {
     try {
       // Create worker with proper webpack configuration
       workerRef.current = new Worker(
-        new URL('../workers/ranking-processor.worker.ts', import.meta.url),
+        new URL('../workers/ranking-processor-worker-20250706.ts', import.meta.url),
         { type: 'module' }
       )
     } catch (error) {

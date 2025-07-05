@@ -10,6 +10,10 @@
   box-shadow: var(--shadow-lg, 0 4px 20px rgba(0, 0, 0, 0.15));
   padding: 20px;
   z-index: 1000;
+}
+
+/* checkingとhidden以外の状態でのみアニメーション適用 */
+.browser-recommendation:not(.browser-recommendation--checking):not(.browser-recommendation--hidden) {
   animation: slideInUp 0.3s ease-out;
 }
 
@@ -76,6 +80,10 @@
   font-size: 48px;
   text-align: center;
   margin-bottom: 12px;
+}
+
+/* checkingとhidden以外の状態でのみパルスアニメーション適用 */
+.browser-recommendation:not(.browser-recommendation--checking):not(.browser-recommendation--hidden) .browser-recommendation-icon {
   animation: pulse 2s infinite;
 }
 
@@ -181,12 +189,14 @@
 
 /* アクセシビリティ */
 @media (prefers-reduced-motion: reduce) {
-  .browser-recommendation {
-    animation: none;
+  .browser-recommendation,
+  .browser-recommendation:not(.browser-recommendation--checking):not(.browser-recommendation--hidden) {
+    animation: none !important;
   }
   
-  .browser-recommendation-icon {
-    animation: none;
+  .browser-recommendation-icon,
+  .browser-recommendation:not(.browser-recommendation--checking):not(.browser-recommendation--hidden) .browser-recommendation-icon {
+    animation: none !important;
   }
 }
 
@@ -215,8 +225,12 @@
   border-bottom: 2px solid #f59e0b;
   padding: 12px 20px;
   position: relative;
-  animation: slideInDown 0.3s ease-out;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* checkingとhidden以外の状態でのみバナーアニメーション適用 */
+.browser-recommendation-banner:not(.browser-recommendation--checking):not(.browser-recommendation--hidden) {
+  animation: slideInDown 0.3s ease-out;
 }
 
 @keyframes slideInDown {
@@ -376,8 +390,9 @@
 
 /* アクセシビリティ */
 @media (prefers-reduced-motion: reduce) {
-  .browser-recommendation-banner {
-    animation: none;
+  .browser-recommendation-banner,
+  .browser-recommendation-banner:not(.browser-recommendation--checking):not(.browser-recommendation--hidden) {
+    animation: none !important;
   }
 }
 
@@ -390,6 +405,10 @@
 .browser-recommendation--checking {
   opacity: 0;
   pointer-events: none;
+  /* アニメーションを無効化して点滅を防ぐ */
+  animation: none !important;
+  /* トランジションも無効化 */
+  transition: none !important;
 }
 
 .browser-recommendation--hidden {

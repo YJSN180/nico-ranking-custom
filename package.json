@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:ci": "tsc --noEmit -p tsconfig.test.json",
     "deploy:worker": "wrangler deploy",
-    "build:worker": "tsc workers/api-gateway-r2.ts --outDir dist --skipLibCheck --moduleResolution node --target es2022",
+    "build:worker": "tsc workers/api-gateway-r2-20250706.ts --outDir dist --skipLibCheck --moduleResolution node --target es2022",
     "deploy:worker:r2": "wrangler deploy -c wrangler-r2.toml",
     "update-ranking": "tsx scripts/update-ranking-parallel-v2.ts",
     "aggregate-ranking": "tsx scripts/aggregate-ranking-results-direct.ts",

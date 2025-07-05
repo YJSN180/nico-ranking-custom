@@ -1,51 +1,62 @@
 #!/bin/bash
-# Deploy Green Worker with HTML decode functionality
+# Green Worker 20250705 デプロイスクリプト
+# Smart Router用動的TTL対応Worker
 
-set -euo pipefail
+set -e
 
-echo "=== Deploy Green Worker with HTML Decode ==="
-echo ""
+echo "🚀 Green Worker 20250705 デプロイ開始..."
 
-# Check if CLOUDFLARE_API_TOKEN is set
-if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]]; then
-  echo "Error: CLOUDFLARE_API_TOKEN environment variable must be set"
-  echo "You can set it by running:"
-  echo "  export CLOUDFLARE_API_TOKEN=your_token_here"
-  exit 1
+# 設定確認
+CONFIG_FILE="wrangler-green-20250705.toml"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "❌ エラー: $CONFIG_FILE が見つかりません"
+    exit 1
 fi
 
-# Account ID
-export CLOUDFLARE_ACCOUNT_ID="5984977746a3dfcd71415bed5c324eb1"
+echo "📁 設定ファイル: $CONFIG_FILE"
+echo "🔧 Worker: nico-ranking-green-20250705"
 
-echo "1. Deploying Green Worker..."
-echo "   Worker name: nico-ranking-green"
-echo "   Source file: workers/api-gateway-r2-with-dynamic-ttl-and-kv-maintenance.ts"
+# WORKER_AUTH_KEY Secretの確認
 echo ""
+echo "🔐 セキュリティチェック..."
+read -p "WORKER_AUTH_KEYをCloudflare Secretsに設定済みですか? (y/N): " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo ""
+    echo "⚠️  WORKER_AUTH_KEYの設定が必要です："
+    echo "wrangler secret put WORKER_AUTH_KEY -c $CONFIG_FILE"
+    echo ""
+    read -p "今すぐ設定しますか? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "現在のキー: c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
+        wrangler secret put WORKER_AUTH_KEY -c "$CONFIG_FILE"
+    else
+        echo "❌ セキュリティ設定が未完了のため、デプロイを中止します"
+        exit 1
+    fi
+fi
 
-# Deploy using wrangler
-wrangler deploy workers/api-gateway-r2-with-dynamic-ttl-and-kv-maintenance.ts \
-  --name nico-ranking-green \
-  -c wrangler-green.toml
-
+# デプロイ実行
 echo ""
-echo "2. Updating KV routing configuration..."
+echo "🚀 Green Workerをデプロイ中..."
+wrangler deploy -c "$CONFIG_FILE"
 
-# Update routing configuration using Node.js script
-node scripts/update-kv-routing.js
-
-echo ""
-echo "3. Verifying deployment..."
-
-# Test the API endpoint
-echo "Testing API endpoint..."
-curl -s -o /dev/null -w "HTTP Status: %{http_code}\n" https://nico-rank.com/api/debug || true
-
-echo ""
-echo "=== Deployment Complete ==="
-echo ""
-echo "Green Worker has been deployed with:"
-echo "- HTML decode functionality"
-echo "- Dynamic TTL support"
-echo "- KV-based maintenance mode"
-echo ""
-echo "The Smart Router will automatically route traffic to the Green Worker."
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "✅ Green Worker デプロイ完了！"
+    echo ""
+    echo "🔍 動作確認:"
+    echo "curl -I https://nico-ranking-green-20250705.example.workers.dev/api/debug"
+    echo ""
+    echo "🔄 Smart Router切り替え（テスト用）:"
+    echo "wrangler kv:key put --binding=MAINTENANCE_FLAGS \"active_worker\" \"green\""
+    echo ""
+    echo "🔙 ロールバック（緊急時）:"
+    echo "wrangler kv:key put --binding=MAINTENANCE_FLAGS \"active_worker\" \"blue\""
+    echo ""
+    echo "📊 詳細な手順: DEPLOY_GREEN_20250705.md を参照"
+else
+    echo "❌ デプロイに失敗しました"
+    exit 1
+fi

@@ -305,8 +305,8 @@ const withBundleAnalyzer = bundleAnalyzer({
 const pwaConfig = withPWA({
   dest: 'public',
   register: true,
-  skipWaiting: true,
-  clientsClaim: true,
+  skipWaiting: false,    // ユーザーがページを閉じるまで待機
+  clientsClaim: false,   // 新しいページのみ新しいSWが制御
   disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
   fallbacks: {
     document: '/offline.html'

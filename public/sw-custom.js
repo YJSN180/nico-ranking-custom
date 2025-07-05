@@ -1,14 +1,14 @@
-// Custom service worker events to ensure immediate activation
+// Custom service worker events with safe activation
 self.addEventListener('install', (event) => {
   console.log('[SW] Install event');
-  // Skip waiting to activate immediately
-  self.skipWaiting();
+  // Do NOT skip waiting - wait for all tabs to close
+  // self.skipWaiting(); // REMOVED to prevent data loss
 });
 
 self.addEventListener('activate', (event) => {
   console.log('[SW] Activate event');
-  // Take control of all pages immediately
-  event.waitUntil(clients.claim());
+  // Do NOT claim clients immediately - let new pages use new SW
+  // event.waitUntil(clients.claim()); // REMOVED to prevent data loss
 });
 
 self.addEventListener('fetch', (event) => {

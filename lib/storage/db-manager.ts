@@ -35,6 +35,16 @@ export class DBManager {
       throw new Error('IndexedDB is not available in this browser')
     }
     
+    // Request persistent storage to prevent data loss
+    if ('storage' in navigator && 'persist' in navigator.storage) {
+      try {
+        const isPersisted = await navigator.storage.persist()
+        console.log('[DBManager] Persistent storage:', isPersisted ? 'granted' : 'denied')
+      } catch (error) {
+        console.warn('[DBManager] Failed to request persistent storage:', error)
+      }
+    }
+    
     try {
       // eslint-disable-next-line no-console
       console.log('[DBManager] Calling openDB...')

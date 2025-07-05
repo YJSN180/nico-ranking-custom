@@ -1,5 +1,5 @@
 name = "nico-ranking-v1-stable"
-main = "workers/api-gateway-r2-with-dynamic-ttl-and-kv-maintenance.ts"
+main = "workers/api-gateway-r2-dynamic-ttl-kv-20250706.ts"
 compatibility_date = "2025-06-24"
 compatibility_flags = ["nodejs_compat"]
 
