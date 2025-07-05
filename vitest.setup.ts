@@ -168,9 +168,12 @@ import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach } from 'vitest'
 
 // Ensure complete cleanup after each test
-afterEach(() => {
-  // Clean up React Testing Library
-  cleanup()
+afterEach(async () => {
+  // Wait for any pending React work to complete before cleanup
+  await new Promise(resolve => setTimeout(resolve, 0))
+  
+  // Clean up React Testing Library with proper timing
+  await import('@testing-library/react').then(({ cleanup }) => cleanup())
   
   // Clear all timers
   vi.clearAllTimers()
