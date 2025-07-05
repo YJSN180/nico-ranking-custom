@@ -55,6 +55,15 @@ describe('PWA Detection', () => {
       configurable: true,
       value: false
     })
+    
+    // windowオブジェクトのモック（PWA detection関数で使用）
+    if (typeof window !== 'undefined') {
+      // windowが存在する場合はmatchMediaを確実に設定
+      // @ts-ignore
+      window.matchMedia = global.matchMedia
+      // @ts-ignore
+      window.navigator = global.navigator
+    }
   })
 
   afterEach(() => {
@@ -111,7 +120,7 @@ describe('PWA Detection', () => {
 
   describe('isPWAInstalled', () => {
     it('should detect standalone mode', () => {
-      global.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      const mockMatchMedia = vi.fn().mockImplementation((query: string) => ({
         matches: query === '(display-mode: standalone)',
         media: query,
         onchange: null,
@@ -121,6 +130,12 @@ describe('PWA Detection', () => {
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
       }))
+      
+      global.matchMedia = mockMatchMedia
+      if (typeof window !== 'undefined') {
+        // @ts-ignore
+        window.matchMedia = mockMatchMedia
+      }
       
       expect(isPWAInstalled()).toBe(true)
     })
@@ -185,7 +200,7 @@ describe('PWA Detection', () => {
     })
 
     it('should return false if already installed', () => {
-      global.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      const mockMatchMedia = vi.fn().mockImplementation((query: string) => ({
         matches: query === '(display-mode: standalone)',
         media: query,
         onchange: null,
@@ -195,6 +210,12 @@ describe('PWA Detection', () => {
         removeEventListener: vi.fn(),
         dispatchEvent: vi.fn(),
       }))
+      
+      global.matchMedia = mockMatchMedia
+      if (typeof window !== 'undefined') {
+        // @ts-ignore
+        window.matchMedia = mockMatchMedia
+      }
       
       expect(canInstallPWA()).toBe(false)
     })
