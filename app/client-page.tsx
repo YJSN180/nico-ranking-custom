@@ -364,15 +364,8 @@ export default function ClientPage({
     const endIndex = startIndex + ITEMS_PER_PAGE
     const pageItems = filteredData.slice(startIndex, endIndex)
     
-    // 表示用ランク番号を割り当て（NGフィルタリング後の連続番号）
-    const result = pageItems.map((item, index) => {
-      const displayRank = startIndex + index + 1
-      return {
-        ...item,
-        originalRank: item.rank, // 元のランク番号を保持
-        rank: displayRank // フィルタリング後の連続した表示用ランク番号
-      }
-    })
+    // ページ内のアイテムをそのまま返す（rankは既にfilterWithNGListで再計算済み）
+    const result = pageItems
     
     return {
       displayItems: result,

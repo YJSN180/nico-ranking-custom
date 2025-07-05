@@ -6,50 +6,36 @@ test.describe('ナビゲーション機能', () => {
   })
 
   test('ジャンル選択が機能する', async ({ page }) => {
-    // ジャンルセレクター（ボタンまたはselect要素）を探す
-    const genreButton = page.locator('button:has-text("ゲーム")')
-    const genreSelector = page.locator('select').first()
+    // より安定したセレクターを使用
+    const genreButton = page.getByRole('button', { name: 'ゲーム' })
     
-    if (await genreButton.count() > 0) {
-      // ボタン形式のジャンル選択
-      await genreButton.click()
-      await page.waitForTimeout(500)
-      
-      // URLまたはページ内容が更新されることを確認
-      const currentUrl = page.url()
-      const hasGenreParam = currentUrl.includes('genre=game')
-      const hasContent = await page.locator('h1').count() > 0
-      
-      expect(hasGenreParam || hasContent).toBeTruthy()
-    } else if (await genreSelector.count() > 0) {
-      // select要素の場合
-      await genreSelector.selectOption({ label: 'ゲーム' })
-      await expect(page).toHaveURL(/genre=game/)
-    } else {
-      test.skip(true, 'ジャンル選択UI要素が見つかりません')
-    }
+    // ボタンの存在を確認
+    await expect(genreButton).toBeVisible({ timeout: 10000 })
+    
+    // クリックしてURL変更を待つ
+    await genreButton.click()
+    await page.waitForURL('**/\?genre=game**', { timeout: 10000 })
+    
+    // URLパラメータを確認
+    expect(page.url()).toContain('genre=game')
   })
 
   test('期間選択が機能する', async ({ page }) => {
-    // 期間選択ボタンまたはリンクを探す（24時間/毎時）
-    const hourlyButton = page.locator('button:has-text("毎時"), button:has-text("1時間")')
+    // より安定したセレクターを使用（毎時ボタンを探す）
+    const hourlyButton = page.getByRole('button', { name: /毎時|1時間/i })
     
-    if (await hourlyButton.count() > 0) {
-      await hourlyButton.first().click()
-      
-      // ページが更新されることを確認（URLは必ずしも変わらない場合もある）
-      await page.waitForTimeout(500) // 少し待つ
-      const currentUrl = page.url()
-      
-      // URLにperiod=hourが含まれるか、またはページが正常に表示されることを確認
-      const hasHourParam = currentUrl.includes('period=hour')
-      const hasValidContent = await page.locator('h1').count() > 0
-      
-      expect(hasHourParam || hasValidContent).toBeTruthy()
-    } else {
-      // 期間選択ボタンが見つからない場合はスキップ
-      test.skip(true, '期間選択ボタンが見つかりません')
-    }
+    // ボタンの存在を確認
+    await expect(hourlyButton).toBeVisible({ timeout: 10000 })
+    
+    // クリックしてURL変更を待つ
+    await hourlyButton.click()
+    await page.waitForFunction(
+      () => window.location.href.includes('period=hour'),
+      { timeout: 10000 }
+    )
+    
+    // URLパラメータを確認
+    expect(page.url()).toContain('period=hour')
   })
 
   test('人気タグが表示され、クリック可能', async ({ page }) => {
@@ -74,21 +60,28 @@ test.describe('ナビゲーション機能', () => {
   })
 
   test('ページネーションが機能する', async ({ page }) => {
-    // ページネーションコントロールを探す
-    const nextPageButton = page.locator('button:has-text("次"), a:has-text("次"), button:has-text("→"), a:has-text("→"), [aria-label*="次のページ"]')
+    // ページネーションボタンをより安定的に探す
+    const nextPageButton = page.getByRole('button', { name: /次|→|Next/i }).or(
+      page.getByRole('link', { name: /次|→|Next/i })
+    )
     
-    if (await nextPageButton.count() > 0) {
-      await nextPageButton.first().click()
-      await page.waitForTimeout(500)
+    // ボタンの存在を確認（最初のページには十分なアイテムがない可能性がある）
+    const buttonVisible = await nextPageButton.isVisible({ timeout: 5000 }).catch(() => false)
+    
+    if (buttonVisible) {
+      await nextPageButton.click()
       
-      // URLにページパラメータが含まれるか、ページ内容が変わることを確認
-      const currentUrl = page.url()
-      const hasPageParam = currentUrl.includes('page=2') || currentUrl.includes('offset=')
-      const hasContent = await page.locator('h1').count() > 0
+      // URL変更を待つ
+      await page.waitForFunction(
+        () => window.location.href.includes('page=2') || window.location.href.includes('offset='),
+        { timeout: 10000 }
+      )
       
-      expect(hasPageParam || hasContent).toBeTruthy()
+      // URLパラメータを確認
+      expect(page.url()).toMatch(/page=2|offset=/)
     } else {
-      test.skip(true, 'ページネーション要素が見つかりません')
+      // ページネーションが不要な場合（アイテム数が少ない）
+      test.skip(true, 'ページネーション要素が表示されていません（アイテム数が少ない可能性）')
     }
   })
 
@@ -98,20 +91,21 @@ test.describe('ナビゲーション機能', () => {
     await page.waitForLoadState('networkidle')
     
     // ロゴまたはサイトタイトルをクリック
-    const logo = page.locator('h1, a:has-text("ニコラン"), [role="banner"] a')
-    if (await logo.count() > 0) {
-      await logo.first().click()
-      await page.waitForTimeout(500)
-      
-      // トップページに戻ったかを確認（URLまたはページ表示で判定）
-      const currentUrl = page.url()
-      const isHomePage = !currentUrl.includes('genre=game') || currentUrl === page.url().split('?')[0]
-      const hasContent = await page.locator('h1').count() > 0
-      
-      expect(isHomePage || hasContent).toBeTruthy()
-    } else {
-      test.skip(true, 'ホームロゴ要素が見つかりません')
-    }
+    const logo = page.getByRole('heading', { level: 1 }).or(
+      page.getByRole('link', { name: /ニコラン/i })
+    )
+    
+    // ロゴの存在を確認
+    await expect(logo).toBeVisible({ timeout: 10000 })
+    
+    await logo.click()
+    
+    // トップページへの遷移を待つ
+    await page.waitForURL('**/', { timeout: 10000 })
+    
+    // URLにパラメータがないことを確認
+    const url = new URL(page.url())
+    expect(url.search).toBe('')
   })
 
   test('無効なジャンルの場合、総合ランキングにリダイレクト', async ({ page }) => {
@@ -143,39 +137,29 @@ test.describe('ナビゲーション機能', () => {
       // 特定のジャンル・期間・タグで直接アクセス
       await page.goto(`/?genre=music&period=hour&tag=${encodedTag}`)
       
-      // ページのロードとレンダリングを待つ
+      // ページのロードを待つ
       await page.waitForLoadState('networkidle')
-      await page.waitForTimeout(1000) // CI環境での安定性のため追加の待機
       
       // ページが正常に表示されることを確認
-      await expect(page.locator('h1')).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10000 })
       
-      // URLパラメータが維持されていることを確認（CI環境での遅延を考慮）
-      await page.waitForFunction(
-        () => window.location.href.includes('genre=music'),
-        { timeout: 15000 }
-      )
-      expect(page.url()).toContain('genre=music')
-      expect(page.url()).toContain('period=hour')
-      expect(page.url()).toContain('tag=')
+      // URLパラメータが維持されていることを確認
+      await expect(page).toHaveURL(/genre=music/, { timeout: 10000 })
+      await expect(page).toHaveURL(/period=hour/)
+      await expect(page).toHaveURL(/tag=/)
     } else {
       // タグがない場合はジャンルと期間のみでテスト
       await page.goto('/?genre=music&period=hour')
       
-      // ページのロードとレンダリングを待つ
+      // ページのロードを待つ
       await page.waitForLoadState('networkidle')
-      await page.waitForTimeout(1000) // CI環境での安定性のため追加の待機
       
       // ページが正常に表示されることを確認
-      await expect(page.locator('h1')).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10000 })
       
-      // URLパラメータが維持されていることを確認（CI環境での遅延を考慮）
-      await page.waitForFunction(
-        () => window.location.href.includes('genre=music'),
-        { timeout: 15000 }
-      )
-      expect(page.url()).toContain('genre=music')
-      expect(page.url()).toContain('period=hour')
+      // URLパラメータが維持されていることを確認
+      await expect(page).toHaveURL(/genre=music/, { timeout: 10000 })
+      await expect(page).toHaveURL(/period=hour/)
     }
   })
 
@@ -204,7 +188,8 @@ test.describe('ナビゲーション機能', () => {
     await page.goBack()
     await page.waitForLoadState('networkidle')
     // URLパラメータなしのルートページに戻ることを確認
-    await expect(page).toHaveURL(/^http:\/\/localhost:3001\/$/i)
+    const baseUrl = new URL(page.url()).origin
+    await expect(page).toHaveURL(`${baseUrl}/`)
     
     // ブラウザの進むボタン
     await page.goForward()
