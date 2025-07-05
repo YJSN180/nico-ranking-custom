@@ -331,6 +331,15 @@ jobs:
           name: build-artifacts
           path: .
 
+      - name: Verify build artifacts
+        run: |
+          echo "Checking downloaded artifacts..."
+          ls -la
+          echo "Checking .next directory..."
+          ls -la .next/ || echo ".next directory not found!"
+          echo "Checking for build-id..."
+          ls -la .next/BUILD_ID || echo "BUILD_ID not found!"
+
       - name: Run E2E tests (sharded)
         run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:

@@ -16,6 +16,12 @@ describe('useMylistOperations - カウント更新テスト', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     
+    // テスト環境フラグを一時的に削除して、実際のモックを使用できるようにする
+    // @ts-ignore
+    delete window.__TEST_ENV__
+    // @ts-ignore
+    delete window.__MOCK_MYLIST_DATA__
+    
     mockDBManager = {
       init: vi.fn().mockResolvedValue(undefined)
     }
@@ -39,6 +45,15 @@ describe('useMylistOperations - カウント更新テスト', () => {
 
     vi.mocked(DBManager).mockImplementation(() => mockDBManager)
     vi.mocked(MylistManager).mockImplementation(() => mockMylistManager)
+  })
+  
+  afterEach(() => {
+    // テスト後にフラグを復元 - 安全な復元関数を使用
+    // @ts-ignore
+    if (typeof window !== 'undefined' && window.__SETUP_TEST_FLAGS__) {
+      // @ts-ignore
+      window.__SETUP_TEST_FLAGS__()
+    }
   })
 
   it('動画追加後にマイリストのカウントが更新される', async () => {

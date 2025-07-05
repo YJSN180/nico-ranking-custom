@@ -121,22 +121,34 @@ if (typeof Element !== 'undefined') {
 // Mock window.confirm for JSDOM
 if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
-  // Set test environment flag for MylistButton component
-  ;(window as any).__TEST_ENV__ = true
-  // Set mock mylist data for MylistOperationsProvider early return
-  ;(window as any).__MOCK_MYLIST_DATA__ = {
-    mylists: [
-      {
-        id: 'test-mylist-1',
-        name: 'テスト用マイリスト',
-        description: 'テスト用',
-        isDefault: true,
-        videoCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+  
+  // Function to set up test environment flags safely
+  const setupTestFlags = () => {
+    if (typeof window !== 'undefined' && !window.hasOwnProperty('__TEST_ENV__')) {
+      // Set test environment flag for MylistButton component
+      ;(window as any).__TEST_ENV__ = true
+      // Set mock mylist data for MylistOperationsProvider early return
+      ;(window as any).__MOCK_MYLIST_DATA__ = {
+        mylists: [
+          {
+            id: 'test-mylist-1',
+            name: 'テスト用マイリスト',
+            description: 'テスト用',
+            isDefault: true,
+            videoCount: 0,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+        ]
       }
-    ]
+    }
   }
+  
+  // Set flags initially and provide a way to restore them
+  setupTestFlags()
+  
+  // Make the setup function available globally for tests that need to restore flags
+  ;(window as any).__SETUP_TEST_FLAGS__ = setupTestFlags
 }
 
 // styled-jsx is now properly installed as a dependency

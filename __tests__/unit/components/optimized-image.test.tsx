@@ -34,6 +34,53 @@ describe('OptimizedImage', () => {
     vi.clearAllMocks()
   })
 
+  describe('ニコニコ動画CDN画像の特別な扱い', () => {
+    it('ニコニコ動画CDNの画像は通常の<img>タグで表示されること', () => {
+      const { container } = render(
+        <OptimizedImage
+          src="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/1234567.jpg"
+          alt="Nico CDN image"
+          width={100}
+          height={100}
+          sizes="100px"
+        />
+      )
+
+      const img = container.querySelector('img')
+      expect(img).toBeTruthy()
+      // ニコニコ動画CDNの画像は通常の<img>タグで表示される
+      // そのため、Next.js Image固有の属性（data-sizes, data-fill等）は設定されない
+      expect(img?.getAttribute('data-sizes')).toBeNull()
+      expect(img?.getAttribute('data-fill')).toBeNull()
+      expect(img?.getAttribute('data-priority')).toBeNull()
+      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+    })
+
+    it('ニコニコ動画の各種CDNドメインが正しく識別されること', () => {
+      const nicoUrls = [
+        'https://tn.smilevideo.jp/thumbnail.jpg',
+        'https://nicovideo.cdn.nimg.jp/video.jpg',
+        'https://secure-dcdn.cdn.nimg.jp/usericon.jpg'
+      ]
+
+      nicoUrls.forEach(url => {
+        const { container } = render(
+          <OptimizedImage
+            src={url}
+            alt="Nico image"
+            width={100}
+            height={100}
+          />
+        )
+
+        const img = container.querySelector('img')
+        expect(img).toBeTruthy()
+        // 通常の<img>タグが使用されていることを確認
+        expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      })
+    })
+  })
+
   describe('外部画像の最適化', () => {
     it('外部画像に対してもNext.jsの画像最適化が有効になること（unoptimized未設定）', () => {
       const { container } = render(
@@ -82,7 +129,9 @@ describe('OptimizedImage', () => {
       expect(img).toBeTruthy()
       expect(img?.getAttribute('width')).toBe('18')
       expect(img?.getAttribute('height')).toBe('18')
-      expect(img?.getAttribute('data-sizes')).toBe('18px')
+      // ニコニコ動画CDNの画像は通常の<img>タグで表示されるため、sizesは適用されない
+      expect(img?.getAttribute('data-sizes')).toBeNull()
+      // ニコニコ動画CDNの画像は直接表示されるため、data-unoptimizedも設定されない
       expect(img?.getAttribute('data-unoptimized')).toBeNull()
     })
   })

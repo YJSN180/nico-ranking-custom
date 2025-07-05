@@ -57,12 +57,22 @@ export function setupSnapshotAPIMock(mockResponses = {}) {
     // Mock Snapshot API responses
     if (urlString.includes('api.search.nicovideo.jp/api/v2/snapshot/video/contents/search')) {
       const urlParams = new URL(urlString).searchParams;
-      const q = urlParams.get('q');
+      const jsonFilterParam = urlParams.get('jsonFilter');
       
       // Extract video IDs from jsonFilter
-      const videoIds = q.match(/contentId:"([^"]+)"/g)?.map(match => 
-        match.match(/contentId:"([^"]+)"/)[1]
-      ) || [];
+      let videoIds = [];
+      if (jsonFilterParam) {
+        try {
+          const jsonFilter = JSON.parse(jsonFilterParam);
+          if (jsonFilter.filters && Array.isArray(jsonFilter.filters)) {
+            videoIds = jsonFilter.filters
+              .filter(f => f.field === 'contentId' && f.value)
+              .map(f => f.value);
+          }
+        } catch (e) {
+          console.error('Failed to parse jsonFilter:', e);
+        }
+      }
       
       const response = mockResponses[videoIds.join(',')] || { data: [] };
       
