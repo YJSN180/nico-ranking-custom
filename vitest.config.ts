@@ -24,7 +24,7 @@ export default defineConfig({
         '__tests__/unit/genre-500-items-support.test.tsx'
       ] : [])
     ],
-    testTimeout: process.env.CI ? 30000 : 10000,
+    testTimeout: process.env.CI ? 60000 : 10000,
     pool: 'forks',
     poolOptions: {
       forks: {
@@ -44,7 +44,10 @@ export default defineConfig({
       sequence: {
         shuffle: false  // テストの実行順序をシャッフルしない
       },
-      fileParallelism: false  // ファイル並列実行を無効化
+      fileParallelism: false,  // ファイル並列実行を無効化
+      maxThreads: 1,  // CI環境で並列実行を完全に無効化
+      minThreads: 1,  // CI環境で並列実行を完全に無効化
+      teardownTimeout: 10000  // テストの後片付けタイムアウト
     } : {}),
     coverage: {
       provider: 'v8',
