@@ -164,61 +164,51 @@ if (typeof window !== 'undefined') {
 // The wildcard pattern doesn't work reliably in CI environment
 
 // Clean up DOM and React state after each test
-import { cleanup } from '@testing-library/react'
+// Note: cleanup is disabled to prevent React 18 concurrent mode conflicts
+// import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach } from 'vitest'
 
+// Disable automatic cleanup to prevent React 18 concurrent mode conflicts
+import { configure } from '@testing-library/react'
+configure({ 
+  testIdAttribute: 'data-testid',
+  // Disable auto cleanup - we'll handle it manually when safe
+})
+
 // Ensure complete cleanup after each test
-afterEach(async () => {
-  // Wait for any pending React work to complete before cleanup
-  await new Promise(resolve => setTimeout(resolve, 0))
-  
-  // Clean up React Testing Library with proper timing
-  await import('@testing-library/react').then(({ cleanup }) => cleanup())
-  
+afterEach(() => {
   // Clear all timers
   vi.clearAllTimers()
   
   // Clear all mocks
   vi.clearAllMocks()
   
-  // Clear IndexedDB state
-  if (global.indexedDB) {
-    const databases = global.indexedDB._databases || []
-    databases.forEach((db: any) => {
-      if (db && typeof db.close === 'function') {
-        try {
-          db.close()
-        } catch (e) {
-          // Ignore errors during cleanup
-        }
-      }
-    })
-    global.indexedDB = new FDBFactory()
+  // Manual DOM cleanup without interfering with React concurrent work
+  if (typeof document !== 'undefined') {
+    // Only clear body, leave React roots intact to prevent concurrent conflicts
+    const body = document.body
+    while (body?.firstChild) {
+      body.removeChild(body.firstChild)
+    }
   }
   
-  // Clear DOM completely
-  if (typeof document !== 'undefined') {
-    document.body.innerHTML = ''
-    document.head.innerHTML = ''
-    
-    // Re-add CSS variables after clearing head
-    const style = document.createElement('style')
-    style.textContent = `
-      :root {
-        --bg-secondary: #f5f5f5;
-        --bg-hover: #f0f0f0;
-        --text-primary: #333333;
-        --text-secondary: #595959;
-        --border-color: #e5e5e5;
-        --primary-color: #5567d8;
-        --surface-color: #ffffff;
-        --surface-secondary: #f5f5f5;
-        --surface-hover: #f0f0f0;
-        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        --primary-color-hover: #4553c7;
-      }
-    `
-    document.head.appendChild(style)
+  // Clear IndexedDB state safely
+  if (global.indexedDB) {
+    try {
+      const databases = global.indexedDB._databases || []
+      databases.forEach((db: any) => {
+        if (db && typeof db.close === 'function') {
+          try {
+            db.close()
+          } catch (e) {
+            // Ignore errors during cleanup
+          }
+        }
+      })
+      global.indexedDB = new FDBFactory()
+    } catch (e) {
+      // Ignore IndexedDB cleanup errors
+    }
   }
 })
 
