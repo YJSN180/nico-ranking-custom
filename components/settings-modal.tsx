@@ -152,7 +152,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存（filterWithNGListによる自動再計算により即座に反映される）
+    // NGリストを保存（即座に反映される）
     saveNGListDirectly(tempNGList)
     
     // onApplyコールバックがあれば呼び出す

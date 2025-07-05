@@ -6,6 +6,7 @@ import { RankingSelector } from '@/components/ranking-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
+import { filterWithNGList } from '@/lib/filter-with-ng-list'
 
 // 動的インポートでバンドルサイズを削減
 const Pagination = lazy(() => import('@/components/pagination'))
@@ -350,11 +351,11 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // クライアントサイドページネーション処理 (NGフィルタリング済みデータを使用)
+  // クライアントサイドページネーション処理 (同期的なNGフィルタリング)
   const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
-    // フィルタリング済みのランキングデータを使用
-    const filteredData = rankingData
-    const totalCount = filteredData.length
+    // fullRankingDataに対して直接フィルタリングを適用（即座に反映）
+    const { filteredItems } = filterWithNGList(fullRankingData, ngList)
+    const totalCount = filteredItems.length
     
     // 総ページ数を計算
     const calculatedTotalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
@@ -362,7 +363,7 @@ export default function ClientPage({
     // 現在のページのアイテムを抽出
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
-    const pageItems = filteredData.slice(startIndex, endIndex)
+    const pageItems = filteredItems.slice(startIndex, endIndex)
     
     // ページ内のアイテムをそのまま返す（rankは既にfilterWithNGListで再計算済み）
     const result = pageItems
@@ -372,7 +373,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [rankingData, currentPage])
+  }, [fullRankingData, ngList, ngListVersion, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

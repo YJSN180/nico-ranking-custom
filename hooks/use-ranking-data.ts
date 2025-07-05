@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { rankingCache } from '@/lib/ranking-cache'
 import { requestThrottle } from '@/lib/request-throttle'
-import { filterWithNGList } from '@/lib/filter-with-ng-list'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
@@ -130,12 +129,9 @@ export function useRankingData({
       const data: RankingData = await response.json()
       
       if (data && data.items && Array.isArray(data.items)) {
-        // NGフィルタリングを適用
-        const { filteredItems } = filterWithNGList(data.items, ngList)
-        
-        // データを設定
-        setFullRankingData(filteredItems)
-        setRankingData(filteredItems)
+        // フィルタリングせずに生データを保存
+        setFullRankingData(data.items)
+        setRankingData(data.items)
         
         // 人気タグを設定
         if (data.popularTags && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
@@ -143,8 +139,8 @@ export function useRankingData({
           savePopularTagsToCache(data.popularTags, config.genre, config.period)
         }
         
-        // キャッシュに保存
-        rankingCache.set(config.genre, config.period, filteredItems, data.popularTags, config.tag)
+        // キャッシュに保存（生データを保存）
+        rankingCache.set(config.genre, config.period, data.items, data.popularTags, config.tag)
       } else {
         setFullRankingData([])
         setRankingData([])
@@ -164,15 +160,13 @@ export function useRankingData({
         setLoading(false)
       }
     }
-  }, [ngList, savePopularTagsToCache])
+  }, [savePopularTagsToCache])
 
-  // NGリストが変更された時にデータを再フィルタリング
+  // NGリストのフィルタリングはclient-page.tsx側で行うため、
+  // ここでは生データをそのまま保持する
   useEffect(() => {
-    if (fullRankingData.length > 0) {
-      const { filteredItems } = filterWithNGList(fullRankingData, ngList)
-      setRankingData(filteredItems)
-    }
-  }, [ngListVersion, fullRankingData, ngList])
+    setRankingData(fullRankingData)
+  }, [fullRankingData])
 
   return {
     rankingData,
