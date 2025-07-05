@@ -52,7 +52,17 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-Object.defineProperty(window, 'localStorage', { value: localStorageMock })
+
+// Only define localStorage if it doesn't exist or can be redefined
+if (!window.localStorage || Object.getOwnPropertyDescriptor(window, 'localStorage')?.configurable !== false) {
+  Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+    configurable: true,
+  })
+} else {
+  Object.assign(window.localStorage, localStorageMock)
+}
 
 // sessionStorageのモック
 const sessionStorageMock = {
@@ -61,7 +71,17 @@ const sessionStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 }
-Object.defineProperty(window, 'sessionStorage', { value: sessionStorageMock })
+
+// Only define sessionStorage if it doesn't exist or can be redefined
+if (!window.sessionStorage || Object.getOwnPropertyDescriptor(window, 'sessionStorage')?.configurable !== false) {
+  Object.defineProperty(window, 'sessionStorage', {
+    value: sessionStorageMock,
+    writable: true,
+    configurable: true,
+  })
+} else {
+  Object.assign(window.sessionStorage, sessionStorageMock)
+}
 
 // グローバルfetchのモック
 global.fetch = vi.fn(() =>

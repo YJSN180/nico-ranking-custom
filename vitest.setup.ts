@@ -169,14 +169,23 @@ configure({
   testIdAttribute: 'data-testid'
 })
 
-// Standard cleanup after each test
-afterEach(() => {
-  // Use standard RTL cleanup
-  cleanup()
-  
-  // Clear all timers and mocks
+// Careful cleanup after each test to avoid React concurrent mode conflicts
+afterEach(async () => {
+  // Clear timers and mocks first
   vi.clearAllTimers()
   vi.clearAllMocks()
+  
+  // Use act() wrapper for RTL cleanup to prevent concurrent conflicts
+  try {
+    await vi.waitFor(() => {
+      cleanup()
+    }, { timeout: 1000 })
+  } catch (e) {
+    // If cleanup fails, force manual cleanup without RTL
+    if (typeof document !== 'undefined') {
+      document.body.innerHTML = ''
+    }
+  }
   
   // Reset IndexedDB state
   if (global.indexedDB) {

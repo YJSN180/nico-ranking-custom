@@ -22,7 +22,9 @@ describe('PWA Detection', () => {
     originalMatchMedia = global.matchMedia
     
     // LocalStorageのクリア
-    localStorage.clear()
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear()
+    }
     
     // デフォルトのmatchMediaモック
     global.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -41,6 +43,17 @@ describe('PWA Detection', () => {
       writable: true,
       configurable: true,
       value: 0
+    })
+    
+    // navigator.standaloneをリセット
+    // @ts-ignore
+    delete global.navigator.standalone
+    
+    // デフォルトでfalseに設定
+    Object.defineProperty(global.navigator, 'standalone', {
+      writable: true,
+      configurable: true,
+      value: false
     })
   })
 
