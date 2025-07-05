@@ -10,6 +10,7 @@ import { BackLink } from '@/components/back-link'
 import { MylistBackup } from '@/components/mylist-backup'
 import { formatBytes, formatDate } from './utils/format-utils'
 import { initializeStorage, getStorageInfo } from './utils/storage-operations'
+import { MylistSkeleton } from './components/mylist-skeleton'
 import styles from './mylists.module.css'
 
 // モーダルを動的インポート（遅延ロード）
@@ -35,6 +36,7 @@ export function MylistsClient() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingMylist, setEditingMylist] = useState<Mylist | null>(null)
   const [storageInfo, setStorageInfo] = useState({ used: 0, quota: 0 })
+  const [contentReady, setContentReady] = useState(false)
   const router = useRouter()
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
@@ -72,6 +74,9 @@ export function MylistsClient() {
         setTimeout(() => {
           if (mounted) {
             setIsLoading(false);
+            requestAnimationFrame(() => {
+              setContentReady(true);
+            });
           }
         }, 200);
         
@@ -105,6 +110,10 @@ export function MylistsClient() {
       } finally {
         if (mounted) {
           setIsLoading(false)
+          // コンテンツの準備完了を通知（LCP改善のため）
+          requestAnimationFrame(() => {
+            setContentReady(true)
+          })
         }
       }
     }
@@ -176,7 +185,7 @@ export function MylistsClient() {
   if (isLoading) {
     return (
       <div className={styles.container}>
-        <div className={styles.loading}>読み込み中...</div>
+        <MylistSkeleton />
       </div>
     )
   }

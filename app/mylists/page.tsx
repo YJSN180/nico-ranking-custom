@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic'
 import { HeaderWithSettings } from '@/components/header-with-settings'
-import { Footer } from '@/components/footer'
+import { FooterLazy } from '@/components/footer-lazy'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -8,37 +8,19 @@ export const metadata: Metadata = {
   description: 'お気に入りの動画をマイリストで管理',
 }
 
-// MylistsClientを動的インポートで遅延ロード
+// MylistsClientを動的インポートで遅延ロード（優先度高で事前ロード）
 const MylistsClient = dynamic(
   () => import('./mylists-client').then(mod => ({ default: mod.MylistsClient })),
   {
-    loading: () => (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        minHeight: '400px',
-        color: 'var(--text-secondary)'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ 
-            fontSize: '18px',
-            fontWeight: '500',
-            marginBottom: '8px'
-          }}>
-            マイリストを読み込んでいます
-          </div>
-          <div style={{ 
-            fontSize: '14px',
-            opacity: 0.7
-          }}>
-            しばらくお待ちください...
-          </div>
-        </div>
-      </div>
-    )
+    loading: () => null, // スケルトンUIをMylistsClient内で表示するため、ここでは何も表示しない
+    ssr: false // クライアントサイドのみでレンダリング
   }
 )
+
+// ページロード時に事前にコンポーネントをプリロード
+if (typeof window !== 'undefined') {
+  import('./mylists-client')
+}
 
 export default function MylistsPage() {
   return (
@@ -58,7 +40,7 @@ export default function MylistsPage() {
         }}>
         <MylistsClient />
       </div>
-      <Footer />
+      <FooterLazy />
     </main>
   )
 }

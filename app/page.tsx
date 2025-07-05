@@ -4,7 +4,7 @@ import type { RankingData, RankingItem } from '@/types/ranking'
 import ClientPage from './client-page'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
-import { Footer } from '@/components/footer'
+import { FooterLazy } from '@/components/footer-lazy'
 import { BrowserRecommendationSSR } from '@/components/browser-recommendation-ssr'
 import { cookies } from 'next/headers'
 import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
@@ -279,7 +279,7 @@ export default async function Home({ searchParams }: PageProps) {
             />
           </SuspenseWrapper>
         </div>
-        <Footer />
+        <FooterLazy />
       </main>
     )
   } catch (error: any) {

@@ -1,6 +1,6 @@
 import { MylistDetailClient } from './mylist-detail-client'
 import { HeaderWithSettings } from '@/components/header-with-settings'
-import { Footer } from '@/components/footer'
+import { FooterLazy } from '@/components/footer-lazy'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ export default function MylistDetailPage() {
     <>
       <HeaderWithSettings />
       <MylistDetailClient />
-      <Footer />
+      <FooterLazy />
     </>
   )
 }
