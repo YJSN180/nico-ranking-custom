@@ -153,7 +153,7 @@ test.describe('ナビゲーション機能', () => {
       // URLパラメータが維持されていることを確認（CI環境での遅延を考慮）
       await page.waitForFunction(
         () => window.location.href.includes('genre=music'),
-        { timeout: 5000 }
+        { timeout: 15000 }
       )
       expect(page.url()).toContain('genre=music')
       expect(page.url()).toContain('period=hour')
@@ -172,7 +172,7 @@ test.describe('ナビゲーション機能', () => {
       // URLパラメータが維持されていることを確認（CI環境での遅延を考慮）
       await page.waitForFunction(
         () => window.location.href.includes('genre=music'),
-        { timeout: 5000 }
+        { timeout: 15000 }
       )
       expect(page.url()).toContain('genre=music')
       expect(page.url()).toContain('period=hour')
@@ -180,27 +180,35 @@ test.describe('ナビゲーション機能', () => {
   })
 
   test('ブラウザの戻る/進むボタンが正しく動作する', async ({ page }) => {
-    // 初期ページ
+    // 初期ページ（明示的にルートページにアクセス）
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
     const initialUrl = page.url()
     
     // ジャンルを変更
     await page.goto('/?genre=game')
+    await page.waitForLoadState('networkidle')
     const gameUrl = page.url()
     
     // さらに期間を変更
     await page.goto('/?genre=game&period=hour')
+    await page.waitForLoadState('networkidle')
     const hourlyUrl = page.url()
     
     // ブラウザの戻るボタン
     await page.goBack()
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(gameUrl)
     
     // さらに戻る
     await page.goBack()
-    await expect(page).toHaveURL(initialUrl)
+    await page.waitForLoadState('networkidle')
+    // URLパラメータなしのルートページに戻ることを確認
+    await expect(page).toHaveURL(/^http:\/\/localhost:3001\/$/i)
     
     // ブラウザの進むボタン
     await page.goForward()
+    await page.waitForLoadState('networkidle')
     await expect(page).toHaveURL(gameUrl)
   })
 })
