@@ -378,7 +378,7 @@ jobs:
   benchmark-report:
     name: Benchmark Report
     runs-on: ubuntu-latest
-    needs: [quick-checks, build-test, unit-tests, integration-tests, e2e-tests, merge-reports, security-quality, performance-monitoring]
+    needs: [quick-checks, build-test, e2e-tests, merge-reports, security-quality, performance-monitoring]
     if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_level == 'monitoring'))
     
     steps:
@@ -394,8 +394,7 @@ jobs:
           echo "## Job Results:" >> benchmark-report.md
           echo "- Quick Checks: ${{ needs.quick-checks.result }}" >> benchmark-report.md
           echo "- Build Test: ${{ needs.build-test.result }}" >> benchmark-report.md
-          echo "- Unit Tests: ${{ needs.unit-tests.result }}" >> benchmark-report.md
-          echo "- Integration Tests: ${{ needs.integration-tests.result }}" >> benchmark-report.md
+          echo "- Coverage Tests: ${{ needs.coverage-tests.result }}" >> benchmark-report.md
           echo "- E2E Tests: ${{ needs.e2e-tests.result }}" >> benchmark-report.md
           echo "- Security & Quality: ${{ needs.security-quality.result }}" >> benchmark-report.md
           echo "- Performance Monitoring: ${{ needs.performance-monitoring.result }}" >> benchmark-report.md
@@ -439,19 +438,8 @@ jobs:
           # Test Summary
           echo ""
           echo "=== Test Summary ==="
-          if [ "$UNIT_TOTAL" != "0" ] && [ "$UNIT_TOTAL" != "" ] || [ "$INT_TOTAL" != "0" ] && [ "$INT_TOTAL" != "" ]; then
-            TOTAL_TESTS=$((${UNIT_TOTAL:-0} + ${INT_TOTAL:-0}))
-            TOTAL_PASSED=$((${UNIT_PASSED:-0} + ${INT_PASSED:-0}))
-            TOTAL_FAILED=$((${UNIT_FAILED:-0} + ${INT_FAILED:-0}))
-            echo "Total Tests Run: $TOTAL_TESTS"
-            echo "Tests Passed: $TOTAL_PASSED"
-            echo "Tests Failed: $TOTAL_FAILED"
-            if [ "$TOTAL_FAILED" -gt "0" ]; then
-              echo "⚠️  Some tests failed - check job logs for details"
-            else
-              echo "✅ All tests passed!"
-            fi
-          fi
+          echo "Unit and Integration tests are now covered by Coverage Tests with 4-way parallelization"
+          echo "Coverage tests run all tests with coverage reporting enabled"
           
           # Calculate approximate time saved
           echo ""
