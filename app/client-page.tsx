@@ -94,6 +94,9 @@ export default function ClientPage({
   // ページ状態の管理
   const [currentPage, setCurrentPage] = useState(initialPage)
   
+  // 外部ナビゲーション中の状態管理（UX制御）
+  const [isNavigating, setIsNavigating] = useState(false)
+  
   
   // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
   
@@ -111,6 +114,7 @@ export default function ClientPage({
         tag: config.tag,
         page: currentPage,
         popularTags: currentPopularTags,
+        scrollPosition: window.pageYOffset || document.documentElement.scrollTop || 0,
         savedAt: Date.now()
       }
       sessionStorage.setItem('ranking-navigation-state', JSON.stringify(stateToSave))
@@ -119,12 +123,18 @@ export default function ClientPage({
     // ページ離脱時に保存
     window.addEventListener('beforeunload', saveCurrentState)
     
-    // 内部リンククリック時にも保存
-    const handleInternalNavigation = (e: MouseEvent) => {
+    // 外部リンククリック時に状態を保存
+    const handleExternalNavigation = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       const link = target.closest('a')
       
-      // 内部リンク（メニューページ）の場合のみ状態を保存
+      // 外部リンク（ニコニコ動画など）の場合に状態を保存
+      if (link && link.href && (link.href.includes('nicovideo.jp') || link.href.includes('niconico.jp') || link.href.includes('ch.nicovideo.jp') || link.href.includes('com.nicovideo.jp'))) {
+        saveCurrentState()
+        setIsNavigating(true)
+      }
+      
+      // 内部リンク（メニューページ）の場合も状態を保存
       if (link && link.href && !link.href.includes('nicovideo.jp') && !link.href.includes('niconico.jp')) {
         const url = new URL(link.href)
         if (url.origin === window.location.origin && url.pathname !== '/') {
@@ -133,11 +143,29 @@ export default function ClientPage({
       }
     }
     
-    document.addEventListener('click', handleInternalNavigation)
+    document.addEventListener('click', handleExternalNavigation)
+    
+    // ページフォーカス状態の監視（外部サイトから戻ってきた際の検出）
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // ページが再びアクティブになった場合、ナビゲーション状態をリセット
+        setIsNavigating(false)
+      }
+    }
+    
+    const handleFocus = () => {
+      // ページがフォーカスを取り戻した場合、ナビゲーション状態をリセット
+      setIsNavigating(false)
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
     
     return () => {
       window.removeEventListener('beforeunload', saveCurrentState)
-      document.removeEventListener('click', handleInternalNavigation)
+      document.removeEventListener('click', handleExternalNavigation)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
     }
   }, [config, currentPopularTags, currentPage])
   
@@ -233,9 +261,9 @@ export default function ClientPage({
     }
   }, [])
   
-  // スクロール位置の保存・復元ロジックは削除
-  // 理由: 動画リンクは target="_blank" で別タブで開くため、
-  // 元のタブのスクロール位置は自動的に保持される
+  // スクロール位置の保存・復元は上記のuseEffectで実装済み
+  // 外部リンク（ニコニコ動画）クリック時に状態を保存し、
+  // ブラウザの戻るボタンで戻ってきた際に復元される
   
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
@@ -303,43 +331,86 @@ export default function ClientPage({
     window.history.replaceState(null, '', newUrl)
   }, [currentPage, config])
   
-  // sessionStorageから設定を復元
+  // sessionStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
     if (shouldRestore) {
-      const restoredConfig: RankingConfig = {
+      // フォールバック戦略：無効な状態の段階的復元
+      let finalConfig: RankingConfig = {
         genre: shouldRestore.genre || 'all',
         period: shouldRestore.period || '24h',
         tag: shouldRestore.tag
       }
+      let finalPage = shouldRestore.page || 1
+      let scrollPosition = shouldRestore.scrollPosition || 0
+      
+      // バリデーション1: タグが現在の人気タグに存在するかチェック
+      if (finalConfig.tag && shouldRestore.popularTags && Array.isArray(shouldRestore.popularTags)) {
+        const tagExists = shouldRestore.popularTags.includes(finalConfig.tag)
+        if (!tagExists) {
+          // フォールバック: 同じジャンルの「すべて」動画に遷移
+          finalConfig.tag = undefined
+          finalPage = 1
+          scrollPosition = 0
+          // Tag not found, falling back to "all" videos
+        }
+      }
+      
+      // バリデーション2: ページ数の妥当性チェック（データが利用可能な場合）
+      if (finalPage > 1 && fullRankingData.length > 0) {
+        const { filteredItems } = filterWithNGList(fullRankingData, ngList)
+        const maxPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE)
+        if (finalPage > maxPages) {
+          // フォールバック: 無効なページの場合は同じタグの1ページ目に遷移
+          finalPage = 1
+          scrollPosition = 0
+          // Invalid page number, falling back to page 1
+        }
+      }
+      
+      // バリデーション3: スクロール位置の妥当性チェック
+      if (scrollPosition > 0 && finalPage === 1) {
+        // ページが変更された場合はスクロール位置をリセット
+        if (finalPage !== (shouldRestore.page || 1) || finalConfig.tag !== shouldRestore.tag) {
+          scrollPosition = 0
+          // Page or tag changed, resetting scroll position
+        }
+      }
       
       // 保存された設定が現在の設定と異なる場合のみ更新
       if (
-        restoredConfig.genre !== config.genre ||
-        restoredConfig.period !== config.period ||
-        restoredConfig.tag !== config.tag
+        finalConfig.genre !== config.genre ||
+        finalConfig.period !== config.period ||
+        finalConfig.tag !== config.tag
       ) {
-        // 人気タグも復元
+        // 人気タグも復元（フォールバック後のタグが有効な場合のみ）
         if (shouldRestore.popularTags && Array.isArray(shouldRestore.popularTags)) {
           setCurrentPopularTags(shouldRestore.popularTags)
         }
         
-        // ページ状態も復元
-        if (shouldRestore.page && shouldRestore.page > 1) {
-          setCurrentPage(shouldRestore.page)
+        // ページ状態を復元
+        if (finalPage > 1) {
+          setCurrentPage(finalPage)
+        }
+        
+        // スクロール位置を復元（バリデーション済み）
+        if (scrollPosition > 0) {
+          setTimeout(() => {
+            window.scrollTo(0, scrollPosition)
+          }, 100)
         }
         
         // URLを更新（ブラウザの履歴に追加しない）
         const params = new URLSearchParams()
-        if (restoredConfig.genre !== 'all') params.set('genre', restoredConfig.genre)
-        if (restoredConfig.period !== '24h') params.set('period', restoredConfig.period)
-        if (restoredConfig.tag) params.set('tag', restoredConfig.tag)
-        if (shouldRestore.page && shouldRestore.page > 1) params.set('page', shouldRestore.page.toString())
+        if (finalConfig.genre !== 'all') params.set('genre', finalConfig.genre)
+        if (finalConfig.period !== '24h') params.set('period', finalConfig.period)
+        if (finalConfig.tag) params.set('tag', finalConfig.tag)
+        if (finalPage > 1) params.set('page', finalPage.toString())
         
         const newUrl = params.toString() ? `?${params.toString()}` : '/'
         window.history.replaceState(null, '', newUrl)
         
         // handleConfigChangeを使用してデータも取得
-        handleConfigChange(restoredConfig)
+        handleConfigChange(finalConfig)
         
         // 復元後は削除
         sessionStorage.removeItem('ranking-navigation-state')
@@ -528,6 +599,7 @@ export default function ClientPage({
               <RankingItemResponsive 
                 key={item.id} 
                 item={item}
+                disabled={isNavigating}
               />
             ))}
           </ul>

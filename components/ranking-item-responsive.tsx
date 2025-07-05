@@ -9,12 +9,13 @@ import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
   item: RankingItem
+  disabled?: boolean
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
-const RankingItemResponsive = memo(function RankingItemResponsive({ item }: RankingItemProps) {
+const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false }: RankingItemProps) {
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
     2: 'var(--rank-silver)', 
@@ -33,7 +34,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
   
   // 動画クリック時に動画ページを開く
   const handleVideoClick = () => {
-    window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank')
+    if (disabled) return
+    window.location.href = `https://www.nicovideo.jp/watch/${item.id}`
   }
 
   return (
@@ -49,27 +51,32 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
         boxShadow: 'var(--shadow-md)',
         border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
         marginBottom: '8px',
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'background-color 0.2s',
-        position: 'relative'
+        position: 'relative',
+        opacity: disabled ? 0.6 : 1
       }}
       onClick={(e) => {
+        // disabled状態では何もしない
+        if (disabled) return;
         // 投稿者リンクやボタンなどの子要素のクリックは除外
         const target = e.target as HTMLElement;
         if (target.closest('a') || target.closest('button')) return;
         handleVideoClick();
       }}
       onMouseEnter={(e) => {
-        // タッチデバイスではホバー効果を適用しない
-        if ('ontouchstart' in window) return;
+        // disabled状態またはタッチデバイスではホバー効果を適用しない
+        if (disabled || 'ontouchstart' in window) return;
         e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
       }}
       onMouseLeave={(e) => {
-        // タッチデバイスではホバー効果を適用しない
-        if ('ontouchstart' in window) return;
+        // disabled状態またはタッチデバイスではホバー効果を適用しない
+        if (disabled || 'ontouchstart' in window) return;
         e.currentTarget.style.backgroundColor = 'var(--surface-color)';
       }}
       onTouchEnd={(e) => {
+        // disabled状態では何もしない
+        if (disabled) return;
         // タッチ終了時に背景色をリセット
         const element = e.currentTarget;
         setTimeout(() => {
@@ -119,11 +126,13 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             </div>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: 'block', cursor: 'pointer' }}
+              style={{ display: 'block', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
               onClick={(e) => {
                 e.stopPropagation()
+                if (disabled) {
+                  e.preventDefault()
+                  return false
+                }
               }}
             >
               <OptimizedImage
@@ -158,12 +167,15 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
             {/* タイトル */}
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
               className="ranking-item-responsive__title"
               data-testid="video-title"
+              style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
               onClick={(e) => {
                 e.stopPropagation()
+                if (disabled) {
+                  e.preventDefault()
+                  return false
+                }
               }}
             >
               {item.title}
@@ -184,9 +196,13 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                   ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
                   : `https://www.nicovideo.jp/user/${item.authorId}`
                 }
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (disabled) {
+                    e.preventDefault()
+                    return false
+                  }
+                }}
                 style={{ 
                   display: 'flex',
                   alignItems: 'center',
@@ -196,13 +212,19 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item }: Rank
                   padding: '3px 6px',
                   margin: '-3px -6px',
                   borderRadius: '4px',
-                  transition: 'background-color 0.2s'
+                  transition: 'background-color 0.2s',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.6 : 1
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                  if (!disabled) {
+                    e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
+                  if (!disabled) {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                  }
                 }}
               >
                 {item.authorIcon && (
