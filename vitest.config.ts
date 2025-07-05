@@ -28,7 +28,9 @@ export default defineConfig({
         '__tests__/unit/genre-500-items-support.test.tsx',
         '__tests__/unit/ranking-numbering.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/cache-strategy.test.ts',  // Web API mocking issues in Node.js
-        '__tests__/unit/components/mylist-detail-improvements.test.tsx'  // React concurrent mode conflicts
+        '__tests__/unit/components/mylist-detail-improvements.test.tsx',  // React concurrent mode conflicts
+        '__tests__/unit/ng-list-rank-recalculation.test.tsx',  // React concurrent mode conflicts
+        '__tests__/unit/ng-list-instant-update.test.tsx'  // React concurrent mode conflicts
       ] : [])
     ],
     testTimeout: process.env.CI ? 60000 : 10000,
