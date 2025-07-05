@@ -139,14 +139,14 @@ jobs:
 
   # Job 4: Parallel Coverage Generation (runs after build succeeds)
   coverage-tests:
-    name: Coverage Tests
+    name: Coverage Tests (Shard ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     needs: build-test
     
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]  # 4-way sharding for parallel coverage
+        shard: [1, 2]  # 2-way sharding to reduce memory load
     
     steps:
       - name: Checkout
@@ -166,7 +166,7 @@ jobs:
           npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }}
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=8192'
+          NODE_OPTIONS: '--max-old-space-size=12288'
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
