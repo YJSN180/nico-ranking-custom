@@ -30,6 +30,11 @@ if (typeof document !== 'undefined') {
 // Ensure React is available globally for all tests
 globalThis.React = React
 
+// Force React to use legacy sync mode in tests to avoid act warnings
+if (typeof globalThis.IS_REACT_ACT_ENVIRONMENT === 'undefined') {
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+}
+
 // Mock IndexedDB for tests
 import FDBFactory from 'fake-indexeddb/lib/FDBFactory'
 import FDBKeyRange from 'fake-indexeddb/lib/FDBKeyRange'
@@ -158,6 +163,74 @@ if (typeof window !== 'undefined') {
 
 // CSS modules mock removed - using individual mocks in test files for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
+
+// Clean up DOM and React state after each test
+import { cleanup } from '@testing-library/react'
+import { afterEach, beforeEach } from 'vitest'
+
+// Ensure complete cleanup after each test
+afterEach(() => {
+  // Clean up React Testing Library
+  cleanup()
+  
+  // Clear all timers
+  vi.clearAllTimers()
+  
+  // Clear all mocks
+  vi.clearAllMocks()
+  
+  // Clear IndexedDB state
+  if (global.indexedDB) {
+    const databases = global.indexedDB._databases || []
+    databases.forEach((db: any) => {
+      if (db && typeof db.close === 'function') {
+        try {
+          db.close()
+        } catch (e) {
+          // Ignore errors during cleanup
+        }
+      }
+    })
+    global.indexedDB = new FDBFactory()
+  }
+  
+  // Clear DOM completely
+  if (typeof document !== 'undefined') {
+    document.body.innerHTML = ''
+    document.head.innerHTML = ''
+    
+    // Re-add CSS variables after clearing head
+    const style = document.createElement('style')
+    style.textContent = `
+      :root {
+        --bg-secondary: #f5f5f5;
+        --bg-hover: #f0f0f0;
+        --text-primary: #333333;
+        --text-secondary: #595959;
+        --border-color: #e5e5e5;
+        --primary-color: #5567d8;
+        --surface-color: #ffffff;
+        --surface-secondary: #f5f5f5;
+        --surface-hover: #f0f0f0;
+        --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        --primary-color-hover: #4553c7;
+      }
+    `
+    document.head.appendChild(style)
+  }
+})
+
+// Set up test environment before each test
+beforeEach(() => {
+  // Reset any global state
+  vi.clearAllMocks()
+  vi.clearAllTimers()
+  
+  // Ensure test flags are set
+  if (typeof window !== 'undefined' && (window as any).__SETUP_TEST_FLAGS__) {
+    (window as any).__SETUP_TEST_FLAGS__()
+  }
+})
 
 // Global CSS modules mocks for mylist components
 vi.mock('@/components/mylist-modal.module.css', () => ({

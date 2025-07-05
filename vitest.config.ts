@@ -29,10 +29,10 @@ export default defineConfig({
     poolOptions: {
       forks: {
         // CI環境でのメモリ使用量を制限
-        maxForks: process.env.CI ? 2 : 4,
+        maxForks: process.env.CI ? 1 : 4,
         minForks: 1,
         // CI環境で単一ワーカーのテストを分離してメモリ効率を向上
-        singleFork: process.env.CI ? true : false
+        singleFork: true
       }
     },
     // CI環境での追加設定
@@ -40,7 +40,11 @@ export default defineConfig({
       isolate: true,  // 各テストファイルを分離
       passWithNoTests: true,  // テストがない場合もパス
       bail: 5,  // 5つ失敗したら即座に停止
-      logHeapUsage: true  // メモリ使用状況をログ出力
+      logHeapUsage: true,  // メモリ使用状況をログ出力
+      sequence: {
+        shuffle: false  // テストの実行順序をシャッフルしない
+      },
+      fileParallelism: false  // ファイル並列実行を無効化
     } : {}),
     coverage: {
       provider: 'v8',
