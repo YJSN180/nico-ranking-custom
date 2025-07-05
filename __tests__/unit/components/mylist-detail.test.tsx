@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { MylistManager } from '@/lib/storage/mylists'
@@ -95,6 +95,11 @@ describe('MylistDetailClient', () => {
       searchVideosInMylist: vi.fn().mockResolvedValue(mockVideos)
     }
     MylistManager.mockImplementation(() => mockMylistManager)
+  })
+
+  afterEach(() => {
+    cleanup() // DOM cleanup
+    vi.restoreAllMocks()
   })
 
   describe('基本表示', () => {

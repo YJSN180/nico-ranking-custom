@@ -14,7 +14,10 @@ const localStorageMock = {
   length: 0,
   key: vi.fn()
 }
-global.localStorage = localStorageMock as any
+Object.defineProperty(global, 'localStorage', {
+  value: localStorageMock,
+  writable: true
+})
 
 // document.cookieのモック
 const cookieMock = {

@@ -14,6 +14,7 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**', 
       '**/__tests__/e2e/**',
+      '**/tests/e2e/**', // E2E test files (Playwright)
       '**/*.bak', // バックアップファイルを除外
       // Temporarily exclude problematic tests in CI
       ...(process.env.CI ? [

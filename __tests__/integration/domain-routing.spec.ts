@@ -110,6 +110,8 @@ describe('Domain Routing Tests', () => {
 
   describe('Rate Limiting Tests', () => {
     it('should enforce rate limits', async () => {
+      let statusCodes: number[] = []
+      
       try {
         const url = 'https://nico-ranking-api-gateway.yjsn180180.workers.dev/api/ranking'
         const requests = []
@@ -120,7 +122,7 @@ describe('Domain Routing Tests', () => {
         }
         
         const responses = await Promise.all(requests)
-        const statusCodes = responses
+        statusCodes = responses
           .filter(r => r && typeof r.status === 'number')
           .map(r => r.status)
         

@@ -17,7 +17,7 @@ type SortOrder = 'addedAt-desc' | 'addedAt-asc' | 'title-asc' | 'title-desc' | '
 export function MylistDetailClient() {
   const params = useParams()
   const router = useRouter()
-  const mylistId = params.id as string
+  const mylistId = params?.id as string
   
   const [mylist, setMylist] = useState<Mylist | null>(null)
   const [videos, setVideos] = useState<MylistVideo[]>([])
@@ -33,7 +33,7 @@ export function MylistDetailClient() {
   
 
   const loadMylistData = useCallback(async () => {
-    if (!mylistManagerRef.current) return
+    if (!mylistManagerRef.current || !mylistId) return
     
     try {
       const mylistData = await mylistManagerRef.current.getMylist(mylistId)
