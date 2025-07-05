@@ -143,10 +143,18 @@ test.describe('ナビゲーション機能', () => {
       // 特定のジャンル・期間・タグで直接アクセス
       await page.goto(`/?genre=music&period=hour&tag=${encodedTag}`)
       
+      // ページのロードとレンダリングを待つ
+      await page.waitForLoadState('networkidle')
+      await page.waitForTimeout(1000) // CI環境での安定性のため追加の待機
+      
       // ページが正常に表示されることを確認
       await expect(page.locator('h1')).toBeVisible()
       
-      // URLパラメータが維持されていることを確認
+      // URLパラメータが維持されていることを確認（CI環境での遅延を考慮）
+      await page.waitForFunction(
+        () => window.location.href.includes('genre=music'),
+        { timeout: 5000 }
+      )
       expect(page.url()).toContain('genre=music')
       expect(page.url()).toContain('period=hour')
       expect(page.url()).toContain('tag=')
@@ -154,10 +162,18 @@ test.describe('ナビゲーション機能', () => {
       // タグがない場合はジャンルと期間のみでテスト
       await page.goto('/?genre=music&period=hour')
       
+      // ページのロードとレンダリングを待つ
+      await page.waitForLoadState('networkidle')
+      await page.waitForTimeout(1000) // CI環境での安定性のため追加の待機
+      
       // ページが正常に表示されることを確認
       await expect(page.locator('h1')).toBeVisible()
       
-      // URLパラメータが維持されていることを確認
+      // URLパラメータが維持されていることを確認（CI環境での遅延を考慮）
+      await page.waitForFunction(
+        () => window.location.href.includes('genre=music'),
+        { timeout: 5000 }
+      )
       expect(page.url()).toContain('genre=music')
       expect(page.url()).toContain('period=hour')
     }
