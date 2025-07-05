@@ -12,15 +12,11 @@ export const metadata: Metadata = {
 const MylistsClient = dynamic(
   () => import('./mylists-client').then(mod => ({ default: mod.MylistsClient })),
   {
-    loading: () => null, // スケルトンUIをMylistsClient内で表示するため、ここでは何も表示しない
-    ssr: false // クライアントサイドのみでレンダリング
+    loading: () => null // スケルトンUIをMylistsClient内で表示するため、ここでは何も表示しない
   }
 )
 
-// ページロード時に事前にコンポーネントをプリロード
-if (typeof window !== 'undefined') {
-  import('./mylists-client')
-}
+// 注：プリロードはクライアントコンポーネント内で行う必要があるため削除
 
 export default function MylistsPage() {
   return (
