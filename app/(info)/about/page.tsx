@@ -67,9 +67,9 @@ export default function AboutPage() {
           color: 'var(--text-secondary)',
           lineHeight: '1.8',
         }}>
-          <li>最新版のChrome、Edge、Firefox、Safariでの動作を推奨します。</li>
-          <li>Internet Explorer、旧バージョンのブラウザでは正常に動作しない場合があります。</li>
-          <li>一部の機能はモバイルブラウザで最適化されています。</li>
+          <li>PC版では最新版のChrome、Edge、Firefoxでの動作を推奨します。</li>
+          <li>iOS端末（iPhone/iPad）ではメモリ制限（200-400MB）により、大量の動画を表示する際に動作が遅くなる場合があります。</li>
+          <li>RAM 4GB以下のAndroid端末では、表示が遅くなることがあります。より快適にご利用いただくには、PC版の利用を推奨します。</li>
         </ul>
       </section>
 
