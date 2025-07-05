@@ -3,7 +3,7 @@ import { screen } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { vi, beforeAll } from 'vitest'
 import ClientPage from '@/app/client-page'
-import { MylistOperationsProvider } from '@/context/mylist-operations-context'
+// MylistOperationsProviderは test-utils.tsx 内で適用されるため削除
 import type { RankingItem } from '@/types'
 
 // Next.js のモック
@@ -31,14 +31,8 @@ beforeAll(() => {
   }
 })
 
-// MylistOperationsProvider付きのrenderヘルパー
-const renderWithProviders = (component: React.ReactElement) => {
-  return render(
-    <MylistOperationsProvider>
-      {component}
-    </MylistOperationsProvider>
-  )
-}
+// test-utils.tsxのrenderはすでにMylistOperationsProviderを含んでいるため、
+// 直接renderを使用
 
 describe('ランキング順位のナンバリング検証', () => {
   beforeEach(() => {
@@ -56,7 +50,7 @@ describe('ランキング順位のナンバリング検証', () => {
       { id: '5', title: 'Video 5', rank: 5, thumbURL: 'https://example.com/5.jpg', views: 600 }
     ]
 
-    renderWithProviders(
+    render(
       <ClientPage
         initialData={{ items: testData }}
         allRankingData={testData}
@@ -83,7 +77,7 @@ describe('ランキング順位のナンバリング検証', () => {
       { id: '5', title: 'Video 5', rank: 5, thumbURL: 'https://example.com/5.jpg', views: 600 }
     ]
 
-    renderWithProviders(
+    render(
       <ClientPage
         initialData={{ items: testData }}
         allRankingData={testData}
@@ -116,7 +110,7 @@ describe('ランキング順位のナンバリング検証', () => {
       { id: '7', title: 'Video 7', rank: 7, thumbURL: 'https://example.com/7.jpg', views: 400 }, // 6位が欠番
     ]
 
-    renderWithProviders(
+    render(
       <ClientPage
         initialData={{ items: testData }}
         allRankingData={testData}
@@ -159,7 +153,7 @@ describe('ランキング順位のナンバリング検証', () => {
       if (testData.length >= 100) break
     }
 
-    renderWithProviders(
+    render(
       <ClientPage
         initialData={{ items: testData }}
         allRankingData={testData}
@@ -193,7 +187,7 @@ describe('ランキング順位のナンバリング検証', () => {
     // デバッグ用: 入力データを確認
     console.log('Input testData:', testData.map(item => `${item.title} (rank: ${item.rank})`))
 
-    renderWithProviders(
+    render(
       <ClientPage
         initialData={{ items: testData }}
         allRankingData={testData}
@@ -237,7 +231,7 @@ describe('ランキング順位のナンバリング検証', () => {
       })
     }
 
-    renderWithProviders(
+    render(
       <ClientPage
         initialData={{ items: testData }} // 正しい形式でデータを渡す
         initialGenre="all"

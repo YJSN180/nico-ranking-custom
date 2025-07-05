@@ -3,7 +3,6 @@ import { screen, waitFor } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { vi } from 'vitest'
 import ClientPage from '@/app/client-page'
-import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 import type { RankingData } from '@/types/ranking'
 
 // Mock fetch
@@ -120,19 +119,11 @@ describe('Popular Tags Cache', () => {
     delete (window as any).__MOCK_MYLIST_DATA__
   })
 
-  // テスト用のレンダリングヘルパー
-  const renderWithProviders = (component: React.ReactElement) => {
-    return render(
-      <MylistOperationsProvider>
-        {component}
-      </MylistOperationsProvider>
-    )
-  }
 
   it('should cache popular tags from initial props', async () => {
     const popularTags = ['tag1', 'tag2', 'tag3']
     
-    const { container } = renderWithProviders(
+    const { container } = render(
       <ClientPage
         initialData={{ items: mockData, popularTags }}
         initialGenre="game"
@@ -164,7 +155,7 @@ describe('Popular Tags Cache', () => {
       }),
     })
 
-    const { container } = renderWithProviders(
+    const { container } = render(
       <ClientPage
         initialData={{ items: mockData, popularTags }}
         initialGenre="game"
@@ -187,7 +178,7 @@ describe('Popular Tags Cache', () => {
   it('should maintain popular tags during rapid switching', async () => {
     const popularTags = ['initial1', 'initial2']
     
-    const { container } = renderWithProviders(
+    const { container } = render(
       <ClientPage
         initialData={{ items: mockData, popularTags }}
         initialGenre="game"
