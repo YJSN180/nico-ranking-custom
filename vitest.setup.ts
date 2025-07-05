@@ -30,10 +30,9 @@ if (typeof document !== 'undefined') {
 // Ensure React is available globally for all tests
 globalThis.React = React
 
-// Force React to use legacy sync mode in tests to avoid act warnings
-if (typeof globalThis.IS_REACT_ACT_ENVIRONMENT === 'undefined') {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true
-}
+// Disable React act environment to avoid "Should not already be working" errors
+// This is needed when using React Testing Library with Vitest
+globalThis.IS_REACT_ACT_ENVIRONMENT = false
 
 // Mock IndexedDB for tests
 import FDBFactory from 'fake-indexeddb/lib/FDBFactory'
