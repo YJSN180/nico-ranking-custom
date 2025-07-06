@@ -27,6 +27,7 @@ export interface Mylist {
   createdAt: number    // 作成日時（タイムスタンプ）
   updatedAt: number    // 更新日時（タイムスタンプ）
   videoCount: number   // 動画数
+  customOrder?: number // カスタム並び順（オプション）
 }
 
 // マイリスト内の動画
@@ -61,4 +62,22 @@ export interface StorageStats {
   storageUsed: number  // バイト数
   storageQuota: number // バイト数
   lastUpdated: number
+}
+
+// マイリスト並び替えオプション
+export type MylistSortOrder = 
+  | 'createdAt-desc'    // 作成日（新しい順）
+  | 'createdAt-asc'     // 作成日（古い順）
+  | 'updatedAt-desc'    // 更新日（新しい順）
+  | 'updatedAt-asc'     // 更新日（古い順）
+  | 'name-asc'          // 名前（昇順）
+  | 'name-desc'         // 名前（降順）
+  | 'videoCount-desc'   // 動画数（多い順）
+  | 'videoCount-asc'    // 動画数（少ない順）
+  | 'custom'            // カスタム順
+
+// マイリストソート設定
+export interface MylistSortConfig {
+  order: MylistSortOrder
+  lastUpdated?: number  // 設定更新日時
 }

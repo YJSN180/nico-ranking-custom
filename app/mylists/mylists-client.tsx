@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import type { Mylist } from '@/lib/storage/types'
+import type { Mylist, MylistSortOrder, MylistSortConfig } from '@/lib/storage/types'
 import type { DBManager } from '@/lib/storage/db-manager'
 import type { MylistManager } from '@/lib/storage/mylists'
 import { BackLink } from '@/components/back-link'
@@ -37,6 +37,9 @@ export function MylistsClient() {
   const [editingMylist, setEditingMylist] = useState<Mylist | null>(null)
   const [storageInfo, setStorageInfo] = useState({ used: 0, quota: 0 })
   const [contentReady, setContentReady] = useState(false)
+  const [sortOrder, setSortOrder] = useState<MylistSortOrder>('updatedAt-desc')
+  const [isDragMode, setIsDragMode] = useState(false)
+  const [draggedMylistId, setDraggedMylistId] = useState<string | null>(null)
   const router = useRouter()
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
@@ -98,6 +101,12 @@ export function MylistsClient() {
         // デフォルトマイリストを確保
         await mylistManagerRef.current.getOrCreateDefaultMylist()
         
+        // 保存されたソート設定を読み込み
+        if (mylistManagerRef.current) {
+          const savedConfig = await mylistManagerRef.current.getMylistSortConfig()
+          setSortOrder(savedConfig.order)
+        }
+        
         // マイリスト一覧を取得
         await loadMylists()
         
@@ -125,11 +134,12 @@ export function MylistsClient() {
     }
   }, [])
 
-  const loadMylists = async () => {
+  const loadMylists = async (customSortOrder?: MylistSortOrder) => {
     if (!mylistManagerRef.current) return
     
     try {
-      const allMylists = await mylistManagerRef.current.getAllMylists()
+      const orderToUse = customSortOrder || sortOrder
+      const allMylists = await mylistManagerRef.current.getAllMylists(orderToUse)
       setMylists(allMylists)
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -138,6 +148,93 @@ export function MylistsClient() {
   }
 
 
+  const handleSortChange = async (newSortOrder: MylistSortOrder) => {
+    if (!mylistManagerRef.current) return
+    
+    setSortOrder(newSortOrder)
+    
+    try {
+      // ソート設定を保存
+      await mylistManagerRef.current.saveMylistSortConfig({
+        order: newSortOrder
+      })
+      
+      // カスタム順に変更した場合はドラッグモードを有効化
+      if (newSortOrder === 'custom') {
+        setIsDragMode(true)
+      } else {
+        setIsDragMode(false)
+      }
+      
+      // マイリストを再読み込み
+      await loadMylists(newSortOrder)
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update sort order:', error)
+    }
+  }
+  
+  const handleDragStart = (e: React.DragEvent, mylistId: string) => {
+    if (!isDragMode) return
+    setDraggedMylistId(mylistId)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', mylistId)
+    
+    // ドラッグ要素にクラスを追加
+    const element = e.currentTarget as HTMLElement
+    element.classList.add(styles.dragging)
+  }
+  
+  const handleDragEnd = (e: React.DragEvent) => {
+    setDraggedMylistId(null)
+    
+    // ドラッグ要素からクラスを削除
+    const element = e.currentTarget as HTMLElement
+    element.classList.remove(styles.dragging)
+  }
+  
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isDragMode || !draggedMylistId) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+  
+  const handleDrop = async (e: React.DragEvent, targetMylistId: string) => {
+    if (!isDragMode || !draggedMylistId || !mylistManagerRef.current) return
+    e.preventDefault()
+    
+    if (draggedMylistId === targetMylistId) return
+    
+    try {
+      // 現在の順序を取得
+      const currentMylists = [...mylists]
+      const draggedIndex = currentMylists.findIndex(m => m.id === draggedMylistId)
+      const targetIndex = currentMylists.findIndex(m => m.id === targetMylistId)
+      
+      if (draggedIndex === -1 || targetIndex === -1) return
+      
+      // 配列内での移動
+      const [removed] = currentMylists.splice(draggedIndex, 1)
+      currentMylists.splice(targetIndex, 0, removed)
+      
+      // カスタム順序を更新
+      const updates = currentMylists.map((mylist, index) => ({
+        mylistId: mylist.id,
+        customOrder: index
+      }))
+      
+      await mylistManagerRef.current.updateMultipleMylistOrders(updates)
+      
+      // 表示を更新
+      setMylists(currentMylists)
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to update mylist order:', error)
+      // エラー時は元の順序を復元
+      await loadMylists()
+    }
+  }
+  
   const handleCreateMylist = async (name: string, description?: string) => {
     if (!mylistManagerRef.current) return
 
@@ -207,14 +304,47 @@ export function MylistsClient() {
         </div>
       </div>
       
+      {/* ソート・表示オプション */}
+      <div className={styles.controls}>
+        <div className={styles.sortSection}>
+          <label className={styles.sortLabel}>並び替え:</label>
+          <select
+            className={styles.sortSelect}
+            value={sortOrder}
+            onChange={(e) => handleSortChange(e.target.value as MylistSortOrder)}
+          >
+            <option value="updatedAt-desc">更新日（新しい順）</option>
+            <option value="updatedAt-asc">更新日（古い順）</option>
+            <option value="createdAt-desc">作成日（新しい順）</option>
+            <option value="createdAt-asc">作成日（古い順）</option>
+            <option value="name-asc">名前（昇順）</option>
+            <option value="name-desc">名前（降順）</option>
+            <option value="videoCount-desc">動画数（多い順）</option>
+            <option value="videoCount-asc">動画数（少ない順）</option>
+            <option value="custom">カスタム順</option>
+          </select>
+        </div>
+        
+        {isDragMode && (
+          <div className={styles.dragHint}>
+            💡 ドラッグ＆ドロップでマイリストの順序を変更できます
+          </div>
+        )}
+      </div>
+      
       {/* PWAInstallGuide moved to bottom */}
 
       <div className={styles.mylistGrid}>
         {mylists.map(mylist => (
           <div
             key={mylist.id}
-            className={styles.mylistCard}
-            onClick={() => router.push(`/mylists/${mylist.id}`)}
+            className={`${styles.mylistCard} ${isDragMode ? styles.draggable : ''}`}
+            draggable={isDragMode}
+            onDragStart={(e) => handleDragStart(e, mylist.id)}
+            onDragEnd={handleDragEnd}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, mylist.id)}
+            onClick={() => !isDragMode && router.push(`/mylists/${mylist.id}`)}
           >
             <div className={styles.mylistInfo}>
               <div className={styles.mylistIcon}>📁</div>

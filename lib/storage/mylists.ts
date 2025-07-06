@@ -1,5 +1,5 @@
 import { DBManager } from './db-manager'
-import type { Mylist, MylistVideo } from './types'
+import type { Mylist, MylistVideo, MylistSortOrder, MylistSortConfig } from './types'
 
 export class MylistManager {
   private static defaultMylistPromise: Promise<Mylist> | null = null
@@ -88,13 +88,45 @@ export class MylistManager {
   /**
    * すべてのマイリストを取得
    */
-  async getAllMylists(): Promise<Mylist[]> {
+  async getAllMylists(sortOrder: MylistSortOrder = 'updatedAt-desc'): Promise<Mylist[]> {
     const db = this.dbManager.getDB()
     const tx = db.transaction('mylists', 'readonly')
     const mylists = await tx.store.getAll()
     
-    // 作成日時の新しい順にソート
-    return mylists.sort((a, b) => b.createdAt - a.createdAt)
+    return this.sortMylists(mylists, sortOrder)
+  }
+
+  /**
+   * マイリストをソートする
+   */
+  private sortMylists(mylists: Mylist[], sortOrder: MylistSortOrder): Mylist[] {
+    return [...mylists].sort((a, b) => {
+      switch (sortOrder) {
+        case 'createdAt-desc':
+          return b.createdAt - a.createdAt
+        case 'createdAt-asc':
+          return a.createdAt - b.createdAt
+        case 'updatedAt-desc':
+          return b.updatedAt - a.updatedAt
+        case 'updatedAt-asc':
+          return a.updatedAt - b.updatedAt
+        case 'name-asc':
+          return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+        case 'name-desc':
+          return b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: 'base' })
+        case 'videoCount-desc':
+          return b.videoCount - a.videoCount
+        case 'videoCount-asc':
+          return a.videoCount - b.videoCount
+        case 'custom':
+          // カスタム順の場合、customOrderフィールドでソート（未設定の場合は作成日順）
+          const aOrder = a.customOrder ?? a.createdAt
+          const bOrder = b.customOrder ?? b.createdAt
+          return aOrder - bOrder
+        default:
+          return b.updatedAt - a.updatedAt
+      }
+    })
   }
 
   /**
@@ -346,5 +378,74 @@ export class MylistManager {
       // 両方orderIndexがない場合は追加日時の新しい順
       return b.addedAt - a.addedAt
     })
+  }
+
+  /**
+   * マイリストのカスタム順序を更新
+   */
+  async updateMylistCustomOrder(mylistId: string, customOrder: number): Promise<void> {
+    const db = this.dbManager.getDB()
+    const tx = db.transaction('mylists', 'readwrite')
+    
+    const mylist = await tx.store.get(mylistId)
+    if (!mylist) {
+      throw new Error('Mylist not found')
+    }
+    
+    mylist.customOrder = customOrder
+    mylist.updatedAt = Date.now()
+    
+    await tx.store.put(mylist)
+    await tx.done
+  }
+
+  /**
+   * 複数のマイリストのカスタム順序を一括更新
+   */
+  async updateMultipleMylistOrders(updates: { mylistId: string; customOrder: number }[]): Promise<void> {
+    const db = this.dbManager.getDB()
+    const tx = db.transaction('mylists', 'readwrite')
+    
+    for (const update of updates) {
+      const mylist = await tx.store.get(update.mylistId)
+      if (mylist) {
+        mylist.customOrder = update.customOrder
+        mylist.updatedAt = Date.now()
+        await tx.store.put(mylist)
+      }
+    }
+    
+    await tx.done
+  }
+
+  /**
+   * マイリストソート設定を保存
+   */
+  async saveMylistSortConfig(config: MylistSortConfig): Promise<void> {
+    const configWithTimestamp = {
+      ...config,
+      lastUpdated: Date.now()
+    }
+    localStorage.setItem('mylist-sort-config', JSON.stringify(configWithTimestamp))
+  }
+
+  /**
+   * マイリストソート設定を読み込み
+   */
+  async getMylistSortConfig(): Promise<MylistSortConfig> {
+    try {
+      const saved = localStorage.getItem('mylist-sort-config')
+      if (saved) {
+        return JSON.parse(saved)
+      }
+    } catch (error) {
+      console.warn('Failed to load mylist sort config:', error)
+    }
+    
+    // デフォルト設定
+    return {
+      order: 'updatedAt-desc',
+      lastUpdated: Date.now()
+    }
   }
 }
