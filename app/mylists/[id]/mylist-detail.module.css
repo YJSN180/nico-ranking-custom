@@ -572,8 +572,19 @@
   }
 
   .modalFooter {
+    /* マイリスト設定モーダル用 */
     flex-direction: column;
     gap: 12px;
+  }
+
+  /* メモ編集モーダルのボタンも横並びに */
+  .modalFooter:not(:has(.btnDanger)) {
+    flex-direction: row;
+  }
+
+  .modalFooter:not(:has(.btnDanger)) .btnPrimary,
+  .modalFooter:not(:has(.btnDanger)) .btnSecondary {
+    flex: 1;
   }
 
   .modalActions {
