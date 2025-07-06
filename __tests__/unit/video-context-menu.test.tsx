@@ -60,7 +60,7 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     }, { timeout: 600 })
   })
 
-  it('サムネイルURLが既に存在する場合、プロキシAPI経由でダウンロードされる', async () => {
+  it('サムネイルURLが既に存在する場合、大きいサイズに変換してプロキシAPI経由でダウンロードされる', async () => {
     // Blobのモック
     const mockBlob = new Blob(['mock image data'], { type: 'image/jpeg' })
     ;(global.fetch as jest.Mock).mockResolvedValueOnce({
@@ -102,9 +102,10 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     fireEvent.click(saveButton)
 
     await waitFor(() => {
-      // プロキシAPIが正しいURLで呼ばれたことを確認
+      // プロキシAPIが正しいURLで呼ばれたことを確認（.Lに変換されている）
+      const expectedUrl = mockVideo.thumbURL + '.L'
       expect(global.fetch).toHaveBeenCalledWith(
-        `/api/thumbnail-proxy?url=${encodeURIComponent(mockVideo.thumbURL)}`
+        `/api/thumbnail-proxy?url=${encodeURIComponent(expectedUrl)}`
       )
       
       // ダウンロードリンクが作成され、クリックされたことを確認

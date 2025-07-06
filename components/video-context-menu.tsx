@@ -112,24 +112,25 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   // サムネイル保存機能
   const handleSaveThumbnail = async () => {
     try {
-      // まず既存のサムネイルURLがあるか確認
-      let thumbnailUrl = video.thumbURL
+      // HDサムネイルエンドポイントから1280x720の高解像度サムネイルを取得
+      // eslint-disable-next-line no-console
+      console.log(`[HD Thumbnail] Fetching HD thumbnail for ${video.id}`)
       
-      // サムネイルURLがない場合は、APIから取得
-      if (!thumbnailUrl) {
-        const response = await fetch(`/api/thumbnail/${video.id}`)
-        
-        if (!response.ok) {
-          throw new Error('サムネイル取得に失敗しました')
-        }
-        
-        const data = await response.json()
-        thumbnailUrl = data.thumbnail
-        
-        if (!thumbnailUrl) {
-          throw new Error('サムネイルが見つかりません')
-        }
+      const response = await fetch(`/api/hd-thumbnail/${video.id}`)
+      
+      if (!response.ok) {
+        throw new Error(`HDサムネイル取得に失敗しました: ${response.status}`)
       }
+      
+      const data = await response.json()
+      const thumbnailUrl = data.thumbnail
+      
+      if (!thumbnailUrl) {
+        throw new Error('HDサムネイルが見つかりません')
+      }
+      
+      // eslint-disable-next-line no-console
+      console.log(`[HD Thumbnail] Resolution: ${data.resolution}, URL: ${thumbnailUrl}`)
       
       // プロキシAPIが利用可能か試す
       try {

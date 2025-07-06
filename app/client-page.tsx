@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
@@ -8,9 +8,9 @@ import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
 import { filterWithNGList } from '@/lib/filter-with-ng-list'
 
-// 動的インポートでバンドルサイズを削減
-const Pagination = lazy(() => import('@/components/pagination'))
-const TagSelector = lazy(() => import('@/components/tag-selector').then(mod => ({ default: mod.TagSelector })))
+// 直接インポート（まず動作確認）
+import Pagination from '@/components/pagination'
+import { TagSelector } from '@/components/tag-selector'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useRankingData } from '@/hooks/use-ranking-data'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
@@ -460,23 +460,11 @@ export default function ClientPage({
       <>
         <div className="selectors-container">
         <RankingSelector config={config} onConfigChange={handleConfigChange} />
-        <Suspense fallback={
-          <div style={{ 
-            minHeight: '100px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--text-secondary)'
-          }}>
-            <span>タグを読み込み中...</span>
-          </div>
-        }>
-          <TagSelector 
-            config={config} 
-            onConfigChange={handleConfigChange} 
-            popularTags={currentPopularTags} 
-          />
-        </Suspense>
+        <TagSelector 
+          config={config} 
+          onConfigChange={handleConfigChange} 
+          popularTags={currentPopularTags} 
+        />
       </div>
       
       {loading && (
@@ -559,25 +547,13 @@ export default function ClientPage({
           </div>
           
           {/* 上部ページネーション */}
-          <Suspense fallback={
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              padding: '20px 0',
-              borderTop: '1px solid var(--border-color)',
-              marginTop: '20px'
-            }}>
-              <div style={{ height: '40px' }} />
-            </div>
-          }>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalItemsCount}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={handlePageChange}
-            />
-          </Suspense>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItemsCount}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={handlePageChange}
+          />
           
           {/* 件数表示（ページネーションなしの場合） */}
           {totalPages <= 1 && totalItemsCount > 0 && (
@@ -605,25 +581,13 @@ export default function ClientPage({
           </ul>
           
           {/* 下部ページネーション */}
-          <Suspense fallback={
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              padding: '20px 0',
-              borderTop: '1px solid var(--border-color)',
-              marginTop: '20px'
-            }}>
-              <div style={{ height: '40px' }} />
-            </div>
-          }>
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalItemsCount}
-              itemsPerPage={ITEMS_PER_PAGE}
-              onPageChange={handlePageChange}
-            />
-          </Suspense>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItemsCount}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={handlePageChange}
+          />
           
           {/* 件数表示（ページネーションなしの場合） */}
           {totalPages <= 1 && totalItemsCount > 0 && (
