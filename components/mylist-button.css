@@ -2,17 +2,31 @@
 
 .mylist-button {
   /* 基本スタイル（既存のinline styleと同じ） */
-  border-radius: 20px;
-  padding: 6px;
+  border-radius: 22px;
+  padding: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
+  position: relative;
   
   /* 軽量最適化のみ - GPU負荷軽減 */
+}
+
+/* モバイル向けタップ領域拡大（見た目はそのまま） */
+@media (hover: none) and (pointer: coarse) {
+  .mylist-button::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    right: -8px;
+    bottom: -8px;
+    z-index: 0;
+  }
 }
 
 /* 通常状態 */
@@ -55,9 +69,9 @@
 
 /* プレースホルダー（ローディング中） */
 .mylist-button-placeholder {
-  width: 32px;
-  height: 32px;
-  border-radius: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
   background: var(--surface-secondary);
   opacity: 0.5;
   flex-shrink: 0;
@@ -76,6 +90,8 @@
 
 /* ボタン内のアイコン */
 .mylist-button__icon {
-  font-size: 16px;
+  font-size: 20px;
   line-height: 1;
+  position: relative;
+  z-index: 1;
 }
