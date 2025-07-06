@@ -25,7 +25,11 @@ import type { Mylist, MylistVideo } from './types'
  *   "addedAt": 1234567890000,     // 追加日時のタイムスタンプ（必須）
  *   "memo": "メモ内容",           // メモ（オプション）
  *   "orderIndex": 0,              // 並び順（オプション）
- *   "duration": 300               // 再生時間（秒）（オプション）
+ *   "duration": 300,              // 再生時間（秒）（オプション）
+ *   "registeredAt": "2025-07-06T10:00:00.000Z", // 動画投稿日時（オプション）
+ *   "authorName": "投稿者名",     // 投稿者名（オプション）
+ *   "authorId": "123456",         // 投稿者ID（オプション）
+ *   "authorIcon": "https://..."   // 投稿者アイコンURL（オプション）
  * }
  */
 interface ExportMylistVideo {
@@ -37,6 +41,10 @@ interface ExportMylistVideo {
   memo?: string
   orderIndex?: number
   duration?: number
+  registeredAt?: string  // 動画投稿日時（並び替えに必要）
+  authorName?: string    // 投稿者名（表示用）
+  authorId?: string      // 投稿者ID
+  authorIcon?: string    // 投稿者アイコンURL
 }
 
 /**
@@ -109,7 +117,11 @@ export async function exportMylistData(): Promise<BackupData> {
     addedAt: video.addedAt,
     ...(video.memo && { memo: video.memo }),
     ...(video.orderIndex !== undefined && { orderIndex: video.orderIndex }),
-    ...(video.duration !== undefined && { duration: video.duration })
+    ...(video.duration !== undefined && { duration: video.duration }),
+    ...(video.registeredAt && { registeredAt: video.registeredAt }),
+    ...(video.authorName && { authorName: video.authorName }),
+    ...(video.authorId && { authorId: video.authorId }),
+    ...(video.authorIcon && { authorIcon: video.authorIcon })
   }))
   
   // バックアップデータを構築

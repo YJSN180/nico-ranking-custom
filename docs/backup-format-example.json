@@ -1,0 +1,63 @@
+{
+  "version": "1.0.0",
+  "exportDate": "2025-07-06T10:30:00.000Z",
+  "mylists": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "お気に入り動画",
+      "description": "よく見る動画集",
+      "createdAt": 1720260000000,
+      "updatedAt": 1720263600000,
+      "videoCount": 2
+    },
+    {
+      "id": "default",
+      "name": "とりあえずマイリスト",
+      "createdAt": 1720256400000,
+      "updatedAt": 1720267200000,
+      "videoCount": 1
+    }
+  ],
+  "mylistVideos": [
+    {
+      "id": "sm12345",
+      "mylistId": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "サンプル動画タイトル1",
+      "thumbURL": "https://nicovideo.cdn.nimg.jp/thumbnails/12345/12345",
+      "addedAt": 1720260600000,
+      "memo": "この動画のメモ",
+      "duration": 300,
+      "registeredAt": "2025-06-15T14:30:00.000Z",
+      "authorName": "投稿者A",
+      "authorId": "123456",
+      "authorIcon": "https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/123/1234567.jpg"
+    },
+    {
+      "id": "sm67890",
+      "mylistId": "550e8400-e29b-41d4-a716-446655440000",
+      "title": "サンプル動画タイトル2",
+      "thumbURL": "https://nicovideo.cdn.nimg.jp/thumbnails/67890/67890",
+      "addedAt": 1720263600000,
+      "orderIndex": 1,
+      "registeredAt": "2025-07-01T09:00:00.000Z",
+      "authorName": "投稿者B",
+      "authorId": "789012"
+    },
+    {
+      "id": "sm11111",
+      "mylistId": "default",
+      "title": "デフォルトマイリストの動画",
+      "thumbURL": "https://nicovideo.cdn.nimg.jp/thumbnails/11111/11111",
+      "addedAt": 1720267200000,
+      "registeredAt": "2025-07-05T18:45:00.000Z",
+      "authorName": "投稿者C",
+      "authorId": "345678",
+      "authorIcon": "https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/345/3456789.jpg"
+    }
+  ],
+  "metadata": {
+    "totalMylists": 2,
+    "totalVideos": 3,
+    "appVersion": "1.0.0"
+  }
+}
