@@ -6,10 +6,10 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { videoId: string } }
+  { params }: { params: Promise<{ videoId: string }> }
 ) {
   try {
-    const { videoId } = params
+    const { videoId } = await params
     
     if (!videoId || !/^[a-zA-Z0-9]+$/.test(videoId)) {
       return NextResponse.json(
@@ -18,6 +18,7 @@ export async function GET(
       )
     }
     
+    // eslint-disable-next-line no-console
     console.log(`[HD Thumbnail] Fetching HD thumbnail for ${videoId}`)
     const nicogayUrl = `https://www.nicovideo.gay/watch/${videoId}`
     
@@ -43,10 +44,12 @@ export async function GET(
     
     if (ogImageMatch) {
       hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]
+      // eslint-disable-next-line no-console
       console.log(`[HD Thumbnail] Found og:image: ${hdThumbnailUrl}`)
       
       // サムネイルURLの検証（1280x720であることを確認）
       if (hdThumbnailUrl.includes('1280x720') || hdThumbnailUrl.includes('.original')) {
+        // eslint-disable-next-line no-console
         console.log(`[HD Thumbnail] Confirmed HD size for ${videoId}`)
       } else {
         // フォールバック: .original サフィックスで最大サイズ取得を試行
@@ -56,6 +59,7 @@ export async function GET(
           originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
         }
         hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
+        // eslint-disable-next-line no-console
         console.log(`[HD Thumbnail] Fallback to original: ${hdThumbnailUrl}`)
       }
     }
@@ -72,6 +76,7 @@ export async function GET(
           originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
         }
         hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
+        // eslint-disable-next-line no-console
         console.log(`[HD Thumbnail] Fallback thumbnail with original: ${hdThumbnailUrl}`)
       }
     }
@@ -93,11 +98,12 @@ export async function GET(
     })
     
   } catch (error) {
-    console.error(`[HD Thumbnail] Error for ${params.videoId}:`, error)
+    const resolvedParams = await params
+    console.error(`[HD Thumbnail] Error for ${resolvedParams.videoId}:`, error)
     
     return NextResponse.json({
       error: 'Failed to fetch HD thumbnail',
-      videoId: params.videoId,
+      videoId: resolvedParams.videoId,
       details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 })
   }
