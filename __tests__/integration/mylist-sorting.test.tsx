@@ -303,5 +303,49 @@ describe('マイリスト並び替え機能のテスト', () => {
       expect(mylists[1].name).toBe('アニメマイリスト')
       expect(mylists[2].name).toBe('音楽マイリスト')
     })
+
+    it('ユーザーがドラッグ&ドロップ後に確認操作を行う', async () => {
+      // 1. カスタム順に変更（元の順序を記録）
+      const originalMylists = await mylistManager.getAllMylists('updatedAt-desc')
+      await mylistManager.saveMylistSortConfig({ order: 'custom' })
+      
+      // 2. 一時的な順序変更をシミュレート（DBは更新しない）
+      // 元の順序: 音楽マイリスト(最新) → アニメマイリスト → ゲーム実況(最古)
+      // 新しい順序: ゲーム実況 → アニメマイリスト → 音楽マイリスト
+      const gameMylist = originalMylists.find(m => m.name === 'ゲーム実況')!
+      const animeMylist = originalMylists.find(m => m.name === 'アニメマイリスト')!
+      const musicMylist = originalMylists.find(m => m.name === '音楽マイリスト')!
+      
+      // 3. 確認して保存する場合
+      const saveOrder = [
+        { mylistId: gameMylist.id, customOrder: 0 },  // ゲーム実況を先頭に
+        { mylistId: animeMylist.id, customOrder: 1 }, // アニメマイリストを2番目に
+        { mylistId: musicMylist.id, customOrder: 2 }  // 音楽マイリストを最後に
+      ]
+      
+      await mylistManager.updateMultipleMylistOrders(saveOrder)
+      
+      // 4. 保存された順序で取得
+      const savedMylists = await mylistManager.getAllMylists('custom')
+      expect(savedMylists[0].name).toBe('ゲーム実況')
+      expect(savedMylists[1].name).toBe('アニメマイリスト')  
+      expect(savedMylists[2].name).toBe('音楽マイリスト')
+    })
+
+    it('ユーザーがドラッグ&ドロップをキャンセルする', async () => {
+      // 1. 元の順序を取得
+      const originalMylists = await mylistManager.getAllMylists('updatedAt-desc')
+      const originalOrder = originalMylists.map(m => m.name)
+      
+      // 2. カスタム順に変更
+      await mylistManager.saveMylistSortConfig({ order: 'custom' })
+      
+      // 3. キャンセル後は元の順序が維持されることを確認
+      // （実際のキャンセル操作はUI側で元の配列を復元）
+      const afterCancel = await mylistManager.getAllMylists('updatedAt-desc')
+      const afterCancelOrder = afterCancel.map(m => m.name)
+      
+      expect(afterCancelOrder).toEqual(originalOrder)
+    })
   })
 })

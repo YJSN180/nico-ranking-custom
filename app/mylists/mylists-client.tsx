@@ -40,6 +40,8 @@ export function MylistsClient() {
   const [sortOrder, setSortOrder] = useState<MylistSortOrder>('updatedAt-desc')
   const [isDragMode, setIsDragMode] = useState(false)
   const [draggedMylistId, setDraggedMylistId] = useState<string | null>(null)
+  const [originalMylists, setOriginalMylists] = useState<Mylist[]>([])
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const router = useRouter()
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
@@ -161,9 +163,14 @@ export function MylistsClient() {
       
       // カスタム順に変更した場合はドラッグモードを有効化
       if (newSortOrder === 'custom') {
+        // 元の順序を保存（キャンセル時の復元用）
+        setOriginalMylists([...mylists])
         setIsDragMode(true)
+        setHasUnsavedChanges(false)
       } else {
         setIsDragMode(false)
+        setHasUnsavedChanges(false)
+        setOriginalMylists([])
       }
       
       // マイリストを再読み込み
@@ -200,39 +207,53 @@ export function MylistsClient() {
   }
   
   const handleDrop = async (e: React.DragEvent, targetMylistId: string) => {
-    if (!isDragMode || !draggedMylistId || !mylistManagerRef.current) return
+    if (!isDragMode || !draggedMylistId) return
     e.preventDefault()
     
     if (draggedMylistId === targetMylistId) return
     
+    // 現在の順序を取得
+    const currentMylists = [...mylists]
+    const draggedIndex = currentMylists.findIndex(m => m.id === draggedMylistId)
+    const targetIndex = currentMylists.findIndex(m => m.id === targetMylistId)
+    
+    if (draggedIndex === -1 || targetIndex === -1) return
+    
+    // 配列内での移動（一時的な表示のみ更新）
+    const [removed] = currentMylists.splice(draggedIndex, 1)
+    currentMylists.splice(targetIndex, 0, removed)
+    
+    // 表示を更新（DBは更新しない）
+    setMylists(currentMylists)
+    setHasUnsavedChanges(true)
+  }
+  
+  const handleSaveOrder = async () => {
+    if (!mylistManagerRef.current || !hasUnsavedChanges) return
+    
     try {
-      // 現在の順序を取得
-      const currentMylists = [...mylists]
-      const draggedIndex = currentMylists.findIndex(m => m.id === draggedMylistId)
-      const targetIndex = currentMylists.findIndex(m => m.id === targetMylistId)
-      
-      if (draggedIndex === -1 || targetIndex === -1) return
-      
-      // 配列内での移動
-      const [removed] = currentMylists.splice(draggedIndex, 1)
-      currentMylists.splice(targetIndex, 0, removed)
-      
       // カスタム順序を更新
-      const updates = currentMylists.map((mylist, index) => ({
+      const updates = mylists.map((mylist, index) => ({
         mylistId: mylist.id,
         customOrder: index
       }))
       
       await mylistManagerRef.current.updateMultipleMylistOrders(updates)
-      
-      // 表示を更新
-      setMylists(currentMylists)
+      setHasUnsavedChanges(false)
+      setOriginalMylists([...mylists])
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('Failed to update mylist order:', error)
+      console.error('Failed to save mylist order:', error)
       // エラー時は元の順序を復元
-      await loadMylists()
+      handleCancelOrder()
     }
+  }
+  
+  const handleCancelOrder = () => {
+    if (originalMylists.length > 0) {
+      setMylists([...originalMylists])
+    }
+    setHasUnsavedChanges(false)
   }
   
   const handleCreateMylist = async (name: string, description?: string) => {
@@ -328,6 +349,22 @@ export function MylistsClient() {
         {isDragMode && (
           <div className={styles.dragHint}>
             💡 ドラッグ＆ドロップでマイリストの順序を変更できます
+            {hasUnsavedChanges && (
+              <div className={styles.confirmButtons}>
+                <button
+                  className={styles.saveButton}
+                  onClick={handleSaveOrder}
+                >
+                  ✓ 完了
+                </button>
+                <button
+                  className={styles.cancelButton}
+                  onClick={handleCancelOrder}
+                >
+                  ✕ キャンセル
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -344,7 +381,13 @@ export function MylistsClient() {
             onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, mylist.id)}
-            onClick={() => !isDragMode && router.push(`/mylists/${mylist.id}`)}
+            onClick={(e) => {
+              // ドラッグ中やアクションボタンのクリック時はナビゲーションしない
+              if (draggedMylistId || (e.target as HTMLElement).closest('button')) {
+                return
+              }
+              router.push(`/mylists/${mylist.id}`)
+            }}
           >
             <div className={styles.mylistInfo}>
               <div className={styles.mylistIcon}>📁</div>

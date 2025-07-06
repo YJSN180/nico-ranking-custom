@@ -118,6 +118,47 @@
   align-items: center;
   gap: 8px;
   animation: fadeIn 0.3s ease-out;
+  flex-wrap: wrap;
+}
+
+.confirmButtons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.saveButton,
+.cancelButton {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.saveButton {
+  background: var(--success-color, #10b981);
+  color: white;
+}
+
+.saveButton:hover {
+  background: var(--success-color-hover, #059669);
+  transform: translateY(-1px);
+}
+
+.cancelButton {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.cancelButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--error-color, #ef4444);
 }
 
 @keyframes fadeIn {
@@ -511,6 +552,25 @@
   .sortSelect {
     width: 100%;
     min-width: unset;
+  }
+
+  .dragHint {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .confirmButtons {
+    margin-left: 0;
+    margin-top: 8px;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .saveButton,
+  .cancelButton {
+    flex: 1;
+    text-align: center;
   }
 
   .mylistGrid {
