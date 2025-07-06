@@ -13,6 +13,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 })
   const [copySuccess, setCopySuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('✓ コピーしました')
   const longPressTimer = useRef<NodeJS.Timeout>()
   const containerRef = useRef<HTMLDivElement>(null)
   
@@ -59,6 +60,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   const copyToClipboard = async (text: string, type: 'title' | 'url') => {
     try {
       await navigator.clipboard.writeText(text)
+      setSuccessMessage('✓ コピーしました')
       setCopySuccess(true)
       
       // 2秒後にメニューを閉じる
@@ -74,6 +76,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
       textArea.select()
       try {
         document.execCommand('copy')
+        setSuccessMessage('✓ コピーしました')
         setCopySuccess(true)
         setTimeout(closeMenu, 1500)
       } catch {
@@ -103,6 +106,59 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
     } else {
       // Web Share API が使えない場合はURLをコピー
       await copyToClipboard(videoUrl, 'url')
+    }
+  }
+  
+  // サムネイル保存機能
+  const handleSaveThumbnail = async () => {
+    try {
+      // まず既存のサムネイルURLがあるか確認
+      let thumbnailUrl = video.thumbURL
+      
+      // サムネイルURLがない場合は、APIから取得
+      if (!thumbnailUrl) {
+        const response = await fetch(`/api/thumbnail/${video.id}`)
+        
+        if (!response.ok) {
+          throw new Error('サムネイル取得に失敗しました')
+        }
+        
+        const data = await response.json()
+        thumbnailUrl = data.thumbnail
+        
+        if (!thumbnailUrl) {
+          throw new Error('サムネイルが見つかりません')
+        }
+      }
+      
+      // サムネイル画像をダウンロード
+      const imageResponse = await fetch(thumbnailUrl)
+      const blob = await imageResponse.blob()
+      
+      // ダウンロードリンクを作成
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${video.id}.jpg`
+      
+      // ダウンロードを実行
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // URLを解放
+      URL.revokeObjectURL(url)
+      
+      // 成功メッセージを表示
+      setSuccessMessage('✓ サムネイルを保存しました')
+      setCopySuccess(true)
+      setTimeout(() => {
+        closeMenu()
+      }, 1500)
+      
+    } catch (error) {
+      console.error('サムネイル保存エラー:', error)
+      alert('サムネイルの保存に失敗しました')
     }
   }
   
@@ -149,7 +205,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
           >
             {copySuccess ? (
               <div className="video-context-menu__success">
-                ✓ コピーしました
+                {successMessage}
               </div>
             ) : (
               <>
@@ -177,6 +233,16 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
                 >
                   <span className="video-context-menu__icon">📤</span>
                   共有...
+                </button>
+                
+                <div className="video-context-menu__divider" />
+                
+                <button
+                  className="video-context-menu__item"
+                  onClick={handleSaveThumbnail}
+                >
+                  <span className="video-context-menu__icon">🖼️</span>
+                  サムネイル保存
                 </button>
               </>
             )}

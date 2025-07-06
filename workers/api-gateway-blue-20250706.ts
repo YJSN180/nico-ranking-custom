@@ -1,6 +1,15 @@
 /**
  * Blue Worker - Original API Gateway Implementation
  * R2から直接ランキングデータを配信 (Blue/Green用)
+ * 
+ * 実装状況 (2025-07-06更新):
+ * ✅ /api/ranking - R2からランキングデータ取得
+ * ✅ /api/debug - デバッグ情報
+ * ✅ /api/thumbnail/{videoId} - サムネイル取得API (KVキャッシュなし、CDNキャッシュのみ)
+ * 
+ * 注意事項:
+ * - サムネイルAPIはKVキャッシュを使用しない（個人差でキャッシュヒット率が低いため）
+ * - CDNレベルでキャッシュ: ブラウザ1時間、CDN24時間
  */
 
 /// <reference types="@cloudflare/workers-types" />
@@ -108,6 +117,74 @@ export default {
 
       } catch (error) {
         console.error('Error fetching ranking data:', error)
+        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders,
+            ...securityHeaders
+          }
+        })
+      }
+    }
+
+    // /api/thumbnail/{videoId} パスの処理
+    if (url.pathname.startsWith('/api/thumbnail/')) {
+      try {
+        const videoId = url.pathname.split('/').pop()
+        
+        if (!videoId || !/^[a-zA-Z0-9_-]+$/.test(videoId)) {
+          return new Response(JSON.stringify({ error: 'Invalid video ID' }), {
+            status: 400,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders,
+              ...securityHeaders
+            }
+          })
+        }
+        
+        // ニコニコ動画から動画ページを取得（キャッシュなし）
+        const nicoResponse = await fetch(`https://www.nicovideo.jp/watch/${videoId}`, {
+          headers: {
+            'User-Agent': 'nico-ranking-thumbnail/1.0'
+          }
+        })
+        
+        if (!nicoResponse.ok) {
+          return new Response(JSON.stringify({ error: 'Video not found' }), {
+            status: 404,
+            headers: {
+              'Content-Type': 'application/json',
+              ...corsHeaders,
+              ...securityHeaders
+            }
+          })
+        }
+        
+        // HTMLからOGP画像URLを抽出
+        const html = await nicoResponse.text()
+        const ogImageMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i)
+        const thumbnailUrl = ogImageMatch ? ogImageMatch[1] : null
+        
+        const result = JSON.stringify({ 
+          videoId,
+          thumbnail: thumbnailUrl
+        })
+        
+        return new Response(result, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            // CDNレベルでのキャッシュのみ（個人差があるためKVキャッシュは使用しない）
+            'Cache-Control': 'public, max-age=3600, s-maxage=86400', // ブラウザ1時間、CDN24時間
+            ...corsHeaders,
+            ...securityHeaders
+          }
+        })
+        
+      } catch (error) {
+        console.error('Error fetching thumbnail:', error)
         return new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
           headers: {
