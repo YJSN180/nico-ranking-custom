@@ -33,6 +33,7 @@ interface Env {
   MAINTENANCE_FLAGS: KVNamespace
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
+  RATE_LIMITER: any // Cloudflare Rate Limiting binding
 }
 
 // セキュリティヘッダー定義
@@ -71,6 +72,54 @@ function getCorsHeaders(request: Request): Record<string, string> {
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
     'Access-Control-Max-Age': '86400'
+  }
+}
+
+/**
+ * IP別レート制限チェック（サムネイル取得API用）
+ * 10リクエスト/分の制限を適用
+ */
+async function checkRateLimit(request: Request, env: Env, endpoint: string = 'general'): Promise<{ success: boolean; error?: Response }> {
+  try {
+    // クライアントIPを取得（Cloudflare経由）
+    const clientIP = request.headers.get('CF-Connecting-IP') || 
+                     request.headers.get('X-Forwarded-For') || 
+                     'unknown'
+    
+    // レート制限キー（IP + エンドポイント）
+    const limitKey = `${clientIP}:${endpoint}`
+    
+    // Rate Limiting APIを使用（10req/分制限）
+    const { success } = await env.RATE_LIMITER.limit({
+      key: limitKey
+    })
+    
+    if (!success) {
+      const errorResponse = new Response(
+        JSON.stringify({ 
+          error: 'Too Many Requests',
+          message: 'Rate limit exceeded. Please try again later.',
+          retryAfter: 60
+        }), 
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '60',
+            'X-RateLimit-Limit': '10',
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': Math.floor(Date.now() / 1000 + 60).toString()
+          }
+        }
+      )
+      return { success: false, error: errorResponse }
+    }
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Rate limit check failed:', error)
+    // レート制限エラーの場合はリクエストを通す（フェイルオープン）
+    return { success: true }
   }
 }
 
@@ -459,6 +508,12 @@ export default {
           })
         }
         
+        // レート制限チェック（サムネイル取得API用）
+        const rateLimitCheck = await checkRateLimit(request, env, 'thumbnail')
+        if (!rateLimitCheck.success) {
+          return rateLimitCheck.error!
+        }
+        
         // ニコニコ動画から動画ページを取得（キャッシュなし）
         // nico-thumb-appのロジックを参考に、ミラーサイトとUser-Agent偽装を使用
         const nicoResponse = await fetch(`https://www.nicovideo.gay/watch/${videoId}`, {
@@ -611,6 +666,12 @@ export default {
             ...securityHeaders
           }
         })
+      }
+      
+      // レート制限チェック（HDサムネイル取得API用）
+      const rateLimitCheck = await checkRateLimit(request, env, 'hd-thumbnail')
+      if (!rateLimitCheck.success) {
+        return rateLimitCheck.error!
       }
       
       try {
