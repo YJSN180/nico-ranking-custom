@@ -31,7 +31,8 @@ vi.mock('@/lib/storage/backup', () => ({
   exportMylistData: vi.fn(),
   downloadBackupData: vi.fn(),
   readBackupFile: vi.fn(),
-  importMylistData: vi.fn()
+  importMylistData: vi.fn(),
+  detectMylistConflicts: vi.fn()
 }))
 
 // useMylistOperationsフックをモック - CI環境対応
@@ -91,6 +92,22 @@ describe('MylistBackup Component', () => {
     
     // useMylistOperationsモックの設定
     mockUseMylistOperations.mockReturnValue(mockOperations)
+    
+    // detectMylistConflictsのデフォルトモック設定
+    vi.mocked(backupModule.detectMylistConflicts).mockResolvedValue({
+      hasConflicts: false,
+      summary: {
+        importingMylists: 0,
+        importingVideos: 0,
+        totalConflictingMylists: 0,
+        totalConflictingVideos: 0
+      },
+      conflicts: {
+        mylistIds: [],
+        mylistNames: [],
+        videos: []
+      }
+    })
   })
 
   afterEach(() => {
@@ -176,8 +193,11 @@ describe('MylistBackup Component', () => {
       vi.mocked(backupModule.importMylistData).mockResolvedValue({
         success: true,
         imported: { mylists: 2, videos: 5 },
-        errors: [],
-        overwritten: 0
+        created: { mylists: 2, videos: 5 },
+        overwritten: { mylists: 0, videos: 0 },
+        skipped: { mylists: 0, videos: 0, reason: [] },
+        renamed: { mylists: [] },
+        errors: []
       })
       
       render(<MylistBackup />)
@@ -188,7 +208,9 @@ describe('MylistBackup Component', () => {
       await waitFor(() => {
         const successMessage = screen.getByTestId('import-success-message')
         expect(successMessage).toBeInTheDocument()
-        expect(successMessage).toHaveTextContent('インポート完了: 2個のマイリスト、5個の動画')
+        expect(successMessage).toHaveTextContent('✅ インポート完了')
+        expect(successMessage).toHaveTextContent('追加されたマイリスト: 2件')
+        expect(successMessage).toHaveTextContent('追加された動画: 5件')
         expect(successMessage).toHaveTextContent('⚠️ 変更を反映するにはページをリロードしてください')
       })
       
@@ -207,8 +229,11 @@ describe('MylistBackup Component', () => {
       vi.mocked(backupModule.importMylistData).mockResolvedValue({
         success: true,
         imported: { mylists: 3, videos: 10 },
-        errors: [],
-        overwritten: 2
+        created: { mylists: 1, videos: 10 },
+        overwritten: { mylists: 2, videos: 0 },
+        skipped: { mylists: 0, videos: 0, reason: [] },
+        renamed: { mylists: [] },
+        errors: []
       })
       
       render(<MylistBackup />)
@@ -218,8 +243,11 @@ describe('MylistBackup Component', () => {
       
       await waitFor(() => {
         const successMessage = screen.getByTestId('import-success-message')
-        expect(successMessage).toHaveTextContent('インポート完了: 3個のマイリスト、10個の動画')
-        expect(successMessage).toHaveTextContent('（うち2個のマイリストが上書きされました）')
+        expect(successMessage).toBeInTheDocument()
+        expect(successMessage).toHaveTextContent('✅ インポート完了')
+        expect(successMessage).toHaveTextContent('追加されたマイリスト: 1件')
+        expect(successMessage).toHaveTextContent('追加された動画: 10件')
+        expect(successMessage).toHaveTextContent('上書きされたマイリスト: 2件')
       })
     })
 
@@ -233,8 +261,11 @@ describe('MylistBackup Component', () => {
       vi.mocked(backupModule.importMylistData).mockResolvedValue({
         success: true,
         imported: { mylists: 1, videos: 1 },
-        errors: [],
-        overwritten: 0
+        created: { mylists: 1, videos: 1 },
+        overwritten: { mylists: 0, videos: 0 },
+        skipped: { mylists: 0, videos: 0, reason: [] },
+        renamed: { mylists: [] },
+        errors: []
       })
       
       render(<MylistBackup />)
@@ -256,8 +287,11 @@ describe('MylistBackup Component', () => {
       vi.mocked(backupModule.importMylistData).mockResolvedValue({
         success: false,
         imported: { mylists: 0, videos: 0 },
-        errors: ['エラー1', 'エラー2'],
-        overwritten: 0
+        created: { mylists: 0, videos: 0 },
+        overwritten: { mylists: 0, videos: 0 },
+        skipped: { mylists: 0, videos: 0, reason: [] },
+        renamed: { mylists: [] },
+        errors: ['エラー1', 'エラー2']
       })
       
       render(<MylistBackup />)
@@ -268,7 +302,9 @@ describe('MylistBackup Component', () => {
       await waitFor(() => {
         const errorMessage = screen.getByTestId('import-error-message')
         expect(errorMessage).toBeInTheDocument()
-        expect(errorMessage).toHaveTextContent('インポート中にエラーが発生しました: エラー1, エラー2')
+        expect(errorMessage).toHaveTextContent('❌ インポートエラー')
+        expect(errorMessage).toHaveTextContent('エラー1')
+        expect(errorMessage).toHaveTextContent('エラー2')
       })
     })
 
@@ -285,6 +321,7 @@ describe('MylistBackup Component', () => {
       await waitFor(() => {
         const errorMessage = screen.getByTestId('import-error-message')
         expect(errorMessage).toBeInTheDocument()
+        expect(errorMessage).toHaveTextContent('❌ インポートエラー')
         expect(errorMessage).toHaveTextContent('無効なファイル形式です')
       })
     })
@@ -297,8 +334,11 @@ describe('MylistBackup Component', () => {
       vi.mocked(backupModule.importMylistData).mockResolvedValue({
         success: true,
         imported: { mylists: 1, videos: 1 },
-        errors: [],
-        overwritten: 0
+        created: { mylists: 1, videos: 1 },
+        overwritten: { mylists: 0, videos: 0 },
+        skipped: { mylists: 0, videos: 0, reason: [] },
+        renamed: { mylists: [] },
+        errors: []
       })
       
       render(<MylistBackup />)
