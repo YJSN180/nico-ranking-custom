@@ -204,18 +204,53 @@ jobs:
           mkdir -p coverage
           # Install dependencies for coverage merging
           npm ci
+          # Install nyc for coverage merging
+          npm install --no-save nyc
+          
           # Merge coverage files manually since vitest doesn't have built-in merge
           echo "Merging coverage reports from shards..."
-          ls -la coverage-artifacts/
-          # Copy all coverage files to merged directory
-          find coverage-artifacts -name "coverage-final.json" -exec cp {} coverage/ \; 2>/dev/null || true
-          find coverage-artifacts -name "lcov.info" -exec cp {} coverage/ \; 2>/dev/null || true
-          # Generate summary report
-          if [ -f "coverage/coverage-final.json" ]; then
-            echo "Coverage files found and merged successfully"
+          
+          # Debug: Show structure of downloaded artifacts
+          echo "Downloaded artifact structure:"
+          ls -la coverage-artifacts/ || echo "coverage-artifacts directory not found"
+          
+          # Look for coverage files in subdirectories created by download-artifact
+          echo "Looking for coverage files in shard subdirectories..."
+          
+          # Create a temporary directory for merging
+          mkdir -p coverage/tmp
+          
+          # Copy all coverage-final.json files to temp directory with unique names
+          counter=1
+          for shard_dir in coverage-artifacts/coverage-shard-*; do
+            if [ -d "$shard_dir" ]; then
+              echo "Processing $shard_dir..."
+              if [ -f "$shard_dir/coverage-final.json" ]; then
+                cp "$shard_dir/coverage-final.json" "coverage/tmp/coverage-final-$counter.json"
+                echo "Copied coverage-final.json from $shard_dir"
+                ((counter++))
+              fi
+              # Also copy lcov.info files
+              if [ -f "$shard_dir/lcov.info" ]; then
+                cat "$shard_dir/lcov.info" >> coverage/lcov.info
+                echo "Appended lcov.info from $shard_dir"
+              fi
+            fi
+          done
+          
+          # Merge coverage-final.json files using nyc
+          if [ -f "coverage/tmp/coverage-final-1.json" ]; then
+            echo "Merging coverage-final.json files..."
+            npx nyc merge coverage/tmp coverage/coverage-final.json
+            echo "Coverage files merged successfully"
+            rm -rf coverage/tmp
           else
-            echo "Warning: No coverage files found to merge"
+            echo "Warning: No coverage-final.json files found to merge"
           fi
+          
+          # Verify merged files
+          echo "Merged coverage files:"
+          ls -la coverage/
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
