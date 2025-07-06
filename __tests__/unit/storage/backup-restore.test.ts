@@ -370,7 +370,8 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.mylists).toBe(2)
     expect(result.imported.videos).toBe(3)
     expect(result.errors).toHaveLength(0)
-    expect(result.overwritten).toBe(0)
+    expect(result.overwritten.mylists).toBe(0)
+    expect(result.overwritten.videos).toBe(0)
   })
   
   it('should detect and count overwritten mylists', async () => {
@@ -401,7 +402,8 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.mylists).toBe(2)
     expect(result.imported.videos).toBe(3)
     expect(result.errors).toHaveLength(0)
-    expect(result.overwritten).toBe(1) // 1つのマイリストが上書きされた
+    expect(result.overwritten.mylists).toBe(1) // 1つのマイリストが上書きされた
+    expect(result.overwritten.videos).toBe(3) // 動画も上書き
   })
   
   it('should handle partial import with errors', async () => {
@@ -440,7 +442,8 @@ describe('Import Mylist Data Tests', () => {
     expect(result.errors).toHaveLength(2)
     expect(result.errors[0]).toContain('テストマイリスト2')
     expect(result.errors[1]).toContain('動画関連データ')
-    expect(result.overwritten).toBe(0)
+    expect(result.overwritten.mylists).toBe(0)
+    expect(result.overwritten.videos).toBe(0)
   })
   
   it('should handle database initialization error during import', async () => {
@@ -458,7 +461,8 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.videos).toBe(0)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]).toContain('Database not initialized')
-    expect(result.overwritten).toBe(0)
+    expect(result.overwritten.mylists).toBe(0)
+    expect(result.overwritten.videos).toBe(0)
   })
   
   it('should handle complete import failure', async () => {
@@ -476,7 +480,8 @@ describe('Import Mylist Data Tests', () => {
     expect(result.imported.videos).toBe(0)
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]).toContain('DB init failed')
-    expect(result.overwritten).toBe(0)
+    expect(result.overwritten.mylists).toBe(0)
+    expect(result.overwritten.videos).toBe(0)
   })
 })
 

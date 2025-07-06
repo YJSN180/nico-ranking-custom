@@ -48,6 +48,76 @@ interface ExportMylistVideo {
 }
 
 /**
+ * 重複検出結果
+ */
+export interface MylistConflictDetectionResult {
+  hasConflicts: boolean
+  conflicts: {
+    // マイリストID重複
+    mylistIds: Array<{
+      id: string
+      existingName: string
+      importingName: string
+      existingVideoCount: number
+      importingVideoCount: number
+    }>
+    // マイリスト名重複（異なるID）
+    mylistNames: Array<{
+      name: string
+      existingId: string
+      importingId: string
+      existingVideoCount: number
+      importingVideoCount: number
+    }>
+    // 動画重複
+    videos: Array<{
+      id: string
+      title: string
+      existingMylistId: string
+      existingMylistName: string
+      importingMylistId: string
+      importingMylistName: string
+      conflictType: 'same_mylist' | 'different_mylist'
+    }>
+  }
+  summary: {
+    totalConflictingMylists: number
+    totalConflictingVideos: number
+    importingMylists: number
+    importingVideos: number
+  }
+}
+
+/**
+ * インポート結果
+ */
+export interface MylistImportResult {
+  success: boolean
+  imported: {
+    mylists: number
+    videos: number
+  }
+  created: {
+    mylists: number
+    videos: number
+  }
+  overwritten: {
+    mylists: number
+    videos: number
+  }
+  skipped: {
+    mylists: number
+    videos: number
+    reason: string[]
+  }
+  renamed: {
+    mylists: Array<{ original: string; renamed: string }>
+  }
+  errors: string[]
+  message?: string
+}
+
+/**
  * バックアップデータの形式
  * 
  * ⚠️ JSON形式仕様（変更禁止）:
@@ -218,21 +288,169 @@ export function validateBackupData(data: unknown): data is BackupData {
 }
 
 /**
+ * ユニークなマイリスト名を生成
+ */
+function generateUniqueMylistName(baseName: string, existingNames: string[]): string {
+  let counter = 2
+  let newName = `${baseName} (${counter})`
+  
+  while (existingNames.includes(newName)) {
+    counter++
+    newName = `${baseName} (${counter})`
+  }
+  
+  return newName
+}
+
+/**
+ * 新しいUUIDを生成
+ */
+function generateUniqueMylistId(): string {
+  return 'mylist-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
+}
+
+/**
+ * 重複と競合関係を検出
+ */
+export async function detectMylistConflicts(importingData: BackupData): Promise<MylistConflictDetectionResult> {
+  const dbManager = new DBManager()
+  await dbManager.init()
+  const db = dbManager.getDB()
+  
+  if (!db) {
+    throw new Error('Database not initialized')
+  }
+  
+  const tx = db.transaction(['mylists', 'mylistVideos'], 'readonly')
+  
+  // 既存のマイリストとマイリスト動画を取得
+  const existingMylists = await tx.objectStore('mylists').getAll()
+  const existingMylistVideos = await tx.objectStore('mylistVideos').getAll()
+  
+  await tx.done
+  
+  const conflicts = {
+    mylistIds: [] as Array<{
+      id: string
+      existingName: string
+      importingName: string
+      existingVideoCount: number
+      importingVideoCount: number
+    }>,
+    mylistNames: [] as Array<{
+      name: string
+      existingId: string
+      importingId: string
+      existingVideoCount: number
+      importingVideoCount: number
+    }>,
+    videos: [] as Array<{
+      id: string
+      title: string
+      existingMylistId: string
+      existingMylistName: string
+      importingMylistId: string
+      importingMylistName: string
+      conflictType: 'same_mylist' | 'different_mylist'
+    }>
+  }
+  
+  // マイリストID重複検出
+  for (const importingMylist of importingData.mylists) {
+    const existingMylist = existingMylists.find(m => m.id === importingMylist.id)
+    if (existingMylist) {
+      const existingVideoCount = existingMylistVideos.filter(v => v.mylistId === importingMylist.id).length
+      const importingVideoCount = importingData.mylistVideos.filter(v => v.mylistId === importingMylist.id).length
+      
+      conflicts.mylistIds.push({
+        id: importingMylist.id,
+        existingName: existingMylist.name,
+        importingName: importingMylist.name,
+        existingVideoCount,
+        importingVideoCount
+      })
+    }
+  }
+  
+  // マイリスト名重複検出（異なるID）
+  for (const importingMylist of importingData.mylists) {
+    // ID重複は既にチェック済みなのでスキップ
+    if (conflicts.mylistIds.some(c => c.id === importingMylist.id)) {
+      continue
+    }
+    
+    const existingMylist = existingMylists.find(m => m.name === importingMylist.name)
+    if (existingMylist) {
+      const existingVideoCount = existingMylistVideos.filter(v => v.mylistId === existingMylist.id).length
+      const importingVideoCount = importingData.mylistVideos.filter(v => v.mylistId === importingMylist.id).length
+      
+      conflicts.mylistNames.push({
+        name: importingMylist.name,
+        existingId: existingMylist.id,
+        importingId: importingMylist.id,
+        existingVideoCount,
+        importingVideoCount
+      })
+    }
+  }
+  
+  // 動画重複検出
+  for (const importingVideo of importingData.mylistVideos) {
+    const existingVideo = existingMylistVideos.find(v => v.id === importingVideo.id)
+    if (existingVideo) {
+      const conflictType = existingVideo.mylistId === importingVideo.mylistId ? 'same_mylist' : 'different_mylist'
+      const existingMylistName = existingMylists.find(m => m.id === existingVideo.mylistId)?.name || 'Unknown'
+      const importingMylistName = importingData.mylists.find(m => m.id === importingVideo.mylistId)?.name || 'Unknown'
+      
+      conflicts.videos.push({
+        id: importingVideo.id,
+        title: importingVideo.title,
+        existingMylistId: existingVideo.mylistId,
+        existingMylistName,
+        importingMylistId: importingVideo.mylistId,
+        importingMylistName,
+        conflictType
+      })
+    }
+  }
+  
+  const hasConflicts = 
+    conflicts.mylistIds.length > 0 || 
+    conflicts.mylistNames.length > 0 || 
+    conflicts.videos.length > 0
+  
+  return {
+    hasConflicts,
+    conflicts,
+    summary: {
+      totalConflictingMylists: conflicts.mylistIds.length + conflicts.mylistNames.length,
+      totalConflictingVideos: conflicts.videos.length,
+      importingMylists: importingData.mylists.length,
+      importingVideos: importingData.mylistVideos.length
+    }
+  }
+}
+
+/**
  * バックアップデータをインポート
  */
-export async function importMylistData(data: BackupData): Promise<{
-  success: boolean
-  imported: {
-    mylists: number
-    videos: number
-  }
-  errors: string[]
-  overwritten: number
-}> {
+export async function importMylistData(
+  data: BackupData,
+  conflictResolution: 'safe_add' | 'smart_merge' | 'complete_overwrite' = 'safe_add'
+): Promise<MylistImportResult> {
   const errors: string[] = []
   let importedMylists = 0
   let importedVideos = 0
+  let createdMylists = 0
+  let createdVideos = 0
   let overwrittenMylists = 0
+  let overwrittenVideos = 0
+  const skipped = {
+    mylists: 0,
+    videos: 0,
+    reason: [] as string[]
+  }
+  const renamed: Array<{ original: string; renamed: string }> = []
   
   try {
     const dbManager = new DBManager()
@@ -243,36 +461,165 @@ export async function importMylistData(data: BackupData): Promise<{
       throw new Error('Database not initialized')
     }
     
-    // トランザクションを開始
-    const tx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
+    // 既存データを取得
+    let tx = db.transaction(['mylists', 'mylistVideos'], 'readonly')
+    const existingMylists = await tx.objectStore('mylists').getAll()
+    const existingMylistVideos = await tx.objectStore('mylistVideos').getAll()
+    await tx.done
+    
+    // 完全上書きモードの場合、全データを削除
+    if (conflictResolution === 'complete_overwrite') {
+      const deleteTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
+      await deleteTx.objectStore('mylists').clear()
+      await deleteTx.objectStore('mylistVideos').clear()
+      await deleteTx.done
+    }
+    
+    // インポート用トランザクション開始
+    const importTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
+    
+    // 既存の名前リストを構築（リネーム検出用）
+    const existingNames = existingMylists.map(m => m.name)
     
     // マイリストをインポート
-    for (const mylist of data.mylists) {
+    for (const importingMylist of data.mylists) {
       try {
-        // 既存のマイリストを確認
-        const existing = await tx.objectStore('mylists').get(mylist.id)
-        if (existing) {
-          overwrittenMylists++
-        }
+        let mylistToImport = { ...importingMylist }
         
-        await tx.objectStore('mylists').put(mylist)
-        importedMylists++
+        if (conflictResolution === 'complete_overwrite') {
+          // 完全上書き：そのまま追加
+          await importTx.objectStore('mylists').put(mylistToImport)
+          importedMylists++
+          createdMylists++
+        } else {
+          const existingMylist = existingMylists.find(m => m.id === importingMylist.id)
+          const nameConflict = existingMylists.find(m => m.name === importingMylist.name && m.id !== importingMylist.id)
+          
+          if (existingMylist) {
+            // ID重複あり
+            if (conflictResolution === 'safe_add') {
+              // 安全追加：新IDで作成
+              mylistToImport.id = generateUniqueMylistId()
+              if (nameConflict) {
+                const newName = generateUniqueMylistName(importingMylist.name, existingNames)
+                mylistToImport.name = newName
+                renamed.push({ original: importingMylist.name, renamed: newName })
+                existingNames.push(newName)
+              }
+              await importTx.objectStore('mylists').put(mylistToImport)
+              importedMylists++
+              createdMylists++
+            } else if (conflictResolution === 'smart_merge') {
+              // スマートマージ：既存を上書き
+              await importTx.objectStore('mylists').put(mylistToImport)
+              importedMylists++
+              overwrittenMylists++
+            }
+          } else if (nameConflict) {
+            // 名前重複のみ
+            if (conflictResolution === 'safe_add' || conflictResolution === 'smart_merge') {
+              const newName = generateUniqueMylistName(importingMylist.name, existingNames)
+              mylistToImport.name = newName
+              renamed.push({ original: importingMylist.name, renamed: newName })
+              existingNames.push(newName)
+              await importTx.objectStore('mylists').put(mylistToImport)
+              importedMylists++
+              createdMylists++
+            }
+          } else {
+            // 重複なし：そのまま追加
+            await importTx.objectStore('mylists').put(mylistToImport)
+            importedMylists++
+            createdMylists++
+          }
+        }
       } catch (error) {
-        errors.push(`マイリスト「${mylist.name}」のインポートに失敗: ${error}`)
+        errors.push(`マイリスト「${importingMylist.name}」のインポートに失敗: ${error}`)
       }
     }
     
     // マイリスト動画をインポート
-    for (const mv of data.mylistVideos) {
+    for (const importingVideo of data.mylistVideos) {
       try {
-        await tx.objectStore('mylistVideos').put(mv)
-        importedVideos++
+        let videoToImport = { ...importingVideo }
+        
+        if (conflictResolution === 'complete_overwrite') {
+          // 完全上書き：そのまま追加
+          await importTx.objectStore('mylistVideos').put(videoToImport)
+          importedVideos++
+          createdVideos++
+        } else {
+          // 既存動画の検索（プライマリキーでの検索を試行）
+          let existingVideo = existingMylistVideos.find(v => v.id === importingVideo.id)
+          if (!existingVideo) {
+            // メモリ上で見つからない場合は直接DBから検索
+            try {
+              existingVideo = await importTx.objectStore('mylistVideos').get(importingVideo.id)
+            } catch (error) {
+              // 検索エラーは無視
+            }
+          }
+          
+          // マイリストIDの変更を反映（安全追加でIDが変更された場合）
+          const originalMylist = data.mylists.find(m => m.id === importingVideo.mylistId)
+          if (originalMylist) {
+            const renamedEntry = renamed.find(r => r.original === originalMylist.name)
+            if (renamedEntry) {
+              // 新しいマイリストIDを見つける - getAll()を使用してから検索
+              const allMylists = await importTx.objectStore('mylists').getAll()
+              const newMylist = allMylists.find(m => m.name === renamedEntry.renamed)
+              if (newMylist) {
+                videoToImport.mylistId = newMylist.id
+              }
+            }
+          }
+          
+          if (existingVideo) {
+            // 動画重複あり
+            if (conflictResolution === 'safe_add') {
+              // 安全追加：重複を許可（異なるマイリストの場合）
+              if (existingVideo.mylistId !== videoToImport.mylistId) {
+                await importTx.objectStore('mylistVideos').put(videoToImport)
+                importedVideos++
+                createdVideos++
+              } else {
+                // 同一マイリスト内重複はスキップ
+                skipped.videos++
+                skipped.reason.push(`動画「${importingVideo.title}」は既に同じマイリストに存在します`)
+              }
+            } else if (conflictResolution === 'smart_merge') {
+              // スマートマージ：同一マイリスト内は除去、異なるマイリスト間は許可
+              if (existingVideo.mylistId === videoToImport.mylistId) {
+                // 同一マイリスト内：上書き
+                await importTx.objectStore('mylistVideos').put(videoToImport)
+                importedVideos++
+                overwrittenVideos++
+              } else {
+                // 異なるマイリスト間：重複許可
+                await importTx.objectStore('mylistVideos').put(videoToImport)
+                importedVideos++
+                createdVideos++
+              }
+            }
+          } else {
+            // 重複なし：そのまま追加
+            await importTx.objectStore('mylistVideos').put(videoToImport)
+            importedVideos++
+            createdVideos++
+          }
+        }
       } catch (error) {
         errors.push(`動画関連データのインポートに失敗: ${error}`)
       }
     }
     
-    await tx.done
+    await importTx.done
+    
+    const message = conflictResolution === 'complete_overwrite' 
+      ? '既存データを完全に置き換えました'
+      : conflictResolution === 'smart_merge'
+      ? 'データをスマートマージしました'
+      : '安全にデータを追加しました'
     
     return {
       success: errors.length === 0,
@@ -280,8 +627,20 @@ export async function importMylistData(data: BackupData): Promise<{
         mylists: importedMylists,
         videos: importedVideos
       },
+      created: {
+        mylists: createdMylists,
+        videos: createdVideos
+      },
+      overwritten: {
+        mylists: overwrittenMylists,
+        videos: overwrittenVideos
+      },
+      skipped,
+      renamed: {
+        mylists: renamed
+      },
       errors,
-      overwritten: overwrittenMylists
+      message
     }
   } catch (error) {
     return {
@@ -290,8 +649,23 @@ export async function importMylistData(data: BackupData): Promise<{
         mylists: 0,
         videos: 0
       },
-      errors: [`インポート処理中にエラーが発生しました: ${error}`],
-      overwritten: 0
+      created: {
+        mylists: 0,
+        videos: 0
+      },
+      overwritten: {
+        mylists: 0,
+        videos: 0
+      },
+      skipped: {
+        mylists: 0,
+        videos: 0,
+        reason: []
+      },
+      renamed: {
+        mylists: []
+      },
+      errors: [`インポート処理中にエラーが発生しました: ${error}`]
     }
   }
 }

@@ -351,7 +351,7 @@ export function detectConflicts(existingNGList: UserNGList, importingNGList: Use
  */
 export function importNGListData(
   data: NGListBackupData,
-  conflictResolution: 'skip' | 'overwrite' | 'merge' = 'skip'
+  conflictResolution: 'overwrite' | 'merge' = 'merge'
 ): NGListImportResult {
   const errors: string[] = []
   let imported = {
@@ -440,36 +440,6 @@ export function importNGListData(
       imported.categoryBreakdown.authorNamesExact = newNGList.authorNames.exact.length - existingNGList.authorNames.exact.length
       imported.categoryBreakdown.authorNamesPartial = newNGList.authorNames.partial.length - existingNGList.authorNames.partial.length
       imported.totalItems = Object.values(imported.categoryBreakdown).reduce((sum, count) => sum + count, 0)
-    } else {
-      // スキップモード：重複しないアイテムのみ追加
-      const newVideoIds = data.ngList.videoIds.filter(id => !existingNGList.videoIds.includes(id))
-      const newVideoTitlesExact = data.ngList.videoTitles.exact.filter(title => !existingNGList.videoTitles.exact.includes(title))
-      const newVideoTitlesPartial = data.ngList.videoTitles.partial.filter(title => !existingNGList.videoTitles.partial.includes(title))
-      const newAuthorIds = data.ngList.authorIds.filter(id => !existingNGList.authorIds.includes(id))
-      const newAuthorNamesExact = data.ngList.authorNames.exact.filter(name => !existingNGList.authorNames.exact.includes(name))
-      const newAuthorNamesPartial = data.ngList.authorNames.partial.filter(name => !existingNGList.authorNames.partial.includes(name))
-      
-      newNGList.videoIds.push(...newVideoIds)
-      newNGList.videoTitles.exact.push(...newVideoTitlesExact)
-      newNGList.videoTitles.partial.push(...newVideoTitlesPartial)
-      newNGList.authorIds.push(...newAuthorIds)
-      newNGList.authorNames.exact.push(...newAuthorNamesExact)
-      newNGList.authorNames.partial.push(...newAuthorNamesPartial)
-      
-      imported.categoryBreakdown.videoIds = newVideoIds.length
-      imported.categoryBreakdown.videoTitlesExact = newVideoTitlesExact.length
-      imported.categoryBreakdown.videoTitlesPartial = newVideoTitlesPartial.length
-      imported.categoryBreakdown.authorIds = newAuthorIds.length
-      imported.categoryBreakdown.authorNamesExact = newAuthorNamesExact.length
-      imported.categoryBreakdown.authorNamesPartial = newAuthorNamesPartial.length
-      imported.totalItems = Object.values(imported.categoryBreakdown).reduce((sum, count) => sum + count, 0)
-      
-      // スキップされたアイテム数を計算
-      const skippedCount = data.metadata.totalItems - imported.totalItems
-      if (skippedCount > 0) {
-        skipped.totalItems = skippedCount
-        skipped.reason.push(`${skippedCount}件のアイテムが重複のためスキップされました`)
-      }
     }
     
     // 総数とタイムスタンプを更新

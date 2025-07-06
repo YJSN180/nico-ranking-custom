@@ -102,7 +102,7 @@ export function NGBackup() {
   }
 
   // 重複処理選択時のインポート実行
-  const handleConflictResolution = async (resolution: 'skip' | 'overwrite' | 'merge') => {
+  const handleConflictResolution = async (resolution: 'overwrite' | 'merge') => {
     if (!conflictData) return
 
     setIsImporting(true)
@@ -286,17 +286,9 @@ export function NGBackup() {
               <p className={styles.resolutionTitle}>どのように処理しますか？</p>
               
               <label className={styles.resolutionOption}>
-                <input type="radio" name="resolution" value="skip" />
-                <div className={styles.optionContent}>
-                  <span className={styles.optionTitle}>重複をスキップして追加</span>
-                  <span className={styles.optionDescription}>重複しないアイテムのみを追加します</span>
-                </div>
-              </label>
-              
-              <label className={styles.resolutionOption}>
                 <input type="radio" name="resolution" value="overwrite" />
                 <div className={styles.optionContent}>
-                  <span className={styles.optionTitle}>重複を上書き</span>
+                  <span className={styles.optionTitle}>完全に上書き</span>
                   <span className={styles.optionDescription}>現在のNGリストをインポートデータで完全に置き換えます</span>
                 </div>
               </label>
@@ -304,7 +296,7 @@ export function NGBackup() {
               <label className={styles.resolutionOption}>
                 <input type="radio" name="resolution" value="merge" defaultChecked />
                 <div className={styles.optionContent}>
-                  <span className={styles.optionTitle}>すべてマージ（推奨）</span>
+                  <span className={styles.optionTitle}>マージして結合（推奨）</span>
                   <span className={styles.optionDescription}>重複を除いて両方のデータを結合します</span>
                 </div>
               </label>
@@ -324,7 +316,7 @@ export function NGBackup() {
                 onClick={() => {
                   const selected = document.querySelector('input[name="resolution"]:checked') as HTMLInputElement
                   if (selected) {
-                    handleConflictResolution(selected.value as 'skip' | 'overwrite' | 'merge')
+                    handleConflictResolution(selected.value as 'overwrite' | 'merge')
                   }
                 }}
                 disabled={isImporting}

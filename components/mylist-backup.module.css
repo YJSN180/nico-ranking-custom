@@ -159,9 +159,194 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+/* 重複解決ダイアログ専用スタイル */
+.conflictDialog {
+  max-width: 600px;
+}
+
+.conflictSummary {
+  margin: 1rem 0;
+}
+
+.importStats {
+  background: var(--surface-secondary);
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.statItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 0.25rem 0;
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.statValue {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.conflictDetail {
+  margin: 0.75rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.conflictType {
+  background: var(--surface-secondary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.conflictList {
+  padding: 0.5rem 0.75rem;
+}
+
+.conflictItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.375rem 0;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.conflictItem small {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.moreConflicts {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.resolutionOptions {
+  margin: 1.5rem 0;
+}
+
+.resolutionTitle {
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.resolutionOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resolutionOption:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+}
+
+.resolutionOption input[type="radio"] {
+  margin-top: 0.125rem;
+}
+
+.optionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.optionTitle {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.optionDescription {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* インポート結果の詳細表示 */
+.resultMessage {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.resultDetails {
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+
+.resultDetails > div {
+  margin: 0.25rem 0;
+}
+
+.renamedInfo, .skippedInfo {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: var(--surface-secondary);
+  border-radius: 4px;
+}
+
+.renamedList, .skippedReasons {
+  margin-top: 0.375rem;
+  padding-left: 1rem;
+}
+
+.renamedList div, .skippedReasons div {
+  margin: 0.125rem 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.reloadPrompt {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(255, 193, 7, 0.1);
+  color: rgb(255, 193, 7);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.errorDetails {
+  margin-top: 0.5rem;
+}
+
+.errorDetails div {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
+}
+
 @media (max-width: 768px) {
   .backupDialog {
     padding: 1.5rem;
+  }
+
+  .conflictDialog {
+    max-width: 95vw;
+    margin: 0 auto;
   }
 
   .backupActions {
@@ -172,5 +357,21 @@
     flex: 1;
     justify-content: center;
     min-width: 140px;
+  }
+
+  .conflictItem {
+    font-size: 0.8rem;
+  }
+
+  .resolutionOption {
+    padding: 0.5rem;
+  }
+
+  .optionTitle {
+    font-size: 0.85rem;
+  }
+
+  .optionDescription {
+    font-size: 0.75rem;
   }
 }
