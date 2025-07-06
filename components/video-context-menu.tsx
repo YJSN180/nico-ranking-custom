@@ -159,7 +159,6 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
         }
       } catch (proxyError) {
         // プロキシAPIが使えない場合は、フォールバック処理へ
-        console.log('Proxy API not available, falling back to direct open')
       }
       
       // フォールバック: 新しいタブで画像を開く
