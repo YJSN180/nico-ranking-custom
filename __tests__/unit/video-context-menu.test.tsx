@@ -60,10 +60,11 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     }, { timeout: 600 })
   })
 
-  it('サムネイルURLが既に存在する場合、直接ダウンロードされる', async () => {
+  it('サムネイルURLが既に存在する場合、プロキシAPI経由でダウンロードされる', async () => {
     // Blobのモック
     const mockBlob = new Blob(['mock image data'], { type: 'image/jpeg' })
     ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
       blob: async () => mockBlob,
     })
 
@@ -101,8 +102,10 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     fireEvent.click(saveButton)
 
     await waitFor(() => {
-      // fetch が正しいURLで呼ばれたことを確認
-      expect(global.fetch).toHaveBeenCalledWith(mockVideo.thumbURL)
+      // プロキシAPIが正しいURLで呼ばれたことを確認
+      expect(global.fetch).toHaveBeenCalledWith(
+        `/api/thumbnail-proxy?url=${encodeURIComponent(mockVideo.thumbURL)}`
+      )
       
       // ダウンロードリンクが作成され、クリックされたことを確認
       expect(createElementSpy).toHaveBeenCalledWith('a')
@@ -186,9 +189,44 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
 
     await waitFor(() => {
       // エラーアラートが表示されることを確認
-      expect(alertMock).toHaveBeenCalledWith('サムネイルの保存に失敗しました')
+      expect(alertMock).toHaveBeenCalledWith('サムネイルの取得に失敗しました')
     })
 
     alertMock.mockRestore()
+  })
+  
+  it('プロキシAPIが利用できない場合は新しいタブで画像を開く', async () => {
+    // プロキシAPIがエラーを返すモック
+    ;(global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'))
+
+    // window.open のモック
+    const mockOpen = jest.fn()
+    global.window.open = mockOpen
+
+    render(
+      <VideoContextMenu video={mockVideo}>
+        <div>テストコンテンツ</div>
+      </VideoContextMenu>
+    )
+
+    // メニューを開く
+    const content = screen.getByText('テストコンテンツ')
+    fireEvent.touchStart(content, { touches: [{ clientX: 100, clientY: 100 }] })
+    
+    await waitFor(() => {
+      expect(screen.getByText('サムネイル保存')).toBeInTheDocument()
+    })
+
+    // サムネイル保存ボタンをクリック
+    const saveButton = screen.getByText('サムネイル保存')
+    fireEvent.click(saveButton)
+
+    await waitFor(() => {
+      // window.openが呼ばれたことを確認
+      expect(mockOpen).toHaveBeenCalledWith(mockVideo.thumbURL, '_blank')
+      
+      // 手動保存の案内メッセージが表示されることを確認
+      expect(screen.getByText(/画像を開きました/)).toBeInTheDocument()
+    })
   })
 })

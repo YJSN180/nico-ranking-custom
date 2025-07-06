@@ -131,34 +131,50 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
         }
       }
       
-      // サムネイル画像をダウンロード
-      const imageResponse = await fetch(thumbnailUrl)
-      const blob = await imageResponse.blob()
+      // プロキシAPIが利用可能か試す
+      try {
+        const proxyResponse = await fetch(`/api/thumbnail-proxy?url=${encodeURIComponent(thumbnailUrl)}`)
+        
+        if (proxyResponse.ok) {
+          // プロキシ経由でダウンロード
+          const blob = await proxyResponse.blob()
+          const url = URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = `${video.id}.jpg`
+          
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          
+          URL.revokeObjectURL(url)
+          
+          // 成功メッセージを表示
+          setSuccessMessage('✓ サムネイルを保存しました')
+          setCopySuccess(true)
+          setTimeout(() => {
+            closeMenu()
+          }, 1500)
+          return
+        }
+      } catch (proxyError) {
+        // プロキシAPIが使えない場合は、フォールバック処理へ
+        console.log('Proxy API not available, falling back to direct open')
+      }
       
-      // ダウンロードリンクを作成
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `${video.id}.jpg`
+      // フォールバック: 新しいタブで画像を開く
+      window.open(thumbnailUrl, '_blank')
       
-      // ダウンロードを実行
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-      // URLを解放
-      URL.revokeObjectURL(url)
-      
-      // 成功メッセージを表示
-      setSuccessMessage('✓ サムネイルを保存しました')
+      // 手動保存の案内メッセージ
+      setSuccessMessage('✓ 画像を開きました\n右クリックで保存してください')
       setCopySuccess(true)
       setTimeout(() => {
         closeMenu()
-      }, 1500)
+      }, 2500)
       
     } catch (error) {
       console.error('サムネイル保存エラー:', error)
-      alert('サムネイルの保存に失敗しました')
+      alert('サムネイルの取得に失敗しました')
     }
   }
   
