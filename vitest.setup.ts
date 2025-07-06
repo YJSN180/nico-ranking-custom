@@ -1,3 +1,33 @@
+// Setup global navigator mock BEFORE any imports
+if (typeof global !== 'undefined' && !global.navigator) {
+  global.navigator = {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    vibrate: () => {},
+    clipboard: {
+      writeText: () => Promise.resolve(),
+      readText: () => Promise.resolve(''),
+      write: () => Promise.resolve(),
+      read: () => Promise.resolve([])
+    },
+    vendor: 'Google Inc.',
+    platform: 'Win32',
+    language: 'ja-JP',
+    languages: ['ja-JP', 'ja', 'en'],
+    onLine: true,
+    cookieEnabled: true,
+    maxTouchPoints: 0,
+    mediaDevices: {},
+    permissions: {
+      query: () => Promise.resolve({ state: 'granted' })
+    }
+  } as any
+}
+
+// Setup Document constructor for JSDOM
+if (typeof global !== 'undefined' && typeof Document === 'undefined') {
+  global.Document = (global as any).window?.Document || class Document {}
+}
+
 import '@testing-library/jest-dom'
 import { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import './__tests__/mocks/next-router'
@@ -40,6 +70,13 @@ if (typeof document !== 'undefined') {
 
 // Ensure React is available globally for all tests
 globalThis.React = React
+
+// Disable React's concurrent features for tests
+if (typeof window !== 'undefined') {
+  // Force React to use legacy mode in tests
+  ;(window as any).__REACT_DISABLE_DEV_WARNINGS__ = true
+  ;(window as any).__DISABLE_REACT_CONCURRENT_MODE__ = true
+}
 
 // Mock IndexedDB for tests
 import FDBFactory from 'fake-indexeddb/lib/FDBFactory'
@@ -97,9 +134,10 @@ vi.stubEnv('CLOUDFLARE_ACCOUNT_ID', 'test-account-id')
 vi.stubEnv('CLOUDFLARE_KV_NAMESPACE_ID', 'test-namespace-id')
 vi.stubEnv('CLOUDFLARE_KV_API_TOKEN', 'test-cf-token')
 
-// Mock console methods to avoid test output
+// Mock console methods to avoid test output (preserve original methods)
+const originalConsole = { ...console }
 global.console = {
-  ...console,
+  ...originalConsole,
   log: vi.fn(),
   error: vi.fn(),
   warn: vi.fn(),
@@ -147,29 +185,41 @@ if (typeof Element !== 'undefined') {
 if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
   
-  // Mock clipboard API for user-event
-  if (!window.navigator) {
+  // Ensure Document constructor is available
+  if (!window.Document && typeof Document !== 'undefined') {
+    window.Document = Document
+  }
+  
+  // Use the same navigator mock for window
+  const navigatorMock = {
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    vibrate: vi.fn(),
+    clipboard: {
+      writeText: vi.fn(() => Promise.resolve()),
+      readText: vi.fn(() => Promise.resolve('')),
+      write: vi.fn(() => Promise.resolve()),
+      read: vi.fn(() => Promise.resolve([]))
+    },
+    vendor: 'Google Inc.',
+    platform: 'Win32',
+    language: 'ja-JP',
+    languages: ['ja-JP', 'ja', 'en'],
+    onLine: true,
+    cookieEnabled: true,
+    maxTouchPoints: 0,
+    mediaDevices: {},
+    permissions: {
+      query: vi.fn(() => Promise.resolve({ state: 'granted' }))
+    }
+  }
+  
+  // Ensure navigator is set on window
+  if (!window.navigator || !window.navigator.clipboard) {
     Object.defineProperty(window, 'navigator', {
-      value: {
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        clipboard: {
-          writeText: vi.fn(() => Promise.resolve()),
-          readText: vi.fn(() => Promise.resolve('')),
-          write: vi.fn(() => Promise.resolve()),
-          read: vi.fn(() => Promise.resolve([]))
-        }
-      },
-      writable: true
-    })
-  } else if (!window.navigator.clipboard) {
-    Object.defineProperty(window.navigator, 'clipboard', {
-      value: {
-        writeText: vi.fn(() => Promise.resolve()),
-        readText: vi.fn(() => Promise.resolve('')),
-        write: vi.fn(() => Promise.resolve()),
-        read: vi.fn(() => Promise.resolve([]))
-      },
-      writable: true
+      value: navigatorMock,
+      writable: true,
+      configurable: true,
+      enumerable: true
     })
   }
   
@@ -217,25 +267,25 @@ import { afterEach, beforeEach } from 'vitest'
 // Use default React Testing Library configuration
 import { configure } from '@testing-library/react'
 configure({ 
-  testIdAttribute: 'data-testid'
+  testIdAttribute: 'data-testid',
+  // Disable concurrent features for tests to avoid conflicts
+  // This prevents "Should not already be working" errors
+  reactStrictMode: false
 })
 
 // Careful cleanup after each test to avoid React concurrent mode conflicts
-afterEach(async () => {
+afterEach(() => {
   // Clear timers and mocks first
   vi.clearAllTimers()
   vi.clearAllMocks()
   
-  // Use act() wrapper for RTL cleanup to prevent concurrent conflicts
-  try {
-    await vi.waitFor(() => {
-      cleanup()
-    }, { timeout: 1000 })
-  } catch (e) {
-    // If cleanup fails, force manual cleanup without RTL
-    if (typeof document !== 'undefined') {
-      document.body.innerHTML = ''
-    }
+  // Synchronous cleanup without act() to avoid concurrent mode issues
+  cleanup()
+  
+  // Manual DOM cleanup as backup
+  if (typeof document !== 'undefined') {
+    document.body.innerHTML = ''
+    document.head.innerHTML = ''
   }
   
   // Reset IndexedDB state
@@ -245,6 +295,39 @@ afterEach(async () => {
     } catch (e) {
       // Ignore IndexedDB cleanup errors
     }
+  }
+  
+  // Reset window object properties
+  if (typeof window !== 'undefined') {
+    // Restore navigator mock
+    const navigatorMock = {
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      vibrate: vi.fn(),
+      clipboard: {
+        writeText: vi.fn(() => Promise.resolve()),
+        readText: vi.fn(() => Promise.resolve('')),
+        write: vi.fn(() => Promise.resolve()),
+        read: vi.fn(() => Promise.resolve([]))
+      },
+      vendor: 'Google Inc.',
+      platform: 'Win32',
+      language: 'ja-JP',
+      languages: ['ja-JP', 'ja', 'en'],
+      onLine: true,
+      cookieEnabled: true,
+      maxTouchPoints: 0,
+      mediaDevices: {},
+      permissions: {
+        query: vi.fn(() => Promise.resolve({ state: 'granted' }))
+      }
+    }
+    
+    Object.defineProperty(window, 'navigator', {
+      value: navigatorMock,
+      writable: true,
+      configurable: true,
+      enumerable: true
+    })
   }
 })
 

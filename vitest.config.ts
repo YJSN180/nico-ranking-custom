@@ -13,6 +13,14 @@ export default defineConfig({
   })],
   test: {
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        // JSDOMの詳細設定
+        url: 'http://localhost:3001',
+        pretendToBeVisual: true,
+        resources: 'usable'
+      }
+    },
     globals: true,
     setupFiles: './vitest.setup.ts',
     // Jest API compatibility for tests
