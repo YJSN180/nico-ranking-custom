@@ -1,32 +1,5 @@
-// Setup global navigator mock BEFORE any imports
-if (typeof global !== 'undefined' && !global.navigator) {
-  global.navigator = {
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    vibrate: () => {},
-    clipboard: {
-      writeText: () => Promise.resolve(),
-      readText: () => Promise.resolve(''),
-      write: () => Promise.resolve(),
-      read: () => Promise.resolve([])
-    },
-    vendor: 'Google Inc.',
-    platform: 'Win32',
-    language: 'ja-JP',
-    languages: ['ja-JP', 'ja', 'en'],
-    onLine: true,
-    cookieEnabled: true,
-    maxTouchPoints: 0,
-    mediaDevices: {},
-    permissions: {
-      query: () => Promise.resolve({ state: 'granted' })
-    }
-  } as any
-}
-
-// Setup Document constructor for JSDOM
-if (typeof global !== 'undefined' && typeof Document === 'undefined') {
-  global.Document = (global as any).window?.Document || class Document {}
-}
+// テスト環境の強制初期化を最初に実行
+import './__tests__/test-environment'
 
 import '@testing-library/jest-dom'
 import { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
