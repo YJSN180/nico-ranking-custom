@@ -3,6 +3,7 @@
 import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
+import { VideoContextMenu } from './video-context-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import type { RankingItem } from '@/types/ranking'
@@ -73,53 +74,54 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   }
 
   return (
-    <li 
-      data-testid="ranking-item"
-      data-video-id={item.id}
-      className="ranking-item-responsive"
-      style={{
-        // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
-        background: 'var(--surface-color)',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)',
-        border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
-        marginBottom: '8px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'background-color 0.2s',
-        position: 'relative',
-        opacity: disabled ? 0.6 : 1
-      }}
-      onClick={(e) => {
-        // disabled状態では何もしない
-        if (disabled) return;
-        // 投稿者リンクやボタンなどの子要素のクリックは除外
-        const target = e.target as HTMLElement;
-        if (target.closest('a') || target.closest('button')) return;
-        handleVideoClick();
-      }}
-      onMouseEnter={(e) => {
-        // disabled状態またはタッチデバイスではホバー効果を適用しない
-        if (disabled || 'ontouchstart' in window) return;
-        e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
-      }}
-      onMouseLeave={(e) => {
-        // disabled状態またはタッチデバイスではホバー効果を適用しない
-        if (disabled || 'ontouchstart' in window) return;
-        e.currentTarget.style.backgroundColor = 'var(--surface-color)';
-      }}
-      onTouchEnd={(e) => {
-        // disabled状態では何もしない
-        if (disabled) return;
-        // タッチ終了時に背景色をリセット
-        const element = e.currentTarget;
-        setTimeout(() => {
-          if (element) {
-            element.style.backgroundColor = 'var(--surface-color)';
-          }
-        }, 100);
-      }}
-    >
+    <VideoContextMenu video={item}>
+      <li 
+        data-testid="ranking-item"
+        data-video-id={item.id}
+        className="ranking-item-responsive"
+        style={{
+          // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
+          background: 'var(--surface-color)',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-md)',
+          border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
+          marginBottom: '8px',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          transition: 'background-color 0.2s',
+          position: 'relative',
+          opacity: disabled ? 0.6 : 1
+        }}
+        onClick={(e) => {
+          // disabled状態では何もしない
+          if (disabled) return;
+          // 投稿者リンクやボタンなどの子要素のクリックは除外
+          const target = e.target as HTMLElement;
+          if (target.closest('a') || target.closest('button')) return;
+          handleVideoClick();
+        }}
+        onMouseEnter={(e) => {
+          // disabled状態またはタッチデバイスではホバー効果を適用しない
+          if (disabled || 'ontouchstart' in window) return;
+          e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+        }}
+        onMouseLeave={(e) => {
+          // disabled状態またはタッチデバイスではホバー効果を適用しない
+          if (disabled || 'ontouchstart' in window) return;
+          e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+        }}
+        onTouchEnd={(e) => {
+          // disabled状態では何もしない
+          if (disabled) return;
+          // タッチ終了時に背景色をリセット
+          const element = e.currentTarget;
+          setTimeout(() => {
+            if (element) {
+              element.style.backgroundColor = 'var(--surface-color)';
+            }
+          }, 100);
+        }}
+      >
       <div className="ranking-item-responsive__content">
         {/* デスクトップ用順位（モバイルでは非表示） */}
         <div 
@@ -354,6 +356,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         </div>
       </div>
     </li>
+    </VideoContextMenu>
   )
 }, (prevProps, nextProps) => {
   // メモ化の比較関数

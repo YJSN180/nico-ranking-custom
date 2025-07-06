@@ -1,0 +1,144 @@
+/* 動画コンテキストメニュー スタイル */
+
+.video-context-menu-container {
+  position: relative;
+  /* タッチイベントを正しく受け取るため */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 背景オーバーレイ */
+.video-context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 998;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* コンテキストメニュー本体 */
+.video-context-menu {
+  position: fixed;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 200px;
+  z-index: 999;
+  animation: slideIn 0.2s ease-out;
+  
+  /* メニューが画面外に出ないよう調整 */
+  transform: translate(-50%, -100%);
+  margin-top: -8px;
+}
+
+/* メニューアイテム */
+.video-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  font-size: 15px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  font-family: inherit;
+  
+  /* タッチデバイスでのハイライト無効化 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.video-context-menu__item:hover {
+  background: var(--surface-secondary);
+}
+
+.video-context-menu__item:active {
+  background: var(--surface-hover);
+  transform: scale(0.98);
+}
+
+/* アイコン */
+.video-context-menu__icon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* 区切り線 */
+.video-context-menu__divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 8px;
+}
+
+/* 成功メッセージ */
+.video-context-menu__success {
+  padding: 16px 24px;
+  font-size: 15px;
+  color: var(--success-color);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+/* PWAスタンドアロンモードでの調整 */
+@media (display-mode: standalone) {
+  .video-context-menu {
+    /* PWAではより大きめのタッチターゲット */
+    min-width: 220px;
+  }
+  
+  .video-context-menu__item {
+    padding: 14px 18px;
+    font-size: 16px;
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .video-context-menu {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* 画面端での位置調整 */
+@media (max-width: 420px) {
+  .video-context-menu {
+    /* 画面幅が狭い場合は中央寄せ */
+    left: 50% !important;
+    right: auto;
+  }
+}
