@@ -322,7 +322,7 @@ export function MylistBackup() {
               <label className={styles.resolutionOption}>
                 <input type="radio" name="mylist-resolution" value="complete_overwrite" />
                 <div className={styles.optionContent}>
-                  <span className={styles.optionTitle}>⚠️ 完全上書き（上級者向け）</span>
+                  <span className={styles.optionTitle}>⚠️ 完全上書き</span>
                   <span className={styles.optionDescription}>
                     既存マイリストを全削除してインポートデータで完全置換
                   </span>

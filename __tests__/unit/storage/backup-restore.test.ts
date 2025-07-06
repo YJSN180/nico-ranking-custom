@@ -347,13 +347,33 @@ describe('Download Backup Data Tests', () => {
 
 describe('Import Mylist Data Tests', () => {
   it('should import mylist data successfully', async () => {
+    // トランザクションカウンター（読み取り用と書き込み用を区別）
+    let transactionCount = 0
+    
     const mockDB = {
-      transaction: vi.fn().mockReturnValue({
-        objectStore: vi.fn(() => ({
-          get: vi.fn().mockResolvedValue(null), // 既存のマイリストはない
-          put: vi.fn().mockResolvedValue(undefined)
-        })),
-        done: Promise.resolve()
+      transaction: vi.fn().mockImplementation((stores, mode) => {
+        transactionCount++
+        
+        // 最初のトランザクションは既存データ読み取り用
+        if (transactionCount === 1) {
+          return {
+            objectStore: vi.fn(() => ({
+              getAll: vi.fn().mockResolvedValue([]) // 既存データなし
+            })),
+            done: Promise.resolve()
+          }
+        }
+        
+        // 2番目以降は書き込み用トランザクション
+        return {
+          objectStore: vi.fn((storeName) => ({
+            get: vi.fn().mockResolvedValue(null),
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockResolvedValue(undefined),
+            clear: vi.fn().mockResolvedValue(undefined)
+          })),
+          done: Promise.resolve()
+        }
       })
     }
     
@@ -375,17 +395,43 @@ describe('Import Mylist Data Tests', () => {
   })
   
   it('should detect and count overwritten mylists', async () => {
-    const mockGet = vi.fn()
-      .mockResolvedValueOnce({ id: 'test-mylist-1', name: '既存のマイリスト1' }) // 既存
-      .mockResolvedValueOnce(null) // 新規
+    // トランザクションカウンター
+    let transactionCount = 0
+    
+    // 既存のデータ（test-mylist-1が既に存在）
+    const existingMylists = [
+      { id: 'test-mylist-1', name: '既存のマイリスト1', videoCount: 2 }
+    ]
+    const existingVideos = [] // 既存動画はなし
     
     const mockDB = {
-      transaction: vi.fn().mockReturnValue({
-        objectStore: vi.fn(() => ({
-          get: mockGet,
-          put: vi.fn().mockResolvedValue(undefined)
-        })),
-        done: Promise.resolve()
+      transaction: vi.fn().mockImplementation((stores, mode) => {
+        transactionCount++
+        
+        // 最初のトランザクションは既存データ読み取り用
+        if (transactionCount === 1) {
+          return {
+            objectStore: vi.fn((storeName) => ({
+              getAll: vi.fn().mockResolvedValue(
+                storeName === 'mylists' ? existingMylists : existingVideos
+              )
+            })),
+            done: Promise.resolve()
+          }
+        }
+        
+        // 2番目以降は書き込み用トランザクション
+        return {
+          objectStore: vi.fn((storeName) => ({
+            get: vi.fn().mockResolvedValue(null),
+            getAll: vi.fn().mockResolvedValue(
+              storeName === 'mylists' ? existingMylists : []
+            ),
+            put: vi.fn().mockResolvedValue(undefined),
+            clear: vi.fn().mockResolvedValue(undefined)
+          })),
+          done: Promise.resolve()
+        }
       })
     }
     
@@ -396,34 +442,55 @@ describe('Import Mylist Data Tests', () => {
     
     vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
     
-    const result = await importMylistData(validBackupData)
+    // smart_mergeモードで実行（既存データを上書き）
+    const result = await importMylistData(validBackupData, 'smart_merge')
     
     expect(result.success).toBe(true)
     expect(result.imported.mylists).toBe(2)
     expect(result.imported.videos).toBe(3)
     expect(result.errors).toHaveLength(0)
     expect(result.overwritten.mylists).toBe(1) // 1つのマイリストが上書きされた
-    expect(result.overwritten.videos).toBe(3) // 動画も上書き
+    expect(result.overwritten.videos).toBe(0) // 動画は新規追加のみ
   })
   
   it('should handle partial import with errors', async () => {
-    const mockObjectStore = vi.fn((storeName) => ({
-      get: vi.fn().mockResolvedValue(null), // 既存のマイリストはない
-      put: vi.fn().mockImplementation((data) => {
-        if (storeName === 'mylists' && data.id === 'test-mylist-2') {
-          throw new Error('Failed to put mylist')
-        }
-        if (storeName === 'mylistVideos' && data.id === 'sm67890') {
-          throw new Error('Failed to put video')
-        }
-        return Promise.resolve()
-      })
-    }))
+    // トランザクションカウンター
+    let transactionCount = 0
     
     const mockDB = {
-      transaction: vi.fn().mockReturnValue({
-        objectStore: mockObjectStore,
-        done: Promise.resolve()
+      transaction: vi.fn().mockImplementation((stores, mode) => {
+        transactionCount++
+        
+        // 最初のトランザクションは既存データ読み取り用
+        if (transactionCount === 1) {
+          return {
+            objectStore: vi.fn(() => ({
+              getAll: vi.fn().mockResolvedValue([]) // 既存データなし
+            })),
+            done: Promise.resolve()
+          }
+        }
+        
+        // 2番目以降は書き込み用トランザクション
+        return {
+          objectStore: vi.fn((storeName) => ({
+            get: vi.fn().mockResolvedValue(null),
+            getAll: vi.fn().mockResolvedValue([]),
+            put: vi.fn().mockImplementation((data) => {
+              // test-mylist-2のputでエラーを発生させる
+              if (storeName === 'mylists' && data.id === 'test-mylist-2') {
+                throw new Error('Failed to put mylist')
+              }
+              // sm67890のputでエラーを発生させる
+              if (storeName === 'mylistVideos' && data.id === 'sm67890') {
+                throw new Error('Failed to put video')
+              }
+              return Promise.resolve()
+            }),
+            clear: vi.fn().mockResolvedValue(undefined)
+          })),
+          done: Promise.resolve()
+        }
       })
     }
     
