@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
+// Note: Edge Runtime対応のため、直接process.envを使用
+// import { config } from './lib/config'
 
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 

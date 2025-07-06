@@ -26,30 +26,35 @@ yarn-debug.log*
 yarn-error.log*
 dev.log
 
-# local env files
-.env*.local
+# ==========================================
+# 環境変数ファイル (セキュリティ重要)
+# ==========================================
+# すべての.env関連ファイル（テンプレート以外）
 .env
-
-# vercel
-.vercel
-
-# environment variable scripts and documentation
-scripts/set-*.sh
-vercel-env-vars.txt
-*.env
 .env.*
+.env*.local
+*.env
+
+# Vercel自動生成ファイル（機密情報含む）
+.vercel
+vercel-env-vars.txt
+
+# 環境変数関連スクリプト
+scripts/set-*.sh
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
+# ==========================================
 # Cloudflare Workers
-wrangler.toml
+# ==========================================
 .wrangler/
+.dev.vars
+wrangler.toml
 
 # OpenNext build artifacts
 .open-next/
-.dev.vars
 
 # Documentation files (except README.md)
 *.md
@@ -107,11 +112,8 @@ gh
 ehthumbs.db
 Thumbs.db
 
-# wrangler
-.wrangler/
-.dev.vars
+# Cloudflare環境変数（上記で包含済み）
 .env.cloudflare
-wrangler.toml
 
 # scripts folder - only allow specific required scripts
 scripts/*
@@ -159,3 +161,5 @@ venv/
 __pycache__/
 *.pyc
 SuperClaude/
+
+# Workers環境変数（上記で包含済み）

@@ -634,11 +634,12 @@ export default {
         const html = await response.text()
         
         // og:image メタタグから1280x720サムネイルURL取得
-        const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+        // 属性の順序が異なる場合も対応（content が先にくる場合）
+        const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
         let hdThumbnailUrl = null
         
         if (ogImageMatch) {
-          hdThumbnailUrl = ogImageMatch[1]
+          hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]
           console.log(`[HD Thumbnail] Found og:image: ${hdThumbnailUrl}`)
           
           // サムネイルURLの検証（1280x720であることを確認）
