@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { VideoContextMenu } from '@/components/video-context-menu'
 import type { RankingItem } from '@/types/ranking'
@@ -20,27 +21,27 @@ const mockVideo: RankingItem = {
 }
 
 // Fetch APIのモック
-global.fetch = jest.fn()
-global.URL.createObjectURL = jest.fn(() => 'blob:mock-url')
-global.URL.revokeObjectURL = jest.fn()
+global.fetch = vi.fn()
+global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
+global.URL.revokeObjectURL = vi.fn()
 
 // navigator.vibrate のモック
 Object.defineProperty(navigator, 'vibrate', {
-  value: jest.fn(),
+  value: vi.fn(),
   writable: true,
 })
 
 // navigator.clipboard のモック
 Object.defineProperty(navigator, 'clipboard', {
   value: {
-    writeText: jest.fn(),
+    writeText: vi.fn(),
   },
   writable: true,
 })
 
 describe('VideoContextMenu - サムネイル保存機能', () => {
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
   })
 
   it('コンテキストメニューにサムネイル保存ボタンが表示される', async () => {
@@ -155,7 +156,7 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
 
     await waitFor(() => {
       // APIが正しく呼ばれたことを確認
-      expect(global.fetch).toHaveBeenCalledWith(`/api/thumbnail/${videoWithoutThumb.id}`)
+      expect(global.fetch).toHaveBeenCalledWith(`/api/hd-thumbnail/${videoWithoutThumb.id}`)
     })
   })
 
@@ -163,12 +164,12 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     const videoWithoutThumb = { ...mockVideo, thumbURL: undefined }
     
     // API エラーのモック
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,
     })
 
     // alert のモック
-    const alertMock = jest.spyOn(window, 'alert').mockImplementation(() => {})
+    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
 
     render(
       <VideoContextMenu video={videoWithoutThumb}>
@@ -198,10 +199,10 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
   
   it('プロキシAPIが利用できない場合は新しいタブで画像を開く', async () => {
     // プロキシAPIがエラーを返すモック
-    ;(global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'))
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'))
 
     // window.open のモック
-    const mockOpen = jest.fn()
+    const mockOpen = vi.fn()
     global.window.open = mockOpen
 
     render(

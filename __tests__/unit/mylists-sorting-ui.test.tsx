@@ -36,7 +36,31 @@ vi.mock('next/dynamic', () => ({
   }
 }))
 
-// MylistManager のモック
+// Storage operations のモック - vi.mockはホイストされるため、内部で変数を使わない
+vi.mock('../../app/mylists/utils/storage-operations', () => ({
+  initializeStorage: vi.fn().mockResolvedValue({
+    dbManager: {
+      init: vi.fn(),
+      getDB: vi.fn()
+    },
+    mylistManager: {
+      getAllMylists: vi.fn(),
+      getMylistSortConfig: vi.fn(),
+      saveMylistSortConfig: vi.fn(),
+      updateMultipleMylistOrders: vi.fn(),
+      getOrCreateDefaultMylist: vi.fn(),
+      createMylist: vi.fn(),
+      updateMylist: vi.fn(),
+      deleteMylist: vi.fn()
+    }
+  }),
+  getStorageInfo: vi.fn().mockResolvedValue({
+    used: 1024 * 1024,
+    quota: 100 * 1024 * 1024
+  })
+}))
+
+// モックオブジェクトへの参照を保持（テスト内で使用）
 const mockMylistManager = {
   getAllMylists: vi.fn(),
   getMylistSortConfig: vi.fn(),
@@ -48,23 +72,10 @@ const mockMylistManager = {
   deleteMylist: vi.fn()
 }
 
-// DBManager のモック
 const mockDBManager = {
   init: vi.fn(),
   getDB: vi.fn()
 }
-
-// Storage operations のモック
-vi.mock('../../app/mylists/utils/storage-operations', () => ({
-  initializeStorage: vi.fn().mockResolvedValue({
-    dbManager: mockDBManager,
-    mylistManager: mockMylistManager
-  }),
-  getStorageInfo: vi.fn().mockResolvedValue({
-    used: 1024 * 1024,
-    quota: 100 * 1024 * 1024
-  })
-}))
 
 describe('マイリスト並び替えUI', () => {
   const mockMylists: Mylist[] = [
