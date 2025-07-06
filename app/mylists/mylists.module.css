@@ -2,7 +2,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
-  padding-top: 28px; /* ヘッダーとの距離を70%に調整 */
+  padding-top: 20px; /* ヘッダーとの距離を50%に調整 */
 }
 
 .loading {
