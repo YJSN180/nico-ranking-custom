@@ -1,9 +1,20 @@
 import { NextResponse } from 'next/server'
 import { TOTP } from '@/lib/totp'
 import QRCode from 'qrcode'
+import { cookies } from 'next/headers'
 
 export async function POST() {
   try {
+    // 管理者認証チェック - CRITICAL SECURITY FIX
+    const cookieStore = await cookies()
+    const adminAuth = cookieStore.get('admin-auth')
+    
+    if (!adminAuth || adminAuth.value !== 'authenticated') {
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin authentication required' },
+        { status: 401 }
+      )
+    }
     // Generate a new secret
     const secret = TOTP.generateSecret()
     

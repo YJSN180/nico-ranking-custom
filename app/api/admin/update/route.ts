@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { kv } from '@/lib/simple-kv'
 import { fetchNicoRanking } from '@/lib/fetch-rss'
+import { cookies } from 'next/headers'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 
 // 管理者用：手動でランキングデータを更新
@@ -74,6 +75,17 @@ export async function POST(request: Request) {
 // 更新状態を確認
 export async function GET(request: Request) {
   try {
+    // 管理者認証チェック - CRITICAL SECURITY FIX
+    const cookieStore = await cookies()
+    const adminAuth = cookieStore.get('admin-auth')
+    
+    if (!adminAuth || adminAuth.value !== 'authenticated') {
+      return NextResponse.json(
+        { error: 'Unauthorized - Admin authentication required' },
+        { status: 401 }
+      )
+    }
+    
     const lastUpdate = await kv.get<any>('last-update')
     const data = await kv.get<any>('ranking-data')
     

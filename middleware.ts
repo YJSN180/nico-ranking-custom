@@ -11,8 +11,9 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   
-  // /api/ パスは常に許可（内部APIコール）
-  if (pathname.startsWith('/api/')) {
+  // SECURITY FIX: /api/admin/* は認証チェックを通す
+  // 一般的な公開APIのみ認証をスキップ
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
     return NextResponse.next()
   }
   
