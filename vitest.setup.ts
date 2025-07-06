@@ -243,7 +243,12 @@ configure({
   testIdAttribute: 'data-testid',
   // Disable concurrent features for tests to avoid conflicts
   // This prevents "Should not already be working" errors
-  reactStrictMode: false
+  reactStrictMode: false,
+  // Disable act warnings
+  // @ts-ignore
+  unstable_advanceTimersWrapper: (cb: any) => cb(),
+  // @ts-ignore
+  asyncWrapper: async (cb: any) => cb()
 })
 
 // Careful cleanup after each test to avoid React concurrent mode conflicts

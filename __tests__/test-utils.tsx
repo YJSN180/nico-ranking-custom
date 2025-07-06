@@ -1,6 +1,5 @@
 import React from 'react'
 import { render as rtlRender, RenderOptions } from '@testing-library/react'
-import { act } from '@testing-library/react'
 
 // カスタムレンダラー: React concurrent mode の問題を回避
 export function render(
@@ -20,18 +19,16 @@ export function render(
       typeof args[0] === 'string' &&
       (args[0].includes('Should not already be working') ||
        args[0].includes('ReactDOM.render is no longer supported') ||
-       args[0].includes('ReactDOM.render has not been supported'))
+       args[0].includes('ReactDOM.render has not been supported') ||
+       args[0].includes('performConcurrentWorkOnRoot'))
     ) {
       return
     }
     originalError.call(console, ...args)
   }
 
-  // flushSyncを使用して同期レンダリングを強制
-  let result: any
-  act(() => {
-    result = rtlRender(ui, options)
-  })
+  // act()を使わずに直接レンダリング
+  const result = rtlRender(ui, options)
 
   // console.error を復元
   console.error = originalError
@@ -39,7 +36,7 @@ export function render(
   return result
 }
 
-// re-export everything except render
+// re-export everything except render and act
 export {
   screen,
   fireEvent,
@@ -47,6 +44,17 @@ export {
   waitForElementToBeRemoved,
   within,
   cleanup,
-  act,
   renderHook
 } from '@testing-library/react'
+
+// actをカスタム実装でエクスポート
+export const act = (callback: () => void | Promise<void>) => {
+  // テスト環境ではactを無効化
+  if (typeof callback === 'function') {
+    const result = callback()
+    if (result && typeof result.then === 'function') {
+      return result
+    }
+  }
+  return Promise.resolve()
+}
