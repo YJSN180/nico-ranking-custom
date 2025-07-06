@@ -1,7 +1,18 @@
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import './__tests__/mocks/next-router'
 import React from 'react'
+
+// Jest API compatibility - map Jest globals to vitest
+globalThis.jest = vi
+globalThis.expect = expect
+globalThis.describe = describe
+globalThis.it = it
+globalThis.test = test
+globalThis.beforeEach = beforeEach
+globalThis.afterEach = afterEach
+globalThis.beforeAll = beforeAll
+globalThis.afterAll = afterAll
 
 // グローバルCSSをテスト環境でインポート（CSS変数対応）
 import './app/globals.css'

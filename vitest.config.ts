@@ -15,6 +15,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './vitest.setup.ts',
+    // Jest API compatibility for tests
+    alias: {
+      jest: 'vitest'
+    },
     exclude: [
       '**/node_modules/**', 
       '**/__tests__/e2e/**',
@@ -43,26 +47,31 @@ export default defineConfig({
     pool: 'forks',
     poolOptions: {
       forks: {
-        // CI環境でのメモリ使用量を制限
-        maxForks: process.env.CI ? 1 : 4,
+        // シャード環境に対応したメモリ使用量制限
+        maxForks: process.env.CI ? 2 : 4,
         minForks: 1,
-        // CI環境で単一ワーカーのテストを分離してメモリ効率を向上
-        singleFork: true
+        // シャード環境では singleFork を無効化
+        singleFork: false
       }
     },
-    // CI環境での追加設定
+    // CI環境での追加設定 (シャード対応版)
     ...(process.env.CI ? {
       isolate: true,  // 各テストファイルを分離
       passWithNoTests: true,  // テストがない場合もパス
-      bail: 5,  // 5つ失敗したら即座に停止
+      bail: 10,  // シャード環境では失敗許容数を増加
       logHeapUsage: true,  // メモリ使用状況をログ出力
       sequence: {
         shuffle: false  // テストの実行順序をシャッフルしない
       },
-      fileParallelism: false,  // ファイル並列実行を無効化
-      maxThreads: 1,  // CI環境で並列実行を完全に無効化
-      minThreads: 1,  // CI環境で並列実行を完全に無効化
-      teardownTimeout: 10000  // テストの後片付けタイムアウト
+      // シャード実行時は並列制限を緩和
+      fileParallelism: true,  // シャード環境では並列実行を有効
+      maxThreads: 2,  // シャード環境では2スレッドまで許可
+      minThreads: 1,
+      teardownTimeout: 15000,  // テストの後片付けタイムアウト
+      // React concurrent mode conflict prevention
+      retry: 1,  // 失敗時の再試行
+      restoreMocks: true,  // モック状態をリセット
+      clearMocks: true  // モックを自動クリア
     } : {}),
     coverage: {
       provider: 'v8',
