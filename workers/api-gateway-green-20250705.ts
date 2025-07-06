@@ -458,7 +458,12 @@ export default {
         // ニコニコ動画から動画ページを取得（キャッシュなし）
         const nicoResponse = await fetch(`https://www.nicovideo.jp/watch/${videoId}`, {
           headers: {
-            'User-Agent': 'nico-ranking-thumbnail/1.0'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
           }
         })
         
@@ -473,10 +478,56 @@ export default {
           })
         }
         
-        // HTMLからOGP画像URLを抽出
+        // HTMLからサムネイルURLを抽出
         const html = await nicoResponse.text()
-        const ogImageMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i)
-        const thumbnailUrl = ogImageMatch ? ogImageMatch[1] : null
+        
+        let thumbnailUrl = null
+        
+        // og:imageメタタグを探す（最も確実な方法）
+        const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+        if (ogImageMatch) {
+          thumbnailUrl = ogImageMatch[1]
+          console.log('Thumbnail found in og:image:', thumbnailUrl)
+        }
+        
+        // og:imageで見つからない場合は、thumbnailメタタグを試す
+        if (!thumbnailUrl) {
+          const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
+          if (thumbnailMatch) {
+            thumbnailUrl = thumbnailMatch[1]
+            console.log('Thumbnail found in thumbnail meta tag:', thumbnailUrl)
+          }
+        }
+        
+        // それでも見つからない場合は、JSON-LDを探す
+        if (!thumbnailUrl) {
+          try {
+            // JSON-LDのVideoObjectを探す
+            const jsonLdMatches = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)
+            for (const match of jsonLdMatches) {
+              try {
+                const jsonLd = JSON.parse(match[1])
+                if (jsonLd['@type'] === 'VideoObject' && jsonLd.thumbnailUrl) {
+                  if (Array.isArray(jsonLd.thumbnailUrl) && jsonLd.thumbnailUrl.length > 0) {
+                    thumbnailUrl = jsonLd.thumbnailUrl[0]
+                  } else if (typeof jsonLd.thumbnailUrl === 'string') {
+                    thumbnailUrl = jsonLd.thumbnailUrl
+                  }
+                  if (thumbnailUrl) {
+                    console.log('Thumbnail found in JSON-LD:', thumbnailUrl)
+                    break
+                  }
+                }
+              } catch (e) {
+                // 個別のJSON-LDパースエラーは無視して次を試す
+              }
+            }
+          } catch (e) {
+            console.error('Failed to process JSON-LD:', e)
+          }
+        }
+        
+        console.log('Final thumbnail URL:', thumbnailUrl)
         
         const result = JSON.stringify({ 
           videoId,

@@ -145,9 +145,13 @@ export default {
         }
         
         // ニコニコ動画から動画ページを取得（キャッシュなし）
-        const nicoResponse = await fetch(`https://www.nicovideo.jp/watch/${videoId}`, {
+        // nico-thumb-appのロジックを参考に、ミラーサイトとUser-Agent偽装を使用
+        const nicoResponse = await fetch(`https://www.nicovideo.gay/watch/${videoId}`, {
           headers: {
-            'User-Agent': 'nico-ranking-thumbnail/1.0'
+            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+            'Accept-Language': 'ja,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
           }
         })
         
