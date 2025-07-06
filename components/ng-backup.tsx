@@ -286,7 +286,7 @@ export function NGBackup() {
               <p className={styles.resolutionTitle}>どのように処理しますか？</p>
               
               <label className={styles.resolutionOption}>
-                <input type="radio" name="resolution" value="skip" defaultChecked />
+                <input type="radio" name="resolution" value="skip" />
                 <div className={styles.optionContent}>
                   <span className={styles.optionTitle}>重複をスキップして追加</span>
                   <span className={styles.optionDescription}>重複しないアイテムのみを追加します</span>
@@ -302,9 +302,9 @@ export function NGBackup() {
               </label>
               
               <label className={styles.resolutionOption}>
-                <input type="radio" name="resolution" value="merge" />
+                <input type="radio" name="resolution" value="merge" defaultChecked />
                 <div className={styles.optionContent}>
-                  <span className={styles.optionTitle}>すべてマージ</span>
+                  <span className={styles.optionTitle}>すべてマージ（推奨）</span>
                   <span className={styles.optionDescription}>重複を除いて両方のデータを結合します</span>
                 </div>
               </label>
