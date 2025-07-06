@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor, act } from '../test-utils'
+import { render, screen, fireEvent, waitFor } from '../test-utils'
 import userEvent from '@testing-library/user-event'
 import { MylistsClient } from '@/app/mylists/mylists-client'
 import type { Mylist, MylistSortOrder } from '@/lib/storage/types'
