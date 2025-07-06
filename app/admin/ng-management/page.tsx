@@ -265,6 +265,15 @@ export default function NGManagementPage() {
     <div className={`${styles.container} ${styles[theme]}`}>
       <h1>NGリスト管理</h1>
 
+      {/* Information box about automatic NG feature */}
+      <div className={styles.infoBox}>
+        <h3>🛡️ 自動NG機能について</h3>
+        <p>
+          手動NGリスト（タイトル・投稿者名）でフィルタリングされた動画のIDは、自動的に「派生NGリスト」に追加され、以後確実に非表示になります。この機
+          能により、一度NGになった動画は動画IDが直接ブロックされたため、タイトル変更なども確実に除外され続けます。
+        </p>
+      </div>
+
       <div className={styles.tabs}>
         <button
           className={`${styles.tab} ${activeTab === 'manual' ? styles.active : ''}`}
@@ -282,6 +291,14 @@ export default function NGManagementPage() {
 
       {activeTab === 'manual' && (
         <div className={styles.content}>
+          <div className={styles.infoBox}>
+            <h3>手動NGリスト</h3>
+            <p>
+              手動NGリスト（タイトル・投稿者名）でフィルタリングされた動画のIDは、自動的に「派生NGリスト」に追加され、以後確実に非表示になります。この機
+              能により、一度NGになった動画は動画IDが直接ブロックされたため、タイトル変更なども確実に除外され続けます。
+            </p>
+          </div>
+          
           <div className={styles.addSection}>
             <select
               value={itemType}
