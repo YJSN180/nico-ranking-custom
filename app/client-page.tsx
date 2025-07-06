@@ -126,6 +126,13 @@ export default function ClientPage({
       }
       // PWAでも動作するようにlocalStorageを使用
       localStorage.setItem('ranking-navigation-state', JSON.stringify(stateToSave))
+      
+      // PWAモードでストレージ永続化をリクエスト（iOS WebKit対応）
+      if (isPWA() && 'storage' in navigator && 'persist' in navigator.storage) {
+        navigator.storage.persist().catch(() => {
+          // エラーは無視（対応していないブラウザの場合）
+        })
+      }
     }
     
     // ページ離脱時に保存
@@ -234,8 +241,8 @@ export default function ClientPage({
         const savedState = localStorage.getItem('ranking-navigation-state')
         if (savedState) {
           const parsed = JSON.parse(savedState)
-          // PWAモードでは1時間以内のデータを復元（通常は30分）
-          const expirationTime = isPWA() ? (60 * 60 * 1000) : (30 * 60 * 1000)
+          // PWAモードでは7日間のデータを復元（通常は30分）
+          const expirationTime = isPWA() ? (7 * 24 * 60 * 60 * 1000) : (30 * 60 * 1000)
           const expirationThreshold = Date.now() - expirationTime
           if (parsed.savedAt && parsed.savedAt > expirationThreshold) {
             // PWAモードでURLパラメータがある場合は、保存された状態を優先
