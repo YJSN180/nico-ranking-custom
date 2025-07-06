@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
+import { NGBackup } from './ng-backup'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -12,7 +13,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'display' | 'nglist'>('nglist')
+  const [activeTab, setActiveTab] = useState<'display' | 'nglist' | 'ng-backup'>('nglist')
   const [inputVideoId, setInputVideoId] = useState('')
   const [inputVideoTitle, setInputVideoTitle] = useState('')
   const [videoTitleType, setVideoTitleType] = useState<'exact' | 'partial'>('partial')
@@ -189,13 +190,19 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
             onClick={() => setActiveTab('display')}
           >
-            表示設定
+            🎨 表示設定
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'nglist' ? styles.active : ''}`}
             onClick={() => setActiveTab('nglist')}
           >
-            NGリスト管理
+            🚫 NGリスト管理
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
+            onClick={() => setActiveTab('ng-backup')}
+          >
+            💾 NGリスト保存
           </button>
         </div>
 
@@ -283,7 +290,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 </fieldset>
               </section>
             </div>
-          ) : (
+          ) : activeTab === 'nglist' ? (
             <div className={styles.ngListSettings}>
               {/* 動画ID */}
               <section className={styles.section}>
@@ -431,16 +438,30 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 </div>
               </section>
             </div>
+          ) : (
+            <div className={styles.ngBackupSettings}>
+              <section className={styles.section}>
+                <h3>💾 NGリストバックアップ</h3>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
+                </p>
+                <NGBackup />
+              </section>
+            </div>
           )}
         </div>
 
         <div className={styles.footer}>
           <div className={styles.stats}>
-            NGリスト: {tempNGList.totalCount}件
-            {hasChanges && <span style={{ color: 'var(--warning-color)', marginLeft: '8px' }}>(未保存)</span>}
+            {activeTab === 'nglist' && (
+              <>
+                NGリスト: {tempNGList.totalCount}件
+                {hasChanges && <span style={{ color: 'var(--warning-color)', marginLeft: '8px' }}>(未保存)</span>}
+              </>
+            )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {hasChanges && (
+            {activeTab === 'nglist' && hasChanges && (
               <button 
                 className={styles.applyButton} 
                 onClick={handleApply}

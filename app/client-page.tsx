@@ -371,6 +371,7 @@ export default function ClientPage({
     if (shouldRestore) {
       // デバッグ情報（開発時のみ）
       if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
         console.log('[PWA Session Restore] Attempting to restore:', {
           isPWA: isPWA(),
           savedState: shouldRestore,
@@ -428,6 +429,7 @@ export default function ClientPage({
       ) {
         // デバッグ情報（開発時のみ）
         if (process.env.NODE_ENV === 'development') {
+          // eslint-disable-next-line no-console
           console.log('[PWA Session Restore] Restoring to:', finalConfig)
         }
         

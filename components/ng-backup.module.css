@@ -1,0 +1,429 @@
+.ngBackup {
+  margin: 1rem 0;
+}
+
+.backupActions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.backupButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.backupButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+}
+
+.backupButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.buttonIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.fileInput {
+  display: none;
+}
+
+.backupDialogOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.backupDialog {
+  background: var(--surface-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-xl);
+  animation: modalSlideIn 0.2s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.conflictDialog {
+  max-width: 500px;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.backupDialog h3 {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.backupDialog p {
+  margin: 0.5rem 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.dialogNote {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* エクスポート時の統計表示 */
+.exportStats {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.statItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.statItem:last-child {
+  margin-bottom: 0;
+}
+
+.statLabel {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.statValue {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.statValue small {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* 重複検出結果の表示 */
+.conflictSummary {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+}
+
+.conflictItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.conflictItem:last-child {
+  margin-bottom: 0;
+}
+
+.conflictType {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.conflictCount {
+  color: #d97706;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* 解決方法の選択肢 */
+.resolutionOptions {
+  margin: 1.5rem 0;
+}
+
+.resolutionTitle {
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+}
+
+.resolutionOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.resolutionOption:hover {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+}
+
+.resolutionOption:last-child {
+  margin-bottom: 0;
+}
+
+.resolutionOption input[type="radio"] {
+  margin: 0;
+  margin-top: 2px;
+}
+
+.optionContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.optionTitle {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.optionDescription {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.dialogActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.dialogButton {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.cancelButton:hover {
+  background: var(--surface-hover);
+}
+
+.confirmButton {
+  background: var(--primary-color);
+  color: white;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background: var(--primary-color-hover);
+  transform: translateY(-1px);
+}
+
+.confirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* インポート結果メッセージ */
+.importResult {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.importResult.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: rgb(34, 197, 94);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.importResult.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.resultDetails {
+  margin-top: 0.75rem;
+}
+
+.resultDetails > div {
+  margin-bottom: 0.5rem;
+}
+
+.resultDetails > div:last-child {
+  margin-bottom: 0;
+}
+
+.categoryDetails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.categoryDetails span {
+  padding: 0.25rem 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.skippedInfo {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.skippedReasons {
+  margin-top: 0.5rem;
+  padding-left: 1rem;
+}
+
+.skippedReasons div {
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  color: rgba(217, 119, 6, 0.8);
+}
+
+.overwriteInfo {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.reloadPrompt {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.errorDetails {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: 4px;
+}
+
+.errorDetails div {
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.errorDetails div:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+  .backupDialog {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+
+  .conflictDialog {
+    max-width: none;
+  }
+
+  .backupActions {
+    justify-content: center;
+  }
+
+  .backupButton {
+    flex: 1;
+    justify-content: center;
+    min-width: 140px;
+  }
+
+  .categoryDetails {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .categoryDetails span {
+    text-align: center;
+  }
+
+  .dialogActions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .dialogButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .resolutionOption {
+    padding: 1rem;
+  }
+
+  .exportStats {
+    font-size: 0.85rem;
+  }
+
+  .statItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}

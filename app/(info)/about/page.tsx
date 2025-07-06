@@ -205,6 +205,86 @@ export default function AboutPage() {
           <li>インストール方法：iOS Safari - 共有ボタン→「ホーム画面に追加」、Android Chrome - メニュー→「ホーム画面に追加」、デスクトップ - アドレスバーのインストールアイコン</li>
           <li>メリット：アプリ起動の高速化（JS/CSSをキャッシュ）、サムネイル画像の高速表示（7日間キャッシュ）、Safari 7日間データ削除の回避</li>
         </ul>
+
+        <div style={{
+          padding: '16px',
+          backgroundColor: 'var(--bg-secondary)',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          marginBottom: '20px',
+        }}>
+          <h4 style={{
+            fontSize: '1.1rem',
+            marginBottom: '12px',
+            color: 'var(--text-primary)',
+            fontWeight: 'bold',
+          }}>
+            ⚠️ 重要：設定データの共有について
+          </h4>
+          <div style={{
+            color: 'var(--text-secondary)',
+            lineHeight: '1.7',
+            fontSize: '0.95rem',
+          }}>
+            <p style={{ marginBottom: '12px' }}>
+              <span style={{
+                color: '#d32f2f',
+                fontWeight: 'bold',
+              }}>
+                【重要】iOSでは、PWAアプリとSafariブラウザでユーザー設定が共有されません。
+              </span>
+            </p>
+            
+            <p style={{ marginBottom: '12px' }}>
+              以下の設定は、PWAアプリとブラウザで別々に管理されます：
+            </p>
+            
+            <ul style={{
+              listStyle: 'disc',
+              paddingLeft: '20px',
+              marginBottom: '12px',
+            }}>
+              <li>NGリスト（ブロックした動画）</li>
+              <li>マイリスト（お気に入り動画）</li>
+              <li>テーマ設定（ライト/ダーク/ダークブルー）</li>
+              <li>前回の表示状態（ジャンル・期間・タグ）</li>
+            </ul>
+            
+            <div style={{
+              backgroundColor: 'var(--bg-primary)',
+              padding: '12px',
+              borderRadius: '6px',
+              border: '1px solid var(--border)',
+              marginBottom: '12px',
+            }}>
+              <p style={{
+                fontSize: '0.9rem',
+                fontWeight: 'bold',
+                marginBottom: '8px',
+                color: 'var(--text-primary)',
+              }}>
+                📱 設定を移行したい場合：
+              </p>
+              <ol style={{
+                listStyle: 'decimal',
+                paddingLeft: '20px',
+                fontSize: '0.9rem',
+              }}>
+                <li>Safariブラウザで設定→「NGリスト管理」→「エクスポート」</li>
+                <li>PWAアプリで設定→「NGリスト管理」→「インポート」</li>
+                <li>マイリストも同様にエクスポート・インポート可能</li>
+              </ol>
+            </div>
+            
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#d32f2f',
+              fontWeight: 'bold',
+            }}>
+              ※ Androidでは、Chromeブラウザとアプリで設定が自動的に共有されます。
+            </p>
+          </div>
+        </div>
       </section>
 
     </div>
