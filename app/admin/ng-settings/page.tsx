@@ -5,6 +5,21 @@ import type { NGList } from '@/types/ng-list'
 import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
 import { DerivedNGList } from './components/DerivedNGList'
 
+// 常時ライトモード適用のためのラッパー
+function LightModeWrapper({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    // body要素に強制的にライトテーマを適用
+    document.body.setAttribute('data-theme', 'light')
+    
+    return () => {
+      // クリーンアップ時にテーマ属性を削除（元の設定に戻す）
+      document.body.removeAttribute('data-theme')
+    }
+  }, [])
+  
+  return <div data-theme="light" style={{ minHeight: '100vh', backgroundColor: '#ffffff', color: '#333333' }}>{children}</div>
+}
+
 export default function NGSettingsPage() {
   const [ngList, setNgList] = useState<NGList>(createEmptyNGList())
   const [loading, setLoading] = useState(true)
@@ -204,11 +219,16 @@ export default function NGSettingsPage() {
 
 
   if (loading) {
-    return <div style={{ padding: '20px' }}>読み込み中...</div>
+    return (
+      <LightModeWrapper>
+        <div style={{ padding: '20px' }}>読み込み中...</div>
+      </LightModeWrapper>
+    )
   }
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
+    <LightModeWrapper>
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
       <h1 style={{ marginBottom: '30px' }}>NG設定管理</h1>
       
       {/* 自動NG機能の説明 */}
@@ -412,6 +432,7 @@ export default function NGSettingsPage() {
           setNgList(prev => ({ ...prev, derivedVideoIds: newList }))
         }}
       />
-    </div>
+      </div>
+    </LightModeWrapper>
   )
 }
