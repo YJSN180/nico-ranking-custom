@@ -175,7 +175,7 @@ describe('マイリスト並び替え機能のテスト', () => {
       localStorage.clear()
       
       const config = await mylistManager.getMylistSortConfig()
-      expect(config.order).toBe('updatedAt-desc')
+      expect(config.order).toBe('createdAt-desc')
       expect(config.lastUpdated).toBeTruthy()
     })
   })
@@ -189,14 +189,14 @@ describe('マイリスト並び替え機能のテスト', () => {
       })
       
       const config = await mylistManager.getMylistSortConfig()
-      expect(config.order).toBe('updatedAt-desc')
+      expect(config.order).toBe('createdAt-desc')
     })
 
     it('不正なJSONが保存されている場合もデフォルト設定で動作する', async () => {
       localStorage.setItem('mylist-sort-config', 'invalid json')
       
       const config = await mylistManager.getMylistSortConfig()
-      expect(config.order).toBe('updatedAt-desc')
+      expect(config.order).toBe('createdAt-desc')
     })
   })
 
