@@ -2,6 +2,9 @@
  * Blue Worker - Original API Gateway Implementation
  * R2から直接ランキングデータを配信 (Blue/Green用)
  * 
+ * 🔵 バックアップWorker (待機中)
+ * Blue/Green デプロイメント戦略において、このBlue Workerは現在バックアップとして待機中です
+ * 
  * 実装状況 (2025-07-06更新):
  * ✅ /api/ranking - R2からランキングデータ取得
  * ✅ /api/debug - デバッグ情報
@@ -10,6 +13,7 @@
  * 注意事項:
  * - サムネイルAPIはKVキャッシュを使用しない（個人差でキャッシュヒット率が低いため）
  * - CDNレベルでキャッシュ: ブラウザ1時間、CDN24時間
+ * - サムネイル取得にはnicovideo.gayミラーサイトを使用
  */
 
 /// <reference types="@cloudflare/workers-types" />
@@ -169,7 +173,43 @@ export default {
         // HTMLからOGP画像URLを抽出
         const html = await nicoResponse.text()
         const ogImageMatch = html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i)
-        const thumbnailUrl = ogImageMatch ? ogImageMatch[1] : null
+        let thumbnailUrl = ogImageMatch ? ogImageMatch[1] : null
+        
+        // サムネイルURLを大きいサイズに変換
+        if (thumbnailUrl) {
+          // nico-thumb-appの方法を参考に、より確実な変換を行う
+          
+          // originalサイズのURLの場合はそのまま使用
+          if (thumbnailUrl.includes('.original') || thumbnailUrl.includes('/original/')) {
+            console.log('Already original size thumbnail:', thumbnailUrl)
+          } else {
+            // ニコニコ動画のサムネイルURL形式
+            // 例: https://nicovideo.cdn.nimg.jp/thumbnails/12345678/12345678.12345678
+            // 例: https://nicovideo.cdn.nimg.jp/thumbnails/12345678/12345678.12345678.M
+            
+            // クエリパラメータを分離
+            const [urlBase, urlQuery] = thumbnailUrl.split('?')
+            
+            // 既存のサイズ指定を削除（.数字の後の.Mや.Lを削除）
+            let cleanUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
+            
+            // .Lを追加（拡張子の前または末尾に）
+            if (cleanUrl.match(/\.\d+$/)) {
+              // 数字で終わる場合（例: 12345678.12345678）
+              cleanUrl = cleanUrl + '.L'
+            } else if (cleanUrl.match(/\.\d+\//)) {
+              // 数字の後にスラッシュがある場合
+              cleanUrl = cleanUrl.replace(/(\.\d+)(\/)/g, '$1.L$2')
+            } else {
+              // その他の場合は末尾に追加
+              cleanUrl = cleanUrl + '.L'
+            }
+            
+            // クエリパラメータを再結合
+            thumbnailUrl = urlQuery ? `${cleanUrl}?${urlQuery}` : cleanUrl
+            console.log('Converted to large thumbnail:', thumbnailUrl)
+          }
+        }
         
         const result = JSON.stringify({ 
           videoId,

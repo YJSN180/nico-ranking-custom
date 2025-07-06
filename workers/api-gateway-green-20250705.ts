@@ -2,6 +2,9 @@
  * Cloudflare Worker - Green Worker 20250705 with Dynamic TTL & ETag Support
  * Smart Router用Green Worker（動的TTL & ETag対応、2025-07-05版）
  * 
+ * 🟢 現在アクティブなWorker (本番環境で使用中)
+ * Blue/Green デプロイメント戦略において、このGreen Workerが現在稼働中です
+ * 
  * Features:
  * - Dynamic TTL based on actual update schedule (0, 20, 40 minutes)
  * - ETag support for conditional requests
@@ -17,6 +20,7 @@
  * 注意事項:
  * - サムネイルAPIはKVキャッシュを使用しない（個人差でキャッシュヒット率が低いため）
  * - CDNレベルでキャッシュ: ブラウザ1時間、CDN24時間
+ * - サムネイル取得にはnicovideo.gayミラーサイトを使用
  */
 
 /// <reference types="@cloudflare/workers-types" />
@@ -456,14 +460,13 @@ export default {
         }
         
         // ニコニコ動画から動画ページを取得（キャッシュなし）
-        const nicoResponse = await fetch(`https://www.nicovideo.jp/watch/${videoId}`, {
+        // nico-thumb-appのロジックを参考に、ミラーサイトとUser-Agent偽装を使用
+        const nicoResponse = await fetch(`https://www.nicovideo.gay/watch/${videoId}`, {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3',
+            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+            'Accept-Language': 'ja,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
           }
         })
         
@@ -528,6 +531,42 @@ export default {
         }
         
         console.log('Final thumbnail URL:', thumbnailUrl)
+        
+        // サムネイルURLを大きいサイズに変換
+        if (thumbnailUrl) {
+          // nico-thumb-appの方法を参考に、より確実な変換を行う
+          
+          // originalサイズのURLの場合はそのまま使用
+          if (thumbnailUrl.includes('.original') || thumbnailUrl.includes('/original/')) {
+            console.log('Already original size thumbnail:', thumbnailUrl)
+          } else {
+            // ニコニコ動画のサムネイルURL形式
+            // 例: https://nicovideo.cdn.nimg.jp/thumbnails/12345678/12345678.12345678
+            // 例: https://nicovideo.cdn.nimg.jp/thumbnails/12345678/12345678.12345678.M
+            
+            // クエリパラメータを分離
+            const [urlBase, urlQuery] = thumbnailUrl.split('?')
+            
+            // 既存のサイズ指定を削除（.数字の後の.Mや.Lを削除）
+            let cleanUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
+            
+            // .Lを追加（拡張子の前または末尾に）
+            if (cleanUrl.match(/\.\d+$/)) {
+              // 数字で終わる場合（例: 12345678.12345678）
+              cleanUrl = cleanUrl + '.L'
+            } else if (cleanUrl.match(/\.\d+\//)) {
+              // 数字の後にスラッシュがある場合
+              cleanUrl = cleanUrl.replace(/(\.\d+)(\/)/g, '$1.L$2')
+            } else {
+              // その他の場合は末尾に追加
+              cleanUrl = cleanUrl + '.L'
+            }
+            
+            // クエリパラメータを再結合
+            thumbnailUrl = urlQuery ? `${cleanUrl}?${urlQuery}` : cleanUrl
+            console.log('Converted to large thumbnail:', thumbnailUrl)
+          }
+        }
         
         const result = JSON.stringify({ 
           videoId,
