@@ -37,11 +37,7 @@ export function MylistsClient() {
   const [editingMylist, setEditingMylist] = useState<Mylist | null>(null)
   const [storageInfo, setStorageInfo] = useState({ used: 0, quota: 0 })
   const [contentReady, setContentReady] = useState(false)
-  const [sortOrder, setSortOrder] = useState<MylistSortOrder>('updatedAt-desc')
-  const [isDragMode, setIsDragMode] = useState(false)
-  const [draggedMylistId, setDraggedMylistId] = useState<string | null>(null)
-  const [originalMylists, setOriginalMylists] = useState<Mylist[]>([])
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [sortOrder, setSortOrder] = useState<MylistSortOrder>('createdAt-desc')
   const router = useRouter()
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
@@ -161,99 +157,12 @@ export function MylistsClient() {
         order: newSortOrder
       })
       
-      // カスタム順に変更した場合はドラッグモードを有効化
-      if (newSortOrder === 'custom') {
-        // 元の順序を保存（キャンセル時の復元用）
-        setOriginalMylists([...mylists])
-        setIsDragMode(true)
-        setHasUnsavedChanges(false)
-      } else {
-        setIsDragMode(false)
-        setHasUnsavedChanges(false)
-        setOriginalMylists([])
-      }
-      
       // マイリストを再読み込み
       await loadMylists(newSortOrder)
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to update sort order:', error)
     }
-  }
-  
-  const handleDragStart = (e: React.DragEvent, mylistId: string) => {
-    if (!isDragMode) return
-    setDraggedMylistId(mylistId)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', mylistId)
-    
-    // ドラッグ要素にクラスを追加
-    const element = e.currentTarget as HTMLElement
-    element.classList.add(styles.dragging)
-  }
-  
-  const handleDragEnd = (e: React.DragEvent) => {
-    setDraggedMylistId(null)
-    
-    // ドラッグ要素からクラスを削除
-    const element = e.currentTarget as HTMLElement
-    element.classList.remove(styles.dragging)
-  }
-  
-  const handleDragOver = (e: React.DragEvent) => {
-    if (!isDragMode || !draggedMylistId) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-  
-  const handleDrop = async (e: React.DragEvent, targetMylistId: string) => {
-    if (!isDragMode || !draggedMylistId) return
-    e.preventDefault()
-    
-    if (draggedMylistId === targetMylistId) return
-    
-    // 現在の順序を取得
-    const currentMylists = [...mylists]
-    const draggedIndex = currentMylists.findIndex(m => m.id === draggedMylistId)
-    const targetIndex = currentMylists.findIndex(m => m.id === targetMylistId)
-    
-    if (draggedIndex === -1 || targetIndex === -1) return
-    
-    // 配列内での移動（一時的な表示のみ更新）
-    const [removed] = currentMylists.splice(draggedIndex, 1)
-    currentMylists.splice(targetIndex, 0, removed)
-    
-    // 表示を更新（DBは更新しない）
-    setMylists(currentMylists)
-    setHasUnsavedChanges(true)
-  }
-  
-  const handleSaveOrder = async () => {
-    if (!mylistManagerRef.current || !hasUnsavedChanges) return
-    
-    try {
-      // カスタム順序を更新
-      const updates = mylists.map((mylist, index) => ({
-        mylistId: mylist.id,
-        customOrder: index
-      }))
-      
-      await mylistManagerRef.current.updateMultipleMylistOrders(updates)
-      setHasUnsavedChanges(false)
-      setOriginalMylists([...mylists])
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to save mylist order:', error)
-      // エラー時は元の順序を復元
-      handleCancelOrder()
-    }
-  }
-  
-  const handleCancelOrder = () => {
-    if (originalMylists.length > 0) {
-      setMylists([...originalMylists])
-    }
-    setHasUnsavedChanges(false)
   }
   
   const handleCreateMylist = async (name: string, description?: string) => {
@@ -334,39 +243,16 @@ export function MylistsClient() {
             value={sortOrder}
             onChange={(e) => handleSortChange(e.target.value as MylistSortOrder)}
           >
-            <option value="updatedAt-desc">更新日（新しい順）</option>
-            <option value="updatedAt-asc">更新日（古い順）</option>
             <option value="createdAt-desc">作成日（新しい順）</option>
             <option value="createdAt-asc">作成日（古い順）</option>
+            <option value="updatedAt-desc">更新日（新しい順）</option>
+            <option value="updatedAt-asc">更新日（古い順）</option>
             <option value="name-asc">名前（昇順）</option>
             <option value="name-desc">名前（降順）</option>
             <option value="videoCount-desc">動画数（多い順）</option>
             <option value="videoCount-asc">動画数（少ない順）</option>
-            <option value="custom">カスタム順</option>
           </select>
         </div>
-        
-        {isDragMode && (
-          <div className={styles.dragHint}>
-            💡 左側のハンドル（≡）をドラッグしてマイリストの順序を変更できます
-            {hasUnsavedChanges && (
-              <div className={styles.confirmButtons}>
-                <button
-                  className={styles.saveButton}
-                  onClick={handleSaveOrder}
-                >
-                  ✓ 完了
-                </button>
-                <button
-                  className={styles.cancelButton}
-                  onClick={handleCancelOrder}
-                >
-                  ✕ キャンセル
-                </button>
-              </div>
-            )}
-          </div>
-        )}
       </div>
       
       {/* PWAInstallGuide moved to bottom */}
@@ -375,44 +261,15 @@ export function MylistsClient() {
         {mylists.map(mylist => (
           <div
             key={mylist.id}
-            className={`${styles.mylistCard} ${isDragMode ? styles.draggable : ''}`}
-            draggable={isDragMode}
-            onDragStart={(e) => {
-              // ドラッグハンドルから開始されたかを確認
-              const dragHandle = e.currentTarget.querySelector(`.${styles.dragHandle}`)
-              const isDragReady = dragHandle?.getAttribute('data-drag-ready') === 'true'
-              
-              if (!isDragMode || !isDragReady) {
-                e.preventDefault()
-                return
-              }
-              
-              // ドラッグ開始後にマーカーをクリア
-              dragHandle?.removeAttribute('data-drag-ready')
-              handleDragStart(e, mylist.id)
-            }}
-            onDragEnd={handleDragEnd}
-            onDragOver={handleDragOver}
-            onDrop={(e) => handleDrop(e, mylist.id)}
+            className={styles.mylistCard}
             onClick={(e) => {
-              // ドラッグ中やアクションボタンのクリック時はナビゲーションしない
-              if (draggedMylistId || (e.target as HTMLElement).closest('button')) {
+              // アクションボタンのクリック時はナビゲーションしない
+              if ((e.target as HTMLElement).closest('button')) {
                 return
               }
               router.push(`/mylists/${mylist.id}`)
             }}
           >
-            {isDragMode && (
-              <div 
-                className={styles.dragHandle}
-                onMouseDown={(e) => {
-                  // ドラッグハンドルをクリックした時のマーカー
-                  e.currentTarget.setAttribute('data-drag-ready', 'true')
-                }}
-              >
-                <div className={styles.dragIcon}>≡</div>
-              </div>
-            )}
             <div className={styles.mylistInfo}>
               <div className={styles.mylistIcon}>📁</div>
               <div className={styles.mylistDetails}>

@@ -27,7 +27,6 @@ export interface Mylist {
   createdAt: number    // 作成日時（タイムスタンプ）
   updatedAt: number    // 更新日時（タイムスタンプ）
   videoCount: number   // 動画数
-  customOrder?: number // カスタム並び順（オプション）
 }
 
 // マイリスト内の動画
@@ -74,7 +73,6 @@ export type MylistSortOrder =
   | 'name-desc'         // 名前（降順）
   | 'videoCount-desc'   // 動画数（多い順）
   | 'videoCount-asc'    // 動画数（少ない順）
-  | 'custom'            // カスタム順
 
 // マイリストソート設定
 export interface MylistSortConfig {

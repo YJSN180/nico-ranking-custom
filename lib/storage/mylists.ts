@@ -88,7 +88,7 @@ export class MylistManager {
   /**
    * すべてのマイリストを取得
    */
-  async getAllMylists(sortOrder: MylistSortOrder = 'updatedAt-desc'): Promise<Mylist[]> {
+  async getAllMylists(sortOrder: MylistSortOrder = 'createdAt-desc'): Promise<Mylist[]> {
     const db = this.dbManager.getDB()
     const tx = db.transaction('mylists', 'readonly')
     const mylists = await tx.store.getAll()
@@ -118,11 +118,6 @@ export class MylistManager {
           return b.videoCount - a.videoCount
         case 'videoCount-asc':
           return a.videoCount - b.videoCount
-        case 'custom':
-          // カスタム順の場合、customOrderフィールドでソート（未設定の場合は作成日順）
-          const aOrder = a.customOrder ?? a.createdAt
-          const bOrder = b.customOrder ?? b.createdAt
-          return aOrder - bOrder
         default:
           return b.updatedAt - a.updatedAt
       }
@@ -380,43 +375,6 @@ export class MylistManager {
     })
   }
 
-  /**
-   * マイリストのカスタム順序を更新
-   */
-  async updateMylistCustomOrder(mylistId: string, customOrder: number): Promise<void> {
-    const db = this.dbManager.getDB()
-    const tx = db.transaction('mylists', 'readwrite')
-    
-    const mylist = await tx.store.get(mylistId)
-    if (!mylist) {
-      throw new Error('Mylist not found')
-    }
-    
-    mylist.customOrder = customOrder
-    mylist.updatedAt = Date.now()
-    
-    await tx.store.put(mylist)
-    await tx.done
-  }
-
-  /**
-   * 複数のマイリストのカスタム順序を一括更新
-   */
-  async updateMultipleMylistOrders(updates: { mylistId: string; customOrder: number }[]): Promise<void> {
-    const db = this.dbManager.getDB()
-    const tx = db.transaction('mylists', 'readwrite')
-    
-    for (const update of updates) {
-      const mylist = await tx.store.get(update.mylistId)
-      if (mylist) {
-        mylist.customOrder = update.customOrder
-        mylist.updatedAt = Date.now()
-        await tx.store.put(mylist)
-      }
-    }
-    
-    await tx.done
-  }
 
   /**
    * マイリストソート設定を保存
@@ -444,7 +402,7 @@ export class MylistManager {
     
     // デフォルト設定
     return {
-      order: 'updatedAt-desc',
+      order: 'createdAt-desc',
       lastUpdated: Date.now()
     }
   }

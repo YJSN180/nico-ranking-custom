@@ -28,8 +28,7 @@ describe('マイリスト並び替え機能のテスト', () => {
         description: 'アニメ関連の動画',
         createdAt: 1704067200000, // 2024-01-01
         updatedAt: 1709251200000, // 2024-03-01
-        videoCount: 15,
-        customOrder: undefined
+        videoCount: 15
       },
       {
         id: 'mylist-2', 
@@ -37,8 +36,7 @@ describe('マイリスト並び替え機能のテスト', () => {
         description: '好きな音楽',
         createdAt: 1706745600000, // 2024-02-01
         updatedAt: 1711929600000, // 2024-04-01
-        videoCount: 8,
-        customOrder: undefined
+        videoCount: 8
       },
       {
         id: 'mylist-3',
@@ -46,8 +44,7 @@ describe('マイリスト並び替え機能のテスト', () => {
         description: '',
         createdAt: 1698796800000, // 2023-11-01
         updatedAt: 1706745600000, // 2024-02-01
-        videoCount: 25,
-        customOrder: undefined
+        videoCount: 25
       }
     ]
 
@@ -75,25 +72,12 @@ describe('マイリスト並び替え機能のテスト', () => {
             return b.videoCount - a.videoCount
           case 'videoCount-asc':
             return a.videoCount - b.videoCount
-          case 'custom':
-            const aOrder = a.customOrder ?? a.createdAt
-            const bOrder = b.customOrder ?? b.createdAt
-            return aOrder - bOrder
-          default:
+            default:
             return b.updatedAt - a.updatedAt
         }
       })
     })
 
-    vi.spyOn(mylistManager, 'updateMultipleMylistOrders').mockImplementation(async (updates) => {
-      updates.forEach(update => {
-        const mylist = mockMylists.find(m => m.id === update.mylistId)
-        if (mylist) {
-          mylist.customOrder = update.customOrder
-          mylist.updatedAt = Date.now()
-        }
-      })
-    })
 
     vi.spyOn(mylistManager, 'saveMylistSortConfig').mockImplementation(async (config) => {
       const configWithTimestamp = {
@@ -114,7 +98,7 @@ describe('マイリスト並び替え機能のテスト', () => {
       }
       
       return {
-        order: 'updatedAt-desc' as MylistSortOrder,
+        order: 'createdAt-desc' as MylistSortOrder,
         lastUpdated: Date.now()
       }
     })
@@ -196,50 +180,6 @@ describe('マイリスト並び替え機能のテスト', () => {
     })
   })
 
-  describe('カスタム順序機能', () => {
-    it('カスタム順序が設定できる', async () => {
-      const updates = [
-        { mylistId: 'mylist-1', customOrder: 2 },
-        { mylistId: 'mylist-2', customOrder: 0 },
-        { mylistId: 'mylist-3', customOrder: 1 }
-      ]
-      
-      await mylistManager.updateMultipleMylistOrders(updates)
-      
-      // customOrderが設定されたことを確認
-      expect(mockMylists.find(m => m.id === 'mylist-1')?.customOrder).toBe(2)
-      expect(mockMylists.find(m => m.id === 'mylist-2')?.customOrder).toBe(0)
-      expect(mockMylists.find(m => m.id === 'mylist-3')?.customOrder).toBe(1)
-    })
-
-    it('カスタム順序でソートされる', async () => {
-      // カスタム順序を設定
-      mockMylists[0].customOrder = 2 // アニメマイリスト
-      mockMylists[1].customOrder = 0 // 音楽マイリスト
-      mockMylists[2].customOrder = 1 // ゲーム実況
-      
-      const result = await mylistManager.getAllMylists('custom')
-      
-      expect(result[0].name).toBe('音楽マイリスト') // customOrder: 0
-      expect(result[1].name).toBe('ゲーム実況')     // customOrder: 1
-      expect(result[2].name).toBe('アニメマイリスト') // customOrder: 2
-    })
-
-    it('customOrderが未設定の場合は作成日順にフォールバックする', async () => {
-      // customOrderを一部のマイリストのみに設定
-      mockMylists[1].customOrder = 0 // 音楽マイリスト
-      // 他のマイリストはcustomOrder未設定
-      
-      const result = await mylistManager.getAllMylists('custom')
-      
-      // customOrderが設定されているものが先頭
-      expect(result[0].name).toBe('音楽マイリスト')
-      
-      // 残りは作成日順（customOrderが未設定の場合はcreatedAtで比較）
-      const remaining = result.slice(1)
-      expect(remaining[0].createdAt).toBeLessThan(remaining[1].createdAt)
-    })
-  })
 
   describe('エラーハンドリング', () => {
     it('localStorageエラー時もデフォルト設定で動作する', async () => {
@@ -284,94 +224,8 @@ describe('マイリスト並び替え機能のテスト', () => {
       expect(savedConfig.order).toBe('name-asc')
     })
 
-    it('ユーザーがドラッグ&ドロップで順序を変更する', async () => {
-      // 1. カスタム順に変更
-      await mylistManager.saveMylistSortConfig({ order: 'custom' })
-      
-      // 2. ドラッグ&ドロップで順序変更をシミュレート
-      const newOrder = [
-        { mylistId: 'mylist-3', customOrder: 0 }, // ゲーム実況を先頭に
-        { mylistId: 'mylist-1', customOrder: 1 }, // アニメマイリストを2番目に
-        { mylistId: 'mylist-2', customOrder: 2 }  // 音楽マイリストを最後に
-      ]
-      
-      await mylistManager.updateMultipleMylistOrders(newOrder)
-      
-      // 3. 変更された順序で取得
-      const mylists = await mylistManager.getAllMylists('custom')
-      expect(mylists[0].name).toBe('ゲーム実況')
-      expect(mylists[1].name).toBe('アニメマイリスト')
-      expect(mylists[2].name).toBe('音楽マイリスト')
-    })
 
-    it('ユーザーがドラッグ&ドロップ後に確認操作を行う', async () => {
-      // 1. カスタム順に変更（元の順序を記録）
-      const originalMylists = await mylistManager.getAllMylists('updatedAt-desc')
-      await mylistManager.saveMylistSortConfig({ order: 'custom' })
-      
-      // 2. 一時的な順序変更をシミュレート（DBは更新しない）
-      // 元の順序: 音楽マイリスト(最新) → アニメマイリスト → ゲーム実況(最古)
-      // 新しい順序: ゲーム実況 → アニメマイリスト → 音楽マイリスト
-      const gameMylist = originalMylists.find(m => m.name === 'ゲーム実況')!
-      const animeMylist = originalMylists.find(m => m.name === 'アニメマイリスト')!
-      const musicMylist = originalMylists.find(m => m.name === '音楽マイリスト')!
-      
-      // 3. 確認して保存する場合
-      const saveOrder = [
-        { mylistId: gameMylist.id, customOrder: 0 },  // ゲーム実況を先頭に
-        { mylistId: animeMylist.id, customOrder: 1 }, // アニメマイリストを2番目に
-        { mylistId: musicMylist.id, customOrder: 2 }  // 音楽マイリストを最後に
-      ]
-      
-      await mylistManager.updateMultipleMylistOrders(saveOrder)
-      
-      // 4. 保存された順序で取得
-      const savedMylists = await mylistManager.getAllMylists('custom')
-      expect(savedMylists[0].name).toBe('ゲーム実況')
-      expect(savedMylists[1].name).toBe('アニメマイリスト')  
-      expect(savedMylists[2].name).toBe('音楽マイリスト')
-    })
 
-    it('ユーザーがドラッグ&ドロップをキャンセルする', async () => {
-      // 1. 元の順序を取得
-      const originalMylists = await mylistManager.getAllMylists('updatedAt-desc')
-      const originalOrder = originalMylists.map(m => m.name)
-      
-      // 2. カスタム順に変更
-      await mylistManager.saveMylistSortConfig({ order: 'custom' })
-      
-      // 3. キャンセル後は元の順序が維持されることを確認
-      // （実際のキャンセル操作はUI側で元の配列を復元）
-      const afterCancel = await mylistManager.getAllMylists('updatedAt-desc')
-      const afterCancelOrder = afterCancel.map(m => m.name)
-      
-      expect(afterCancelOrder).toEqual(originalOrder)
-    })
 
-    it('ドラッグハンドルUIテスト（視覚的インジケーター）', async () => {
-      // UI構造の期待値を検証（実装の意図を記録）
-      // カスタム順選択時に以下の要素が表示されることを期待:
-      
-      const expectedUIElements = {
-        // ドラッグハンドル
-        hasDragHandle: true,
-        dragIconSymbol: '≡',
-        dragHandleClassName: 'dragHandle',
-        
-        // 更新されたヒントテキスト  
-        instructionText: '左側のハンドル（≡）をドラッグして',
-        
-        // ドラッグ可能カードのスタイル
-        draggableCardStyle: 'draggable',
-        dashBorderStyle: 'dashed'
-      }
-      
-      // 実装された機能の検証
-      expect(expectedUIElements.hasDragHandle).toBe(true)
-      expect(expectedUIElements.dragIconSymbol).toBe('≡')
-      expect(expectedUIElements.instructionText).toContain('ハンドル（≡）')
-      expect(expectedUIElements.draggableCardStyle).toBe('draggable')
-      expect(expectedUIElements.dashBorderStyle).toBe('dashed')
-    })
   })
 })
