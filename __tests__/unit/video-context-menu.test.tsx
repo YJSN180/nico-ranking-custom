@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
+import { render } from '@/__tests__/test-utils'
 import { VideoContextMenu } from '@/components/video-context-menu'
 import type { RankingItem } from '@/types/ranking'
+import '../test-environment'
 
 // モックデータ
 const mockVideo: RankingItem = {
@@ -44,6 +46,10 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     vi.clearAllMocks()
   })
 
+  afterEach(() => {
+    cleanup()
+  })
+
   it('コンテキストメニューにサムネイル保存ボタンが表示される', async () => {
     render(
       <VideoContextMenu video={mockVideo}>
@@ -64,21 +70,31 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
   it('サムネイルURLが既に存在する場合、大きいサイズに変換してプロキシAPI経由でダウンロードされる', async () => {
     // Blobのモック
     const mockBlob = new Blob(['mock image data'], { type: 'image/jpeg' })
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       blob: async () => mockBlob,
-    })
+    } as Response)
 
     // ダウンロードリンクのクリックをモック
     const mockClick = vi.fn()
     const mockRemove = vi.fn()
-    const createElementSpy = vi.spyOn(document, 'createElement')
-    createElementSpy.mockReturnValue({
+    const mockAnchor = {
       href: '',
       download: '',
       click: mockClick,
       remove: mockRemove,
-    } as any)
+    }
+    
+    // createElementの実装を保存
+    const originalCreateElement = document.createElement.bind(document)
+    
+    // createElementをモック（aタグのみ）
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
+      if (tagName === 'a') {
+        return mockAnchor as any
+      }
+      return originalCreateElement(tagName)
+    })
 
     // appendChild/removeChild のモック
     const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(() => null as any)
@@ -127,14 +143,15 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     const videoWithoutThumb = { ...mockVideo, thumbURL: undefined }
     
     // API レスポンスのモック
-    ;(global.fetch as ReturnType<typeof vi.fn>)
+    vi.mocked(global.fetch)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ thumbnail: 'https://api.example.com/thumb.jpg' }),
-      })
+      } as Response)
       .mockResolvedValueOnce({
+        ok: true,
         blob: async () => new Blob(['mock image data'], { type: 'image/jpeg' }),
-      })
+      } as Response)
 
     render(
       <VideoContextMenu video={videoWithoutThumb}>
@@ -164,9 +181,9 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     const videoWithoutThumb = { ...mockVideo, thumbURL: undefined }
     
     // API エラーのモック
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+    vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: false,
-    })
+    } as Response)
 
     // alert のモック
     const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
@@ -199,7 +216,7 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
   
   it('プロキシAPIが利用できない場合は新しいタブで画像を開く', async () => {
     // プロキシAPIがエラーを返すモック
-    ;(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('Network error'))
+    vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network error'))
 
     // window.open のモック
     const mockOpen = vi.fn()

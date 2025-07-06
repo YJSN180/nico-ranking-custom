@@ -137,19 +137,8 @@ describe('Safari Detection Tests', () => {
       storage: storageAPISuccess
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     expect(isSafari()).toBe(false)
   })
@@ -160,30 +149,15 @@ describe('Safari Detection Tests', () => {
       storage: storageAPISuccess
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     expect(isSafari()).toBe(false)
   })
   
   it('should return false in server-side environment', () => {
     // window オブジェクトを削除
-    Object.defineProperty(global, 'window', {
-      value: undefined,
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('window', undefined)
     
     expect(isSafari()).toBe(false)
   })
@@ -218,19 +192,8 @@ describe('Persistent Storage Tests', () => {
       storage: undefined
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     const result = await requestPersistentStorage()
     
@@ -251,19 +214,8 @@ describe('Persistent Storage Tests', () => {
       storage: errorStorageAPI
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     const result = await requestPersistentStorage()
     
@@ -291,19 +243,8 @@ describe('Persistent Storage Tests', () => {
       storage: errorStorageAPI
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     const result = await checkPersistentStorage()
     
@@ -493,19 +434,8 @@ describe('Storage Usage Estimation Tests', () => {
       }
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     const estimate = await estimateStorageUsage()
     
@@ -525,19 +455,8 @@ describe('Storage Usage Estimation Tests', () => {
       storage: errorStorageAPI
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     const estimate = await estimateStorageUsage()
     
@@ -557,19 +476,8 @@ describe('Storage Usage Estimation Tests', () => {
       storage: customStorageAPI
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     const estimate = await estimateStorageUsage()
     

@@ -33,11 +33,11 @@ vi.mock('next/navigation', () => ({
 // TagSelectorを通常のimportに戻すためのモック
 vi.mock('@/components/tag-selector', () => ({
   TagSelector: ({ config, onConfigChange, popularTags = [] }: any) => {
-    // タグが選択されている場合は非表示
-    if (config.tag) return null
-    
     // allジャンルの場合は何も表示しない（実際のコンポーネントと同じ挙動）
     if (config.genre === 'all') return null
+    
+    // 人気タグが空の場合も何も表示しない
+    if (!popularTags || popularTags.length === 0) return null
     
     // その他のジャンルではタグを表示
     return (
@@ -45,9 +45,20 @@ vi.mock('@/components/tag-selector', () => ({
         <div>
           <h2 className="_selectorTitle_933bb3">人気タグ</h2>
           <div className="_buttonContainer_933bb3">
-            <button className="_button_933bb3 _buttonSelected_933bb3">すべて</button>
+            <button 
+              className={`_button_933bb3 ${!config.tag ? '_buttonSelected_933bb3' : ''}`}
+              onClick={() => onConfigChange({ ...config, tag: undefined })}
+            >
+              すべて
+            </button>
             {popularTags.map((tag: string) => (
-              <button key={tag} className="_button_933bb3">{tag}</button>
+              <button 
+                key={tag} 
+                className={`_button_933bb3 ${config.tag === tag ? '_buttonSelected_933bb3' : ''}`}
+                onClick={() => onConfigChange({ ...config, tag })}
+              >
+                {tag}
+              </button>
             ))}
           </div>
         </div>

@@ -148,9 +148,9 @@ describe('NG List Continuous Rank Display', () => {
     expect(thirdRankElement).toHaveTextContent('3')
     expect(firstPageItems[2]).toHaveTextContent('Video 4')
     
-    // Navigate to page 2
-    const goToPage2Button = screen.getByText('Go to page 2')
-    goToPage2Button.click()
+    // Navigate to page 2 (there are 2 pagination components)
+    const goToPage2Buttons = screen.getAllByText('Go to page 2')
+    goToPage2Buttons[0].click()
 
     // Re-render with page 2
     rerender(
@@ -210,8 +210,8 @@ describe('NG List Continuous Rank Display', () => {
     const expectedRanks = [1, 2, 3, 4, 5, 6, 7]
     
     items.forEach((item, index) => {
-      const rankText = item.textContent?.match(/^\d+/)?.[0]
-      expect(parseInt(rankText || '0')).toBe(expectedRanks[index])
+      const rankElement = item.querySelector('.ranking-item-responsive__rank')
+      expect(rankElement).toHaveTextContent(expectedRanks[index].toString())
     })
   })
 })
