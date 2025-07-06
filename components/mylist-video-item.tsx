@@ -2,7 +2,9 @@
 
 import { memo } from 'react'
 import { OptimizedImage } from './optimized-image'
+import { VideoContextMenu } from './video-context-menu'
 import { formatNumberMobile, formatDuration } from '@/lib/format-utils'
+import { convertMylistVideoToRankingItem } from '@/lib/adapters/video-type-adapter'
 import type { MylistVideo } from '@/lib/storage/types'
 import './mylist-video-item.css'
 
@@ -48,36 +50,40 @@ const MylistVideoItem = memo(function MylistVideoItem({
     }
   }
 
+  // 型変換: MylistVideo → RankingItem（VideoContextMenu用）
+  const convertedVideo = convertMylistVideoToRankingItem(video, rank)
+
   return (
-    <li 
-      data-testid="mylist-video-item"
-      className="mylist-video-item"
-      style={{
-        // Container Queries用のcontainment設定
-        containerType: 'inline-size',
-        background: 'var(--surface-color)',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)',
-        border: '1px solid var(--border-color)',
-        marginBottom: '8px',
-        cursor: 'pointer',
-        transition: 'background-color 0.2s',
-        position: 'relative'
-      }}
-      onClick={(e) => {
-        // リンクやボタンのクリックは除外
-        const target = e.target as HTMLElement;
-        if (target.closest('a') || target.closest('button')) return;
-        window.open(`https://www.nicovideo.jp/watch/${video.id}`, '_blank');
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = 'var(--surface-color)';
-      }}
-    >
+    <VideoContextMenu video={convertedVideo}>
+      <li 
+        data-testid="mylist-video-item"
+        className="mylist-video-item"
+        style={{
+          // Container Queries用のcontainment設定
+          containerType: 'inline-size',
+          background: 'var(--surface-color)',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-md)',
+          border: '1px solid var(--border-color)',
+          marginBottom: '8px',
+          cursor: 'pointer',
+          transition: 'background-color 0.2s',
+          position: 'relative'
+        }}
+        onClick={(e) => {
+          // リンクやボタンのクリックは除外
+          const target = e.target as HTMLElement;
+          if (target.closest('a') || target.closest('button')) return;
+          window.open(`https://www.nicovideo.jp/watch/${video.id}`, '_blank');
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+        }}
+      >
       <div className="mylist-video-item__content">
         {/* サムネイル */}
         <div className="mylist-video-item__thumbnail">
@@ -247,6 +253,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
         </div>
       </div>
     </li>
+    </VideoContextMenu>
   )
 }, (prevProps, nextProps) => {
   // メモ化の比較関数
