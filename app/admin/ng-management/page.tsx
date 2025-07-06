@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useTheme } from '@/hooks/use-theme'
 import styles from './ng-management.module.css'
 
 interface NGList {
@@ -18,7 +17,8 @@ interface DerivedNGList {
 }
 
 export default function NGManagementPage() {
-  const theme = useTheme()
+  // 管理者NG画面は常時ライトモードで表示（視認性確保のため）
+  const theme = 'light'
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [manualList, setManualList] = useState<NGList>({
     videoIds: [],
