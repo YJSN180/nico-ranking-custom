@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useRef, useEffect } from 'react'
+import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
@@ -24,6 +24,22 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   
   const isNew = isWithin24Hours(item.registeredAt)
   const dateDisplay = formatRegisteredDate(item.registeredAt)
+  
+  // PWA環境での訪問済み状態を管理
+  const [isVisited, setIsVisited] = useState(false)
+  
+  // 初回マウント時に訪問済みかチェック
+  useEffect(() => {
+    try {
+      const visitedKey = 'visited-videos'
+      const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+      if (visited.includes(item.id)) {
+        setIsVisited(true)
+      }
+    } catch {
+      // localStorage エラーは無視
+    }
+  }, [item.id])
 
   // ホバー状態をリセットする関数を外部に公開するために、data属性を使用
   const resetHoverState = (element: HTMLElement | null) => {
@@ -35,6 +51,24 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   // 動画クリック時に動画ページを開く
   const handleVideoClick = () => {
     if (disabled) return
+    
+    // PWA環境での訪問済みリンク履歴を手動で記録
+    try {
+      const visitedKey = 'visited-videos'
+      const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+      if (!visited.includes(item.id)) {
+        visited.push(item.id)
+        // 最大1000件まで保存（メモリ制限対策）
+        if (visited.length > 1000) {
+          visited.shift()
+        }
+        localStorage.setItem(visitedKey, JSON.stringify(visited))
+        setIsVisited(true)
+      }
+    } catch {
+      // localStorage エラーは無視
+    }
+    
     window.location.href = `https://www.nicovideo.jp/watch/${item.id}`
   }
 
@@ -133,6 +167,21 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                   e.preventDefault()
                   return false
                 }
+                // サムネイルクリック時も訪問済みとして記録
+                try {
+                  const visitedKey = 'visited-videos'
+                  const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+                  if (!visited.includes(item.id)) {
+                    visited.push(item.id)
+                    if (visited.length > 1000) {
+                      visited.shift()
+                    }
+                    localStorage.setItem(visitedKey, JSON.stringify(visited))
+                    setIsVisited(true)
+                  }
+                } catch {
+                  // エラーは無視
+                }
               }}
             >
               <OptimizedImage
@@ -169,12 +218,32 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               className="ranking-item-responsive__title"
               data-testid="video-title"
-              style={{ cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+              style={{ 
+                cursor: disabled ? 'not-allowed' : 'pointer', 
+                opacity: disabled ? 0.6 : 1,
+                // PWA環境での訪問済みスタイル
+                color: isVisited ? 'var(--link-visited-color)' : undefined
+              }}
               onClick={(e) => {
                 e.stopPropagation()
                 if (disabled) {
                   e.preventDefault()
                   return false
+                }
+                // クリック時も訪問済みとして記録
+                try {
+                  const visitedKey = 'visited-videos'
+                  const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+                  if (!visited.includes(item.id)) {
+                    visited.push(item.id)
+                    if (visited.length > 1000) {
+                      visited.shift()
+                    }
+                    localStorage.setItem(visitedKey, JSON.stringify(visited))
+                    setIsVisited(true)
+                  }
+                } catch {
+                  // エラーは無視
                 }
               }}
             >
