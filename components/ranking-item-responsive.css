@@ -282,9 +282,9 @@
     flex-shrink: 0;
     /* タッチターゲットを拡大 */
     position: relative;
-    /* 見た目よりも大きなタッチ領域を作成（44pxボタンに対応） */
-    padding: 4px;
-    margin: -4px;
+    /* 見た目よりも大きなタッチ領域を作成（38pxボタンに対応） */
+    padding: 5px;
+    margin: -5px;
   }
 }
 
