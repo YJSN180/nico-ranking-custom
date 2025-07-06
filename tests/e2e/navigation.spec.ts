@@ -98,8 +98,11 @@ test.describe('ナビゲーション機能', () => {
     
     await logo.click()
     
-    // トップページへの遷移を待つ
-    await page.waitForURL('**/', { timeout: 10000 })
+    // トップページへの遷移を待つ（URLパターンを修正）
+    await page.waitForURL((url) => {
+      const urlObj = new URL(url)
+      return urlObj.pathname === '/' && urlObj.search === ''
+    }, { timeout: 10000 })
     
     // URLにパラメータがないことを確認
     const url = new URL(page.url())

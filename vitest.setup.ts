@@ -122,6 +122,20 @@ if (typeof window !== 'undefined') {
       dispatchEvent: vi.fn(),
     })),
   })
+  
+  // Set up proper Document constructor for React DOM
+  if (!window.Document) {
+    window.Document = Document
+  }
+  
+  // Ensure activeElement is properly set
+  if (!document.activeElement) {
+    Object.defineProperty(document, 'activeElement', {
+      writable: true,
+      configurable: true,
+      value: document.body
+    })
+  }
 }
 
 // Mock Element.scrollTo for JSDOM
@@ -132,6 +146,32 @@ if (typeof Element !== 'undefined') {
 // Mock window.confirm for JSDOM
 if (typeof window !== 'undefined') {
   window.confirm = vi.fn(() => true)
+  
+  // Mock clipboard API for user-event
+  if (!window.navigator) {
+    Object.defineProperty(window, 'navigator', {
+      value: {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        clipboard: {
+          writeText: vi.fn(() => Promise.resolve()),
+          readText: vi.fn(() => Promise.resolve('')),
+          write: vi.fn(() => Promise.resolve()),
+          read: vi.fn(() => Promise.resolve([]))
+        }
+      },
+      writable: true
+    })
+  } else if (!window.navigator.clipboard) {
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: {
+        writeText: vi.fn(() => Promise.resolve()),
+        readText: vi.fn(() => Promise.resolve('')),
+        write: vi.fn(() => Promise.resolve()),
+        read: vi.fn(() => Promise.resolve([]))
+      },
+      writable: true
+    })
+  }
   
   // Function to set up test environment flags safely
   const setupTestFlags = () => {

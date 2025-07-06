@@ -70,7 +70,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
       // localStorage エラーは無視
     }
     
-    window.location.href = `https://www.nicovideo.jp/watch/${item.id}`
+    // 新しいタブで開く
+    window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank', 'noopener,noreferrer')
   }
 
   return (
@@ -162,6 +163,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             </div>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{ display: 'block', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
               onClick={(e) => {
                 e.stopPropagation()
@@ -218,6 +221,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             {/* タイトル */}
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="ranking-item-responsive__title"
               data-testid="video-title"
               style={{ 

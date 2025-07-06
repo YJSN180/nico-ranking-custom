@@ -1,5 +1,6 @@
+import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MylistsClient } from '@/app/mylists/mylists-client'
 import type { Mylist, MylistSortOrder } from '@/lib/storage/types'
@@ -123,7 +124,9 @@ describe('マイリスト並び替えUI', () => {
   })
 
   it('初期状態で並び替えセレクタが表示される', async () => {
-    render(<MylistsClient />)
+    await act(async () => {
+      render(<MylistsClient />)
+    })
     
     await waitFor(() => {
       expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
@@ -134,7 +137,9 @@ describe('マイリスト並び替えUI', () => {
   })
 
   it('並び替えオプションがすべて存在する', async () => {
-    render(<MylistsClient />)
+    await act(async () => {
+      render(<MylistsClient />)
+    })
     
     await waitFor(() => {
       const sortSelect = screen.getByLabelText('並び替え:')
@@ -159,7 +164,9 @@ describe('マイリスト並び替えUI', () => {
 
   it('並び替えを変更すると設定が保存される', async () => {
     const user = userEvent.setup()
-    render(<MylistsClient />)
+    await act(async () => {
+      render(<MylistsClient />)
+    })
     
     await waitFor(() => {
       expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
@@ -181,7 +188,9 @@ describe('マイリスト並び替えUI', () => {
 
   it('カスタム順を選択するとドラッグヒントが表示される', async () => {
     const user = userEvent.setup()
-    render(<MylistsClient />)
+    await act(async () => {
+      render(<MylistsClient />)
+    })
     
     await waitFor(() => {
       expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
@@ -204,7 +213,9 @@ describe('マイリスト並び替えUI', () => {
       lastUpdated: Date.now()
     })
     
-    render(<MylistsClient />)
+    await act(async () => {
+      render(<MylistsClient />)
+    })
     
     await waitFor(() => {
       expect(mockMylistManager.getMylistSortConfig).toHaveBeenCalled()
