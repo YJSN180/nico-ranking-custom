@@ -257,8 +257,12 @@ afterEach(() => {
   
   // Manual DOM cleanup as backup
   if (typeof document !== 'undefined') {
-    document.body.innerHTML = ''
-    document.head.innerHTML = ''
+    if (document.body) {
+      document.body.innerHTML = ''
+    }
+    if (document.head) {
+      document.head.innerHTML = ''
+    }
   }
   
   // Reset IndexedDB state
