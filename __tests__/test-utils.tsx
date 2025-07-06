@@ -1,7 +1,6 @@
 import React from 'react'
 import { render as rtlRender, RenderOptions } from '@testing-library/react'
-import { vi } from 'vitest'
-import ReactDOM from 'react-dom'
+import { act } from '@testing-library/react'
 
 // カスタムレンダラー: React concurrent mode の問題を回避
 export function render(
@@ -11,6 +10,7 @@ export function render(
   // テスト環境フラグを設定
   if (typeof window !== 'undefined') {
     ;(window as any).__TEST_ENV__ = true
+    ;(window as any).__DISABLE_REACT_CONCURRENT_MODE__ = true
   }
 
   // React 18 の concurrent features を無効化
@@ -19,7 +19,7 @@ export function render(
     if (
       typeof args[0] === 'string' &&
       (args[0].includes('Should not already be working') ||
-       args[0].includes('Warning: ReactDOM.render is no longer supported') ||
+       args[0].includes('ReactDOM.render is no longer supported') ||
        args[0].includes('ReactDOM.render has not been supported'))
     ) {
       return
@@ -27,36 +27,16 @@ export function render(
     originalError.call(console, ...args)
   }
 
-  // React 17スタイルのレンダリングを強制
-  const container = options?.container || document.createElement('div')
-  document.body.appendChild(container)
-  
-  // act()を使わずに直接レンダリング
-  let component: any
-  if (ReactDOM.render) {
-    // React 17 スタイル
-    component = ReactDOM.render(ui, container)
-  } else {
-    // React 18でもlegacy modeを使用
-    const result = rtlRender(ui, {
-      ...options,
-      container
-    })
-    
-    // console.error を復元
-    console.error = originalError
-    
-    return result
-  }
+  // flushSyncを使用して同期レンダリングを強制
+  let result: any
+  act(() => {
+    result = rtlRender(ui, options)
+  })
 
   // console.error を復元
   console.error = originalError
 
-  // React Testing Library互換のオブジェクトを返す
-  return {
-    container,
-    ...rtlRender(ui, { ...options, container })
-  }
+  return result
 }
 
 // re-export everything except render

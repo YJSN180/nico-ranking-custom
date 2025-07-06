@@ -18,21 +18,7 @@ export default defineConfig({
         // JSDOMの詳細設定
         url: 'http://localhost:3001',
         pretendToBeVisual: true,
-        resources: 'usable',
-        beforeParse: (window: any) => {
-          // React concurrent modeを無効化
-          window.__DISABLE_REACT_CONCURRENT_MODE__ = true
-          window.__TEST_ENV__ = true
-          // Ensure document.body and document.head exist
-          if (!window.document.body) {
-            const body = window.document.createElement('body')
-            window.document.documentElement.appendChild(body)
-          }
-          if (!window.document.head) {
-            const head = window.document.createElement('head')
-            window.document.documentElement.insertBefore(head, window.document.body)
-          }
-        }
+        resources: 'usable'
       }
     },
     globals: true,
