@@ -36,16 +36,17 @@ vi.mock('@/components/tag-selector', () => ({
     // タグが選択されている場合は非表示
     if (config.tag) return null
     
-    // allジャンルの場合は「すべて」ボタンのみ表示
-    const visibleTags = config.genre === 'all' ? [] : popularTags
+    // allジャンルの場合は何も表示しない（実際のコンポーネントと同じ挙動）
+    if (config.genre === 'all') return null
     
+    // その他のジャンルではタグを表示
     return (
       <div className="_selectorContainer_933bb3">
         <div>
           <h2 className="_selectorTitle_933bb3">人気タグ</h2>
           <div className="_buttonContainer_933bb3">
             <button className="_button_933bb3 _buttonSelected_933bb3">すべて</button>
-            {visibleTags.map((tag: string) => (
+            {popularTags.map((tag: string) => (
               <button key={tag} className="_button_933bb3">{tag}</button>
             ))}
           </div>
@@ -290,7 +291,7 @@ describe('人気タグの表示問題', () => {
     })
   })
 
-  it('allジャンルでは人気タグセクションが表示されるが空になる', async () => {
+  it('allジャンルでは人気タグセクションが非表示になる', async () => {
     const user = userEvent.setup()
 
     render(
@@ -328,14 +329,9 @@ describe('人気タグの表示問題', () => {
       expect(rankingCall).toBeTruthy()
     })
 
-    // 人気タグセクションは表示されるが、すべてボタンのみになることを確認
+    // 総合ジャンルでは人気タグセクションが非表示になることを確認
     await waitFor(() => {
-      expect(screen.getByText('人気タグ')).toBeInTheDocument()
-      const tagSection = screen.getByText('人気タグ').closest('div')?.parentElement
-      const tagButtons = tagSection?.querySelectorAll('button')
-      // すべてボタンのみ表示される
-      expect(tagButtons?.length).toBe(1)
-      expect(tagButtons?.[0]?.textContent).toBe('すべて')
+      expect(screen.queryByText('人気タグ')).not.toBeInTheDocument()
     })
   })
 

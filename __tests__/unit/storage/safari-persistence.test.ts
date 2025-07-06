@@ -53,10 +53,7 @@ const storageAPIFailure = {
 // global オブジェクトのモック設定
 beforeEach(() => {
   // localStorage をグローバルにセット
-  Object.defineProperty(global, 'localStorage', {
-    value: localStorageMock,
-    writable: true
-  })
+  vi.stubGlobal('localStorage', localStorageMock)
   
   // localStorageMock をリセット
   localStorageMock.store = {}
@@ -68,65 +65,30 @@ beforeEach(() => {
     storage: storageAPISuccess
   }
   
-  // navigator をグローバルにセット
-  Object.defineProperty(global, 'navigator', {
-    value: defaultNavigator,
-    writable: true,
-    configurable: true
-  })
-  
-  // window オブジェクトのモック
-  Object.defineProperty(global, 'window', {
-    value: {
-      navigator: defaultNavigator
-    },
-    writable: true,
-    configurable: true
+  // navigator と window をグローバルにセット（vi.stubGlobalを使用）
+  vi.stubGlobal('navigator', defaultNavigator)
+  vi.stubGlobal('window', {
+    navigator: defaultNavigator
   })
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   
   // localStorageMock をリセット
   localStorageMock.store = {}
   
-  // 完全に新しいStorageAPIモックを作成
-  const freshStorageAPI = {
-    persisted: vi.fn().mockResolvedValue(false),
-    persist: vi.fn().mockResolvedValue(true),
-    estimate: vi.fn().mockResolvedValue({
-      usage: 1024 * 1024,
-      quota: 100 * 1024 * 1024
-    })
-  }
-  
-  // Navigator を完全に新しいオブジェクトで上書き
-  const freshNavigator = {
-    userAgent: '',
-    storage: freshStorageAPI
-  }
-  
-  // global.navigator を削除してから再作成
-  delete (global as any).navigator
-  delete (global as any).window
-  
-  Object.defineProperty(global, 'navigator', {
-    value: freshNavigator,
-    writable: true,
-    configurable: true
+  // StorageAPIモックをリセット
+  storageAPISuccess.persisted.mockClear()
+  storageAPISuccess.persist.mockClear()
+  storageAPISuccess.estimate.mockClear()
+  storageAPISuccess.persisted.mockResolvedValue(false)
+  storageAPISuccess.persist.mockResolvedValue(true)
+  storageAPISuccess.estimate.mockResolvedValue({
+    usage: 1024 * 1024,
+    quota: 100 * 1024 * 1024
   })
-  
-  Object.defineProperty(global, 'window', {
-    value: {
-      navigator: freshNavigator
-    },
-    writable: true,
-    configurable: true
-  })
-  
-  // storageAPISuccess の参照を更新
-  Object.assign(storageAPISuccess, freshStorageAPI)
 })
 
 describe('Safari Detection Tests', () => {
@@ -137,19 +99,8 @@ describe('Safari Detection Tests', () => {
       storage: storageAPISuccess
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     expect(isSafari()).toBe(true)
   })
@@ -161,19 +112,8 @@ describe('Safari Detection Tests', () => {
       storage: storageAPISuccess
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     expect(isSafari()).toBe(true)
   })
@@ -185,19 +125,8 @@ describe('Safari Detection Tests', () => {
       storage: storageAPISuccess
     }
     
-    Object.defineProperty(global, 'navigator', {
-      value: navigator,
-      writable: true,
-      configurable: true
-    })
-    
-    Object.defineProperty(global, 'window', {
-      value: {
-        navigator: navigator
-      },
-      writable: true,
-      configurable: true
-    })
+    vi.stubGlobal('navigator', navigator)
+    vi.stubGlobal('window', { navigator })
     
     expect(isSafari()).toBe(true)
   })

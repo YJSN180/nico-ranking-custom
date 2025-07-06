@@ -64,15 +64,15 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
   it('サムネイルURLが既に存在する場合、大きいサイズに変換してプロキシAPI経由でダウンロードされる', async () => {
     // Blobのモック
     const mockBlob = new Blob(['mock image data'], { type: 'image/jpeg' })
-    ;(global.fetch as jest.Mock).mockResolvedValueOnce({
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       blob: async () => mockBlob,
     })
 
     // ダウンロードリンクのクリックをモック
-    const mockClick = jest.fn()
-    const mockRemove = jest.fn()
-    const createElementSpy = jest.spyOn(document, 'createElement')
+    const mockClick = vi.fn()
+    const mockRemove = vi.fn()
+    const createElementSpy = vi.spyOn(document, 'createElement')
     createElementSpy.mockReturnValue({
       href: '',
       download: '',
@@ -81,8 +81,8 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     } as any)
 
     // appendChild/removeChild のモック
-    const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(() => null as any)
-    const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(() => null as any)
+    const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(() => null as any)
+    const removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation(() => null as any)
 
     render(
       <VideoContextMenu video={mockVideo}>
@@ -127,7 +127,7 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     const videoWithoutThumb = { ...mockVideo, thumbURL: undefined }
     
     // API レスポンスのモック
-    ;(global.fetch as jest.Mock)
+    ;(global.fetch as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ thumbnail: 'https://api.example.com/thumb.jpg' }),

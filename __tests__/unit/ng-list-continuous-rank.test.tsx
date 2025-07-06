@@ -134,15 +134,18 @@ describe('NG List Continuous Rank Display', () => {
     const firstPageItems = screen.getAllByTestId('ranking-item')
     
     // First visible item should be rank 1 (sm1 is not blocked)
-    expect(firstPageItems[0]).toHaveTextContent('1')
+    const firstRankElement = firstPageItems[0].querySelector('.ranking-item-responsive__rank')
+    expect(firstRankElement).toHaveTextContent('1')
     expect(firstPageItems[0]).toHaveTextContent('Video 1')
     
     // Second visible item should be rank 2 (sm3, since sm2 is blocked)
-    expect(firstPageItems[1]).toHaveTextContent('2')
+    const secondRankElement = firstPageItems[1].querySelector('.ranking-item-responsive__rank')
+    expect(secondRankElement).toHaveTextContent('2')
     expect(firstPageItems[1]).toHaveTextContent('Video 3')
     
     // Third visible item should be rank 3 (sm4)
-    expect(firstPageItems[2]).toHaveTextContent('3')
+    const thirdRankElement = firstPageItems[2].querySelector('.ranking-item-responsive__rank')
+    expect(thirdRankElement).toHaveTextContent('3')
     expect(firstPageItems[2]).toHaveTextContent('Video 4')
     
     // Navigate to page 2
@@ -169,13 +172,16 @@ describe('NG List Continuous Rank Display', () => {
     
     // First item on page 2 should NOT be rank 1 again
     // It should continue with the next available rank after filtering
-    const firstRankOnPage2 = secondPageItems[0].textContent?.match(/^\d+/)?.[0]
+    const firstRankOnPage2Element = secondPageItems[0].querySelector('.ranking-item-responsive__rank')
+    const firstRankOnPage2 = firstRankOnPage2Element?.textContent
     expect(parseInt(firstRankOnPage2 || '0')).toBeGreaterThan(100)
     
     // Verify ranks are continuous within page 2
     for (let i = 1; i < Math.min(5, secondPageItems.length); i++) {
-      const currentRank = parseInt(secondPageItems[i].textContent?.match(/^\d+/)?.[0] || '0')
-      const previousRank = parseInt(secondPageItems[i - 1].textContent?.match(/^\d+/)?.[0] || '0')
+      const currentRankElement = secondPageItems[i].querySelector('.ranking-item-responsive__rank')
+      const previousRankElement = secondPageItems[i - 1].querySelector('.ranking-item-responsive__rank')
+      const currentRank = parseInt(currentRankElement?.textContent || '0')
+      const previousRank = parseInt(previousRankElement?.textContent || '0')
       expect(currentRank).toBe(previousRank + 1)
     }
   })
