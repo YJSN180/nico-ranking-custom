@@ -37,6 +37,13 @@ const DISPLAY_LIMITS = {
   GENRE: 500,    // ジャンル別ランキングは500件取得
 }
 
+// PWAモードかどうかを検出
+const isPWA = () => {
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         (window.navigator as any).standalone === true ||
+         document.referrer.includes('android-app://') // Androidの場合
+}
+
 export default function ClientPage({ 
   initialData, 
   initialGenre = 'all', 
@@ -105,7 +112,7 @@ export default function ClientPage({
     migrateLocalStorageData()
   }, [])
   
-  // ページ離脱時に現在の設定をsessionStorageに保存
+  // ページ離脱時に現在の設定をlocalStorageに保存（PWA対応）
   useEffect(() => {
     const saveCurrentState = () => {
       const stateToSave = {
@@ -117,11 +124,23 @@ export default function ClientPage({
         scrollPosition: window.pageYOffset || document.documentElement.scrollTop || 0,
         savedAt: Date.now()
       }
-      sessionStorage.setItem('ranking-navigation-state', JSON.stringify(stateToSave))
+      // PWAでも動作するようにlocalStorageを使用
+      localStorage.setItem('ranking-navigation-state', JSON.stringify(stateToSave))
     }
     
     // ページ離脱時に保存
     window.addEventListener('beforeunload', saveCurrentState)
+    
+    // PWA環境での追加イベント対応
+    window.addEventListener('pagehide', saveCurrentState)
+    
+    // iOSでのPWA対応
+    window.addEventListener('blur', () => {
+      // PWAモードでアプリが非アクティブになった時に保存
+      if (isPWA()) {
+        saveCurrentState()
+      }
+    })
     
     // 外部リンククリック時に状態を保存
     const handleExternalNavigation = (e: MouseEvent) => {
@@ -163,13 +182,15 @@ export default function ClientPage({
     
     return () => {
       window.removeEventListener('beforeunload', saveCurrentState)
+      window.removeEventListener('pagehide', saveCurrentState)
+      window.removeEventListener('blur', saveCurrentState)
       document.removeEventListener('click', handleExternalNavigation)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
   }, [config, currentPopularTags, currentPage])
   
-  // sessionStorageから復元する設定を管理
+  // localStorageから復元する設定を管理
   const [shouldRestore, setShouldRestore] = useState(null)
   
   // クライアント側の初期化処理
@@ -199,21 +220,35 @@ export default function ClientPage({
       // パースエラーは無視
     }
     
-    // URLパラメータがない場合のみ、sessionStorageから復元を試みる
+    // URLパラメータがない場合のみ、localStorageから復元を試みる（PWA対応）
     const hasUrlParams = urlParams.has('genre') || 
                         urlParams.has('period') || 
                         urlParams.has('tag') ||
                         urlParams.has('page')
     
-    if (!hasUrlParams) {
+    // PWAモードでは常に復元を試みる（URLパラメータがあっても）
+    const shouldAttemptRestore = !hasUrlParams || isPWA()
+    
+    if (shouldAttemptRestore) {
       try {
-        const savedState = sessionStorage.getItem('ranking-navigation-state')
+        const savedState = localStorage.getItem('ranking-navigation-state')
         if (savedState) {
           const parsed = JSON.parse(savedState)
-          // 30分以内のデータのみ復元（古いデータは無視）
-          const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000)
-          if (parsed.savedAt && parsed.savedAt > thirtyMinutesAgo) {
-            setShouldRestore(parsed)
+          // PWAモードでは1時間以内のデータを復元（通常は30分）
+          const expirationTime = isPWA() ? (60 * 60 * 1000) : (30 * 60 * 1000)
+          const expirationThreshold = Date.now() - expirationTime
+          if (parsed.savedAt && parsed.savedAt > expirationThreshold) {
+            // PWAモードでURLパラメータがある場合は、保存された状態を優先
+            if (isPWA() && hasUrlParams) {
+              // URLパラメータよりも保存された状態を優先
+              setShouldRestore(parsed)
+            } else if (!hasUrlParams) {
+              // 通常のブラウザモードでURLパラメータがない場合
+              setShouldRestore(parsed)
+            }
+          } else {
+            // 期限切れのデータを削除
+            localStorage.removeItem('ranking-navigation-state')
           }
         }
       } catch {
@@ -331,9 +366,18 @@ export default function ClientPage({
     window.history.replaceState(null, '', newUrl)
   }, [currentPage, config])
   
-  // sessionStorageから設定を復元（フォールバック戦略付き）
+  // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
     if (shouldRestore) {
+      // デバッグ情報（開発時のみ）
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[PWA Session Restore] Attempting to restore:', {
+          isPWA: isPWA(),
+          savedState: shouldRestore,
+          currentConfig: config
+        })
+      }
+      
       // フォールバック戦略：無効な状態の段階的復元
       let finalConfig: RankingConfig = {
         genre: shouldRestore.genre || 'all',
@@ -382,6 +426,11 @@ export default function ClientPage({
         finalConfig.period !== config.period ||
         finalConfig.tag !== config.tag
       ) {
+        // デバッグ情報（開発時のみ）
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[PWA Session Restore] Restoring to:', finalConfig)
+        }
+        
         // 人気タグも復元（フォールバック後のタグが有効な場合のみ）
         if (shouldRestore.popularTags && Array.isArray(shouldRestore.popularTags)) {
           setCurrentPopularTags(shouldRestore.popularTags)
@@ -413,8 +462,17 @@ export default function ClientPage({
         handleConfigChange(finalConfig)
         
         // 復元後は削除
-        sessionStorage.removeItem('ranking-navigation-state')
+        localStorage.removeItem('ranking-navigation-state')
         setShouldRestore(null)
+      } else {
+        // 同じ設定の場合でも、スクロール位置は復元
+        if (scrollPosition > 0) {
+          setTimeout(() => {
+            window.scrollTo(0, scrollPosition)
+          }, 100)
+        }
+        // 不要なデータは削除
+        localStorage.removeItem('ranking-navigation-state')
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
