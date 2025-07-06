@@ -1,11 +1,33 @@
 /**
  * マイリストデータのバックアップ・リストア機能
+ * 
+ * ⚠️ 重要: エクスポート・インポートのJSON形式は絶対に変更しないこと
+ * このファイルで定義されているBackupDataとExportMylistVideoの形式は
+ * ユーザーの既存バックアップファイルとの互換性を保つため、
+ * 今後一切変更してはいけません。
+ * 
+ * 新しいフィールドを追加する場合は必ずオプショナル(?)として追加し、
+ * 既存フィールドの削除・型変更は絶対に行わないでください。
  */
 
 import { DBManager } from './db-manager'
 import type { Mylist, MylistVideo } from './types'
 
-// エクスポート時の動画データ（統計情報を除外）
+/**
+ * エクスポート時の動画データ（統計情報を除外）
+ * 
+ * ⚠️ JSON形式仕様（変更禁止）:
+ * {
+ *   "id": "sm12345",              // 動画ID（必須）
+ *   "mylistId": "uuid-string",    // マイリストID（必須）
+ *   "title": "動画タイトル",       // タイトル（必須）
+ *   "thumbURL": "https://...",    // サムネイルURL（必須）
+ *   "addedAt": 1234567890000,     // 追加日時のタイムスタンプ（必須）
+ *   "memo": "メモ内容",           // メモ（オプション）
+ *   "orderIndex": 0,              // 並び順（オプション）
+ *   "duration": 300               // 再生時間（秒）（オプション）
+ * }
+ */
 interface ExportMylistVideo {
   id: string
   mylistId: string
@@ -17,6 +39,32 @@ interface ExportMylistVideo {
   duration?: number
 }
 
+/**
+ * バックアップデータの形式
+ * 
+ * ⚠️ JSON形式仕様（変更禁止）:
+ * {
+ *   "version": "1.0.0",           // バックアップ形式のバージョン（必須）
+ *   "exportDate": "2025-07-06...", // エクスポート日時ISO文字列（必須）
+ *   "mylists": [...],             // Mylist型の配列（必須）
+ *   "mylistVideos": [...],        // ExportMylistVideo型の配列（必須）
+ *   "metadata": {                 // メタデータ（必須）
+ *     "totalMylists": 5,          // マイリスト総数（必須）
+ *     "totalVideos": 100,         // 動画総数（必須）
+ *     "appVersion": "1.0.0"       // アプリバージョン（必須）
+ *   }
+ * }
+ * 
+ * Mylist型の仕様（lib/storage/types.tsで定義）:
+ * {
+ *   "id": "uuid-string",          // マイリストID（必須）
+ *   "name": "マイリスト名",        // 名前（必須）
+ *   "description": "説明",        // 説明（オプション）
+ *   "createdAt": 1234567890000,   // 作成日時（必須）
+ *   "updatedAt": 1234567890000,   // 更新日時（必須）
+ *   "videoCount": 10              // 動画数（必須）
+ * }
+ */
 export interface BackupData {
   version: string
   exportDate: string
