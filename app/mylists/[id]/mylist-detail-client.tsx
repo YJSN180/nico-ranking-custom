@@ -12,7 +12,7 @@ import type { Mylist, MylistVideo } from '@/lib/storage/types'
 import styles from './mylist-detail.module.css'
 import '@/components/mylist-video-item.css'
 
-type SortOrder = 'addedAt-desc' | 'addedAt-asc' | 'title-asc' | 'title-desc' | 'views-desc'
+type SortOrder = 'addedAt-desc' | 'addedAt-asc' | 'title-asc' | 'title-desc' | 'registeredAt-desc' | 'registeredAt-asc'
 
 export function MylistDetailClient() {
   const params = useParams()
@@ -107,11 +107,19 @@ export function MylistDetailClient() {
           case 'addedAt-asc':
             return a.addedAt - b.addedAt
           case 'title-asc':
-            return a.title.localeCompare(b.title, 'ja')
+            // 言語に依存しない比較（数字・英語・日本語に対応）
+            return a.title.localeCompare(b.title, undefined, { numeric: true, sensitivity: 'base' })
           case 'title-desc':
-            return b.title.localeCompare(a.title, 'ja')
-          case 'views-desc':
-            return (b.views || 0) - (a.views || 0)
+            return b.title.localeCompare(a.title, undefined, { numeric: true, sensitivity: 'base' })
+          case 'registeredAt-desc':
+            // 投稿日が存在しない場合は追加日時で比較
+            const aReg = a.registeredAt ? new Date(a.registeredAt).getTime() : a.addedAt
+            const bReg = b.registeredAt ? new Date(b.registeredAt).getTime() : b.addedAt
+            return bReg - aReg
+          case 'registeredAt-asc':
+            const aRegAsc = a.registeredAt ? new Date(a.registeredAt).getTime() : a.addedAt
+            const bRegAsc = b.registeredAt ? new Date(b.registeredAt).getTime() : b.addedAt
+            return aRegAsc - bRegAsc
           default:
             return 0
         }
@@ -252,9 +260,10 @@ export function MylistDetailClient() {
         >
           <option value="addedAt-desc">追加日（新しい順）</option>
           <option value="addedAt-asc">追加日（古い順）</option>
+          <option value="registeredAt-desc">投稿日（新しい順）</option>
+          <option value="registeredAt-asc">投稿日（古い順）</option>
           <option value="title-asc">タイトル（昇順）</option>
           <option value="title-desc">タイトル（降順）</option>
-          <option value="views-desc">再生数（多い順）</option>
         </select>
       </div>
 
