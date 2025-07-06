@@ -201,8 +201,41 @@
 
 /* ドラッグ＆ドロップ対応 */
 .mylistCard.draggable {
-  cursor: move;
+  cursor: default; /* カード全体のカーソルをデフォルトに変更 */
   transition: all 0.2s ease;
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 100%;
+  cursor: move;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+  flex-shrink: 0;
+  border-radius: 6px;
+  margin-right: 8px;
+}
+
+.dragHandle:hover {
+  opacity: 1;
+  background: var(--surface-hover);
+}
+
+.dragIcon {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--text-secondary);
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+.mylistCard.draggable {
+  border: 2px dashed var(--border-color);
+  border-color: var(--primary-color-alpha, rgba(85, 103, 216, 0.3));
 }
 
 .mylistCard.draggable:hover {
@@ -571,6 +604,15 @@
   .cancelButton {
     flex: 1;
     text-align: center;
+  }
+
+  .dragHandle {
+    width: 40px; /* モバイルでタッチしやすいサイズに拡大 */
+    margin-right: 12px;
+  }
+
+  .dragIcon {
+    font-size: 18px; /* モバイルで見やすくするため拡大 */
   }
 
   .mylistGrid {

@@ -348,7 +348,7 @@ export function MylistsClient() {
         
         {isDragMode && (
           <div className={styles.dragHint}>
-            💡 ドラッグ＆ドロップでマイリストの順序を変更できます
+            💡 左側のハンドル（≡）をドラッグしてマイリストの順序を変更できます
             {hasUnsavedChanges && (
               <div className={styles.confirmButtons}>
                 <button
@@ -377,7 +377,20 @@ export function MylistsClient() {
             key={mylist.id}
             className={`${styles.mylistCard} ${isDragMode ? styles.draggable : ''}`}
             draggable={isDragMode}
-            onDragStart={(e) => handleDragStart(e, mylist.id)}
+            onDragStart={(e) => {
+              // ドラッグハンドルから開始されたかを確認
+              const dragHandle = e.currentTarget.querySelector(`.${styles.dragHandle}`)
+              const isDragReady = dragHandle?.getAttribute('data-drag-ready') === 'true'
+              
+              if (!isDragMode || !isDragReady) {
+                e.preventDefault()
+                return
+              }
+              
+              // ドラッグ開始後にマーカーをクリア
+              dragHandle?.removeAttribute('data-drag-ready')
+              handleDragStart(e, mylist.id)
+            }}
             onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
             onDrop={(e) => handleDrop(e, mylist.id)}
@@ -389,6 +402,17 @@ export function MylistsClient() {
               router.push(`/mylists/${mylist.id}`)
             }}
           >
+            {isDragMode && (
+              <div 
+                className={styles.dragHandle}
+                onMouseDown={(e) => {
+                  // ドラッグハンドルをクリックした時のマーカー
+                  e.currentTarget.setAttribute('data-drag-ready', 'true')
+                }}
+              >
+                <div className={styles.dragIcon}>≡</div>
+              </div>
+            )}
             <div className={styles.mylistInfo}>
               <div className={styles.mylistIcon}>📁</div>
               <div className={styles.mylistDetails}>
