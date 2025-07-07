@@ -511,7 +511,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, ngListVersion, currentPage])
+  }, [fullRankingData, ngList, ngListVersion, currentPage, config.period])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

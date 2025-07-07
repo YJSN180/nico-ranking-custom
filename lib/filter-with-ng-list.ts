@@ -23,6 +23,13 @@ export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilter
     }
   }
   
+  // 入力配列の順序を保持しつつ、rank番号をリセット
+  // これにより、期間切り替え時の古いrank番号の問題を解決
+  const itemsWithResetRank = items.map((item, index) => ({
+    ...item,
+    rank: index + 1
+  }))
+  
   // 高速検索のためにSetを作成
   const videoIdSet = new Set(ngList.videoIds)
   const derivedVideoIdSet = new Set(ngList.derivedVideoIds || [])
@@ -30,7 +37,7 @@ export function filterWithNGList(items: RankingItem[], ngList: NGList): NGFilter
   const authorIdSet = new Set(ngList.authorIds)
   const authorNameExactSet = new Set(ngList.authorNames.exact)
   
-  const filteredItems = items.filter((item) => {
+  const filteredItems = itemsWithResetRank.filter((item) => {
     // 既にNGリストにある場合
     if (videoIdSet.has(item.id)) {
       return false
