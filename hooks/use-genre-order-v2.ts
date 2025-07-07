@@ -1,0 +1,147 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { GenreItem, createDefaultGenreItems } from '@/types/genre-order'
+import { RankingGenre } from '@/types/ranking-config'
+
+const STORAGE_KEY = 'nicoRankingGenreOrder'
+
+/**
+ * ジャンル順序管理フック v2
+ * - シンプルな状態管理
+ * - 一時状態と永続化状態の明確な分離
+ * - 直感的なAPI
+ */
+export function useGenreOrderV2() {
+  // 永続化された状態
+  const [savedItems, setSavedItems] = useState<GenreItem[]>(() => {
+    if (typeof window === 'undefined') return createDefaultGenreItems()
+    
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as GenreItem[]
+        // 不正なデータのバリデーション
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load genre order:', error)
+    }
+    
+    return createDefaultGenreItems()
+  })
+
+  // 一時的な編集状態
+  const [tempItems, setTempItems] = useState<GenreItem[]>(savedItems)
+  const [hasChanges, setHasChanges] = useState(false)
+
+  // 保存済み状態が変更されたら一時状態も更新
+  useEffect(() => {
+    setTempItems(savedItems)
+    setHasChanges(false)
+  }, [savedItems])
+
+  // 変更検知
+  useEffect(() => {
+    const isChanged = JSON.stringify(tempItems) !== JSON.stringify(savedItems)
+    setHasChanges(isChanged)
+  }, [tempItems, savedItems])
+
+  /**
+   * 2つのアイテムの位置を入れ替える
+   */
+  const swapItems = useCallback((fromId: RankingGenre, toId: RankingGenre) => {
+    setTempItems(items => {
+      const newItems = [...items]
+      const fromIndex = newItems.findIndex(item => item.id === fromId)
+      const toIndex = newItems.findIndex(item => item.id === toId)
+      
+      if (fromIndex === -1 || toIndex === -1) return items
+      
+      // orderを入れ替える（表示状態は維持）
+      const tempOrder = newItems[fromIndex].order
+      newItems[fromIndex] = { ...newItems[fromIndex], order: newItems[toIndex].order }
+      newItems[toIndex] = { ...newItems[toIndex], order: tempOrder }
+      
+      // order順でソート
+      return newItems.sort((a, b) => a.order - b.order)
+    })
+  }, [])
+
+  /**
+   * 表示/非表示を切り替える
+   */
+  const toggleVisibility = useCallback((id: RankingGenre) => {
+    setTempItems(items => 
+      items.map(item => 
+        item.id === id 
+          ? { ...item, isVisible: !item.isVisible }
+          : item
+      )
+    )
+  }, [])
+
+  /**
+   * デフォルトに戻す
+   */
+  const resetToDefault = useCallback(() => {
+    setTempItems(createDefaultGenreItems())
+  }, [])
+
+  /**
+   * 変更を適用してLocalStorageに保存
+   */
+  const applyChanges = useCallback(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tempItems))
+      setSavedItems(tempItems)
+      setHasChanges(false)
+      
+      // ページリロードで変更を反映
+      window.location.reload()
+    } catch (error) {
+      console.error('Failed to save genre order:', error)
+      throw error
+    }
+  }, [tempItems])
+
+  /**
+   * 変更を破棄
+   */
+  const cancelChanges = useCallback(() => {
+    setTempItems(savedItems)
+    setHasChanges(false)
+  }, [savedItems])
+
+  /**
+   * 現在の表示順序（表示されているもののみ）
+   */
+  const visibleGenres = tempItems
+    .filter(item => item.isVisible)
+    .sort((a, b) => a.order - b.order)
+    .map(item => item.id)
+
+  /**
+   * 現在の非表示リスト
+   */
+  const hiddenGenres = tempItems
+    .filter(item => !item.isVisible)
+    .map(item => item.id)
+
+  return {
+    // 状態
+    items: tempItems,
+    visibleGenres,
+    hiddenGenres,
+    hasChanges,
+    
+    // 操作
+    swapItems,
+    toggleVisibility,
+    resetToDefault,
+    applyChanges,
+    cancelChanges
+  }
+}

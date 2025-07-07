@@ -1,0 +1,160 @@
+import { renderHook, act } from '@testing-library/react'
+import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
+import { vi } from 'vitest'
+import type { RankingGenre } from '@/types/ranking-config'
+
+// Mock localStorage
+const localStorageMock = (() => {
+  let store: Record<string, string> = {}
+  return {
+    getItem: (key: string) => store[key] || null,
+    setItem: (key: string, value: string) => {
+      store[key] = value
+    },
+    removeItem: (key: string) => {
+      delete store[key]
+    },
+    clear: () => {
+      store = {}
+    }
+  }
+})()
+
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock
+})
+
+// Mock window.location.reload
+const reloadMock = vi.fn()
+Object.defineProperty(window, 'location', {
+  value: { reload: reloadMock },
+  writable: true
+})
+
+describe('useGenreOrderV2', () => {
+  beforeEach(() => {
+    localStorageMock.clear()
+    reloadMock.mockClear()
+  })
+
+  it('returns default state when no saved data exists', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    expect(result.current.items).toHaveLength(23) // All genres
+    expect(result.current.items[0]).toEqual({
+      id: 'all',
+      isVisible: true,
+      order: 0
+    })
+    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.hiddenGenres).toHaveLength(0)
+    expect(result.current.hasChanges).toBe(false)
+  })
+
+  it('loads saved state from localStorage', () => {
+    const savedData = [
+      { id: 'game' as RankingGenre, isVisible: true, order: 0 },
+      { id: 'all' as RankingGenre, isVisible: false, order: 1 },
+    ]
+    localStorageMock.setItem('nicoRankingGenreOrder', JSON.stringify(savedData))
+    
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    expect(result.current.items).toEqual(savedData)
+    expect(result.current.visibleGenres).toEqual(['game'])
+    expect(result.current.hiddenGenres).toEqual(['all'])
+  })
+
+  it('swaps items correctly', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    act(() => {
+      result.current.swapItems('all', 'game')
+    })
+    
+    expect(result.current.items[0].id).toBe('game')
+    expect(result.current.items[1].id).toBe('all')
+    expect(result.current.hasChanges).toBe(true)
+  })
+
+  it('toggles visibility correctly', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    const initialVisibleCount = result.current.visibleGenres.length
+    
+    act(() => {
+      result.current.toggleVisibility('all')
+    })
+    
+    expect(result.current.visibleGenres).not.toContain('all')
+    expect(result.current.hiddenGenres).toContain('all')
+    expect(result.current.visibleGenres.length).toBe(initialVisibleCount - 1)
+    expect(result.current.hasChanges).toBe(true)
+  })
+
+  it('resets to default correctly', () => {
+    // Set up saved state that's different from default
+    const customSavedData = [
+      { id: 'game' as RankingGenre, isVisible: true, order: 0 },
+      { id: 'all' as RankingGenre, isVisible: false, order: 1 },
+      { id: 'anime' as RankingGenre, isVisible: true, order: 2 },
+    ]
+    localStorageMock.setItem('nicoRankingGenreOrder', JSON.stringify(customSavedData))
+    
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // Verify custom state is loaded
+    expect(result.current.items[0].id).toBe('game')
+    expect(result.current.hasChanges).toBe(false)
+    
+    // Reset to default
+    act(() => {
+      result.current.resetToDefault()
+    })
+    
+    // Check default state is restored
+    expect(result.current.items[0].id).toBe('all')
+    expect(result.current.items[0].isVisible).toBe(true)
+    expect(result.current.visibleGenres.length).toBe(23)
+    expect(result.current.hasChanges).toBe(true) // Has changes because it's different from saved state
+  })
+
+  it('applies changes and saves to localStorage', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    act(() => {
+      result.current.swapItems('all', 'game')
+    })
+    
+    expect(result.current.hasChanges).toBe(true)
+    
+    act(() => {
+      result.current.applyChanges()
+    })
+    
+    const saved = JSON.parse(localStorageMock.getItem('nicoRankingGenreOrder') || '[]')
+    expect(saved[0].id).toBe('game')
+    expect(saved[1].id).toBe('all')
+    expect(reloadMock).toHaveBeenCalled()
+  })
+
+  it('cancels changes correctly', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    const initialOrder = result.current.items[0].id
+    
+    act(() => {
+      result.current.swapItems('all', 'game')
+    })
+    
+    expect(result.current.items[0].id).not.toBe(initialOrder)
+    expect(result.current.hasChanges).toBe(true)
+    
+    act(() => {
+      result.current.cancelChanges()
+    })
+    
+    expect(result.current.items[0].id).toBe(initialOrder)
+    expect(result.current.hasChanges).toBe(false)
+  })
+})

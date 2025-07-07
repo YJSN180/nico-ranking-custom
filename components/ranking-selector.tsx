@@ -3,6 +3,7 @@
 import { useRef, useEffect } from 'react'
 import { GENRE_LABELS, PERIOD_LABELS } from '@/types/ranking-config'
 import type { RankingGenre, RankingPeriod, RankingConfig } from '@/types/ranking-config'
+import { useGenreOrder } from '@/hooks/use-genre-order'
 import styles from './selectors.module.css'
 
 interface RankingSelectorProps {
@@ -12,6 +13,7 @@ interface RankingSelectorProps {
 
 export function RankingSelector({ config, onConfigChange }: RankingSelectorProps) {
   const genreScrollRef = useRef<HTMLDivElement>(null)
+  const { order: visibleGenres } = useGenreOrder()
 
   const handlePeriodChange = (period: RankingPeriod) => {
     onConfigChange({ ...config, period })
@@ -82,14 +84,14 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
             ref={genreScrollRef}
             className={`${styles.buttonContainer} ${styles.genreScrollContainer}`}
           >
-            {(Object.entries(GENRE_LABELS) as [RankingGenre, string][]).map(([value, label]) => (
+            {visibleGenres.map((genre) => (
               <button
-                key={value}
+                key={genre}
                 // refを削除（CSS Scroll Snapに任せる）
-                onClick={() => handleGenreChange(value)}
-                className={`${styles.button} ${styles.genreButton} ${config.genre === value ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
+                onClick={() => handleGenreChange(genre)}
+                className={`${styles.button} ${styles.genreButton} ${config.genre === genre ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
               >
-                {label}
+                {GENRE_LABELS[genre]}
               </button>
             ))}
           </div>

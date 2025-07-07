@@ -110,6 +110,18 @@
   gap: 24px;
 }
 
+.genreOrderSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ngBackupSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 .section {
   border: 1px solid var(--border-color);
   border-radius: 8px;

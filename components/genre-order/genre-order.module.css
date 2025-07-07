@@ -1,0 +1,228 @@
+/* Genre Order Customizer Styles */
+
+.container {
+  padding: 16px;
+}
+
+.description {
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.genreList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+/* Genre Item */
+.genreItem {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+  cursor: move;
+  user-select: none;
+}
+
+.genreItem:hover {
+  background: var(--surface-active);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.genreItem.hidden {
+  opacity: 0.6;
+  background: var(--surface-secondary);
+}
+
+.genreItem.dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Drag Handle */
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  cursor: grab;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.dragIcon {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+/* Genre Label */
+.genreLabel {
+  flex: 1;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* Visibility Toggle */
+.visibilityToggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.visibilityToggle:hover {
+  background-color: var(--surface-hover);
+}
+
+.visibilityToggle:active {
+  transform: scale(0.95);
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.resetButton {
+  padding: 8px 16px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.resetButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.resetButton:active {
+  transform: scale(0.98);
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.cancelButton {
+  padding: 8px 16px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.cancelButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+
+.applyButton {
+  padding: 8px 16px;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  color: white;
+  transition: all 0.2s ease;
+}
+
+.applyButton:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3);
+}
+
+.applyButton:active {
+  transform: scale(0.98);
+}
+
+.applyButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Help Text */
+.helpText {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--info-bg);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.helpText ul {
+  margin: 8px 0 0 20px;
+  padding: 0;
+}
+
+.helpText li {
+  margin-bottom: 4px;
+}
+
+/* Drag Over Effects */
+.dragOver {
+  background: var(--surface-active);
+  border-color: var(--primary-color);
+}
+
+/* Scrollbar Styles */
+.genreList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.genreList::-webkit-scrollbar-track {
+  background: var(--surface-secondary);
+  border-radius: 4px;
+}
+
+.genreList::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.genreList::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
