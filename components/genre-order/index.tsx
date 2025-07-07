@@ -1,6 +1,6 @@
 'use client'
 
-import React, { forwardRef, useImperativeHandle, useState, useCallback } from 'react'
+import React, { forwardRef, useImperativeHandle, useState, useCallback, useRef, useEffect } from 'react'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import { GenreItem } from './genre-item'
 import { RankingGenre } from '@/types/ranking-config'
@@ -29,21 +29,120 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
 
     // ドラッグ中のアイテム
     const [draggedGenre, setDraggedGenre] = useState<RankingGenre | null>(null)
+    
+    // 自動スクロール用の参照とstate
+    const scrollContainerRef = useRef<HTMLElement | null>(null)
+    const [isDragging, setIsDragging] = useState(false)
+    const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 })
+    const scrollIntervalRef = useRef<number | null>(null)
+    const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | null>(null)
 
     // 変更状態を親に通知
     React.useEffect(() => {
       onChangesUpdate?.(hasChanges)
     }, [hasChanges, onChangesUpdate])
 
+    // スクロールコンテナを検索
+    useEffect(() => {
+      // 親要素から overflow-y が auto または scroll の要素を探す
+      const findScrollContainer = () => {
+        let element = document.querySelector('.genreOrderContainer')?.parentElement
+        while (element && element.tagName !== 'BODY') {
+          const computedStyle = getComputedStyle(element)
+          if (computedStyle.overflowY === 'auto' || 
+              computedStyle.overflowY === 'scroll') {
+            return element
+          }
+          element = element.parentElement
+        }
+        return null
+      }
+      
+      scrollContainerRef.current = findScrollContainer()
+    }, [])
+
+    // 自動スクロール処理
+    useEffect(() => {
+      if (!isDragging || !scrollContainerRef.current) return
+
+      const container = scrollContainerRef.current
+      const containerRect = container.getBoundingClientRect()
+      
+      // スクロール検知エリアのサイズ（上下100px）
+      const scrollZoneSize = 100
+      // 最大スクロール速度
+      const maxScrollSpeed = 20
+      
+      const autoScroll = () => {
+        const mouseY = dragPosition.y
+        
+        // 上部エリアでのスクロール
+        if (mouseY < containerRect.top + scrollZoneSize) {
+          const distance = containerRect.top + scrollZoneSize - mouseY
+          const speed = Math.min((distance / scrollZoneSize) * maxScrollSpeed, maxScrollSpeed)
+          container.scrollTop -= speed
+          setScrollDirection('up')
+        }
+        // 下部エリアでのスクロール
+        else if (mouseY > containerRect.bottom - scrollZoneSize) {
+          const distance = mouseY - (containerRect.bottom - scrollZoneSize)
+          const speed = Math.min((distance / scrollZoneSize) * maxScrollSpeed, maxScrollSpeed)
+          container.scrollTop += speed
+          setScrollDirection('down')
+        }
+        // スクロールエリア外
+        else {
+          setScrollDirection(null)
+        }
+      }
+
+      // requestAnimationFrameでスムーズなスクロール
+      const animate = () => {
+        autoScroll()
+        scrollIntervalRef.current = requestAnimationFrame(animate)
+      }
+      
+      scrollIntervalRef.current = requestAnimationFrame(animate)
+
+      return () => {
+        if (scrollIntervalRef.current) {
+          cancelAnimationFrame(scrollIntervalRef.current)
+        }
+      }
+    }, [isDragging, dragPosition])
+
+    // ドラッグ位置の更新
+    useEffect(() => {
+      const handleMouseMove = (e: MouseEvent) => {
+        if (isDragging) {
+          setDragPosition({ x: e.clientX, y: e.clientY })
+        }
+      }
+
+      if (isDragging) {
+        document.addEventListener('mousemove', handleMouseMove)
+        return () => {
+          document.removeEventListener('mousemove', handleMouseMove)
+        }
+      }
+    }, [isDragging])
+
     // ドラッグ&ドロップハンドラー
     const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>) => {
       const genre = e.currentTarget.getAttribute('data-genre') as RankingGenre
       setDraggedGenre(genre)
+      setIsDragging(true)
+      setDragPosition({ x: e.clientX, y: e.clientY })
       e.dataTransfer.effectAllowed = 'move'
     }, [])
 
     const handleDragEnd = useCallback(() => {
       setDraggedGenre(null)
+      setIsDragging(false)
+      setScrollDirection(null)
+      if (scrollIntervalRef.current) {
+        cancelAnimationFrame(scrollIntervalRef.current)
+      }
     }, [])
 
     const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -74,7 +173,19 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
           ドラッグ&ドロップでジャンルの順序を変更したり、表示/非表示を切り替えることができます。
         </p>
 
-        <div className={styles.genreList}>
+        {/* スクロールインジケーター */}
+        {isDragging && scrollDirection === 'up' && (
+          <div className={styles.scrollIndicatorTop}>
+            <span>↑ スクロール中 ↑</span>
+          </div>
+        )}
+        {isDragging && scrollDirection === 'down' && (
+          <div className={styles.scrollIndicatorBottom}>
+            <span>↓ スクロール中 ↓</span>
+          </div>
+        )}
+
+        <div className={`${styles.genreList} genreOrderContainer`}>
           {items.map((item) => (
             <GenreItem
               key={item.id}

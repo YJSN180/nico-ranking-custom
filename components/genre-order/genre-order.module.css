@@ -159,3 +159,39 @@
   border-color: var(--primary-color);
 }
 
+/* Scroll Indicators */
+.scrollIndicatorTop,
+.scrollIndicatorBottom {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(85, 103, 216, 0.9);
+  color: white;
+  padding: 8px 24px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1000;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.scrollIndicatorTop {
+  top: 20px;
+}
+
+.scrollIndicatorBottom {
+  bottom: 20px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.9;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.05);
+  }
+}
+
