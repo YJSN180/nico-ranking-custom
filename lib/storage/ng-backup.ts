@@ -155,8 +155,8 @@ export function downloadNGListBackup(data: NGListBackupData): void {
   const blob = new Blob([json], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-  const filename = `nico-ranking-ng-list-backup-${timestamp}.json`
+  const date = new Date().toISOString().slice(0, 10)
+  const filename = `nico-ranking-nglist-backup-${date}.json`
   
   const link = document.createElement('a')
   link.href = url

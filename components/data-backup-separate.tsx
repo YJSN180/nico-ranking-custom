@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useGenreOrder } from '@/hooks/use-genre-order'
 import type { RankingGenre } from '@/types/ranking-config'
+import { exportNGListData, downloadNGListBackup, importNGListData, readNGListBackupFile } from '@/lib/storage/ng-backup'
 import styles from './settings-modal.module.css'
 
 type ExportType = 'nglist' | 'genre-order'
@@ -18,22 +19,13 @@ export function DataBackupSeparate() {
 
   // NGリストのエクスポート
   const exportNGList = () => {
-    const exportData = {
-      version: 1,
-      type: 'nglist',
-      ngList,
-      exportDate: new Date().toISOString()
+    try {
+      const exportData = exportNGListData()
+      downloadNGListBackup(exportData)
+    } catch (error) {
+      console.error('NGリストのエクスポートに失敗しました:', error)
+      alert(error instanceof Error ? error.message : 'エクスポートに失敗しました')
     }
-    
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `nico-ranking-nglist-backup-${new Date().toISOString().slice(0, 10)}.json`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
   }
 
   // ジャンル並び替えのエクスポート
@@ -60,65 +52,72 @@ export function DataBackupSeparate() {
   }
 
   // インポート処理
-  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
+    if (importType === 'nglist') {
+      // NGリストのインポート（既存の形式を使用）
       try {
-        const data = JSON.parse(e.target?.result as string)
+        const data = await readNGListBackupFile(file)
+        const result = await importNGListData(data)
         
-        // データタイプの確認
-        if (!data.type || (data.type !== 'nglist' && data.type !== 'genre-order')) {
-          setImportStatus('❌ 無効なファイル形式です')
-          return
-        }
-
-        // インポートタイプとファイルタイプの一致確認
-        if (data.type !== importType) {
-          setImportStatus(`❌ ${importType === 'nglist' ? 'NGリスト' : 'ジャンル並び替え'}のファイルを選択してください`)
-          return
-        }
-
-        if (data.type === 'nglist' && data.ngList) {
-          // NGリストのインポート
-          saveNGListDirectly(data.ngList)
-          setImportStatus('✅ NGリストを正常にインポートしました')
-        } else if (data.type === 'genre-order' && data.genreOrder) {
-          // ジャンル並び替えのインポート
-          const { order, hidden } = data.genreOrder
-          
-          // 順序の更新
-          updateOrder(order)
-          
-          // 表示/非表示の更新
-          const currentHidden = new Set(hiddenGenres)
-          const importedHidden = new Set(hidden)
-          
-          // 現在非表示で、インポートでは表示のものを表示に
-          currentHidden.forEach(genre => {
-            if (!importedHidden.has(genre)) {
-              toggleGenreVisibility(genre)
-            }
-          })
-          
-          // 現在表示で、インポートでは非表示のものを非表示に
-          importedHidden.forEach((genre: unknown) => {
-            if (!currentHidden.has(genre as RankingGenre)) {
-              toggleGenreVisibility(genre as RankingGenre)
-            }
-          })
-          
-          setImportStatus('✅ ジャンル並び替えを正常にインポートしました')
+        if (result.success) {
+          setImportStatus(`✅ NGリストを正常にインポートしました（${result.imported.totalItems}件）`)
         } else {
-          setImportStatus('❌ ファイル形式が正しくありません')
+          setImportStatus(`❌ インポートに失敗しました: ${result.errors.join(', ')}`)
         }
       } catch (error) {
-        setImportStatus('❌ ファイルの読み込みに失敗しました')
+        setImportStatus(`❌ ファイルの読み込みに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
       }
+    } else {
+      // ジャンル並び替えのインポート
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target?.result as string)
+          
+          // ジャンル並び替えファイルの確認
+          if (!data.type || data.type !== 'genre-order') {
+            setImportStatus('❌ ジャンル並び替えのファイルを選択してください')
+            return
+          }
+
+          if (data.type === 'genre-order' && data.genreOrder) {
+            // ジャンル並び替えのインポート
+            const { order, hidden } = data.genreOrder
+            
+            // 順序の更新
+            updateOrder(order)
+            
+            // 表示/非表示の更新
+            const currentHidden = new Set(hiddenGenres)
+            const importedHidden = new Set(hidden)
+            
+            // 現在非表示で、インポートでは表示のものを表示に
+            currentHidden.forEach(genre => {
+              if (!importedHidden.has(genre)) {
+                toggleGenreVisibility(genre)
+              }
+            })
+            
+            // 現在表示で、インポートでは非表示のものを非表示に
+            importedHidden.forEach((genre: unknown) => {
+              if (!currentHidden.has(genre as RankingGenre)) {
+                toggleGenreVisibility(genre as RankingGenre)
+              }
+            })
+            
+            setImportStatus('✅ ジャンル並び替えを正常にインポートしました')
+          } else {
+            setImportStatus('❌ ファイル形式が正しくありません')
+          }
+        } catch (error) {
+          setImportStatus('❌ ファイルの読み込みに失敗しました')
+        }
+      }
+      reader.readAsText(file)
     }
-    reader.readAsText(file)
     
     // インプットをリセット
     event.target.value = ''
