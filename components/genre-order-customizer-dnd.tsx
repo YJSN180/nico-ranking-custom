@@ -112,7 +112,7 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     setTempOrder(currentOrder)
     setTempHidden(new Set(currentHidden))
     setHasChanges(false)
-    setIsResetToDefault(false)
+    // isResetToDefaultは手動操作でのみ制御する（自動リセットしない）
   }, [currentOrder, currentHidden])
 
   // スクロールコンテナの参照を設定
