@@ -151,6 +151,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for Codecov
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -163,11 +165,23 @@ jobs:
 
       - name: Run tests with coverage (shard ${{ matrix.shard }})
         run: |
-          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=verbose --no-file-parallelism
+          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=verbose
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=16384'
+          NODE_OPTIONS: '--max-old-space-size=8192'
           FORCE_COLOR: 0
+          
+      - name: Rename coverage files to prevent overwrite
+        if: always()
+        run: |
+          if [ -f "coverage/lcov.info" ]; then
+            cp coverage/lcov.info coverage/lcov-shard-${{ matrix.shard }}.info
+            echo "Renamed lcov.info for shard ${{ matrix.shard }}"
+          fi
+          if [ -f "coverage/coverage-final.json" ]; then
+            cp coverage/coverage-final.json coverage/coverage-final-shard-${{ matrix.shard }}.json
+            echo "Renamed coverage-final.json for shard ${{ matrix.shard }}"
+          fi
           
       - name: Verify coverage output
         if: always()
@@ -195,6 +209,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Required for Codecov
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -212,61 +228,66 @@ jobs:
       - name: Merge coverage reports
         run: |
           mkdir -p coverage
-          # Install dependencies for coverage merging
-          npm ci
-          # Install nyc for coverage merging
-          npm install --no-save nyc
           
-          # Merge coverage files manually since vitest doesn't have built-in merge
-          echo "Merging coverage reports from shards..."
+          echo "=== Merging coverage reports from shards ==="
           
-          # Debug: Show structure of downloaded artifacts
-          echo "Downloaded artifact structure:"
-          ls -la coverage-artifacts/ || echo "coverage-artifacts directory not found"
+          # Debug: Show downloaded artifacts structure
+          echo "Downloaded artifacts:"
+          find coverage-artifacts -type f -name "*.info" -o -name "*.json" | sort
           
-          # Look for coverage files in subdirectories created by download-artifact
-          echo "Looking for coverage files in shard subdirectories..."
-          
-          # Create a temporary directory for merging
-          mkdir -p coverage/tmp
-          
-          # Copy all coverage-final.json files to temp directory with unique names
-          counter=1
+          # Merge lcov.info files (simple concatenation)
+          echo "Merging lcov.info files..."
+          touch coverage/lcov.info
           for shard_dir in coverage-artifacts/coverage-shard-*; do
             if [ -d "$shard_dir" ]; then
-              echo "Processing $shard_dir..."
-              if [ -f "$shard_dir/coverage-final.json" ]; then
-                cp "$shard_dir/coverage-final.json" "coverage/tmp/coverage-final-$counter.json"
-                echo "Copied coverage-final.json from $shard_dir"
-                ((counter++))
-              fi
-              # Also copy lcov.info files
-              if [ -f "$shard_dir/lcov.info" ]; then
-                cat "$shard_dir/lcov.info" >> coverage/lcov.info
-                echo "Appended lcov.info from $shard_dir"
-              fi
+              # Look for both renamed and original lcov files
+              for lcov_file in "$shard_dir"/lcov*.info; do
+                if [ -f "$lcov_file" ]; then
+                  echo "Appending $lcov_file"
+                  cat "$lcov_file" >> coverage/lcov.info
+                fi
+              done
             fi
           done
           
-          # Merge coverage-final.json files using nyc
-          if [ -f "coverage/tmp/coverage-final-1.json" ]; then
-            echo "Merging coverage-final.json files..."
-            npx nyc merge coverage/tmp coverage/coverage-final.json
-            echo "Coverage files merged successfully"
-            rm -rf coverage/tmp
-          else
-            echo "Warning: No coverage-final.json files found to merge"
+          # Merge coverage-final.json files if needed
+          echo "Looking for JSON coverage files..."
+          json_files=()
+          for shard_dir in coverage-artifacts/coverage-shard-*; do
+            if [ -d "$shard_dir" ]; then
+              for json_file in "$shard_dir"/coverage-final*.json; do
+                if [ -f "$json_file" ]; then
+                  json_files+=("$json_file")
+                  echo "Found JSON file: $json_file"
+                fi
+              done
+            fi
+          done
+          
+          # If we have JSON files, we can merge them (optional for Codecov)
+          if [ ${#json_files[@]} -gt 0 ]; then
+            echo "Found ${#json_files[@]} JSON coverage files"
+            # For now, just copy the first one as a base
+            cp "${json_files[0]}" coverage/coverage-final.json
           fi
           
           # Verify merged files
-          echo "Merged coverage files:"
+          echo ""
+          echo "=== Final coverage files ==="
           ls -la coverage/
           
-          # Verify coverage file contents
+          # Verify file contents
           echo ""
-          echo "=== Checking coverage file sizes ==="
-          [ -f "coverage/lcov.info" ] && echo "lcov.info size: $(wc -l < coverage/lcov.info) lines" || echo "lcov.info not found"
-          [ -f "coverage/coverage-final.json" ] && echo "coverage-final.json size: $(wc -c < coverage/coverage-final.json) bytes" || echo "coverage-final.json not found"
+          echo "=== Coverage file validation ==="
+          if [ -f "coverage/lcov.info" ]; then
+            lines=$(wc -l < coverage/lcov.info)
+            echo "✅ lcov.info: $lines lines"
+            if [ $lines -eq 0 ]; then
+              echo "⚠️  WARNING: lcov.info is empty!"
+            fi
+          else
+            echo "❌ lcov.info not found!"
+          fi
 
       - name: Check Codecov token
         run: |

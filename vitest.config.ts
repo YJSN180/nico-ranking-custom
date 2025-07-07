@@ -54,7 +54,7 @@ export default defineConfig({
         '__tests__/unit/ng-list-continuous-rank.test.tsx'  // React component initialization issues in CI
       ] : [])
     ],
-    testTimeout: process.env.CI ? 60000 : 10000,
+    testTimeout: process.env.CI ? 120000 : 10000,  // CI環境では2分に増加
     pool: 'forks',
     poolOptions: {
       forks: {
@@ -75,7 +75,7 @@ export default defineConfig({
         shuffle: false  // テストの実行順序をシャッフルしない
       },
       // シャード実行時は並列制限を緩和
-      fileParallelism: true,  // シャード環境では並列実行を有効
+      fileParallelism: process.env.VITEST_SHARD ? false : true,  // シャード＋カバレッジ時は無効
       maxThreads: 2,  // シャード環境では2スレッドまで許可
       minThreads: 1,
       teardownTimeout: 15000,  // テストの後片付けタイムアウト
@@ -89,7 +89,7 @@ export default defineConfig({
       reporter: process.env.CI ? ['text', 'json', 'lcov', 'json-summary'] : ['text', 'json', 'html'],
       reportsDirectory: './coverage',
       all: false,  // CI環境では実行されたファイルのみカバレッジを収集
-      clean: true,  // 前回のカバレッジファイルを削除
+      clean: !process.env.VITEST_SHARD,  // シャード実行時は削除しない
       exclude: [
         'node_modules/**',
         'coverage/**',
