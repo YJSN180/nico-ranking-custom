@@ -23,6 +23,15 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   
   // 長押し開始
   const handleTouchStart = (e: React.TouchEvent) => {
+    // インタラクティブな要素（ボタン、リンクなど）からのタッチは無視
+    const target = e.target as HTMLElement
+    const interactiveElement = target.closest('button, a, input, textarea, select, [role="button"], [tabindex]')
+    
+    // インタラクティブ要素からのタッチイベントは長押し検出しない
+    if (interactiveElement) {
+      return
+    }
+    
     const touch = e.touches[0]
     setMenuPosition({ x: touch.clientX, y: touch.clientY })
     
@@ -46,6 +55,15 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   // デスクトップ右クリック対応
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
+    
+    // インタラクティブな要素からの右クリックは無視
+    const target = e.target as HTMLElement
+    const interactiveElement = target.closest('button, a, input, textarea, select, [role="button"], [tabindex]')
+    
+    if (interactiveElement) {
+      return
+    }
+    
     setMenuPosition({ x: e.clientX, y: e.clientY })
     setShowMenu(true)
   }
