@@ -25,6 +25,11 @@ export function DataBackupSeparate() {
     backup: NGListBackupData
     conflicts: ConflictDetectionResult
   } | null>(null)
+  const [genreImportDialogOpen, setGenreImportDialogOpen] = useState(false)
+  const [pendingGenreData, setPendingGenreData] = useState<{
+    order: string[]
+    hidden: string[]
+  } | null>(null)
   
   const { ngList, saveNGListDirectly } = useUserNGList()
   const { order: genreOrder, hidden: hiddenGenres, updateOrder, toggleGenreVisibility } = useGenreOrder()
@@ -144,31 +149,9 @@ export function DataBackupSeparate() {
         }
 
         if (data.type === 'genre-order' && data.genreOrder) {
-          // ジャンル並び替えのインポート
-          const { order, hidden } = data.genreOrder
-          
-          // 順序の更新
-          updateOrder(order)
-          
-          // 表示/非表示の更新
-          const currentHidden = new Set(hiddenGenres)
-          const importedHidden = new Set(hidden)
-          
-          // 現在非表示で、インポートでは表示のものを表示に
-          currentHidden.forEach(genre => {
-            if (!importedHidden.has(genre)) {
-              toggleGenreVisibility(genre)
-            }
-          })
-          
-          // 現在表示で、インポートでは非表示のものを非表示に
-          importedHidden.forEach((genre: unknown) => {
-            if (!currentHidden.has(genre as RankingGenre)) {
-              toggleGenreVisibility(genre as RankingGenre)
-            }
-          })
-          
-          setGenreImportStatus('✅ ジャンル並び替えを正常にインポートしました')
+          // 確認ダイアログ用にデータを保存
+          setPendingGenreData(data.genreOrder)
+          setGenreImportDialogOpen(true)
         } else {
           setGenreImportStatus('❌ ファイル形式が正しくありません')
         }
@@ -180,6 +163,45 @@ export function DataBackupSeparate() {
     
     // インプットをリセット
     event.target.value = ''
+  }
+  
+  // ジャンル並び替えの実際のインポート処理
+  const executeGenreImport = () => {
+    if (!pendingGenreData) return
+    
+    const { order, hidden } = pendingGenreData
+    
+    // 順序の更新
+    updateOrder(order as RankingGenre[])
+    
+    // 表示/非表示の更新
+    const currentHidden = new Set(hiddenGenres)
+    const importedHidden = new Set(hidden)
+    
+    // 現在非表示で、インポートでは表示のものを表示に
+    currentHidden.forEach(genre => {
+      if (!importedHidden.has(genre)) {
+        toggleGenreVisibility(genre)
+      }
+    })
+    
+    // 現在表示で、インポートでは非表示のものを非表示に
+    importedHidden.forEach((genre: unknown) => {
+      if (!currentHidden.has(genre as RankingGenre)) {
+        toggleGenreVisibility(genre as RankingGenre)
+      }
+    })
+    
+    setGenreImportStatus('✅ ジャンル並び替えを正常にインポートしました')
+    setGenreImportDialogOpen(false)
+    setPendingGenreData(null)
+    
+    // リロード促す
+    setTimeout(() => {
+      if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+        window.location.reload()
+      }
+    }, 1500)
   }
 
   return (
@@ -475,6 +497,69 @@ export function DataBackupSeparate() {
                     handleConflictResolution(selected.value as 'merge' | 'overwrite')
                   }
                 }}
+                className={`${ngStyles.dialogButton} ${ngStyles.confirmButton}`}
+              >
+                インポート実行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* ジャンル並び替えインポート確認ダイアログ */}
+      {genreImportDialogOpen && pendingGenreData && (
+        <div className={ngStyles.backupDialogOverlay} onClick={() => setGenreImportDialogOpen(false)}>
+          <div 
+            className={ngStyles.backupDialog} 
+            onClick={(e) => e.stopPropagation()}
+            data-testid="genre-import-confirm-dialog"
+          >
+            <h3>ジャンル並び替え設定をインポート</h3>
+            
+            <div style={{ marginBottom: '24px' }}>
+              <p style={{ marginBottom: '16px' }}>
+                ジャンルの表示順序と表示/非表示設定をインポートします。
+              </p>
+              
+              <div className={ngStyles.exportStats}>
+                <div className={ngStyles.statItem}>
+                  <span className={ngStyles.statLabel}>ジャンル数:</span>
+                  <span className={ngStyles.statValue}>
+                    {pendingGenreData.order.length}件
+                  </span>
+                </div>
+                <div className={ngStyles.statItem}>
+                  <span className={ngStyles.statLabel}>非表示ジャンル:</span>
+                  <span className={ngStyles.statValue}>
+                    {pendingGenreData.hidden.length}件
+                  </span>
+                </div>
+              </div>
+              
+              <p style={{ 
+                marginTop: '16px', 
+                padding: '12px',
+                background: 'var(--warning-bg, #fff9e6)',
+                borderRadius: '6px',
+                fontSize: '14px',
+                color: 'var(--warning-color, #d97706)'
+              }}>
+                ⚠️ 注意: 現在のジャンル並び替え設定は上書きされます
+              </p>
+            </div>
+
+            <div className={ngStyles.dialogActions}>
+              <button 
+                onClick={() => {
+                  setGenreImportDialogOpen(false)
+                  setPendingGenreData(null)
+                }}
+                className={`${ngStyles.dialogButton} ${ngStyles.cancelButton}`}
+              >
+                キャンセル
+              </button>
+              <button 
+                onClick={executeGenreImport}
                 className={`${ngStyles.dialogButton} ${ngStyles.confirmButton}`}
               >
                 インポート実行
