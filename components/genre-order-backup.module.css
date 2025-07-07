@@ -1,0 +1,234 @@
+/* 基本的にng-backup.module.cssと同じスタイルを使用 */
+.genreOrderBackup {
+  margin: 1rem 0;
+}
+
+.backupActions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.backupButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.backupButton:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--primary-color);
+}
+
+.backupButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.buttonIcon {
+  width: 20px;
+  height: 20px;
+}
+
+.fileInput {
+  display: none;
+}
+
+.backupDialogOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.backupDialog {
+  background: var(--surface-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 100%;
+  box-shadow: var(--shadow-xl);
+  animation: modalSlideIn 0.2s ease-out;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.backupDialog h3 {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.backupDialog p {
+  margin: 0.5rem 0;
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+.dialogNote {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* インポート確認 */
+.importInfo {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--info-bg, #e8f4fd);
+  border: 1px solid var(--info-border, #b3d9f2);
+  border-radius: 8px;
+}
+
+.warningInfo {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #d97706;
+}
+
+.dialogActions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.dialogButton {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.cancelButton:hover {
+  background: var(--surface-hover);
+}
+
+.confirmButton {
+  background: var(--primary-color);
+  color: white;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background: var(--primary-color-hover);
+  transform: translateY(-1px);
+}
+
+.confirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* インポート結果メッセージ */
+.importResult {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.importResult.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: rgb(34, 197, 94);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.importResult.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: rgb(239, 68, 68);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* 使い方説明 */
+.helpText {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--info-bg, #e8f4fd);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.helpText strong {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.helpText ul {
+  margin: 0.5rem 0 0 1.5rem;
+  padding: 0;
+}
+
+.helpText li {
+  margin-bottom: 0.25rem;
+}
+
+@media (max-width: 768px) {
+  .backupDialog {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+
+  .backupActions {
+    justify-content: center;
+  }
+
+  .backupButton {
+    flex: 1;
+    justify-content: center;
+    min-width: 140px;
+  }
+
+  .dialogActions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .dialogButton {
+    width: 100%;
+    justify-content: center;
+  }
+}

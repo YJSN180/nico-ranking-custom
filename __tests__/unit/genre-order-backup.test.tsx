@@ -22,8 +22,8 @@ describe('GenreOrderBackup', () => {
   it('renders export and import buttons', () => {
     render(<GenreOrderBackup />)
     
-    expect(screen.getByText('📥 エクスポート')).toBeInTheDocument()
-    expect(screen.getByText('📤 インポート')).toBeInTheDocument()
+    expect(screen.getByText('エクスポート')).toBeInTheDocument()
+    expect(screen.getByText('インポート')).toBeInTheDocument()
   })
 
   it('renders usage instructions', () => {
@@ -34,7 +34,32 @@ describe('GenreOrderBackup', () => {
     expect(screen.getByText(/インポート: 保存したファイルから設定を復元します/)).toBeInTheDocument()
   })
 
-  it('shows success message when valid file is imported', async () => {
+  it('shows import confirmation dialog when valid file is imported', async () => {
+    render(<GenreOrderBackup />)
+    
+    const validData = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      genreOrder: [
+        { id: 'game', isVisible: true, order: 0 },
+        { id: 'all', isVisible: false, order: 1 },
+      ]
+    }
+    
+    const file = new File([JSON.stringify(validData)], 'backup.json', { type: 'application/json' })
+    const input = screen.getByTestId('import-file-input') as HTMLInputElement
+    
+    fireEvent.change(input, { target: { files: [file] } })
+    
+    // 確認ダイアログが表示されることを確認
+    await waitFor(() => {
+      expect(screen.getByTestId('import-confirm-dialog')).toBeInTheDocument()
+      expect(screen.getByText('ジャンル並び替えデータをインポート')).toBeInTheDocument()
+      expect(screen.getByText(/現在のジャンル並び替え設定は完全に上書きされます/)).toBeInTheDocument()
+    })
+  })
+
+  it('imports data when confirm button is clicked in dialog', async () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     const reloadSpy = vi.fn()
     Object.defineProperty(window, 'location', {
@@ -66,9 +91,18 @@ describe('GenreOrderBackup', () => {
     }
     
     const file = new File([JSON.stringify(validData)], 'backup.json', { type: 'application/json' })
-    const input = screen.getByLabelText('📤 インポート').parentElement?.querySelector('input[type="file"]') as HTMLInputElement
+    const input = screen.getByTestId('import-file-input') as HTMLInputElement
     
     fireEvent.change(input, { target: { files: [file] } })
+    
+    // 確認ダイアログが表示されるのを待つ
+    await waitFor(() => {
+      expect(screen.getByTestId('import-confirm-dialog')).toBeInTheDocument()
+    })
+    
+    // インポート実行ボタンをクリック
+    const confirmButton = screen.getByText('インポート実行')
+    fireEvent.click(confirmButton)
     
     await waitFor(() => {
       expect(screen.getByText(/ジャンル並び替えデータをインポートしました/)).toBeInTheDocument()
@@ -82,12 +116,58 @@ describe('GenreOrderBackup', () => {
     }, { timeout: 3500 })
   })
 
+  it('cancels import when cancel button is clicked in dialog', async () => {
+    const setItemSpy = vi.fn()
+    Object.defineProperty(window, 'localStorage', {
+      value: {
+        setItem: setItemSpy,
+        getItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn()
+      },
+      writable: true
+    })
+    
+    render(<GenreOrderBackup />)
+    
+    const validData = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      genreOrder: [
+        { id: 'game', isVisible: true, order: 0 },
+        { id: 'all', isVisible: false, order: 1 },
+      ]
+    }
+    
+    const file = new File([JSON.stringify(validData)], 'backup.json', { type: 'application/json' })
+    const input = screen.getByTestId('import-file-input') as HTMLInputElement
+    
+    fireEvent.change(input, { target: { files: [file] } })
+    
+    // 確認ダイアログが表示されるのを待つ
+    await waitFor(() => {
+      expect(screen.getByTestId('import-confirm-dialog')).toBeInTheDocument()
+    })
+    
+    // キャンセルボタンをクリック
+    const cancelButton = screen.getByText('キャンセル')
+    fireEvent.click(cancelButton)
+    
+    // ダイアログが閉じることを確認
+    await waitFor(() => {
+      expect(screen.queryByTestId('import-confirm-dialog')).not.toBeInTheDocument()
+    })
+    
+    // LocalStorageに保存されていないことを確認
+    expect(setItemSpy).not.toHaveBeenCalled()
+  })
+
   it('shows error message for invalid file format', async () => {
     render(<GenreOrderBackup />)
     
     const invalidData = { invalid: 'data' }
     const file = new File([JSON.stringify(invalidData)], 'invalid.json', { type: 'application/json' })
-    const input = screen.getByLabelText('📤 インポート').parentElement?.querySelector('input[type="file"]') as HTMLInputElement
+    const input = screen.getByTestId('import-file-input') as HTMLInputElement
     
     fireEvent.change(input, { target: { files: [file] } })
     
