@@ -293,3 +293,39 @@
     transform: translateY(0);
   }
 }
+
+/* ジャンル並び替え関連 */
+.genreOrderSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.genreList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.genreItem {
+  user-select: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.genreItem:hover:not(.genreItemHidden) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.genreItem.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+  cursor: grabbing !important;
+}
+
+.genreItemHidden {
+  cursor: not-allowed;
+}

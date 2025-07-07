@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
-import { DataBackup } from './data-backup'
-import { GenreOrderCustomizer } from './genre-order-customizer'
+import { DataBackupSeparate } from './data-backup-separate'
+import { GenreOrderCustomizerDnD } from './genre-order-customizer-dnd'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -27,12 +27,14 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   // 一時的なNGリストの状態
   const [tempNGList, setTempNGList] = useState<UserNGList>(ngList)
   const [hasChanges, setHasChanges] = useState(false)
+  const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
   
   // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
   useEffect(() => {
     if (isOpen) {
       setTempNGList(ngList)
       setHasChanges(false)
+      setHasGenreOrderChanges(false)
     }
   }, [isOpen, ngList])
   
@@ -168,9 +170,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 閉じる処理
   const handleClose = () => {
-    if (hasChanges) {
+    if (hasChanges || hasGenreOrderChanges) {
       if (confirm('変更を破棄してもよろしいですか？')) {
         setTempNGList(ngList)  // 元に戻す
+        setHasGenreOrderChanges(false)
         onClose()
       }
     } else {
@@ -452,7 +455,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             <div className={styles.genreOrderSettings}>
               <section className={styles.section}>
                 <h3>🎯 ジャンル並び替え</h3>
-                <GenreOrderCustomizer />
+                <GenreOrderCustomizerDnD 
+                  onChangesUpdate={setHasGenreOrderChanges}
+                />
               </section>
             </div>
           ) : (
@@ -460,9 +465,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
               <section className={styles.section}>
                 <h3>💾 設定データバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  NGリストやジャンル並び替えの設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
+                  NGリストとジャンル並び替えの設定を個別にバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
-                <DataBackup />
+                <DataBackupSeparate />
               </section>
             </div>
           )}
