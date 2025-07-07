@@ -59,7 +59,7 @@ export default defineConfig({
     poolOptions: {
       forks: {
         // シャード環境に対応したメモリ使用量制限
-        maxForks: process.env.CI ? 2 : 4,
+        maxForks: process.env.CI && process.env.VITEST_SHARD ? 1 : (process.env.CI ? 2 : 4),
         minForks: 1,
         // シャード環境では singleFork を無効化
         singleFork: false
