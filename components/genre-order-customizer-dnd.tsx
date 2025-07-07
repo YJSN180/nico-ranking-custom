@@ -237,6 +237,8 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
         newOrder[draggedOrderIndex] = dropGenre
         newOrder[dropOrderIndex] = draggedGenre
         setTempOrder(newOrder)
+        // 手動操作時はデフォルトリセットフラグを解除
+        setIsResetToDefault(false)
       }
     }
     
@@ -257,6 +259,8 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
       newHidden.add(genre)
     }
     setTempHidden(newHidden)
+    // 手動操作時はデフォルトリセットフラグを解除
+    setIsResetToDefault(false)
   }
 
   // 適用処理
