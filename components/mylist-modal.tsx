@@ -54,7 +54,16 @@ export function MylistModal({
 
   return (
     <>
-      <div className={styles.overlay} onClick={onClose} data-testid="modal-overlay" />
+      <div 
+        className={styles.overlay} 
+        onClick={onClose} 
+        onTouchEnd={(e) => {
+          // タッチイベントの伝播を止めて、親の長押し検出を防ぐ
+          e.stopPropagation()
+          onClose()
+        }}
+        data-testid="modal-overlay" 
+      />
       <div 
         className={styles.modal} 
         role="dialog" 
@@ -67,6 +76,10 @@ export function MylistModal({
           <button 
             className={styles.closeButton}
             onClick={onClose}
+            onTouchEnd={(e) => {
+              // タッチイベントの伝播を止める
+              e.stopPropagation()
+            }}
             aria-label="閉じる"
             data-testid="mylist-modal-close"
           >

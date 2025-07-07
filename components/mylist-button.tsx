@@ -145,6 +145,10 @@ export function MylistButton({ video }: MylistButtonProps) {
         data-testid="mylist-button"
         aria-label={isInMylist ? "マイリストから削除" : "マイリストに追加"}
         onClick={handleClick}
+        onTouchStart={(e) => {
+          // 親のVideoContextMenuの長押し検出を防ぐ
+          e.stopPropagation()
+        }}
         onTouchEnd={(e) => {
           // 親要素への伝播のみ止める（preventDefaultは削除）
           e.stopPropagation()

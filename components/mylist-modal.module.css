@@ -7,6 +7,10 @@
   background: rgba(0, 0, 0, 0.6);
   animation: fadeIn 0.2s ease-out;
   z-index: 1000;
+  /* iOS長押しメニューを無効化 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .modal {
@@ -24,6 +28,8 @@
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
   z-index: 1001;
+  /* iOS長押しメニューを無効化 */
+  -webkit-touch-callout: none;
 }
 
 /* ダークモード対応 */
@@ -60,6 +66,9 @@
   line-height: 1;
   border-radius: 4px;
   transition: all 0.2s;
+  /* iOSタッチ効果を無効化 */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .closeButton:hover {
@@ -158,6 +167,9 @@
   cursor: pointer;
   transition: all 0.2s;
   border: none;
+  /* iOSタッチ効果を無効化 */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .primaryButton {

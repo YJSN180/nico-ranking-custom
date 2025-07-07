@@ -14,6 +14,12 @@
   position: relative;
   
   /* 軽量最適化のみ - GPU負荷軽減 */
+  
+  /* iOS長押しメニューを無効化 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* モバイル向けタップ領域拡大（見た目はそのまま） */
