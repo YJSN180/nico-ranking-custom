@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
-import { NGBackup } from './ng-backup'
+import { DataBackup } from './data-backup'
+import { GenreOrderCustomizer } from './genre-order-customizer'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -13,7 +14,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'display' | 'nglist' | 'ng-backup'>('nglist')
+  const [activeTab, setActiveTab] = useState<'display' | 'nglist' | 'genre-order' | 'data-backup'>('nglist')
   const [inputVideoId, setInputVideoId] = useState('')
   const [inputVideoTitle, setInputVideoTitle] = useState('')
   const [videoTitleType, setVideoTitleType] = useState<'exact' | 'partial'>('partial')
@@ -199,10 +200,16 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             🚫 NGリスト管理
           </button>
           <button
-            className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
-            onClick={() => setActiveTab('ng-backup')}
+            className={`${styles.tab} ${activeTab === 'genre-order' ? styles.active : ''}`}
+            onClick={() => setActiveTab('genre-order')}
           >
-            💾 NGリスト保存
+            🎯 ジャンル並び替え
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'data-backup' ? styles.active : ''}`}
+            onClick={() => setActiveTab('data-backup')}
+          >
+            💾 設定データ保存
           </button>
         </div>
 
@@ -292,6 +299,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             </div>
           ) : activeTab === 'nglist' ? (
             <div className={styles.ngListSettings}>
+              <p style={{ marginBottom: '16px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+                設定データは「設定データ保存」タブから保存・復元できます。
+              </p>
               {/* 動画ID */}
               <section className={styles.section}>
                 <h3>🚫 動画ID</h3>
@@ -438,14 +448,21 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 </div>
               </section>
             </div>
-          ) : (
-            <div className={styles.ngBackupSettings}>
+          ) : activeTab === 'genre-order' ? (
+            <div className={styles.genreOrderSettings}>
               <section className={styles.section}>
-                <h3>💾 NGリストバックアップ</h3>
+                <h3>🎯 ジャンル並び替え</h3>
+                <GenreOrderCustomizer />
+              </section>
+            </div>
+          ) : (
+            <div className={styles.dataBackupSettings}>
+              <section className={styles.section}>
+                <h3>💾 設定データバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
+                  NGリストやジャンル並び替えの設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
-                <NGBackup />
+                <DataBackup />
               </section>
             </div>
           )}
