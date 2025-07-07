@@ -74,8 +74,9 @@ export default defineConfig({
       sequence: {
         shuffle: false  // テストの実行順序をシャッフルしない
       },
-      // シャード実行時は並列制限を緩和
-      fileParallelism: process.env.VITEST_SHARD ? false : true,  // シャード＋カバレッジ時は無効
+      // シャード実行時は並列を無効化してメモリとCPUの競合を防ぐ
+      fileParallelism: !process.env.VITEST_SHARD,  // シャード時は無効
+      maxWorkers: process.env.VITEST_SHARD ? 1 : undefined,  // シャード時は1ワーカー
       maxThreads: 2,  // シャード環境では2スレッドまで許可
       minThreads: 1,
       teardownTimeout: 15000,  // テストの後片付けタイムアウト

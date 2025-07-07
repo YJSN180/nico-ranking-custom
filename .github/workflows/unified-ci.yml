@@ -165,7 +165,7 @@ jobs:
 
       - name: Run tests with coverage (shard ${{ matrix.shard }})
         run: |
-          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=verbose --no-file-parallelism
+          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=verbose
         env:
           CI: true
           NODE_OPTIONS: '--max-old-space-size=12288'
