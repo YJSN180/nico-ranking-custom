@@ -5,6 +5,7 @@ import { OptimizedImage } from './optimized-image'
 import { VideoContextMenu } from './video-context-menu'
 import { formatNumberMobile, formatDuration } from '@/lib/format-utils'
 import { convertMylistVideoToRankingItem } from '@/lib/adapters/video-type-adapter'
+import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import type { MylistVideo } from '@/lib/storage/types'
 import './mylist-video-item.css'
 
@@ -75,7 +76,10 @@ const MylistVideoItem = memo(function MylistVideoItem({
           // リンクやボタンのクリックは除外
           const target = e.target as HTMLElement;
           if (target.closest('a') || target.closest('button')) return;
-          window.open(`https://www.nicovideo.jp/watch/${video.id}`, '_blank');
+          
+          // PWA環境に応じたナビゲーション
+          const url = `https://www.nicovideo.jp/watch/${video.id}`;
+          navigateToVideo(url);
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
@@ -89,9 +93,17 @@ const MylistVideoItem = memo(function MylistVideoItem({
         <div className="mylist-video-item__thumbnail">
           <a
             href={`https://www.nicovideo.jp/watch/${video.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
+            target={getLinkTarget()}
+            rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
             style={{ display: 'block', cursor: 'pointer' }}
+            onClick={(e) => {
+              // PWA環境でのナビゲーション処理
+              const url = `https://www.nicovideo.jp/watch/${video.id}`;
+              if (getLinkTarget() === '_self') {
+                e.preventDefault();
+                navigateToVideo(url, e);
+              }
+            }}
           >
             <OptimizedImage
               src={video.thumbURL}
@@ -121,10 +133,18 @@ const MylistVideoItem = memo(function MylistVideoItem({
           {/* タイトル */}
           <a
             href={`https://www.nicovideo.jp/watch/${video.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
+            target={getLinkTarget()}
+            rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
             className="mylist-video-item__title"
             data-testid="video-title"
+            onClick={(e) => {
+              // PWA環境でのナビゲーション処理
+              const url = `https://www.nicovideo.jp/watch/${video.id}`;
+              if (getLinkTarget() === '_self') {
+                e.preventDefault();
+                navigateToVideo(url, e);
+              }
+            }}
           >
             {video.title}
           </a>

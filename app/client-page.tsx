@@ -18,6 +18,7 @@ import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
+import { useNavigationState } from '@/hooks/use-navigation-state'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -58,6 +59,9 @@ export default function ClientPage({
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList } = useUserNGList()
+  
+  // PWA環境でのナビゲーション状態管理
+  useNavigationState()
   
   // NGリストのバージョンを追跡（更新時に強制再レンダリング）
   const ngListVersion = useMemo(() => {

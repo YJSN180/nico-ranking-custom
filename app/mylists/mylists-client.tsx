@@ -11,6 +11,7 @@ import { MylistBackup } from '@/components/mylist-backup'
 import { formatBytes, formatDate } from './utils/format-utils'
 import { initializeStorage, getStorageInfo } from './utils/storage-operations'
 import { MylistSkeleton } from './components/mylist-skeleton'
+import { useNavigationState } from '@/hooks/use-navigation-state'
 import styles from './mylists.module.css'
 
 // モーダルを動的インポート（遅延ロード）
@@ -41,6 +42,9 @@ export function MylistsClient() {
   const router = useRouter()
   const dbManagerRef = useRef<DBManager | null>(null)
   const mylistManagerRef = useRef<MylistManager | null>(null)
+  
+  // PWA環境でのナビゲーション状態管理
+  useNavigationState()
 
   useEffect(() => {
     let mounted = true

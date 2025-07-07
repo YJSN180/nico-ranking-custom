@@ -6,6 +6,7 @@ import { MylistButton } from './mylist-button'
 import { VideoContextMenu } from './video-context-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
+import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
@@ -163,8 +164,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             </div>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              target={getLinkTarget()}
+              rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
               style={{ display: 'block', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
               onClick={(e) => {
                 e.stopPropagation()
@@ -172,6 +173,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                   e.preventDefault()
                   return false
                 }
+                
+                // PWA環境でのナビゲーション処理
+                const url = `https://www.nicovideo.jp/watch/${item.id}`
+                if (getLinkTarget() === '_self') {
+                  e.preventDefault()
+                  navigateToVideo(url, e)
+                }
+                
                 // サムネイルクリック時も訪問済みとして記録
                 try {
                   const visitedKey = 'visited-videos'
@@ -221,8 +230,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             {/* タイトル */}
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
+              target={getLinkTarget()}
+              rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
               className="ranking-item-responsive__title"
               data-testid="video-title"
               style={{ 
@@ -237,6 +246,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                   e.preventDefault()
                   return false
                 }
+                
+                // PWA環境でのナビゲーション処理
+                const url = `https://www.nicovideo.jp/watch/${item.id}`
+                if (getLinkTarget() === '_self') {
+                  e.preventDefault()
+                  navigateToVideo(url, e)
+                }
+                
                 // クリック時も訪問済みとして記録
                 try {
                   const visitedKey = 'visited-videos'
