@@ -106,23 +106,6 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
           >
             デフォルトに戻す
           </button>
-          
-          {hasChanges && (
-            <div className={styles.buttonGroup}>
-              <button 
-                className={styles.cancelButton}
-                onClick={cancelChanges}
-              >
-                キャンセル
-              </button>
-              <button 
-                className={styles.applyButton}
-                onClick={applyChanges}
-              >
-                適用
-              </button>
-            </div>
-          )}
         </div>
       </div>
     )
