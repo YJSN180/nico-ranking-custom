@@ -27,13 +27,15 @@ vi.mock('@/components/mylist-backup.module.css', () => ({
 }))
 
 // backupモジュールのモック
-vi.mock('@/lib/storage/backup', () => ({
-  exportMylistData: vi.fn(),
-  downloadBackupData: vi.fn(),
-  readBackupFile: vi.fn(),
-  importMylistData: vi.fn(),
-  detectMylistConflicts: vi.fn()
-}))
+vi.mock('@/lib/storage/backup', () => {
+  return {
+    exportMylistData: vi.fn(),
+    downloadBackupData: vi.fn(),
+    readBackupFile: vi.fn(),
+    importMylistData: vi.fn(),
+    detectMylistConflicts: vi.fn()
+  }
+})
 
 // useMylistOperationsフックをモック - CI環境対応
 // 強制的にundefinedでないことを保証

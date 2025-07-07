@@ -163,10 +163,11 @@ jobs:
 
       - name: Run tests with coverage (shard ${{ matrix.shard }})
         run: |
-          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=verbose --no-file-parallelism
         env:
           CI: true
           NODE_OPTIONS: '--max-old-space-size=16384'
+          FORCE_COLOR: 0
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4

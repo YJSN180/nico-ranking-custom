@@ -87,6 +87,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: process.env.CI ? ['text', 'json', 'lcov'] : ['text', 'json', 'html'],
+      reportsDirectory: './coverage',
+      all: false,  // CI環境では実行されたファイルのみカバレッジを収集
       exclude: [
         'node_modules/**',
         'coverage/**',
