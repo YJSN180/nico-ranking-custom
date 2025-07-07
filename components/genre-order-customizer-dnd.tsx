@@ -222,31 +222,17 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     const draggedGenre = allGenres[draggedIndex]
     const dropGenre = allGenres[dropIndex]
     
-    // ドラッグ元が表示中の場合のみ並び替え可能（ドロップ先は非表示でもOK）
-    if (!tempHidden.has(draggedGenre)) {
+    // 両方が表示中の場合のみ並び替え可能
+    if (!tempHidden.has(draggedGenre) && !tempHidden.has(dropGenre)) {
       const newOrder = [...tempOrder]
       const draggedOrderIndex = newOrder.indexOf(draggedGenre)
+      const dropOrderIndex = newOrder.indexOf(dropGenre)
       
-      if (draggedOrderIndex !== -1) {
-        // ドロップ先が非表示の場合は、一時的に表示する
-        if (tempHidden.has(dropGenre)) {
-          const newHidden = new Set(tempHidden)
-          newHidden.delete(dropGenre)
-          setTempHidden(newHidden)
-          
-          // orderにも追加が必要な場合
-          if (!newOrder.includes(dropGenre)) {
-            newOrder.push(dropGenre)
-          }
-        }
-        
-        const dropOrderIndex = newOrder.indexOf(dropGenre)
-        if (dropOrderIndex !== -1) {
-          // 順序を入れ替え
-          newOrder.splice(draggedOrderIndex, 1)
-          newOrder.splice(dropOrderIndex, 0, draggedGenre)
-          setTempOrder(newOrder)
-        }
+      if (draggedOrderIndex !== -1 && dropOrderIndex !== -1) {
+        // 順序を入れ替え
+        newOrder.splice(draggedOrderIndex, 1)
+        newOrder.splice(dropOrderIndex, 0, draggedGenre)
+        setTempOrder(newOrder)
       }
     }
     
