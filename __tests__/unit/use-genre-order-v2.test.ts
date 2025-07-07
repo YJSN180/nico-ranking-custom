@@ -65,15 +65,24 @@ describe('useGenreOrderV2', () => {
     expect(result.current.hiddenGenres).toEqual(['all'])
   })
 
-  it('swaps items correctly', () => {
+  it('moves items correctly with insert behavior', () => {
     const { result } = renderHook(() => useGenreOrderV2())
     
+    // Initial order: [all, game, anime, ...]
+    const initialOrder = result.current.items.map(item => item.id)
+    expect(initialOrder[0]).toBe('all')
+    expect(initialOrder[1]).toBe('game')
+    expect(initialOrder[2]).toBe('anime')
+    
+    // Move 'anime' (index 2) to position of 'all' (index 0)
     act(() => {
-      result.current.swapItems('all', 'game')
+      result.current.moveItem('anime', 'all')
     })
     
-    expect(result.current.items[0].id).toBe('game')
+    // New order should be: [anime, all, game, ...]
+    expect(result.current.items[0].id).toBe('anime')
     expect(result.current.items[1].id).toBe('all')
+    expect(result.current.items[2].id).toBe('game')
     expect(result.current.hasChanges).toBe(true)
   })
 
@@ -123,7 +132,7 @@ describe('useGenreOrderV2', () => {
     const { result } = renderHook(() => useGenreOrderV2())
     
     act(() => {
-      result.current.swapItems('all', 'game')
+      result.current.moveItem('game', 'all')
     })
     
     expect(result.current.hasChanges).toBe(true)
@@ -135,26 +144,62 @@ describe('useGenreOrderV2', () => {
     const saved = JSON.parse(localStorageMock.getItem('nicoRankingGenreOrder') || '[]')
     expect(saved[0].id).toBe('game')
     expect(saved[1].id).toBe('all')
+    expect(saved[2].id).toBe('anime')
     expect(reloadMock).toHaveBeenCalled()
   })
 
   it('cancels changes correctly', () => {
     const { result } = renderHook(() => useGenreOrderV2())
     
-    const initialOrder = result.current.items[0].id
+    const initialOrder = result.current.items.map(item => item.id)
     
     act(() => {
-      result.current.swapItems('all', 'game')
+      result.current.moveItem('game', 'all')
     })
     
-    expect(result.current.items[0].id).not.toBe(initialOrder)
+    // Verify order changed
+    expect(result.current.items[0].id).toBe('game')
+    expect(result.current.items[1].id).toBe('all')
     expect(result.current.hasChanges).toBe(true)
     
     act(() => {
       result.current.cancelChanges()
     })
     
-    expect(result.current.items[0].id).toBe(initialOrder)
+    // Verify order restored
+    expect(result.current.items[0].id).toBe(initialOrder[0])
+    expect(result.current.items[1].id).toBe(initialOrder[1])
+    expect(result.current.items[2].id).toBe(initialOrder[2])
     expect(result.current.hasChanges).toBe(false)
+  })
+
+  it('handles complex insert movements correctly', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // Initial: [all, game, anime, vocaloid, voicesynthesis, ...]
+    
+    // Move 'vocaloid' (index 3) to 'game' (index 1)
+    act(() => {
+      result.current.moveItem('vocaloid', 'game')
+    })
+    
+    // Expected: [all, vocaloid, game, anime, voicesynthesis, ...]
+    expect(result.current.items[0].id).toBe('all')
+    expect(result.current.items[1].id).toBe('vocaloid')
+    expect(result.current.items[2].id).toBe('game')
+    expect(result.current.items[3].id).toBe('anime')
+    expect(result.current.items[4].id).toBe('voicesynthesis')
+    
+    // Move 'all' (index 0) to 'anime' (index 3)
+    act(() => {
+      result.current.moveItem('all', 'anime')
+    })
+    
+    // Expected: [vocaloid, game, anime, all, voicesynthesis, ...]
+    expect(result.current.items[0].id).toBe('vocaloid')
+    expect(result.current.items[1].id).toBe('game')
+    expect(result.current.items[2].id).toBe('anime')
+    expect(result.current.items[3].id).toBe('all')
+    expect(result.current.items[4].id).toBe('voicesynthesis')
   })
 })

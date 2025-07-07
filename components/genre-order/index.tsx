@@ -20,7 +20,7 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
     const {
       items,
       hasChanges,
-      swapItems,
+      moveItem,
       toggleVisibility,
       resetToDefault,
       applyChanges,
@@ -56,11 +56,11 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
       const dropGenre = e.currentTarget.getAttribute('data-genre') as RankingGenre
       
       if (draggedGenre && draggedGenre !== dropGenre) {
-        swapItems(draggedGenre, dropGenre)
+        moveItem(draggedGenre, dropGenre)
       }
       
       setDraggedGenre(null)
-    }, [draggedGenre, swapItems])
+    }, [draggedGenre, moveItem])
 
     // 外部から呼び出し可能なメソッドを公開
     useImperativeHandle(ref, () => ({

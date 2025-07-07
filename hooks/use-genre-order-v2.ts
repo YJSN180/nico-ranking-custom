@@ -50,23 +50,29 @@ export function useGenreOrderV2() {
   }, [tempItems, savedItems])
 
   /**
-   * 2つのアイテムの位置を入れ替える
+   * アイテムを新しい位置に移動する（Insert方式）
+   * ドラッグしたアイテムを新しい位置に挿入し、他のアイテムは順番を保ちながらシフト
    */
-  const swapItems = useCallback((fromId: RankingGenre, toId: RankingGenre) => {
+  const moveItem = useCallback((fromId: RankingGenre, toId: RankingGenre) => {
     setTempItems(items => {
       const newItems = [...items]
       const fromIndex = newItems.findIndex(item => item.id === fromId)
       const toIndex = newItems.findIndex(item => item.id === toId)
       
-      if (fromIndex === -1 || toIndex === -1) return items
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return items
       
-      // orderを入れ替える（表示状態は維持）
-      const tempOrder = newItems[fromIndex].order
-      newItems[fromIndex] = { ...newItems[fromIndex], order: newItems[toIndex].order }
-      newItems[toIndex] = { ...newItems[toIndex], order: tempOrder }
+      // ドラッグされたアイテムを取り出す
+      const [draggedItem] = newItems.splice(fromIndex, 1)
       
-      // order順でソート
-      return newItems.sort((a, b) => a.order - b.order)
+      // 新しい位置に挿入
+      newItems.splice(toIndex, 0, draggedItem)
+      
+      // orderを再計算
+      newItems.forEach((item, index) => {
+        item.order = index
+      })
+      
+      return newItems
     })
   }, [])
 
@@ -138,7 +144,7 @@ export function useGenreOrderV2() {
     hasChanges,
     
     // 操作
-    swapItems,
+    moveItem,
     toggleVisibility,
     resetToDefault,
     applyChanges,
