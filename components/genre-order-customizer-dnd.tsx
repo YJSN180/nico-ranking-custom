@@ -280,18 +280,11 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
 
   // リセット処理
   const handleReset = () => {
-    // デフォルト状態を一時状態に設定
-    const DEFAULT_ORDER: RankingGenre[] = [
-      'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment',
-      'music', 'sing', 'dance', 'play', 'commentary', 'cooking',
-      'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd',
-      'vtuber', 'radio', 'sports', 'animal', 'other'
-    ]
-    setTempOrder(DEFAULT_ORDER)
-    setTempHidden(new Set<RankingGenre>())
-    // 変更フラグを強制的に設定
-    setHasChanges(true)
-    onChangesUpdate?.(true)
+    // 実際の状態をデフォルトに戻す（即座に反映・保存）
+    resetToDefault()
+    
+    // ページをリロードして全体に反映
+    window.location.reload()
   }
 
   // キャンセル処理
