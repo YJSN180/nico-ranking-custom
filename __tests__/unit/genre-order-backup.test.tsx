@@ -61,6 +61,7 @@ describe('GenreOrderBackup', () => {
 
   it('imports data when confirm button is clicked in dialog', async () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const reloadSpy = vi.fn()
     Object.defineProperty(window, 'location', {
       value: { reload: reloadSpy },
@@ -110,10 +111,13 @@ describe('GenreOrderBackup', () => {
     
     expect(setItemSpy).toHaveBeenCalledWith('nicoRankingGenreOrder', JSON.stringify(validData.genreOrder))
     
-    // Wait for reload timeout
+    // Wait for reload confirmation dialog
     await waitFor(() => {
-      expect(reloadSpy).toHaveBeenCalled()
-    }, { timeout: 3500 })
+      expect(confirmSpy).toHaveBeenCalledWith('インポートが完了しました。ページをリロードして変更を反映しますか？')
+    }, { timeout: 2000 })
+    
+    // Check reload was called
+    expect(reloadSpy).toHaveBeenCalled()
   })
 
   it('cancels import when cancel button is clicked in dialog', async () => {
@@ -174,5 +178,66 @@ describe('GenreOrderBackup', () => {
     await waitFor(() => {
       expect(screen.getByText('無効なバックアップファイル形式です')).toBeInTheDocument()
     })
+  })
+
+  it('does not reload when user cancels reload confirmation', async () => {
+    vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const reloadSpy = vi.fn()
+    Object.defineProperty(window, 'location', {
+      value: { reload: reloadSpy },
+      writable: true
+    })
+    
+    // Mock localStorage
+    const setItemSpy = vi.fn()
+    Object.defineProperty(window, 'localStorage', {
+      value: {
+        setItem: setItemSpy,
+        getItem: vi.fn(),
+        removeItem: vi.fn(),
+        clear: vi.fn()
+      },
+      writable: true
+    })
+    
+    render(<GenreOrderBackup />)
+    
+    const validData = {
+      version: 1,
+      exportDate: new Date().toISOString(),
+      genreOrder: [
+        { id: 'game', isVisible: true, order: 0 },
+        { id: 'all', isVisible: false, order: 1 },
+      ]
+    }
+    
+    const file = new File([JSON.stringify(validData)], 'backup.json', { type: 'application/json' })
+    const input = screen.getByTestId('import-file-input') as HTMLInputElement
+    
+    fireEvent.change(input, { target: { files: [file] } })
+    
+    // 確認ダイアログが表示されるのを待つ
+    await waitFor(() => {
+      expect(screen.getByTestId('import-confirm-dialog')).toBeInTheDocument()
+    })
+    
+    // インポート実行ボタンをクリック
+    const confirmButton = screen.getByText('インポート実行')
+    fireEvent.click(confirmButton)
+    
+    await waitFor(() => {
+      expect(screen.getByText(/ジャンル並び替えデータをインポートしました/)).toBeInTheDocument()
+    })
+    
+    expect(setItemSpy).toHaveBeenCalledWith('nicoRankingGenreOrder', JSON.stringify(validData.genreOrder))
+    
+    // Wait for reload confirmation dialog
+    await waitFor(() => {
+      expect(confirmSpy).toHaveBeenCalledWith('インポートが完了しました。ページをリロードして変更を反映しますか？')
+    }, { timeout: 2000 })
+    
+    // Check reload was NOT called
+    expect(reloadSpy).not.toHaveBeenCalled()
   })
 })

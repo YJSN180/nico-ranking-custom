@@ -65,13 +65,7 @@ export function NGBackup() {
         const result = await importNGListData(data, 'merge')
         setImportResult(result)
         
-        if (result.success) {
-          setTimeout(() => {
-            if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-              window.location.reload()
-            }
-          }, 1500)
-        }
+        // NGリストは即座に反映されるのでリロード不要
       }
     } catch (error) {
       setImportResult({
@@ -112,13 +106,7 @@ export function NGBackup() {
       setConflictDialogOpen(false)
       setConflictData(null)
       
-      if (result.success) {
-        setTimeout(() => {
-          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-            window.location.reload()
-          }
-        }, 1500)
-      }
+      // NGリストは即座に反映されるのでリロード不要
     } catch (error) {
       setImportResult({
         success: false,
@@ -360,9 +348,6 @@ export function NGBackup() {
                     ⚠️ 既存のNGリストが上書きされました
                   </div>
                 )}
-              </div>
-              <div className={styles.reloadPrompt}>
-                ⚠️ 変更を反映するにはページをリロードしてください
               </div>
             </div>
           ) : (

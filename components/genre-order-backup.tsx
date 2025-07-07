@@ -100,15 +100,17 @@ export function GenreOrderBackup() {
       
       setImportMessage({ 
         type: 'success', 
-        text: 'ジャンル並び替えデータをインポートしました。ページをリロードして反映してください。' 
+        text: 'ジャンル並び替えデータをインポートしました。' 
       })
       setImportConfirmOpen(false)
       setPendingImportData(null)
       
-      // 3秒後にリロード
+      // リロード確認
       setTimeout(() => {
-        window.location.reload()
-      }, 3000)
+        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+          window.location.reload()
+        }
+      }, 1500)
     } catch (error) {
       console.error('Failed to apply import:', error)
       setImportMessage({ 
@@ -217,7 +219,7 @@ export function GenreOrderBackup() {
         <ul>
           <li>エクスポート: 現在のジャンル並び替え設定をファイルに保存します</li>
           <li>インポート: 保存したファイルから設定を復元します</li>
-          <li>インポート後は自動的にページがリロードされます</li>
+          <li>インポート後はページのリロードが必要です</li>
         </ul>
       </div>
     </div>
