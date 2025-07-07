@@ -222,16 +222,35 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     const draggedGenre = allGenres[draggedIndex]
     const dropGenre = allGenres[dropIndex]
     
-    // 両方が表示中の場合のみ並び替え可能
-    if (!tempHidden.has(draggedGenre) && !tempHidden.has(dropGenre)) {
+    // ドラッグ&ドロップによる入れ替え処理
+    if (draggedGenre !== dropGenre) {
+      const draggedIsHidden = tempHidden.has(draggedGenre)
+      const dropIsHidden = tempHidden.has(dropGenre)
+      
+      // 表示/非表示状態を入れ替え
+      const newHidden = new Set(tempHidden)
+      if (draggedIsHidden && !dropIsHidden) {
+        // 非表示 → 表示、表示 → 非表示
+        newHidden.delete(draggedGenre)
+        newHidden.add(dropGenre)
+      } else if (!draggedIsHidden && dropIsHidden) {
+        // 表示 → 非表示、非表示 → 表示
+        newHidden.add(draggedGenre)
+        newHidden.delete(dropGenre)
+      }
+      // 両方とも同じ状態（表示同士、非表示同士）の場合は状態変更なし
+      
+      setTempHidden(newHidden)
+      
+      // 順序も入れ替え（orderは表示・非表示関係なく全ジャンルの順序を管理）
       const newOrder = [...tempOrder]
       const draggedOrderIndex = newOrder.indexOf(draggedGenre)
       const dropOrderIndex = newOrder.indexOf(dropGenre)
       
       if (draggedOrderIndex !== -1 && dropOrderIndex !== -1) {
         // 順序を入れ替え
-        newOrder.splice(draggedOrderIndex, 1)
-        newOrder.splice(dropOrderIndex, 0, draggedGenre)
+        newOrder[draggedOrderIndex] = dropGenre
+        newOrder[dropOrderIndex] = draggedGenre
         setTempOrder(newOrder)
       }
     }
