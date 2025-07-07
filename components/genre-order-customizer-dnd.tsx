@@ -101,6 +101,7 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
   const [tempHidden, setTempHidden] = useState<Set<RankingGenre>>(new Set(currentHidden))
   const [hasChanges, setHasChanges] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [isResetToDefault, setIsResetToDefault] = useState(false)
   
   // 自動スクロール用のref
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -111,6 +112,7 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     setTempOrder(currentOrder)
     setTempHidden(new Set(currentHidden))
     setHasChanges(false)
+    setIsResetToDefault(false)
   }, [currentOrder, currentHidden])
 
   // スクロールコンテナの参照を設定
@@ -259,32 +261,49 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
 
   // 適用処理
   const handleApply = () => {
-    // 現在の設定を更新
-    updateOrder(tempOrder)
-    
-    // 表示/非表示の更新
-    currentHidden.forEach(genre => {
-      if (!tempHidden.has(genre)) {
-        toggleGenreVisibility(genre)
-      }
-    })
-    tempHidden.forEach(genre => {
-      if (!currentHidden.has(genre)) {
-        toggleGenreVisibility(genre)
-      }
-    })
+    if (isResetToDefault) {
+      // デフォルトリセットの場合
+      resetToDefault()
+    } else {
+      // 通常の変更の場合
+      updateOrder(tempOrder)
+      
+      // 表示/非表示の更新
+      currentHidden.forEach(genre => {
+        if (!tempHidden.has(genre)) {
+          toggleGenreVisibility(genre)
+        }
+      })
+      tempHidden.forEach(genre => {
+        if (!currentHidden.has(genre)) {
+          toggleGenreVisibility(genre)
+        }
+      })
+    }
     
     setHasChanges(false)
+    setIsResetToDefault(false)
     onChangesUpdate?.(false)
   }
 
   // リセット処理
   const handleReset = () => {
-    // 実際の状態をデフォルトに戻す（即座に反映・保存）
-    resetToDefault()
+    // デフォルトの順序を設定
+    const DEFAULT_ORDER: RankingGenre[] = [
+      'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment',
+      'music', 'sing', 'dance', 'play', 'commentary', 'cooking',
+      'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd',
+      'vtuber', 'radio', 'sports', 'animal', 'other'
+    ]
     
-    // ページをリロードして全体に反映
-    window.location.reload()
+    // 一時状態をデフォルトに戻す
+    setTempOrder(DEFAULT_ORDER)
+    setTempHidden(new Set<RankingGenre>())
+    
+    // デフォルトリセットフラグを設定
+    setIsResetToDefault(true)
+    setHasChanges(true)
+    onChangesUpdate?.(true)
   }
 
   // キャンセル処理
@@ -292,6 +311,7 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     setTempOrder(currentOrder)
     setTempHidden(new Set(currentHidden))
     setHasChanges(false)
+    setIsResetToDefault(false)
     onChangesUpdate?.(false)
   }
   
