@@ -26,8 +26,17 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
     replace: vi.fn(),
     refresh: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    prefetch: vi.fn(),
   }),
   useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/',
+  notFound: vi.fn(),
+  redirect: vi.fn(),
+  useParams: () => ({}),
+  useSelectedLayoutSegment: () => null,
+  useSelectedLayoutSegments: () => [],
 }))
 
 // TagSelectorを通常のimportに戻すためのモック

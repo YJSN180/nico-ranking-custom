@@ -152,22 +152,59 @@ export function MylistBackup() {
 
   return (
     <div className={styles.mylistBackup}>
-      <div className={styles.backupActions}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         {/* エクスポートボタン */}
         <button
           onClick={() => setExportConfirmOpen(true)}
           disabled={isExporting}
-          className={`${styles.backupButton} ${styles.exportButton}`}
+          style={{
+            padding: '10px 20px',
+            background: 'var(--primary-color)',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'background 0.2s',
+            opacity: isExporting ? 0.6 : 1
+          }}
+          onMouseEnter={e => !isExporting && (e.currentTarget.style.background = 'var(--primary-color-hover)')}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--primary-color)'}
           data-testid="export-mylists-button"
         >
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3" />
-          </svg>
+          <span>📤</span>
           エクスポート
         </button>
 
         {/* インポートボタン */}
-        <label className={`${styles.backupButton} ${styles.importButton}`} data-testid="import-mylists-button">
+        <label 
+          style={{
+            display: 'inline-block',
+            padding: '10px 20px',
+            background: 'var(--surface-secondary)',
+            border: '2px dashed var(--border-color)',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            transition: 'all 0.2s',
+            opacity: isImporting ? 0.6 : 1
+          }}
+          onMouseEnter={e => {
+            if (!isImporting) {
+              e.currentTarget.style.background = 'var(--surface-hover)'
+              e.currentTarget.style.borderColor = 'var(--primary-color)'
+            }
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'var(--surface-secondary)'
+            e.currentTarget.style.borderColor = 'var(--border-color)'
+          }}
+          data-testid="import-mylists-button"
+        >
           <input
             type="file"
             accept=".json"
@@ -176,10 +213,10 @@ export function MylistBackup() {
             className={styles.fileInput}
             data-testid="import-file-input"
           />
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2 2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3" />
-          </svg>
-          インポート
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span>📥</span>
+            インポート
+          </span>
         </label>
       </div>
 

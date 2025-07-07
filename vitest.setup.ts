@@ -3,8 +3,29 @@ import './__tests__/test-environment'
 
 import '@testing-library/jest-dom'
 import { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
-import './__tests__/mocks/next-router'
 import React from 'react'
+
+// Next.js navigation モックを最初に設定
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    prefetch: vi.fn(),
+    back: vi.fn(),
+    forward: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  useSearchParams: () => ({
+    get: vi.fn(),
+    toString: vi.fn(() => ''),
+  }),
+  usePathname: () => '/',
+  notFound: vi.fn(),
+  redirect: vi.fn(),
+  useParams: () => ({}),
+  useSelectedLayoutSegment: () => null,
+  useSelectedLayoutSegments: () => [],
+}))
 
 // Jest API compatibility - map Jest globals to vitest
 globalThis.jest = vi
