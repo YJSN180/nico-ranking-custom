@@ -209,6 +209,14 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault()
+    
+    // 非表示ジャンルへのドロップは禁止
+    const dropGenre = allGenres[index]
+    if (tempHidden.has(dropGenre)) {
+      e.dataTransfer.dropEffect = 'none'
+      return
+    }
+    
     e.dataTransfer.dropEffect = 'move'
     startAutoScroll(e)
   }
@@ -221,6 +229,12 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     
     const draggedGenre = allGenres[draggedIndex]
     const dropGenre = allGenres[dropIndex]
+    
+    // 非表示ジャンルへのドロップは禁止
+    if (tempHidden.has(dropGenre)) {
+      setDraggedIndex(null)
+      return
+    }
     
     // ドラッグ&ドロップによる位置移動処理
     if (draggedGenre !== dropGenre) {
