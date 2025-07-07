@@ -42,13 +42,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示',
     description: 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！',
-    images: [{
-      url: '/og-image.png',
-      width: 1200,
-      height: 630,
-      alt: 'ニコラン(Re:turn)',
-      type: 'image/png',
-    }],
+    images: ['https://nico-rank.com/og-image.png'], // 絶対URLで指定
     creator: '@nico_rank', // 必要に応じてTwitterアカウントを設定
   },
 }
