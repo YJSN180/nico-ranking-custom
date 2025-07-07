@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
 import { DataBackupSeparate } from './data-backup-separate'
@@ -28,6 +28,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [tempNGList, setTempNGList] = useState<UserNGList>(ngList)
   const [hasChanges, setHasChanges] = useState(false)
   const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
+  
+  // ジャンル並び替えコンポーネントの参照
+  const genreOrderRef = useRef<{ applyChanges: () => void } | null>(null)
   
   // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
   useEffect(() => {
@@ -156,16 +159,25 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存（即座に反映される）
-    saveNGListDirectly(tempNGList)
-    
-    // onApplyコールバックがあれば呼び出す
-    if (onApply) {
-      onApply()
+    if (activeTab === 'nglist') {
+      // NGリストを保存（即座に反映される）
+      saveNGListDirectly(tempNGList)
+      
+      // onApplyコールバックがあれば呼び出す
+      if (onApply) {
+        onApply()
+      }
+      
+      // モーダルを閉じる
+      onClose()
+    } else if (activeTab === 'genre-order' && genreOrderRef.current) {
+      // ジャンル並び替えを適用してリロード
+      genreOrderRef.current.applyChanges()
+      
+      // モーダルを閉じて即座にリロード
+      onClose()
+      window.location.reload()
     }
-    
-    // モーダルを閉じる
-    onClose()
   }
   
   // 閉じる処理
@@ -456,6 +468,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
               <section className={styles.section}>
                 <h3>🎯 ジャンル並び替え</h3>
                 <GenreOrderCustomizerDnD 
+                  ref={genreOrderRef}
                   onChangesUpdate={setHasGenreOrderChanges}
                 />
               </section>
@@ -483,7 +496,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {activeTab === 'nglist' && hasChanges && (
+            {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
               <button 
                 className={styles.applyButton} 
                 onClick={handleApply}

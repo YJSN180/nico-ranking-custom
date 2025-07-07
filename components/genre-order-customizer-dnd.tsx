@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useGenreOrder } from '@/hooks/use-genre-order'
 import { GENRE_LABELS } from '@/types/ranking-config'
 import type { RankingGenre } from '@/types/ranking-config'
@@ -82,7 +82,12 @@ interface GenreOrderCustomizerDnDProps {
   onChangesUpdate?: (hasChanges: boolean) => void
 }
 
-export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomizerDnDProps) {
+export interface GenreOrderCustomizerDnDRef {
+  applyChanges: () => void
+}
+
+export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, GenreOrderCustomizerDnDProps>(
+  ({ onChangesUpdate }, ref) => {
   const {
     order: currentOrder,
     hidden: currentHidden,
@@ -286,6 +291,11 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
     setHasChanges(false)
     onChangesUpdate?.(false)
   }
+  
+  // 外部から呼び出し可能なメソッドを公開
+  useImperativeHandle(ref, () => ({
+    applyChanges: handleApply
+  }))
 
   return (
     <div className={styles.genreOrderSettings}>
@@ -355,41 +365,7 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
         >
           デフォルトに戻す
         </button>
-        
-        {hasChanges && (
-          <>
-            <button 
-              onClick={handleCancel}
-              style={{
-                padding: '8px 16px',
-                background: 'var(--surface-secondary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '4px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                color: 'var(--text-primary)'
-              }}
-            >
-              キャンセル
-            </button>
-            <button 
-              onClick={handleApply}
-              style={{
-                padding: '8px 16px',
-                background: 'var(--primary-color)',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
-              }}
-            >
-              適用
-            </button>
-          </>
-        )}
       </div>
     </div>
   )
-}
+})
