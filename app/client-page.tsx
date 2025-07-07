@@ -637,7 +637,7 @@ export default function ClientPage({
           )}
           
           {/* ランキングリスト */}
-          <ul key={ngListVersion} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul key={`${ngListVersion}-${config.period}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <RankingItemResponsive 
                 key={item.id} 
