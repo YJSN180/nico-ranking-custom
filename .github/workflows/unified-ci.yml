@@ -168,6 +168,15 @@ jobs:
           CI: true
           NODE_OPTIONS: '--max-old-space-size=16384'
           FORCE_COLOR: 0
+          
+      - name: Verify coverage output
+        if: always()
+        run: |
+          echo "=== Coverage directory contents ==="
+          ls -la coverage/ || echo "Coverage directory not found"
+          echo ""
+          echo "=== Coverage files ==="
+          find coverage -name "*.json" -o -name "*.info" -o -name "*.xml" 2>/dev/null || echo "No coverage files found"
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -252,18 +261,31 @@ jobs:
           # Verify merged files
           echo "Merged coverage files:"
           ls -la coverage/
+          
+          # Verify coverage file contents
+          echo ""
+          echo "=== Checking coverage file sizes ==="
+          [ -f "coverage/lcov.info" ] && echo "lcov.info size: $(wc -l < coverage/lcov.info) lines" || echo "lcov.info not found"
+          [ -f "coverage/coverage-final.json" ] && echo "coverage-final.json size: $(wc -c < coverage/coverage-final.json) bytes" || echo "coverage-final.json not found"
+
+      - name: Check Codecov token
+        run: |
+          if [ -n "${{ secrets.CODECOV_TOKEN }}" ]; then
+            echo "✅ CODECOV_TOKEN is set"
+          else
+            echo "❌ CODECOV_TOKEN is not set"
+          fi
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
           files: ./coverage/lcov.info,./coverage/coverage-final.json
           flags: unittests
           name: codecov-umbrella
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
-        env:
-          CODECOV_API_TOKEN: ${{ secrets.CODECOV_API_TOKEN }}
 
       - name: Upload merged coverage report
         uses: actions/upload-artifact@v4

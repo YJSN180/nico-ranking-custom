@@ -4,9 +4,9 @@
 codecov:
   require_ci_to_pass: yes
   notify:
-    after_n_builds: 1
+    after_n_builds: 2  # Wait for both coverage shards
   
-# API settings (uses CODECOV_API_TOKEN environment variable)
+# API settings (uses CODECOV_TOKEN environment variable)
 api:
   enable: true
 
@@ -68,3 +68,14 @@ ignore:
 
 github_checks:
   annotations: true
+
+# CI設定
+ci:
+  - "github.com"
+  
+# アップロード設定
+upload:
+  # 並列アップロードの設定
+  notify_error: true
+  # パーシャルアップロードを許可
+  require_ci_to_pass: false
