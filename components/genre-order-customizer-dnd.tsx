@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useGenreOrder } from '@/hooks/use-genre-order'
 import { GENRE_LABELS } from '@/types/ranking-config'
 import type { RankingGenre } from '@/types/ranking-config'
@@ -13,6 +13,7 @@ interface DraggableGenreItemProps {
   onDragStart: (index: number) => void
   onDragOver: (e: React.DragEvent, index: number) => void
   onDrop: (e: React.DragEvent, index: number) => void
+  onDragEnd: () => void
   onToggleVisibility: (genre: RankingGenre) => void
   isDragging: boolean
 }
@@ -24,6 +25,7 @@ function DraggableGenreItem({
   onDragStart,
   onDragOver,
   onDrop,
+  onDragEnd,
   onToggleVisibility,
   isDragging
 }: DraggableGenreItemProps) {
@@ -33,6 +35,7 @@ function DraggableGenreItem({
       onDragStart={() => onDragStart(index)}
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={(e) => onDrop(e, index)}
+      onDragEnd={onDragEnd}
       className={`${styles.genreItem} ${isHidden ? styles.genreItemHidden : ''} ${isDragging ? styles.dragging : ''}`}
       style={{
         display: 'flex',
@@ -93,6 +96,10 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
   const [tempHidden, setTempHidden] = useState<Set<RankingGenre>>(new Set(currentHidden))
   const [hasChanges, setHasChanges] = useState(false)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  
+  // 自動スクロール用のref
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const autoScrollIntervalRef = useRef<number | null>(null)
 
   // 現在の設定と一時的な設定を同期
   useEffect(() => {
@@ -100,6 +107,20 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
     setTempHidden(new Set(currentHidden))
     setHasChanges(false)
   }, [currentOrder, currentHidden])
+
+  // スクロールコンテナの参照を設定
+  useEffect(() => {
+    // 親要素の.contentクラスを持つ要素を探す（CSS Modulesのクラス名を考慮）
+    const contentElement = document.querySelector('[class*="content"]') as HTMLDivElement
+    if (contentElement) {
+      scrollContainerRef.current = contentElement
+    }
+    
+    // クリーンアップ
+    return () => {
+      stopAutoScroll()
+    }
+  }, [])
 
   // 変更検知
   useEffect(() => {
@@ -118,6 +139,64 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
     ) as RankingGenre[]
   )
 
+  // 自動スクロール機能
+  const startAutoScroll = (e: React.DragEvent) => {
+    if (!scrollContainerRef.current) return
+
+    const scrollContainer = scrollContainerRef.current
+    const containerRect = scrollContainer.getBoundingClientRect()
+    const mouseY = e.clientY
+
+    // スクロールゾーンのサイズ（上下150px）
+    const scrollZoneSize = 150
+    const scrollSpeed = 10
+
+    // 上部スクロールゾーン
+    if (mouseY < containerRect.top + scrollZoneSize) {
+      const distance = containerRect.top + scrollZoneSize - mouseY
+      const speed = (distance / scrollZoneSize) * scrollSpeed
+      
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current)
+      }
+      
+      autoScrollIntervalRef.current = window.setInterval(() => {
+        if (scrollContainer) {
+          scrollContainer.scrollTop -= speed
+        }
+      }, 16) // 約60fps
+    }
+    // 下部スクロールゾーン
+    else if (mouseY > containerRect.bottom - scrollZoneSize) {
+      const distance = mouseY - (containerRect.bottom - scrollZoneSize)
+      const speed = (distance / scrollZoneSize) * scrollSpeed
+      
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current)
+      }
+      
+      autoScrollIntervalRef.current = window.setInterval(() => {
+        if (scrollContainer) {
+          scrollContainer.scrollTop += speed
+        }
+      }, 16) // 約60fps
+    }
+    // スクロールゾーン外
+    else {
+      if (autoScrollIntervalRef.current) {
+        clearInterval(autoScrollIntervalRef.current)
+        autoScrollIntervalRef.current = null
+      }
+    }
+  }
+
+  const stopAutoScroll = () => {
+    if (autoScrollIntervalRef.current) {
+      clearInterval(autoScrollIntervalRef.current)
+      autoScrollIntervalRef.current = null
+    }
+  }
+
   // ドラッグ&ドロップハンドラー
   const handleDragStart = (index: number) => {
     setDraggedIndex(index)
@@ -126,10 +205,12 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
+    startAutoScroll(e)
   }
 
   const handleDrop = (e: React.DragEvent, dropIndex: number) => {
     e.preventDefault()
+    stopAutoScroll()
     
     if (draggedIndex === null || draggedIndex === dropIndex) return
     
@@ -150,6 +231,11 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
       }
     }
     
+    setDraggedIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    stopAutoScroll()
     setDraggedIndex(null)
   }
 
@@ -222,6 +308,7 @@ export function GenreOrderCustomizerDnD({ onChangesUpdate }: GenreOrderCustomize
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
               onToggleVisibility={handleToggleVisibility}
               isDragging={draggedIndex === index}
             />
