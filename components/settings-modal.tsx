@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
 import { NGBackup } from './ng-backup'
+import { GenreOrderBackup } from './genre-order-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import styles from './settings-modal.module.css'
 
@@ -222,7 +223,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
             onClick={() => setActiveTab('ng-backup')}
           >
-            💾 NGリスト保存
+            💾 設定データ保存
           </button>
         </div>
 
@@ -476,6 +477,14 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <NGBackup />
+              </section>
+              
+              <section className={styles.section} style={{ marginTop: '2rem' }}>
+                <h3>🎯 ジャンル並び替えデータバックアップ</h3>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  ジャンルの表示順序と表示/非表示設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
+                </p>
+                <GenreOrderBackup />
               </section>
             </div>
           )}
