@@ -4,12 +4,27 @@ import { useState } from 'react'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useGenreOrder } from '@/hooks/use-genre-order'
 import type { RankingGenre } from '@/types/ranking-config'
-import { exportNGListData, downloadNGListBackup, importNGListData, readNGListBackupFile } from '@/lib/storage/ng-backup'
+import { 
+  exportNGListData, 
+  downloadNGListBackup, 
+  importNGListData, 
+  readNGListBackupFile,
+  detectConflicts,
+  type NGListBackupData,
+  type ConflictDetectionResult,
+  type NGListImportResult
+} from '@/lib/storage/ng-backup'
 import styles from './settings-modal.module.css'
+import ngStyles from './ng-backup.module.css'
 
 export function DataBackupSeparate() {
   const [ngImportStatus, setNgImportStatus] = useState<string | null>(null)
   const [genreImportStatus, setGenreImportStatus] = useState<string | null>(null)
+  const [conflictDialogOpen, setConflictDialogOpen] = useState(false)
+  const [conflictData, setConflictData] = useState<{
+    backup: NGListBackupData
+    conflicts: ConflictDetectionResult
+  } | null>(null)
   
   const { ngList, saveNGListDirectly } = useUserNGList()
   const { order: genreOrder, hidden: hiddenGenres, updateOrder, toggleGenreVisibility } = useGenreOrder()
@@ -55,12 +70,29 @@ export function DataBackupSeparate() {
 
     try {
       const data = await readNGListBackupFile(file)
-      const result = await importNGListData(data)
       
-      if (result.success) {
-        setNgImportStatus(`✅ NGリストを正常にインポートしました（${result.imported.totalItems}件）`)
+      // 重複検出
+      const conflicts = detectConflicts(ngList, data.ngList)
+      
+      if (conflicts.hasConflicts) {
+        // 重複がある場合は確認ダイアログを表示
+        setConflictData({ backup: data, conflicts })
+        setConflictDialogOpen(true)
       } else {
-        setNgImportStatus(`❌ インポートに失敗しました: ${result.errors.join(', ')}`)
+        // 重複がない場合は直接インポート（デフォルト：追加）
+        const result = await importNGListData(data)
+        
+        if (result.success) {
+          setNgImportStatus(`✅ NGリストを正常にインポートしました（${result.imported.totalItems}件）`)
+          
+          setTimeout(() => {
+            if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+              window.location.reload()
+            }
+          }, 1500)
+        } else {
+          setNgImportStatus(`❌ インポートに失敗しました: ${result.errors.join(', ')}`)
+        }
       }
     } catch (error) {
       setNgImportStatus(`❌ ファイルの読み込みに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
@@ -68,6 +100,31 @@ export function DataBackupSeparate() {
     
     // インプットをリセット
     event.target.value = ''
+  }
+  
+  // 重複処理選択時のインポート実行
+  const handleConflictResolution = async (resolution: 'merge' | 'overwrite') => {
+    if (!conflictData) return
+
+    try {
+      const result = await importNGListData(conflictData.backup, resolution)
+      setConflictDialogOpen(false)
+      setConflictData(null)
+      
+      if (result.success) {
+        setNgImportStatus(`✅ NGリストを正常にインポートしました（${result.imported.totalItems}件）`)
+        
+        setTimeout(() => {
+          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+            window.location.reload()
+          }
+        }, 1500)
+      } else {
+        setNgImportStatus(`❌ インポートに失敗しました: ${result.errors.join(', ')}`)
+      }
+    } catch (error) {
+      setNgImportStatus(`❌ インポート処理に失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`)
+    }
   }
 
   // ジャンル並び替えのインポート
@@ -314,6 +371,118 @@ export function DataBackupSeparate() {
           <li>バックアップファイルは安全な場所に保管してください</li>
         </ul>
       </div>
+      
+      {/* 重複解決ダイアログ */}
+      {conflictDialogOpen && conflictData && (
+        <div className={ngStyles.backupDialogOverlay} onClick={() => setConflictDialogOpen(false)}>
+          <div 
+            className={ngStyles.backupDialog} 
+            onClick={(e) => e.stopPropagation()}
+            data-testid="ng-conflict-resolution-dialog"
+          >
+            <h3>⚠️ 重複するNGリスト項目が見つかりました</h3>
+            
+            <div className={ngStyles.conflictSummary}>
+              <p>インポートしようとしているファイルに、すでに登録されている項目が含まれています。</p>
+              
+              <div className={ngStyles.exportStats}>
+                {conflictData.conflicts.conflicts.videoIds.length > 0 && (
+                  <div className={ngStyles.statItem}>
+                    <span className={ngStyles.statLabel}>動画ID:</span>
+                    <span className={ngStyles.statValue}>
+                      {conflictData.conflicts.conflicts.videoIds.length}件の重複
+                    </span>
+                  </div>
+                )}
+                
+                {(conflictData.conflicts.conflicts.videoTitles.exact.length > 0 || 
+                  conflictData.conflicts.conflicts.videoTitles.partial.length > 0 ||
+                  conflictData.conflicts.inclusions.videoTitles.length > 0) && (
+                  <div className={ngStyles.statItem}>
+                    <span className={ngStyles.statLabel}>動画タイトル:</span>
+                    <span className={ngStyles.statValue}>
+                      {conflictData.conflicts.conflicts.videoTitles.exact.length + conflictData.conflicts.conflicts.videoTitles.partial.length}件の重複
+                      {conflictData.conflicts.inclusions.videoTitles.length > 0 && 
+                        `, ${conflictData.conflicts.inclusions.videoTitles.length}件の包含関係`
+                      }
+                    </span>
+                  </div>
+                )}
+                
+                {conflictData.conflicts.conflicts.authorIds.length > 0 && (
+                  <div className={ngStyles.statItem}>
+                    <span className={ngStyles.statLabel}>投稿者ID:</span>
+                    <span className={ngStyles.statValue}>
+                      {conflictData.conflicts.conflicts.authorIds.length}件の重複
+                    </span>
+                  </div>
+                )}
+                
+                {(conflictData.conflicts.conflicts.authorNames.exact.length > 0 || 
+                  conflictData.conflicts.conflicts.authorNames.partial.length > 0 ||
+                  conflictData.conflicts.inclusions.authorNames.length > 0) && (
+                  <div className={ngStyles.statItem}>
+                    <span className={ngStyles.statLabel}>投稿者名:</span>
+                    <span className={ngStyles.statValue}>
+                      {conflictData.conflicts.conflicts.authorNames.exact.length + conflictData.conflicts.conflicts.authorNames.partial.length}件の重複
+                      {conflictData.conflicts.inclusions.authorNames.length > 0 && 
+                        `, ${conflictData.conflicts.inclusions.authorNames.length}件の包含関係`
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className={ngStyles.resolutionOptions}>
+              <p className={ngStyles.resolutionTitle}>どのように処理しますか？</p>
+              
+              <label className={ngStyles.resolutionOption}>
+                <input type="radio" name="resolution" value="merge" defaultChecked />
+                <div className={ngStyles.optionContent}>
+                  <span className={ngStyles.optionTitle}>重複を無視して追加</span>
+                  <span className={ngStyles.optionDescription}>
+                    既存の項目はそのままに、新しい項目のみを追加します（推奨）
+                  </span>
+                </div>
+              </label>
+              
+              <label className={ngStyles.resolutionOption}>
+                <input type="radio" name="resolution" value="overwrite" />
+                <div className={ngStyles.optionContent}>
+                  <span className={ngStyles.optionTitle}>すべて上書き</span>
+                  <span className={ngStyles.optionDescription}>
+                    既存のNGリストを削除して、インポートしたデータで完全に置き換えます
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            <div className={ngStyles.dialogActions}>
+              <button 
+                onClick={() => {
+                  setConflictDialogOpen(false)
+                  setConflictData(null)
+                }}
+                className={`${ngStyles.dialogButton} ${ngStyles.cancelButton}`}
+              >
+                キャンセル
+              </button>
+              <button 
+                onClick={() => {
+                  const selected = document.querySelector('input[name="resolution"]:checked') as HTMLInputElement
+                  if (selected) {
+                    handleConflictResolution(selected.value as 'merge' | 'overwrite')
+                  }
+                }}
+                className={`${ngStyles.dialogButton} ${ngStyles.confirmButton}`}
+              >
+                インポート実行
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
