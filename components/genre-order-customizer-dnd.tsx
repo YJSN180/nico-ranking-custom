@@ -369,3 +369,5 @@ export const GenreOrderCustomizerDnD = forwardRef<GenreOrderCustomizerDnDRef, Ge
     </div>
   )
 })
+
+GenreOrderCustomizerDnD.displayName = 'GenreOrderCustomizerDnD'
