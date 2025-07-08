@@ -14,6 +14,9 @@ interface GenreItemProps {
   onDragEnd: (e: React.DragEvent<HTMLDivElement>) => void
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void
   onDrop: (e: React.DragEvent<HTMLDivElement>) => void
+  onTouchStart?: (e: React.TouchEvent<HTMLDivElement>) => void
+  onTouchMove?: (e: React.TouchEvent<HTMLDivElement>) => void
+  onTouchEnd?: (e: React.TouchEvent<HTMLDivElement>) => void
 }
 
 export const GenreItem = React.memo(function GenreItem({
@@ -24,7 +27,10 @@ export const GenreItem = React.memo(function GenreItem({
   onDragStart,
   onDragEnd,
   onDragOver,
-  onDrop
+  onDrop,
+  onTouchStart,
+  onTouchMove,
+  onTouchEnd
 }: GenreItemProps) {
   return (
     <div 
@@ -34,6 +40,9 @@ export const GenreItem = React.memo(function GenreItem({
       onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
       data-genre={genre}
     >
       <div className={styles.dragHandle}>

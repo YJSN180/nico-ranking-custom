@@ -30,6 +30,10 @@
   transition: all 0.2s ease-in-out;
   cursor: move;
   user-select: none;
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none;
+  touch-action: none; /* タッチ操作を制御 */
+  position: relative; /* タッチドラッグ時の位置調整用 */
 }
 
 .genreItem:hover {

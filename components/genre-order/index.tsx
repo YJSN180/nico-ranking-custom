@@ -36,6 +36,13 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
     const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 })
     const scrollIntervalRef = useRef<number | null>(null)
     const [scrollDirection, setScrollDirection] = useState<'up' | 'down' | null>(null)
+    
+    // タッチデバイス用の状態
+    const [touchedGenre, setTouchedGenre] = useState<RankingGenre | null>(null)
+    const [touchStartY, setTouchStartY] = useState<number>(0)
+    const [currentTouchY, setCurrentTouchY] = useState<number>(0)
+    const touchedElementRef = useRef<HTMLElement | null>(null)
+    const placeholderRef = useRef<HTMLDivElement | null>(null)
 
     // 変更状態を親に通知
     React.useEffect(() => {
@@ -127,6 +134,101 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
       }
     }, [isDragging])
 
+    // タッチイベントハンドラー
+    const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>, genre: RankingGenre) => {
+      const touch = e.touches[0]
+      setTouchedGenre(genre)
+      setTouchStartY(touch.clientY)
+      setCurrentTouchY(touch.clientY)
+      setDragPosition({ x: touch.clientX, y: touch.clientY })
+      setIsDragging(true)
+      
+      // タッチした要素を保存
+      touchedElementRef.current = e.currentTarget
+      
+      // 長押し振動フィードバック（対応デバイスのみ）
+      if ('vibrate' in navigator) {
+        navigator.vibrate(50)
+      }
+    }, [])
+
+    const handleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+      if (!touchedGenre || !touchedElementRef.current) return
+      
+      e.preventDefault() // スクロールを防ぐ
+      const touch = e.touches[0]
+      setCurrentTouchY(touch.clientY)
+      setDragPosition({ x: touch.clientX, y: touch.clientY })
+      
+      // ドラッグ中の要素の位置を更新
+      if (touchedElementRef.current) {
+        const deltaY = touch.clientY - touchStartY
+        touchedElementRef.current.style.transform = `translateY(${deltaY}px)`
+        touchedElementRef.current.style.zIndex = '1000'
+        touchedElementRef.current.style.opacity = '0.8'
+      }
+      
+      // ドロップ位置の判定
+      const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY)
+      if (elementBelow) {
+        const targetItem = elementBelow.closest('[data-genre]')
+        if (targetItem && targetItem !== touchedElementRef.current) {
+          const targetGenre = targetItem.getAttribute('data-genre') as RankingGenre
+          if (targetGenre && targetGenre !== touchedGenre) {
+            // ビジュアルフィードバック
+            targetItem.classList.add(styles.dragOver)
+          }
+        }
+      }
+      
+      // 以前のハイライトをクリア
+      document.querySelectorAll(`.${styles.dragOver}`).forEach(el => {
+        if (!el.contains(elementBelow!)) {
+          el.classList.remove(styles.dragOver)
+        }
+      })
+    }, [touchedGenre, touchStartY])
+
+    const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+      if (!touchedGenre || !touchedElementRef.current) return
+      
+      const touch = e.changedTouches[0]
+      const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY)
+      
+      // ドロップ位置の判定
+      if (elementBelow) {
+        const targetItem = elementBelow.closest('[data-genre]')
+        if (targetItem && targetItem !== touchedElementRef.current) {
+          const targetGenre = targetItem.getAttribute('data-genre') as RankingGenre
+          if (targetGenre && targetGenre !== touchedGenre) {
+            moveItem(touchedGenre, targetGenre)
+          }
+        }
+      }
+      
+      // 要素のスタイルをリセット
+      if (touchedElementRef.current) {
+        touchedElementRef.current.style.transform = ''
+        touchedElementRef.current.style.zIndex = ''
+        touchedElementRef.current.style.opacity = ''
+      }
+      
+      // ハイライトをクリア
+      document.querySelectorAll(`.${styles.dragOver}`).forEach(el => {
+        el.classList.remove(styles.dragOver)
+      })
+      
+      // 状態をリセット
+      setTouchedGenre(null)
+      setIsDragging(false)
+      setScrollDirection(null)
+      touchedElementRef.current = null
+      
+      if (scrollIntervalRef.current) {
+        cancelAnimationFrame(scrollIntervalRef.current)
+      }
+    }, [touchedGenre, moveItem])
+
     // ドラッグ&ドロップハンドラー
     const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>) => {
       const genre = e.currentTarget.getAttribute('data-genre') as RankingGenre
@@ -197,6 +299,9 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
               onDragEnd={handleDragEnd}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
+              onTouchStart={(e) => handleTouchStart(e, item.id)}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             />
           ))}
         </div>
