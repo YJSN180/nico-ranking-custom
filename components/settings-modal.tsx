@@ -205,7 +205,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
             onClick={() => setActiveTab('display')}
           >
-            🎨 表示
+            🎨 テーマ
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'nglist' ? styles.active : ''}`}
