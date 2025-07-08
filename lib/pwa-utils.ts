@@ -7,6 +7,11 @@
  * @returns PWAとして動作している場合はtrue
  */
 export function isPWA(): boolean {
+  // Check if window is available (for SSR)
+  if (typeof window === 'undefined' || !window.matchMedia) {
+    return false
+  }
+  
   // display-mode: standalone（通常のPWA）
   if (window.matchMedia('(display-mode: standalone)').matches) {
     return true

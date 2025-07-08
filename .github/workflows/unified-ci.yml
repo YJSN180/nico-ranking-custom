@@ -139,14 +139,14 @@ jobs:
 
   # Job 4: Parallel Coverage Generation (runs after build succeeds)
   coverage-tests:
-    name: Coverage Tests (Shard ${{ matrix.shard }}/2)
+    name: Coverage Tests (Shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     needs: build-test
     
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2]  # 2-way sharding to reduce memory load
+        shard: [1, 2, 3, 4]  # 4-way sharding to reduce memory load
     
     steps:
       - name: Checkout
@@ -165,10 +165,10 @@ jobs:
 
       - name: Run tests with coverage (shard ${{ matrix.shard }})
         run: |
-          npx vitest run --coverage --shard=${{ matrix.shard }}/${{ strategy.job-total }} --reporter=verbose
+          npx vitest run --coverage --shard=${{ matrix.shard }}/4 --reporter=verbose
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=12288'
+          NODE_OPTIONS: '--max-old-space-size=8192'
           FORCE_COLOR: 0
           VITEST_SHARD: '1'  # シャード実行を示すフラグ
           

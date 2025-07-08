@@ -4,7 +4,7 @@
 codecov:
   require_ci_to_pass: yes
   notify:
-    after_n_builds: 2  # Wait for both coverage shards
+    after_n_builds: 4  # Wait for all 4 coverage shards
   
 # API settings (uses CODECOV_TOKEN environment variable)
 api:

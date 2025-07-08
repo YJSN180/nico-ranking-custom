@@ -48,6 +48,24 @@ export function forceTestEnvironmentInit() {
         configurable: true
       })
     }
+    
+    // window.matchMediaの設定
+    if (win && !win.matchMedia) {
+      Object.defineProperty(win, 'matchMedia', {
+        value: (query: string) => ({
+          matches: false,
+          media: query,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => true
+        }),
+        writable: true,
+        configurable: true
+      })
+    }
   }
 }
 
