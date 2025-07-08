@@ -104,9 +104,11 @@
 .importInfo {
   margin: 1rem 0;
   padding: 1rem;
-  background: var(--info-bg, #e8f4fd);
-  border: 1px solid var(--info-border, #b3d9f2);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border);
   border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.875rem;
 }
 
 .warningInfo {
