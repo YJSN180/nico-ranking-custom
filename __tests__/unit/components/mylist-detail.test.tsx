@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
+import { useParams } from 'next/navigation'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { MylistManager } from '@/lib/storage/mylists'
 import { DBManager } from '@/lib/storage/db-manager'
@@ -40,6 +41,7 @@ vi.mock('@/hooks/use-deleted-video-detection', () => ({
 describe('MylistDetailClient', () => {
   let mockDBManager: any
   let mockMylistManager: any
+  let mockParams: any
   
   const mockMylist: Mylist = {
     id: 'test-mylist-id',
@@ -82,6 +84,10 @@ describe('MylistDetailClient', () => {
   ]
 
   beforeEach(() => {
+    // Router paramsのモック
+    mockParams = { id: 'test-mylist-id' }
+    vi.mocked(useParams).mockReturnValue(mockParams)
+    
     // DBManagerのモック
     mockDBManager = {
       init: vi.fn(),

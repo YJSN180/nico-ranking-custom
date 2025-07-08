@@ -63,7 +63,7 @@ describe('タグ別ランキング300件制限', () => {
     }))
   }
 
-  it('タグ別ランキングは300件すべて表示される', () => {
+  it('タグ別ランキングは最初の100件が表示される（ページネーション）', () => {
     const mockItems = createMockData(300)
     const mockData = { items: mockItems }
     
@@ -78,18 +78,18 @@ describe('タグ別ランキング300件制限', () => {
       />
     )
     
-    // 300件すべてが表示されることを確認
+    // 最初の100件が表示されることを確認
     const items = screen.getAllByText(/Test Video \d+/)
-    expect(items).toHaveLength(300)
+    expect(items).toHaveLength(100)
     
-    // 「もっと見る」ボタンが表示されないことを確認
-    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    // ページネーションが表示されることを確認
+    expect(screen.getByTestId('pagination')).toBeInTheDocument()
     
-    // 表示件数情報を確認
-    expect(screen.getByText(/300件表示/)).toBeInTheDocument()
+    // 合計3ページあることを確認
+    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument()
   })
 
-  it('タグ別ランキングが300件未満の場合も正しく表示される', () => {
+  it('タグ別ランキングが100件を超える場合はページネーションが表示される', () => {
     const mockItems = createMockData(150)
     const mockData = { items: mockItems }
     
@@ -104,14 +104,14 @@ describe('タグ別ランキング300件制限', () => {
       />
     )
     
-    // 150件すべてが表示されることを確認
+    // 最初の100件が表示されることを確認
     const items = screen.getAllByText(/Test Video \d+/)
-    expect(items).toHaveLength(150)
+    expect(items).toHaveLength(100)
     
-    // 「もっと見る」ボタンが表示されないことを確認
-    expect(screen.queryByText('もっと見る')).not.toBeInTheDocument()
+    // ページネーションが表示されることを確認
+    expect(screen.getByTestId('pagination')).toBeInTheDocument()
     
-    // 表示件数情報を確認
-    expect(screen.getByText(/150件表示/)).toBeInTheDocument()
+    // 合計2ページあることを確認
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
   })
 })
