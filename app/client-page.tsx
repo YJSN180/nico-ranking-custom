@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
+import { VideoContextMenu } from '@/components/video-context-menu'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
 import { filterWithNGList } from '@/lib/filter-with-ng-list'
@@ -643,11 +644,14 @@ export default function ClientPage({
           {/* ランキングリスト */}
           <ul key={`${ngListVersion}-${config.period}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
-              <RankingItemResponsive 
-                key={item.id} 
-                item={item}
-                disabled={isNavigating}
-              />
+              <li key={item.id} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                <VideoContextMenu video={item}>
+                  <RankingItemResponsive 
+                    item={item}
+                    disabled={isNavigating}
+                  />
+                </VideoContextMenu>
+              </li>
             ))}
           </ul>
           
