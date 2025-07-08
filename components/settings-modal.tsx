@@ -29,6 +29,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [tempNGList, setTempNGList] = useState<UserNGList>(ngList)
   const [hasChanges, setHasChanges] = useState(false)
   const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   
   // ジャンル並び替えコンポーネントの参照
   const genreOrderRef = useRef<GenreOrderCustomizerRef | null>(null)
@@ -179,6 +180,11 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 閉じる処理
   const handleClose = () => {
+    // ドラッグ中は閉じない
+    if (isDragging) {
+      return
+    }
+    
     if (hasChanges || hasGenreOrderChanges) {
       if (confirm('変更を破棄してもよろしいですか？')) {
         setTempNGList(ngList)  // 元に戻す
@@ -191,13 +197,20 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       onClose()
     }
   }
+  
+  // オーバーレイクリック時の処理（ドラッグ中は閉じない）
+  const handleOverlayClick = () => {
+    if (!isDragging) {
+      onClose()
+    }
+  }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={handleOverlayClick}>
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>設定</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={styles.closeButton} onClick={handleClose}>×</button>
         </div>
 
         <div className={styles.tabs}>
@@ -466,6 +479,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <GenreOrderCustomizer 
                   ref={genreOrderRef}
                   onChangesUpdate={setHasGenreOrderChanges}
+                  onDragStateChange={setIsDragging}
                 />
               </section>
             </div>

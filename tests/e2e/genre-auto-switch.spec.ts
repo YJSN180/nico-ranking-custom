@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 // TODO: 設定モーダルの開閉に問題があるため一時的にスキップ
 // Issue: タブボタンのテキストにnbspが含まれており、セレクタがマッチしない
 // 修正後に再度有効化する必要がある
-test.describe.skip('ジャンル自動切り替え機能', () => {
+test.describe('ジャンル自動切り替え機能', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
     await page.waitForLoadState('networkidle')
@@ -18,13 +18,12 @@ test.describe.skip('ジャンル自動切り替え機能', () => {
     await expect(page.url()).toContain('genre=music')
     
     // 設定モーダルを開く
-    await page.getByRole('button', { name: '設定' }).click()
+    await page.locator('button[aria-label="設定"]').click()
     await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
     await page.waitForTimeout(500)
     
     // ジャンルタブを開く
-    // 部分一致でタブを検索
-    await page.locator('button').filter({ hasText: 'ジャンル' }).nth(1).click()  // 最初のは設定ボタンなので2番目
+    await page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' }).click()
     await page.waitForTimeout(500)
     
     // 全ジャンルを非表示にする
@@ -60,13 +59,12 @@ test.describe.skip('ジャンル自動切り替え機能', () => {
     await expect(page.url()).toContain('genre=anime')
     
     // 設定モーダルを開く
-    await page.getByRole('button', { name: '設定' }).click()
+    await page.locator('button[aria-label="設定"]').click()
     await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
     await page.waitForTimeout(500)
     
     // ジャンルタブを開く
-    // 部分一致でタブを検索
-    await page.locator('button').filter({ hasText: 'ジャンル' }).nth(1).click()  // 最初のは設定ボタンなので2番目
+    await page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' }).click()
     await page.waitForTimeout(500)
     
     // 全ジャンルを非表示にする
@@ -106,13 +104,12 @@ test.describe.skip('ジャンル自動切り替え機能', () => {
     await expect(page.url()).toContain('genre=music')
     
     // 設定モーダルを開く
-    await page.getByRole('button', { name: '設定' }).click()
+    await page.locator('button[aria-label="設定"]').click()
     await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
     await page.waitForTimeout(500)
     
     // ジャンルタブを開く
-    // 部分一致でタブを検索
-    await page.locator('button').filter({ hasText: 'ジャンル' }).nth(1).click()  // 最初のは設定ボタンなので2番目
+    await page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' }).click()
     await page.waitForTimeout(500)
     
     // ゲームジャンルを非表示にする（音楽は表示のまま）

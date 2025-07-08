@@ -26,6 +26,7 @@ import styles from './genre-order.module.css'
 
 interface GenreOrderCustomizerProps {
   onChangesUpdate?: (hasChanges: boolean) => void
+  onDragStateChange?: (isDragging: boolean) => void
 }
 
 export interface GenreOrderCustomizerRef {
@@ -34,7 +35,7 @@ export interface GenreOrderCustomizerRef {
 }
 
 export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrderCustomizerProps>(
-  function GenreOrderCustomizer({ onChangesUpdate }, ref) {
+  function GenreOrderCustomizer({ onChangesUpdate, onDragStateChange }, ref) {
     const {
       items,
       hasChanges,
@@ -83,6 +84,7 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
 
     const handleDragStart = (event: DragStartEvent) => {
       setActiveId(event.active.id as RankingGenre)
+      onDragStateChange?.(true)
       
       // モバイルデバイスで振動フィードバック
       if ('vibrate' in navigator && event.activatorEvent?.type?.includes('touch')) {
@@ -98,6 +100,7 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
       }
       
       setActiveId(null)
+      onDragStateChange?.(false)
     }
 
     return (
