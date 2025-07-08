@@ -54,9 +54,9 @@ test.describe('ジャンル順序カスタマイズ - モバイル', () => {
       throw new Error('要素の位置を取得できませんでした')
     }
     
-    // @dnd-kit の長押し判定（250ms）を考慮したドラッグ
+    // @dnd-kit の長押し判定（125ms）を考慮したドラッグ
     await page.touchscreen.down(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2)
-    await page.waitForTimeout(300) // 250msの長押し判定 + 余裕
+    await page.waitForTimeout(150) // 125msの長押し判定 + 余裕
     await page.touchscreen.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height + 10)
     await page.touchscreen.up()
     
@@ -100,7 +100,7 @@ test.describe('ジャンル順序カスタマイズ - モバイル', () => {
     
     // ドラッグで順序変更
     await page.touchscreen.down(firstBox.x + firstBox.width / 2, firstBox.y + firstBox.height / 2)
-    await page.waitForTimeout(300) // @dnd-kit の長押し判定
+    await page.waitForTimeout(150) // @dnd-kit の長押し判定（125ms + 余裕）
     await page.touchscreen.move(secondBox.x + secondBox.width / 2, secondBox.y + secondBox.height + 10)
     await page.touchscreen.up()
     
@@ -136,7 +136,7 @@ test.describe('ジャンル順序カスタマイズ - モバイル', () => {
     
     // ドラッグ操作
     await page.touchscreen.down(thirdBox.x + thirdBox.width / 2, thirdBox.y + thirdBox.height / 2)
-    await page.waitForTimeout(300) // @dnd-kit の長押し判定
+    await page.waitForTimeout(150) // @dnd-kit の長押し判定（125ms + 余裕）
     await page.touchscreen.move(fourthBox.x + fourthBox.width / 2, fourthBox.y + fourthBox.height + 10)
     await page.touchscreen.up()
     

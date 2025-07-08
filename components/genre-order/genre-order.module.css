@@ -59,7 +59,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-right: 12px;
+  margin-right: 20px;  /* 12px → 20px: ジャンル名との間隔を増やす */
   cursor: grab;
 }
 
@@ -223,8 +223,14 @@
 @media (hover: none) {
   .dragHandle {
     /* タッチデバイスではより大きなタッチターゲット */
-    padding: 8px;
-    margin: -8px;
+    padding: 12px;  /* 8px → 12px: タッチ領域を拡大 */
+    margin: -12px;   /* -8px → -12px: 見た目のサイズは維持 */
+    margin-right: 8px;  /* ジャンル名との実質的な間隔を確保 (20px + 8px = 28px) */
+  }
+  
+  /* モバイルでジャンルアイテム全体の間隔も調整 */
+  .genreItem {
+    padding: 12px 12px 12px 8px;  /* 左側のパディングを減らして全体のバランスを取る */
   }
 }
 

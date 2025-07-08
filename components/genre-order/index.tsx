@@ -58,7 +58,7 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
       // モバイル・タブレット用タッチセンサー
       useSensor(TouchSensor, {
         activationConstraint: {
-          delay: 250,     // 250ms長押しでドラッグ開始
+          delay: 125,     // 125ms長押しでドラッグ開始（250ms → 125msに短縮）
           tolerance: 5,   // 5pxの手ブレは許容
         },
       }),
