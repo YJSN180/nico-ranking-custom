@@ -63,9 +63,12 @@ describe('GenreOrderBackup', () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const reloadSpy = vi.fn()
+    
+    // window.location.reloadのモック
     Object.defineProperty(window, 'location', {
       value: { reload: reloadSpy },
-      writable: true
+      writable: true,
+      configurable: true
     })
     
     // Mock localStorage
@@ -184,9 +187,12 @@ describe('GenreOrderBackup', () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const reloadSpy = vi.fn()
+    
+    // window.location.reloadのモック
     Object.defineProperty(window, 'location', {
       value: { reload: reloadSpy },
-      writable: true
+      writable: true,
+      configurable: true
     })
     
     // Mock localStorage
