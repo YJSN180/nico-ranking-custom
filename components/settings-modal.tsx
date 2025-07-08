@@ -205,25 +205,25 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
             onClick={() => setActiveTab('display')}
           >
-            🎨 テーマ
+            <span style={{ whiteSpace: 'nowrap' }}>🎨&nbsp;テーマ</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'nglist' ? styles.active : ''}`}
             onClick={() => setActiveTab('nglist')}
           >
-            🚫 NGリスト
+            <span style={{ whiteSpace: 'nowrap' }}>🚫&nbsp;NGリスト</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'genre-order' ? styles.active : ''}`}
             onClick={() => setActiveTab('genre-order')}
           >
-            🎯 ジャンル
+            <span style={{ whiteSpace: 'nowrap' }}>🎯&nbsp;ジャンル</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
             onClick={() => setActiveTab('ng-backup')}
           >
-            💾 バックアップ
+            <span style={{ whiteSpace: 'nowrap' }}>💾&nbsp;バックアップ</span>
           </button>
         </div>
 

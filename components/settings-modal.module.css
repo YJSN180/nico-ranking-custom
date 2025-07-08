@@ -87,6 +87,10 @@
   transition: all 0.2s;
   white-space: nowrap;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: fit-content;
 }
 
 .tab:hover {
