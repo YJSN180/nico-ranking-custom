@@ -6,7 +6,7 @@ import ClientPage from '@/app/client-page'
 import type { RankingData } from '@/types/ranking'
 
 // Navigation mock is provided by global setup in vitest.setup.ts
-import { useRouter } from 'next/navigation'
+import * as nextNavigation from 'next/navigation'
 
 // Create mock router for test use
 const mockPush = vi.fn()
@@ -101,7 +101,7 @@ describe('URL更新テスト', () => {
     vi.clearAllMocks()
     
     // Override the global navigation mock for this specific test
-    vi.mocked(useRouter).mockReturnValue(mockRouter)
+    vi.spyOn(nextNavigation, 'useRouter').mockReturnValue(mockRouter)
     
     // カスタムNGリストが設定されていない状態にする
     localStorageMock.getItem.mockReturnValue(null)
