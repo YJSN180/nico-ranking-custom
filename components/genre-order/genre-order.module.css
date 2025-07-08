@@ -27,13 +27,13 @@
   background: var(--surface-hover);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  transition: all 0.2s ease-in-out;
   cursor: move;
   user-select: none;
   -webkit-touch-callout: none; /* iOS Safari */
   -webkit-user-select: none;
   touch-action: none; /* タッチ操作を制御 */
-  position: relative; /* タッチドラッグ時の位置調整用 */
+  position: relative;
+  /* @dnd-kit がトランジションを管理するため、手動設定を削除 */
 }
 
 .genreItem:hover {
@@ -49,9 +49,7 @@
 }
 
 .genreItem.dragging {
-  opacity: 0.5;
-  transform: scale(1.02);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0.3; /* 元の位置は薄く表示 */
 }
 
 /* Drag Handle */
@@ -196,6 +194,37 @@
   50% {
     opacity: 1;
     transform: translateX(-50%) scale(1.05);
+  }
+}
+
+/* ドラッグオーバーレイ（@dnd-kit） */
+.dragOverlay {
+  cursor: grabbing;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05) rotate(2deg); /* わずかな拡大と回転で浮いている感じを演出 */
+  background: var(--surface-primary);
+  border: 2px solid var(--primary-color);
+}
+
+/* 新しいヘルプテキスト（小さいサイズ） */
+.helpTextSmall {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* キーボードフォーカス時のスタイル */
+.genreItem:focus-visible {
+  outline: 3px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* タッチデバイスでの視覚的フィードバック */
+@media (hover: none) {
+  .dragHandle {
+    /* タッチデバイスではより大きなタッチターゲット */
+    padding: 8px;
+    margin: -8px;
   }
 }
 
