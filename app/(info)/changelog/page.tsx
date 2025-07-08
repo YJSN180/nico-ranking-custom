@@ -21,6 +21,13 @@ type ChangelogEntry = {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2025-07-08',
+    version: 'v1.0.1',
+    changes: [
+      { type: 'feature', description: 'ジャンル並び替え・非表示機能' },
+    ],
+  },
+  {
     date: '2025-07-05',
     version: 'v1.0.0',
     changes: [
