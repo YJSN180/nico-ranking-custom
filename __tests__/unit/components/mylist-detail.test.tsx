@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
-import { useParams } from 'next/navigation'
+import * as nextNavigation from 'next/navigation'
 import { MylistDetailClient } from '@/app/mylists/[id]/mylist-detail-client'
 import { MylistManager } from '@/lib/storage/mylists'
 import { DBManager } from '@/lib/storage/db-manager'
@@ -86,7 +86,9 @@ describe('MylistDetailClient', () => {
   beforeEach(() => {
     // Router paramsのモック
     mockParams = { id: 'test-mylist-id' }
-    vi.mocked(useParams).mockReturnValue(mockParams)
+    
+    // useParamsをスパイして返り値を設定
+    vi.spyOn(nextNavigation, 'useParams').mockReturnValue(mockParams)
     
     // DBManagerのモック
     mockDBManager = {
