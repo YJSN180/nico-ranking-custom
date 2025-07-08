@@ -205,25 +205,25 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
             onClick={() => setActiveTab('display')}
           >
-            🎨 表示設定
+            🎨 表示
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'nglist' ? styles.active : ''}`}
             onClick={() => setActiveTab('nglist')}
           >
-            🚫 NGリスト管理
+            🚫 NGリスト
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'genre-order' ? styles.active : ''}`}
             onClick={() => setActiveTab('genre-order')}
           >
-            🎯 ジャンル並び替え
+            🎯 ジャンル
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
             onClick={() => setActiveTab('ng-backup')}
           >
-            💾 設定データ保存
+            💾 バックアップ
           </button>
         </div>
 
