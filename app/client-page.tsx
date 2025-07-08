@@ -66,6 +66,14 @@ export default function ClientPage({
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
   
+  // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
+  useEffect(() => {
+    if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
+      // 現在のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替え
+      handleConfigChange({ ...config, genre: visibleGenres[0], tag: undefined })
+    }
+  }, [visibleGenres]) // eslint-disable-line react-hooks/exhaustive-deps
+  
   // NGリストのバージョンを追跡（更新時に強制再レンダリング）
   const ngListVersion = useMemo(() => {
     // 軽量なハッシュ関数を使用（JSON.stringifyよりも高速）
@@ -563,7 +571,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && finalDisplayItems.length === 0 && (
+      {!loading && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
@@ -576,7 +584,7 @@ export default function ClientPage({
                 ? 'このタグの動画が見つかりません' 
                 : 'ランキングデータがありません'}
           </div>
-          {config.tag && (
+          {config.tag && visibleGenres.length > 0 && (
             <button
               onClick={() => handleConfigChange({ ...config, tag: undefined })}
               style={{
@@ -595,7 +603,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && finalDisplayItems.length > 0 && (
+      {!loading && !error && finalDisplayItems.length > 0 && visibleGenres.length > 0 && (
         <>
           {/* リアルタイム更新インジケーター */}
           <div style={{
