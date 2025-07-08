@@ -15,6 +15,7 @@ vi.mock('next/navigation', () => ({
     toString: vi.fn(() => ''),
   }),
   usePathname: () => '/',
+  useParams: () => ({}),
 }))
 
 // window.scrollTo モック
