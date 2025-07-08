@@ -181,31 +181,6 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-/* 使い方説明 */
-.helpText {
-  margin-top: 1rem;
-  padding: 1rem;
-  background: var(--info-bg, #e8f4fd);
-  border-radius: 6px;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.helpText strong {
-  display: block;
-  margin-bottom: 0.5rem;
-}
-
-.helpText ul {
-  margin: 0.5rem 0 0 1.5rem;
-  padding: 0;
-}
-
-.helpText li {
-  margin-bottom: 0.25rem;
-}
-
 @media (max-width: 768px) {
   .backupDialog {
     padding: 1.5rem;

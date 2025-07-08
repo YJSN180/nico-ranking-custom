@@ -212,16 +212,6 @@ export function GenreOrderBackup() {
           {importMessage.text}
         </div>
       )}
-      
-      {/* 使い方説明 */}
-      <div className={styles.helpText}>
-        <strong>📌 使い方:</strong>
-        <ul>
-          <li>エクスポート: 現在のジャンル並び替え設定をファイルに保存します</li>
-          <li>インポート: 保存したファイルから設定を復元します</li>
-          <li>インポート後はページのリロードが必要です</li>
-        </ul>
-      </div>
     </div>
   )
 }
