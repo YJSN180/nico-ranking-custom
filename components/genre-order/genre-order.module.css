@@ -106,11 +106,12 @@
 /* Actions */
 .actions {
   display: flex;
-  justify-content: space-between;
+  gap: 8px;
   align-items: center;
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
 
 .resetButton {

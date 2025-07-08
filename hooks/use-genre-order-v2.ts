@@ -97,6 +97,24 @@ export function useGenreOrderV2() {
   }, [])
 
   /**
+   * すべて非表示にする
+   */
+  const hideAll = useCallback(() => {
+    setTempItems(items => 
+      items.map(item => ({ ...item, isVisible: false }))
+    )
+  }, [])
+
+  /**
+   * すべて表示にする
+   */
+  const showAll = useCallback(() => {
+    setTempItems(items => 
+      items.map(item => ({ ...item, isVisible: true }))
+    )
+  }, [])
+
+  /**
    * 変更を適用してLocalStorageに保存
    */
   const applyChanges = useCallback(() => {
@@ -147,6 +165,8 @@ export function useGenreOrderV2() {
     moveItem,
     toggleVisibility,
     resetToDefault,
+    hideAll,
+    showAll,
     applyChanges,
     cancelChanges
   }

@@ -41,6 +41,8 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
       moveItem,
       toggleVisibility,
       resetToDefault,
+      hideAll,
+      showAll,
       applyChanges,
       cancelChanges,
     } = useGenreOrderV2()
@@ -151,6 +153,18 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
               onClick={resetToDefault}
             >
               デフォルトに戻す
+            </button>
+            <button
+              className={styles.resetButton}
+              onClick={showAll}
+            >
+              すべて表示にする
+            </button>
+            <button
+              className={styles.resetButton}
+              onClick={hideAll}
+            >
+              すべて非表示にする
             </button>
           </div>
         </div>
