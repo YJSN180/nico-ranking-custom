@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
 import { NGBackup } from './ng-backup'
+import { GenreOrderBackup } from './genre-order-backup'
+import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -13,7 +15,7 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'display' | 'nglist' | 'ng-backup'>('nglist')
+  const [activeTab, setActiveTab] = useState<'display' | 'nglist' | 'genre-order' | 'ng-backup'>('nglist')
   const [inputVideoId, setInputVideoId] = useState('')
   const [inputVideoTitle, setInputVideoTitle] = useState('')
   const [videoTitleType, setVideoTitleType] = useState<'exact' | 'partial'>('partial')
@@ -26,12 +28,17 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   // 一時的なNGリストの状態
   const [tempNGList, setTempNGList] = useState<UserNGList>(ngList)
   const [hasChanges, setHasChanges] = useState(false)
+  const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
+  
+  // ジャンル並び替えコンポーネントの参照
+  const genreOrderRef = useRef<GenreOrderCustomizerRef | null>(null)
   
   // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
   useEffect(() => {
     if (isOpen) {
       setTempNGList(ngList)
       setHasChanges(false)
+      setHasGenreOrderChanges(false)
     }
   }, [isOpen, ngList])
   
@@ -153,23 +160,31 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 適用処理
   const handleApply = () => {
-    // NGリストを保存（即座に反映される）
-    saveNGListDirectly(tempNGList)
-    
-    // onApplyコールバックがあれば呼び出す
-    if (onApply) {
-      onApply()
+    if (activeTab === 'nglist') {
+      // NGリストを保存（即座に反映される）
+      saveNGListDirectly(tempNGList)
+      
+      // onApplyコールバックがあれば呼び出す
+      if (onApply) {
+        onApply()
+      }
+      
+      // モーダルを閉じる
+      onClose()
+    } else if (activeTab === 'genre-order' && genreOrderRef.current) {
+      // ジャンル並び替えを適用（内部でリロード）
+      genreOrderRef.current.applyChanges()
     }
-    
-    // モーダルを閉じる
-    onClose()
   }
   
   // 閉じる処理
   const handleClose = () => {
-    if (hasChanges) {
+    if (hasChanges || hasGenreOrderChanges) {
       if (confirm('変更を破棄してもよろしいですか？')) {
         setTempNGList(ngList)  // 元に戻す
+        if (hasGenreOrderChanges && genreOrderRef.current) {
+          genreOrderRef.current.cancelChanges()
+        }
         onClose()
       }
     } else {
@@ -190,19 +205,25 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
             onClick={() => setActiveTab('display')}
           >
-            🎨 表示設定
+            <span style={{ whiteSpace: 'nowrap' }}>🎨&nbsp;テーマ</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'nglist' ? styles.active : ''}`}
             onClick={() => setActiveTab('nglist')}
           >
-            🚫 NGリスト管理
+            <span style={{ whiteSpace: 'nowrap' }}>🚫&nbsp;NGリスト</span>
+          </button>
+          <button
+            className={`${styles.tab} ${activeTab === 'genre-order' ? styles.active : ''}`}
+            onClick={() => setActiveTab('genre-order')}
+          >
+            <span style={{ whiteSpace: 'nowrap' }}>🎯&nbsp;ジャンル</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
             onClick={() => setActiveTab('ng-backup')}
           >
-            💾 NGリスト保存
+            <span style={{ whiteSpace: 'nowrap' }}>💾&nbsp;バックアップ</span>
           </button>
         </div>
 
@@ -438,6 +459,16 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 </div>
               </section>
             </div>
+          ) : activeTab === 'genre-order' ? (
+            <div className={styles.genreOrderSettings}>
+              <section className={styles.section}>
+                <h3>🎯 ジャンル並び替え</h3>
+                <GenreOrderCustomizer 
+                  ref={genreOrderRef}
+                  onChangesUpdate={setHasGenreOrderChanges}
+                />
+              </section>
+            </div>
           ) : (
             <div className={styles.ngBackupSettings}>
               <section className={styles.section}>
@@ -446,6 +477,14 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <NGBackup />
+              </section>
+              
+              <section className={styles.section} style={{ marginTop: '2rem' }}>
+                <h3>🎯 ジャンル並び替えデータバックアップ</h3>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  ジャンルの表示順序と表示/非表示設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
+                </p>
+                <GenreOrderBackup />
               </section>
             </div>
           )}
@@ -461,7 +500,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {activeTab === 'nglist' && hasChanges && (
+            {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
               <button 
                 className={styles.applyButton} 
                 onClick={handleApply}

@@ -3,7 +3,6 @@
 import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
-import { VideoContextMenu } from './video-context-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
@@ -17,6 +16,7 @@ interface RankingItemProps {
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
+// HTML構造修正: VideoContextMenuは親コンポーネントで配置
 const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false }: RankingItemProps) {
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
@@ -76,28 +76,27 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   }
 
   return (
-    <VideoContextMenu video={item}>
-      <li 
-        data-testid="ranking-item"
-        data-video-id={item.id}
-        className="ranking-item-responsive"
-        style={{
-          // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
-          background: 'var(--surface-color)',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          boxShadow: 'var(--shadow-md)',
-          border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
-          marginBottom: '8px',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          transition: 'background-color 0.2s',
-          position: 'relative',
-          opacity: disabled ? 0.6 : 1
-        }}
-        onClick={(e) => {
-          // disabled状態では何もしない
-          if (disabled) return;
-          // 投稿者リンクやボタンなどの子要素のクリックは除外
+    <div 
+      data-testid="ranking-item"
+      data-video-id={item.id}
+      className="ranking-item-responsive"
+      style={{
+        // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
+        background: 'var(--surface-color)',
+        borderRadius: '8px',
+        overflow: 'hidden',
+        boxShadow: 'var(--shadow-md)',
+        border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
+        marginBottom: '8px',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transition: 'background-color 0.2s',
+        position: 'relative',
+        opacity: disabled ? 0.6 : 1
+      }}
+      onClick={(e) => {
+        // disabled状態では何もしない
+        if (disabled) return;
+        // 投稿者リンクやボタンなどの子要素のクリックは除外
           const target = e.target as HTMLElement;
           if (target.closest('a') || target.closest('button')) return;
           handleVideoClick();
@@ -377,8 +376,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           <MylistButton video={item} />
         </div>
       </div>
-    </li>
-    </VideoContextMenu>
+    </div>
   )
 }, (prevProps, nextProps) => {
   // メモ化の比較関数

@@ -40,17 +40,17 @@ describe('RankingItemResponsive - モバイルホバー修正', () => {
     test('タッチ終了時のイベントハンドリング', () => {
       vi.useFakeTimers()
       const { container } = render(<RankingItemResponsive item={mockItem} />)
-      const listItem = container.querySelector('li')!
+      const rankingItem = container.querySelector('.ranking-item-responsive')!
       
       // タッチ終了イベントが処理されることを確認
       const touchEndEvent = new TouchEvent('touchend', { bubbles: true })
-      listItem.dispatchEvent(touchEndEvent)
+      rankingItem.dispatchEvent(touchEndEvent)
       
       // タイマーが動作することを確認
       vi.advanceTimersByTime(100)
       
       // エラーが発生しないことを確認（実際の値は環境依存）
-      expect(listItem).toBeInTheDocument()
+      expect(rankingItem).toBeInTheDocument()
       
       vi.useRealTimers()
     })
