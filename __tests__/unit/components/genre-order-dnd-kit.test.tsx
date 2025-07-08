@@ -96,7 +96,6 @@ describe('GenreOrderCustomizer @dnd-kit 実装', () => {
     // デバイス別の操作説明が表示される
     expect(screen.getByText(/モバイル: 長押ししてドラッグ/)).toBeInTheDocument()
     expect(screen.getByText(/PC: クリックしてドラッグ/)).toBeInTheDocument()
-    expect(screen.getByText(/キーボード: Space \+ 矢印キー/)).toBeInTheDocument()
   })
 
   test('すべてのジャンルアイテムが表示される', () => {

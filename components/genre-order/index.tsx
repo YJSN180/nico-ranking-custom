@@ -118,7 +118,7 @@ export const GenreOrderCustomizer = forwardRef<GenreOrderCustomizerRef, GenreOrd
             ドラッグ&ドロップでジャンルの順序を変更したり、表示/非表示を切り替えることができます。
             <br />
             <small className={styles.helpTextSmall}>
-              💡 モバイル: 長押ししてドラッグ | PC: クリックしてドラッグ | キーボード: Space + 矢印キー
+              💡 モバイル: 長押ししてドラッグ | PC: クリックしてドラッグ
             </small>
           </p>
 

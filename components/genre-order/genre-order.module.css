@@ -5,6 +5,7 @@
 }
 
 .description {
+  margin-top: 0;
   margin-bottom: 16px;
   color: var(--text-secondary);
   font-size: 14px;
