@@ -41,15 +41,15 @@ describe('SettingsModal アニメーション', () => {
     
     render(<SettingsModal isOpen={true} onClose={onClose} />)
     
-    // NGリスト管理タブに切り替え
-    const ngListTab = screen.getByText('NGリスト管理')
+    // NGリストタブに切り替え（エスケープされた空白文字を使用）
+    const ngListTab = screen.getByRole('button', { name: /🚫\s*NGリスト/ })
     fireEvent.click(ngListTab)
     
     const content1 = screen.getByText('🚫 動画ID').closest('.content')
     const height1 = content1?.clientHeight || 0
     
-    // 表示設定タブに切り替え
-    const displayTab = screen.getByText('表示設定')
+    // テーマタブに切り替え（エスケープされた空白文字を使用）
+    const displayTab = screen.getByRole('button', { name: /🎨\s*テーマ/ })
     fireEvent.click(displayTab)
     
     const content2 = screen.getByText('🎨 テーマ設定').closest('.content')

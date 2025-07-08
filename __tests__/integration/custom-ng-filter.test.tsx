@@ -15,6 +15,7 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => ({
     get: (key: string) => null,
   }),
+  usePathname: () => '/',
 }))
 
 // モックデータ

@@ -8,28 +8,45 @@
  */
 export function isPWA(): boolean {
   // Check if window is available (for SSR)
-  if (typeof window === 'undefined' || !window.matchMedia) {
+  if (typeof window === 'undefined') {
     return false
   }
   
-  // display-mode: standalone（通常のPWA）
-  if (window.matchMedia('(display-mode: standalone)').matches) {
-    return true
+  // Check if matchMedia is available
+  if (!window.matchMedia || typeof window.matchMedia !== 'function') {
+    return false
   }
   
-  // display-mode: fullscreen（フルスクリーンPWA）
-  if (window.matchMedia('(display-mode: fullscreen)').matches) {
-    return true
+  try {
+    // display-mode: standalone（通常のPWA）
+    const standaloneQuery = window.matchMedia('(display-mode: standalone)')
+    if (standaloneQuery && standaloneQuery.matches) {
+      return true
+    }
+    
+    // display-mode: fullscreen（フルスクリーンPWA）
+    const fullscreenQuery = window.matchMedia('(display-mode: fullscreen)')
+    if (fullscreenQuery && fullscreenQuery.matches) {
+      return true
+    }
+    
+    // display-mode: minimal-ui（一部のブラウザ）
+    const minimalUIQuery = window.matchMedia('(display-mode: minimal-ui)')
+    if (minimalUIQuery && minimalUIQuery.matches) {
+      return true
+    }
+  } catch (error) {
+    // matchMedia might throw in some test environments
+    return false
   }
   
   // iOS Safari の standalone モード（レガシー）
-  if ('standalone' in window.navigator && (window.navigator as any).standalone) {
-    return true
-  }
-  
-  // display-mode: minimal-ui（一部のブラウザ）
-  if (window.matchMedia('(display-mode: minimal-ui)').matches) {
-    return true
+  try {
+    if ('standalone' in window.navigator && (window.navigator as any).standalone) {
+      return true
+    }
+  } catch (error) {
+    // Ignore navigation errors
   }
   
   return false

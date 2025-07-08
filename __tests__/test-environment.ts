@@ -50,7 +50,8 @@ export function forceTestEnvironmentInit() {
     }
     
     // window.matchMediaの設定
-    if (win && !win.matchMedia) {
+    if (win) {
+      // 常に新しいmatchMediaを設定（既存のものを上書き）
       Object.defineProperty(win, 'matchMedia', {
         value: (query: string) => ({
           matches: false,
@@ -63,8 +64,14 @@ export function forceTestEnvironmentInit() {
           dispatchEvent: () => true
         }),
         writable: true,
-        configurable: true
+        configurable: true,
+        enumerable: true
       })
+      
+      // globalにも設定
+      if (typeof global !== 'undefined' && !global.matchMedia) {
+        (global as any).matchMedia = win.matchMedia
+      }
     }
   }
 }

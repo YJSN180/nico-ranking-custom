@@ -26,12 +26,12 @@ describe('GenreOrderBackup', () => {
     expect(screen.getByText('インポート')).toBeInTheDocument()
   })
 
-  it('renders usage instructions', () => {
+  it('renders export and import buttons with correct test ids', () => {
     render(<GenreOrderBackup />)
     
-    expect(screen.getByText('📌 使い方:')).toBeInTheDocument()
-    expect(screen.getByText(/エクスポート: 現在のジャンル並び替え設定をファイルに保存します/)).toBeInTheDocument()
-    expect(screen.getByText(/インポート: 保存したファイルから設定を復元します/)).toBeInTheDocument()
+    expect(screen.getByTestId('export-genre-order-button')).toBeInTheDocument()
+    expect(screen.getByTestId('import-genre-order-button')).toBeInTheDocument()
+    expect(screen.getByTestId('import-file-input')).toBeInTheDocument()
   })
 
   it('shows import confirmation dialog when valid file is imported', async () => {
