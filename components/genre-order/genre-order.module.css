@@ -27,9 +27,13 @@
   background: var(--surface-hover);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  transition: all 0.2s ease-in-out;
   cursor: move;
   user-select: none;
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none;
+  touch-action: none; /* タッチ操作を制御 */
+  position: relative;
+  /* @dnd-kit がトランジションを管理するため、手動設定を削除 */
 }
 
 .genreItem:hover {
@@ -45,9 +49,7 @@
 }
 
 .genreItem.dragging {
-  opacity: 0.5;
-  transform: scale(1.02);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0.3; /* 元の位置は薄く表示 */
 }
 
 /* Drag Handle */
@@ -57,7 +59,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-right: 12px;
+  margin-right: 20px;  /* 12px → 20px: ジャンル名との間隔を増やす */
   cursor: grab;
 }
 
@@ -104,11 +106,12 @@
 /* Actions */
 .actions {
   display: flex;
-  justify-content: space-between;
+  gap: 8px;
   align-items: center;
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--border-color);
+  flex-wrap: wrap;
 }
 
 .resetButton {
@@ -192,6 +195,43 @@
   50% {
     opacity: 1;
     transform: translateX(-50%) scale(1.05);
+  }
+}
+
+/* ドラッグオーバーレイ（@dnd-kit） */
+.dragOverlay {
+  cursor: grabbing;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05) rotate(2deg); /* わずかな拡大と回転で浮いている感じを演出 */
+  background: var(--surface-primary);
+  border: 2px solid var(--primary-color);
+}
+
+/* 新しいヘルプテキスト（小さいサイズ） */
+.helpTextSmall {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* キーボードフォーカス時のスタイル */
+.genreItem:focus-visible {
+  outline: 3px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* タッチデバイスでの視覚的フィードバック */
+@media (hover: none) {
+  .dragHandle {
+    /* タッチデバイスではより大きなタッチターゲット */
+    padding: 12px;  /* 8px → 12px: タッチ領域を拡大 */
+    margin: -12px;   /* -8px → -12px: 見た目のサイズは維持 */
+    margin-right: 8px;  /* ジャンル名との実質的な間隔を確保 (20px + 8px = 28px) */
+  }
+  
+  /* モバイルでジャンルアイテム全体の間隔も調整 */
+  .genreItem {
+    padding: 12px 12px 12px 20px;  /* 左側に全角一文字分（約20px）のスペースを追加 */
   }
 }
 

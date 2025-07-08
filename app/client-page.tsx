@@ -14,6 +14,7 @@ import Pagination from '@/components/pagination'
 import { TagSelector } from '@/components/tag-selector'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 import { useRankingData } from '@/hooks/use-ranking-data'
+import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import type { RankingData, RankingItem } from '@/types/ranking'
@@ -60,9 +61,18 @@ export default function ClientPage({
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList } = useUserNGList()
+  const { visibleGenres } = useGenreOrderV2()
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
+  
+  // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
+  useEffect(() => {
+    if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
+      // 現在のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替え
+      handleConfigChange({ ...config, genre: visibleGenres[0], tag: undefined })
+    }
+  }, [visibleGenres]) // eslint-disable-line react-hooks/exhaustive-deps
   
   // NGリストのバージョンを追跡（更新時に強制再レンダリング）
   const ngListVersion = useMemo(() => {
@@ -561,16 +571,20 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && finalDisplayItems.length === 0 && (
+      {!loading && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
             color: 'var(--text-secondary)',
             marginBottom: '20px'
           }}>
-            {config.tag ? 'このタグの動画が見つかりません' : 'ランキングデータがありません'}
+            {visibleGenres.length === 0 
+              ? '表示する動画がありません' 
+              : config.tag 
+                ? 'このタグの動画が見つかりません' 
+                : 'ランキングデータがありません'}
           </div>
-          {config.tag && (
+          {config.tag && visibleGenres.length > 0 && (
             <button
               onClick={() => handleConfigChange({ ...config, tag: undefined })}
               style={{
@@ -589,7 +603,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && finalDisplayItems.length > 0 && (
+      {!loading && !error && finalDisplayItems.length > 0 && visibleGenres.length > 0 && (
         <>
           {/* リアルタイム更新インジケーター */}
           <div style={{

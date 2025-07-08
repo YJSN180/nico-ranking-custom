@@ -3,7 +3,7 @@
 import { useRef, useEffect } from 'react'
 import { GENRE_LABELS, PERIOD_LABELS } from '@/types/ranking-config'
 import type { RankingGenre, RankingPeriod, RankingConfig } from '@/types/ranking-config'
-import { useGenreOrder } from '@/hooks/use-genre-order'
+import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import styles from './selectors.module.css'
 
 interface RankingSelectorProps {
@@ -13,7 +13,7 @@ interface RankingSelectorProps {
 
 export function RankingSelector({ config, onConfigChange }: RankingSelectorProps) {
   const genreScrollRef = useRef<HTMLDivElement>(null)
-  const { order: visibleGenres } = useGenreOrder()
+  const { visibleGenres } = useGenreOrderV2()
 
   const handlePeriodChange = (period: RankingPeriod) => {
     onConfigChange({ ...config, period })
@@ -80,6 +80,13 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
         <h2 className={styles.selectorTitle}>
           ジャンル
         </h2>
+        {visibleGenres.length === 0 ? (
+          <div className={styles.noGenresMessage}>
+            すべてのジャンルが非表示になっています。
+            <br />
+            設定画面からジャンルの表示を変更してください。
+          </div>
+        ) : (
           <div 
             ref={genreScrollRef}
             className={`${styles.buttonContainer} ${styles.genreScrollContainer}`}
@@ -95,6 +102,7 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
               </button>
             ))}
           </div>
+        )}
       </div>
     </div>
   )

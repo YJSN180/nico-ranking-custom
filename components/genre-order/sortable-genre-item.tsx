@@ -1,42 +1,42 @@
 'use client'
 
 import React from 'react'
-import { RankingGenre } from '@/types/ranking-config'
-import { GENRE_LABELS } from '@/types/ranking-config'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { RankingGenre, GENRE_LABELS } from '@/types/ranking-config'
 import styles from './genre-order.module.css'
 
-interface GenreItemProps {
+interface SortableGenreItemProps {
   genre: RankingGenre
   isVisible: boolean
   onToggleVisibility: () => void
-  isDragging?: boolean
-  onDragStart: (e: React.DragEvent<HTMLDivElement>) => void
-  onDragEnd: (e: React.DragEvent<HTMLDivElement>) => void
-  onDragOver: (e: React.DragEvent<HTMLDivElement>) => void
-  onDrop: (e: React.DragEvent<HTMLDivElement>) => void
 }
 
-export const GenreItem = React.memo(function GenreItem({
-  genre,
-  isVisible,
-  onToggleVisibility,
-  isDragging = false,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop
-}: GenreItemProps) {
+export function SortableGenreItem({ genre, isVisible, onToggleVisibility }: SortableGenreItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: genre })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
   return (
-    <div 
+    <div
+      ref={setNodeRef}
+      style={style}
       className={`${styles.genreItem} ${!isVisible ? styles.hidden : ''} ${isDragging ? styles.dragging : ''}`}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
       data-genre={genre}
+      {...attributes}
     >
-      <div className={styles.dragHandle}>
+      {/* ドラッグハンドル */}
+      <div className={styles.dragHandle} {...listeners}>
         <span className={styles.dragIcon}>☰</span>
       </div>
       
@@ -44,6 +44,7 @@ export const GenreItem = React.memo(function GenreItem({
         {GENRE_LABELS[genre]}
       </div>
       
+      {/* 表示/非表示ボタンはドラッグ対象外 */}
       <button
         className={styles.visibilityToggle}
         onClick={onToggleVisibility}
@@ -54,4 +55,4 @@ export const GenreItem = React.memo(function GenreItem({
       </button>
     </div>
   )
-})
+}

@@ -202,4 +202,121 @@ describe('useGenreOrderV2', () => {
     expect(result.current.items[3].id).toBe('all')
     expect(result.current.items[4].id).toBe('voicesynthesis')
   })
+
+  it('hides all genres when hideAll is called', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // Initially all genres are visible
+    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.hiddenGenres).toHaveLength(0)
+    
+    // Hide all genres
+    act(() => {
+      result.current.hideAll()
+    })
+    
+    // Check all genres are hidden
+    expect(result.current.visibleGenres).toHaveLength(0)
+    expect(result.current.hiddenGenres).toHaveLength(23)
+    expect(result.current.hasChanges).toBe(true)
+    
+    // Check all items have isVisible = false
+    result.current.items.forEach(item => {
+      expect(item.isVisible).toBe(false)
+    })
+  })
+  
+  it('can restore from hideAll state', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // Hide all genres
+    act(() => {
+      result.current.hideAll()
+    })
+    
+    expect(result.current.visibleGenres).toHaveLength(0)
+    
+    // Reset to default
+    act(() => {
+      result.current.resetToDefault()
+    })
+    
+    // Check all genres are visible again
+    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.hiddenGenres).toHaveLength(0)
+  })
+  
+  it('persists hideAll state after apply', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // Hide all genres
+    act(() => {
+      result.current.hideAll()
+    })
+    
+    // Apply changes
+    act(() => {
+      result.current.applyChanges()
+    })
+    
+    // Check localStorage was updated with all genres hidden
+    const saved = JSON.parse(localStorageMock.getItem('nicoRankingGenreOrder') || '[]')
+    expect(saved).toHaveLength(23)
+    saved.forEach((item: any) => {
+      expect(item.isVisible).toBe(false)
+    })
+  })
+
+  it('shows all genres when showAll is called', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // First hide some genres
+    act(() => {
+      result.current.toggleVisibility('music')
+      result.current.toggleVisibility('game')
+      result.current.toggleVisibility('anime')
+    })
+    
+    expect(result.current.visibleGenres).toHaveLength(20)
+    expect(result.current.hiddenGenres).toHaveLength(3)
+    expect(result.current.hasChanges).toBe(true)
+    
+    // Show all genres
+    act(() => {
+      result.current.showAll()
+    })
+    
+    // Check all genres are visible
+    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.hiddenGenres).toHaveLength(0)
+    // hasChanges should be false now because we're back to default state
+    expect(result.current.hasChanges).toBe(false)
+    
+    // Check all items have isVisible = true
+    result.current.items.forEach(item => {
+      expect(item.isVisible).toBe(true)
+    })
+  })
+
+  it('can toggle between showAll and hideAll', () => {
+    const { result } = renderHook(() => useGenreOrderV2())
+    
+    // Hide all
+    act(() => {
+      result.current.hideAll()
+    })
+    expect(result.current.visibleGenres).toHaveLength(0)
+    
+    // Show all
+    act(() => {
+      result.current.showAll()
+    })
+    expect(result.current.visibleGenres).toHaveLength(23)
+    
+    // Hide all again
+    act(() => {
+      result.current.hideAll()
+    })
+    expect(result.current.visibleGenres).toHaveLength(0)
+  })
 })

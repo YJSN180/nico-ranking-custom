@@ -251,3 +251,15 @@
   margin-bottom: 12px;
   display: inline-block;
 }
+
+/* ジャンル非表示時のメッセージ */
+.noGenresMessage {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--surface-hover);
+  border-radius: 8px;
+  margin-top: 8px;
+}
