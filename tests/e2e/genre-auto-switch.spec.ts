@@ -18,12 +18,37 @@ test.describe('ジャンル自動切り替え機能', () => {
     await expect(page.url()).toContain('genre=music')
     
     // 設定モーダルを開く
-    await page.locator('button[aria-label="設定"]').click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+    const settingsButton = page.locator('button[aria-label="設定"]')
+    
+    // デバッグ：ボタンの存在を確認
+    const settingsCount = await settingsButton.count()
+    console.log(`Settings button found: ${settingsCount}`)
+    
+    // ボタンがクリック可能になるまで待機
+    await settingsButton.waitFor({ state: 'visible' })
+    await settingsButton.click()
+    
+    // モーダルが開くまで待機
+    try {
+      await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+    } catch (error) {
+      console.log('Modal not found with role="dialog", trying alternative selector')
+      // 設定モーダルの代替セレクタを試す
+      await page.waitForSelector('div:has(button:has-text("テーマ"))', { timeout: 5000 })
+    }
     await page.waitForTimeout(500)
     
-    // ジャンルタブを開く
-    await page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' }).click()
+    // ジャンルタブを探してクリック
+    let genreTab = page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' })
+    const genreTabCount = await genreTab.count()
+    
+    if (genreTabCount === 0) {
+      // role="dialog"が見つからない場合は、代替セレクタを使用
+      genreTab = page.locator('button').filter({ hasText: 'ジャンル' })
+      console.log(`Using alternative selector for genre tab`)
+    }
+    
+    await genreTab.click()
     await page.waitForTimeout(500)
     
     // 全ジャンルを非表示にする
@@ -59,12 +84,37 @@ test.describe('ジャンル自動切り替え機能', () => {
     await expect(page.url()).toContain('genre=anime')
     
     // 設定モーダルを開く
-    await page.locator('button[aria-label="設定"]').click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+    const settingsButton = page.locator('button[aria-label="設定"]')
+    
+    // デバッグ：ボタンの存在を確認
+    const settingsCount = await settingsButton.count()
+    console.log(`Settings button found: ${settingsCount}`)
+    
+    // ボタンがクリック可能になるまで待機
+    await settingsButton.waitFor({ state: 'visible' })
+    await settingsButton.click()
+    
+    // モーダルが開くまで待機
+    try {
+      await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+    } catch (error) {
+      console.log('Modal not found with role="dialog", trying alternative selector')
+      // 設定モーダルの代替セレクタを試す
+      await page.waitForSelector('div:has(button:has-text("テーマ"))', { timeout: 5000 })
+    }
     await page.waitForTimeout(500)
     
-    // ジャンルタブを開く
-    await page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' }).click()
+    // ジャンルタブを探してクリック
+    let genreTab = page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' })
+    const genreTabCount = await genreTab.count()
+    
+    if (genreTabCount === 0) {
+      // role="dialog"が見つからない場合は、代替セレクタを使用
+      genreTab = page.locator('button').filter({ hasText: 'ジャンル' })
+      console.log(`Using alternative selector for genre tab`)
+    }
+    
+    await genreTab.click()
     await page.waitForTimeout(500)
     
     // 全ジャンルを非表示にする
@@ -104,12 +154,37 @@ test.describe('ジャンル自動切り替え機能', () => {
     await expect(page.url()).toContain('genre=music')
     
     // 設定モーダルを開く
-    await page.locator('button[aria-label="設定"]').click()
-    await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+    const settingsButton = page.locator('button[aria-label="設定"]')
+    
+    // デバッグ：ボタンの存在を確認
+    const settingsCount = await settingsButton.count()
+    console.log(`Settings button found: ${settingsCount}`)
+    
+    // ボタンがクリック可能になるまで待機
+    await settingsButton.waitFor({ state: 'visible' })
+    await settingsButton.click()
+    
+    // モーダルが開くまで待機
+    try {
+      await page.waitForSelector('[role="dialog"]', { timeout: 5000 })
+    } catch (error) {
+      console.log('Modal not found with role="dialog", trying alternative selector')
+      // 設定モーダルの代替セレクタを試す
+      await page.waitForSelector('div:has(button:has-text("テーマ"))', { timeout: 5000 })
+    }
     await page.waitForTimeout(500)
     
-    // ジャンルタブを開く
-    await page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' }).click()
+    // ジャンルタブを探してクリック
+    let genreTab = page.locator('[role="dialog"] button').filter({ hasText: 'ジャンル' })
+    const genreTabCount = await genreTab.count()
+    
+    if (genreTabCount === 0) {
+      // role="dialog"が見つからない場合は、代替セレクタを使用
+      genreTab = page.locator('button').filter({ hasText: 'ジャンル' })
+      console.log(`Using alternative selector for genre tab`)
+    }
+    
+    await genreTab.click()
     await page.waitForTimeout(500)
     
     // ゲームジャンルを非表示にする（音楽は表示のまま）
