@@ -5,16 +5,7 @@ import ClientPage from '@/app/client-page'
 import type { RankingData } from '@/types/ranking'
 
 // モック
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  useSearchParams: () => ({
-    get: (key: string) => null,
-  }),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 vi.mock('@/hooks/use-realtime-stats', () => ({
   useRealtimeStats: (initialData: RankingData) => ({

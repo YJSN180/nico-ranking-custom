@@ -22,15 +22,7 @@ Object.defineProperty(window, 'matchMedia', {
 })
 
 // モックの設定
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    back: vi.fn(),
-  }),
-  useParams: () => ({
-    id: 'test-mylist-id'
-  })
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 vi.mock('@/lib/storage/db-manager')
 vi.mock('@/lib/storage/mylists')

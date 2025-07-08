@@ -13,11 +13,7 @@ vi.mock('@/components/back-link', () => ({
 }))
 
 // Mock useRouter
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-  }),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 describe('MylistsClient Navigation', () => {
   beforeEach(async () => {

@@ -4,10 +4,7 @@ import ClientPage from '@/app/client-page'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 // モック
-vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(),
-  useSearchParams: vi.fn()
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 vi.mock('next/image', () => ({
   default: vi.fn(({ src, alt }: any) => <img src={src} alt={alt} />)

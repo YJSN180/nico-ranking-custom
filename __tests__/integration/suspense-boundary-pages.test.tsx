@@ -4,14 +4,7 @@ import HomePage from '@/app/page'
 import Test500Page from '@/app/test-500/page'
 
 // モックの設定
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  useSearchParams: vi.fn(() => new URLSearchParams())
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 vi.mock('@/lib/simple-kv', () => ({
   kv: {

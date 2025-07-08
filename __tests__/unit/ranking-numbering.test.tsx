@@ -7,14 +7,7 @@ import ClientPage from '@/app/client-page'
 import type { RankingItem } from '@/types'
 
 // Next.js のモック
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  }),
-  useSearchParams: () => new URLSearchParams(),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // fetchのモック
 global.fetch = vi.fn()

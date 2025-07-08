@@ -7,14 +7,7 @@ import { MylistManager } from '@/lib/storage/mylists'
 import type { MylistVideo } from '@/lib/storage/types'
 
 // Mock next/navigation
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-  }),
-  useParams: () => ({
-    id: 'test-mylist-id',
-  }),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // Mock storage managers
 vi.mock('@/lib/storage/db-manager', () => ({

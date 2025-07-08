@@ -8,10 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import type { RankingItem } from '@/types/ranking'
 
 // Mock Next.js navigation
-vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(),
-  useSearchParams: vi.fn(),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // Mock components with lazy loading
 let mockOnConfigChange: any = null

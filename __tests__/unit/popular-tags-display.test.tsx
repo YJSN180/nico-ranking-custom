@@ -21,14 +21,7 @@ vi.mock('@/lib/ranking-cache', () => ({
 }))
 
 // Next.js のモック
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    refresh: vi.fn(),
-  }),
-  useSearchParams: () => new URLSearchParams(),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // TagSelectorを通常のimportに戻すためのモック
 vi.mock('@/components/tag-selector', () => ({

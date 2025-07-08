@@ -5,14 +5,7 @@ import ClientPage from '@/app/client-page'
 import { vi } from 'vitest'
 
 // Mock next/navigation
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  useSearchParams: vi.fn(() => new URLSearchParams())
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // Mock hooks
 vi.mock('@/hooks/use-user-preferences', () => ({

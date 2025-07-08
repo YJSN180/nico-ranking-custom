@@ -9,14 +9,7 @@ import type { RankingData } from '@/types/ranking'
 global.fetch = vi.fn()
 
 // Mock next/navigation
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  useSearchParams: () => new URLSearchParams(),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // Mock hooks
 vi.mock('@/hooks/use-realtime-stats', () => ({

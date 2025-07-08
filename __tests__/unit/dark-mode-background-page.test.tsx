@@ -3,11 +3,7 @@ import { render } from '@/__tests__/test-utils'
 import '@testing-library/jest-dom'
 
 // モック
-vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(() => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  })),
+// Navigation mock is provided by global setup in vitest.setup.ts,
   useSearchParams: vi.fn(() => ({
     get: vi.fn(),
     toString: vi.fn(() => ''),

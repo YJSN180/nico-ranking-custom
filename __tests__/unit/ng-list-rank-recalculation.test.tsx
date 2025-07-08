@@ -6,10 +6,7 @@ import { useUserNGList } from '@/hooks/use-user-ng-list'
 import type { RankingItem } from '@/types/ranking'
 
 // Mock the required modules
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  useSearchParams: () => new URLSearchParams()
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 vi.mock('@/hooks/use-realtime-stats', () => ({
   useRealtimeStats: () => ({ items: [], isUpdating: false, lastUpdated: null })

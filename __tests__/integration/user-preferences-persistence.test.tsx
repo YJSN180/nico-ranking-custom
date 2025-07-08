@@ -5,16 +5,7 @@ import userEvent from '@testing-library/user-event'
 import ClientPage from '@/app/client-page'
 
 // Next.js navigation モック
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  useSearchParams: () => ({
-    get: (key: string) => null,
-  }),
-}))
+// Navigation mock is provided by global setup in vitest.setup.ts
 
 // localStorageのモック
 const localStorageMock = {
