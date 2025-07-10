@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import { cookies } from 'next/headers'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
@@ -141,6 +143,8 @@ export default async function RootLayout({
             <PWARegister />
             <OfflineIndicator />
             {children}
+            <Analytics />
+            <SpeedInsights />
           </MylistOperationsProvider>
         </ThemeProvider>
       </body>
