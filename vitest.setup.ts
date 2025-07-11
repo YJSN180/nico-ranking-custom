@@ -1,19 +1,18 @@
-// デバッグ用: vitest.setup.tsの開始
-console.log('[vitest.setup.ts] START - Loading test environment setup')
+// Uncomment below for debugging test setup issues
+// console.log('[vitest.setup.ts] START - Loading test environment setup')
 
-// 未処理のPromiseエラーを捕捉
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('[vitest.setup.ts] Unhandled Rejection at:', promise, 'reason:', reason)
-  if (reason instanceof Error) {
-    console.error('[vitest.setup.ts] Stack trace:', reason.stack)
-  }
-})
-
-// 未捕捉の例外を捕捉
-process.on('uncaughtException', (error) => {
-  console.error('[vitest.setup.ts] Uncaught Exception:', error)
-  console.error('[vitest.setup.ts] Stack trace:', error.stack)
-})
+// Error handlers for debugging (uncomment if needed)
+// process.on('unhandledRejection', (reason, promise) => {
+//   console.error('[vitest.setup.ts] Unhandled Rejection at:', promise, 'reason:', reason)
+//   if (reason instanceof Error) {
+//     console.error('[vitest.setup.ts] Stack trace:', reason.stack)
+//   }
+// })
+// 
+// process.on('uncaughtException', (error) => {
+//   console.error('[vitest.setup.ts] Uncaught Exception:', error)
+//   console.error('[vitest.setup.ts] Stack trace:', error.stack)
+// })
 
 // テスト環境の強制初期化を最初に実行
 import './__tests__/test-environment'
@@ -144,29 +143,19 @@ global.console = {
   debug: vi.fn(),
 }
 
-// Mock window.matchMedia for JSDOM - CI environment compatible
-const createMatchMediaMock = (query: string) => ({
-  matches: false,
-  media: query,
-  onchange: null,
-  addListener: vi.fn(), // deprecated
-  removeListener: vi.fn(), // deprecated
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  dispatchEvent: vi.fn(),
-})
+// matchMedia mock is already set up in __tests__/test-environment.ts
+// Removing duplicate definition to avoid conflicts
 
-// Set up matchMedia mock globally (for CI environment)
-// CI環境でvi.fn()が正しく動作しない問題を回避するため、直接関数を設定
-global.matchMedia = createMatchMediaMock
-
-// Set up matchMedia mock on window (for browser environment)
+// Set up matchMedia mock on window if needed (for browser environment)
 if (typeof window !== 'undefined') {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    configurable: true,
-    value: global.matchMedia,
-  })
+  // Ensure matchMedia from test-environment.ts is properly available
+  if (!window.matchMedia && global.matchMedia) {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: global.matchMedia,
+    })
+  }
   
   // Set up proper Document constructor for React DOM
   if (!window.Document) {
@@ -197,33 +186,11 @@ if (typeof window !== 'undefined') {
     window.Document = Document
   }
   
-  // Use the same navigator mock for window
-  const navigatorMock = {
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    vibrate: vi.fn(),
-    clipboard: {
-      writeText: vi.fn(() => Promise.resolve()),
-      readText: vi.fn(() => Promise.resolve('')),
-      write: vi.fn(() => Promise.resolve()),
-      read: vi.fn(() => Promise.resolve([]))
-    },
-    vendor: 'Google Inc.',
-    platform: 'Win32',
-    language: 'ja-JP',
-    languages: ['ja-JP', 'ja', 'en'],
-    onLine: true,
-    cookieEnabled: true,
-    maxTouchPoints: 0,
-    mediaDevices: {},
-    permissions: {
-      query: vi.fn(() => Promise.resolve({ state: 'granted' }))
-    }
-  }
-  
-  // Ensure navigator is set on window
-  if (!window.navigator || !window.navigator.clipboard) {
+  // Navigator mock is already set up in __tests__/test-environment.ts
+  // Only ensure it's available on window if missing
+  if (!window.navigator && global.navigator) {
     Object.defineProperty(window, 'navigator', {
-      value: navigatorMock,
+      value: global.navigator,
       writable: true,
       configurable: true,
       enumerable: true
@@ -290,8 +257,8 @@ if (typeof global.CompressionStream === 'undefined') {
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach } from 'vitest'
 
-// デバッグ用: セットアップ完了確認
-console.log('[vitest.setup.ts] Imports completed, proceeding with configuration')
+// Uncomment below for debugging test setup issues
+// console.log('[vitest.setup.ts] Imports completed, proceeding with configuration')
 
 // Use default React Testing Library configuration
 import { configure } from '@testing-library/react'
@@ -337,35 +304,16 @@ afterEach(() => {
   
   // Reset window object properties
   if (typeof window !== 'undefined') {
-    // Restore navigator mock
-    const navigatorMock = {
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      vibrate: vi.fn(),
-      clipboard: {
-        writeText: vi.fn(() => Promise.resolve()),
-        readText: vi.fn(() => Promise.resolve('')),
-        write: vi.fn(() => Promise.resolve()),
-        read: vi.fn(() => Promise.resolve([]))
-      },
-      vendor: 'Google Inc.',
-      platform: 'Win32',
-      language: 'ja-JP',
-      languages: ['ja-JP', 'ja', 'en'],
-      onLine: true,
-      cookieEnabled: true,
-      maxTouchPoints: 0,
-      mediaDevices: {},
-      permissions: {
-        query: vi.fn(() => Promise.resolve({ state: 'granted' }))
-      }
+    // Navigator mock is handled by __tests__/test-environment.ts
+    // Only restore if it's missing
+    if (!window.navigator && global.navigator) {
+      Object.defineProperty(window, 'navigator', {
+        value: global.navigator,
+        writable: true,
+        configurable: true,
+        enumerable: true
+      })
     }
-    
-    Object.defineProperty(window, 'navigator', {
-      value: navigatorMock,
-      writable: true,
-      configurable: true,
-      enumerable: true
-    })
   }
 })
 
@@ -438,5 +386,5 @@ vi.mock('@/context/mylist-operations-context', () => {
   }
 })
 
-// デバッグ用: vitest.setup.tsの完了
-console.log('[vitest.setup.ts] END - Setup completed successfully')
+// Uncomment below for debugging test setup issues
+// console.log('[vitest.setup.ts] END - Setup completed successfully')

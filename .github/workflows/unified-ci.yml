@@ -165,37 +165,13 @@ jobs:
 
       - name: Run tests with coverage (shard ${{ matrix.shard }})
         run: |
-          # デバッグ用: Node.jsとNPMのバージョン確認
-          node --version
-          npm --version
-          
-          # デバッグ用: メモリ状況確認
-          free -m
-          
-          # デバッグ用: vitest listコマンドでテストファイルの確認
-          echo "=== Vitest List (Shard ${{ matrix.shard }}/4) ==="
-          npx vitest list --shard=${{ matrix.shard }}/4 || echo "Vitest list failed with exit code: $?"
-          
-          # デバッグ用: 環境変数の確認
-          echo "=== Environment Variables ==="
-          echo "CI: $CI"
-          echo "VITEST_SHARD: $VITEST_SHARD"
-          echo "NODE_OPTIONS: $NODE_OPTIONS"
-          
           # テスト実行（詳細ログとstderrリダイレクト付き）
-          echo "=== Running Tests ==="
-          npx vitest run --coverage --shard=${{ matrix.shard }}/4 --reporter=verbose --logHeapUsage 2>&1 || {
-            EXIT_CODE=$?
-            echo "Vitest failed with exit code: $EXIT_CODE"
-            echo "=== Debug: Last 50 lines of output ==="
-            exit $EXIT_CODE
-          }
+          npx vitest run --coverage --shard=${{ matrix.shard }}/4 --reporter=verbose --logHeapUsage 2>&1
         env:
           CI: true
           NODE_OPTIONS: '--max-old-space-size=8192'  # メモリ不足エラー対策: 4GB → 8GB
           FORCE_COLOR: 0
           VITEST_SHARD: '${{ matrix.shard }}'  # 各シャードの実際の番号を設定
-          ACTIONS_STEP_DEBUG: true  # GitHub Actionsのデバッグログを有効化
           
       - name: Rename coverage files to prevent overwrite
         if: always()
