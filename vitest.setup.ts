@@ -100,6 +100,15 @@ vi.mock('next/image', () => ({
   }
 }))
 
+// Mock Vercel Analytics and Speed Insights
+vi.mock('@vercel/analytics/react', () => ({
+  Analytics: () => null
+}))
+
+vi.mock('@vercel/speed-insights/next', () => ({
+  SpeedInsights: () => null
+}))
+
 // Mock environment variables
 vi.stubEnv('NODE_ENV', 'test')
 vi.stubEnv('CRON_SECRET', 'test-cron-secret')

@@ -143,8 +143,8 @@ export default async function RootLayout({
             <PWARegister />
             <OfflineIndicator />
             {children}
-            <Analytics />
-            <SpeedInsights />
+            {process.env.NODE_ENV !== 'test' && <Analytics />}
+            {process.env.NODE_ENV !== 'test' && <SpeedInsights />}
           </MylistOperationsProvider>
         </ThemeProvider>
       </body>
