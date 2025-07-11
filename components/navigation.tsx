@@ -113,6 +113,11 @@ export function Navigation() {
 
   // サイドドロワー表示時のボディスクロール制御
   useEffect(() => {
+    // テスト環境対応
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return
+    }
+    
     // CSSメディアクエリでモバイル判定
     const mediaQuery = window.matchMedia('(max-width: 768px)')
     
@@ -131,6 +136,11 @@ export function Navigation() {
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   
   useEffect(() => {
+    // テスト環境対応
+    if (typeof window === 'undefined' || !window.matchMedia) {
+      return
+    }
+    
     // メディアクエリでモバイル判定
     const mediaQuery = window.matchMedia('(max-width: 768px)')
     setShowMobileMenu(mediaQuery.matches)
