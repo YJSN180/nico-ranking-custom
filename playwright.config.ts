@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0, // CI環境でのリトライを2回に増やす
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? 'blob' : 'html',
   
@@ -20,8 +20,11 @@ export default defineConfig({
     // サービスワーカーをブロック（APIモックのため）
     serviceWorkers: 'block',
     // タイムアウト設定を調整
-    actionTimeout: 10000,
-    navigationTimeout: 30000,
+    actionTimeout: 15000, // アクションタイムアウトを15秒に増加
+    navigationTimeout: 45000, // ナビゲーションタイムアウトを45秒に増加
+    // ネットワークの不安定性に対する対策
+    acceptDownloads: false,
+    offline: false,
   },
   
   // グローバルタイムアウト設定

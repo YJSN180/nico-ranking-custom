@@ -227,6 +227,25 @@ if (typeof window !== 'undefined') {
 
 // styled-jsx is now properly installed as a dependency
 
+// Mock Web Streams API for Cloudflare Workers tests
+if (typeof global.DecompressionStream === 'undefined') {
+  // @ts-ignore
+  global.DecompressionStream = class DecompressionStream {
+    constructor(format: string) {
+      // Mock implementation
+    }
+  }
+}
+
+if (typeof global.CompressionStream === 'undefined') {
+  // @ts-ignore
+  global.CompressionStream = class CompressionStream {
+    constructor(format: string) {
+      // Mock implementation
+    }
+  }
+}
+
 // Mock CSS modules - Using individual mock approach for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
 
