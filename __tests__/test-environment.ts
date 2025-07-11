@@ -50,19 +50,21 @@ export function forceTestEnvironmentInit() {
     }
     
     // window.matchMediaの設定
-    if (win) {
-      // 常に新しいmatchMediaを設定（既存のものを上書き）
+    if (win && !win.matchMedia) {
+      // matchMediaが設定されていない場合のみ設定（vitest.setup.tsとの競合を避ける）
+      const matchMediaMock = (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => true
+      })
+      
       Object.defineProperty(win, 'matchMedia', {
-        value: (query: string) => ({
-          matches: false,
-          media: query,
-          onchange: null,
-          addListener: () => {},
-          removeListener: () => {},
-          addEventListener: () => {},
-          removeEventListener: () => {},
-          dispatchEvent: () => true
-        }),
+        value: matchMediaMock,
         writable: true,
         configurable: true,
         enumerable: true
@@ -70,7 +72,7 @@ export function forceTestEnvironmentInit() {
       
       // globalにも設定
       if (typeof global !== 'undefined' && !global.matchMedia) {
-        (global as any).matchMedia = win.matchMedia
+        (global as any).matchMedia = matchMediaMock
       }
     }
   }

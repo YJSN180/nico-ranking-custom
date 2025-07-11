@@ -168,7 +168,7 @@ jobs:
           npx vitest run --coverage --shard=${{ matrix.shard }}/4 --reporter=verbose
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=4096'
+          NODE_OPTIONS: '--max-old-space-size=8192'  # メモリ不足エラー対策: 4GB → 8GB
           FORCE_COLOR: 0
           VITEST_SHARD: '${{ matrix.shard }}'  # 各シャードの実際の番号を設定
           

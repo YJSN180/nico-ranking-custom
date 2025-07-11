@@ -140,7 +140,8 @@ const createMatchMediaMock = (query: string) => ({
 })
 
 // Set up matchMedia mock globally (for CI environment)
-global.matchMedia = vi.fn().mockImplementation(createMatchMediaMock)
+// CI環境でvi.fn()が正しく動作しない問題を回避するため、直接関数を設定
+global.matchMedia = createMatchMediaMock
 
 // Set up matchMedia mock on window (for browser environment)
 if (typeof window !== 'undefined') {

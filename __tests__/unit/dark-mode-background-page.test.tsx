@@ -3,7 +3,8 @@ import { render } from '@/__tests__/test-utils'
 import '@testing-library/jest-dom'
 
 // モック
-// Navigation mock is provided by global setup in vitest.setup.ts,
+// Navigation mock is provided by global setup in vitest.setup.ts
+vi.mock('next/navigation', () => ({
   useSearchParams: vi.fn(() => ({
     get: vi.fn(),
     toString: vi.fn(() => ''),
