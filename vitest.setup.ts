@@ -1,3 +1,20 @@
+// デバッグ用: vitest.setup.tsの開始
+console.log('[vitest.setup.ts] START - Loading test environment setup')
+
+// 未処理のPromiseエラーを捕捉
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[vitest.setup.ts] Unhandled Rejection at:', promise, 'reason:', reason)
+  if (reason instanceof Error) {
+    console.error('[vitest.setup.ts] Stack trace:', reason.stack)
+  }
+})
+
+// 未捕捉の例外を捕捉
+process.on('uncaughtException', (error) => {
+  console.error('[vitest.setup.ts] Uncaught Exception:', error)
+  console.error('[vitest.setup.ts] Stack trace:', error.stack)
+})
+
 // テスト環境の強制初期化を最初に実行
 import './__tests__/test-environment'
 
@@ -273,6 +290,9 @@ if (typeof global.CompressionStream === 'undefined') {
 import { cleanup } from '@testing-library/react'
 import { afterEach, beforeEach } from 'vitest'
 
+// デバッグ用: セットアップ完了確認
+console.log('[vitest.setup.ts] Imports completed, proceeding with configuration')
+
 // Use default React Testing Library configuration
 import { configure } from '@testing-library/react'
 configure({ 
@@ -417,3 +437,6 @@ vi.mock('@/context/mylist-operations-context', () => {
     MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
   }
 })
+
+// デバッグ用: vitest.setup.tsの完了
+console.log('[vitest.setup.ts] END - Setup completed successfully')
