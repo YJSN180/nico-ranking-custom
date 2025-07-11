@@ -127,20 +127,27 @@ global.console = {
   debug: vi.fn(),
 }
 
-// Mock window.matchMedia for JSDOM
+// Mock window.matchMedia for JSDOM - CI environment compatible
+const createMatchMediaMock = (query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener: vi.fn(), // deprecated
+  removeListener: vi.fn(), // deprecated
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
+})
+
+// Set up matchMedia mock globally (for CI environment)
+global.matchMedia = vi.fn().mockImplementation(createMatchMediaMock)
+
+// Set up matchMedia mock on window (for browser environment)
 if (typeof window !== 'undefined') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
-    value: vi.fn().mockImplementation(query => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: vi.fn(), // deprecated
-      removeListener: vi.fn(), // deprecated
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
+    configurable: true,
+    value: global.matchMedia,
   })
   
   // Set up proper Document constructor for React DOM

@@ -118,10 +118,10 @@ export function Navigation() {
       return
     }
     
-    // CSSメディアクエリでモバイル判定
-    const mediaQuery = window.matchMedia('(max-width: 768px)')
+    // CSSメディアクエリでモバイル判定 - 防御的コーディング
+    const mediaQuery = window.matchMedia && window.matchMedia('(max-width: 768px)')
     
-    if (mediaQuery.matches && isOpen) {
+    if (mediaQuery && mediaQuery.matches && isOpen) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = ''

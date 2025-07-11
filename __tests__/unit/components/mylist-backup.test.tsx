@@ -67,12 +67,19 @@ const mockUseMylistOperations = useMylistOperations as unknown as ReturnType<typ
 
 
 
-// window.location.reloadのモック
+// window.location.reloadのモック - jsdom compatible
 const mockReload = vi.fn()
-Object.defineProperty(window, 'location', {
-  value: { reload: mockReload },
-  writable: true
-})
+const originalLocation = window.location
+
+// Store original location for cleanup
+const mockLocation = {
+  ...originalLocation,
+  reload: mockReload
+}
+
+// Use delete and redefine for jsdom compatibility
+delete (window as any).location
+window.location = mockLocation as Location
 
 // window.confirmのモック
 const mockConfirm = vi.fn()
