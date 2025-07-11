@@ -168,9 +168,9 @@ jobs:
           npx vitest run --coverage --shard=${{ matrix.shard }}/4 --reporter=verbose
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=8192'
+          NODE_OPTIONS: '--max-old-space-size=4096'
           FORCE_COLOR: 0
-          VITEST_SHARD: '1'  # シャード実行を示すフラグ
+          VITEST_SHARD: '${{ matrix.shard }}'  # 各シャードの実際の番号を設定
           
       - name: Rename coverage files to prevent overwrite
         if: always()

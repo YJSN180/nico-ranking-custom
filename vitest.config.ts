@@ -55,20 +55,14 @@ export default defineConfig({
       ] : [])
     ],
     testTimeout: process.env.CI ? 120000 : 10000,  // CI環境では2分に増加
-    pool: process.env.VITEST_SHARD ? 'vmThreads' : 'forks',  // シャード時はvmThreadsを使用
+    pool: 'forks',  // CI環境でのより安定した実行のためforksに統一
     poolOptions: {
       forks: {
         // シャード環境に対応したメモリ使用量制限
         maxForks: process.env.CI && process.env.VITEST_SHARD ? 1 : (process.env.CI ? 2 : 4),
         minForks: 1,
-        // シャード環境では singleFork を無効化
-        singleFork: false
-      },
-      vmThreads: {
-        // vmThreadsプール用の設定
-        maxThreads: 1,
-        minThreads: 1,
-        useAtomics: false
+        // シャード環境では singleFork を有効化して安定性向上
+        singleFork: process.env.CI && process.env.VITEST_SHARD ? true : false
       }
     },
     // CI環境での追加設定 (シャード対応版)
