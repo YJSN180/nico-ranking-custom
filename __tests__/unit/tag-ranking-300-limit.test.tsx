@@ -83,10 +83,13 @@ describe('タグ別ランキング300件制限', () => {
     expect(items).toHaveLength(100)
     
     // ページネーションが表示されることを確認
-    expect(screen.getByTestId('pagination')).toBeInTheDocument()
+    const paginations = screen.queryAllByRole('navigation', { name: 'ページネーション' })
+    expect(paginations.length).toBeGreaterThan(0)
     
-    // 合計3ページあることを確認
-    expect(screen.getByText('Page 1 of 3')).toBeInTheDocument()
+    // ページサマリーからページ数を確認（モバイル用の表示）
+    const pageSummaries = screen.queryAllByTestId('page-summary')
+    expect(pageSummaries.length).toBeGreaterThan(0)
+    expect(pageSummaries[0]).toHaveTextContent('1 / 3')
   })
 
   it('タグ別ランキングが100件を超える場合はページネーションが表示される', () => {
@@ -109,9 +112,12 @@ describe('タグ別ランキング300件制限', () => {
     expect(items).toHaveLength(100)
     
     // ページネーションが表示されることを確認
-    expect(screen.getByTestId('pagination')).toBeInTheDocument()
+    const paginations = screen.queryAllByRole('navigation', { name: 'ページネーション' })
+    expect(paginations.length).toBeGreaterThan(0)
     
-    // 合計2ページあることを確認
-    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument()
+    // ページサマリーからページ数を確認（モバイル用の表示）
+    const pageSummaries = screen.queryAllByTestId('page-summary')
+    expect(pageSummaries.length).toBeGreaterThan(0)
+    expect(pageSummaries[0]).toHaveTextContent('1 / 2')
   })
 })

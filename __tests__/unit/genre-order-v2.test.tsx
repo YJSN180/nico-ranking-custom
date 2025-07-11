@@ -47,18 +47,19 @@ describe('GenreOrderCustomizer v2', () => {
   it('applies different styles to hidden genres', () => {
     render(<GenreOrderCustomizer />)
     
-    const animeItem = screen.getByText('アニメ').closest('div[draggable]')
+    const animeItem = screen.getByText('アニメ').closest('div[data-genre]')
     // CSS modulesはクラス名を変換するため、クラス名の部分一致で確認
     expect(animeItem?.className).toMatch(/hidden/)
     
-    const gameItem = screen.getByText('ゲーム').closest('div[draggable]')
+    const gameItem = screen.getByText('ゲーム').closest('div[data-genre]')
     expect(gameItem?.className).not.toMatch(/hidden/)
   })
 
   it('renders visibility toggle buttons', () => {
     render(<GenreOrderCustomizer />)
     
-    const visibilityButtons = screen.getAllByRole('button', { name: /表示する|非表示にする/ })
+    // より具体的なaria-labelで検索
+    const visibilityButtons = screen.getAllByRole('button', { name: /を表示する|を非表示にする/ })
     expect(visibilityButtons.length).toBe(4)
   })
 
@@ -84,21 +85,18 @@ describe('GenreOrderCustomizer v2', () => {
 })
 
 describe('GenreOrderCustomizer v2 - Drag and Drop', () => {
-  it('sets draggable attribute on all items', () => {
+  it('has drag handles on all items', () => {
     render(<GenreOrderCustomizer />)
     
-    const items = screen.getAllByText(/総合|ゲーム|アニメ|ボカロ/)
-      .map(el => el.closest('div[draggable]'))
-    
-    items.forEach(item => {
-      expect(item).toHaveAttribute('draggable', 'true')
-    })
+    // ドラッグハンドルアイコンを探す
+    const dragHandles = screen.getAllByText('☰')
+    expect(dragHandles.length).toBe(4)
   })
 
-  it('has data-genre attribute on draggable items', () => {
+  it('has data-genre attribute on items', () => {
     render(<GenreOrderCustomizer />)
     
-    const gameItem = screen.getByText('ゲーム').closest('div[draggable]')
+    const gameItem = screen.getByText('ゲーム').closest('div[data-genre]')
     expect(gameItem).toHaveAttribute('data-genre', 'game')
   })
 })

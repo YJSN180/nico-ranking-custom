@@ -193,12 +193,12 @@ describe('NG List Continuous Rank Display', () => {
 
     await waitFor(() => {
       // リンク要素で動画アイテムを探す
-      const items = screen.getAllByRole('link', { name: /Test Video/ })
+      const items = screen.getAllByRole('link', { name: /Video/ })
       expect(items.length).toBeGreaterThan(0)
     })
 
     // data-testidの代わりにリンク要素を使用
-    const items = screen.getAllByRole('link', { name: /Test Video/ })
+    const items = screen.getAllByRole('link', { name: /Video/ })
     
     // With NG list blocking sm2, sm5, sm8:
     // Displayed items should be: sm1(rank 1), sm3(rank 2), sm4(rank 3), sm6(rank 4), sm7(rank 5), sm9(rank 6), sm10(rank 7)
@@ -211,7 +211,7 @@ describe('NG List Continuous Rank Display', () => {
     items.forEach((item, index) => {
       // NGリストでフィルタリングされた後の動画が表示されていることを確認
       const expectedVideoNumbers = [1, 3, 4, 6, 7, 9, 10]
-      expect(item).toHaveTextContent(`Test Video ${expectedVideoNumbers[index]}`)
+      expect(item).toHaveTextContent(`Video ${expectedVideoNumbers[index]}`)
     })
   })
 })
