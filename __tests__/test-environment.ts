@@ -8,6 +8,22 @@ export function forceTestEnvironmentInit() {
       (global as any).Document = win.Document
     }
     
+    // Ensure document structure exists
+    if (win && win.document) {
+      if (!win.document.documentElement) {
+        const html = win.document.createElement('html')
+        win.document.appendChild(html)
+      }
+      if (!win.document.head) {
+        const head = win.document.createElement('head')
+        win.document.documentElement.appendChild(head)
+      }
+      if (!win.document.body) {
+        const body = win.document.createElement('body')
+        win.document.documentElement.appendChild(body)
+      }
+    }
+    
     // navigatorの完全な設定
     const navigatorMock = {
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

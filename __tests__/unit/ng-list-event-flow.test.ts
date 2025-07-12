@@ -97,14 +97,15 @@ describe('NG List Event Flow', () => {
       // Manually set localStorage
       localStorage.setItem('user-ng-list', JSON.stringify(newNGList))
       
-      // Dispatch storage event
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'user-ng-list',
-        newValue: JSON.stringify(newNGList),
-        oldValue: null,
-        storageArea: localStorage,
-        url: window.location.href
-      }))
+      // Create a custom event instead of StorageEvent for JSDOM compatibility
+      const event = new Event('storage')
+      Object.defineProperty(event, 'key', { value: 'user-ng-list', writable: false })
+      Object.defineProperty(event, 'newValue', { value: JSON.stringify(newNGList), writable: false })
+      Object.defineProperty(event, 'oldValue', { value: null, writable: false })
+      Object.defineProperty(event, 'storageArea', { value: localStorage, writable: false })
+      Object.defineProperty(event, 'url', { value: window.location.href, writable: false })
+      
+      window.dispatchEvent(event)
     })
     
     // Check if ngList is updated
