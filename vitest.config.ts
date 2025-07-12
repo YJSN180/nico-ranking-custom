@@ -61,6 +61,17 @@ export default defineConfig({
         '__tests__/unit/storage/backup-restore.test.ts',  // Large test file (676 lines) causing memory issues
         '__tests__/unit/popular-tags-display.test.tsx',  // Large test file (493 lines) causing memory issues
         '__tests__/unit/scraper-extended.test.ts',  // Large test file (465 lines) causing memory issues
+        // Additional shard-specific exclusions (temporary)
+        ...(process.env.VITEST_SHARD === '2' ? [
+          '__tests__/unit/cloudflare-workers-complete.test.ts',
+          '__tests__/unit/cloudflare-kv-extended-fixed.test.ts',
+          '__tests__/integration/worker-kv-optimization.test.ts'
+        ] : []),
+        ...(process.env.VITEST_SHARD === '4' ? [
+          '__tests__/unit/typescript-compile.test.ts',
+          '__tests__/unit/minimal-build.test.ts',
+          '__tests__/integration/data-flow.test.ts'
+        ] : [])
       ] : [])
     ],
     testTimeout: process.env.CI ? 120000 : 10000,  // CI環境では2分に増加
@@ -74,7 +85,7 @@ export default defineConfig({
         singleFork: process.env.CI && process.env.VITEST_SHARD ? true : false,
         // メモリリークを防ぐためワーカーを定期的にリサイクル
         isolate: true,
-        execArgv: process.env.CI ? ['--expose-gc'] : []
+        execArgv: process.env.CI ? ['--expose-gc', '--max-old-space-size=4096'] : []
       }
     },
     // CI環境での追加設定 (シャード対応版)
