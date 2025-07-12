@@ -22,8 +22,45 @@ import { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, after
 import './__tests__/mocks/next-router'
 import React from 'react'
 
-// Jest API compatibility - map Jest globals to vitest
-globalThis.jest = vi
+// Jest API compatibility - comprehensive mapping for Jest to Vitest migration
+globalThis.jest = {
+  fn: vi.fn,
+  spyOn: vi.spyOn,
+  clearAllMocks: vi.clearAllMocks,
+  resetAllMocks: vi.resetAllMocks,
+  restoreAllMocks: vi.restoreAllMocks,
+  // Jest useFakeTimers returns an object with timer control methods
+  // Vitest useFakeTimers returns void, so we provide compatibility layer
+  useFakeTimers: (config?: any) => {
+    vi.useFakeTimers(config)
+    return {
+      advanceTimersByTime: vi.advanceTimersByTime.bind(vi),
+      advanceTimersToNextTimer: vi.advanceTimersToNextTimer.bind(vi),
+      runAllTimers: vi.runAllTimers.bind(vi),
+      runOnlyPendingTimers: vi.runOnlyPendingTimers.bind(vi),
+      clearAllTimers: vi.clearAllTimers.bind(vi),
+      getTimerCount: () => vi.getTimerCount(),
+      now: () => Date.now(),
+      setSystemTime: (time: number | Date) => vi.setSystemTime(time),
+    }
+  },
+  useRealTimers: vi.useRealTimers.bind(vi),
+  clearAllTimers: vi.clearAllTimers.bind(vi),
+  advanceTimersByTime: vi.advanceTimersByTime.bind(vi),
+  runAllTimers: vi.runAllTimers.bind(vi),
+  runOnlyPendingTimers: vi.runOnlyPendingTimers.bind(vi),
+  advanceTimersToNextTimer: vi.advanceTimersToNextTimer.bind(vi),
+  getTimerCount: vi.getTimerCount.bind(vi),
+  setSystemTime: vi.setSystemTime.bind(vi),
+  mocked: vi.mocked,
+  unmock: vi.unmock.bind(vi),
+  mock: vi.mock.bind(vi),
+  resetModules: vi.resetModules.bind(vi),
+  isolateModules: vi.isolateModules.bind(vi),
+  retryTimes: () => {},
+  setTimeout: (timeout: number) => {},
+} as any
+
 globalThis.expect = expect
 globalThis.describe = describe
 globalThis.it = it
