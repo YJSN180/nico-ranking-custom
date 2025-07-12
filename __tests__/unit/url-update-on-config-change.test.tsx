@@ -5,9 +5,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import ClientPage from '@/app/client-page'
 import type { RankingData } from '@/types/ranking'
 
-// Navigation mock is provided by global setup in vitest.setup.ts
-import * as nextNavigation from 'next/navigation'
-
 // Create mock router for test use
 const mockPush = vi.fn()
 const mockRouter = {
@@ -19,7 +16,16 @@ const mockRouter = {
   prefetch: vi.fn(),
 }
 
-// Mock will be set in beforeEach within describe block
+// Mock navigation before any imports
+vi.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+  useSearchParams: () => ({
+    get: vi.fn(),
+    toString: vi.fn(() => ''),
+  }),
+  usePathname: () => '/',
+  useParams: () => ({}),
+}))
 
 // useRealtimeStatsのモック
 vi.mock('@/hooks/use-realtime-stats', () => ({
@@ -99,9 +105,6 @@ describe('URL更新テスト', () => {
     sessionStorageMock.setItem.mockReset()
     mockPush.mockReset()
     vi.clearAllMocks()
-    
-    // Override the global navigation mock for this specific test
-    vi.spyOn(nextNavigation, 'useRouter').mockReturnValue(mockRouter)
     
     // カスタムNGリストが設定されていない状態にする
     localStorageMock.getItem.mockReturnValue(null)
