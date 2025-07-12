@@ -157,6 +157,28 @@ if (typeof window !== 'undefined') {
     })
   }
   
+  // Fix StorageEvent constructor for JSDOM (CI compatibility)
+  if (!window.StorageEvent || typeof window.StorageEvent !== 'function') {
+    class StorageEventPolyfill extends Event {
+      key: string | null
+      newValue: string | null
+      oldValue: string | null
+      storageArea: Storage | null
+      url: string
+      
+      constructor(type: string, eventInitDict?: StorageEventInit) {
+        super(type, eventInitDict)
+        this.key = eventInitDict?.key ?? null
+        this.newValue = eventInitDict?.newValue ?? null
+        this.oldValue = eventInitDict?.oldValue ?? null
+        this.storageArea = eventInitDict?.storageArea ?? null
+        this.url = eventInitDict?.url ?? ''
+      }
+    }
+    
+    window.StorageEvent = StorageEventPolyfill as any
+  }
+  
   // Set up proper Document constructor for React DOM
   if (!window.Document) {
     window.Document = Document
