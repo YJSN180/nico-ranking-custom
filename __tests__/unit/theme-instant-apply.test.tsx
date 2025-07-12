@@ -61,9 +61,9 @@ describe('テーマの即時反映', () => {
     
     render(<SettingsModal isOpen={true} onClose={onClose} />)
     
-    // 表示設定タブをクリック
-    const displayTab = screen.getByText('表示設定')
-    fireEvent.click(displayTab)
+    // テーマタブをクリック（デフォルトで開いているはずだが、念のため）
+    const themeTab = screen.getByText(/テーマ/)
+    fireEvent.click(themeTab)
     
     // ダークモードラジオボタンを取得
     const darkModeRadio = screen.getByLabelText(/ダークモード/)

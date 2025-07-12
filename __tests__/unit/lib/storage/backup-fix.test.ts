@@ -167,6 +167,15 @@ describe('Backup Fix - エクスポート・インポート機能の修正', () 
     await dbManager.init()
     mylistManager = new MylistManager(dbManager)
     
+    // 念のため、既存のデータをクリア
+    const newDb = dbManager.getDB()
+    if (newDb) {
+      const tx = newDb.transaction(['mylists', 'mylistVideos'], 'readwrite')
+      await tx.objectStore('mylists').clear()
+      await tx.objectStore('mylistVideos').clear()
+      await tx.done
+    }
+    
     // インポート（修正後：正常に動作するはず）
     const result = await importMylistData(exportedData)
     expect(result.success).toBe(true)
