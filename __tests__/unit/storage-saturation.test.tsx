@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, waitFor, act, screen } from '@testing-library/react'
 import ClientPage from '@/app/client-page'
-import { useRouter, useSearchParams } from 'next/navigation'
 
 // モック
 // Navigation mock is provided by global setup in vitest.setup.ts
@@ -74,10 +73,9 @@ vi.mock('@/components/ranking-item', () => ({
 }))
 
 describe('Storage飽和問題', () => {
-  const mockPush = vi.fn()
-  const mockReplaceState = vi.fn()
   let localStorageSetItemSpy: any
   let localStorageGetItemSpy: any
+  let mockReplaceState: any
   
   const createMockData = (count: number) => {
     return Array.from({ length: count }, (_, i) => ({
@@ -104,6 +102,7 @@ describe('Storage飽和問題', () => {
     localStorageGetItemSpy = vi.spyOn(Storage.prototype, 'getItem')
     
     // window.history.replaceStateのモック
+    mockReplaceState = vi.fn()
     Object.defineProperty(window, 'history', {
       value: {
         replaceState: mockReplaceState,
@@ -127,19 +126,8 @@ describe('Storage飽和問題', () => {
       })),
     })
     
-    // useRouterのモック
-    ;(useRouter as any).mockReturnValue({
-      push: mockPush,
-      replace: vi.fn(),
-      prefetch: vi.fn()
-    })
-    
-    // useSearchParamsのモック
-    const searchParams = {
-      get: (key: string) => null,
-      toString: () => ''
-    }
-    ;(useSearchParams as any).mockReturnValue(searchParams)
+    // Router push mock is already set up globally
+    // We'll just track calls through the global mock
   })
 
   afterEach(() => {

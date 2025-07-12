@@ -6,8 +6,12 @@ import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { useUserNGList } from '@/hooks/use-user-ng-list'
 
 // モック
-vi.mock('@/hooks/use-user-preferences')
-vi.mock('@/hooks/use-user-ng-list')
+vi.mock('@/hooks/use-user-preferences', () => ({
+  useUserPreferences: vi.fn()
+}))
+vi.mock('@/hooks/use-user-ng-list', () => ({
+  useUserNGList: vi.fn()
+}))
 
 describe('テーマの即時反映', () => {
   const mockUpdatePreferences = vi.fn()
