@@ -19,6 +19,9 @@ describe('useNavigationState', () => {
   beforeEach(() => {
     jest.useFakeTimers()
     
+    // PWAテストフラグを設定
+    (window as any).__TESTING_PWA__ = true
+    
     // デフォルトのモック返却値を設定
     mockPathname.mockReturnValue('/')
     mockSearchParams.mockReturnValue(new URLSearchParams(''))
@@ -69,6 +72,9 @@ describe('useNavigationState', () => {
   })
 
   afterEach(() => {
+    // PWAテストフラグをクリア
+    delete (window as any).__TESTING_PWA__
+    
     Object.defineProperty(window, 'scrollY', {
       value: originalScrollY,
       configurable: true

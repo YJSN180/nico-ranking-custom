@@ -40,6 +40,11 @@ export function isAndroid(): boolean {
 export function isPWAInstalled(): boolean {
   if (typeof window === 'undefined') return false
   
+  // Early return for test environment unless specifically testing PWA
+  if (process.env.NODE_ENV === 'test' && !(window as any).__TESTING_PWA_DETECTION__) {
+    return false
+  }
+  
   // メディアクエリでdisplay-modeをチェック
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches
   const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches

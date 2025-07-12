@@ -21,6 +21,11 @@ describe('PWA Detection', () => {
     originalNavigator = global.navigator
     originalMatchMedia = global.matchMedia
     
+    // PWA検出テストフラグを設定
+    if (typeof window !== 'undefined') {
+      (window as any).__TESTING_PWA_DETECTION__ = true
+    }
+    
     // LocalStorageのクリア
     if (typeof localStorage !== 'undefined') {
       localStorage.clear()
@@ -67,6 +72,11 @@ describe('PWA Detection', () => {
   })
 
   afterEach(() => {
+    // PWA検出テストフラグをクリア
+    if (typeof window !== 'undefined') {
+      delete (window as any).__TESTING_PWA_DETECTION__
+    }
+    
     // オリジナルを復元
     global.navigator = originalNavigator
     global.matchMedia = originalMatchMedia
