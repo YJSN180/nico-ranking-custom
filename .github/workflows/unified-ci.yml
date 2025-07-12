@@ -165,8 +165,55 @@ jobs:
 
       - name: Run tests with coverage (shard ${{ matrix.shard }})
         run: |
-          # テスト実行（詳細ログとstderrリダイレクト付き）
-          npx vitest run --coverage --shard=${{ matrix.shard }}/2 --reporter=verbose --logHeapUsage 2>&1
+          # デバッグ情報の出力
+          echo "=== Environment Info ==="
+          echo "Node version: $(node --version)"
+          echo "NPM version: $(npm --version)"
+          echo "Current directory: $(pwd)"
+          echo "VITEST_SHARD: $VITEST_SHARD"
+          echo ""
+          
+          # vitestバージョン確認
+          echo "=== Vitest version ==="
+          npx vitest --version || echo "Failed to get vitest version"
+          echo ""
+          
+          # テスト実行（直接バイナリを使用してnpxの問題を回避）
+          echo "=== Running tests ==="
+          if [ -f "./node_modules/.bin/vitest" ]; then
+            echo "Using direct vitest binary..."
+            ./node_modules/.bin/vitest run --coverage --shard=${{ matrix.shard }}/2 --reporter=verbose --logHeapUsage 2>&1 || {
+              EXIT_CODE=$?
+              echo "Direct binary execution failed with exit code: $EXIT_CODE"
+              echo "Falling back to npx..."
+              npx vitest run --coverage --shard=${{ matrix.shard }}/2 --reporter=verbose --logHeapUsage 2>&1 || {
+                EXIT_CODE=$?
+                echo ""
+                echo "=== Test execution failed with exit code: $EXIT_CODE ==="
+                echo "Checking for common issues..."
+                
+                # node_modulesの確認
+                if [ ! -d "node_modules" ]; then
+                  echo "ERROR: node_modules directory not found!"
+                fi
+                
+                # vitestバイナリの確認
+                if [ ! -f "node_modules/.bin/vitest" ]; then
+                  echo "ERROR: vitest binary not found in node_modules/.bin/"
+                fi
+                
+                # メモリ使用状況
+                echo ""
+                echo "=== Memory usage ==="
+                free -h || true
+                
+                exit $EXIT_CODE
+              }
+            }
+          else
+            echo "vitest binary not found, using npx..."
+            npx vitest run --coverage --shard=${{ matrix.shard }}/2 --reporter=verbose --logHeapUsage 2>&1
+          fi
         env:
           CI: true
           NODE_OPTIONS: '--max-old-space-size=16384 --expose-gc'  # メモリ不足エラー対策: 16GB + GC制御

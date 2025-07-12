@@ -154,18 +154,17 @@ global.console = {
 // matchMedia mock is already set up in __tests__/test-environment.ts
 // Removing duplicate definition to avoid conflicts
 
-// Set up matchMedia mock on window if needed (for browser environment)
-if (typeof window !== 'undefined') {
-  // Ensure matchMedia from test-environment.ts is properly available
+// matchMedia is already set up in __tests__/test-environment.ts
+// Simply ensure it's available on window if needed
+if (typeof window !== 'undefined' && typeof global !== 'undefined') {
+  // Only set up if missing - trust test-environment.ts implementation
   if (!window.matchMedia && global.matchMedia) {
-    Object.defineProperty(window, 'matchMedia', {
-      writable: true,
-      configurable: true,
-      value: global.matchMedia,
-    })
+    window.matchMedia = global.matchMedia
   }
-  
-  // Fix StorageEvent constructor for JSDOM (CI compatibility)
+}
+
+// Fix StorageEvent constructor for JSDOM (CI compatibility)
+if (typeof window !== 'undefined') {
   if (!window.StorageEvent || typeof window.StorageEvent !== 'function') {
     class StorageEventPolyfill extends Event {
       key: string | null
