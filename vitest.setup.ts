@@ -161,6 +161,20 @@ if (typeof window !== 'undefined' && typeof global !== 'undefined') {
   if (!window.matchMedia && global.matchMedia) {
     window.matchMedia = global.matchMedia
   }
+  
+  // Additional safety check - if still missing, create a basic mock
+  if (!window.matchMedia) {
+    window.matchMedia = (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true
+    })
+  }
 }
 
 // Fix StorageEvent constructor for JSDOM (CI compatibility)

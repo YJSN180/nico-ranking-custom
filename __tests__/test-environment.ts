@@ -66,30 +66,39 @@ export function forceTestEnvironmentInit() {
     }
     
     // window.matchMediaの設定 - CI環境での安定性向上のため常に設定
-    const matchMediaMock = (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => true
-    })
+    const matchMediaMock = (query: string) => {
+      // Ensure the mock function always returns a valid object
+      const result = {
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => true
+      }
+      return result
+    }
     
     // 既存のmatchMediaがある場合も上書き（CI環境での不安定性対策）
     if (win) {
       Object.defineProperty(win, 'matchMedia', {
         value: matchMediaMock,
-        writable: true,
-        configurable: true,
+        writable: false,  // Make it non-writable to prevent accidental deletion
+        configurable: false,  // Make it non-configurable to prevent redefinition
         enumerable: true
       })
     }
     
     // globalにも設定
     if (typeof global !== 'undefined') {
-      (global as any).matchMedia = matchMediaMock
+      Object.defineProperty(global, 'matchMedia', {
+        value: matchMediaMock,
+        writable: false,
+        configurable: false,
+        enumerable: true
+      })
     }
   }
 }
