@@ -85,8 +85,8 @@ export function forceTestEnvironmentInit() {
     if (win) {
       Object.defineProperty(win, 'matchMedia', {
         value: matchMediaMock,
-        writable: false,  // Make it non-writable to prevent accidental deletion
-        configurable: false,  // Make it non-configurable to prevent redefinition
+        writable: true,  // Allow override if needed by specific tests
+        configurable: true,  // Allow reconfiguration if needed
         enumerable: true
       })
     }
@@ -95,8 +95,8 @@ export function forceTestEnvironmentInit() {
     if (typeof global !== 'undefined') {
       Object.defineProperty(global, 'matchMedia', {
         value: matchMediaMock,
-        writable: false,
-        configurable: false,
+        writable: true,
+        configurable: true,
         enumerable: true
       })
     }

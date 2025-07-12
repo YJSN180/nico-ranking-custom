@@ -7,20 +7,7 @@ import { MylistManager } from '@/lib/storage/mylists'
 import { DBManager } from '@/lib/storage/db-manager'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'
 
-// window.matchMediaのモックを確実に設定
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
+// window.matchMediaのモックは既にtest-environment.tsで設定されているため削除
 
 // モックの設定
 // Navigation mock is provided by global setup in vitest.setup.ts
