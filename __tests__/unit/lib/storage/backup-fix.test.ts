@@ -195,10 +195,12 @@ describe('Backup Fix - エクスポート・インポート機能の修正', () 
     
     expect(video1Data).toBeTruthy()
     expect(video1Data?.title).toBe('動画1')
-    expect(video1Data?.views).toBe(1000)
+    // 統計情報は意図的にエクスポートから除外されている
+    expect(video1Data?.views).toBeUndefined()
     
     expect(video2Data).toBeTruthy()
     expect(video2Data?.title).toBe('動画2')
-    expect(video2Data?.views).toBe(2000)
+    // 統計情報は意図的にエクスポートから除外されている
+    expect(video2Data?.views).toBeUndefined()
   })
 })

@@ -108,14 +108,6 @@ vi.mock('@/hooks/use-ranking-data', () => ({
 }))
 
 describe('ClientPageOptimized', () => {
-  const mockRouter = {
-    push: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }
-
-  const mockSearchParams = new URLSearchParams()
-
   const mockRankingItems: RankingItem[] = [
     {
       id: 'sm1',
@@ -147,11 +139,6 @@ describe('ClientPageOptimized', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset mock implementations
-    mockRouter.push.mockClear()
-    mockRouter.replace.mockClear()
-    mockSearchParams.get.mockClear()
-    mockSearchParams.toString.mockClear()
   })
 
   it('renders initial data immediately without hydration', () => {
