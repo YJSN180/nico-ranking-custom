@@ -4,11 +4,29 @@ import { render } from '@/__tests__/test-utils'
 import '@testing-library/jest-dom'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import ClientPageOptimized from '@/app/client-page-optimized'
-import { useRouter, useSearchParams } from 'next/navigation'
 import type { RankingItem } from '@/types/ranking'
 
-// Mock Next.js navigation
-// Navigation mock is provided by global setup in vitest.setup.ts
+// Mock Next.js navigation must be done before imports
+const mockRouter = {
+  push: vi.fn(),
+  replace: vi.fn(),
+  prefetch: vi.fn(),
+  back: vi.fn(),
+  forward: vi.fn(),
+  refresh: vi.fn(),
+}
+
+const mockSearchParams = {
+  get: vi.fn(),
+  toString: vi.fn(() => ''),
+}
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
+  usePathname: () => '/',
+  useParams: () => ({}),
+}))
 
 // Mock components with lazy loading
 let mockOnConfigChange: any = null
@@ -129,8 +147,11 @@ describe('ClientPageOptimized', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    ;(useRouter as any).mockReturnValue(mockRouter)
-    ;(useSearchParams as any).mockReturnValue(mockSearchParams)
+    // Reset mock implementations
+    mockRouter.push.mockClear()
+    mockRouter.replace.mockClear()
+    mockSearchParams.get.mockClear()
+    mockSearchParams.toString.mockClear()
   })
 
   it('renders initial data immediately without hydration', () => {
