@@ -7,11 +7,21 @@ describe('pwa-utils', () => {
   let originalOpen: typeof window.open
 
   beforeEach(() => {
+    // window.openが存在しない場合は先に設定
+    if (!window.open) {
+      window.open = jest.fn()
+    }
+    
     // 元の値を保存
     originalMatchMedia = window.matchMedia
     originalNavigator = window.navigator
     originalLocation = window.location
     originalOpen = window.open
+
+    // PWAテストフラグを設定
+    if (typeof window !== 'undefined') {
+      (window as any).__TESTING_PWA__ = true
+    }
 
     // モック設定
     Object.defineProperty(window, 'location', {
@@ -24,6 +34,9 @@ describe('pwa-utils', () => {
   })
 
   afterEach(() => {
+    // PWAテストフラグをクリア
+    delete (window as any).__TESTING_PWA__
+    
     // 元の値を復元
     window.matchMedia = originalMatchMedia
     Object.defineProperty(window, 'navigator', {

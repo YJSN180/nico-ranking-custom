@@ -12,8 +12,8 @@ export function isPWA(): boolean {
     return false
   }
   
-  // Early return for test environment
-  if (process.env.NODE_ENV === 'test') {
+  // Early return for test environment unless specifically testing PWA
+  if (process.env.NODE_ENV === 'test' && !(window as any).__TESTING_PWA__) {
     return false
   }
   
