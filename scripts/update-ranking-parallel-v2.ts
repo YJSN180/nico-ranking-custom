@@ -11,6 +11,12 @@ const ENABLE_TAG_FETCHING = process.env.ENABLE_TAG_FETCHING === 'true'
 const TAG_FETCH_MAX_VIDEOS = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '500', 10)
 const TAG_FETCH_GENRES = process.env.TAG_FETCH_GENRES?.split(',').filter(Boolean) || []
 
+// Debug: Log tag fetching configuration
+console.log('Tag fetching configuration:')
+console.log(`  ENABLE_TAG_FETCHING: ${process.env.ENABLE_TAG_FETCHING} (parsed as: ${ENABLE_TAG_FETCHING})`)
+console.log(`  TAG_FETCH_MAX_VIDEOS: ${process.env.TAG_FETCH_MAX_VIDEOS} (parsed as: ${TAG_FETCH_MAX_VIDEOS})`)
+console.log(`  TAG_FETCH_GENRES: ${process.env.TAG_FETCH_GENRES} (parsed as: ${TAG_FETCH_GENRES.join(', ')})`)
+
 // All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
   'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
