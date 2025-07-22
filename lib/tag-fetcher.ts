@@ -42,7 +42,7 @@ export async function fetchTagsFromWatchAPI(videoId: string): Promise<string[] |
   try {
     const actionTrackId = generateActionTrackId()
     const response = await fetch(
-      `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?actionTrackId=${actionTrackId}`,
+      `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?_frontendId=6&_frontendVersion=0&actionTrackId=${actionTrackId}`,
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -79,7 +79,7 @@ export async function fetchFixedTagsFromWatchAPI(videoId: string): Promise<strin
   try {
     const actionTrackId = generateActionTrackId()
     const response = await fetch(
-      `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?actionTrackId=${actionTrackId}`,
+      `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?_frontendId=6&_frontendVersion=0&actionTrackId=${actionTrackId}`,
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
