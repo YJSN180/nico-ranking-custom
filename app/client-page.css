@@ -5,6 +5,16 @@
   /* RankingSelectorとTagSelectorの高さを事前に確保 */
   min-height: auto; /* 内容に応じて自動調整 */
   position: relative;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Tag toggle button responsive styles */
+.tag-toggle-button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {

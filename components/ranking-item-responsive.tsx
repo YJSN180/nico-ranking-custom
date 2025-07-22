@@ -11,13 +11,14 @@ import type { RankingItem } from '@/types/ranking'
 interface RankingItemProps {
   item: RankingItem
   disabled?: boolean
+  showTags?: boolean
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
-const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false }: RankingItemProps) {
+const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, showTags = false }: RankingItemProps) {
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
     2: 'var(--rank-silver)', 
@@ -369,6 +370,17 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               📁 {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
+          
+          {/* タグ表示 */}
+          {showTags && item.tags && item.tags.length > 0 && (
+            <div className="ranking-item-responsive__tags">
+              {item.tags.map((tag, index) => (
+                <span key={index} className="ranking-item-responsive__tag">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         
         {/* マイリストボタン専用エリア */}

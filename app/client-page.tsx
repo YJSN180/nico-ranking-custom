@@ -63,6 +63,9 @@ export default function ClientPage({
   const { ngList } = useUserNGList()
   const { visibleGenres } = useGenreOrderV2()
   
+  // タグ表示の状態
+  const showTags = preferences.showTags ?? false
+  
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
   
@@ -547,6 +550,36 @@ export default function ClientPage({
           onConfigChange={handleConfigChange} 
           popularTags={currentPopularTags} 
         />
+        {/* タグ表示トグル */}
+        <button
+          className="tag-toggle-button"
+          onClick={() => updatePreferences({ showTags: !showTags })}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: showTags ? 'var(--primary-color)' : 'var(--surface-secondary)',
+            color: showTags ? 'var(--button-text-active)' : 'var(--text-primary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            fontSize: '14px',
+            fontWeight: '500',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            marginLeft: '8px',
+            userSelect: 'none'
+          }}
+          onMouseEnter={(e) => {
+            if (!showTags) {
+              e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!showTags) {
+              e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+            }
+          }}
+        >
+          {showTags ? '🏷️ タグ表示中' : '🏷️ タグ非表示'}
+        </button>
       </div>
       
       {loading && (
@@ -663,6 +696,7 @@ export default function ClientPage({
                   <RankingItemResponsive 
                     item={item}
                     disabled={isNavigating}
+                    showTags={showTags}
                   />
                 </VideoContextMenu>
               </li>

@@ -152,6 +152,35 @@
   flex-shrink: 0;
 }
 
+/* タグ表示 */
+.ranking-item-responsive__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.ranking-item-responsive__tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  border-radius: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.ranking-item-responsive__tag:hover {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  cursor: pointer;
+}
+
 /* マイリストボタン専用エリア */
 .ranking-item-responsive__mylist-area {
   grid-area: mylist-button;
@@ -268,6 +297,18 @@
     gap: var(--mobile-gap);
     flex-wrap: wrap; /* 横スクロールを削除、折り返しを許可 */
     overflow-x: visible;
+  }
+  
+  /* モバイルでのタグ表示調整 */
+  .ranking-item-responsive__tags {
+    margin-top: 4px;
+    gap: 3px;
+  }
+  
+  .ranking-item-responsive__tag {
+    font-size: 11px;
+    padding: 1px 6px;
+    max-width: 100px;
   }
   
   /* モバイルでのマイリストエリア調整 */

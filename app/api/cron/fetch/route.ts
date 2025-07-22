@@ -4,6 +4,7 @@ import { filterRankingDataServer, filterRankingItemsServer } from '@/lib/ng-filt
 import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { CACHED_GENRES } from '@/types/ranking-config'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
+import { enrichRankingItemsWithFixedTags } from '@/lib/tag-fetcher'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
@@ -53,6 +54,12 @@ export async function POST(request: Request) {
   }
 
   try {
+    // タグ取得機能の設定
+    const ENABLE_TAG_FETCHING = process.env.ENABLE_TAG_FETCHING === 'true'
+    const TAG_FETCH_MAX_VIDEOS = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '50', 10)
+    const TAG_FETCH_DELAY_MS = parseInt(process.env.TAG_FETCH_DELAY_MS || '300', 10)
+    const TAG_FETCH_GENRES = process.env.TAG_FETCH_GENRES?.split(',').filter(Boolean) || []
+    
     // 人気ジャンルのデータを取得してキャッシュ
     const genres = CACHED_GENRES
     const periods: ('24h' | 'hour')[] = ['24h', 'hour']
@@ -139,10 +146,37 @@ export async function POST(request: Request) {
           }
           
           // 500件に切り詰め、ランク番号を振り直す
-          const items: RankingItem[] = allItems.slice(0, targetCount).map((item, index) => ({
+          let items: RankingItem[] = allItems.slice(0, targetCount).map((item, index) => ({
             ...item,
             rank: index + 1
           }))
+          
+          // 固定タグ取得（有効化されている場合）
+          if (ENABLE_TAG_FETCHING && 
+              (TAG_FETCH_GENRES.length === 0 || TAG_FETCH_GENRES.includes(genre))) {
+            try {
+              const itemsToEnrich = items.slice(0, TAG_FETCH_MAX_VIDEOS)
+              // console.log(`[Tag Fetch] Fetching fixed tags for ${itemsToEnrich.length} items in ${genre}-${period}`)
+              
+              const startTime = Date.now()
+              const enrichedItems = await enrichRankingItemsWithFixedTags(itemsToEnrich)
+              const elapsed = Date.now() - startTime
+              
+              // 成功率を計算
+              const itemsWithTags = enrichedItems.filter(item => item.tags && item.tags.length > 0)
+              const successRate = (itemsWithTags.length / enrichedItems.length) * 100
+              
+              // console.log(`[Tag Fetch] Completed in ${elapsed}ms, success rate: ${successRate.toFixed(1)}%`)
+              
+              // 元の配列を更新
+              enrichedItems.forEach((enrichedItem, index) => {
+                items[index] = enrichedItem
+              })
+            } catch (tagError) {
+              console.error(`[Tag Fetch] Failed for ${genre}-${period}:`, tagError)
+              // タグ取得に失敗してもランキング処理は継続
+            }
+          }
         
         // Cloudflare KV用のデータ構造に追加
         if (!kvData.genres[genre]) {
