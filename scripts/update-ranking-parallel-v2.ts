@@ -2,8 +2,14 @@
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
+import { enrichRankingItemsWithFixedTags } from '../lib/tag-fetcher'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+
+// Tag fetching configuration from environment variables
+const ENABLE_TAG_FETCHING = process.env.ENABLE_TAG_FETCHING === 'true'
+const TAG_FETCH_MAX_VIDEOS = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '500', 10)
+const TAG_FETCH_GENRES = process.env.TAG_FETCH_GENRES?.split(',').filter(Boolean) || []
 
 // All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
@@ -364,10 +370,35 @@ async function fetchWithNGFiltering(
     }
   }
 
-  const limitedItems = allItems.slice(0, targetItems).map((item, index) => ({
+  let limitedItems = allItems.slice(0, targetItems).map((item, index) => ({
     ...item,
     rank: index + 1
   }));
+
+  // Fetch fixed tags if enabled
+  if (ENABLE_TAG_FETCHING && 
+      (TAG_FETCH_GENRES.length === 0 || TAG_FETCH_GENRES.includes(genre))) {
+    try {
+      console.log(`[${new Date().toISOString()}] Fetching fixed tags for ${limitedItems.length} items in ${genre}/${period}`);
+      const startTime = Date.now();
+      
+      // Limit the number of items to fetch tags for
+      const itemsToEnrich = limitedItems.slice(0, TAG_FETCH_MAX_VIDEOS);
+      const enrichedItems = await enrichRankingItemsWithFixedTags(itemsToEnrich);
+      
+      // Replace the enriched items back into the array
+      enrichedItems.forEach((enrichedItem, index) => {
+        limitedItems[index] = enrichedItem;
+      });
+      
+      const elapsed = Date.now() - startTime;
+      const itemsWithTags = limitedItems.filter(item => item.tags && item.tags.length > 0);
+      console.log(`[${new Date().toISOString()}] Fixed tag fetch completed for ${genre}/${period}: ${itemsWithTags.length}/${itemsToEnrich.length} items have tags (${elapsed}ms)`);
+    } catch (tagError) {
+      console.error(`[${new Date().toISOString()}] Failed to fetch fixed tags for ${genre}/${period}:`, tagError);
+      // Continue without tags if fetching fails
+    }
+  }
 
   return { items: limitedItems, popularTags };
 }
