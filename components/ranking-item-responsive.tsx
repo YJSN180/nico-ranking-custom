@@ -387,7 +387,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             >
               {/* タグ詳細がある場合は詳細を使用、ない場合は従来のタグを使用 */}
               {item.tagDetails && item.tagDetails.length > 0 ? (
-                item.tagDetails.slice(0, 8).map((tagDetail, index) => (
+                item.tagDetails.map((tagDetail, index) => (
                   <span
                     key={index}
                     style={{
@@ -398,9 +398,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                       borderRadius: '14px',
                       border: '1px solid var(--border-color)',
                       whiteSpace: 'nowrap',
-                      maxWidth: '120px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '4px',
@@ -431,14 +428,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                         />
                       )}
                     </svg>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <span>
                       {tagDetail.name}
                     </span>
                   </span>
                 ))
               ) : (
                 // 従来のタグ表示（後方互換性）
-                item.tags?.slice(0, 8).map((tag, index) => (
+                item.tags?.map((tag, index) => (
                   <span
                     key={index}
                     style={{
@@ -449,9 +446,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                       borderRadius: '14px',
                       border: '1px solid var(--border-color)',
                       whiteSpace: 'nowrap',
-                      maxWidth: '120px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                       display: 'inline-block',
                       verticalAlign: 'middle',
                       lineHeight: '12px',
@@ -462,17 +456,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                     {tag}
                   </span>
                 ))
-              )}
-              {(item.tagDetails ? item.tagDetails.length > 8 : item.tags && item.tags.length > 8) && (
-                <span
-                  style={{
-                    color: 'var(--text-secondary)',
-                    fontSize: '11px',
-                    padding: '2px 6px'
-                  }}
-                >
-                  +{item.tagDetails ? item.tagDetails.length - 8 : (item.tags ? item.tags.length - 8 : 0)}
-                </span>
               )}
             </div>
           )}
