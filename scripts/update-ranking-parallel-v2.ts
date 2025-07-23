@@ -477,6 +477,11 @@ async function processGenre(
   const enableTagFetching = process.env.ENABLE_TAG_FETCHING === 'true';
   const tagFetchMaxVideos = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '1000', 10);
   const tagFetchGenres = process.env.TAG_FETCH_GENRES?.split(',').filter(Boolean) || [];
+  const enableTagFetchingForTagRankings = process.env.TAG_FETCH_FOR_TAG_RANKINGS === 'true';
+  
+  if (enableTagFetching) {
+    console.log(`[${new Date().toISOString()}] Fixed tag fetching enabled for ${genre}: maxVideos=${tagFetchMaxVideos}, tagRankings=${enableTagFetchingForTagRankings}`);
+  }
   
   if (enableTagFetching && (tagFetchGenres.length === 0 || tagFetchGenres.includes(genre))) {
     console.log(`[${new Date().toISOString()}] Fetching fixed tags for ${genre}...`);
@@ -532,8 +537,29 @@ async function processGenre(
         const tag24h = await fetchWithNGFiltering(genre, '24h', ngList, tag, 300);
         const tagHour = await fetchWithNGFiltering(genre, 'hour', ngList, tag, 300);
         
-        result.data['24h'].tags[tag] = tag24h.items;
-        result.data['hour'].tags[tag] = tagHour.items;
+        // Apply fixed tags to tag rankings if enabled
+        if (enableTagFetching && enableTagFetchingForTagRankings) {
+          console.log(`[${new Date().toISOString()}] Enriching tag "${tag}" with fixed tags (24h: ${tag24h.items.length}, hour: ${tagHour.items.length} items)`);
+          
+          if (tag24h.items.length > 0) {
+            const itemsWithTags24h = await enrichRankingItemsWithFixedTags(tag24h.items);
+            result.data['24h'].tags[tag] = itemsWithTags24h;
+            console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" 24h with fixed tags`);
+          } else {
+            result.data['24h'].tags[tag] = tag24h.items;
+          }
+          
+          if (tagHour.items.length > 0) {
+            const itemsWithTagsHour = await enrichRankingItemsWithFixedTags(tagHour.items);
+            result.data['hour'].tags[tag] = itemsWithTagsHour;
+            console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" hour with fixed tags`);
+          } else {
+            result.data['hour'].tags[tag] = tagHour.items;
+          }
+        } else {
+          result.data['24h'].tags[tag] = tag24h.items;
+          result.data['hour'].tags[tag] = tagHour.items;
+        }
         
         console.log(`[${new Date().toISOString()}] Fetched tag ${i + 1}/${tagsToFetch.length} "${tag}" (24h: ${tag24h.items.length}, hour: ${tagHour.items.length})`);
       } catch (error) {
