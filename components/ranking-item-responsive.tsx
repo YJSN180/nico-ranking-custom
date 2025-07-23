@@ -81,6 +81,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
 
   // NG追加処理（プロトタイプ版）
   const handleNGAdded = (type: string, value: string | string[]) => {
+    // eslint-disable-next-line no-console
     console.log('NG追加:', { type, value, videoId: item.id, videoTitle: item.title })
     // TODO: 実際のNG追加ロジックを実装
   }

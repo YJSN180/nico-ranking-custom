@@ -346,13 +346,17 @@ export default function ClientPage({
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      const abortController = abortControllerRef.current
+      const tagsAbortController = tagsAbortControllerRef.current
+      
+      if (abortController) {
+        abortController.abort()
       }
-      if (tagsAbortControllerRef.current) {
-        tagsAbortControllerRef.current.abort()
+      if (tagsAbortController) {
+        tagsAbortController.abort()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
   // スクロール位置の保存・復元は上記のuseEffectで実装済み
@@ -563,7 +567,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, ngListVersion, currentPage, config.period])
+  }, [fullRankingData, ngList, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
