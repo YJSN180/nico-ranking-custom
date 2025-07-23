@@ -54,6 +54,7 @@ jobs:
         ENABLE_TAG_FETCHING: ${{ secrets.ENABLE_TAG_FETCHING || 'true' }}
         TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '1000' }}
         TAG_FETCH_GENRES: ''
+        TAG_FETCH_FOR_TAG_RANKINGS: ${{ secrets.TAG_FETCH_FOR_TAG_RANKINGS || 'true' }}
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
         # Debug: Check if environment variables are set
@@ -64,6 +65,7 @@ jobs:
         echo "ENABLE_TAG_FETCHING: $ENABLE_TAG_FETCHING"
         echo "TAG_FETCH_MAX_VIDEOS: $TAG_FETCH_MAX_VIDEOS"
         echo "TAG_FETCH_GENRES: $TAG_FETCH_GENRES"
+        echo "TAG_FETCH_FOR_TAG_RANKINGS: $TAG_FETCH_FOR_TAG_RANKINGS"
         
         # Use fallback if KV_NAMESPACE_ID is not set
         if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
