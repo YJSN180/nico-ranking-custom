@@ -64,7 +64,7 @@ export default function ClientPage({
   const { visibleGenres } = useGenreOrderV2()
   
   // タグ表示の状態
-  const showTags = preferences.showTags ?? false
+  const showTags = preferences.showTags ?? true
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()

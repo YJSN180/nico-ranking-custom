@@ -34,7 +34,12 @@ export function useUserPreferences() {
       // まずCookieから読み込みを試みる
       const cookiePrefs = getUserPreferencesCookieClient()
       if (cookiePrefs?.version === CURRENT_VERSION) {
-        return { ...defaultPreferences, ...cookiePrefs }
+        // showTagsがundefinedの場合はデフォルト値を使用
+        const mergedPrefs = { ...defaultPreferences, ...cookiePrefs }
+        if (cookiePrefs.showTags === undefined) {
+          mergedPrefs.showTags = defaultPreferences.showTags
+        }
+        return mergedPrefs
       }
       
       // Cookieがない場合、localStorageから移行を試みる（後方互換性）
