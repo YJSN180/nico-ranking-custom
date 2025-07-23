@@ -33,8 +33,16 @@ export function useUserPreferences() {
     if (typeof window !== 'undefined') {
       // まずCookieから読み込みを試みる
       const cookiePrefs = getUserPreferencesCookieClient()
+      // デバッグログ（本番環境では削除）
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[UserPreferences] Cookie loaded:', cookiePrefs)
+      }
       if (cookiePrefs?.version === CURRENT_VERSION) {
-        return { ...defaultPreferences, ...cookiePrefs }
+        const merged = { ...defaultPreferences, ...cookiePrefs }
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[UserPreferences] Merged preferences:', merged)
+        }
+        return merged
       }
       
       // Cookieがない場合、localStorageから移行を試みる（後方互換性）
@@ -67,11 +75,21 @@ export function useUserPreferences() {
         updatedAt: new Date().toISOString(),
       }
       
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[UserPreferences] Updating:', updates)
+        console.log('[UserPreferences] New preferences:', newPrefs)
+      }
+      
       // Cookieに保存
       try {
         setUserPreferencesCookieClient(newPrefs)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[UserPreferences] Cookie saved successfully')
+        }
       } catch (error) {
-        // エラーは無視
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[UserPreferences] Cookie save error:', error)
+        }
       }
       
       return newPrefs

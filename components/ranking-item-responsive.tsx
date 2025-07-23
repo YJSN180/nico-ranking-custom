@@ -399,10 +399,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                     maxWidth: '120px',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    lineHeight: '1.1',
-                    height: '20px',
+                    display: 'inline-block',
+                    verticalAlign: 'middle',
+                    lineHeight: '12px',
                     boxSizing: 'border-box'
                   }}
                   title={tag}

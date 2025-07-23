@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, ReactNode, useCallback } from 'react'
+import { createContext, useContext, ReactNode, useCallback, useEffect, useState } from 'react'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 
 interface TagDisplayContextType {
@@ -17,14 +17,27 @@ interface TagDisplayProviderProps {
 
 export function TagDisplayProvider({ children }: TagDisplayProviderProps) {
   const { preferences, updatePreferences } = useUserPreferences()
-  const showTags = preferences.showTags ?? false
+  // showTagsがundefinedの場合のみfalseにする（trueの場合はtrueを保持）
+  const showTags = preferences.showTags !== undefined ? preferences.showTags : false
+  
+  // デバッグログ（本番環境では削除）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[TagDisplayProvider] Initial showTags:', preferences.showTags, '→', showTags)
+  }
 
   const setShowTags = useCallback((show: boolean) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[TagDisplayProvider] setShowTags:', show)
+    }
     updatePreferences({ showTags: show })
   }, [updatePreferences])
 
   const toggleTags = useCallback(() => {
-    updatePreferences({ showTags: !showTags })
+    const newValue = !showTags
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[TagDisplayProvider] toggleTags:', showTags, '→', newValue)
+    }
+    updatePreferences({ showTags: newValue })
   }, [showTags, updatePreferences])
 
   return (
