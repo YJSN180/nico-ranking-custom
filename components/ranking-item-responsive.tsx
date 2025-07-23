@@ -3,6 +3,7 @@
 import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
+import { QuickNGButton } from './quick-ng-button'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
@@ -76,6 +77,12 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     
     // 新しいタブで開く
     window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank', 'noopener,noreferrer')
+  }
+
+  // NG追加処理（プロトタイプ版）
+  const handleNGAdded = (type: string, value: string | string[]) => {
+    console.log('NG追加:', { type, value, videoId: item.id, videoTitle: item.title })
+    // TODO: 実際のNG追加ロジックを実装
   }
 
   return (
@@ -445,9 +452,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           )}
         </div>
         
-        {/* マイリストボタン専用エリア */}
+        {/* マイリストボタン・NGボタンエリア */}
         <div className="ranking-item-responsive__mylist-area">
           <MylistButton video={item} />
+          <QuickNGButton 
+            video={item} 
+            disabled={disabled}
+            onNGAdded={handleNGAdded}
+          />
         </div>
       </div>
     </div>
