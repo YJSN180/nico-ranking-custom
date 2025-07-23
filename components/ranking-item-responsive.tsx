@@ -373,7 +373,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           </div>
           
           {/* タグ情報 */}
-          {showTags && item.tags && item.tags.length > 0 && (
+          {showTags && ((item.tags && item.tags.length > 0) || (item.tagDetails && item.tagDetails.length > 0)) && (
             <div 
               className="ranking-item-responsive__tags"
               style={{
@@ -385,31 +385,85 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 borderTop: '1px solid var(--border-color)'
               }}
             >
-              {item.tags.slice(0, 8).map((tag, index) => (
-                <span
-                  key={index}
-                  style={{
-                    background: 'var(--surface-secondary)',
-                    color: 'var(--text-secondary)',
-                    fontSize: '11px',
-                    padding: '4px 10px',
-                    borderRadius: '14px',
-                    border: '1px solid var(--border-color)',
-                    whiteSpace: 'nowrap',
-                    maxWidth: '120px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: 'inline-block',
-                    verticalAlign: 'middle',
-                    lineHeight: '12px',
-                    boxSizing: 'border-box'
-                  }}
-                  title={tag}
-                >
-                  {tag}
-                </span>
-              ))}
-              {item.tags.length > 8 && (
+              {/* タグ詳細がある場合は詳細を使用、ない場合は従来のタグを使用 */}
+              {item.tagDetails && item.tagDetails.length > 0 ? (
+                item.tagDetails.slice(0, 8).map((tagDetail, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      background: 'var(--surface-secondary)',
+                      color: 'var(--text-secondary)',
+                      fontSize: '11px',
+                      padding: '4px 6px 4px 8px',
+                      borderRadius: '14px',
+                      border: '1px solid var(--border-color)',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '120px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      lineHeight: '12px',
+                      boxSizing: 'border-box'
+                    }}
+                    title={tagDetail.name}
+                  >
+                    {/* タグアイコン */}
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      style={{ flexShrink: 0 }}
+                    >
+                      {tagDetail.isLocked ? (
+                        // ロックタグ用の金色の鍵アイコン
+                        <path
+                          d="M12 2C9.79 2 8 3.79 8 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8H16V6C16 3.79 14.21 2 12 2ZM12 4C13.1 4 14 4.9 14 6V8H10V6C10 4.9 10.9 4 12 4ZM12 13C13.1 13 14 13.9 14 15C14 16.1 13.1 17 12 17C10.9 17 10 16.1 10 15C10 13.9 10.9 13 12 13Z"
+                          fill="#FFD700"
+                        />
+                      ) : (
+                        // ユーザータグ用の銀色のタグアイコン
+                        <path
+                          d="M21.41 11.58L12.41 2.58C12.05 2.22 11.55 2 11 2H4C2.9 2 2 2.9 2 4V11C2 11.55 2.22 12.05 2.59 12.42L11.59 21.42C11.95 21.78 12.45 22 13 22C13.55 22 14.05 21.78 14.41 21.41L21.41 14.41C21.78 14.05 22 13.55 22 13C22 12.45 21.77 11.94 21.41 11.58ZM5.5 7C4.67 7 4 6.33 4 5.5C4 4.67 4.67 4 5.5 4C6.33 4 7 4.67 7 5.5C7 6.33 6.33 7 5.5 7Z"
+                          fill="#C0C0C0"
+                        />
+                      )}
+                    </svg>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {tagDetail.name}
+                    </span>
+                  </span>
+                ))
+              ) : (
+                // 従来のタグ表示（後方互換性）
+                item.tags?.slice(0, 8).map((tag, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      background: 'var(--surface-secondary)',
+                      color: 'var(--text-secondary)',
+                      fontSize: '11px',
+                      padding: '4px 10px',
+                      borderRadius: '14px',
+                      border: '1px solid var(--border-color)',
+                      whiteSpace: 'nowrap',
+                      maxWidth: '120px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: 'inline-block',
+                      verticalAlign: 'middle',
+                      lineHeight: '12px',
+                      boxSizing: 'border-box'
+                    }}
+                    title={tag}
+                  >
+                    {tag}
+                  </span>
+                ))
+              )}
+              {(item.tagDetails ? item.tagDetails.length > 8 : item.tags && item.tags.length > 8) && (
                 <span
                   style={{
                     color: 'var(--text-secondary)',
@@ -417,7 +471,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                     padding: '2px 6px'
                   }}
                 >
-                  +{item.tags.length - 8}
+                  +{item.tagDetails ? item.tagDetails.length - 8 : (item.tags ? item.tags.length - 8 : 0)}
                 </span>
               )}
             </div>

@@ -1,3 +1,11 @@
+/**
+ * タグの詳細情報
+ */
+export interface TagDetail {
+  name: string
+  isLocked: boolean
+}
+
 export interface RankingItem {
   rank: number
   id: string
@@ -9,6 +17,7 @@ export interface RankingItem {
   likes?: number
   // 拡張フィールド（スクレイピング用）
   tags?: string[]
+  tagDetails?: TagDetail[]  // タグの詳細情報（ロック状態を含む）
   authorId?: string
   authorName?: string
   authorIcon?: string
