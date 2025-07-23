@@ -235,14 +235,14 @@ export function aggregateTags(items: RankingItem[], limit: number = 30): Record<
 /**
  * 複数のランキングアイテムに対して固定タグを一括取得
  * @param items ランキングアイテムの配列
- * @param method 取得方法（'watch' | 'html' | 'auto'）- 現在は'watch'のみサポート
+ * @param method 取得方法（'watch' | 'html' | 'auto'）
  * @returns 固定タグ情報が追加されたランキングアイテムの配列
  */
 export async function enrichRankingItemsWithFixedTags(
   items: RankingItem[], 
-  method: 'watch' | 'html' | 'auto' = 'watch'
+  method: 'watch' | 'html' | 'auto' = 'auto'
 ): Promise<RankingItem[]> {
-  // console.log(`Enriching ${items.length} items with fixed tags`)
+  // console.log(`Enriching ${items.length} items with fixed tags using method: ${method}`)
   
   const enrichedItems = await Promise.all(
     items.map(async (item, index) => {
@@ -258,8 +258,18 @@ export async function enrichRankingItemsWithFixedTags(
         await new Promise(resolve => setTimeout(resolve, 300))
       }
       
-      // 固定タグのみを取得
-      tags = await fetchFixedTagsFromWatchAPI(item.id)
+      // Watch APIから固定タグを取得
+      if (method === 'watch' || method === 'auto') {
+        tags = await fetchFixedTagsFromWatchAPI(item.id)
+      }
+      
+      // Watch APIで取得できなかった場合、HTMLスクレイピングを試みる
+      if (!tags && (method === 'html' || method === 'auto')) {
+        // console.log(`Falling back to HTML scraping for ${item.id}`)
+        // レート制限を考慮して少し待機
+        await new Promise(resolve => setTimeout(resolve, 200))
+        tags = await fetchTagsFromHTML(item.id)
+      }
       
       return {
         ...item,

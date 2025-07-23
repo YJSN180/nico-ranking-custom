@@ -34,7 +34,7 @@ describe('tag-fetcher', () => {
 
       expect(tags).toEqual(['ゲーム', '実況プレイ動画'])
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/^https:\/\/www\.nicovideo\.jp\/api\/watch\/v3_guest\/sm12345678\?actionTrackId=/),
+        expect.stringMatching(/^https:\/\/www\.nicovideo\.jp\/api\/watch\/v3_guest\/sm12345678\?_frontendId=6&_frontendVersion=0&actionTrackId=/),
         expect.objectContaining({
           headers: expect.objectContaining({
             'X-Frontend-Id': '6',
