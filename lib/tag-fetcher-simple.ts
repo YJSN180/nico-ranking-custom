@@ -93,6 +93,7 @@ export async function enrichRankingItemsWithFixedTags(
       const elapsed = Date.now() - startTime
       const avgTime = elapsed / processedCount
       const remainingTime = Math.round((totalItems - processedCount) * avgTime / 1000)
+      // eslint-disable-next-line no-console
       console.log(
         `[Tag Fetching] ${progress}% complete (${processedCount}/${totalItems}), ` +
         `${itemsWithTags} items with tags, ` +
@@ -108,6 +109,7 @@ export async function enrichRankingItemsWithFixedTags(
   
   // 最終統計
   const elapsed = Math.round((Date.now() - startTime) / 1000)
+  // eslint-disable-next-line no-console
   console.log(
     `[Tag Fetching] Completed: ${totalItems} items in ${elapsed}s, ` +
     `${itemsWithTags} items with tags (${Math.round(itemsWithTags / totalItems * 100)}%)`
