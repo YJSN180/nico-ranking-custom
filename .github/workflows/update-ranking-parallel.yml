@@ -50,6 +50,10 @@ jobs:
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         # Add KV Namespace ID fallback
         CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+        # Tag fetching configuration
+        ENABLE_TAG_FETCHING: ${{ secrets.ENABLE_TAG_FETCHING || 'true' }}
+        TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '500' }}
+        TAG_FETCH_GENRES: ${{ secrets.TAG_FETCH_GENRES || '' }}
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
         # Debug: Check if environment variables are set
@@ -57,6 +61,9 @@ jobs:
         echo "CLOUDFLARE_ACCOUNT_ID is set: $([ -n "$CLOUDFLARE_ACCOUNT_ID" ] && echo 'YES' || echo 'NO')"
         echo "CLOUDFLARE_KV_NAMESPACE_ID is set: $([ -n "$CLOUDFLARE_KV_NAMESPACE_ID" ] && echo 'YES' || echo 'NO')"
         echo "CLOUDFLARE_API_TOKEN is set: $([ -n "$CLOUDFLARE_API_TOKEN" ] && echo 'YES' || echo 'NO')"
+        echo "ENABLE_TAG_FETCHING: $ENABLE_TAG_FETCHING"
+        echo "TAG_FETCH_MAX_VIDEOS: $TAG_FETCH_MAX_VIDEOS"
+        echo "TAG_FETCH_GENRES: $TAG_FETCH_GENRES"
         
         # Use fallback if KV_NAMESPACE_ID is not set
         if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
