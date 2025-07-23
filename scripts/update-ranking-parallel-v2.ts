@@ -2,6 +2,7 @@
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
+import { enrichRankingItemsWithFixedTags } from '../lib/tag-fetcher-simple'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -470,6 +471,27 @@ async function processGenre(
   } catch (error) {
     console.error(`Failed to fetch ${genre}/hour:`, error);
     // Continue with empty data for hour
+  }
+  
+  // Fetch fixed tags if enabled
+  const enableTagFetching = process.env.ENABLE_TAG_FETCHING === 'true';
+  const tagFetchMaxVideos = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '500', 10);
+  const tagFetchGenres = process.env.TAG_FETCH_GENRES?.split(',').filter(Boolean) || [];
+  
+  if (enableTagFetching && (tagFetchGenres.length === 0 || tagFetchGenres.includes(genre))) {
+    console.log(`[${new Date().toISOString()}] Fetching fixed tags for ${genre}...`);
+    
+    // Fetch tags for 24h data
+    if (data24h.items.length > 0) {
+      const itemsToFetch = data24h.items.slice(0, tagFetchMaxVideos);
+      data24h.items = await enrichRankingItemsWithFixedTags(itemsToFetch);
+    }
+    
+    // Fetch tags for hour data
+    if (dataHour.items.length > 0) {
+      const itemsToFetch = dataHour.items.slice(0, tagFetchMaxVideos);
+      dataHour.items = await enrichRankingItemsWithFixedTags(itemsToFetch);
+    }
   }
   
   // Prepare result structure
