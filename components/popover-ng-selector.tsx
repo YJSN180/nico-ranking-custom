@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { RankingItem } from '@/types/ranking'
 import type { NGType } from './quick-ng-button'
 import './popover-ng-selector.css'
@@ -21,20 +21,93 @@ export function PopoverNGSelector({
   onAdd
 }: PopoverNGSelectorProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
+  const [showTagSelector, setShowTagSelector] = useState(false)
 
-  // 位置計算（簡易版）
+  // 外部クリックとESCキーでのクローズ
   useEffect(() => {
-    if (isOpen && anchorRef.current && popoverRef.current) {
-      const anchor = anchorRef.current.getBoundingClientRect()
-      const popover = popoverRef.current
-      
-      // ボタンの上に表示（後で詳細な位置計算に置き換え）
-      popover.style.position = 'fixed'
-      popover.style.top = `${anchor.top - 10}px`
-      popover.style.left = `${anchor.left}px`
-      popover.style.transform = 'translateY(-100%)'
-      popover.style.zIndex = '1000'
+    if (!isOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        popoverRef.current && 
+        !popoverRef.current.contains(event.target as Node) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(event.target as Node)
+      ) {
+        onClose()
+      }
     }
+
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleEscKey)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscKey)
+    }
+  }, [isOpen, onClose, anchorRef])
+
+  // 動的位置計算（画面端対応）
+  useEffect(() => {
+    if (!isOpen || !anchorRef.current || !popoverRef.current) return
+    
+    const anchor = anchorRef.current.getBoundingClientRect()
+    const popover = popoverRef.current
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+    
+    // ポップオーバーの推定サイズ
+    const popoverWidth = 300 // 最大幅
+    const popoverHeight = 200 // 推定高さ
+    const gap = 8 // アンカーとの間隔
+    
+    let top: number
+    let left: number
+    let transformOrigin = 'center bottom'
+    
+    // 垂直位置の決定（上が優先、スペースが足りなければ下）
+    if (anchor.top - popoverHeight - gap >= 0) {
+      // 上に表示
+      top = anchor.top - gap
+      popover.style.transform = 'translateY(-100%)'
+      transformOrigin = 'center bottom'
+    } else {
+      // 下に表示
+      top = anchor.bottom + gap
+      popover.style.transform = 'translateY(0)'
+      transformOrigin = 'center top'
+    }
+    
+    // 水平位置の決定（中央寄せ、画面端を考慮）
+    const centerLeft = anchor.left + anchor.width / 2 - popoverWidth / 2
+    
+    if (centerLeft < 10) {
+      // 左端に近すぎる場合は左寄せ
+      left = 10
+      transformOrigin = 'left ' + transformOrigin.split(' ')[1]
+    } else if (centerLeft + popoverWidth > viewport.width - 10) {
+      // 右端に近すぎる場合は右寄せ
+      left = viewport.width - popoverWidth - 10
+      transformOrigin = 'right ' + transformOrigin.split(' ')[1]
+    } else {
+      // 中央寄せ
+      left = centerLeft
+    }
+    
+    // スタイル適用
+    popover.style.position = 'fixed'
+    popover.style.top = `${top}px`
+    popover.style.left = `${left}px`
+    popover.style.transformOrigin = transformOrigin
+    popover.style.zIndex = '1000'
   }, [isOpen, anchorRef])
 
   if (!isOpen) return null
@@ -52,11 +125,12 @@ export function PopoverNGSelector({
   }
 
   const handleTagsAdd = () => {
-    // タグ選択の簡易実装（後で詳細実装に置き換え）
-    const tags = video.tagDetails?.map(tag => tag.name) || video.tags || []
-    if (tags.length > 0) {
-      onAdd('tags', tags.slice(0, 1)) // 最初のタグのみ
-    }
+    setShowTagSelector(!showTagSelector)
+  }
+
+  const handleTagSelect = (tagName: string) => {
+    onAdd('tags', [tagName])
+    setShowTagSelector(false)
   }
 
   return (
@@ -106,8 +180,30 @@ export function PopoverNGSelector({
             data-testid="ng-tags"
           >
             <span className="popover-ng-selector__icon">🏷️</span>
-            <span>タグから選択...</span>
+            <span>タグから選択{showTagSelector ? '（閉じる）' : '...'}</span>
           </button>
+          
+          {showTagSelector && (
+            <div className="popover-ng-selector__tag-list">
+              {(video.tagDetails?.map(tag => tag.name) || video.tags || []).map((tagName, index) => (
+                <button
+                  key={index}
+                  className="popover-ng-selector__tag-option"
+                  onClick={() => handleTagSelect(tagName)}
+                  data-testid={`ng-tag-${index}`}
+                >
+                  <span className="popover-ng-selector__tag-icon">🏷️</span>
+                  <span>{tagName}</span>
+                </button>
+              ))}
+              {(!video.tagDetails || video.tagDetails.length === 0) && 
+               (!video.tags || video.tags.length === 0) && (
+                <div className="popover-ng-selector__no-tags">
+                  この動画にはタグがありません
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="popover-ng-selector__actions">
