@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { ExtendedNGList } from '../types/ng-list-extended'
+import { TagIcon, getTagTypeLabel } from './tag-icon'
 import styles from './settings-modal.module.css'
 
 interface NGTagsSectionProps {
@@ -154,8 +155,9 @@ export function NGTagsSection({ tags, onUpdate }: NGTagsSectionProps) {
 
       return (
         <div key={`${tagInfo.type}-${tagInfo.matchType}-${categoryIndex}`} className={styles.listItem}>
-          <span>
-            {tagInfo.icon} {tagInfo.name} ({tagInfo.displayType})
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <TagIcon type={tagInfo.type} size={14} />
+            <span>{tagInfo.name} ({tagInfo.displayType})</span>
           </span>
           <button 
             onClick={() => handleRemoveTag(tagInfo.type, tagInfo.matchType, categoryIndex)}
@@ -173,32 +175,35 @@ export function NGTagsSection({ tags, onUpdate }: NGTagsSectionProps) {
       
       {/* タグタイプ選択 */}
       <div className={styles.radioGroup}>
-        <label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <input
             type="radio"
             value="locked"
             checked={tagType === 'locked'}
             onChange={(e) => setTagType(e.target.value as TagType)}
           />
-          ロックタグ
+          <TagIcon type="locked" size={14} />
+          <span>ロックタグ</span>
         </label>
-        <label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <input
             type="radio"
             value="user"
             checked={tagType === 'user'}
             onChange={(e) => setTagType(e.target.value as TagType)}
           />
-          ユーザータグ
+          <TagIcon type="user" size={14} />
+          <span>ユーザータグ</span>
         </label>
-        <label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <input
             type="radio"
             value="both"
             checked={tagType === 'both'}
             onChange={(e) => setTagType(e.target.value as TagType)}
           />
-          両方
+          <TagIcon type="both" size={14} />
+          <span>両方</span>
         </label>
       </div>
 

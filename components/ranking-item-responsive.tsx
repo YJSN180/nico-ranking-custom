@@ -7,6 +7,7 @@ import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import { useTagDisplay } from '@/contexts/tag-display-context'
+import { TagIcon } from './tag-icon'
 import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
@@ -407,27 +408,10 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                     title={tagDetail.name}
                   >
                     {/* タグアイコン */}
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      style={{ flexShrink: 0 }}
-                    >
-                      {tagDetail.isLocked ? (
-                        // ロックタグ用の金色の鍵アイコン
-                        <path
-                          d="M12 2C9.79 2 8 3.79 8 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8H16V6C16 3.79 14.21 2 12 2ZM12 4C13.1 4 14 4.9 14 6V8H10V6C10 4.9 10.9 4 12 4ZM12 13C13.1 13 14 13.9 14 15C14 16.1 13.1 17 12 17C10.9 17 10 16.1 10 15C10 13.9 10.9 13 12 13Z"
-                          fill="#FFD700"
-                        />
-                      ) : (
-                        // ユーザータグ用の銀色のタグアイコン
-                        <path
-                          d="M21.41 11.58L12.41 2.58C12.05 2.22 11.55 2 11 2H4C2.9 2 2 2.9 2 4V11C2 11.55 2.22 12.05 2.59 12.42L11.59 21.42C11.95 21.78 12.45 22 13 22C13.55 22 14.05 21.78 14.41 21.41L21.41 14.41C21.78 14.05 22 13.55 22 13C22 12.45 21.77 11.94 21.41 11.58ZM5.5 7C4.67 7 4 6.33 4 5.5C4 4.67 4.67 4 5.5 4C6.33 4 7 4.67 7 5.5C7 6.33 6.33 7 5.5 7Z"
-                          fill="#C0C0C0"
-                        />
-                      )}
-                    </svg>
+                    <TagIcon 
+                      type={tagDetail.isLocked ? 'locked' : 'user'} 
+                      size={12}
+                    />
                     <span>
                       {tagDetail.name}
                     </span>
