@@ -291,9 +291,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             >
               {item.title}
             </a>
-            {/* モバイル用マイリストボタン（CSSで表示制御） */}
+            {/* モバイル用マイリストボタン・NGボタン（CSSで表示制御） */}
             <div className="ranking-item-responsive__mylist-button">
               <MylistButton video={item} />
+              <QuickNGButton 
+                video={item} 
+                disabled={disabled}
+                onNGAdded={handleNGAdded}
+              />
             </div>
           </div>
           

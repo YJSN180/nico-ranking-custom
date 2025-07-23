@@ -74,14 +74,16 @@ describe('QuickNG Integration Test', () => {
     const mylistButtons = screen.getAllByTestId('mylist-button')
     expect(mylistButtons).toHaveLength(2)
     
-    // NGボタンは1つのみ（デスクトップのmylist-areaに配置）
-    expect(screen.getByRole('button', { name: /ng追加/i })).toBeInTheDocument()
+    // NGボタンも2つ存在する（モバイル用・デスクトップ用）
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    expect(ngButtons).toHaveLength(2)
   })
 
   it('NGボタンクリックでポップオーバーが表示される', () => {
     renderComponent()
     
-    const ngButton = screen.getByRole('button', { name: /ng追加/i })
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
     fireEvent.click(ngButton)
     
     expect(screen.getByTestId('ng-popover')).toBeInTheDocument()
@@ -92,7 +94,8 @@ describe('QuickNG Integration Test', () => {
     const mockOnQuickNGAdd = vi.fn()
     renderComponent(mockVideo, false, mockOnQuickNGAdd)
     
-    const ngButton = screen.getByRole('button', { name: /ng追加/i })
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
     fireEvent.click(ngButton)
     
     const titleButton = screen.getByTestId('ng-title')
@@ -104,17 +107,29 @@ describe('QuickNG Integration Test', () => {
   it('disabled状態でNGボタンも無効化される', () => {
     renderComponent(mockVideo, true)
     
-    const ngButton = screen.getByRole('button', { name: /ng追加/i })
-    expect(ngButton).toBeDisabled()
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    // 両方のNGボタンが無効化されていることを確認
+    ngButtons.forEach(ngButton => {
+      expect(ngButton).toBeDisabled()
+    })
   })
 
   it('マイリストエリアにCSSクラスが適用される', () => {
     renderComponent()
     
-    // NGボタンが含まれるmylist-areaを検証
-    const ngButton = screen.getByRole('button', { name: /ng追加/i })
-    const mylistArea = ngButton.closest('.ranking-item-responsive__mylist-area')
-    expect(mylistArea).toBeInTheDocument()
-    expect(mylistArea).toHaveClass('ranking-item-responsive__mylist-area')
+    // 両方のNGボタンが適切なエリアに配置されていることを検証
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    
+    // 最初のNGボタン（モバイル用）
+    const mobileButton = ngButtons[0]
+    const mobileArea = mobileButton.closest('.ranking-item-responsive__mylist-button')
+    expect(mobileArea).toBeInTheDocument()
+    expect(mobileArea).toHaveClass('ranking-item-responsive__mylist-button')
+    
+    // 2番目のNGボタン（デスクトップ用）
+    const desktopButton = ngButtons[1]
+    const desktopArea = desktopButton.closest('.ranking-item-responsive__mylist-area')
+    expect(desktopArea).toBeInTheDocument()
+    expect(desktopArea).toHaveClass('ranking-item-responsive__mylist-area')
   })
 })
