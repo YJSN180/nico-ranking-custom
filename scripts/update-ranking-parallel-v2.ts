@@ -2,7 +2,7 @@
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
-import { enrichRankingItemsWithFixedTags } from '../lib/tag-fetcher-simple'
+import { enrichRankingItemsWithTagDetails } from '../lib/tag-fetcher-simple'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -480,16 +480,16 @@ async function processGenre(
   const enableTagFetchingForTagRankings = process.env.TAG_FETCH_FOR_TAG_RANKINGS === 'true';
   
   if (enableTagFetching) {
-    console.log(`[${new Date().toISOString()}] Fixed tag fetching enabled for ${genre}: maxVideos=${tagFetchMaxVideos}, tagRankings=${enableTagFetchingForTagRankings}`);
+    console.log(`[${new Date().toISOString()}] Tag details fetching enabled for ${genre}: maxVideos=${tagFetchMaxVideos}, tagRankings=${enableTagFetchingForTagRankings}`);
   }
   
   if (enableTagFetching && (tagFetchGenres.length === 0 || tagFetchGenres.includes(genre))) {
-    console.log(`[${new Date().toISOString()}] Fetching fixed tags for ${genre}...`);
+    console.log(`[${new Date().toISOString()}] Fetching tag details for ${genre}...`);
     
     // Fetch tags for 24h data
     if (data24h.items.length > 0) {
       const itemsToFetch = data24h.items.slice(0, tagFetchMaxVideos);
-      const itemsWithTags = await enrichRankingItemsWithFixedTags(itemsToFetch);
+      const itemsWithTags = await enrichRankingItemsWithTagDetails(itemsToFetch);
       // Merge tagged items with remaining untagged items to preserve full array
       data24h.items = [...itemsWithTags, ...data24h.items.slice(tagFetchMaxVideos)];
     }
@@ -497,7 +497,7 @@ async function processGenre(
     // Fetch tags for hour data
     if (dataHour.items.length > 0) {
       const itemsToFetch = dataHour.items.slice(0, tagFetchMaxVideos);
-      const itemsWithTags = await enrichRankingItemsWithFixedTags(itemsToFetch);
+      const itemsWithTags = await enrichRankingItemsWithTagDetails(itemsToFetch);
       // Merge tagged items with remaining untagged items to preserve full array
       dataHour.items = [...itemsWithTags, ...dataHour.items.slice(tagFetchMaxVideos)];
     }
@@ -539,20 +539,20 @@ async function processGenre(
         
         // Apply fixed tags to tag rankings if enabled
         if (enableTagFetching && enableTagFetchingForTagRankings) {
-          console.log(`[${new Date().toISOString()}] Enriching tag "${tag}" with fixed tags (24h: ${tag24h.items.length}, hour: ${tagHour.items.length} items)`);
+          console.log(`[${new Date().toISOString()}] Enriching tag "${tag}" with tag details (24h: ${tag24h.items.length}, hour: ${tagHour.items.length} items)`);
           
           if (tag24h.items.length > 0) {
-            const itemsWithTags24h = await enrichRankingItemsWithFixedTags(tag24h.items);
+            const itemsWithTags24h = await enrichRankingItemsWithTagDetails(tag24h.items);
             result.data['24h'].tags[tag] = itemsWithTags24h;
-            console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" 24h with fixed tags`);
+            console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" 24h with tag details`);
           } else {
             result.data['24h'].tags[tag] = tag24h.items;
           }
           
           if (tagHour.items.length > 0) {
-            const itemsWithTagsHour = await enrichRankingItemsWithFixedTags(tagHour.items);
+            const itemsWithTagsHour = await enrichRankingItemsWithTagDetails(tagHour.items);
             result.data['hour'].tags[tag] = itemsWithTagsHour;
-            console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" hour with fixed tags`);
+            console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" hour with tag details`);
           } else {
             result.data['hour'].tags[tag] = tagHour.items;
           }
