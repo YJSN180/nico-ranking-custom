@@ -21,6 +21,7 @@ import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 import { useNavigationState } from '@/hooks/use-navigation-state'
+import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -45,6 +46,42 @@ const isPWA = () => {
   return window.matchMedia('(display-mode: standalone)').matches ||
          (window.navigator as any).standalone === true ||
          document.referrer.includes('android-app://') // Androidの場合
+}
+
+// タグ表示トグルボタンコンポーネント
+function TagToggleButton() {
+  const { showTags, toggleTags } = useTagDisplay()
+  
+  return (
+    <button
+      data-testid="tag-toggle-button"
+      onClick={toggleTags}
+      style={{
+        padding: '6px 12px',
+        fontSize: '12px',
+        backgroundColor: showTags ? 'var(--primary-color)' : 'var(--surface-secondary)',
+        color: showTags ? 'white' : 'var(--text-primary)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        fontWeight: '500',
+        whiteSpace: 'nowrap'
+      }}
+      onMouseEnter={(e) => {
+        if (!showTags) {
+          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!showTags) {
+          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+        }
+      }}
+    >
+      🏷️ タグ{showTags ? '非表示' : '表示'}
+    </button>
+  )
 }
 
 export default function ClientPage({ 
@@ -539,7 +576,7 @@ export default function ClientPage({
   // レンダリング
   try {
     return (
-      <>
+      <TagDisplayProvider>
         <div className="selectors-container">
         <RankingSelector config={config} onConfigChange={handleConfigChange} />
         <TagSelector 
@@ -547,6 +584,7 @@ export default function ClientPage({
           onConfigChange={handleConfigChange} 
           popularTags={currentPopularTags} 
         />
+        <TagToggleButton />
       </div>
       
       {loading && (
@@ -693,7 +731,7 @@ export default function ClientPage({
           )}
         </>
       )}
-    </>
+      </TagDisplayProvider>
   )
   } catch (error) {
     console.error('Rendering error in ClientPage:', error)
