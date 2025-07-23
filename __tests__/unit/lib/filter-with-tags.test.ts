@@ -170,4 +170,76 @@ describe('filterByTags', () => {
       expect(filterByTags(item, ngTags)).toBe(true)
     })
   })
+
+  describe('大文字小文字の処理', () => {
+    it('should perform case-insensitive exact matching for locked tags', () => {
+      const item = createMockItem([
+        { name: 'VOCALOID', isLocked: true }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.locked.exact = ['vocaloid']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('should perform case-insensitive partial matching for locked tags', () => {
+      const item = createMockItem([
+        { name: 'VOCALOID楽曲', isLocked: true }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.locked.partial = ['vocaloid']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('should perform case-insensitive exact matching for user tags', () => {
+      const item = createMockItem([
+        { name: 'MMD', isLocked: false }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.user.exact = ['mmd']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('should perform case-insensitive partial matching for user tags', () => {
+      const item = createMockItem([
+        { name: 'MMDモデル', isLocked: false }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.user.partial = ['mmd']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('should perform case-insensitive exact matching for both tags', () => {
+      const item = createMockItem([
+        { name: 'BGM', isLocked: true }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.both.exact = ['bgm']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('should perform case-insensitive partial matching for both tags', () => {
+      const item = createMockItem([
+        { name: 'BGM素材', isLocked: false }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.both.partial = ['BGM']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('should handle mixed case in both tag name and NG list', () => {
+      const item = createMockItem([
+        { name: 'VoCaLoId', isLocked: true }
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.locked.exact = ['VOCALOID']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+  })
 })

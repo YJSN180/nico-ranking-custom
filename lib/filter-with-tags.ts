@@ -28,35 +28,35 @@ export function filterByTags(
     
     // ロックタグのチェック
     if (isLocked) {
-      // 完全一致
-      if (ngTags.locked.exact.includes(tagName)) {
+      // 完全一致（大文字小文字を区別しない）
+      if (ngTags.locked.exact.some(exact => tagName.toLowerCase() === exact.toLowerCase())) {
         return true
       }
-      // 部分一致
-      if (ngTags.locked.partial.some(partial => tagName.includes(partial))) {
+      // 部分一致（大文字小文字を区別しない）
+      if (ngTags.locked.partial.some(partial => tagName.toLowerCase().includes(partial.toLowerCase()))) {
         return true
       }
     }
     
     // ユーザータグのチェック
     if (!isLocked) {
-      // 完全一致
-      if (ngTags.user.exact.includes(tagName)) {
+      // 完全一致（大文字小文字を区別しない）
+      if (ngTags.user.exact.some(exact => tagName.toLowerCase() === exact.toLowerCase())) {
         return true
       }
-      // 部分一致
-      if (ngTags.user.partial.some(partial => tagName.includes(partial))) {
+      // 部分一致（大文字小文字を区別しない）
+      if (ngTags.user.partial.some(partial => tagName.toLowerCase().includes(partial.toLowerCase()))) {
         return true
       }
     }
     
     // 両方（ロック・ユーザー問わず）のチェック
-    // 完全一致
-    if (ngTags.both.exact.includes(tagName)) {
+    // 完全一致（大文字小文字を区別しない）
+    if (ngTags.both.exact.some(exact => tagName.toLowerCase() === exact.toLowerCase())) {
       return true
     }
-    // 部分一致
-    if (ngTags.both.partial.some(partial => tagName.includes(partial))) {
+    // 部分一致（大文字小文字を区別しない）
+    if (ngTags.both.partial.some(partial => tagName.toLowerCase().includes(partial.toLowerCase()))) {
       return true
     }
   }
