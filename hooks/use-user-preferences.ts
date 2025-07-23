@@ -22,7 +22,7 @@ const defaultPreferences: UserPreferences = {
   lastPeriod: '24h',
   lastTag: undefined,
   theme: 'light',
-  showTags: false,
+  showTags: true,
   version: CURRENT_VERSION,
   updatedAt: new Date().toISOString(),
 }
