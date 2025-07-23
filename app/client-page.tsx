@@ -20,6 +20,8 @@ import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
+import type { ExtendedUserNGList } from '@/types/ng-list-extended'
+import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import './client-page.css'
@@ -97,7 +99,7 @@ export default function ClientPage({
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
-  const { ngList } = useUserNGListExtended()
+  const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
   
   // PWA環境でのナビゲーション状態管理
@@ -429,6 +431,96 @@ export default function ClientPage({
     window.history.replaceState(null, '', newUrl)
   }, [currentPage, config])
   
+  // QuickNG: NG追加処理
+  const handleQuickNGAdd = useCallback((video: RankingItem, type: NGType, value: string | string[]) => {
+    const stringValue = Array.isArray(value) ? value[0] : value
+    const trimmedValue = stringValue?.trim()
+    
+    if (!trimmedValue) {
+      console.warn('QuickNG: Empty value provided')
+      return
+    }
+    
+    // 現在のNGリストをコピーして更新
+    const updatedNGList: ExtendedUserNGList = {
+      ...ngList,
+      updatedAt: new Date().toISOString()
+    }
+    
+    let wasAdded = false
+    let displayValue = ''
+    
+    switch (type) {
+      case 'videoId':
+        if (!ngList.videoIds.includes(trimmedValue)) {
+          updatedNGList.videoIds = [...ngList.videoIds, trimmedValue]
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `動画ID: ${trimmedValue}`
+        }
+        break
+        
+      case 'title':
+        // タイトルは完全一致として追加
+        if (!ngList.videoTitles.exact.includes(trimmedValue)) {
+          updatedNGList.videoTitles = {
+            ...ngList.videoTitles,
+            exact: [...ngList.videoTitles.exact, trimmedValue]
+          }
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `タイトル: ${trimmedValue}`
+        }
+        break
+        
+      case 'author':
+        // 投稿者名は完全一致として追加
+        if (!ngList.authorNames.exact.includes(trimmedValue)) {
+          updatedNGList.authorNames = {
+            ...ngList.authorNames,
+            exact: [...ngList.authorNames.exact, trimmedValue]
+          }
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `投稿者: ${trimmedValue}`
+        }
+        break
+        
+      default:
+        console.warn('QuickNG: Unknown NG type:', type)
+        return
+    }
+    
+    if (wasAdded) {
+      // NGリストを保存
+      saveNGListDirectly(updatedNGList)
+      
+      // ユーザーフィードバック（簡易版）
+      const message = `🚫 NGリストに追加しました: ${displayValue}`
+      
+      // 一時的な通知を表示（シンプルなアラート）
+      // TODO: より良いトースト通知システムを実装予定
+      if (window.confirm(`${message}\n\nOKをクリックして続行してください。`)) {
+        // ユーザーが確認した場合の処理（特に何もしない）
+      }
+      
+      // デバッグ情報（開発時のみ）
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.log('QuickNG: Added to NG list', {
+          type,
+          value: trimmedValue,
+          video: { id: video.id, title: video.title, author: video.authorName },
+          totalCount: updatedNGList.totalCount
+        })
+      }
+    } else {
+      // すでに追加済みの場合
+      const existingMessage = `⚠️ すでにNGリストに登録済みです: ${displayValue}`
+      alert(existingMessage)
+    }
+  }, [ngList, saveNGListDirectly])
+  
   // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
     if (shouldRestore) {
@@ -705,6 +797,7 @@ export default function ClientPage({
                   <RankingItemResponsive 
                     item={item}
                     disabled={isNavigating}
+                    onQuickNGAdd={handleQuickNGAdd}
                   />
                 </VideoContextMenu>
               </li>

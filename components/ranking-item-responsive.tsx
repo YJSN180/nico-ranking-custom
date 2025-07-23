@@ -10,17 +10,19 @@ import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import { useTagDisplay } from '@/contexts/tag-display-context'
 import { TagIcon } from './tag-icon'
 import type { RankingItem } from '@/types/ranking'
+import type { NGType } from './quick-ng-button'
 
 interface RankingItemProps {
   item: RankingItem
   disabled?: boolean
+  onQuickNGAdd?: (video: RankingItem, type: NGType, value: string | string[]) => void
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
-const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false }: RankingItemProps) {
+const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd }: RankingItemProps) {
   const { showTags } = useTagDisplay()
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
@@ -79,11 +81,17 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank', 'noopener,noreferrer')
   }
 
-  // NG追加処理（プロトタイプ版）
-  const handleNGAdded = (type: string, value: string | string[]) => {
-    // eslint-disable-next-line no-console
-    console.log('NG追加:', { type, value, videoId: item.id, videoTitle: item.title })
-    // TODO: 実際のNG追加ロジックを実装
+  // NG追加処理
+  const handleNGAdded = (type: NGType, value: string | string[]) => {
+    if (onQuickNGAdd) {
+      onQuickNGAdd(item, type, value)
+    } else {
+      // フォールバック: コンソールログ（開発時のみ）
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.log('QuickNG: onQuickNGAdd prop not provided', { type, value, videoId: item.id, videoTitle: item.title })
+      }
+    }
   }
 
   return (

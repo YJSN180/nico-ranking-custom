@@ -21,7 +21,6 @@ export function PopoverNGSelector({
   onAdd
 }: PopoverNGSelectorProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
-  const [showTagSelector, setShowTagSelector] = useState(false)
 
   // 外部クリックとESCキーでのクローズ
   useEffect(() => {
@@ -124,14 +123,6 @@ export function PopoverNGSelector({
     onAdd('author', video.authorName || video.authorId || '')
   }
 
-  const handleTagsAdd = () => {
-    setShowTagSelector(!showTagSelector)
-  }
-
-  const handleTagSelect = (tagName: string) => {
-    onAdd('tags', [tagName])
-    setShowTagSelector(false)
-  }
 
   return (
     <div
@@ -174,36 +165,6 @@ export function PopoverNGSelector({
             <span>投稿者: {video.authorName || video.authorId}</span>
           </button>
           
-          <button
-            className="popover-ng-selector__option"
-            onClick={handleTagsAdd}
-            data-testid="ng-tags"
-          >
-            <span className="popover-ng-selector__icon">🏷️</span>
-            <span>タグから選択{showTagSelector ? '（閉じる）' : '...'}</span>
-          </button>
-          
-          {showTagSelector && (
-            <div className="popover-ng-selector__tag-list">
-              {(video.tagDetails?.map(tag => tag.name) || video.tags || []).map((tagName, index) => (
-                <button
-                  key={index}
-                  className="popover-ng-selector__tag-option"
-                  onClick={() => handleTagSelect(tagName)}
-                  data-testid={`ng-tag-${index}`}
-                >
-                  <span className="popover-ng-selector__tag-icon">🏷️</span>
-                  <span>{tagName}</span>
-                </button>
-              ))}
-              {(!video.tagDetails || video.tagDetails.length === 0) && 
-               (!video.tags || video.tags.length === 0) && (
-                <div className="popover-ng-selector__no-tags">
-                  この動画にはタグがありません
-                </div>
-              )}
-            </div>
-          )}
         </div>
         
         <div className="popover-ng-selector__actions">

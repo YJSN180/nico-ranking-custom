@@ -59,10 +59,10 @@ Object.defineProperty(window, 'localStorage', {
 })
 
 describe('QuickNG Integration Test', () => {
-  const renderComponent = (item = mockVideo, disabled = false) => (
+  const renderComponent = (item = mockVideo, disabled = false, onQuickNGAdd?: any) => (
     render(
       <TagDisplayProvider>
-        <RankingItemResponsive item={item} disabled={disabled} />
+        <RankingItemResponsive item={item} disabled={disabled} onQuickNGAdd={onQuickNGAdd} />
       </TagDisplayProvider>
     )
   )
@@ -88,9 +88,9 @@ describe('QuickNG Integration Test', () => {
     expect(screen.getByTestId('ng-title')).toHaveTextContent('Title: Test Video Title')
   })
 
-  it('NG追加時にコンソールログが出力される', () => {
-    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    renderComponent()
+  it('NG追加時にonQuickNGAddが呼び出される', () => {
+    const mockOnQuickNGAdd = vi.fn()
+    renderComponent(mockVideo, false, mockOnQuickNGAdd)
     
     const ngButton = screen.getByRole('button', { name: /ng追加/i })
     fireEvent.click(ngButton)
@@ -98,14 +98,7 @@ describe('QuickNG Integration Test', () => {
     const titleButton = screen.getByTestId('ng-title')
     fireEvent.click(titleButton)
     
-    expect(consoleSpy).toHaveBeenCalledWith('NG追加:', {
-      type: 'title',
-      value: 'Test Video Title',
-      videoId: 'sm12345',
-      videoTitle: 'Test Video Title'
-    })
-    
-    consoleSpy.mockRestore()
+    expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'title', 'Test Video Title')
   })
 
   it('disabled状態でNGボタンも無効化される', () => {

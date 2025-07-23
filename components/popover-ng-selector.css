@@ -103,69 +103,6 @@
   width: 20px;
 }
 
-/* タグ選択UI */
-.popover-ng-selector__tag-list {
-  margin-left: 24px;
-  margin-top: 4px;
-  padding: 8px;
-  background: var(--surface-secondary, #f8f9fa);
-  border: 1px solid var(--border-color, #e5e7eb);
-  border-radius: 6px;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.popover-ng-selector__tag-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-size: 13px;
-  text-align: left;
-  width: 100%;
-  margin-bottom: 2px;
-  
-  /* テキスト省略 */
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.popover-ng-selector__tag-option:last-child {
-  margin-bottom: 0;
-}
-
-.popover-ng-selector__tag-option:hover {
-  background: var(--primary-color, #3b82f6);
-  color: white;
-}
-
-.popover-ng-selector__tag-option:focus-visible {
-  outline: 2px solid var(--focus-color, #3b82f6);
-  outline-offset: 2px;
-}
-
-.popover-ng-selector__tag-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-}
-
-.popover-ng-selector__no-tags {
-  padding: 8px;
-  font-size: 13px;
-  color: var(--text-muted, #9ca3af);
-  text-align: center;
-  font-style: italic;
-}
 
 .popover-ng-selector__actions {
   display: flex;
