@@ -9,6 +9,7 @@ export interface UserPreferences {
   lastPeriod: RankingPeriod
   lastTag?: string
   theme?: ThemeType
+  showTags?: boolean
   version: number
   updatedAt: string
 }
@@ -21,6 +22,7 @@ const defaultPreferences: UserPreferences = {
   lastPeriod: '24h',
   lastTag: undefined,
   theme: 'light',
+  showTags: false,
   version: CURRENT_VERSION,
   updatedAt: new Date().toISOString(),
 }

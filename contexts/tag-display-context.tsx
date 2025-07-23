@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, ReactNode, useCallback } from 'react'
+import { useUserPreferences } from '@/hooks/use-user-preferences'
 
 interface TagDisplayContextType {
   showTags: boolean
@@ -15,11 +16,16 @@ interface TagDisplayProviderProps {
 }
 
 export function TagDisplayProvider({ children }: TagDisplayProviderProps) {
-  const [showTags, setShowTags] = useState(false)
+  const { preferences, updatePreferences } = useUserPreferences()
+  const showTags = preferences.showTags ?? false
 
-  const toggleTags = () => {
-    setShowTags(prev => !prev)
-  }
+  const setShowTags = useCallback((show: boolean) => {
+    updatePreferences({ showTags: show })
+  }, [updatePreferences])
+
+  const toggleTags = useCallback(() => {
+    updatePreferences({ showTags: !showTags })
+  }, [showTags, updatePreferences])
 
   return (
     <TagDisplayContext.Provider value={{ showTags, setShowTags, toggleTags }}>
