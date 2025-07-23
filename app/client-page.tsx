@@ -7,12 +7,12 @@ import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { VideoContextMenu } from '@/components/video-context-menu'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
-import { filterWithNGList } from '@/lib/filter-with-ng-list'
+import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
 
 // 直接インポート（まず動作確認）
 import Pagination from '@/components/pagination'
 import { TagSelector } from '@/components/tag-selector'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import { useRankingData } from '@/hooks/use-ranking-data'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
@@ -97,7 +97,7 @@ export default function ClientPage({
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
-  const { ngList } = useUserNGList()
+  const { ngList } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
   
   // PWA環境でのナビゲーション状態管理
@@ -461,7 +461,7 @@ export default function ClientPage({
       
       // バリデーション2: ページ数の妥当性チェック（データが利用可能な場合）
       if (finalPage > 1 && fullRankingData.length > 0) {
-        const { filteredItems } = filterWithNGList(fullRankingData, ngList)
+        const { filteredItems } = filterWithExtendedNGList(fullRankingData, ngList)
         const maxPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE)
         if (finalPage > maxPages) {
           // フォールバック: 無効なページの場合は同じタグの1ページ目に遷移
@@ -544,7 +544,7 @@ export default function ClientPage({
   // クライアントサイドページネーション処理 (同期的なNGフィルタリング)
   const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
     // fullRankingDataに対して直接フィルタリングを適用（即座に反映）
-    const { filteredItems } = filterWithNGList(fullRankingData, ngList)
+    const { filteredItems } = filterWithExtendedNGList(fullRankingData, ngList)
     const totalCount = filteredItems.length
     
     // 総ページ数を計算
