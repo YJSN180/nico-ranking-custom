@@ -475,7 +475,7 @@ async function processGenre(
   
   // Fetch fixed tags if enabled
   const enableTagFetching = process.env.ENABLE_TAG_FETCHING === 'true';
-  const tagFetchMaxVideos = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '500', 10);
+  const tagFetchMaxVideos = parseInt(process.env.TAG_FETCH_MAX_VIDEOS || '1000', 10);
   const tagFetchGenres = process.env.TAG_FETCH_GENRES?.split(',').filter(Boolean) || [];
   
   if (enableTagFetching && (tagFetchGenres.length === 0 || tagFetchGenres.includes(genre))) {
@@ -484,13 +484,17 @@ async function processGenre(
     // Fetch tags for 24h data
     if (data24h.items.length > 0) {
       const itemsToFetch = data24h.items.slice(0, tagFetchMaxVideos);
-      data24h.items = await enrichRankingItemsWithFixedTags(itemsToFetch);
+      const itemsWithTags = await enrichRankingItemsWithFixedTags(itemsToFetch);
+      // Merge tagged items with remaining untagged items to preserve full array
+      data24h.items = [...itemsWithTags, ...data24h.items.slice(tagFetchMaxVideos)];
     }
     
     // Fetch tags for hour data
     if (dataHour.items.length > 0) {
       const itemsToFetch = dataHour.items.slice(0, tagFetchMaxVideos);
-      dataHour.items = await enrichRankingItemsWithFixedTags(itemsToFetch);
+      const itemsWithTags = await enrichRankingItemsWithFixedTags(itemsToFetch);
+      // Merge tagged items with remaining untagged items to preserve full array
+      dataHour.items = [...itemsWithTags, ...dataHour.items.slice(tagFetchMaxVideos)];
     }
   }
   

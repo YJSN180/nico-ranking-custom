@@ -52,8 +52,8 @@ jobs:
         CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
         # Tag fetching configuration
         ENABLE_TAG_FETCHING: ${{ secrets.ENABLE_TAG_FETCHING || 'true' }}
-        TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '500' }}
-        TAG_FETCH_GENRES: ${{ secrets.TAG_FETCH_GENRES || '' }}
+        TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '1000' }}
+        TAG_FETCH_GENRES: ''
       run: |
         echo "Starting group ${{ matrix.group }} at $(date)"
         # Debug: Check if environment variables are set
