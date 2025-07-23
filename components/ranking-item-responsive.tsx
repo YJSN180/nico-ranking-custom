@@ -6,6 +6,7 @@ import { MylistButton } from './mylist-button'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
+import { useTagDisplay } from '@/contexts/tag-display-context'
 import type { RankingItem } from '@/types/ranking'
 
 interface RankingItemProps {
@@ -18,6 +19,7 @@ interface RankingItemProps {
 // パフォーマンス最適化: Container Query → Media Query移行完了
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
 const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false }: RankingItemProps) {
+  const { showTags } = useTagDisplay()
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
     2: 'var(--rank-silver)', 
@@ -369,6 +371,53 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               📁 {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
+          
+          {/* タグ情報 */}
+          {showTags && item.tags && item.tags.length > 0 && (
+            <div 
+              className="ranking-item-responsive__tags"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '4px',
+                marginTop: '8px',
+                paddingTop: '8px',
+                borderTop: '1px solid var(--border-color)'
+              }}
+            >
+              {item.tags.slice(0, 8).map((tag, index) => (
+                <span
+                  key={index}
+                  style={{
+                    background: 'var(--surface-secondary)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '11px',
+                    padding: '2px 6px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-color)',
+                    whiteSpace: 'nowrap',
+                    maxWidth: '120px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                  title={tag}
+                >
+                  {tag}
+                </span>
+              ))}
+              {item.tags.length > 8 && (
+                <span
+                  style={{
+                    color: 'var(--text-secondary)',
+                    fontSize: '11px',
+                    padding: '2px 6px'
+                  }}
+                >
+                  +{item.tags.length - 8}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         
         {/* マイリストボタン専用エリア */}
@@ -377,15 +426,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         </div>
       </div>
     </div>
-  )
-}, (prevProps, nextProps) => {
-  // メモ化の比較関数
-  return (
-    prevProps.item.id === nextProps.item.id &&
-    prevProps.item.views === nextProps.item.views &&
-    prevProps.item.comments === nextProps.item.comments &&
-    prevProps.item.mylists === nextProps.item.mylists &&
-    prevProps.item.likes === nextProps.item.likes
   )
 })
 

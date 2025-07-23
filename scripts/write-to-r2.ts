@@ -193,11 +193,21 @@ async function writeToR2() {
         updatedAt: aggregatedData.metadata?.updatedAt || new Date().toISOString()
       }
       
+      // 各動画のタグ数を集計
+      const tagCounts: Record<string, number> = {}
+      items.forEach(item => {
+        if (item.tags && Array.isArray(item.tags)) {
+          item.tags.forEach(tag => {
+            tagCounts[tag] = (tagCounts[tag] || 0) + 1
+          })
+        }
+      })
+      
       // 「すべて」のランキングデータを保存
       const allDataToStore: RankingData = {
         items: items,
         popularTags: popularTags,
-        tags: {}, // 個別動画のタグ情報は現時点では取得できないため空
+        tags: tagCounts, // 各タグの出現回数を保存
         metadata: {
           version: 1,
           updatedAt: aggregatedData.metadata?.updatedAt || new Date().toISOString(),
