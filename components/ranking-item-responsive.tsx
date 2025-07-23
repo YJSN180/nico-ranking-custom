@@ -392,8 +392,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                     background: 'var(--surface-secondary)',
                     color: 'var(--text-secondary)',
                     fontSize: '11px',
-                    padding: '3px 8px',
-                    borderRadius: '12px',
+                    padding: '4px 10px',
+                    borderRadius: '14px',
                     border: '1px solid var(--border-color)',
                     whiteSpace: 'nowrap',
                     maxWidth: '120px',
@@ -401,7 +401,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                     textOverflow: 'ellipsis',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    lineHeight: '1.2'
+                    lineHeight: '1.1',
+                    height: '20px',
+                    boxSizing: 'border-box'
                   }}
                   title={tag}
                 >
