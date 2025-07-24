@@ -84,7 +84,7 @@ export function PopoverNGSelector({
           40 + (optionCount * 48) + 50 + 30 : // モバイル: ヘッダー40 + オプション48px + アクション50 + 余白30
           40 + (optionCount * 40) + 45 + 25   // デスクトップ: ヘッダー40 + オプション40px + アクション45 + 余白25
         
-        console.warn('Popover height not available, using estimate:', estimatedHeight)
+        // 高さが取得できない場合は推定値を使用し、再計算をスケジュール
         
         // 高さが取得できていない場合は、少し遅延して再計算
         setTimeout(() => calculatePosition(), 50)
@@ -107,17 +107,6 @@ export function PopoverNGSelector({
       // 垂直位置の決定（画面内に収まるように調整）
       const spaceAbove = anchor.top - safeArea
       const spaceBelow = viewport.height - anchor.bottom - safeArea
-      
-      // デバッグ情報
-      console.log('Popover positioning debug:', {
-        anchorBottom: anchor.bottom,
-        anchorTop: anchor.top,
-        viewportHeight: viewport.height,
-        popoverHeight,
-        spaceBelow,
-        spaceAbove,
-        willShowAbove: spaceBelow < popoverHeight + gap && spaceAbove >= popoverHeight + gap
-      })
       
       // デフォルトは下に表示するが、スペースが足りない場合は上に表示
       if (spaceBelow >= popoverHeight + gap) {
