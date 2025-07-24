@@ -69,6 +69,16 @@ export function useRankingData({
 
   // データフェッチ関数
   const fetchRankingData = useCallback(async (config: RankingConfig) => {
+    // カスタムジャンルの場合はAPIリクエストをスキップ
+    if (config.genre === 'custom') {
+      setLoading(false)
+      setError(null)
+      setFullRankingData([])
+      setRankingData([])
+      setCurrentPopularTags([])
+      return
+    }
+
     // 前のリクエストをキャンセル
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
