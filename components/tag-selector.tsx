@@ -19,7 +19,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const tagScrollRef = useRef<HTMLDivElement>(null)
   
   // カスタムランキング管理
-  const { rankings, selectedId, createRanking, selectRanking } = useCustomRankings()
+  const { rankings, selectedId, createRanking, updateRanking, deleteRanking, selectRanking } = useCustomRankings()
+  
+  // 編集用の状態
+  const [editingRanking, setEditingRanking] = useState<any>(null)
 
   // propsから渡されたタグを優先的に使用
   useEffect(() => {
@@ -81,6 +84,39 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     })
     // 作成したカスタムランキングを自動選択
     handleCustomRankingSelect(newRanking.id)
+  }
+
+  const handleEditRanking = (ranking: any) => {
+    setEditingRanking(ranking)
+    setShowCustomModal(true)
+  }
+
+  const handleUpdateRanking = (data: any) => {
+    if (editingRanking) {
+      updateRanking(editingRanking.id, {
+        title: data.title,
+        baseGenre: data.baseGenre,
+        conditions: data.conditions
+      })
+      setEditingRanking(null)
+    } else {
+      handleCreateCustomRanking(data)
+    }
+  }
+
+  const handleDeleteRanking = (ranking: any) => {
+    if (window.confirm(`「${ranking.title}」を削除しますか？この操作は取り消せません。`)) {
+      deleteRanking(ranking.id)
+      // 削除したランキングが選択中だった場合、選択を解除
+      if (config.tag === `custom:${ranking.id}`) {
+        onConfigChange({ ...config, tag: undefined })
+      }
+    }
+  }
+
+  const handleModalClose = () => {
+    setShowCustomModal(false)
+    setEditingRanking(null)
   }
 
 
@@ -154,26 +190,50 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
               
               {/* 既存のカスタムランキング */}
               {rankings.map((ranking) => (
-                <button
-                  key={ranking.id}
-                  onClick={() => handleCustomRankingSelect(ranking.id)}
-                  className={`${styles.button} ${styles.tagButton} ${
-                    config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
-                  }`}
-                >
-                  {ranking.title}
-                </button>
+                <div key={ranking.id} className={styles.customRankingItem}>
+                  <button
+                    onClick={() => handleCustomRankingSelect(ranking.id)}
+                    className={`${styles.button} ${styles.tagButton} ${
+                      config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
+                    }`}
+                  >
+                    {ranking.title}
+                  </button>
+                  <div className={styles.customRankingActions}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleEditRanking(ranking)
+                      }}
+                      className={styles.editButton}
+                      title="編集"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteRanking(ranking)
+                      }}
+                      className={styles.deleteButton}
+                      title="削除"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </div>
         </div>
         
-        {/* カスタムランキング作成モーダル */}
+        {/* カスタムランキング作成・編集モーダル */}
         <CustomRankingModal
           isOpen={showCustomModal}
-          onClose={() => setShowCustomModal(false)}
-          onSave={handleCreateCustomRanking}
-          existingTitles={rankings.map(r => r.title)}
+          onClose={handleModalClose}
+          onSave={handleUpdateRanking}
+          existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
+          editingRanking={editingRanking}
         />
       </>
     )

@@ -263,3 +263,54 @@
   border-radius: 8px;
   margin-top: 8px;
 }
+
+/* カスタムランキングアイテム */
+.customRankingItem {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.customRankingItem:hover .customRankingActions {
+  opacity: 1;
+}
+
+.customRankingActions {
+  display: flex;
+  gap: 4px;
+  margin-left: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.editButton,
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--surface-secondary);
+  transition: all 0.2s ease;
+}
+
+.editButton:hover {
+  background: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.deleteButton:hover {
+  background: var(--error-color, #ef4444);
+  transform: scale(1.1);
+}
+
+/* モバイルでは常に表示 */
+@media (max-width: 640px) {
+  .customRankingActions {
+    opacity: 1;
+  }
+}

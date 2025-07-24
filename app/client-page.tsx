@@ -103,7 +103,7 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
-  const { selectedRanking } = useCustomRankings()
+  const { selectedRanking, selectRanking } = useCustomRankings()
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
@@ -267,9 +267,16 @@ export default function ClientPage({
     // URLパラメータから初期ページを取得
     const urlParams = new URLSearchParams(window.location.search)
     const pageParam = urlParams.get('page')
+    const rankingParam = urlParams.get('ranking')
+    
     if (pageParam) {
       const pageNum = parseInt(pageParam, 10)
       setCurrentPage(Math.max(1, pageNum))
+    }
+    
+    // カスタムランキングのパラメータがある場合、対応するランキングを選択
+    if (rankingParam && config.genre === 'custom') {
+      selectRanking(rankingParam)
     }
     
     // 初回レンダリング時はSSRのデータを使用するため、追加のAPI呼び出しを避ける
@@ -409,6 +416,10 @@ export default function ClientPage({
     if (newConfig.genre !== 'all') params.set('genre', newConfig.genre)
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
+    // カスタムジャンルかつ選択されたランキングがある場合、rankingパラメータを追加
+    if (newConfig.genre === 'custom' && selectedRanking) {
+      params.set('ranking', selectedRanking.id)
+    }
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
@@ -442,12 +453,16 @@ export default function ClientPage({
     if (config.period !== '24h') params.set('period', config.period)
     if (config.tag) params.set('tag', config.tag)
     if (page > 1) params.set('page', page.toString())
+    // カスタムジャンルかつ選択されたランキングがある場合、rankingパラメータを追加
+    if (config.genre === 'custom' && selectedRanking) {
+      params.set('ranking', selectedRanking.id)
+    }
     
     // URLを更新するが、データの再取得は行わない
     // window.history.replaceStateを使用してブラウザ履歴に追加しない
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
     window.history.replaceState(null, '', newUrl)
-  }, [currentPage, config])
+  }, [currentPage, config, selectedRanking])
   
   // QuickNG: NG追加処理
   const handleQuickNGAdd = useCallback((video: RankingItem, type: NGType, value: string | string[]) => {

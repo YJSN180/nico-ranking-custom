@@ -10,13 +10,15 @@ interface CustomRankingModalProps {
   onClose: () => void
   onSave: (data: CustomRankingFormState) => void
   existingTitles?: string[]
+  editingRanking?: any // 編集対象のランキング
 }
 
 export function CustomRankingModal({ 
   isOpen, 
   onClose, 
   onSave, 
-  existingTitles = [] 
+  existingTitles = [],
+  editingRanking
 }: CustomRankingModalProps) {
   const [currentStep, setCurrentStep] = useState<ModalStep>(1)
   const [formData, setFormData] = useState<CustomRankingFormState>({
@@ -35,20 +37,30 @@ export function CustomRankingModal({
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
 
-  // モーダルが開いた時にリセット
+  // モーダルが開いた時にリセットまたは初期化
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1)
-      setFormData({
-        baseGenre: undefined,
-        conditions: [],
-        title: ''
-      })
+      if (editingRanking) {
+        // 編集モードの場合は既存データで初期化
+        setFormData({
+          baseGenre: editingRanking.baseGenre,
+          conditions: editingRanking.conditions || [],
+          title: editingRanking.title
+        })
+      } else {
+        // 新規作成モードの場合はリセット
+        setFormData({
+          baseGenre: undefined,
+          conditions: [],
+          title: ''
+        })
+      }
       setTagInput('')
       setTagOperator('AND')
       setTagType('both')
     }
-  }, [isOpen])
+  }, [isOpen, editingRanking])
 
   // ESCキーで閉じる
   useEffect(() => {
@@ -143,7 +155,7 @@ export function CustomRankingModal({
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2>カスタムランキング作成</h2>
+          <h2>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
           <button className={styles.closeButton} onClick={onClose}>×</button>
         </div>
 
