@@ -19,7 +19,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const tagScrollRef = useRef<HTMLDivElement>(null)
   
   // カスタムランキング管理
-  const { rankings, selectedId, createRanking, updateRanking, deleteRanking, selectRanking } = useCustomRankings()
+  const { rankings, selectedId, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
   
   // 編集用の状態
   const [editingRanking, setEditingRanking] = useState<any>(null)
@@ -151,6 +151,23 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     console.log('  - rankings array:', rankings);
     console.log('  - rankings.length:', rankings.length);
     console.log('  - selectedId:', selectedId);
+    console.log('  - isLoading:', isLoading);
+    
+    // データ読み込み中の場合はローディング表示
+    if (isLoading) {
+      return (
+        <div className={styles.tagSelectorContainer}>
+          <div className={styles.tagHeader}>
+            <h2 className={styles.tagTitle}>
+              カスタムランキング
+            </h2>
+          </div>
+          <div style={{ color: 'var(--text-secondary)', fontSize: '14px', padding: '20px 0' }}>
+            読み込み中...
+          </div>
+        </div>
+      )
+    }
     
     return (
       <>

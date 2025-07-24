@@ -11,6 +11,7 @@ const defaultStorage: CustomRankingStorage = {
 
 export function useCustomRankings() {
   const [storage, setStorage] = useState<CustomRankingStorage>(defaultStorage)
+  const [isLoading, setIsLoading] = useState(true)
 
   // 初回読み込みとストレージ変更の監視
   useEffect(() => {
@@ -37,6 +38,9 @@ export function useCustomRankings() {
         }
       } catch (error) {
         console.error('Failed to load custom rankings:', error)
+      } finally {
+        // データ読み込み完了をマーク
+        setIsLoading(false)
       }
     }
     
@@ -165,5 +169,6 @@ export function useCustomRankings() {
     deleteRanking,
     selectRanking,
     isUniqueTitle,
+    isLoading,
   }
 }
