@@ -139,7 +139,7 @@ export function useRankingData({
         // 人気タグを設定
         if (data.popularTags && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
           setCurrentPopularTags(data.popularTags)
-          savePopularTagsToCache(data.popularTags, effectiveGenre, config.period)
+          savePopularTagsToCache(data.popularTags, config.genre, config.period)
         }
         
         // キャッシュに保存（生データを保存）
