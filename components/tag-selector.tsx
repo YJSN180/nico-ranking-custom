@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { RankingConfig } from '@/types/ranking-config'
+import { useCustomRankings } from '@/hooks/use-custom-rankings'
+import { CustomRankingModal } from './custom-ranking-modal'
 import styles from './selectors.module.css'
 
 interface TagSelectorProps {
@@ -13,7 +15,11 @@ interface TagSelectorProps {
 export function TagSelector({ config, onConfigChange, popularTags: propsTags = [] }: TagSelectorProps) {
   const [popularTags, setPopularTags] = useState<string[]>(propsTags)
   const [loading, setLoading] = useState(false)
+  const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
+  
+  // カスタムランキング管理
+  const { rankings, selectedId, createRanking, selectRanking } = useCustomRankings()
 
   // propsから渡されたタグを優先的に使用
   useEffect(() => {
@@ -61,6 +67,22 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     }
   }
 
+  const handleCustomRankingSelect = (customId: string) => {
+    selectRanking(customId)
+    // カスタムランキングのIDをtagとして設定
+    onConfigChange({ ...config, tag: `custom:${customId}` })
+  }
+
+  const handleCreateCustomRanking = (data: any) => {
+    const newRanking = createRanking({
+      title: data.title,
+      baseGenre: data.baseGenre,
+      conditions: data.conditions
+    })
+    // 作成したカスタムランキングを自動選択
+    handleCustomRankingSelect(newRanking.id)
+  }
+
 
   const clearTag = () => {
     onConfigChange({ ...config, tag: undefined })
@@ -84,7 +106,80 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     return null
   }
   
-  // 常に表示（「すべて」タグを含める）
+  // カスタムジャンルの場合は専用UI
+  if (config.genre === 'custom') {
+    return (
+      <>
+        <div className={styles.tagSelectorContainer}>
+          <div className={styles.tagHeader}>
+            <h2 className={styles.tagTitle}>
+              カスタムランキング
+            </h2>
+            {config.tag && (
+              <button
+                onClick={clearTag}
+                className={styles.clearButton}
+              >
+                クリア
+              </button>
+            )}
+          </div>
+          
+          {config.tag && config.tag.startsWith('custom:') && (
+            <div style={{ marginBottom: '12px' }}>
+              <span className={styles.selectedTag}>
+                選択中: {rankings.find(r => r.id === config.tag?.replace('custom:', ''))?.title || config.tag}
+              </span>
+            </div>
+          )}
+
+          <div className={styles.scrollContainer}>
+            <div 
+              ref={tagScrollRef}
+              className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
+            >
+              {/* 新規作成ボタン */}
+              <button
+                onClick={() => setShowCustomModal(true)}
+                className={`${styles.button} ${styles.tagButton} ${styles.createButton}`}
+                style={{
+                  backgroundColor: 'var(--surface-secondary)',
+                  border: '2px dashed var(--border-color)',
+                  color: 'var(--primary-color)',
+                  fontWeight: '500'
+                }}
+              >
+                ＋ 新しく作成する
+              </button>
+              
+              {/* 既存のカスタムランキング */}
+              {rankings.map((ranking) => (
+                <button
+                  key={ranking.id}
+                  onClick={() => handleCustomRankingSelect(ranking.id)}
+                  className={`${styles.button} ${styles.tagButton} ${
+                    config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
+                  }`}
+                >
+                  {ranking.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        {/* カスタムランキング作成モーダル */}
+        <CustomRankingModal
+          isOpen={showCustomModal}
+          onClose={() => setShowCustomModal(false)}
+          onSave={handleCreateCustomRanking}
+          existingTitles={rankings.map(r => r.title)}
+        />
+      </>
+    )
+  }
+  
+  // 通常のジャンルの場合は人気タグを表示
   return (
     <div className={styles.tagSelectorContainer}>
       <div className={styles.tagHeader}>

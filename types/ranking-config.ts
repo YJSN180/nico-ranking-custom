@@ -26,6 +26,7 @@ export type RankingGenre =
   | 'sports'
   | 'animal'
   | 'other'
+  | 'custom'
 
 export const GENRE_LABELS: Record<RankingGenre, string> = {
   all: '総合',
@@ -50,7 +51,8 @@ export const GENRE_LABELS: Record<RankingGenre, string> = {
   radio: 'ラジオ',
   sports: 'スポーツ',
   animal: '動物',
-  other: 'その他'
+  other: 'その他',
+  custom: 'カスタム'
 }
 
 export const PERIOD_LABELS: Record<RankingPeriod, string> = {
@@ -85,7 +87,7 @@ export const RANKING_GENRES: Array<{ value: RankingGenre; label: string }> = Obj
 export const GENRE_GROUPS = {
   1: ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing'] as RankingGenre[],
   2: ['dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology'] as RankingGenre[],
-  3: ['society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other'] as RankingGenre[]
+  3: ['society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other', 'custom'] as RankingGenre[]
 } as const
 
 // Helper function to get group ID for a genre

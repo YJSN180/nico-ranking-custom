@@ -1,0 +1,509 @@
+/* オーバーレイ */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* モーダル本体 */
+.modal {
+  background: var(--surface-color);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ダークモード対応 */
+[data-theme="dark"] .modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="darkblue"] .modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* ヘッダー */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.closeButton:hover {
+  background-color: var(--surface-hover);
+}
+
+/* ステップインジケーター */
+.stepIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 8px;
+}
+
+.step {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-color);
+  transition: all 0.3s ease;
+}
+
+.step.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.stepNumber {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stepLine {
+  width: 60px;
+  height: 2px;
+  background: var(--border-color);
+  transition: background-color 0.3s ease;
+}
+
+.stepLine.active {
+  background: var(--primary-color);
+}
+
+/* コンテンツエリア */
+.content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.stepContent h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.125rem;
+  color: var(--text-primary);
+}
+
+.stepDescription {
+  color: var(--text-secondary);
+  margin: 0 0 24px 0;
+  font-size: 0.875rem;
+}
+
+/* Step 1: ジャンル選択 */
+.genreGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.genreOption {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.genreOption:hover {
+  background: var(--surface-hover);
+}
+
+.genreOption.selected {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.genreOption input {
+  position: absolute;
+  opacity: 0;
+}
+
+.genreOption span {
+  font-size: 0.875rem;
+}
+
+/* Step 2: タグ条件設定 */
+.currentConditions {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.currentConditions h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.conditionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.conditionGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.operatorLabel {
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 40px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  font-size: 0.875rem;
+}
+
+.removeTag {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 16px;
+  padding: 0;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.removeTag:hover {
+  background: var(--bg-hover);
+}
+
+.tagInputSection h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.tagInputWrapper {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.tagInput {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.tagInput:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.suggestionItem {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background-color 0.2s;
+}
+
+.suggestionItem:hover {
+  background: var(--bg-hover);
+}
+
+.operatorSelect {
+  margin-bottom: 16px;
+}
+
+.operatorSelect label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.operatorButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.operatorButton {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: all 0.2s;
+}
+
+.operatorButton:hover {
+  background: var(--surface-hover);
+}
+
+.operatorButton.active {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  color: white;
+}
+
+.addButton {
+  width: 100%;
+  padding: 10px 16px;
+  background: var(--primary-color);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.addButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.addButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Step 3: タイトル設定 */
+.titleInput {
+  margin-bottom: 24px;
+}
+
+.titleField {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 16px;
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.titleField:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.charCount {
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.error {
+  color: var(--error-color, #ef4444);
+  font-size: 0.875rem;
+  margin: 8px 0;
+}
+
+.preview {
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.preview h4 {
+  margin: 0 0 12px 0;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.previewBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.previewLabel {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.previewSelect {
+  padding: 8px 12px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+/* フッター */
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.backButton,
+.nextButton {
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.backButton {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.backButton:hover {
+  background: var(--bg-hover);
+}
+
+.nextButton {
+  background: var(--primary-color);
+  border: none;
+  color: white;
+}
+
+.nextButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.nextButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .modal {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .genreGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stepIndicator {
+    padding: 16px;
+  }
+
+  .stepLine {
+    width: 40px;
+  }
+
+  .content {
+    padding: 16px;
+  }
+}

@@ -24,5 +24,6 @@ export const GENRE_ID_MAP: Record<RankingGenre, string> = {
   radio: 'oxzi6bje',
   sports: '4w3p65pf',
   animal: 'ne72lua2',
-  other: 'ramuboyn'
+  other: 'ramuboyn',
+  custom: 'custom-local' // カスタムランキング用（ローカル処理）
 }
