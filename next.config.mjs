@@ -31,7 +31,24 @@ const nextConfig = {
       {
         source: '/:path*',
         headers: [
-          {
+          // 開発環境では CSP を緩める
+          ...(process.env.NODE_ENV === 'development' ? [{
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel-scripts.com https://vercel.live https://static.cloudflareinsights.com https://*.cloudflareinsights.com",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: https: blob:",
+              "font-src 'self' data:",
+              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com",
+              "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "frame-ancestors 'none'",
+              "upgrade-insecure-requests"
+            ].join('; ')
+          }] : [{
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
@@ -47,7 +64,7 @@ const nextConfig = {
               "frame-ancestors 'none'",
               "upgrade-insecure-requests"
             ].join('; ')
-          },
+          }]),
           // COEP を削除 - ニコニコ動画のサムネイル画像がCORSヘッダーを提供していないため
           // {
           //   key: 'Cross-Origin-Embedder-Policy',
