@@ -351,31 +351,18 @@ export default function ClientPage({
   
   // 初期マウント時にカスタムジャンルの場合、localStorage読み込み完了後にデータ取得
   useEffect(() => {
-    console.log('🔍 カスタムランキング初期化チェック:', {
-      genre: config.genre,
-      customRankingsLoading,
-      isInitialLoad,
-      hasCustomTag: config.tag?.startsWith('custom:')
-    })
-    
     // カスタムジャンルかつローディング完了かつ初期ロード時
     if (config.genre === 'custom' && !customRankingsLoading && isInitialLoad) {
-      console.log('📋 カスタムランキング初期化条件に合致')
-      
       // カスタムランキングが選択されている場合のみデータ取得
       if (config.tag?.startsWith('custom:')) {
-        console.log('🚀 初期化時のデータ取得開始')
         fetchRankingData(config)
           .then(() => {
-            console.log('✅ 初期化時のデータ取得完了')
             setIsInitialLoad(false)
           })
-          .catch((error) => {
-            console.log('❌ 初期化時のデータ取得エラー:', error)
+          .catch(() => {
             setIsInitialLoad(false)
           })
       } else {
-        console.log('⚠️ カスタムタグが設定されていないため、初期化完了')
         setIsInitialLoad(false)
       }
     }
@@ -476,30 +463,30 @@ export default function ClientPage({
     try {
       // カスタムジャンルの場合は常にデータを取得（baseGenre使用）
       if (newConfig.genre === 'custom') {
-        console.log('🔄 カスタムランキング選択 - データ取得開始')
+        // カスタムランキング選択時のデータ取得開始
         
         // カスタムランキングがまだ読み込み中の場合、少し待つ
         if (customRankingsLoading) {
-          console.log('⏳ カスタムランキング読み込み中 - 100ms待機')
+          // カスタムランキング読み込み中 - 100ms待機
           setTimeout(async () => {
             try {
               await fetchRankingData(newConfig)
-              console.log('✅ カスタムランキング データ取得完了（delayed）')
+              // データ取得完了
             } catch (error) {
-              console.log('❌ カスタムランキング データ取得エラー（delayed）:', error)
+              // エラーは内部で処理される
             }
           }, 100)
         } else {
           // 即座に実行
           await fetchRankingData(newConfig)
-          console.log('✅ カスタムランキング データ取得完了（immediate）')
+          // データ取得完了
         }
       } else {
         // 通常のジャンルの場合
         await fetchRankingData(newConfig)
       }
     } catch (error) {
-      console.log('❌ データ取得エラー:', error)
+      // エラーはフック内で処理済み
       // エラーはフック内で処理済み
     }
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankingsLoading])
