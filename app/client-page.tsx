@@ -105,7 +105,7 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
-  const { selectedRanking, selectRanking } = useCustomRankings()
+  const { selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
@@ -276,14 +276,8 @@ export default function ClientPage({
       setCurrentPage(Math.max(1, pageNum))
     }
     
-    // SSRから渡されたrankingパラメータがある場合、対応するランキングを選択し、ジャンルを'custom'に設定
-    if (initialRanking) {
-      selectRanking(initialRanking)
-      // configもカスタムジャンルに変更
-      if (config.genre !== 'custom') {
-        setConfig(prev => ({ ...prev, genre: 'custom', tag: `custom:${initialRanking}` }))
-      }
-    }
+    // SSRから渡されたrankingパラメータがある場合の処理は別のuseEffectで行う
+    // (カスタムランキングの読み込み完了を待つため)
     
     // 初回レンダリング時はSSRのデータを使用するため、追加のAPI呼び出しを避ける
     // これにより二重リクエストを防ぐ
@@ -339,6 +333,21 @@ export default function ClientPage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  
+  // SSRから渡されたrankingパラメータがある場合、カスタムランキングの読み込み完了後に処理
+  useEffect(() => {
+    if (initialRanking && !customRankingsLoading) {
+      selectRanking(initialRanking)
+      // configもカスタムジャンルに変更
+      if (config.genre !== 'custom' || config.tag !== `custom:${initialRanking}`) {
+        handleConfigChange({ 
+          ...config, 
+          genre: 'custom', 
+          tag: `custom:${initialRanking}` 
+        })
+      }
+    }
+  }, [initialRanking, customRankingsLoading, selectRanking, config, handleConfigChange])
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -432,13 +441,25 @@ export default function ClientPage({
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
-      // カスタムジャンルの場合も通常通りデータを取得
-      // use-ranking-data.ts内でbaseGenreへの変換とフィルタリングを行う
-      await fetchRankingData(newConfig)
+      // カスタムジャンルの場合、ランキングデータの読み込みを待つ
+      if (newConfig.genre === 'custom' && customRankingsLoading) {
+        // カスタムランキングがまだ読み込み中の場合、少し待つ
+        setTimeout(async () => {
+          try {
+            await fetchRankingData(newConfig)
+          } catch (error) {
+            // エラーはフック内で処理済み
+          }
+        }, 100)
+      } else {
+        // カスタムジャンルの場合も通常通りデータを取得
+        // use-ranking-data.ts内でbaseGenreへの変換とフィルタリングを行う
+        await fetchRankingData(newConfig)
+      }
     } catch (error) {
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankingsLoading])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
