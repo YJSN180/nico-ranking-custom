@@ -35,19 +35,16 @@ function matchesConditions(
   // NOT条件の収集
   const notConditions = conditions.filter(c => c.operator === 'NOT')
 
-  // アイテムのタグを取得（大文字小文字を区別しない比較のため小文字化）
-  const itemTags = getItemTags(item).map(tag => tag.toLowerCase())
-
   // NOT条件のチェック（1つでも含まれていたら除外）
   for (const condition of notConditions) {
-    if (itemTags.includes(condition.tag.toLowerCase())) {
+    if (hasMatchingTag(item, condition)) {
       return false
     }
   }
 
   // AND条件のチェック（すべて含まれている必要がある）
   for (const condition of andConditions) {
-    if (!itemTags.includes(condition.tag.toLowerCase())) {
+    if (!hasMatchingTag(item, condition)) {
       return false
     }
   }
@@ -55,7 +52,7 @@ function matchesConditions(
   // OR条件のチェック（少なくとも1つ含まれている必要がある）
   if (orConditions.length > 0) {
     const hasAnyOrTag = orConditions.some(condition => 
-      itemTags.includes(condition.tag.toLowerCase())
+      hasMatchingTag(item, condition)
     )
     if (!hasAnyOrTag) {
       return false
@@ -63,6 +60,48 @@ function matchesConditions(
   }
 
   return true
+}
+
+/**
+ * アイテムが指定されたタグ条件に一致するかチェック
+ * @param item ランキングアイテム
+ * @param condition タグ条件
+ * @returns 条件に一致する場合はtrue
+ */
+function hasMatchingTag(item: RankingItem, condition: TagCondition): boolean {
+  const tagNameLower = condition.tag.toLowerCase()
+
+  // tagDetailsがある場合は詳細情報を使用
+  if (item.tagDetails && item.tagDetails.length > 0) {
+    for (const tagDetail of item.tagDetails) {
+      if (tagDetail.name.toLowerCase() === tagNameLower) {
+        // タグタイプのチェック
+        switch (condition.tagType) {
+          case 'lock':
+            return tagDetail.isLocked
+          case 'user':
+            return !tagDetail.isLocked
+          case 'both':
+            return true
+          default:
+            // 後方互換性のため、tagTypeが未定義の場合は両方を対象とする
+            return true
+        }
+      }
+    }
+    return false
+  }
+
+  // tagDetailsがない場合はtagsを使用（タグタイプの区別はできない）
+  if (item.tags && item.tags.length > 0) {
+    const hasTag = item.tags.some(tag => tag.toLowerCase() === tagNameLower)
+    if (hasTag) {
+      // tagDetailsがない場合は、tagTypeに関わらず一致とする
+      return true
+    }
+  }
+
+  return false
 }
 
 /**

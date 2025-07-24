@@ -9,6 +9,7 @@ export type TagOperator = 'AND' | 'OR' | 'NOT'
 export interface TagCondition {
   tag: string              // タグ名
   operator: TagOperator    // 条件演算子
+  tagType: 'lock' | 'user' | 'both'  // タグの種別: ロックタグ、ユーザータグ、両方
 }
 
 // カスタムランキングの定義

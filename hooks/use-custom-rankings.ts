@@ -21,6 +21,18 @@ export function useCustomRankings() {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
           const parsed = JSON.parse(stored)
+          
+          // 後方互換性: tagTypeが存在しない古いデータにデフォルト値を追加
+          if (parsed.rankings) {
+            parsed.rankings = parsed.rankings.map((ranking: any) => ({
+              ...ranking,
+              conditions: ranking.conditions?.map((condition: any) => ({
+                ...condition,
+                tagType: condition.tagType || 'both' // デフォルトは'both'
+              })) || []
+            }))
+          }
+          
           setStorage(parsed)
         }
       } catch (error) {

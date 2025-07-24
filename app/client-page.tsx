@@ -8,6 +8,8 @@ import { VideoContextMenu } from '@/components/video-context-menu'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
+import { applyCustomFilters } from '@/lib/custom-ranking-filter'
+import { useCustomRankings } from '@/hooks/use-custom-rankings'
 
 // 直接インポート（まず動作確認）
 import Pagination from '@/components/pagination'
@@ -101,6 +103,7 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
+  const { selectedRanking } = useCustomRankings()
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
@@ -411,11 +414,21 @@ export default function ClientPage({
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
-      await fetchRankingData(newConfig)
+      // カスタムジャンルの場合は、選択されたランキングのベースジャンルからデータを取得
+      if (newConfig.genre === 'custom' && selectedRanking) {
+        const baseConfig = {
+          ...newConfig,
+          genre: selectedRanking.baseGenre,
+          tag: undefined // カスタムランキングではタグは使用しない
+        }
+        await fetchRankingData(baseConfig)
+      } else {
+        await fetchRankingData(newConfig)
+      }
     } catch (error) {
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, selectedRanking])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
@@ -654,8 +667,15 @@ export default function ClientPage({
 
   // クライアントサイドページネーション処理 (同期的なNGフィルタリング)
   const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
-    // fullRankingDataに対して直接フィルタリングを適用（即座に反映）
-    const { filteredItems } = filterWithExtendedNGList(fullRankingData, ngList)
+    let baseData = fullRankingData
+
+    // カスタムフィルタリングを適用（カスタムジャンルかつ選択されたランキングがある場合）
+    if (config.genre === 'custom' && selectedRanking && selectedRanking.conditions.length > 0) {
+      baseData = applyCustomFilters(baseData, selectedRanking.conditions)
+    }
+
+    // NGフィルタリングを適用
+    const { filteredItems } = filterWithExtendedNGList(baseData, ngList)
     const totalCount = filteredItems.length
     
     // 総ページ数を計算
@@ -674,7 +694,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, currentPage])
+  }, [fullRankingData, ngList, currentPage, config.genre, selectedRanking])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

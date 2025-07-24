@@ -28,6 +28,7 @@ export function CustomRankingModal({
   // タグ入力関連の状態
   const [tagInput, setTagInput] = useState('')
   const [tagOperator, setTagOperator] = useState<TagOperator>('AND')
+  const [tagType, setTagType] = useState<'lock' | 'user' | 'both'>('both')
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   
@@ -45,6 +46,7 @@ export function CustomRankingModal({
       })
       setTagInput('')
       setTagOperator('AND')
+      setTagType('both')
     }
   }, [isOpen])
 
@@ -81,7 +83,8 @@ export function CustomRankingModal({
 
     const newCondition: TagCondition = {
       tag,
-      operator: tagOperator
+      operator: tagOperator,
+      tagType: tagType
     }
 
     setFormData(prev => ({
@@ -214,9 +217,15 @@ export function CustomRankingModal({
                           <div className={styles.tags}>
                             {conditions.map((condition, index) => {
                               const originalIndex = formData.conditions.indexOf(condition)
+                              const tagTypeLabel = condition.tagType === 'lock' ? 'ロック' 
+                                : condition.tagType === 'user' ? 'ユーザー' 
+                                : '両方'
                               return (
                                 <span key={originalIndex} className={styles.tag}>
                                   {condition.tag}
+                                  <span className={styles.tagTypeIndicator}>
+                                    ({tagTypeLabel})
+                                  </span>
                                   <button
                                     className={styles.removeTag}
                                     onClick={() => handleRemoveTag(originalIndex)}
@@ -291,6 +300,33 @@ export function CustomRankingModal({
                       onClick={() => setTagOperator('NOT')}
                     >
                       NOT
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.tagTypeSelect}>
+                  <label>タグ種別:</label>
+                  <div className={styles.tagTypeButtons}>
+                    <button
+                      className={`${styles.tagTypeButton} ${tagType === 'lock' ? styles.active : ''}`}
+                      onClick={() => setTagType('lock')}
+                      title="運営が設定したロックタグのみ対象"
+                    >
+                      ロックタグ
+                    </button>
+                    <button
+                      className={`${styles.tagTypeButton} ${tagType === 'user' ? styles.active : ''}`}
+                      onClick={() => setTagType('user')}
+                      title="ユーザーが設定したタグのみ対象"
+                    >
+                      ユーザータグ
+                    </button>
+                    <button
+                      className={`${styles.tagTypeButton} ${tagType === 'both' ? styles.active : ''}`}
+                      onClick={() => setTagType('both')}
+                      title="ロックタグとユーザータグの両方を対象"
+                    >
+                      両方
                     </button>
                   </div>
                 </div>

@@ -332,6 +332,53 @@
   color: white;
 }
 
+/* タグ種別選択 */
+.tagTypeSelect {
+  margin-bottom: 16px;
+}
+
+.tagTypeSelect label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.tagTypeButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.tagTypeButton {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.tagTypeButton:hover {
+  background: var(--surface-hover);
+}
+
+.tagTypeButton.active {
+  background: var(--secondary-color, #10b981);
+  border-color: var(--secondary-color, #10b981);
+  color: white;
+}
+
+.tagTypeIndicator {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+
 .addButton {
   width: 100%;
   padding: 10px 16px;
