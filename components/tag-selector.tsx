@@ -144,6 +144,14 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   
   // カスタムジャンルの場合は専用UI
   if (config.genre === 'custom') {
+    // デバッグ用のログ出力
+    console.log('🔍 TagSelector Debug Info:');
+    console.log('  - config.genre:', config.genre);
+    console.log('  - config.tag:', config.tag);
+    console.log('  - rankings array:', rankings);
+    console.log('  - rankings.length:', rankings.length);
+    console.log('  - selectedId:', selectedId);
+    
     return (
       <>
         <div className={styles.tagSelectorContainer}>
@@ -176,7 +184,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             >
               {/* 新規作成ボタン */}
               <button
-                onClick={() => setShowCustomModal(true)}
+                onClick={() => {
+                  console.log('🆕 Create button clicked');
+                  setShowCustomModal(true);
+                }}
                 className={`${styles.button} ${styles.tagButton} ${styles.createButton}`}
                 style={{
                   backgroundColor: 'var(--surface-secondary)',
@@ -189,7 +200,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
               </button>
               
               {/* 既存のカスタムランキング */}
-              {rankings.map((ranking) => (
+              {console.log('🔄 Rendering custom rankings, count:', rankings.length)}
+              {rankings.map((ranking) => {
+                console.log('📝 Rendering ranking:', ranking.id, ranking.title);
+                return (
                 <div key={ranking.id} className={styles.customRankingItem}>
                   <button
                     onClick={() => handleCustomRankingSelect(ranking.id)}
@@ -222,7 +236,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
