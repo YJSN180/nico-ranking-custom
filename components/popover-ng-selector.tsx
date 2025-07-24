@@ -56,57 +56,109 @@ export function PopoverNGSelector({
   useEffect(() => {
     if (!isOpen || !anchorRef.current || !popoverRef.current) return
     
-    const anchor = anchorRef.current.getBoundingClientRect()
-    const popover = popoverRef.current
-    const viewport = {
-      width: window.innerWidth,
-      height: window.innerHeight
+    // 実際のサイズを取得するために少し遅延させる
+    const calculatePosition = () => {
+      if (!anchorRef.current || !popoverRef.current) return
+      
+      const anchor = anchorRef.current.getBoundingClientRect()
+      const popover = popoverRef.current
+      const popoverRect = popover.getBoundingClientRect()
+      const viewport = {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+      
+      // モバイル判定
+      const isMobile = viewport.width <= 480
+      
+      // 実際のポップオーバーサイズを使用（フォールバックあり）
+      const actualWidth = popoverRect.width || (isMobile ? 280 : 300)
+      const actualHeight = popoverRect.height || 250
+      
+      // モバイルでの最大幅制限（CSSと同じ計算式）
+      const maxWidth = isMobile ? viewport.width - 20 : 320
+      const popoverWidth = Math.min(actualWidth, maxWidth)
+      const popoverHeight = actualHeight
+      
+      const gap = 8 // アンカーとの間隔
+      const safeArea = 10 // 画面端からの安全距離
+      
+      let top: number
+      let left: number
+      let transformOrigin = 'center bottom'
+      let maxHeight: number | null = null
+      
+      // 垂直位置の決定（画面内に収まるように調整）
+      const spaceAbove = anchor.top - safeArea
+      const spaceBelow = viewport.height - anchor.bottom - safeArea
+    
+      if (spaceAbove >= popoverHeight + gap) {
+        // 上に十分なスペースがある場合
+        top = anchor.top - gap
+        popover.style.transform = 'translateY(-100%)'
+        transformOrigin = 'center bottom'
+      } else if (spaceBelow >= popoverHeight + gap) {
+        // 下に十分なスペースがある場合
+        top = anchor.bottom + gap
+        popover.style.transform = 'translateY(0)'
+        transformOrigin = 'center top'
+      } else {
+        // どちらにも十分なスペースがない場合
+        if (spaceAbove > spaceBelow) {
+          // 上の方がスペースが多い
+          top = safeArea
+          maxHeight = spaceAbove - gap
+          popover.style.transform = 'translateY(0)'
+          transformOrigin = 'center bottom'
+        } else {
+          // 下の方がスペースが多い（または同じ）
+          top = anchor.bottom + gap
+          maxHeight = spaceBelow - gap
+          popover.style.transform = 'translateY(0)'
+          transformOrigin = 'center top'
+        }
+      }
+    
+      // 水平位置の決定（中央寄せ、画面端を考慮）
+      const centerLeft = anchor.left + anchor.width / 2 - popoverWidth / 2
+      
+      if (centerLeft < safeArea) {
+        // 左端に近すぎる場合は左寄せ
+        left = safeArea
+        transformOrigin = 'left ' + transformOrigin.split(' ')[1]
+      } else if (centerLeft + popoverWidth > viewport.width - safeArea) {
+        // 右端に近すぎる場合は右寄せ
+        left = viewport.width - popoverWidth - safeArea
+        transformOrigin = 'right ' + transformOrigin.split(' ')[1]
+      } else {
+        // 中央寄せ
+        left = centerLeft
+      }
+    
+      // スタイル適用
+      popover.style.position = 'fixed'
+      popover.style.top = `${top}px`
+      popover.style.left = `${left}px`
+      popover.style.transformOrigin = transformOrigin
+      popover.style.zIndex = '1000'
+      
+      // 幅制限を明示的に設定（モバイルでのはみ出し防止）
+      if (isMobile) {
+        popover.style.maxWidth = `${maxWidth}px`
+      }
+      
+      // 高さ制限が必要な場合
+      if (maxHeight !== null) {
+        popover.style.maxHeight = `${maxHeight}px`
+        popover.style.overflowY = 'auto'
+      } else {
+        popover.style.maxHeight = ''
+        popover.style.overflowY = ''
+      }
     }
     
-    // ポップオーバーの推定サイズ
-    const popoverWidth = 300 // 最大幅
-    const popoverHeight = 200 // 推定高さ
-    const gap = 8 // アンカーとの間隔
-    
-    let top: number
-    let left: number
-    let transformOrigin = 'center bottom'
-    
-    // 垂直位置の決定（上が優先、スペースが足りなければ下）
-    if (anchor.top - popoverHeight - gap >= 0) {
-      // 上に表示
-      top = anchor.top - gap
-      popover.style.transform = 'translateY(-100%)'
-      transformOrigin = 'center bottom'
-    } else {
-      // 下に表示
-      top = anchor.bottom + gap
-      popover.style.transform = 'translateY(0)'
-      transformOrigin = 'center top'
-    }
-    
-    // 水平位置の決定（中央寄せ、画面端を考慮）
-    const centerLeft = anchor.left + anchor.width / 2 - popoverWidth / 2
-    
-    if (centerLeft < 10) {
-      // 左端に近すぎる場合は左寄せ
-      left = 10
-      transformOrigin = 'left ' + transformOrigin.split(' ')[1]
-    } else if (centerLeft + popoverWidth > viewport.width - 10) {
-      // 右端に近すぎる場合は右寄せ
-      left = viewport.width - popoverWidth - 10
-      transformOrigin = 'right ' + transformOrigin.split(' ')[1]
-    } else {
-      // 中央寄せ
-      left = centerLeft
-    }
-    
-    // スタイル適用
-    popover.style.position = 'fixed'
-    popover.style.top = `${top}px`
-    popover.style.left = `${left}px`
-    popover.style.transformOrigin = transformOrigin
-    popover.style.zIndex = '1000'
+    // requestAnimationFrameで次のフレームで位置計算を実行
+    requestAnimationFrame(calculatePosition)
   }, [isOpen, anchorRef])
 
   if (!isOpen) return null
