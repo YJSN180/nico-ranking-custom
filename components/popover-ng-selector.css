@@ -195,3 +195,12 @@
   flex: 1;
   min-width: 0; /* フレックスアイテムの省略を有効にする */
 }
+
+/* 初期位置計算中の一時的な非表示 */
+.popover-ng-selector--calculating {
+  visibility: hidden;
+  animation: none;
+  /* 初期位置を画面左上に設定して、不自然な表示を防ぐ */
+  top: 0 !important;
+  left: 0 !important;
+}

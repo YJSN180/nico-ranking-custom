@@ -21,6 +21,7 @@ export function PopoverNGSelector({
   onAdd
 }: PopoverNGSelectorProps) {
   const popoverRef = useRef<HTMLDivElement>(null)
+  const [isCalculating, setIsCalculating] = useState(true)
 
   // 外部クリックとESCキーでのクローズ
   useEffect(() => {
@@ -73,7 +74,14 @@ export function PopoverNGSelector({
       
       // 実際のポップオーバーサイズを使用（フォールバックあり）
       const actualWidth = popoverRect.width || (isMobile ? 240 : 300)
-      const actualHeight = popoverRect.height || 250
+      
+      // オプション数に基づいた高さの推定
+      // ヘッダー + 4オプション（authorIdがある場合） + キャンセルボタン + 余白
+      const optionCount = video.authorId ? 4 : 3
+      const estimatedHeight = isMobile ? 
+        40 + (optionCount * 48) + 50 + 30 : // モバイル: ヘッダー40 + オプション48px + アクション50 + 余白30
+        40 + (optionCount * 40) + 45 + 25   // デスクトップ: ヘッダー40 + オプション40px + アクション45 + 余白25
+      const actualHeight = popoverRect.height || estimatedHeight
       
       // モバイルでの最大幅制限（CSSと同じ計算式）
       const maxWidth = isMobile ? Math.min(260, viewport.width - 40) : 320
@@ -105,15 +113,17 @@ export function PopoverNGSelector({
       } else {
         // どちらにも十分なスペースがない場合
         if (spaceAbove > spaceBelow) {
-          // 上の方がスペースが多い
-          top = safeArea
-          maxHeight = spaceAbove - gap
+          // 上の方がスペースが多い - 上に表示して高さを制限
+          // ポップオーバーの上端が画面内に収まるように調整
+          maxHeight = Math.min(popoverHeight, spaceAbove - gap)
+          top = Math.max(safeArea, anchor.top - gap - maxHeight)
           popover.style.transform = 'translateY(0)'
           transformOrigin = 'center bottom'
         } else {
-          // 下の方がスペースが多い（または同じ）
+          // 下の方がスペースが多い（または同じ） - 下に表示して高さを制限
+          // ポップオーバーの下端が画面内に収まるように調整
+          maxHeight = Math.min(popoverHeight, spaceBelow - gap)
           top = anchor.bottom + gap
-          maxHeight = spaceBelow - gap
           popover.style.transform = 'translateY(0)'
           transformOrigin = 'center top'
         }
@@ -155,11 +165,34 @@ export function PopoverNGSelector({
         popover.style.maxHeight = ''
         popover.style.overflowY = ''
       }
+      
+      // 位置計算完了後に表示
+      setIsCalculating(false)
     }
     
     // requestAnimationFrameで次のフレームで位置計算を実行
     requestAnimationFrame(calculatePosition)
-  }, [isOpen, anchorRef])
+    
+    // ポップオーバーのサイズが変わったら再計算
+    const resizeObserver = new ResizeObserver(() => {
+      calculatePosition()
+    })
+    
+    if (popoverRef.current) {
+      resizeObserver.observe(popoverRef.current)
+    }
+    
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [isOpen, anchorRef, video.authorId])
+  
+  // isOpenがfalseになったら計算状態をリセット
+  useEffect(() => {
+    if (!isOpen) {
+      setIsCalculating(true)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -183,7 +216,7 @@ export function PopoverNGSelector({
   return (
     <div
       ref={popoverRef}
-      className="popover-ng-selector"
+      className={`popover-ng-selector ${isCalculating ? 'popover-ng-selector--calculating' : ''}`}
       data-testid="ng-popover"
       role="dialog"
       aria-label="NGリスト追加オプション"
