@@ -7,12 +7,12 @@ import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { VideoContextMenu } from '@/components/video-context-menu'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
-import { filterWithNGList } from '@/lib/filter-with-ng-list'
+import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
 
 // 直接インポート（まず動作確認）
 import Pagination from '@/components/pagination'
 import { TagSelector } from '@/components/tag-selector'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import { useRankingData } from '@/hooks/use-ranking-data'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
@@ -20,6 +20,8 @@ import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
+import type { ExtendedUserNGList } from '@/types/ng-list-extended'
+import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import './client-page.css'
@@ -97,7 +99,7 @@ export default function ClientPage({
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
-  const { ngList } = useUserNGList()
+  const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
   
   // PWA環境でのナビゲーション状態管理
@@ -346,13 +348,17 @@ export default function ClientPage({
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
     return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      const abortController = abortControllerRef.current
+      const tagsAbortController = tagsAbortControllerRef.current
+      
+      if (abortController) {
+        abortController.abort()
       }
-      if (tagsAbortControllerRef.current) {
-        tagsAbortControllerRef.current.abort()
+      if (tagsAbortController) {
+        tagsAbortController.abort()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
   // スクロール位置の保存・復元は上記のuseEffectで実装済み
@@ -425,6 +431,106 @@ export default function ClientPage({
     window.history.replaceState(null, '', newUrl)
   }, [currentPage, config])
   
+  // QuickNG: NG追加処理
+  const handleQuickNGAdd = useCallback((video: RankingItem, type: NGType, value: string | string[]) => {
+    const stringValue = Array.isArray(value) ? value[0] : value
+    const trimmedValue = stringValue?.trim()
+    
+    if (!trimmedValue) {
+      console.warn('QuickNG: Empty value provided')
+      return
+    }
+    
+    // 現在のNGリストをコピーして更新
+    const updatedNGList: ExtendedUserNGList = {
+      ...ngList,
+      updatedAt: new Date().toISOString()
+    }
+    
+    let wasAdded = false
+    let displayValue = ''
+    
+    switch (type) {
+      case 'videoId':
+        if (!ngList.videoIds.includes(trimmedValue)) {
+          updatedNGList.videoIds = [...ngList.videoIds, trimmedValue]
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `動画ID: ${trimmedValue}`
+        }
+        break
+        
+      case 'title':
+        // タイトルは完全一致として追加
+        if (!ngList.videoTitles.exact.includes(trimmedValue)) {
+          updatedNGList.videoTitles = {
+            ...ngList.videoTitles,
+            exact: [...ngList.videoTitles.exact, trimmedValue]
+          }
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `タイトル: ${trimmedValue}`
+        }
+        break
+        
+      case 'author':
+        // 投稿者名は完全一致として追加
+        if (!ngList.authorNames.exact.includes(trimmedValue)) {
+          updatedNGList.authorNames = {
+            ...ngList.authorNames,
+            exact: [...ngList.authorNames.exact, trimmedValue]
+          }
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `投稿者名: ${trimmedValue}`
+        }
+        break
+        
+      case 'authorId':
+        // 投稿者IDは別のリストに追加
+        if (!ngList.authorIds.includes(trimmedValue)) {
+          updatedNGList.authorIds = [...ngList.authorIds, trimmedValue]
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `投稿者ID: ${trimmedValue}`
+        }
+        break
+        
+      default:
+        console.warn('QuickNG: Unknown NG type:', type)
+        return
+    }
+    
+    if (wasAdded) {
+      // NGリストを保存
+      saveNGListDirectly(updatedNGList)
+      
+      // ユーザーフィードバック（簡易版）
+      const message = `🚫 NGリストに追加しました: ${displayValue}`
+      
+      // 一時的な通知を表示（シンプルなアラート）
+      // TODO: より良いトースト通知システムを実装予定
+      if (window.confirm(`${message}\n\nOKをクリックして続行してください。`)) {
+        // ユーザーが確認した場合の処理（特に何もしない）
+      }
+      
+      // デバッグ情報（開発時のみ）
+      if (process.env.NODE_ENV === 'development') {
+        // eslint-disable-next-line no-console
+        console.log('QuickNG: Added to NG list', {
+          type,
+          value: trimmedValue,
+          video: { id: video.id, title: video.title, author: video.authorName },
+          totalCount: updatedNGList.totalCount
+        })
+      }
+    } else {
+      // すでに追加済みの場合
+      const existingMessage = `⚠️ すでにNGリストに登録済みです: ${displayValue}`
+      alert(existingMessage)
+    }
+  }, [ngList, saveNGListDirectly])
+  
   // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
     if (shouldRestore) {
@@ -461,7 +567,7 @@ export default function ClientPage({
       
       // バリデーション2: ページ数の妥当性チェック（データが利用可能な場合）
       if (finalPage > 1 && fullRankingData.length > 0) {
-        const { filteredItems } = filterWithNGList(fullRankingData, ngList)
+        const { filteredItems } = filterWithExtendedNGList(fullRankingData, ngList)
         const maxPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE)
         if (finalPage > maxPages) {
           // フォールバック: 無効なページの場合は同じタグの1ページ目に遷移
@@ -544,7 +650,7 @@ export default function ClientPage({
   // クライアントサイドページネーション処理 (同期的なNGフィルタリング)
   const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
     // fullRankingDataに対して直接フィルタリングを適用（即座に反映）
-    const { filteredItems } = filterWithNGList(fullRankingData, ngList)
+    const { filteredItems } = filterWithExtendedNGList(fullRankingData, ngList)
     const totalCount = filteredItems.length
     
     // 総ページ数を計算
@@ -563,7 +669,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, ngListVersion, currentPage, config.period])
+  }, [fullRankingData, ngList, currentPage])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -701,6 +807,7 @@ export default function ClientPage({
                   <RankingItemResponsive 
                     item={item}
                     disabled={isNavigating}
+                    onQuickNGAdd={handleQuickNGAdd}
                   />
                 </VideoContextMenu>
               </li>

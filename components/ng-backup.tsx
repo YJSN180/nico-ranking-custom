@@ -2,16 +2,16 @@
 
 import { useState } from 'react'
 import { 
-  exportNGListData, 
-  downloadNGListBackup, 
-  readNGListBackupFile, 
-  importNGListData,
-  detectConflicts,
-  type NGListBackupData,
-  type ConflictDetectionResult,
-  type NGListImportResult
-} from '@/lib/storage/ng-backup'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
+  exportExtendedNGListData, 
+  readExtendedNGListBackupFile, 
+  importExtendedNGListData,
+  detectExtendedConflicts,
+  type ExtendedNGListBackupData,
+  type ExtendedConflictDetectionResult,
+  type ExtendedNGListImportResult
+} from '../lib/storage/ng-backup-extended'
+import { downloadNGListBackup } from '../lib/storage/ng-backup'
+import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
 import styles from './ng-backup.module.css'
 
 export function NGBackup() {
@@ -19,20 +19,20 @@ export function NGBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false)
-  const [importResult, setImportResult] = useState<NGListImportResult | null>(null)
+  const [importResult, setImportResult] = useState<ExtendedNGListImportResult | null>(null)
   const [conflictData, setConflictData] = useState<{
-    backup: NGListBackupData
-    conflicts: ConflictDetectionResult
+    backup: ExtendedNGListBackupData
+    conflicts: ExtendedConflictDetectionResult
   } | null>(null)
 
-  const { ngList } = useUserNGList()
+  const { ngList } = useUserNGListExtended()
 
   // エクスポート処理
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      const data = exportNGListData()
-      downloadNGListBackup(data)
+      const data = exportExtendedNGListData()
+      downloadNGListBackup(data as any) // downloadNGListBackupは共通で使える
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Export failed:', error)
@@ -51,10 +51,10 @@ export function NGBackup() {
     setImportResult(null)
 
     try {
-      const data = await readNGListBackupFile(file)
+      const data = await readExtendedNGListBackupFile(file)
       
       // 重複検出
-      const conflicts = detectConflicts(ngList, data.ngList)
+      const conflicts = detectExtendedConflicts(ngList, data.ngList)
       
       if (conflicts.hasConflicts) {
         // 重複がある場合は確認ダイアログを表示
@@ -62,7 +62,7 @@ export function NGBackup() {
         setConflictDialogOpen(true)
       } else {
         // 重複がない場合は直接インポート
-        const result = await importNGListData(data, 'merge')
+        const result = await importExtendedNGListData(data, 'merge')
         setImportResult(result)
         
         // NGリストは即座に反映されるのでリロード不要
@@ -101,7 +101,7 @@ export function NGBackup() {
 
     setIsImporting(true)
     try {
-      const result = await importNGListData(conflictData.backup, resolution)
+      const result = await importExtendedNGListData(conflictData.backup, resolution)
       setImportResult(result)
       setConflictDialogOpen(false)
       setConflictData(null)
@@ -195,6 +195,21 @@ export function NGBackup() {
                   <small>（ID:{ngList.authorIds.length} / 名前:{ngList.authorNames.exact.length + ngList.authorNames.partial.length}）</small>
                 </span>
               </div>
+              {ngList.tags && (
+                <div className={styles.statItem}>
+                  <span className={styles.statLabel}>タグ:</span>
+                  <span className={styles.statValue}>
+                    {ngList.tags.locked.exact.length + ngList.tags.locked.partial.length + 
+                     ngList.tags.user.exact.length + ngList.tags.user.partial.length + 
+                     ngList.tags.both.exact.length + ngList.tags.both.partial.length}件
+                    <small>
+                      （ロック:{ngList.tags.locked.exact.length + ngList.tags.locked.partial.length} / 
+                       ユーザー:{ngList.tags.user.exact.length + ngList.tags.user.partial.length} / 
+                       両方:{ngList.tags.both.exact.length + ngList.tags.both.partial.length}）
+                    </small>
+                  </span>
+                </div>
+              )}
             </div>
             <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
             <div className={styles.dialogActions}>
@@ -268,6 +283,41 @@ export function NGBackup() {
                   </span>
                 </div>
               )}
+              
+              {conflictData.conflicts.conflicts.tags && (
+                (conflictData.conflicts.conflicts.tags.locked.exact.length > 0 ||
+                 conflictData.conflicts.conflicts.tags.locked.partial.length > 0 ||
+                 conflictData.conflicts.conflicts.tags.user.exact.length > 0 ||
+                 conflictData.conflicts.conflicts.tags.user.partial.length > 0 ||
+                 conflictData.conflicts.conflicts.tags.both.exact.length > 0 ||
+                 conflictData.conflicts.conflicts.tags.both.partial.length > 0 ||
+                 (conflictData.conflicts.inclusions.tags && (
+                   conflictData.conflicts.inclusions.tags.locked.length > 0 ||
+                   conflictData.conflicts.inclusions.tags.user.length > 0 ||
+                   conflictData.conflicts.inclusions.tags.both.length > 0
+                 ))) && (
+                  <div className={styles.conflictItem}>
+                    <span className={styles.conflictType}>タグ:</span>
+                    <span className={styles.conflictCount}>
+                      {conflictData.conflicts.conflicts.tags.locked.exact.length +
+                       conflictData.conflicts.conflicts.tags.locked.partial.length +
+                       conflictData.conflicts.conflicts.tags.user.exact.length +
+                       conflictData.conflicts.conflicts.tags.user.partial.length +
+                       conflictData.conflicts.conflicts.tags.both.exact.length +
+                       conflictData.conflicts.conflicts.tags.both.partial.length}件の重複
+                      {conflictData.conflicts.inclusions.tags && (
+                        conflictData.conflicts.inclusions.tags.locked.length +
+                        conflictData.conflicts.inclusions.tags.user.length +
+                        conflictData.conflicts.inclusions.tags.both.length
+                      ) > 0 && 
+                        `, ${conflictData.conflicts.inclusions.tags.locked.length +
+                             conflictData.conflicts.inclusions.tags.user.length +
+                             conflictData.conflicts.inclusions.tags.both.length}件の包含関係`
+                      }
+                    </span>
+                  </div>
+                )
+              )}
             </div>
 
             <div className={styles.resolutionOptions}>
@@ -332,6 +382,16 @@ export function NGBackup() {
                   <span>動画ID: {importResult.imported.categoryBreakdown.videoIds}件</span>
                   <span>動画タイトル: {importResult.imported.categoryBreakdown.videoTitlesExact + importResult.imported.categoryBreakdown.videoTitlesPartial}件</span>
                   <span>投稿者: {importResult.imported.categoryBreakdown.authorIds + importResult.imported.categoryBreakdown.authorNamesExact + importResult.imported.categoryBreakdown.authorNamesPartial}件</span>
+                  {importResult.imported.categoryBreakdown.tagsLockedExact !== undefined && (
+                    <span>
+                      タグ: {(importResult.imported.categoryBreakdown.tagsLockedExact || 0) +
+                             (importResult.imported.categoryBreakdown.tagsLockedPartial || 0) +
+                             (importResult.imported.categoryBreakdown.tagsUserExact || 0) +
+                             (importResult.imported.categoryBreakdown.tagsUserPartial || 0) +
+                             (importResult.imported.categoryBreakdown.tagsBothExact || 0) +
+                             (importResult.imported.categoryBreakdown.tagsBothPartial || 0)}件
+                    </span>
+                  )}
                 </div>
                 {importResult.skipped.totalItems > 0 && (
                   <div className={styles.skippedInfo}>

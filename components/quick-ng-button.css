@@ -1,0 +1,139 @@
+/* QuickNGButton - マイリストボタンとの整合性維持 */
+
+.quick-ng-button-container {
+  position: relative;
+  display: inline-block;
+}
+
+.quick-ng-button {
+  /* マイリストボタンと同じ基本スタイル */
+  border-radius: 21px;
+  padding: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  position: relative;
+  border: 1px solid;
+  
+  /* NGボタン専用の色設計 - 背景は表面色を使用 */
+  background: var(--surface-color);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  opacity: 1;
+  
+  /* iOS長押しメニューを無効化 */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* モバイル向けタップ領域拡大（見た目はそのまま） */
+@media (hover: none) and (pointer: coarse) {
+  .quick-ng-button::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    z-index: 0;
+  }
+}
+
+/* ホバー状態 */
+.quick-ng-button:hover:not(.quick-ng-button--disabled) {
+  background: var(--surface-hover, var(--surface-color));
+  border-color: var(--border-color);
+  transform: scale(1.05);
+}
+
+/* アクティブ状態（ポップオーバー開放中） */
+.quick-ng-button[aria-expanded="true"] {
+  background: var(--surface-secondary, var(--surface-color));
+  border-color: var(--border-color);
+  transform: scale(1.02);
+}
+
+/* 無効化状態 */
+.quick-ng-button--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  background: var(--surface-secondary, #e5e7eb);
+  border-color: var(--border-color, #d1d5db);
+  color: var(--text-muted, #9ca3af);
+}
+
+.quick-ng-button--disabled:hover {
+  transform: none;
+  background: var(--surface-secondary, #e5e7eb);
+  border-color: var(--border-color, #d1d5db);
+}
+
+/* ボタン内のアイコン */
+.quick-ng-button__icon {
+  font-size: 18px;
+  line-height: 1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* フォーカス状態（アクセシビリティ） */
+.quick-ng-button:focus-visible {
+  outline: 2px solid var(--primary-color, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* アニメーション */
+@keyframes ng-button-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* 処理中アニメーション（将来の拡張用） */
+.quick-ng-button--processing {
+  cursor: wait;
+  animation: ng-button-pulse 1.5s ease-in-out infinite;
+}
+
+/* 高コントラストモード対応 */
+@media (prefers-contrast: high) {
+  .quick-ng-button {
+    border-width: 2px;
+  }
+  
+  .quick-ng-button:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* reduced motionモード対応 */
+@media (prefers-reduced-motion: reduce) {
+  .quick-ng-button {
+    transition: none;
+  }
+  
+  .quick-ng-button:hover {
+    transform: none;
+  }
+  
+  .quick-ng-button[aria-expanded="true"] {
+    transform: none;
+  }
+  
+  .quick-ng-button--processing {
+    animation: none;
+  }
+}

@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
-import { useUserPreferences, type ThemeType } from '@/hooks/use-user-preferences'
+import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
+import type { ExtendedUserNGList } from '../types/ng-list-extended'
+import { useUserPreferences, type ThemeType } from '../hooks/use-user-preferences'
 import { NGBackup } from './ng-backup'
 import { GenreOrderBackup } from './genre-order-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
+import { NGTagsSection } from './ng-tags-section'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -23,10 +25,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [inputAuthorName, setInputAuthorName] = useState('')
   const [authorNameType, setAuthorNameType] = useState<'exact' | 'partial'>('exact')
 
-  const { ngList, saveNGListDirectly } = useUserNGList()
+  const { ngList, saveNGListDirectly } = useUserNGListExtended()
   
   // 一時的なNGリストの状態
-  const [tempNGList, setTempNGList] = useState<UserNGList>(ngList)
+  const [tempNGList, setTempNGList] = useState<ExtendedUserNGList>(ngList)
   const [hasChanges, setHasChanges] = useState(false)
   const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -471,6 +473,19 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   </div>
                 </div>
               </section>
+
+              {/* タグ */}
+              {tempNGList.tags && (
+                <NGTagsSection
+                  tags={tempNGList.tags}
+                  onUpdate={(tags) => {
+                    setTempNGList(prev => ({
+                      ...prev,
+                      tags
+                    }))
+                  }}
+                />
+              )}
             </div>
           ) : activeTab === 'genre-order' ? (
             <div className={styles.genreOrderSettings}>

@@ -3,7 +3,7 @@
  */
 
 export const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp; media-src 'self' https://*.niconico.jp https://*.nicovideo.jp; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com https://vercel.live https://static.cloudflareinsights.com https://*.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://nicovideo.cdn.nimg.jp https://img.cdn.nimg.jp https://*.smilevideo.jp https://secure-dcdn.cdn.nimg.jp; media-src 'self' https://*.niconico.jp https://*.nicovideo.jp; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests",
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
   'X-Frame-Options': 'DENY',
   'X-Content-Type-Options': 'nosniff',

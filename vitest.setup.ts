@@ -56,7 +56,7 @@ globalThis.jest = {
   unmock: vi.unmock.bind(vi),
   mock: vi.mock.bind(vi),
   resetModules: vi.resetModules.bind(vi),
-  isolateModules: vi.isolateModules.bind(vi),
+  isolateModules: vi.isolateModules ? vi.isolateModules.bind(vi) : () => {},
   retryTimes: () => {},
   setTimeout: (timeout: number) => {},
 } as any
