@@ -88,13 +88,6 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   items: RankingItem[]
   popularTags?: string[]
 }> {
-  // カスタムジャンルの場合は空のデータを返す（APIは存在しない）
-  if (genre === 'custom') {
-    return {
-      items: [],
-      popularTags: []
-    }
-  }
   
   // Cloudflare Worker から直接データを取得（Vercel Function をバイパス）
   try {

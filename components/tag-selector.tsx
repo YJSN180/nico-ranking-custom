@@ -71,9 +71,16 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   }
 
   const handleCustomRankingSelect = (customId: string) => {
-    selectRanking(customId)
-    // カスタムランキングのIDをtagとして設定し、genreも'custom'に変更
-    onConfigChange({ ...config, genre: 'custom', tag: `custom:${customId}` })
+    // 選択されたカスタムランキングを取得
+    const selectedRanking = rankings.find(r => r.id === customId)
+    if (!selectedRanking) return
+    
+    // カスタムランキングのbaseGenreのランキングページにリダイレクト
+    onConfigChange({ 
+      ...config, 
+      genre: selectedRanking.baseGenre, 
+      tag: undefined // タグはクリア（baseGenreの全動画を表示）
+    })
   }
 
   const handleCreateCustomRanking = (data: any) => {
@@ -83,8 +90,12 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       conditions: data.conditions
     })
     
-    // 作成したカスタムランキングを自動選択
-    handleCustomRankingSelect(newRanking.id)
+    // 作成後、そのbaseGenreのランキングページにリダイレクト
+    onConfigChange({ 
+      ...config, 
+      genre: newRanking.baseGenre, 
+      tag: undefined 
+    })
   }
 
   const handleEditRanking = (ranking: any) => {
@@ -100,6 +111,13 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         conditions: data.conditions
       })
       setEditingRanking(null)
+      
+      // 編集後、そのbaseGenreのランキングページにリダイレクト
+      onConfigChange({ 
+        ...config, 
+        genre: data.baseGenre, 
+        tag: undefined 
+      })
     } else {
       handleCreateCustomRanking(data)
     }
@@ -108,9 +126,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const handleDeleteRanking = (ranking: any) => {
     if (window.confirm(`「${ranking.title}」を削除しますか？この操作は取り消せません。`)) {
       deleteRanking(ranking.id)
-      // 削除したランキングが選択中だった場合、選択を解除
-      if (config.tag === `custom:${ranking.id}`) {
-        onConfigChange({ ...config, tag: undefined })
+      // 削除後は「すべて」ジャンルに戻る
+      if (config.genre === ranking.baseGenre) {
+        onConfigChange({ ...config, genre: 'all', tag: undefined })
       }
     }
   }

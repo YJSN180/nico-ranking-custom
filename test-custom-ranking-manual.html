@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>カスタムランキング手動テスト</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 800px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0052a3;
+    }
+    code {
+      background: #f0f0f0;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    .result {
+      margin-top: 10px;
+      padding: 10px;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .success {
+      color: green;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h1>カスタムランキング手動テスト</h1>
+  
+  <section>
+    <h2>1. カスタムランキングの作成</h2>
+    <button onclick="createCustomRankings()">カスタムランキングを作成</button>
+    <div id="createResult" class="result"></div>
+  </section>
+  
+  <section>
+    <h2>2. 動作確認</h2>
+    <ol>
+      <li>上のボタンでカスタムランキングを作成</li>
+      <li><a href="http://localhost:3001" target="_blank">開発サーバー</a>にアクセス</li>
+      <li>ジャンルセレクターから「カスタム」を選択</li>
+      <li>「テスト用ゲームランキング」または「テスト用音楽ランキング」を選択</li>
+      <li>URLが <code>genre=game</code> または <code>genre=music</code> に変わることを確認</li>
+      <li><code>genre=custom</code> がURLに含まれないことを確認</li>
+    </ol>
+  </section>
+  
+  <section>
+    <h2>3. URLパラメータテスト</h2>
+    <p>以下のリンクをクリックして、正しくリダイレクトされることを確認：</p>
+    <ul>
+      <li><a href="http://localhost:3001/?genre=custom" target="_blank">genre=customでアクセス</a> → 自動的に総合（genre=all）にリダイレクトされるはず</li>
+    </ul>
+  </section>
+  
+  <section>
+    <h2>4. localStorage確認</h2>
+    <button onclick="checkLocalStorage()">localStorageを確認</button>
+    <div id="storageResult" class="result"></div>
+  </section>
+  
+  <script>
+    function createCustomRankings() {
+      const customRanking = {
+        version: "1.0",
+        rankings: [
+          {
+            id: "test-game-ranking",
+            title: "テスト用ゲームランキング",
+            baseGenre: "game",
+            conditions: [
+              {
+                tag: "実況プレイ",
+                operator: "AND",
+                tagType: "both"
+              }
+            ],
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          },
+          {
+            id: "test-music-ranking",
+            title: "テスト用音楽ランキング",
+            baseGenre: "music",
+            conditions: [
+              {
+                tag: "歌ってみた",
+                operator: "AND",
+                tagType: "both"
+              }
+            ],
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          }
+        ],
+        selectedId: null
+      };
+      
+      try {
+        localStorage.setItem('custom-rankings', JSON.stringify(customRanking));
+        document.getElementById('createResult').innerHTML = 
+          '<span class="success">✅ カスタムランキングを作成しました</span><br>' +
+          '- テスト用ゲームランキング (baseGenre: game)<br>' +
+          '- テスト用音楽ランキング (baseGenre: music)';
+      } catch (e) {
+        document.getElementById('createResult').innerHTML = 
+          '<span class="error">❌ エラー: ' + e.message + '</span>';
+      }
+    }
+    
+    function checkLocalStorage() {
+      try {
+        const data = localStorage.getItem('custom-rankings');
+        if (data) {
+          const parsed = JSON.parse(data);
+          document.getElementById('storageResult').innerHTML = 
+            '<pre>' + JSON.stringify(parsed, null, 2) + '</pre>';
+        } else {
+          document.getElementById('storageResult').innerHTML = 
+            '<span class="error">カスタムランキングが保存されていません</span>';
+        }
+      } catch (e) {
+        document.getElementById('storageResult').innerHTML = 
+          '<span class="error">❌ エラー: ' + e.message + '</span>';
+      }
+    }
+  </script>
+</body>
+</html>

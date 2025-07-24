@@ -112,11 +112,6 @@ export default function ClientPage({
   
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
-    // カスタムジャンルの場合はリダイレクトしない（データがなくても維持）
-    if (config.genre === 'custom') {
-      return
-    }
-    
     if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
       // 現在のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替え
       handleConfigChange({ ...config, genre: visibleGenres[0], tag: undefined })
@@ -153,9 +148,11 @@ export default function ClientPage({
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
+    // genre=customが来た場合はgenre=allに変換
+    const genre = initialGenre === 'custom' ? 'all' : initialGenre
     return {
       period: initialPeriod as '24h' | 'hour',
-      genre: initialGenre as RankingGenre,
+      genre: genre as RankingGenre,
       tag: initialTag
     }
   })
@@ -270,6 +267,16 @@ export default function ClientPage({
     // URLパラメータから初期ページを取得
     const urlParams = new URLSearchParams(window.location.search)
     const pageParam = urlParams.get('page')
+    const genreParam = urlParams.get('genre')
+    
+    // genre=customが来た場合はgenre=allにリダイレクト
+    if (genreParam === 'custom') {
+      urlParams.delete('genre')
+      urlParams.delete('tag')
+      const newUrl = urlParams.toString() ? `?${urlParams.toString()}` : '/'
+      router.replace(newUrl)
+      return
+    }
     
     if (pageParam) {
       const pageNum = parseInt(pageParam, 10)
@@ -338,35 +345,19 @@ export default function ClientPage({
   useEffect(() => {
     if (initialRanking && !customRankingsLoading) {
       selectRanking(initialRanking)
-      // configもカスタムジャンルに変更
-      if (config.genre !== 'custom' || config.tag !== `custom:${initialRanking}`) {
+      // カスタムランキングのbaseGenreに切り替える
+      const rankings = JSON.parse(localStorage.getItem('custom-rankings') || '{}')
+      const selectedRanking = rankings.rankings?.find((r: any) => r.id === initialRanking)
+      if (selectedRanking) {
         setConfig({ 
           ...config, 
-          genre: 'custom', 
-          tag: `custom:${initialRanking}` 
+          genre: selectedRanking.baseGenre, 
+          tag: undefined 
         })
       }
     }
   }, [initialRanking, customRankingsLoading, selectRanking, config])
   
-  // 初期マウント時にカスタムジャンルの場合、localStorage読み込み完了後にデータ取得
-  useEffect(() => {
-    // カスタムジャンルかつローディング完了かつ初期ロード時
-    if (config.genre === 'custom' && !customRankingsLoading && isInitialLoad) {
-      // カスタムランキングが選択されている場合のみデータ取得
-      if (config.tag?.startsWith('custom:')) {
-        fetchRankingData(config)
-          .then(() => {
-            setIsInitialLoad(false)
-          })
-          .catch(() => {
-            setIsInitialLoad(false)
-          })
-      } else {
-        setIsInitialLoad(false)
-      }
-    }
-  }, [config, customRankingsLoading, isInitialLoad, fetchRankingData])
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -421,7 +412,7 @@ export default function ClientPage({
         newConfig.genre === initialGenre && 
         newConfig.period === initialPeriod && 
         newConfig.tag === initialTag &&
-        newConfig.genre !== 'custom') {  // カスタムジャンルは除外
+        true) {
       setIsInitialLoad(false)
       return
     }
@@ -451,42 +442,13 @@ export default function ClientPage({
     if (newConfig.genre !== 'all') params.set('genre', newConfig.genre)
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
-    // カスタムジャンルかつ選択されたランキングがある場合、rankingパラメータを追加
-    if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
-      const customId = newConfig.tag.replace('custom:', '')
-      params.set('ranking', customId)
-    }
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
-      // カスタムジャンルの場合は常にデータを取得（baseGenre使用）
-      if (newConfig.genre === 'custom') {
-        // カスタムランキング選択時のデータ取得開始
-        
-        // カスタムランキングがまだ読み込み中の場合、少し待つ
-        if (customRankingsLoading) {
-          // カスタムランキング読み込み中 - 100ms待機
-          setTimeout(async () => {
-            try {
-              await fetchRankingData(newConfig)
-              // データ取得完了
-            } catch (error) {
-              // エラーは内部で処理される
-            }
-          }, 100)
-        } else {
-          // 即座に実行
-          await fetchRankingData(newConfig)
-          // データ取得完了
-        }
-      } else {
-        // 通常のジャンルの場合
-        await fetchRankingData(newConfig)
-      }
+      await fetchRankingData(newConfig)
     } catch (error) {
-      // エラーはフック内で処理済み
       // エラーはフック内で処理済み
     }
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankingsLoading])
