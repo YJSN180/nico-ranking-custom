@@ -340,14 +340,14 @@ export default function ClientPage({
       selectRanking(initialRanking)
       // configもカスタムジャンルに変更
       if (config.genre !== 'custom' || config.tag !== `custom:${initialRanking}`) {
-        handleConfigChange({ 
+        setConfig({ 
           ...config, 
           genre: 'custom', 
           tag: `custom:${initialRanking}` 
         })
       }
     }
-  }, [initialRanking, customRankingsLoading, selectRanking, config, handleConfigChange])
+  }, [initialRanking, customRankingsLoading, selectRanking, config])
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -491,7 +491,7 @@ export default function ClientPage({
     const trimmedValue = stringValue?.trim()
     
     if (!trimmedValue) {
-      console.warn('QuickNG: Empty value provided')
+      // QuickNG: Empty value provided
       return
     }
     
@@ -551,7 +551,7 @@ export default function ClientPage({
         break
         
       default:
-        console.warn('QuickNG: Unknown NG type:', type)
+        // QuickNG: Unknown NG type
         return
     }
     
@@ -904,7 +904,7 @@ export default function ClientPage({
       </TagDisplayProvider>
   )
   } catch (error) {
-    console.error('Rendering error in ClientPage:', error)
+    // Rendering error in ClientPage
     return (
       <div style={{ textAlign: 'center', padding: '40px' }}>
         <div style={{ fontSize: '16px', color: 'var(--error-color)' }}>

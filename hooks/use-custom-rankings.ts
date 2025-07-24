@@ -37,7 +37,7 @@ export function useCustomRankings() {
           setStorage(parsed)
         }
       } catch (error) {
-        console.error('Failed to load custom rankings:', error)
+        // Failed to load custom rankings
       } finally {
         // データ読み込み完了をマーク
         setIsLoading(false)
@@ -54,7 +54,7 @@ export function useCustomRankings() {
           const parsed = JSON.parse(e.newValue)
           setStorage(parsed)
         } catch (error) {
-          console.error('Failed to parse storage event:', error)
+          // Failed to parse storage event
         }
       }
     }
@@ -87,7 +87,7 @@ export function useCustomRankings() {
         detail: { storage: newStorage } 
       }))
     } catch (error) {
-      console.error('Failed to save custom rankings:', error)
+      // Failed to save custom rankings
     }
   }, [])
 
