@@ -171,6 +171,16 @@ export function useRankingData({
 
       const apiUrl = `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || ''}/api/ranking?${baseParams.toString()}`
       
+      // デバッグ用ログ（カスタムランキング時のみ）
+      if (config.genre === 'custom') {
+        console.log('🔍 カスタムランキング API リクエスト情報:')
+        console.log('  - 元のconfig:', config)
+        console.log('  - selectedCustomRanking:', selectedCustomRanking)
+        console.log('  - effectiveGenre (baseGenre):', effectiveGenre)
+        console.log('  - API URL:', apiUrl)
+        console.log('  - リクエストパラメータ:', Object.fromEntries(baseParams))
+      }
+      
       // リクエスト制限を適用
       await requestThrottle.throttle(apiUrl)
 
@@ -181,6 +191,17 @@ export function useRankingData({
       }
 
       const data: RankingData = await response.json()
+      
+      // デバッグ用ログ（カスタムランキング時のみ）
+      if (config.genre === 'custom') {
+        console.log('📡 カスタムランキング API レスポンス情報:')
+        console.log('  - レスポンス status:', response.status)
+        console.log('  - データ件数:', data?.items?.length || 0)
+        console.log('  - 人気タグ数:', data?.popularTags?.length || 0)
+        if (data?.items?.length > 0) {
+          console.log('  - 最初の3件:', data.items.slice(0, 3))
+        }
+      }
       
       if (data && data.items && Array.isArray(data.items)) {
         // フィルタリングせずに生データを保存
@@ -197,6 +218,11 @@ export function useRankingData({
         // カスタムランキングの場合はタグパラメータなしで保存
         rankingCache.set(effectiveGenre, config.period, data.items, data.popularTags, config.tag?.startsWith('custom:') ? undefined : config.tag)
       } else {
+        // デバッグ用ログ（カスタムランキング時のみ）
+        if (config.genre === 'custom') {
+          console.log('⚠️ カスタムランキング: 空のデータを受信')
+          console.log('  - data:', data)
+        }
         setFullRankingData([])
         setRankingData([])
       }
@@ -204,6 +230,13 @@ export function useRankingData({
       // AbortErrorは無視（前のリクエストがキャンセルされた場合）
       if (err.name === 'AbortError') {
         return
+      }
+      
+      // デバッグ用ログ（カスタムランキング時のみ）
+      if (config.genre === 'custom') {
+        console.log('❌ カスタムランキング API エラー:')
+        console.log('  - エラー:', err)
+        console.log('  - エラーメッセージ:', err.message)
       }
       
       setError(err instanceof Error ? err.message : 'データの取得に失敗しました')
