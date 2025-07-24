@@ -19,9 +19,9 @@
   position: relative;
   border: 1px solid;
   
-  /* NGボタン専用の色設計 */
-  background: var(--danger-color, #ef4444);
-  border-color: var(--danger-color, #ef4444);
+  /* NGボタン専用の色設計 - テーマ色を使用 */
+  background: var(--primary-color);
+  border-color: var(--primary-color);
   color: white;
   cursor: pointer;
   opacity: 1;
@@ -48,16 +48,17 @@
 
 /* ホバー状態 */
 .quick-ng-button:hover:not(.quick-ng-button--disabled) {
-  background: var(--danger-hover, #dc2626);
-  border-color: var(--danger-hover, #dc2626);
+  background: var(--primary-hover, var(--primary-color));
+  border-color: var(--primary-hover, var(--primary-color));
   transform: scale(1.05);
 }
 
 /* アクティブ状態（ポップオーバー開放中） */
 .quick-ng-button[aria-expanded="true"] {
-  background: var(--danger-active, #b91c1c);
-  border-color: var(--danger-active, #b91c1c);
+  background: var(--primary-color);
+  border-color: var(--primary-color);
   transform: scale(1.02);
+  filter: brightness(0.85);
 }
 
 /* 無効化状態 */
