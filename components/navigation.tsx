@@ -33,6 +33,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   // メインセクション
   { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
+  { href: '/custom-rankings', label: 'カスタムランキング', icon: <GuideIcon />, section: 'main' },
   { href: '/mylists', label: 'マイリスト', icon: <MylistIcon />, section: 'main' },
   { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
   
@@ -233,6 +234,9 @@ export function Navigation() {
                               onMouseEnter={() => {
                                 if (item.href === '/mylists') {
                                   router.prefetch('/mylists')
+                                }
+                                if (item.href === '/custom-rankings') {
+                                  router.prefetch('/custom-rankings')
                                 }
                               }}
                               className={`${styles.navLinkMobile} ${pathname === item.href ? styles.active : ''}`}
@@ -439,6 +443,9 @@ export function Navigation() {
                         onMouseEnter={() => {
                           if (item.href === '/mylists') {
                             router.prefetch('/mylists')
+                          }
+                          if (item.href === '/custom-rankings') {
+                            router.prefetch('/custom-rankings')
                           }
                         }}
                         className={`${styles.navLinkDesktop} ${pathname === item.href ? styles.active : ''}`}

@@ -1,0 +1,180 @@
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+}
+
+.headerTop {
+  padding: 20px 0;
+}
+
+.header {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 16px;
+}
+
+.meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.genre,
+.period {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--surface-secondary);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.genre {
+  background: var(--primary-color-alpha);
+  color: var(--primary-color);
+}
+
+.period {
+  background: var(--info-color-alpha);
+  color: var(--info-color);
+}
+
+.conditions {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+  line-height: 1.6;
+}
+
+.stats {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.statItem {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* 空状態 */
+.emptyState {
+  text-align: center;
+  padding: 80px 20px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-top: 40px;
+}
+
+.emptyMessage {
+  font-size: 18px;
+  color: var(--text-primary);
+  margin: 0 0 12px;
+}
+
+.emptyHint {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0 0 24px;
+}
+
+.backButton {
+  padding: 10px 24px;
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.backButton:hover {
+  background: var(--primary-color-hover);
+  transform: translateY(-1px);
+}
+
+/* モバイル対応 */
+@media (max-width: 768px) {
+  .container {
+    padding: 0 12px 32px;
+  }
+  
+  .title {
+    font-size: 22px;
+  }
+  
+  .meta {
+    flex-wrap: wrap;
+  }
+  
+  .conditions {
+    font-size: 14px;
+  }
+  
+  .emptyState {
+    padding: 60px 16px;
+  }
+}
+
+/* ランキングリスト */
+.rankingList {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ローディング状態 */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+/* エラー状態 */
+.error {
+  text-align: center;
+  padding: 60px 20px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-top: 40px;
+}
+
+.error p {
+  font-size: 16px;
+  color: var(--error-color);
+  margin: 0 0 16px;
+}
+
+.retryButton {
+  padding: 10px 24px;
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retryButton:hover {
+  background: var(--primary-color-hover);
+  transform: translateY(-1px);
+}
