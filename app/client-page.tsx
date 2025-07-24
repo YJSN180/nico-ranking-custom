@@ -351,19 +351,31 @@ export default function ClientPage({
   
   // 初期マウント時にカスタムジャンルの場合、localStorage読み込み完了後にデータ取得
   useEffect(() => {
+    console.log('🔍 カスタムランキング初期化チェック:', {
+      genre: config.genre,
+      customRankingsLoading,
+      isInitialLoad,
+      hasCustomTag: config.tag?.startsWith('custom:')
+    })
+    
     // カスタムジャンルかつローディング完了かつ初期ロード時
     if (config.genre === 'custom' && !customRankingsLoading && isInitialLoad) {
+      console.log('📋 カスタムランキング初期化条件に合致')
+      
       // カスタムランキングが選択されている場合のみデータ取得
       if (config.tag?.startsWith('custom:')) {
+        console.log('🚀 初期化時のデータ取得開始')
         fetchRankingData(config)
           .then(() => {
+            console.log('✅ 初期化時のデータ取得完了')
             setIsInitialLoad(false)
           })
-          .catch(() => {
-            // エラーはフック内で処理済み
+          .catch((error) => {
+            console.log('❌ 初期化時のデータ取得エラー:', error)
             setIsInitialLoad(false)
           })
       } else {
+        console.log('⚠️ カスタムタグが設定されていないため、初期化完了')
         setIsInitialLoad(false)
       }
     }
@@ -462,22 +474,32 @@ export default function ClientPage({
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
-      // カスタムジャンルの場合、ランキングデータの読み込みを待つ
-      if (newConfig.genre === 'custom' && customRankingsLoading) {
+      // カスタムジャンルの場合は常にデータを取得（baseGenre使用）
+      if (newConfig.genre === 'custom') {
+        console.log('🔄 カスタムランキング選択 - データ取得開始')
+        
         // カスタムランキングがまだ読み込み中の場合、少し待つ
-        setTimeout(async () => {
-          try {
-            await fetchRankingData(newConfig)
-          } catch (error) {
-            // エラーはフック内で処理済み
-          }
-        }, 100)
+        if (customRankingsLoading) {
+          console.log('⏳ カスタムランキング読み込み中 - 100ms待機')
+          setTimeout(async () => {
+            try {
+              await fetchRankingData(newConfig)
+              console.log('✅ カスタムランキング データ取得完了（delayed）')
+            } catch (error) {
+              console.log('❌ カスタムランキング データ取得エラー（delayed）:', error)
+            }
+          }, 100)
+        } else {
+          // 即座に実行
+          await fetchRankingData(newConfig)
+          console.log('✅ カスタムランキング データ取得完了（immediate）')
+        }
       } else {
-        // カスタムジャンルの場合も通常通りデータを取得
-        // use-ranking-data.ts内でbaseGenreへの変換とフィルタリングを行う
+        // 通常のジャンルの場合
         await fetchRankingData(newConfig)
       }
     } catch (error) {
+      console.log('❌ データ取得エラー:', error)
       // エラーはフック内で処理済み
     }
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankingsLoading])
