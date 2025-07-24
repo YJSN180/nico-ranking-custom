@@ -23,6 +23,29 @@ export function useGenreOrderV2() {
         const parsed = JSON.parse(stored) as GenreItem[]
         // 不正なデータのバリデーション
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // 既存のlocalStorageデータに新しいジャンルが含まれているか確認
+          const defaultItems = createDefaultGenreItems()
+          const existingIds = new Set(parsed.map(item => item.id))
+          const missingItems: GenreItem[] = []
+          
+          // デフォルトのジャンルリストに存在するが、保存データに存在しないジャンルを検出
+          defaultItems.forEach(defaultItem => {
+            if (!existingIds.has(defaultItem.id)) {
+              // 新しいジャンルを最後に追加（表示状態で）
+              missingItems.push({
+                id: defaultItem.id,
+                isVisible: true,
+                order: parsed.length + missingItems.length
+              })
+            }
+          })
+          
+          // 新しいジャンルが見つかった場合は追加
+          if (missingItems.length > 0) {
+            console.log('新しいジャンルを検出:', missingItems.map(item => item.id))
+            return [...parsed, ...missingItems]
+          }
+          
           return parsed
         }
       }
