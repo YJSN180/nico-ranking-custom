@@ -76,6 +76,7 @@
   font-size: 14px;
   text-align: left;
   width: 100%;
+  color: var(--text-primary);
   
   /* テキスト省略 - spanに適用されるように削除 */
 }
@@ -87,7 +88,7 @@
 }
 
 .popover-ng-selector__option:focus-visible {
-  outline: 2px solid var(--focus-color, #3b82f6);
+  outline: 2px solid var(--primary-color, #3b82f6);
   outline-offset: 2px;
 }
 
@@ -125,7 +126,7 @@
 }
 
 .popover-ng-selector__close:focus-visible {
-  outline: 2px solid var(--focus-color, #3b82f6);
+  outline: 2px solid var(--primary-color, #3b82f6);
   outline-offset: 2px;
 }
 
@@ -177,13 +178,11 @@
   }
 }
 
-/* ダークモード対応（将来の拡張用） */
-@media (prefers-color-scheme: dark) {
-  .popover-ng-selector {
-    background: var(--surface-dark, #1f2937);
-    border-color: var(--border-dark, #374151);
-    color: var(--text-dark, #f9fafb);
-  }
+/* ダークテーマ対応 */
+[data-theme="dark"] .popover-ng-selector,
+[data-theme="darkblue"] .popover-ng-selector {
+  /* 背景色とボーダーはすでにCSS変数で対応済み */
+  /* 追加の調整が必要な場合はここに記述 */
 }
 
 /* オプションテキストの省略 */
