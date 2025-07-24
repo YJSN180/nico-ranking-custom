@@ -280,13 +280,33 @@
   
   /* モバイルでタイトル行内のマイリストボタンを表示 */
   .ranking-item-responsive__mylist-button {
-    display: block;
+    display: flex;
+    flex-direction: column; /* ボタンを縦並びに */
+    gap: 4px; /* ボタン間のスペース */
     flex-shrink: 0;
     /* タッチターゲットを拡大 */
     position: relative;
-    /* 見た目よりも大きなタッチ領域を作成（38pxボタンに対応） */
+    /* 見た目よりも大きなタッチ領域を作成 */
     padding: 5px;
     margin: -5px;
+  }
+  
+  /* モバイルでボタンのサイズ調整 */
+  .ranking-item-responsive__mylist-button > button {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 16px !important; /* アイコンサイズ調整 */
+  }
+  
+  .ranking-item-responsive__mylist-button .quick-ng-button {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+  }
+  
+  .ranking-item-responsive__mylist-button .quick-ng-button__icon {
+    font-size: 14px !important; /* 禁止アイコンのサイズ調整 */
   }
 }
 
