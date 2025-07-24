@@ -26,7 +26,7 @@ const CHANGELOG: ChangelogEntry[] = [
     changes: [
       { type: 'feature', description: '動画ごとのタグデータ表示' },
       { type: 'feature', description: 'タグNG機能（特定のタグを含む動画の非表示）' },
-      { type: 'feature', description: 'クイックNG機能（動画ID・タイトル・投稿者・投稿者ID・タグの即時NG追加）' },
+      { type: 'feature', description: 'クイックNG機能（動画ID・タイトル・投稿者名・投稿者IDの即時NG追加）' },
     ],
   },
   {
