@@ -231,7 +231,8 @@ export default async function Home({ searchParams }: PageProps) {
     
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
-    if (rankingData.length === 0) {
+    // カスタムジャンルの場合は、データが空でも通常のページをレンダリング
+    if (rankingData.length === 0 && genre !== 'custom') {
       // タグ検索でデータがない場合は、タグなしでリダイレクト
       if (tag) {
         const { redirect } = await import('next/navigation')
