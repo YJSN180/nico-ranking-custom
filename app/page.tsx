@@ -193,6 +193,7 @@ export default async function Home({ searchParams }: PageProps) {
   let genre = params.genre as string
   let period = params.period as string
   let tag = params.tag as string | undefined
+  let ranking = params.ranking as string | undefined
   let page = parseInt((params.page as string) || '1', 10)
   
   // Cookieから設定を読み取る（無効なジャンルを除外）
@@ -283,6 +284,7 @@ export default async function Home({ searchParams }: PageProps) {
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}
+              initialRanking={ranking}
               initialPage={page}
               popularTags={popularTags}
             />

@@ -34,6 +34,7 @@ interface ClientPageProps {
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
+  initialRanking?: string
   initialPage?: number
   popularTags?: string[]
 }
@@ -93,6 +94,7 @@ export default function ClientPage({
   initialGenre = 'all', 
   initialPeriod = '24h', 
   initialTag, 
+  initialRanking,
   initialPage = 1,
   popularTags = []
 }: ClientPageProps) {
@@ -267,19 +269,18 @@ export default function ClientPage({
     // URLパラメータから初期ページを取得
     const urlParams = new URLSearchParams(window.location.search)
     const pageParam = urlParams.get('page')
-    const rankingParam = urlParams.get('ranking')
     
     if (pageParam) {
       const pageNum = parseInt(pageParam, 10)
       setCurrentPage(Math.max(1, pageNum))
     }
     
-    // カスタムランキングのパラメータがある場合、対応するランキングを選択し、ジャンルを'custom'に設定
-    if (rankingParam) {
-      selectRanking(rankingParam)
+    // SSRから渡されたrankingパラメータがある場合、対応するランキングを選択し、ジャンルを'custom'に設定
+    if (initialRanking) {
+      selectRanking(initialRanking)
       // configもカスタムジャンルに変更
       if (config.genre !== 'custom') {
-        setConfig(prev => ({ ...prev, genre: 'custom', tag: `custom:${rankingParam}` }))
+        setConfig(prev => ({ ...prev, genre: 'custom', tag: `custom:${initialRanking}` }))
       }
     }
     
@@ -421,8 +422,9 @@ export default function ClientPage({
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
     // カスタムジャンルかつ選択されたランキングがある場合、rankingパラメータを追加
-    if (newConfig.genre === 'custom' && selectedRanking) {
-      params.set('ranking', selectedRanking.id)
+    if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
+      const customId = newConfig.tag.replace('custom:', '')
+      params.set('ranking', customId)
     }
     
     router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
@@ -458,8 +460,9 @@ export default function ClientPage({
     if (config.tag) params.set('tag', config.tag)
     if (page > 1) params.set('page', page.toString())
     // カスタムジャンルかつ選択されたランキングがある場合、rankingパラメータを追加
-    if (config.genre === 'custom' && selectedRanking) {
-      params.set('ranking', selectedRanking.id)
+    if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
+      const customId = config.tag.replace('custom:', '')
+      params.set('ranking', customId)
     }
     
     // URLを更新するが、データの再取得は行わない
