@@ -469,7 +469,7 @@ export default function ClientPage({
     // window.history.replaceStateを使用してブラウザ履歴に追加しない
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
     window.history.replaceState(null, '', newUrl)
-  }, [currentPage, config, selectedRanking])
+  }, [currentPage, config])
   
   // QuickNG: NG追加処理
   const handleQuickNGAdd = useCallback((video: RankingItem, type: NGType, value: string | string[]) => {
