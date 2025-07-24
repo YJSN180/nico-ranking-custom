@@ -2,11 +2,11 @@
 export function getSecurityHeaders(nonce?: string) {
   const cspDirectives = [
     "default-src 'self'",
-    `script-src 'self'${nonce ? ` 'nonce-${nonce}'` : ''} https://*.vercel-scripts.com`,
+    `script-src 'self'${nonce ? ` 'nonce-${nonce}'` : ''} https://*.vercel-scripts.com https://static.cloudflareinsights.com https://*.cloudflareinsights.com`,
     "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に許可
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
+    "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://nicovideo.cdn.nimg.jp https://img.cdn.nimg.jp https://*.smilevideo.jp https://secure-dcdn.cdn.nimg.jp",
     "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
     "object-src 'none'",
     "base-uri 'self'",
