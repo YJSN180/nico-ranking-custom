@@ -69,14 +69,25 @@ export function useRankingData({
 
   // データフェッチ関数
   const fetchRankingData = useCallback(async (config: RankingConfig) => {
-    // カスタムジャンルの場合はAPIリクエストをスキップ
-    if (config.genre === 'custom') {
-      setLoading(false)
-      setError(null)
-      setFullRankingData([])
-      setRankingData([])
-      setCurrentPopularTags([])
-      return
+    // カスタムジャンルの場合、選択されたカスタムランキングを取得
+    let effectiveGenre = config.genre
+    if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
+      const customId = config.tag.replace('custom:', '')
+      const customRankings = JSON.parse(localStorage.getItem('custom-rankings') || '{"rankings":[]}')
+      const selectedRanking = customRankings.rankings.find((r: any) => r.id === customId)
+      
+      if (selectedRanking) {
+        // カスタムランキングのbaseGenreを使用
+        effectiveGenre = selectedRanking.baseGenre
+      } else {
+        // カスタムランキングが見つからない場合はエラー
+        setLoading(false)
+        setError('カスタムランキングが見つかりません')
+        setFullRankingData([])
+        setRankingData([])
+        setCurrentPopularTags([])
+        return
+      }
     }
 
     // 前のリクエストをキャンセル
@@ -99,8 +110,8 @@ export function useRankingData({
 
     try {
       // キャッシュから取得を試行
-      const cacheKey = `${config.genre}-${config.period}${config.tag ? `-tag-${config.tag}` : ''}`
-      const cachedData = rankingCache.get(config.genre, config.period, config.tag)
+      const cacheKey = `${effectiveGenre}-${config.period}${config.tag && !config.tag.startsWith('custom:') ? `-tag-${config.tag}` : ''}`
+      const cachedData = rankingCache.get(effectiveGenre, config.period, config.tag?.startsWith('custom:') ? undefined : config.tag)
       
       if (cachedData) {
         console.log(`Using cached data for ${cacheKey}`)
@@ -114,14 +125,15 @@ export function useRankingData({
       }
 
       // APIから取得
-      const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
+      const limit = config.tag && !config.tag.startsWith('custom:') ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
       const baseParams = new URLSearchParams({
-        genre: config.genre,
+        genre: effectiveGenre,
         period: config.period,
         limit: limit.toString()
       })
       
-      if (config.tag) {
+      // カスタムランキングではない通常のタグの場合のみタグパラメータを設定
+      if (config.tag && !config.tag.startsWith('custom:')) {
         baseParams.set('tag', config.tag)
       }
 
@@ -146,11 +158,12 @@ export function useRankingData({
         // 人気タグを設定
         if (data.popularTags && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
           setCurrentPopularTags(data.popularTags)
-          savePopularTagsToCache(data.popularTags, config.genre, config.period)
+          savePopularTagsToCache(data.popularTags, effectiveGenre, config.period)
         }
         
         // キャッシュに保存（生データを保存）
-        rankingCache.set(config.genre, config.period, data.items, data.popularTags, config.tag)
+        // カスタムランキングの場合はタグパラメータなしで保存
+        rankingCache.set(effectiveGenre, config.period, data.items, data.popularTags, config.tag?.startsWith('custom:') ? undefined : config.tag)
       } else {
         setFullRankingData([])
         setRankingData([])
