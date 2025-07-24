@@ -31,15 +31,16 @@ interface UseRankingDataReturn {
 }
 
 const DISPLAY_LIMITS = {
-  TAG: 300,      // タグ別ランキングは全300件取得
-  GENRE: 500,    // ジャンル別ランキングは500件取得
+  TAG: 300,       // タグ別ランキングは全300件取得
+  GENRE: 500,     // ジャンル別ランキングは500件取得
+  CUSTOM: 1000,   // カスタムランキングは最大1000件取得
 }
 
 export function useRankingData({
   initialData,
   ngList,
   ngListVersion
-}: UseRankingDataProps): UseRankingDataReturn {
+}: UseRankingDataProps): UseRankingDataReturn & { currentCustomRanking?: any } {
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
     // 初期データをrank順でソートして設定
@@ -49,6 +50,7 @@ export function useRankingData({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(initialData?.popularTags || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentCustomRanking, setCurrentCustomRanking] = useState<any>(null)
   
   // リクエストキャンセル用のAbortController
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -62,7 +64,6 @@ export function useRankingData({
       try {
         localStorage.setItem(storageKey, JSON.stringify(tags))
       } catch (e) {
-        console.warn('Failed to save popular tags to localStorage:', e)
       }
     }
   }, [])
@@ -71,18 +72,46 @@ export function useRankingData({
   const fetchRankingData = useCallback(async (config: RankingConfig) => {
     // カスタムジャンルの場合、選択されたカスタムランキングを取得
     let effectiveGenre = config.genre
+    let selectedCustomRanking: any = null
+    
+    // カスタムランキングでない場合はリセット
+    if (config.genre !== 'custom' || !config.tag?.startsWith('custom:')) {
+      setCurrentCustomRanking(null)
+    }
+    
     if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
       const customId = config.tag.replace('custom:', '')
-      const customRankings = JSON.parse(localStorage.getItem('custom-rankings') || '{"rankings":[]}')
-      const selectedRanking = customRankings.rankings.find((r: any) => r.id === customId)
       
-      if (selectedRanking) {
-        // カスタムランキングのbaseGenreを使用
-        effectiveGenre = selectedRanking.baseGenre
-      } else {
-        // カスタムランキングが見つからない場合はエラー
+      try {
+        const storedData = localStorage.getItem('custom-rankings')
+        if (!storedData) {
+          setLoading(false)
+          setError('カスタムランキングのデータが見つかりません')
+          setFullRankingData([])
+          setRankingData([])
+          setCurrentPopularTags([])
+          return
+        }
+        
+        const customRankings = JSON.parse(storedData)
+        selectedCustomRanking = customRankings.rankings?.find((r: any) => r.id === customId)
+        
+        if (selectedCustomRanking) {
+          // カスタムランキングのbaseGenreを使用
+          effectiveGenre = selectedCustomRanking.baseGenre
+          setCurrentCustomRanking(selectedCustomRanking)
+        } else {
+          // カスタムランキングが見つからない場合はエラー
+          setLoading(false)
+          setError('選択されたカスタムランキングが見つかりません')
+          setFullRankingData([])
+          setRankingData([])
+          setCurrentPopularTags([])
+          return
+        }
+      } catch (e) {
         setLoading(false)
-        setError('カスタムランキングが見つかりません')
+        setError('カスタムランキングの読み込みに失敗しました')
         setFullRankingData([])
         setRankingData([])
         setCurrentPopularTags([])
@@ -114,7 +143,6 @@ export function useRankingData({
       const cachedData = rankingCache.get(effectiveGenre, config.period, config.tag?.startsWith('custom:') ? undefined : config.tag)
       
       if (cachedData) {
-        console.log(`Using cached data for ${cacheKey}`)
         setFullRankingData(cachedData.data)
         setRankingData(cachedData.data)
         if (cachedData.popularTags) {
@@ -125,7 +153,11 @@ export function useRankingData({
       }
 
       // APIから取得
-      const limit = config.tag && !config.tag.startsWith('custom:') ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
+      const limit = config.tag?.startsWith('custom:') 
+        ? DISPLAY_LIMITS.CUSTOM 
+        : config.tag 
+        ? DISPLAY_LIMITS.TAG 
+        : DISPLAY_LIMITS.GENRE
       const baseParams = new URLSearchParams({
         genre: effectiveGenre,
         period: config.period,
@@ -204,6 +236,7 @@ export function useRankingData({
     setError,
     abortControllerRef,
     tagsAbortControllerRef,
-    isFallbackInitiatedRef
+    isFallbackInitiatedRef,
+    currentCustomRanking
   }
 }

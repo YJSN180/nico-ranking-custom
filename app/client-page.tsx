@@ -143,7 +143,8 @@ export default function ClientPage({
     setError,
     abortControllerRef,
     tagsAbortControllerRef,
-    isFallbackInitiatedRef
+    isFallbackInitiatedRef,
+    currentCustomRanking
   } = useRankingData({
     initialData,
     ngList,
@@ -431,21 +432,13 @@ export default function ClientPage({
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
-      // カスタムジャンルの場合は、選択されたランキングのベースジャンルからデータを取得
-      if (newConfig.genre === 'custom' && selectedRanking) {
-        const baseConfig = {
-          ...newConfig,
-          genre: selectedRanking.baseGenre,
-          tag: undefined // カスタムランキングではタグは使用しない
-        }
-        await fetchRankingData(baseConfig)
-      } else {
-        await fetchRankingData(newConfig)
-      }
+      // カスタムジャンルの場合も通常通りデータを取得
+      // use-ranking-data.ts内でbaseGenreへの変換とフィルタリングを行う
+      await fetchRankingData(newConfig)
     } catch (error) {
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, selectedRanking])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
@@ -692,8 +685,8 @@ export default function ClientPage({
     let baseData = fullRankingData
 
     // カスタムフィルタリングを適用（カスタムジャンルかつ選択されたランキングがある場合）
-    if (config.genre === 'custom' && selectedRanking && selectedRanking.conditions.length > 0) {
-      baseData = applyCustomFilters(baseData, selectedRanking.conditions)
+    if (config.genre === 'custom' && currentCustomRanking && currentCustomRanking.conditions.length > 0) {
+      baseData = applyCustomFilters(baseData, currentCustomRanking.conditions)
     }
 
     // NGフィルタリングを適用
@@ -716,7 +709,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, currentPage, config.genre, selectedRanking])
+  }, [fullRankingData, ngList, currentPage, config.genre, currentCustomRanking])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
