@@ -10,42 +10,43 @@ const defaultStorage: CustomRankingStorage = {
 }
 
 export function useCustomRankings() {
-  const [storage, setStorage] = useState<CustomRankingStorage>(defaultStorage)
-  const [isLoading, setIsLoading] = useState(true)
-
-  // 初回読み込みとストレージ変更の監視
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const loadStorage = () => {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          
-          // 後方互換性: tagTypeが存在しない古いデータにデフォルト値を追加
-          if (parsed.rankings) {
-            parsed.rankings = parsed.rankings.map((ranking: any) => ({
-              ...ranking,
-              conditions: ranking.conditions?.map((condition: any) => ({
-                ...condition,
-                tagType: condition.tagType || 'both' // デフォルトは'both'
-              })) || []
-            }))
-          }
-          
-          setStorage(parsed)
-        }
-      } catch (error) {
-        // Failed to load custom rankings
-      } finally {
-        // データ読み込み完了をマーク
-        setIsLoading(false)
-      }
+  // SSR対応：初期状態をlocalStorageから同期的に読み込む
+  const getInitialStorage = (): CustomRankingStorage => {
+    if (typeof window === 'undefined') {
+      return defaultStorage
     }
     
-    // 初回読み込み
-    loadStorage()
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        
+        // 後方互換性: tagTypeが存在しない古いデータにデフォルト値を追加
+        if (parsed.rankings) {
+          parsed.rankings = parsed.rankings.map((ranking: any) => ({
+            ...ranking,
+            conditions: ranking.conditions?.map((condition: any) => ({
+              ...condition,
+              tagType: condition.tagType || 'both'
+            })) || []
+          }))
+        }
+        
+        return parsed
+      }
+    } catch (error) {
+      // Failed to load from localStorage
+    }
+    
+    return defaultStorage
+  }
+
+  const [storage, setStorage] = useState<CustomRankingStorage>(getInitialStorage)
+  const [isLoading, setIsLoading] = useState(false) // 初期読み込み完了済みなのでfalse
+
+  // ストレージ変更の監視（他のタブ・コンポーネントからの変更を検知）
+  useEffect(() => {
+    if (typeof window === 'undefined') return
     
     // storageイベントを監視（他のタブでの変更を検知）
     const handleStorageChange = (e: StorageEvent) => {
