@@ -88,6 +88,13 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   items: RankingItem[]
   popularTags?: string[]
 }> {
+  // カスタムジャンルの場合は空のデータを返す（APIは存在しない）
+  if (genre === 'custom') {
+    return {
+      items: [],
+      popularTags: []
+    }
+  }
   
   // Cloudflare Worker から直接データを取得（Vercel Function をバイパス）
   try {
@@ -196,7 +203,7 @@ export default async function Home({ searchParams }: PageProps) {
         const preferences = JSON.parse(preferenceCookie.value)
         
         // ジャンルの検証（有効なジャンルのみ許可）
-        const validGenres = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other']
+        const validGenres = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other', 'custom']
         const validPeriods = ['24h', 'hour']
         
         if (!genre && preferences.lastGenre && validGenres.includes(preferences.lastGenre)) {
@@ -236,7 +243,8 @@ export default async function Home({ searchParams }: PageProps) {
       }
       
       // ジャンル自体のデータがない場合は総合ランキングへリダイレクト
-      if (genre !== 'all') {
+      // ただし、カスタムジャンルは除外（データがなくても正常）
+      if (genre !== 'all' && genre !== 'custom') {
         const { redirect } = await import('next/navigation')
         redirect('/')
       }
