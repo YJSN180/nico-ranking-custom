@@ -162,6 +162,21 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       )
     }
     
+    // 選択されたカスタムランキングのタグを取得
+    const selectedCustomRanking = (() => {
+      if (!config.tag?.startsWith('custom:')) return null
+      const customId = config.tag.replace('custom:', '')
+      return rankings.find(r => r.id === customId) || 
+             (selectedRanking?.id === customId ? selectedRanking : null)
+    })()
+    
+    // カスタムランキングのタグを抽出
+    const customTags = selectedCustomRanking?.conditions?.map(c => c.tag) || []
+    const includeTags = selectedCustomRanking?.conditions
+      ?.filter(c => c.operator !== 'NOT') || []
+    const excludeTags = selectedCustomRanking?.conditions
+      ?.filter(c => c.operator === 'NOT') || []
+    
     return (
       <>
         <div className={styles.tagSelectorContainer}>
@@ -255,6 +270,117 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             </div>
           </div>
         </div>
+        
+        {/* 選択されたカスタムランキングのタグを表示 */}
+        {selectedCustomRanking && customTags.length > 0 && (
+          <>
+            {/* 含むタグ */}
+            {includeTags.length > 0 && (
+              <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
+                <div className={styles.tagHeader}>
+                  <h2 className={styles.tagTitle}>
+                    含むタグ
+                  </h2>
+                </div>
+                
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                    「{selectedCustomRanking.title}」の検索条件：
+                  </span>
+                </div>
+                
+                <div className={styles.scrollContainer}>
+                  <div 
+                    className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
+                  >
+                    {includeTags.map((condition, index) => {
+                      const operatorColor = condition.operator === 'AND' ? 'var(--success-color)' : 'var(--warning-color)'
+                      
+                      return (
+                        <div key={condition.tag} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {index > 0 && (
+                            <span style={{ 
+                              color: operatorColor,
+                              fontWeight: 'bold',
+                              fontSize: '12px',
+                              padding: '0 4px'
+                            }}>
+                              {condition.operator}
+                            </span>
+                          )}
+                          <button
+                            className={`${styles.button} ${styles.tagButton}`}
+                            style={{
+                              backgroundColor: 'var(--surface-secondary)',
+                              borderColor: operatorColor,
+                              borderWidth: '2px',
+                              cursor: 'default'
+                            }}
+                            disabled
+                          >
+                            {condition.tag}
+                            {condition.tagType !== 'both' && (
+                              <span style={{ 
+                                fontSize: '10px', 
+                                marginLeft: '4px',
+                                opacity: 0.7
+                              }}>
+                                ({condition.tagType === 'lock' ? 'ロック' : 'ユーザー'})
+                              </span>
+                            )}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* 除外タグ */}
+            {excludeTags.length > 0 && (
+              <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
+                <div className={styles.tagHeader}>
+                  <h2 className={styles.tagTitle}>
+                    除外タグ
+                  </h2>
+                </div>
+                
+                <div className={styles.scrollContainer}>
+                  <div 
+                    className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
+                  >
+                    {excludeTags.map((condition) => (
+                      <button
+                        key={condition.tag}
+                        className={`${styles.button} ${styles.tagButton}`}
+                        style={{
+                          backgroundColor: 'var(--error-bg)',
+                          borderColor: 'var(--error-color)',
+                          borderWidth: '2px',
+                          cursor: 'default',
+                          textDecoration: 'line-through'
+                        }}
+                        disabled
+                      >
+                        {condition.tag}
+                        {condition.tagType !== 'both' && (
+                          <span style={{ 
+                            fontSize: '10px', 
+                            marginLeft: '4px',
+                            opacity: 0.7
+                          }}>
+                            ({condition.tagType === 'lock' ? 'ロック' : 'ユーザー'})
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
         
         {/* カスタムランキング作成・編集モーダル */}
         <CustomRankingModal
