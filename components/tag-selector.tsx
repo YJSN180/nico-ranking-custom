@@ -72,8 +72,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
 
   const handleCustomRankingSelect = (customId: string) => {
     selectRanking(customId)
-    // カスタムランキングのIDをtagとして設定
-    onConfigChange({ ...config, tag: `custom:${customId}` })
+    // カスタムランキングのIDをtagとして設定し、genreも'custom'に変更
+    onConfigChange({ ...config, genre: 'custom', tag: `custom:${customId}` })
   }
 
   const handleCreateCustomRanking = (data: any) => {

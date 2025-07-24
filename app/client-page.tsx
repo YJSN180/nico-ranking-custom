@@ -274,9 +274,13 @@ export default function ClientPage({
       setCurrentPage(Math.max(1, pageNum))
     }
     
-    // カスタムランキングのパラメータがある場合、対応するランキングを選択
-    if (rankingParam && config.genre === 'custom') {
+    // カスタムランキングのパラメータがある場合、対応するランキングを選択し、ジャンルを'custom'に設定
+    if (rankingParam) {
       selectRanking(rankingParam)
+      // configもカスタムジャンルに変更
+      if (config.genre !== 'custom') {
+        setConfig(prev => ({ ...prev, genre: 'custom', tag: `custom:${rankingParam}` }))
+      }
     }
     
     // 初回レンダリング時はSSRのデータを使用するため、追加のAPI呼び出しを避ける
