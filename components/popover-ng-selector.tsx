@@ -123,6 +123,10 @@ export function PopoverNGSelector({
     onAdd('author', video.authorName || video.authorId || '')
   }
 
+  const handleAuthorIdAdd = () => {
+    onAdd('authorId', video.authorId || '')
+  }
+
 
   return (
     <div
@@ -162,8 +166,19 @@ export function PopoverNGSelector({
             data-testid="ng-author"
           >
             <span className="popover-ng-selector__icon">👤</span>
-            <span>投稿者: {video.authorName || video.authorId}</span>
+            <span>投稿者名: {video.authorName || video.authorId}</span>
           </button>
+          
+          {video.authorId && (
+            <button
+              className="popover-ng-selector__option"
+              onClick={handleAuthorIdAdd}
+              data-testid="ng-author-id"
+            >
+              <span className="popover-ng-selector__icon">🆔</span>
+              <span>投稿者ID: {video.authorId}</span>
+            </button>
+          )}
           
         </div>
         

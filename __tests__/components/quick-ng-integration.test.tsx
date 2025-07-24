@@ -18,6 +18,12 @@ vi.mock('../../components/popover-ng-selector', () => ({
         <button data-testid="ng-title" onClick={() => onAdd('title', video.title)}>
           Title: {video.title}
         </button>
+        <button data-testid="ng-author" onClick={() => onAdd('author', video.authorName)}>
+          Author: {video.authorName}
+        </button>
+        <button data-testid="ng-author-id" onClick={() => onAdd('authorId', video.authorId)}>
+          Author ID: {video.authorId}
+        </button>
         <button data-testid="ng-close" onClick={onClose}>
           Close
         </button>
@@ -90,7 +96,7 @@ describe('QuickNG Integration Test', () => {
     expect(screen.getByTestId('ng-title')).toHaveTextContent('Title: Test Video Title')
   })
 
-  it('NG追加時にonQuickNGAddが呼び出される', () => {
+  it('NG追加時にonQuickNGAddが呼び出される（タイトル）', () => {
     const mockOnQuickNGAdd = vi.fn()
     renderComponent(mockVideo, false, mockOnQuickNGAdd)
     
@@ -102,6 +108,34 @@ describe('QuickNG Integration Test', () => {
     fireEvent.click(titleButton)
     
     expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'title', 'Test Video Title')
+  })
+
+  it('NG追加時にonQuickNGAddが呼び出される（投稿者名）', () => {
+    const mockOnQuickNGAdd = vi.fn()
+    renderComponent(mockVideo, false, mockOnQuickNGAdd)
+    
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
+    fireEvent.click(ngButton)
+    
+    const authorButton = screen.getByTestId('ng-author')
+    fireEvent.click(authorButton)
+    
+    expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'author', 'Test Author')
+  })
+
+  it('NG追加時にonQuickNGAddが呼び出される（投稿者ID）', () => {
+    const mockOnQuickNGAdd = vi.fn()
+    renderComponent(mockVideo, false, mockOnQuickNGAdd)
+    
+    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
+    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
+    fireEvent.click(ngButton)
+    
+    const authorIdButton = screen.getByTestId('ng-author-id')
+    fireEvent.click(authorIdButton)
+    
+    expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'authorId', 'user123')
   })
 
   it('disabled状態でNGボタンも無効化される', () => {

@@ -482,7 +482,17 @@ export default function ClientPage({
           }
           updatedNGList.totalCount = ngList.totalCount + 1
           wasAdded = true
-          displayValue = `投稿者: ${trimmedValue}`
+          displayValue = `投稿者名: ${trimmedValue}`
+        }
+        break
+        
+      case 'authorId':
+        // 投稿者IDは別のリストに追加
+        if (!ngList.authorIds.includes(trimmedValue)) {
+          updatedNGList.authorIds = [...ngList.authorIds, trimmedValue]
+          updatedNGList.totalCount = ngList.totalCount + 1
+          wasAdded = true
+          displayValue = `投稿者ID: ${trimmedValue}`
         }
         break
         

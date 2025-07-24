@@ -17,6 +17,9 @@ vi.mock('../../components/popover-ng-selector', () => ({
         <button data-testid="ng-author" onClick={() => onAdd('author', video.authorName)}>
           Author
         </button>
+        <button data-testid="ng-author-id" onClick={() => onAdd('authorId', video.authorId)}>
+          Author ID
+        </button>
         <button data-testid="ng-close" onClick={onClose}>
           Close
         </button>
@@ -142,6 +145,19 @@ describe('QuickNGButton', () => {
       fireEvent.click(authorButton)
       
       expect(onNGAdded).toHaveBeenCalledWith('author', 'Test Author')
+    })
+
+    it('投稿者ID追加が正しく動作する', () => {
+      const onNGAdded = vi.fn()
+      render(<QuickNGButton video={mockVideo} onNGAdded={onNGAdded} />)
+      
+      const button = screen.getByRole('button', { name: /ng追加/i })
+      fireEvent.click(button)
+      
+      const authorIdButton = screen.getByTestId('ng-author-id')
+      fireEvent.click(authorIdButton)
+      
+      expect(onNGAdded).toHaveBeenCalledWith('authorId', 'user123')
     })
   })
 

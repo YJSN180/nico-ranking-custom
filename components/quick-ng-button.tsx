@@ -5,7 +5,7 @@ import { PopoverNGSelector } from './popover-ng-selector'
 import type { RankingItem } from '@/types/ranking'
 import './quick-ng-button.css'
 
-export type NGType = 'videoId' | 'title' | 'author' | 'tags'
+export type NGType = 'videoId' | 'title' | 'author' | 'authorId' | 'tags'
 
 interface QuickNGButtonProps {
   video: RankingItem
