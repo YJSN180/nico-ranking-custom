@@ -59,9 +59,11 @@ wrangler.toml
 # Documentation files (except README.md)
 *.md
 !README.md
+!IMPLEMENTATION_PLAN_*.md
 
 # Documentation directories and common documentation formats
 docs/
+!docs/custom-tag-ranking-*.md
 documentation/
 doc/
 *.markdown
