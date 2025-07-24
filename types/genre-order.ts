@@ -24,7 +24,7 @@ export const DEFAULT_GENRE_ORDER: RankingGenre[] = [
   'entertainment', 'music', 'sing', 'dance', 'play', 
   'commentary', 'cooking', 'travel', 'nature', 'vehicle', 
   'technology', 'society', 'mmd', 'vtuber', 'radio', 
-  'sports', 'animal', 'other'
+  'sports', 'animal', 'other', 'custom'
 ]
 
 /**
