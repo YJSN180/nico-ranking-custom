@@ -77,10 +77,7 @@
   text-align: left;
   width: 100%;
   
-  /* テキスト省略 */
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  /* テキスト省略 - spanに適用されるように削除 */
 }
 
 .popover-ng-selector__option:hover {
@@ -135,13 +132,13 @@
 /* モバイル最適化 */
 @media (max-width: 480px) {
   .popover-ng-selector {
-    min-width: 260px;
-    max-width: calc(100vw - 20px);
+    min-width: 220px;
+    max-width: min(260px, calc(100vw - 40px));
   }
   
   .popover-ng-selector__option {
     padding: 10px 12px;
-    font-size: 15px;
+    font-size: 14px; /* デスクトップ版と同じサイズに統一 */
   }
   
   .popover-ng-selector__icon {
@@ -187,4 +184,14 @@
     border-color: var(--border-dark, #374151);
     color: var(--text-dark, #f9fafb);
   }
+}
+
+/* オプションテキストの省略 */
+.popover-ng-selector__option > span:last-child {
+  /* テキスト部分の省略 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0; /* フレックスアイテムの省略を有効にする */
 }

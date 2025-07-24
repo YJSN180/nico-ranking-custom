@@ -72,11 +72,11 @@ export function PopoverNGSelector({
       const isMobile = viewport.width <= 480
       
       // 実際のポップオーバーサイズを使用（フォールバックあり）
-      const actualWidth = popoverRect.width || (isMobile ? 280 : 300)
+      const actualWidth = popoverRect.width || (isMobile ? 240 : 300)
       const actualHeight = popoverRect.height || 250
       
       // モバイルでの最大幅制限（CSSと同じ計算式）
-      const maxWidth = isMobile ? viewport.width - 20 : 320
+      const maxWidth = isMobile ? Math.min(260, viewport.width - 40) : 320
       const popoverWidth = Math.min(actualWidth, maxWidth)
       const popoverHeight = actualHeight
       
