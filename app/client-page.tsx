@@ -107,6 +107,11 @@ export default function ClientPage({
   
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
+    // カスタムジャンルの場合はリダイレクトしない（データがなくても維持）
+    if (config.genre === 'custom') {
+      return
+    }
+    
     if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
       // 現在のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替え
       handleConfigChange({ ...config, genre: visibleGenres[0], tag: undefined })
@@ -724,11 +729,13 @@ export default function ClientPage({
           }}>
             {visibleGenres.length === 0 
               ? '表示する動画がありません' 
+              : config.genre === 'custom' && !config.tag
+                ? 'カスタムランキングを作成するか、既存のカスタムランキングを選択してください'
               : config.tag 
                 ? 'このタグの動画が見つかりません' 
                 : 'ランキングデータがありません'}
           </div>
-          {config.tag && visibleGenres.length > 0 && (
+          {config.tag && visibleGenres.length > 0 && config.genre !== 'custom' && (
             <button
               onClick={() => handleConfigChange({ ...config, tag: undefined })}
               style={{
