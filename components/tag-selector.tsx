@@ -19,7 +19,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const tagScrollRef = useRef<HTMLDivElement>(null)
   
   // カスタムランキング管理
-  const { rankings, selectedId, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
+  const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
   
   // 編集用の状態
   const [editingRanking, setEditingRanking] = useState<any>(null)
@@ -71,17 +71,33 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   }
 
   const handleCustomRankingSelect = (customId: string) => {
+    console.log('🎯 handleCustomRankingSelect called:')
+    console.log('  - customId:', customId)
+    console.log('  - current rankings.length:', rankings.length)
+    console.log('  - current rankings IDs:', rankings.map(r => r.id))
+    
     selectRanking(customId)
     // カスタムランキングのIDをtagとして設定し、genreも'custom'に変更
     onConfigChange({ ...config, genre: 'custom', tag: `custom:${customId}` })
+    
+    console.log('  - config.tag set to:', `custom:${customId}`)
   }
 
   const handleCreateCustomRanking = (data: any) => {
+    console.log('📝 handleCreateCustomRanking called:')
+    console.log('  - data.title:', data.title)
+    console.log('  - before createRanking - rankings.length:', rankings.length)
+    
     const newRanking = createRanking({
       title: data.title,
       baseGenre: data.baseGenre,
       conditions: data.conditions
     })
+    
+    console.log('  - newRanking created:', newRanking)
+    console.log('  - newRanking.id:', newRanking.id)
+    console.log('  - after createRanking - rankings.length:', rankings.length)
+    
     // 作成したカスタムランキングを自動選択
     handleCustomRankingSelect(newRanking.id)
   }
@@ -181,7 +197,27 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           {config.tag && config.tag.startsWith('custom:') && (
             <div style={{ marginBottom: '12px' }}>
               <span className={styles.selectedTag}>
-                選択中: {rankings.find(r => r.id === config.tag?.replace('custom:', ''))?.title || config.tag}
+                選択中: {(() => {
+                  const customId = config.tag?.replace('custom:', '') || ''
+                  
+                  // まずrankings配列から検索
+                  const foundRanking = rankings.find(r => r.id === customId)
+                  
+                  // rankings配列で見つからない場合、selectedRankingを確認
+                  // (作成直後はselectedRankingに即座に反映されるため)
+                  const effectiveRanking = foundRanking || (selectedRanking?.id === customId ? selectedRanking : null)
+                  
+                  console.log('🔍 Tag Display Debug:')
+                  console.log('  - config.tag:', config.tag)
+                  console.log('  - customId:', customId)
+                  console.log('  - rankings.length:', rankings.length)
+                  console.log('  - foundRanking:', foundRanking)
+                  console.log('  - selectedRanking:', selectedRanking)
+                  console.log('  - effectiveRanking:', effectiveRanking)
+                  console.log('  - final title:', effectiveRanking?.title)
+                  
+                  return effectiveRanking?.title || config.tag
+                })()}
               </span>
             </div>
           )}
