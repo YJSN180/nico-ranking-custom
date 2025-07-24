@@ -349,6 +349,26 @@ export default function ClientPage({
     }
   }, [initialRanking, customRankingsLoading, selectRanking, config])
   
+  // 初期マウント時にカスタムジャンルの場合、localStorage読み込み完了後にデータ取得
+  useEffect(() => {
+    // カスタムジャンルかつローディング完了かつ初期ロード時
+    if (config.genre === 'custom' && !customRankingsLoading && isInitialLoad) {
+      // カスタムランキングが選択されている場合のみデータ取得
+      if (config.tag?.startsWith('custom:')) {
+        fetchRankingData(config)
+          .then(() => {
+            setIsInitialLoad(false)
+          })
+          .catch(() => {
+            // エラーはフック内で処理済み
+            setIsInitialLoad(false)
+          })
+      } else {
+        setIsInitialLoad(false)
+      }
+    }
+  }, [config, customRankingsLoading, isInitialLoad, fetchRankingData])
+  
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
     // 人気タグ取得用のAbortController
@@ -397,11 +417,12 @@ export default function ClientPage({
   
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
-    // 初回ロードの場合はSSRのデータをそのまま使用
+    // 初回ロードの場合はSSRのデータをそのまま使用（カスタムジャンルを除く）
     if (isInitialLoad && 
         newConfig.genre === initialGenre && 
         newConfig.period === initialPeriod && 
-        newConfig.tag === initialTag) {
+        newConfig.tag === initialTag &&
+        newConfig.genre !== 'custom') {  // カスタムジャンルは除外
       setIsInitialLoad(false)
       return
     }

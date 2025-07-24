@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>カスタムランキング テスト</title>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>カスタムランキング テストツール</h1>
+        
+        <h2>テスト操作</h2>
+        <button onclick="createTestData()">テストデータを作成</button>
+        <button onclick="viewCurrentData()">現在のデータを表示</button>
+        <button onclick="clearData()">データをクリア</button>
+        <button onclick="testNavigate()">カスタムランキングページへ移動</button>
+        
+        <h2>ログ</h2>
+        <pre id="log"></pre>
+    </div>
+
+    <script>
+        const log = (message, isError = false) => {
+            const logElement = document.getElementById('log');
+            const time = new Date().toLocaleTimeString('ja-JP');
+            const className = isError ? 'error' : 'success';
+            logElement.innerHTML += `<span class="${className}">[${time}]</span> ${message}\n`;
+            console.log(`[${time}] ${message}`);
+        };
+
+        const createTestData = () => {
+            try {
+                const testData = {
+                    rankings: [
+                        {
+                            id: "test-123",
+                            title: "テストカスタムランキング",
+                            baseGenre: "game",
+                            conditions: [
+                                { tag: "実況プレイ動画", operator: "AND", tagType: "both" },
+                                { tag: "ゆっくり実況プレイ", operator: "OR", tagType: "both" },
+                                { tag: "淫夢実況シリーズ", operator: "NOT", tagType: "both" }
+                            ],
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        }
+                    ],
+                    selectedId: "test-123"
+                };
+                
+                localStorage.setItem('custom-rankings', JSON.stringify(testData));
+                log('✅ テストデータを作成しました');
+                log('データ内容: ' + JSON.stringify(testData, null, 2));
+            } catch (error) {
+                log('❌ エラー: ' + error.message, true);
+            }
+        };
+
+        const viewCurrentData = () => {
+            try {
+                const data = localStorage.getItem('custom-rankings');
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    log('📊 現在のデータ:');
+                    log(JSON.stringify(parsed, null, 2));
+                } else {
+                    log('⚠️ データが見つかりません');
+                }
+            } catch (error) {
+                log('❌ エラー: ' + error.message, true);
+            }
+        };
+
+        const clearData = () => {
+            try {
+                localStorage.removeItem('custom-rankings');
+                log('🗑️ データをクリアしました');
+            } catch (error) {
+                log('❌ エラー: ' + error.message, true);
+            }
+        };
+
+        const testNavigate = () => {
+            const data = localStorage.getItem('custom-rankings');
+            if (!data) {
+                log('⚠️ まずテストデータを作成してください', true);
+                return;
+            }
+            
+            const parsed = JSON.parse(data);
+            if (parsed.rankings && parsed.rankings.length > 0) {
+                const rankingId = parsed.rankings[0].id;
+                const url = `/?genre=custom&ranking=${rankingId}`;
+                log(`🚀 ${url} へ移動します...`);
+                setTimeout(() => {
+                    window.location.href = url;
+                }, 1000);
+            }
+        };
+
+        // ページ読み込み時に現在のデータを表示
+        window.addEventListener('DOMContentLoaded', () => {
+            log('🌟 テストツールを起動しました');
+            viewCurrentData();
+        });
+    </script>
+</body>
+</html>
