@@ -97,7 +97,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
   let actualGenre = genre
   let actualTag = tag
-  if (genre === 'custom' && tag?.startsWith('custom:')) {
+  if (genre === 'custom') {
     // サーバーサイドではlocalStorageが使えないため、空データを返す
     // クライアントサイドでデータ取得される
     return { items: [], popularTags: [] }
