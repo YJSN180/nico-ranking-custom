@@ -7,6 +7,7 @@ import { requestThrottle } from '@/lib/request-throttle'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
+import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 
 interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
@@ -107,15 +108,27 @@ export function useRankingData({
       
       // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
       let actualGenre = config.genre
+      let customRankingConditions: any[] = []
       if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
         // カスタムランキングIDを取得
         const customId = config.tag.replace('custom:', '')
         const customRankingsStr = localStorage.getItem('custom-rankings')
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Custom ranking ID:', customId)
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] LocalStorage data:', customRankingsStr)
         if (customRankingsStr) {
           const customRankings = JSON.parse(customRankingsStr)
           const targetRanking = customRankings.rankings?.find((r: any) => r.id === customId)
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Target ranking:', targetRanking)
           if (targetRanking && targetRanking.baseGenre) {
             actualGenre = targetRanking.baseGenre
+            customRankingConditions = targetRanking.conditions || []
+            // eslint-disable-next-line no-console
+            console.log('[DEBUG] Actual genre:', actualGenre)
+            // eslint-disable-next-line no-console
+            console.log('[DEBUG] Conditions:', customRankingConditions)
           }
         }
       }
@@ -149,12 +162,36 @@ export function useRankingData({
 
       const data: RankingData = await response.json()
       
-      // カスタムランキングAPIレスポンス情報は内部で処理
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] API response items count:', data?.items?.length)
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] First 3 items:', data?.items?.slice(0, 3).map(item => ({
+        title: item.title,
+        tags: item.tags,
+        tagDetails: item.tagDetails
+      })))
       
       if (data && data.items && Array.isArray(data.items)) {
-        // フィルタリングせずに生データを保存
-        setFullRankingData(data.items)
-        setRankingData(data.items)
+        let itemsToSet = data.items
+        
+        // カスタムランキングの場合、タグ条件でフィルタリング
+        if (config.genre === 'custom' && customRankingConditions.length > 0) {
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Before filtering:', itemsToSet.length)
+          itemsToSet = applyCustomFilters(data.items, customRankingConditions)
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] After filtering:', itemsToSet.length)
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Filtered items:', itemsToSet.slice(0, 3).map(item => ({
+            title: item.title,
+            tags: item.tags,
+            tagDetails: item.tagDetails
+          })))
+        }
+        
+        // フィルタリング後のデータを保存
+        setFullRankingData(itemsToSet)
+        setRankingData(itemsToSet)
         
         // 人気タグを設定
         if (data.popularTags && Array.isArray(data.popularTags) && data.popularTags.length > 0) {
@@ -162,8 +199,8 @@ export function useRankingData({
           savePopularTagsToCache(data.popularTags, config.genre, config.period)
         }
         
-        // キャッシュに保存（生データを保存）
-        rankingCache.set(config.genre, config.period, data.items, data.popularTags, config.tag)
+        // キャッシュに保存（フィルタリング後のデータを保存）
+        rankingCache.set(config.genre, config.period, itemsToSet, data.popularTags, config.tag)
       } else {
         // カスタムランキングで空のデータを受信
         setFullRankingData([])

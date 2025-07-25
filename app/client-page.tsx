@@ -403,6 +403,13 @@ export default function ClientPage({
   
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] handleConfigChange called with:', newConfig)
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] Current config:', config)
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] Is initial load:', isInitialLoad)
+    
     // 初回ロードの場合はSSRのデータをそのまま使用（カスタムジャンルを除く）
     if (isInitialLoad && 
         newConfig.genre === initialGenre && 
@@ -420,6 +427,8 @@ export default function ClientPage({
       newConfig.period === config.period &&
       newConfig.tag === config.tag
     ) {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] No config change, skipping')
       return
     }
     
@@ -439,15 +448,24 @@ export default function ClientPage({
     if (newConfig.period !== '24h') params.set('period', newConfig.period)
     if (newConfig.tag) params.set('tag', newConfig.tag)
     
-    router.push(params.toString() ? `?${params.toString()}` : '/', { scroll: false })
+    const newUrl = params.toString() ? `?${params.toString()}` : '/'
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] Pushing to URL:', newUrl)
+    router.push(newUrl, { scroll: false })
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Fetching ranking data...')
       await fetchRankingData(newConfig)
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Ranking data fetched successfully')
     } catch (error) {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankingsLoading])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {

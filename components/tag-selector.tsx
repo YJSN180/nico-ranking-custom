@@ -73,14 +73,21 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const handleCustomRankingSelect = (customId: string) => {
     // 選択されたカスタムランキングを取得
     const selectedRanking = rankings.find(r => r.id === customId)
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] handleCustomRankingSelect - customId:', customId)
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] handleCustomRankingSelect - selectedRanking:', selectedRanking)
     if (!selectedRanking) return
     
     // genre='custom'のまま、tagにカスタムランキングIDを設定
-    onConfigChange({ 
+    const newConfig = { 
       ...config, 
       genre: 'custom' as RankingGenre, 
       tag: `custom:${customId}`
-    })
+    }
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] handleCustomRankingSelect - newConfig:', newConfig)
+    onConfigChange(newConfig)
   }
 
   const handleCreateCustomRanking = (data: any) => {

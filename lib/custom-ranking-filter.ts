@@ -11,11 +11,23 @@ export function applyCustomFilters(
   items: RankingItem[],
   conditions: TagCondition[]
 ): RankingItem[] {
+  // eslint-disable-next-line no-console
+  console.log('[FILTER DEBUG] applyCustomFilters called')
+  // eslint-disable-next-line no-console
+  console.log('[FILTER DEBUG] Items count:', items.length)
+  // eslint-disable-next-line no-console
+  console.log('[FILTER DEBUG] Conditions:', conditions)
+  
   if (conditions.length === 0) {
+    // eslint-disable-next-line no-console
+    console.log('[FILTER DEBUG] No conditions, returning all items')
     return items
   }
 
-  return items.filter(item => matchesConditions(item, conditions))
+  const filtered = items.filter(item => matchesConditions(item, conditions))
+  // eslint-disable-next-line no-console
+  console.log('[FILTER DEBUG] Filtered count:', filtered.length)
+  return filtered
 }
 
 /**
@@ -70,6 +82,16 @@ function matchesConditions(
  */
 function hasMatchingTag(item: RankingItem, condition: TagCondition): boolean {
   const tagNameLower = condition.tag.toLowerCase()
+  
+  // デバッグ用：最初の数件のみログ出力
+  if (Math.random() < 0.01) { // 1%の確率でログ出力（大量ログ防止）
+    // eslint-disable-next-line no-console
+    console.log('[FILTER DEBUG] Checking tag:', condition.tag, 'for item:', item.title)
+    // eslint-disable-next-line no-console
+    console.log('[FILTER DEBUG] Item tags:', item.tags)
+    // eslint-disable-next-line no-console
+    console.log('[FILTER DEBUG] Item tagDetails:', item.tagDetails?.map(td => ({ name: td.name, isLocked: td.isLocked })))
+  }
 
   // tagDetailsがある場合は詳細情報を使用
   if (item.tagDetails && item.tagDetails.length > 0) {
