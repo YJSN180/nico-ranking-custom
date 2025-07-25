@@ -59,22 +59,21 @@ export const TagIcon: React.FC<TagIconProps> = ({
       )
     
     case 'both':
-      // 複合アイコン（両方のタグ）
+      // 並列アイコン（ロックタグとユーザータグを並べて表示）
       return (
         <svg
           width={size}
           height={size}
-          viewBox="0 0 16 16"
-          fill={fillColor}
+          viewBox="0 0 20 16"
           className={className}
           aria-label="両方のタグ"
         >
-          {/* 左側に小さい鍵アイコン */}
-          <g transform="scale(0.6) translate(0, 2)">
+          {/* 左側：ロックアイコン（金色） */}
+          <g transform="scale(0.7) translate(0, 1)" fill="#FFD700">
             <path d="M8 1.5A2.5 2.5 0 0 0 5.5 4v2H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-2.5V4A2.5 2.5 0 0 0 8 1.5zM6.5 4a1.5 1.5 0 0 1 3 0v2h-3V4zm2.5 6.5v2a1 1 0 1 1-2 0v-2a1 1 0 1 1 2 0z"/>
           </g>
-          {/* 右側に小さいタグアイコン */}
-          <g transform="scale(0.6) translate(14, 8)">
+          {/* 右側：ユーザータグアイコン（銀色） */}
+          <g transform="scale(0.7) translate(12, 1)" fill="#C0C0C0">
             <path d="M2 2v4.586l7 7L13.586 9l-7-7H2zM1 2a1 1 0 0 1 1-1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 1 6.586V2z"/>
             <circle cx="4.5" cy="4.5" r="1.5"/>
           </g>
