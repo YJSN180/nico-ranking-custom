@@ -102,7 +102,6 @@ test.describe('カスタムランキング機能テスト', () => {
     // 事前にカスタムランキングを作成
     await page.addInitScript(() => {
       const customRanking = {
-        version: "1.0",
         rankings: [
           {
             id: "test-game-ranking",
@@ -192,7 +191,6 @@ test.describe('カスタムランキング機能テスト', () => {
       }))
       
       const customRanking = {
-        version: "1.0",
         rankings: rankings,
         selectedId: null
       }

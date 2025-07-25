@@ -41,7 +41,6 @@ test.describe('カスタムランキング - APIテスト', () => {
     // ページに事前にカスタムランキングデータを設定
     await page.addInitScript(() => {
       const customRanking = {
-        version: "1.0", 
         rankings: [
           {
             id: "test-game-ranking",

@@ -9,9 +9,10 @@ import styles from './selectors.module.css'
 interface RankingSelectorProps {
   config: RankingConfig
   onConfigChange: (config: RankingConfig) => void
+  customRankings?: any[]
 }
 
-export function RankingSelector({ config, onConfigChange }: RankingSelectorProps) {
+export function RankingSelector({ config, onConfigChange, customRankings }: RankingSelectorProps) {
   const genreScrollRef = useRef<HTMLDivElement>(null)
   const { visibleGenres } = useGenreOrderV2()
 
@@ -98,7 +99,15 @@ export function RankingSelector({ config, onConfigChange }: RankingSelectorProps
                 onClick={() => handleGenreChange(genre)}
                 className={`${styles.button} ${styles.genreButton} ${config.genre === genre ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
               >
-                {GENRE_LABELS[genre]}
+                {(() => {
+                  // カスタムジャンルの場合、選択されたカスタムランキング名を表示
+                  if (genre === 'custom' && config.genre === 'custom' && config.tag?.startsWith('custom:')) {
+                    const customId = config.tag.replace('custom:', '')
+                    const customRanking = customRankings?.find(r => r.id === customId)
+                    return customRanking ? customRanking.title : GENRE_LABELS[genre]
+                  }
+                  return GENRE_LABELS[genre]
+                })()}
               </button>
             ))}
           </div>

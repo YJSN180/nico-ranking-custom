@@ -104,17 +104,37 @@ export function useRankingData({
 
       // APIから取得
       const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
+      
+      // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
+      let actualGenre = config.genre
+      if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
+        // カスタムランキングIDを取得
+        const customId = config.tag.replace('custom:', '')
+        const customRankingsStr = localStorage.getItem('custom-rankings')
+        if (customRankingsStr) {
+          const customRankings = JSON.parse(customRankingsStr)
+          const targetRanking = customRankings.rankings?.find((r: any) => r.id === customId)
+          if (targetRanking && targetRanking.baseGenre) {
+            actualGenre = targetRanking.baseGenre
+          }
+        }
+      }
+      
       const baseParams = new URLSearchParams({
-        genre: config.genre,
+        genre: actualGenre,
         period: config.period,
         limit: limit.toString()
       })
       
-      if (config.tag) {
+      if (config.tag && !config.tag.startsWith('custom:')) {
         baseParams.set('tag', config.tag)
       }
 
-      const apiUrl = `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || ''}/api/ranking?${baseParams.toString()}`
+      // 開発環境ではプロキシを使用、本番環境では直接APIゲートウェイを使用
+      const isDevelopment = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      const apiUrl = isDevelopment 
+        ? `/api/ranking?${baseParams.toString()}`
+        : `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || ''}/api/ranking?${baseParams.toString()}`
       
       // カスタムランキングAPIリクエストの詳細情報は内部で処理
       

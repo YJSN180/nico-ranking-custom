@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get('host') || ''
   const isVercelApp = host.includes('.vercel.app')
   const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(host)
-  const isPreview = isVercelApp && hasRandomString
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1') || host.includes('0.0.0.0')
+  const isPreview = (isVercelApp && hasRandomString) || isLocalhost
   
   if (isPreview) {
     // プレビュー環境ではプロキシとして動作

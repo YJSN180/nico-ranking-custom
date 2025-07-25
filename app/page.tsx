@@ -46,8 +46,13 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const page = parseInt((params.page as string) || '1', 10)
   
   const genreInfo = RANKING_GENRES.find(g => g.value === genre)
-  const genreName = genreInfo?.label || '総合'
+  let genreName = genreInfo?.label || '総合'
   const periodName = period === '24h' ? '24時間' : '毎時'
+  
+  // カスタムジャンルの場合はカスタムランキング名を使用（SSRではlocalStorageが使えないため、仮の名前を使用）
+  if (genre === 'custom') {
+    genreName = 'カスタム'
+  }
   
   // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
   const isDefault = genre === 'all' && period === '24h' && !tag
@@ -55,7 +60,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   let title = isDefault ? 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示' : `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
   let description = isDefault ? 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
   
-  if (tag) {
+  if (tag && !tag.startsWith('custom:')) {
     title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
     description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
   }
@@ -89,12 +94,21 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
+  // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
+  let actualGenre = genre
+  let actualTag = tag
+  if (genre === 'custom' && tag?.startsWith('custom:')) {
+    // サーバーサイドではlocalStorageが使えないため、空データを返す
+    // クライアントサイドでデータ取得される
+    return { items: [], popularTags: [] }
+  }
+  
   // Cloudflare Worker から直接データを取得（Vercel Function をバイパス）
   try {
     const params = new URLSearchParams()
-    params.set('genre', genre)
+    params.set('genre', actualGenre)
     params.set('period', period)
-    if (tag) params.set('tag', tag)
+    if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
     
     // Cloudflare Worker のエンドポイントに直接アクセス
     const apiUrl = `https://nico-rank.com/api/ranking?${params.toString()}`

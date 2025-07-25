@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import type { RankingConfig } from '@/types/ranking-config'
+import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import { CustomRankingModal } from './custom-ranking-modal'
 import styles from './selectors.module.css'
@@ -75,11 +75,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     const selectedRanking = rankings.find(r => r.id === customId)
     if (!selectedRanking) return
     
-    // カスタムランキングのbaseGenreのランキングページにリダイレクト
+    // genre='custom'のまま、tagにカスタムランキングIDを設定
     onConfigChange({ 
       ...config, 
-      genre: selectedRanking.baseGenre, 
-      tag: undefined // タグはクリア（baseGenreの全動画を表示）
+      genre: 'custom' as RankingGenre, 
+      tag: `custom:${customId}`
     })
   }
 
@@ -90,11 +90,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       conditions: data.conditions
     })
     
-    // 作成後、そのbaseGenreのランキングページにリダイレクト
+    // 作成後、genre='custom'でそのカスタムランキングを選択
     onConfigChange({ 
       ...config, 
-      genre: newRanking.baseGenre, 
-      tag: undefined 
+      genre: 'custom' as RankingGenre, 
+      tag: `custom:${newRanking.id}`
     })
   }
 
@@ -112,11 +112,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       })
       setEditingRanking(null)
       
-      // 編集後、そのbaseGenreのランキングページにリダイレクト
+      // 編集後も、genre='custom'でそのカスタムランキングを選択
       onConfigChange({ 
         ...config, 
-        genre: data.baseGenre, 
-        tag: undefined 
+        genre: 'custom' as RankingGenre, 
+        tag: `custom:${editingRanking.id}` 
       })
     } else {
       handleCreateCustomRanking(data)

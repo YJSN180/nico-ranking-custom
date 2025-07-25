@@ -104,7 +104,7 @@ export default function ClientPage({
   const { preferences, updatePreferences } = useUserPreferences()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const { visibleGenres } = useGenreOrderV2()
-  const { selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
+  const { rankings: customRankings, selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
@@ -146,11 +146,9 @@ export default function ClientPage({
   
   // 設定の管理（初期値はURLパラメータから）
   const [config, setConfig] = useState<RankingConfig>(() => {
-    // genre=customが来た場合はgenre=allに変換
-    const genre = initialGenre === 'custom' ? 'all' : initialGenre
     return {
       period: initialPeriod as '24h' | 'hour',
-      genre: genre as RankingGenre,
+      genre: initialGenre as RankingGenre,
       tag: initialTag
     }
   })
@@ -728,7 +726,11 @@ export default function ClientPage({
     return (
       <TagDisplayProvider>
         <div className="selectors-container">
-        <RankingSelector config={config} onConfigChange={handleConfigChange} />
+        <RankingSelector 
+          config={config} 
+          onConfigChange={handleConfigChange}
+          customRankings={customRankings} 
+        />
         <TagSelector 
           config={config} 
           onConfigChange={handleConfigChange} 

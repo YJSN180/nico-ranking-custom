@@ -40,7 +40,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com",
+              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com https://nico-rank.com",
               "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
               "object-src 'none'",
               "base-uri 'self'",
@@ -56,7 +56,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に必要
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com",
+              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com https://nico-rank.com",
               "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
               "object-src 'none'",
               "base-uri 'self'",

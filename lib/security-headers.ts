@@ -6,7 +6,7 @@ export function getSecurityHeaders(nonce?: string) {
     "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に許可
     "img-src 'self' data: https: blob:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://nicovideo.cdn.nimg.jp https://img.cdn.nimg.jp https://*.smilevideo.jp https://secure-dcdn.cdn.nimg.jp",
+    "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://nicovideo.cdn.nimg.jp https://img.cdn.nimg.jp https://*.smilevideo.jp https://secure-dcdn.cdn.nimg.jp https://nico-rank.com",
     "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
     "object-src 'none'",
     "base-uri 'self'",
