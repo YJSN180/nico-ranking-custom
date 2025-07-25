@@ -6,6 +6,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { decodeRankingData } from './utils/html-decode'
+import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 
 interface Env {
   VERCEL_DEPLOYMENT_URL: string
@@ -26,13 +27,7 @@ const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on'
 }
 
-// CORSヘッダー定義
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400'
-}
+// CORSヘッダーは ./utils/cors-config.ts で統一管理
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -41,10 +36,8 @@ export default {
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-      })
+      const origin = request.headers.get('Origin')
+      return createOptionsResponse(origin)
     }
     
     // /api/metadata パスの処理（メタデータを返す）
@@ -53,43 +46,45 @@ export default {
         const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json')
         if (metadataObject) {
           const metadata = await metadataObject.text()
-          return new Response(metadata, {
+          const metadataResponse = new Response(metadata, {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=300',
-              ...corsHeaders,
-              ...securityHeaders
+              'Cache-Control': 'public, max-age=300'
             }
           })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(metadataResponse, origin, securityHeaders)
         }
       } catch (error) {
         console.error('Metadata read error:', error)
       }
-      return new Response('{}', {
+      const emptyResponse = new Response('{}', {
         status: 200,
         headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders,
-          ...securityHeaders
+          'Content-Type': 'application/json'
         }
       })
+      const origin = request.headers.get('Origin')
+      return applyCORSHeaders(emptyResponse, origin, securityHeaders)
     }
     
     // デバッグエンドポイント
     if (url.pathname === '/api/debug') {
-      return new Response(JSON.stringify({
+      const debugResponse = new Response(JSON.stringify({
         time: new Date().toISOString(),
         headers: Object.fromEntries(request.headers.entries()),
-        worker: 'api-gateway-r2',
-        version: '2025-07-03-fetch-api'
+        worker: 'api-gateway-r2-20250706',
+        version: 'r2-20250706-unified-cors'
       }), {
         status: 200,
         headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders
+          'Content-Type': 'application/json'
         }
       })
+      
+      const origin = request.headers.get('Origin')
+      return applyCORSHeaders(debugResponse, origin, {})
     }
     
     // R2メタデータテストエンドポイント
@@ -107,7 +102,7 @@ export default {
           const isGzipped = firstChunk && firstChunk.length >= 2 && 
                            firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
           
-          return new Response(JSON.stringify({
+          const testResponse = new Response(JSON.stringify({
             key: testKey,
             exists: true,
             size: testObject.size,
@@ -118,32 +113,35 @@ export default {
           }, null, 2), {
             status: 200,
             headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders
+              'Content-Type': 'application/json'
             }
           })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(testResponse, origin, {})
         } else {
-          return new Response(JSON.stringify({
+          const notFoundResponse = new Response(JSON.stringify({
             key: testKey,
             exists: false
           }), {
             status: 200,
             headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders
+              'Content-Type': 'application/json'
             }
           })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(notFoundResponse, origin, {})
         }
       } catch (error) {
-        return new Response(JSON.stringify({
+        const errorResponse = new Response(JSON.stringify({
           error: error.message
         }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders
+            'Content-Type': 'application/json'
           }
         })
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(errorResponse, origin, {})
       }
     }
     
@@ -199,16 +197,16 @@ export default {
             }
             // 空のレスポンスでもデコード処理を通す（将来の一貫性のため）
             const decodedEmptyResponse = decodeRankingData(emptyResponse)
-            return new Response(JSON.stringify(decodedEmptyResponse), {
+            const emptyRankingResponse = new Response(JSON.stringify(decodedEmptyResponse), {
               status: 200,
               headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-                'X-Data-Source': 'r2-tag-not-found',
-                ...corsHeaders,
-                ...securityHeaders
+                'X-Data-Source': 'r2-tag-not-found'
               }
             })
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(emptyRankingResponse, origin, securityHeaders)
           } else {
             // 通常のランキングデータが存在しない場合はVercelにフォールバック
             console.log(`R2 miss for ${r2Key}, falling back to Vercel`)
@@ -374,24 +372,25 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
       responseHeaders.set(key, value)
     })
     
-    // CORSヘッダーを追加
-    Object.entries(corsHeaders).forEach(([key, value]) => {
-      responseHeaders.set(key, value)
-    })
+    // CORSヘッダーは最後にapplyCORSHeadersで統一適用
     
-    return new Response(response.body, {
+    const proxyResponse = new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: responseHeaders
     })
+    
+    const origin = request.headers.get('Origin')
+    return applyCORSHeaders(proxyResponse, origin, {})
   } catch (error) {
     console.error('Proxy error:', error)
-    return new Response('Gateway Error', { 
+    const errorResponse = new Response('Gateway Error', { 
       status: 502,
       headers: {
-        'Content-Type': 'text/plain',
-        ...corsHeaders
+        'Content-Type': 'text/plain'
       }
     })
+    const origin = request.headers.get('Origin')
+    return applyCORSHeaders(errorResponse, origin, {})
   }
 }

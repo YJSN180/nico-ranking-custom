@@ -19,6 +19,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { decodeRankingData } from './utils/html-decode'
+import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 
 interface Env {
   VERCEL_DEPLOYMENT_URL: string
@@ -41,13 +42,7 @@ const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on'
 }
 
-// CORSヘッダー定義
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400'
-}
+// CORSヘッダーは ./utils/cors-config.ts で統一管理
 
 /**
  * IP別レート制限チェック（サムネイル取得API用）
@@ -103,29 +98,28 @@ export default {
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-      })
+      const origin = request.headers.get('Origin')
+      return createOptionsResponse(origin)
     }
     
     // /api/debug パスの処理（デバッグ情報を返す）
     if (url.pathname === '/api/debug') {
-      return new Response(JSON.stringify({
+      const debugResponse = new Response(JSON.stringify({
         time: new Date().toISOString(),
         headers: Object.fromEntries(request.headers),
-        worker: 'api-gateway-blue-20250705',
-        version: 'blue-20250705-r2',
-        features: ['r2-storage', 'html-decode', 'blue-20250705']
+        worker: 'api-gateway-blue-20250706',
+        version: 'blue-20250706-unified-cors',
+        features: ['r2-storage', 'html-decode', 'unified-cors', 'blue-20250706']
       }), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          ...corsHeaders,
-          ...securityHeaders,
-          'X-Worker-Version': 'blue-20250705-r2'
+          'X-Worker-Version': 'blue-20250706-unified-cors'
         }
       })
+      
+      const origin = request.headers.get('Origin')
+      return applyCORSHeaders(debugResponse, origin, securityHeaders)
     }
 
     // /api/ranking パスの処理
@@ -139,14 +133,14 @@ export default {
         const object = await env.R2_BUCKET.get(objectKey)
         
         if (!object) {
-          return new Response(JSON.stringify({ error: 'Data not found' }), {
+          const notFoundResponse = new Response(JSON.stringify({ error: 'Data not found' }), {
             status: 404,
             headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders,
-              ...securityHeaders
+              'Content-Type': 'application/json'
             }
           })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
         }
 
         const rawData = await object.text()
@@ -156,28 +150,29 @@ export default {
         const decodedData = decodeRankingData(rankingData)
         
         // レスポンス
-        return new Response(JSON.stringify(decodedData), {
+        const rankingResponse = new Response(JSON.stringify(decodedData), {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'public, max-age=300',
             'X-Data-Source': 'r2-blue-worker',
-            'X-Worker-Version': 'blue-20250705-r2',
-            ...corsHeaders,
-            ...securityHeaders
+            'X-Worker-Version': 'blue-20250706-unified-cors'
           }
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(rankingResponse, origin, securityHeaders)
 
       } catch (error) {
         console.error('Error fetching ranking data:', error)
-        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        const errorResponse = new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders,
-            ...securityHeaders
+            'Content-Type': 'application/json'
           }
         })
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(errorResponse, origin, securityHeaders)
       }
     }
 
@@ -187,14 +182,14 @@ export default {
         const videoId = url.pathname.split('/').pop()
         
         if (!videoId || !/^[a-zA-Z0-9_-]+$/.test(videoId)) {
-          return new Response(JSON.stringify({ error: 'Invalid video ID' }), {
+          const invalidIdResponse = new Response(JSON.stringify({ error: 'Invalid video ID' }), {
             status: 400,
             headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders,
-              ...securityHeaders
+              'Content-Type': 'application/json'
             }
           })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(invalidIdResponse, origin, securityHeaders)
         }
         
         // レート制限チェック（サムネイル取得API用）
@@ -215,14 +210,14 @@ export default {
         })
         
         if (!nicoResponse.ok) {
-          return new Response(JSON.stringify({ error: 'Video not found' }), {
+          const notFoundResponse = new Response(JSON.stringify({ error: 'Video not found' }), {
             status: 404,
             headers: {
-              'Content-Type': 'application/json',
-              ...corsHeaders,
-              ...securityHeaders
+              'Content-Type': 'application/json'
             }
           })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
         }
         
         // HTMLからOGP画像URLを抽出
@@ -271,27 +266,28 @@ export default {
           thumbnail: thumbnailUrl
         })
         
-        return new Response(result, {
+        const thumbnailResponse = new Response(result, {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
             // CDNレベルでのキャッシュのみ（個人差があるためKVキャッシュは使用しない）
-            'Cache-Control': 'public, max-age=3600, s-maxage=86400', // ブラウザ1時間、CDN24時間
-            ...corsHeaders,
-            ...securityHeaders
+            'Cache-Control': 'public, max-age=3600, s-maxage=86400' // ブラウザ1時間、CDN24時間
           }
         })
         
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(thumbnailResponse, origin, securityHeaders)
+        
       } catch (error) {
         console.error('Error fetching thumbnail:', error)
-        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        const errorResponse = new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json',
-            ...corsHeaders,
-            ...securityHeaders
+            'Content-Type': 'application/json'
           }
         })
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(errorResponse, origin, securityHeaders)
       }
     }
 

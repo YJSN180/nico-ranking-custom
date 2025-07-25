@@ -26,6 +26,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { decodeRankingData } from './utils/html-decode'
+import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 
 interface Env {
   R2_BUCKET: R2Bucket
@@ -49,31 +50,7 @@ const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on'
 }
 
-// 動的CORSヘッダー生成
-function getCorsHeaders(request: Request): Record<string, string> {
-  const origin = request.headers.get('Origin')
-  const allowedOrigins = [
-    'http://localhost:3000',
-    'https://nico-rank.com',
-    'https://nico-ranking-custom-yjsns-projects.vercel.app'
-  ]
-  
-  // Vercelプレビューデプロイメントのパターン
-  const vercelPreviewPattern = /^https:\/\/nico-ranking-[a-z0-9-]+\.vercel\.app$/
-  
-  let allowOrigin = '*' // デフォルト（公開API向け）
-  
-  if (origin && (allowedOrigins.includes(origin) || vercelPreviewPattern.test(origin))) {
-    allowOrigin = origin
-  }
-  
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, If-None-Match',
-    'Access-Control-Max-Age': '86400'
-  }
-}
+// CORSヘッダーは ./utils/cors-config.ts で統一管理
 
 /**
  * IP別レート制限チェック（サムネイル取得API用）
@@ -95,7 +72,7 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
     })
     
     if (!success) {
-      const errorResponse = new Response(
+      const rateLimitErrorResponse = new Response(
         JSON.stringify({ 
           error: 'Too Many Requests',
           message: 'Rate limit exceeded. Please try again later.',
@@ -112,7 +89,11 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
           }
         }
       )
-      return { success: false, error: errorResponse }
+      
+      // Apply CORS headers to rate limit error
+      const origin = request.headers.get('Origin')
+      const corsRateLimitError = applyCORSHeaders(rateLimitErrorResponse, origin, {})
+      return { success: false, error: corsRateLimitError }
     }
     
     return { success: true }
@@ -218,10 +199,8 @@ export default {
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: getCorsHeaders(request)
-      })
+      const origin = request.headers.get('Origin')
+      return createOptionsResponse(origin)
     }
     
     // /api/debug エンドポイント
@@ -241,13 +220,16 @@ export default {
         }
       };
       
-      return new Response(JSON.stringify(debugOutput, null, 2), {
+      const debugResponse = new Response(JSON.stringify(debugOutput, null, 2), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          ...getCorsHeaders(request)
+          'X-Worker-Version': 'green-20250705-unified-cors'
         }
       })
+      
+      const origin = request.headers.get('Origin')
+      return applyCORSHeaders(debugResponse, origin, securityHeaders)
     }
     
     // /api/metadata パスの処理
@@ -276,29 +258,31 @@ export default {
             metadataText = await metadataObject.text()
           }
           
-          return new Response(metadataText, {
+          const metadataResponse = new Response(metadataText, {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
               'Cache-Control': cacheControl,
               'ETag': metadataObject.httpEtag || `"${metadataObject.etag}"`,
-              'X-Worker-Version': 'green-20250705',
-              ...getCorsHeaders(request),
-              ...securityHeaders
+              'X-Worker-Version': 'green-20250705-unified-cors'
             }
           })
+          
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(metadataResponse, origin, securityHeaders)
         }
       } catch (error) {
         console.error('Metadata read error:', error)
       }
-      return new Response('{}', {
+      const emptyResponse = new Response('{}', {
         status: 200,
         headers: {
-          'Content-Type': 'application/json',
-          ...getCorsHeaders(request),
-          ...securityHeaders
+          'Content-Type': 'application/json'
         }
       })
+      
+      const origin = request.headers.get('Origin')
+      return applyCORSHeaders(emptyResponse, origin, securityHeaders)
     }
     
     // /api/ranking パスの処理
@@ -333,21 +317,22 @@ export default {
                 tag
               }
             }
-            return new Response(JSON.stringify(emptyResponse), {
+            const emptyTagResponse = new Response(JSON.stringify(emptyResponse), {
               status: 200,
               headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Data-Source': 'r2-tag-not-found',
-                'X-Worker-Version': 'green-20250705',
-                ...getCorsHeaders(request),
-                ...securityHeaders
+                'X-Worker-Version': 'green-20250705-unified-cors'
               }
             })
+            
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(emptyTagResponse, origin, securityHeaders)
           } else {
             // 通常のランキングデータが存在しない場合は404を返す
             console.log(`[Worker v2.0] R2 miss for ${r2Key}, returning 404`)
-            return new Response(JSON.stringify({
+            const notFoundResponse = new Response(JSON.stringify({
               error: 'Ranking data not found',
               message: `No data available for ${genre}/${period}`
             }), {
@@ -356,11 +341,12 @@ export default {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Data-Source': 'r2-not-found',
-                'X-Worker-Version': 'green-20250705',
-                ...getCorsHeaders(request),
-                ...securityHeaders
+                'X-Worker-Version': 'green-20250705-unified-cors'
               }
             })
+            
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
           }
         }
         
@@ -371,7 +357,7 @@ export default {
         const ifNoneMatch = request.headers.get('If-None-Match')
         if (ifNoneMatch && isETagMatch(etag, ifNoneMatch)) {
           const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
-          return new Response(null, {
+          const notModifiedResponse = new Response(null, {
             status: 304,
             headers: {
               'ETag': etag,
@@ -379,12 +365,13 @@ export default {
               'CDN-Cache-Control': cdnCacheControl,
               'CF-Cache-Status': 'REVALIDATED',
               'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
-              'X-Worker-Version': 'green-20250705',
-              'X-TTL-Source': 'dynamic-20250705',
-              ...getCorsHeaders(request),
-              ...securityHeaders
+              'X-Worker-Version': 'green-20250705-unified-cors',
+              'X-TTL-Source': 'dynamic-20250705'
             }
           })
+          
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(notModifiedResponse, origin, securityHeaders)
         }
         
         // 動的TTL v2.0を計算
@@ -403,10 +390,7 @@ export default {
         headers.set('X-TTL-Source', 'dynamic-20250705')
         headers.set('Server-Timing', `cfCache;desc="MISS", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`)
         
-        // CORSとセキュリティヘッダーを追加
-        Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
-          headers.set(key, value)
-        })
+        // セキュリティヘッダーを追加
         Object.entries(securityHeaders).forEach(([key, value]) => {
           headers.set(key, value)
         })
@@ -433,24 +417,33 @@ export default {
               const jsonData = JSON.parse(decompressedData)
               const decodedData = decodeRankingData(jsonData)
               
-              return new Response(JSON.stringify(decodedData), {
+              const gzipResponse = new Response(JSON.stringify(decodedData), {
                 status: 200,
                 headers
               })
+              
+              const origin = request.headers.get('Origin')
+              return applyCORSHeaders(gzipResponse, origin, {})
             } catch (parseError) {
               console.error('[Green Worker 20250705] Failed to parse or decode JSON:', parseError)
-              return new Response(decompressedData, {
+              const gzipParseErrorResponse = new Response(decompressedData, {
                 status: 200,
                 headers
               })
+              
+              const origin = request.headers.get('Origin')
+              return applyCORSHeaders(gzipParseErrorResponse, origin, {})
             }
           } catch (decompressError) {
             console.error('[Green Worker 20250705] Failed to decompress gzipped data:', decompressError)
-            return new Response(workStream, {
+            const gzipErrorResponse = new Response(workStream, {
               status: 200,
               headers,
               encodeBody: "manual"
             } as ResponseInit)
+            
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(gzipErrorResponse, origin, {})
           }
         } else {
           // 非圧縮データの場合
@@ -461,22 +454,28 @@ export default {
             const jsonData = JSON.parse(textData)
             const decodedData = decodeRankingData(jsonData)
             
-            return new Response(JSON.stringify(decodedData), {
+            const normalResponse = new Response(JSON.stringify(decodedData), {
               status: 200,
               headers
             })
+            
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(normalResponse, origin, {})
           } catch (error) {
             console.error('[Green Worker 20250705] Failed to parse or decode JSON:', error)
-            return new Response(workStream, {
+            const normalErrorResponse = new Response(workStream, {
               status: 200,
               headers
             })
+            
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(normalErrorResponse, origin, {})
           }
         }
         
       } catch (error) {
         console.error('[Green Worker 20250705] Error fetching from R2:', error)
-        return new Response(JSON.stringify({
+        const errorResponse = new Response(JSON.stringify({
           error: 'Internal server error',
           message: 'Failed to fetch ranking data'
         }), {
@@ -484,11 +483,12 @@ export default {
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'X-Worker-Version': 'green-20250705',
-            ...getCorsHeaders(request),
-            ...securityHeaders
+            'X-Worker-Version': 'green-20250705-unified-cors'
           }
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(errorResponse, origin, securityHeaders)
       }
     }
     
@@ -498,14 +498,15 @@ export default {
         const videoId = url.pathname.split('/').pop()
         
         if (!videoId || !/^[a-zA-Z0-9_-]+$/.test(videoId)) {
-          return new Response(JSON.stringify({ error: 'Invalid video ID' }), {
+          const invalidIdResponse = new Response(JSON.stringify({ error: 'Invalid video ID' }), {
             status: 400,
             headers: {
-              'Content-Type': 'application/json',
-              ...getCorsHeaders(request),
-              ...securityHeaders
+              'Content-Type': 'application/json'
             }
           })
+          
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(invalidIdResponse, origin, securityHeaders)
         }
         
         // レート制限チェック（サムネイル取得API用）
@@ -526,14 +527,15 @@ export default {
         })
         
         if (!nicoResponse.ok) {
-          return new Response(JSON.stringify({ error: 'Video not found' }), {
+          const videoNotFoundResponse = new Response(JSON.stringify({ error: 'Video not found' }), {
             status: 404,
             headers: {
-              'Content-Type': 'application/json',
-              ...getCorsHeaders(request),
-              ...securityHeaders
+              'Content-Type': 'application/json'
             }
           })
+          
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(videoNotFoundResponse, origin, securityHeaders)
         }
         
         // HTMLからサムネイルURLを抽出
@@ -628,28 +630,30 @@ export default {
           thumbnail: thumbnailUrl
         })
         
-        return new Response(result, {
+        const thumbnailResponse = new Response(result, {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
             // CDNレベルでのキャッシュのみ（個人差があるためKVキャッシュは使用しない）
             'Cache-Control': 'public, max-age=3600, s-maxage=86400', // ブラウザ1時間、CDN24時間
-            'X-Worker-Version': 'green-20250705',
-            ...getCorsHeaders(request),
-            ...securityHeaders
+            'X-Worker-Version': 'green-20250705-unified-cors'
           }
         })
         
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(thumbnailResponse, origin, securityHeaders)
+        
       } catch (error) {
         console.error('Error fetching thumbnail:', error)
-        return new Response(JSON.stringify({ error: 'Internal server error' }), {
+        const thumbnailErrorResponse = new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request),
-            ...securityHeaders
+            'Content-Type': 'application/json'
           }
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(thumbnailErrorResponse, origin, securityHeaders)
       }
     }
     
@@ -658,14 +662,15 @@ export default {
       const videoId = url.pathname.replace('/api/hd-thumbnail/', '')
       
       if (!videoId || !/^[a-zA-Z0-9]+$/.test(videoId)) {
-        return new Response(JSON.stringify({ error: 'Invalid video ID' }), {
+        const hdInvalidIdResponse = new Response(JSON.stringify({ error: 'Invalid video ID' }), {
           status: 400,
           headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request),
-            ...securityHeaders
+            'Content-Type': 'application/json'
           }
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(hdInvalidIdResponse, origin, securityHeaders)
       }
       
       // レート制限チェック（HDサムネイル取得API用）
@@ -742,32 +747,35 @@ export default {
           timestamp: new Date().toISOString()
         }
         
-        return new Response(JSON.stringify(result), {
+        const hdThumbnailResponse = new Response(JSON.stringify(result), {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'public, max-age=3600, s-maxage=86400',
             'X-HD-Source': 'nicovideo.gay',
-            ...getCorsHeaders(request),
-            ...securityHeaders
+            'X-Worker-Version': 'green-20250705-unified-cors'
           }
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(hdThumbnailResponse, origin, securityHeaders)
         
       } catch (error) {
         console.error(`[HD Thumbnail] Error for ${videoId}:`, error)
         
-        return new Response(JSON.stringify({ 
+        const hdErrorResponse = new Response(JSON.stringify({ 
           error: 'Failed to fetch HD thumbnail',
           videoId,
           details: error.message 
         }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json',
-            ...getCorsHeaders(request),
-            ...securityHeaders
+            'Content-Type': 'application/json'
           }
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(hdErrorResponse, origin, securityHeaders)
       }
     }
     
@@ -883,15 +891,16 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
         Object.entries(securityHeaders).forEach(([key, value]) => {
           finalHeaders.set(key, value)
         })
-        Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
-          finalHeaders.set(key, value)
-        })
+        // CORS headers will be applied later with applyCORSHeaders
         
-        return new Response(finalResponse.body, {
+        const finalProxyResponse = new Response(finalResponse.body, {
           status: 200,
           statusText: 'OK',
           headers: finalHeaders
         })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(finalProxyResponse, origin, {})
       }
     }
     
@@ -902,23 +911,26 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
       responseHeaders.set(key, value)
     })
     
-    Object.entries(getCorsHeaders(request)).forEach(([key, value]) => {
-      responseHeaders.set(key, value)
-    })
+    // CORS headers will be applied at the end
     
-    return new Response(response.body, {
+    const normalProxyResponse = new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers: responseHeaders
     })
+    
+    const origin = request.headers.get('Origin')
+    return applyCORSHeaders(normalProxyResponse, origin, {})
   } catch (error) {
     console.error('Proxy error:', error)
-    return new Response('Gateway Error', { 
+    const proxyErrorResponse = new Response('Gateway Error', { 
       status: 502,
       headers: {
-        'Content-Type': 'text/plain',
-        ...getCorsHeaders(request)
+        'Content-Type': 'text/plain'
       }
     })
+    
+    const origin = request.headers.get('Origin')
+    return applyCORSHeaders(proxyErrorResponse, origin, {})
   }
 }

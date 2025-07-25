@@ -1,9 +1,13 @@
 /**
  * Smart Router - Blue/Green Deployment Router
  * KVからアクティブWorkerを取得してリクエストを転送
+ * 
+ * CORS Fix: 重複ヘッダー問題を解決済み
  */
 
 /// <reference types="@cloudflare/workers-types" />
+
+import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 
 interface Env {
   MAINTENANCE_FLAGS: KVNamespace
@@ -26,13 +30,7 @@ const securityHeaders = {
   'X-DNS-Prefetch-Control': 'on'
 }
 
-// CORSヘッダー定義
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Max-Age': '86400'
-}
+// CORSヘッダーは ./utils/cors-config.ts で統一管理
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
@@ -40,10 +38,8 @@ export default {
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders
-      })
+      const origin = request.headers.get('Origin')
+      return createOptionsResponse(origin)
     }
 
     try {
@@ -56,17 +52,12 @@ export default {
       // リクエストを対象Workerに転送
       const response = await targetWorker.fetch(request)
       
-      // レスポンスをクローンして追加ヘッダーを付与
-      const modifiedResponse = new Response(response.body, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: {
-          ...Object.fromEntries(response.headers),
-          ...corsHeaders,
-          ...securityHeaders,
-          'X-Active-Worker': activeWorker,
-          'X-Router-Version': 'smart-router-20250705'
-        }
+      // CORS重複問題を回避して安全なヘッダーを適用
+      const origin = request.headers.get('Origin')
+      const modifiedResponse = applyCORSHeaders(response, origin, {
+        ...securityHeaders,
+        'X-Active-Worker': activeWorker,
+        'X-Router-Version': 'smart-router-20250706-fixed'
       })
       
       return modifiedResponse
@@ -77,31 +68,27 @@ export default {
       // フォールバック: Blue Workerを使用
       try {
         const fallbackResponse = await env.WORKER_BLUE.fetch(request)
-        return new Response(fallbackResponse.body, {
-          status: fallbackResponse.status,
-          statusText: fallbackResponse.statusText,
-          headers: {
-            ...Object.fromEntries(fallbackResponse.headers),
-            ...corsHeaders,
-            ...securityHeaders,
-            'X-Active-Worker': 'blue-fallback',
-            'X-Router-Version': 'smart-router-20250705',
-            'X-Router-Error': 'fallback-activated'
-          }
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(fallbackResponse, origin, {
+          ...securityHeaders,
+          'X-Active-Worker': 'blue-fallback',
+          'X-Router-Version': 'smart-router-20250706-fixed',
+          'X-Router-Error': 'fallback-activated'
         })
       } catch (fallbackError) {
         console.error('Fallback Error:', fallbackError)
         
         // 最終フォールバック: エラーレスポンス
-        return new Response('Internal Server Error', {
+        const origin = request.headers.get('Origin')
+        const errorResponse = new Response('Internal Server Error', {
           status: 500,
           headers: {
-            ...corsHeaders,
-            ...securityHeaders,
+            'Content-Type': 'text/plain',
             'X-Router-Error': 'all-workers-failed',
-            'X-Router-Version': 'smart-router-20250705'
+            'X-Router-Version': 'smart-router-20250706-fixed'
           }
         })
+        return applyCORSHeaders(errorResponse, origin, securityHeaders)
       }
     }
   }
