@@ -109,27 +109,38 @@ export function useRankingData({
       // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
       let actualGenre = config.genre
       let customRankingConditions: any[] = []
-      if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
+      if (config.genre === 'custom') {
         // カスタムランキングIDを取得
-        const customId = config.tag.replace('custom:', '')
-        const customRankingsStr = localStorage.getItem('custom-rankings')
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Custom ranking ID:', customId)
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] LocalStorage data:', customRankingsStr)
-        if (customRankingsStr) {
-          const customRankings = JSON.parse(customRankingsStr)
-          const targetRanking = customRankings.rankings?.find((r: any) => r.id === customId)
+        if (config.tag?.startsWith('custom:')) {
+          const customId = config.tag.replace('custom:', '')
+          const customRankingsStr = localStorage.getItem('custom-rankings')
           // eslint-disable-next-line no-console
-          console.log('[DEBUG] Target ranking:', targetRanking)
-          if (targetRanking && targetRanking.baseGenre) {
-            actualGenre = targetRanking.baseGenre
-            customRankingConditions = targetRanking.conditions || []
+          console.log('[DEBUG] Custom ranking ID:', customId)
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] LocalStorage data:', customRankingsStr)
+          if (customRankingsStr) {
+            const customRankings = JSON.parse(customRankingsStr)
+            const targetRanking = customRankings.rankings?.find((r: any) => r.id === customId)
             // eslint-disable-next-line no-console
-            console.log('[DEBUG] Actual genre:', actualGenre)
-            // eslint-disable-next-line no-console
-            console.log('[DEBUG] Conditions:', customRankingConditions)
+            console.log('[DEBUG] Target ranking:', targetRanking)
+            if (targetRanking && targetRanking.baseGenre) {
+              actualGenre = targetRanking.baseGenre
+              customRankingConditions = targetRanking.conditions || []
+              // eslint-disable-next-line no-console
+              console.log('[DEBUG] Actual genre:', actualGenre)
+              // eslint-disable-next-line no-console
+              console.log('[DEBUG] Conditions:', customRankingConditions)
+            }
           }
+        } else {
+          // カスタムランキングが選択されているがタグが指定されていない場合
+          // 空データを返してAPIリクエストを防ぐ
+          setFullRankingData([])
+          setRankingData([])
+          setCurrentPopularTags([])
+          setLoading(false)
+          setError(null)
+          return
         }
       }
       
