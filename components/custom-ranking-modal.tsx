@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
 import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
+import { TagIcon } from './tag-icon'
 import styles from './custom-ranking-modal.module.css'
 
 interface CustomRankingModalProps {
@@ -324,6 +325,7 @@ export function CustomRankingModal({
                       onClick={() => setTagType('lock')}
                       title="運営が設定したロックタグのみ対象"
                     >
+                      <TagIcon type="locked" size={16} />
                       ロックタグ
                     </button>
                     <button
@@ -331,6 +333,7 @@ export function CustomRankingModal({
                       onClick={() => setTagType('user')}
                       title="ユーザーが設定したタグのみ対象"
                     >
+                      <TagIcon type="user" size={16} />
                       ユーザータグ
                     </button>
                     <button
@@ -338,6 +341,7 @@ export function CustomRankingModal({
                       onClick={() => setTagType('both')}
                       title="ロックタグとユーザータグの両方を対象"
                     >
+                      <TagIcon type="both" size={16} />
                       両方
                     </button>
                   </div>

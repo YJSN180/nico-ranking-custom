@@ -360,7 +360,10 @@
   font-weight: 500;
   color: var(--text-primary);
   transition: all 0.2s;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .tagTypeButton:hover {
