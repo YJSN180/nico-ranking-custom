@@ -209,14 +209,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             <h2 className={styles.tagTitle}>
               カスタムランキング
             </h2>
-            {config.tag && (
-              <button
-                onClick={clearTag}
-                className={styles.clearButton}
-              >
-                クリア
-              </button>
-            )}
           </div>
           
           {config.tag && config.tag.startsWith('custom:') && (
@@ -259,38 +251,15 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
               
               {/* 既存のカスタムランキング */}
               {rankings.map((ranking) => (
-                <div key={ranking.id} className={styles.customRankingItem}>
-                  <button
-                    onClick={() => handleCustomRankingSelect(ranking.id)}
-                    className={`${styles.button} ${styles.tagButton} ${
-                      config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
-                    }`}
-                  >
-                    {ranking.title}
-                  </button>
-                  <div className={styles.customRankingActions}>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleEditRanking(ranking)
-                      }}
-                      className={styles.editButton}
-                      title="編集"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteRanking(ranking)
-                      }}
-                      className={styles.deleteButton}
-                      title="削除"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
+                <button
+                  key={ranking.id}
+                  onClick={() => handleCustomRankingSelect(ranking.id)}
+                  className={`${styles.button} ${styles.tagButton} ${
+                    config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
+                  }`}
+                >
+                  {ranking.title}
+                </button>
               ))}
             </div>
           </div>
@@ -298,96 +267,88 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         
         {/* 選択されたカスタムランキングのタグを表示 */}
         {selectedCustomRanking && customTags.length > 0 && (
-          <>
-            {/* 含むタグ */}
-            {includeTags.length > 0 && (
-              <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
-                <div className={styles.tagHeader}>
-                  <h2 className={styles.tagTitle}>
-                    含むタグ
-                  </h2>
-                </div>
-                
-                <div style={{ marginBottom: '12px' }}>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                    「{selectedCustomRanking.title}」の検索条件：
-                  </span>
-                </div>
-                
-                <div className={styles.scrollContainer}>
-                  <div 
-                    className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
+          <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
+            <div className={styles.tagHeader}>
+              <h2 className={styles.tagTitle}>
+                検索条件
+              </h2>
+              {selectedCustomRanking && (
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => handleEditRanking(selectedCustomRanking)}
+                    className={styles.editButton}
+                    title="編集"
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--surface-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
                   >
-                    {includeTags.map((condition, index) => {
-                      const operatorColor = condition.operator === 'AND' ? 'var(--success-color)' : 'var(--warning-color)'
-                      
-                      return (
-                        <div key={condition.tag} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {index > 0 && (
-                            <span style={{ 
-                              color: operatorColor,
-                              fontWeight: 'bold',
-                              fontSize: '12px',
-                              padding: '0 4px'
-                            }}>
-                              {condition.operator}
-                            </span>
-                          )}
-                          <button
-                            className={`${styles.button} ${styles.tagButton}`}
-                            style={{
-                              backgroundColor: 'var(--surface-secondary)',
-                              borderColor: operatorColor,
-                              borderWidth: '2px',
-                              cursor: 'default'
-                            }}
-                            disabled
-                          >
-                            {condition.tag}
-                            {condition.tagType !== 'both' && (
-                              <span style={{ 
-                                fontSize: '10px', 
-                                marginLeft: '4px',
-                                opacity: 0.7
-                              }}>
-                                ({condition.tagType === 'lock' ? 'ロック' : 'ユーザー'})
-                              </span>
-                            )}
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
+                    ✏️ 編集
+                  </button>
+                  <button
+                    onClick={() => handleDeleteRanking(selectedCustomRanking)}
+                    className={styles.deleteButton}
+                    title="削除"
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--error-color)',
+                      backgroundColor: 'var(--error-bg)',
+                      color: 'var(--error-color)',
+                      cursor: 'pointer',
+                      fontSize: '12px'
+                    }}
+                  >
+                    🗑️ 削除
+                  </button>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             
-            {/* 除外タグ */}
-            {excludeTags.length > 0 && (
-              <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
-                <div className={styles.tagHeader}>
-                  <h2 className={styles.tagTitle}>
-                    除外タグ
-                  </h2>
-                </div>
-                
-                <div className={styles.scrollContainer}>
-                  <div 
-                    className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
-                  >
-                    {excludeTags.map((condition) => (
+            <div style={{ marginBottom: '12px' }}>
+              <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+                「{selectedCustomRanking.title}」のタグ条件：
+              </span>
+            </div>
+            
+            <div className={styles.scrollContainer}>
+              <div 
+                className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
+              >
+                {/* 含むタグと除外タグを統合して表示 */}
+                {selectedCustomRanking.conditions.map((condition, index) => {
+                  const isExclude = condition.operator === 'NOT'
+                  const operatorColor = condition.operator === 'AND' ? 'var(--success-color)' : 
+                                      condition.operator === 'OR' ? 'var(--warning-color)' : 'var(--error-color)'
+                  
+                  return (
+                    <div key={`${condition.tag}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {index > 0 && (
+                        <span style={{ 
+                          color: operatorColor,
+                          fontWeight: 'bold',
+                          fontSize: '12px',
+                          padding: '0 4px'
+                        }}>
+                          {condition.operator}
+                        </span>
+                      )}
                       <button
-                        key={condition.tag}
                         className={`${styles.button} ${styles.tagButton}`}
                         style={{
-                          backgroundColor: 'var(--error-bg)',
-                          borderColor: 'var(--error-color)',
+                          backgroundColor: isExclude ? 'var(--error-bg)' : 'var(--surface-secondary)',
+                          borderColor: operatorColor,
                           borderWidth: '2px',
                           cursor: 'default',
-                          textDecoration: 'line-through'
+                          textDecoration: isExclude ? 'line-through' : 'none'
                         }}
                         disabled
                       >
+                        {isExclude && '除外: '}
                         {condition.tag}
                         {condition.tagType !== 'both' && (
                           <span style={{ 
@@ -399,12 +360,12 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                           </span>
                         )}
                       </button>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  )
+                })}
               </div>
-            )}
-          </>
+            </div>
+          </div>
         )}
         
         {/* カスタムランキング作成・編集モーダル */}

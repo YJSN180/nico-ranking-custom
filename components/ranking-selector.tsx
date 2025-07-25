@@ -99,15 +99,7 @@ export function RankingSelector({ config, onConfigChange, customRankings }: Rank
                 onClick={() => handleGenreChange(genre)}
                 className={`${styles.button} ${styles.genreButton} ${config.genre === genre ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
               >
-                {(() => {
-                  // カスタムジャンルの場合、選択されたカスタムランキング名を表示
-                  if (genre === 'custom' && config.genre === 'custom' && config.tag?.startsWith('custom:')) {
-                    const customId = config.tag.replace('custom:', '')
-                    const customRanking = customRankings?.find(r => r.id === customId)
-                    return customRanking ? customRanking.title : GENRE_LABELS[genre]
-                  }
-                  return GENRE_LABELS[genre]
-                })()}
+                {GENRE_LABELS[genre]}
               </button>
             ))}
           </div>
