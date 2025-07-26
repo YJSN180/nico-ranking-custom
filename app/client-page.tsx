@@ -261,16 +261,6 @@ export default function ClientPage({
     // URLパラメータから初期ページを取得
     const urlParams = new URLSearchParams(window.location.search)
     const pageParam = urlParams.get('page')
-    const genreParam = urlParams.get('genre')
-    
-    // genre=customが来た場合はgenre=allにリダイレクト
-    if (genreParam === 'custom') {
-      urlParams.delete('genre')
-      urlParams.delete('tag')
-      const newUrl = urlParams.toString() ? `?${urlParams.toString()}` : '/'
-      router.replace(newUrl)
-      return
-    }
     
     if (pageParam) {
       const pageNum = parseInt(pageParam, 10)

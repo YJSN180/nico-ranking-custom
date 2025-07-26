@@ -251,22 +251,22 @@ test.describe('カスタムランキング機能テスト', () => {
     console.log('🎉 複数ベースジャンル テスト完了')
   })
 
-  test('genre=customパラメータがallにリダイレクトされる', async ({ page }) => {
-    console.log('🧪 genre=customリダイレクトテスト開始')
+  test('genre=customパラメータで空のランキングが表示される', async ({ page }) => {
+    console.log('🧪 genre=custom空表示テスト開始')
 
     // genre=customでアクセス
     await page.goto('/?genre=custom')
     await page.waitForLoadState('networkidle', { timeout: 30000 })
 
-    // URLを確認 - genre=customが削除されているか、allになっていることを確認
+    // URLを確認 - genre=customが維持されていることを確認
     const currentUrl = page.url()
-    console.log('📍 リダイレクト後のURL:', currentUrl)
-    expect(currentUrl).not.toContain('genre=custom')
+    console.log('📍 現在のURL:', currentUrl)
+    expect(currentUrl).toContain('genre=custom')
     
-    // ランキングアイテムが表示されていることを確認（総合ランキング）
-    const rankingItems = page.locator('.ranking-item, [data-testid="ranking-item"], .video-item')
-    await expect(rankingItems.first()).toBeVisible({ timeout: 15000 })
+    // カスタムランキング選択を促すメッセージが表示されることを確認
+    const messageElement = page.locator('text=カスタムランキングを作成するか、既存のカスタムランキングを選択してください')
+    await expect(messageElement).toBeVisible({ timeout: 5000 })
     
-    console.log('🎉 genre=customリダイレクトテスト完了')
+    console.log('🎉 genre=custom空表示テスト完了')
   })
 })

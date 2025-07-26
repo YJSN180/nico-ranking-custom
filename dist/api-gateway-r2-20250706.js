@@ -4,6 +4,7 @@
  */
 /// <reference types="@cloudflare/workers-types" />
 import { decodeRankingData } from './utils/html-decode';
+import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config';
 // セキュリティヘッダー定義
 const securityHeaders = {
     'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; media-src 'self' https:; object-src 'none'",
@@ -16,22 +17,14 @@ const securityHeaders = {
     'Cross-Origin-Opener-Policy': 'same-origin',
     'X-DNS-Prefetch-Control': 'on'
 };
-// CORSヘッダー定義
-const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Max-Age': '86400'
-};
+// CORSヘッダーは ./utils/cors-config.ts で統一管理
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
         // OPTIONS リクエストの処理
         if (request.method === 'OPTIONS') {
-            return new Response(null, {
-                status: 204,
-                headers: corsHeaders
-            });
+            const origin = request.headers.get('Origin');
+            return createOptionsResponse(origin);
         }
         // /api/metadata パスの処理（メタデータを返す）
         if (url.pathname === '/api/metadata' && env.R2_BUCKET) {
@@ -39,43 +32,179 @@ export default {
                 const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json');
                 if (metadataObject) {
                     const metadata = await metadataObject.text();
-                    return new Response(metadata, {
+                    const metadataResponse = new Response(metadata, {
                         status: 200,
                         headers: {
                             'Content-Type': 'application/json',
-                            'Cache-Control': 'public, max-age=300',
-                            ...corsHeaders,
-                            ...securityHeaders
+                            'Cache-Control': 'public, max-age=300'
                         }
                     });
+                    const origin = request.headers.get('Origin');
+                    return applyCORSHeaders(metadataResponse, origin, securityHeaders);
                 }
             }
             catch (error) {
                 console.error('Metadata read error:', error);
             }
-            return new Response('{}', {
+            const emptyResponse = new Response('{}', {
                 status: 200,
                 headers: {
-                    'Content-Type': 'application/json',
-                    ...corsHeaders,
-                    ...securityHeaders
+                    'Content-Type': 'application/json'
                 }
             });
+            const origin = request.headers.get('Origin');
+            return applyCORSHeaders(emptyResponse, origin, securityHeaders);
+        }
+        // タグオートコンプリートAPI
+        if (url.pathname === '/api/tags/autocomplete' && env.R2_BUCKET) {
+            try {
+                const query = url.searchParams.get('q') || '';
+                // クエリが空または2文字未満の場合は空の結果を返す
+                if (!query || query.trim().length < 2) {
+                    const emptyResponse = new Response(JSON.stringify({
+                        query,
+                        suggestions: [],
+                        metadata: {
+                            total: 0,
+                            source: 'query-too-short'
+                        }
+                    }), {
+                        status: 200,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'public, max-age=300' // 5分キャッシュ
+                        }
+                    });
+                    const origin = request.headers.get('Origin');
+                    return applyCORSHeaders(emptyResponse, origin, securityHeaders);
+                }
+                // R2からタグ累積データを取得
+                const tagAccumulationObject = await env.R2_BUCKET.get('tag-accumulation.json');
+                if (!tagAccumulationObject) {
+                    // タグ累積データが存在しない場合
+                    const notFoundResponse = new Response(JSON.stringify({
+                        query,
+                        suggestions: [],
+                        metadata: {
+                            total: 0,
+                            source: 'tag-data-not-found',
+                            error: 'Tag accumulation data not available'
+                        }
+                    }), {
+                        status: 200,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'public, max-age=60' // 1分キャッシュ
+                        }
+                    });
+                    const origin = request.headers.get('Origin');
+                    return applyCORSHeaders(notFoundResponse, origin, securityHeaders);
+                }
+                // タグ累積データを解析
+                let tagData;
+                try {
+                    // gzip圧縮対応
+                    const reader = tagAccumulationObject.body.getReader();
+                    const { value: firstChunk } = await reader.read();
+                    reader.releaseLock();
+                    const isGzipped = firstChunk && firstChunk.length >= 2 &&
+                        firstChunk[0] === 0x1f && firstChunk[1] === 0x8b;
+                    if (isGzipped) {
+                        // gzip解凍
+                        const compressedData = await tagAccumulationObject.arrayBuffer();
+                        const decompressedData = await new Response(new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+                        tagData = JSON.parse(decompressedData);
+                    }
+                    else {
+                        // 非圧縮データ
+                        const textData = await tagAccumulationObject.text();
+                        tagData = JSON.parse(textData);
+                    }
+                }
+                catch (parseError) {
+                    console.error('Failed to parse tag accumulation data:', parseError);
+                    const errorResponse = new Response(JSON.stringify({
+                        query,
+                        suggestions: [],
+                        metadata: {
+                            total: 0,
+                            source: 'parse-error',
+                            error: 'Failed to parse tag data'
+                        }
+                    }), {
+                        status: 500,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Cache-Control': 'no-cache'
+                        }
+                    });
+                    const origin = request.headers.get('Origin');
+                    return applyCORSHeaders(errorResponse, origin, securityHeaders);
+                }
+                // プレフィックス検索を実行
+                const lowerQuery = query.toLowerCase();
+                const maxResults = parseInt(url.searchParams.get('limit') || '10');
+                const suggestions = (tagData.tags || [])
+                    .filter((tag) => tag.toLowerCase().startsWith(lowerQuery))
+                    .slice(0, maxResults);
+                // レスポンスを構築
+                const autocompleteResponse = {
+                    query,
+                    suggestions,
+                    metadata: {
+                        total: suggestions.length,
+                        maxResults,
+                        source: 'r2-tag-accumulation',
+                        lastUpdated: tagData.metadata?.lastUpdated || null,
+                        totalUniqueTags: tagData.metadata?.totalUniqueTags || 0
+                    }
+                };
+                const response = new Response(JSON.stringify(autocompleteResponse), {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
+                    }
+                });
+                const origin = request.headers.get('Origin');
+                return applyCORSHeaders(response, origin, securityHeaders);
+            }
+            catch (error) {
+                console.error('Tag autocomplete error:', error);
+                const errorResponse = new Response(JSON.stringify({
+                    query: url.searchParams.get('q') || '',
+                    suggestions: [],
+                    metadata: {
+                        total: 0,
+                        source: 'error',
+                        error: error.message
+                    }
+                }), {
+                    status: 500,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    }
+                });
+                const origin = request.headers.get('Origin');
+                return applyCORSHeaders(errorResponse, origin, securityHeaders);
+            }
         }
         // デバッグエンドポイント
         if (url.pathname === '/api/debug') {
-            return new Response(JSON.stringify({
+            const debugResponse = new Response(JSON.stringify({
                 time: new Date().toISOString(),
                 headers: Object.fromEntries(request.headers.entries()),
-                worker: 'api-gateway-r2',
-                version: '2025-07-03-fetch-api'
+                worker: 'api-gateway-r2-20250706',
+                version: 'r2-20250706-unified-cors'
             }), {
                 status: 200,
                 headers: {
-                    'Content-Type': 'application/json',
-                    ...corsHeaders
+                    'Content-Type': 'application/json'
                 }
             });
+            const origin = request.headers.get('Origin');
+            return applyCORSHeaders(debugResponse, origin, {});
         }
         // R2メタデータテストエンドポイント
         if (url.pathname === '/api/test-r2-metadata') {
@@ -89,7 +218,7 @@ export default {
                     reader.releaseLock();
                     const isGzipped = firstChunk && firstChunk.length >= 2 &&
                         firstChunk[0] === 0x1f && firstChunk[1] === 0x8b;
-                    return new Response(JSON.stringify({
+                    const testResponse = new Response(JSON.stringify({
                         key: testKey,
                         exists: true,
                         size: testObject.size,
@@ -100,34 +229,37 @@ export default {
                     }, null, 2), {
                         status: 200,
                         headers: {
-                            'Content-Type': 'application/json',
-                            ...corsHeaders
+                            'Content-Type': 'application/json'
                         }
                     });
+                    const origin = request.headers.get('Origin');
+                    return applyCORSHeaders(testResponse, origin, {});
                 }
                 else {
-                    return new Response(JSON.stringify({
+                    const notFoundResponse = new Response(JSON.stringify({
                         key: testKey,
                         exists: false
                     }), {
                         status: 200,
                         headers: {
-                            'Content-Type': 'application/json',
-                            ...corsHeaders
+                            'Content-Type': 'application/json'
                         }
                     });
+                    const origin = request.headers.get('Origin');
+                    return applyCORSHeaders(notFoundResponse, origin, {});
                 }
             }
             catch (error) {
-                return new Response(JSON.stringify({
+                const errorResponse = new Response(JSON.stringify({
                     error: error.message
                 }), {
                     status: 500,
                     headers: {
-                        'Content-Type': 'application/json',
-                        ...corsHeaders
+                        'Content-Type': 'application/json'
                     }
                 });
+                const origin = request.headers.get('Origin');
+                return applyCORSHeaders(errorResponse, origin, {});
             }
         }
         // /api/ranking パスの処理（R2から直接配信）
@@ -178,16 +310,16 @@ export default {
                         };
                         // 空のレスポンスでもデコード処理を通す（将来の一貫性のため）
                         const decodedEmptyResponse = decodeRankingData(emptyResponse);
-                        return new Response(JSON.stringify(decodedEmptyResponse), {
+                        const emptyRankingResponse = new Response(JSON.stringify(decodedEmptyResponse), {
                             status: 200,
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-                                'X-Data-Source': 'r2-tag-not-found',
-                                ...corsHeaders,
-                                ...securityHeaders
+                                'X-Data-Source': 'r2-tag-not-found'
                             }
                         });
+                        const origin = request.headers.get('Origin');
+                        return applyCORSHeaders(emptyRankingResponse, origin, securityHeaders);
                     }
                     else {
                         // 通常のランキングデータが存在しない場合はVercelにフォールバック
@@ -205,10 +337,7 @@ export default {
                 // Cloudflare固有のキャッシュ設定
                 headers.set('CDN-Cache-Control', 'public, max-age=1200');
                 headers.set('X-Data-Source', 'r2-direct');
-                // CORSとセキュリティヘッダーを追加
-                Object.entries(corsHeaders).forEach(([key, value]) => {
-                    headers.set(key, value);
-                });
+                // セキュリティヘッダーを追加
                 Object.entries(securityHeaders).forEach(([key, value]) => {
                     headers.set(key, value);
                 });
@@ -240,27 +369,33 @@ export default {
                             const jsonData = JSON.parse(decompressedData);
                             const decodedData = decodeRankingData(jsonData);
                             // デコード済みデータを返す（Cloudflareが必要に応じて再圧縮）
-                            return new Response(JSON.stringify(decodedData), {
+                            const decodedResponse = new Response(JSON.stringify(decodedData), {
                                 status: 200,
                                 headers
                             });
+                            const origin = request.headers.get('Origin');
+                            return applyCORSHeaders(decodedResponse, origin, securityHeaders);
                         }
                         catch (parseError) {
                             console.error('[Worker] Failed to parse or decode JSON:', parseError);
                             // パースに失敗した場合は元のデータをそのまま返す
-                            return new Response(decompressedData, {
+                            const fallbackResponse = new Response(decompressedData, {
                                 status: 200,
                                 headers
                             });
+                            const origin = request.headers.get('Origin');
+                            return applyCORSHeaders(fallbackResponse, origin, securityHeaders);
                         }
                     }
                     catch (decompressError) {
                         console.error('[Worker] Failed to decompress gzipped data:', decompressError);
                         // 解凍に失敗した場合は、元のストリームをそのまま返す
-                        return new Response(passthroughStream, {
+                        const streamResponse = new Response(passthroughStream, {
                             status: 200,
                             headers
                         });
+                        const origin = request.headers.get('Origin');
+                        return applyCORSHeaders(streamResponse, origin, securityHeaders);
                     }
                 }
                 else {
@@ -272,18 +407,22 @@ export default {
                         const jsonData = JSON.parse(textData);
                         const decodedData = decodeRankingData(jsonData);
                         // デコード済みデータを返す（Cloudflareが自動圧縮する）
-                        return new Response(JSON.stringify(decodedData), {
+                        const uncompressedResponse = new Response(JSON.stringify(decodedData), {
                             status: 200,
                             headers
                         });
+                        const origin = request.headers.get('Origin');
+                        return applyCORSHeaders(uncompressedResponse, origin, securityHeaders);
                     }
                     catch (error) {
                         console.error('[Worker] Failed to parse or decode JSON:', error);
                         // エラーの場合は元のストリームをそのまま返す
-                        return new Response(passthroughStream, {
+                        const errorFallbackResponse = new Response(passthroughStream, {
                             status: 200,
                             headers
                         });
+                        const origin = request.headers.get('Origin');
+                        return applyCORSHeaders(errorFallbackResponse, origin, securityHeaders);
                     }
                 }
             }
@@ -330,24 +469,24 @@ async function proxyToVercel(request, env) {
         Object.entries(securityHeaders).forEach(([key, value]) => {
             responseHeaders.set(key, value);
         });
-        // CORSヘッダーを追加
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-            responseHeaders.set(key, value);
-        });
-        return new Response(response.body, {
+        // CORSヘッダーは最後にapplyCORSHeadersで統一適用
+        const proxyResponse = new Response(response.body, {
             status: response.status,
             statusText: response.statusText,
             headers: responseHeaders
         });
+        const origin = request.headers.get('Origin');
+        return applyCORSHeaders(proxyResponse, origin, {});
     }
     catch (error) {
         console.error('Proxy error:', error);
-        return new Response('Gateway Error', {
+        const errorResponse = new Response('Gateway Error', {
             status: 502,
             headers: {
-                'Content-Type': 'text/plain',
-                ...corsHeaders
+                'Content-Type': 'text/plain'
             }
         });
+        const origin = request.headers.get('Origin');
+        return applyCORSHeaders(errorResponse, origin, {});
     }
 }

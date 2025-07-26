@@ -67,16 +67,16 @@
       <li><a href="http://localhost:3001" target="_blank">開発サーバー</a>にアクセス</li>
       <li>ジャンルセレクターから「カスタム」を選択</li>
       <li>「テスト用ゲームランキング」または「テスト用音楽ランキング」を選択</li>
-      <li>URLが <code>genre=game</code> または <code>genre=music</code> に変わることを確認</li>
-      <li><code>genre=custom</code> がURLに含まれないことを確認</li>
+      <li>URLが <code>genre=custom&tag=custom:test-game-ranking</code> 形式になることを確認</li>
+      <li>カスタムランキングの条件に従ったデータが表示されることを確認</li>
     </ol>
   </section>
   
   <section>
     <h2>3. URLパラメータテスト</h2>
-    <p>以下のリンクをクリックして、正しくリダイレクトされることを確認：</p>
+    <p>以下のリンクをクリックして、カスタムジャンルが正しく表示されることを確認：</p>
     <ul>
-      <li><a href="http://localhost:3001/?genre=custom" target="_blank">genre=customでアクセス</a> → 自動的に総合（genre=all）にリダイレクトされるはず</li>
+      <li><a href="http://localhost:3001/?genre=custom" target="_blank">genre=customでアクセス</a> → カスタムランキング選択画面が表示されるはず</li>
     </ul>
   </section>
   
