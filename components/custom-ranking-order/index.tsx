@@ -71,11 +71,11 @@ export function CustomRankingOrder({
     }
   }
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     
     if (over && active.id !== over.id) {
-      onMoveRanking(active.id as string, over.id as string)
+      await onMoveRanking(active.id as string, over.id as string)
     }
     
     setActiveId(null)
