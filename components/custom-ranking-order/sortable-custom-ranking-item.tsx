@@ -66,18 +66,20 @@ export function SortableCustomRankingItem({
       {/* アクションボタン */}
       <div className={styles.actions}>
         <button
-          className={styles.editButton}
+          className={styles.actionButton}
           onClick={onEdit}
           title="編集"
         >
-          ✏️
+          <span className={styles.actionIcon}>✏️</span>
+          <span className={styles.actionText}>編集</span>
         </button>
         <button
-          className={styles.deleteButton}
+          className={`${styles.actionButton} ${styles.deleteAction}`}
           onClick={onDelete}
           title="削除"
         >
-          🗑️
+          <span className={styles.actionIcon}>🗑️</span>
+          <span className={styles.actionText}>削除</span>
         </button>
       </div>
     </div>

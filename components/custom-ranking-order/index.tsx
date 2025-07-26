@@ -92,7 +92,7 @@ export function CustomRankingOrder({
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-          <h3 className={styles.title}>カスタムランキングの並び替え</h3>
+          <h3 className={styles.title}>カスタムランキングの並び替え・編集</h3>
           <button
             className={styles.reorderButton}
             onClick={() => setIsReordering(false)}
@@ -152,7 +152,7 @@ export function CustomRankingOrder({
         onClick={() => setIsReordering(true)}
       >
         <span>↕️</span>
-        <span>並び替え</span>
+        <span>並び替え・編集</span>
       </button>
     </div>
   )
