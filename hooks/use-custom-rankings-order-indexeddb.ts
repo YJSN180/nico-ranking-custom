@@ -51,9 +51,9 @@ export function useCustomRankingsOrderIndexedDB({
   /**
    * 順序でソートされたランキングを返す（表示・非表示両方）
    */
-  const getSortedRankings = useCallback((rankingsToSort: CustomRankingWithConditions[]) => {
+  const getSortedRankings = (rankingsToSort: CustomRankingWithConditions[]) => {
     return [...rankingsToSort].sort((a, b) => a.orderIndex - b.orderIndex)
-  }, [])
+  }
 
   /**
    * 表示されているランキングのみを返す
@@ -61,7 +61,7 @@ export function useCustomRankingsOrderIndexedDB({
   const getVisibleRankings = useCallback((rankingsToSort: CustomRankingWithConditions[]) => {
     const sorted = getSortedRankings(rankingsToSort)
     return sorted.filter(ranking => ranking.isVisible)
-  }, [getSortedRankings])
+  }, [])
 
   /**
    * 順序をリセット（作成日順に再配置）
