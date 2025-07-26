@@ -103,7 +103,13 @@ export function useRankingData({
       }
 
       // APIから取得
-      const limit = getDeviceBasedLimit(deviceType, !!config.tag)
+      // カスタムランキングの場合はタグランキングとして扱わない
+      const isTagRanking = !!config.tag && !config.tag.startsWith('custom:')
+      const limit = getDeviceBasedLimit(deviceType, isTagRanking)
+      
+      // デバッグ情報を出力
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Device type:', deviceType, 'Tag:', config.tag, 'isTagRanking:', isTagRanking, 'Limit:', limit)
       
       // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
       let actualGenre = config.genre
