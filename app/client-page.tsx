@@ -19,6 +19,8 @@ import { useRankingData } from '@/hooks/use-ranking-data'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
+import { rankingCache } from '@/lib/ranking-cache'
+import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
@@ -596,6 +598,28 @@ export default function ClientPage({
       console.error('Prefetch error:', error)
     })
   }, [config.period, fetchRankingData])
+
+  // カスタムランキング作成時の即時フィルタリング
+  const handleCreateCustomRankingWithFilter = useCallback((rankingId: string, baseGenre: RankingGenre, conditions: any[]) => {
+    // キャッシュからbaseGenreのデータを取得
+    const cachedData = rankingCache.get(baseGenre, config.period)
+    
+    if (cachedData && cachedData.data && conditions.length > 0) {
+      // キャッシュデータに対してフィルタリングを適用
+      const filteredData = applyCustomFilters(cachedData.data, conditions)
+      
+      // フィルタリング済みデータを即座に設定
+      setFullRankingData(filteredData)
+      setRankingData(filteredData)
+      
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Applied custom filters immediately:', {
+        originalCount: cachedData.data.length,
+        filteredCount: filteredData.length,
+        conditions
+      })
+    }
+  }, [config.period, setFullRankingData, setRankingData])
   
   // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
@@ -760,6 +784,7 @@ export default function ClientPage({
           onConfigChange={handleConfigChange} 
           popularTags={currentPopularTags}
           onPrefetchGenre={handlePrefetchGenre}
+          onCreateCustomRankingWithFilter={handleCreateCustomRankingWithFilter}
         />
         <TagToggleButton />
       </div>

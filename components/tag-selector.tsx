@@ -15,9 +15,10 @@ interface TagSelectorProps {
   onConfigChange: (config: RankingConfig) => void
   popularTags?: string[]
   onPrefetchGenre?: (genre: RankingGenre) => void // プリフェッチ用コールバック
+  onCreateCustomRankingWithFilter?: (rankingId: string, baseGenre: RankingGenre, conditions: any[]) => void // 作成時フィルタリング用コールバック
 }
 
-export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onPrefetchGenre }: TagSelectorProps) {
+export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onPrefetchGenre, onCreateCustomRankingWithFilter }: TagSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
   const lastSelectedCustomIdRef = useRef<string | null>(null)
@@ -119,6 +120,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       lastSelectedCustomIdRef.current = newRanking
     }
     
+    // 作成と同時にフィルタリングを実行
+    if (onCreateCustomRankingWithFilter && data.baseGenre) {
+      onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions)
+    }
+    
     // 作成後、genre='custom'でそのカスタムランキングを選択
     onConfigChange({ 
       ...config, 
@@ -143,6 +149,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         }))
       })
       setEditingRanking(null)
+      
+      // 編集時も即時フィルタリングを実行
+      if (onCreateCustomRankingWithFilter && data.baseGenre) {
+        onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions)
+      }
       
       // 編集後も、genre='custom'でそのカスタムランキングを選択
       onConfigChange({ 
