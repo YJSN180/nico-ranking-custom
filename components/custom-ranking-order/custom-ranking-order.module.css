@@ -122,12 +122,8 @@
 .actions {
   display: flex;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.customRankingItem:hover .actions {
   opacity: 1;
+  transition: opacity 0.2s ease;
 }
 
 .visibilityButton,
