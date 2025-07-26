@@ -162,14 +162,14 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const handleConfirmDelete = () => {
     if (deletingRanking) {
       deleteRanking(deletingRanking.id)
-      // 削除後は「すべて」ジャンルに戻る
+      // 削除後はカスタムジャンル（タグ未選択状態）に戻る
       if (config.genre === 'custom' && config.tag === `custom:${deletingRanking.id}`) {
         // LocalStorageからも削除（クライアントサイドのみ）
         if (typeof window !== 'undefined') {
           localStorage.removeItem('lastSelectedCustomRankingId')
           lastSelectedCustomIdRef.current = null
         }
-        onConfigChange({ ...config, genre: 'all', tag: undefined })
+        onConfigChange({ ...config, genre: 'custom', tag: undefined })
       }
       setDeletingRanking(null)
     }
