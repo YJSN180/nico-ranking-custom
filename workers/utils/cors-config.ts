@@ -14,6 +14,7 @@ interface CORSHeaders {
   'Access-Control-Allow-Headers': string
   'Access-Control-Max-Age': string
   'Access-Control-Allow-Credentials'?: string
+  [key: string]: string | undefined
 }
 
 /**
