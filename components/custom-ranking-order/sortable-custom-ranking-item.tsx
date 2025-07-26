@@ -13,7 +13,6 @@ interface SortableCustomRankingItemProps {
   onSelect: () => void
   onEdit: () => void
   onDelete: () => void
-  onToggleVisibility: () => void
 }
 
 export function SortableCustomRankingItem({
@@ -23,8 +22,7 @@ export function SortableCustomRankingItem({
   isVisible,
   onSelect,
   onEdit,
-  onDelete,
-  onToggleVisibility
+  onDelete
 }: SortableCustomRankingItemProps) {
   const {
     attributes,
@@ -67,16 +65,6 @@ export function SortableCustomRankingItem({
 
       {/* アクションボタン */}
       <div className={styles.actions}>
-        <button
-          className={styles.visibilityButton}
-          onClick={onToggleVisibility}
-          title={isVisible ? "非表示にする" : "表示する"}
-          style={{
-            opacity: isVisible ? 1 : 0.5
-          }}
-        >
-          {isVisible ? '👁️' : '👁️‍🗨️'}
-        </button>
         <button
           className={styles.editButton}
           onClick={onEdit}

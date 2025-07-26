@@ -28,7 +28,6 @@ interface CustomRankingOrderProps {
   onEdit: (ranking: any) => void
   onDelete: (ranking: any) => void
   onMoveRanking: (fromId: string, toId: string) => void
-  onToggleVisibility: (id: string) => void
 }
 
 export function CustomRankingOrder({
@@ -37,8 +36,7 @@ export function CustomRankingOrder({
   onSelect,
   onEdit,
   onDelete,
-  onMoveRanking,
-  onToggleVisibility
+  onMoveRanking
 }: CustomRankingOrderProps) {
   const [isReordering, setIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -124,7 +122,6 @@ export function CustomRankingOrder({
                   onSelect={() => onSelect(ranking.id)}
                   onEdit={() => onEdit(ranking)}
                   onDelete={() => onDelete(ranking)}
-                  onToggleVisibility={() => onToggleVisibility(ranking.id)}
                 />
               ))}
             </div>

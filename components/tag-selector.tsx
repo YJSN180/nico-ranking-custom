@@ -25,7 +25,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
   
   // カスタムランキング順序管理
-  const { getVisibleRankings, moveRanking, toggleVisibility } = useCustomRankingsOrder(rankings)
+  const { getVisibleRankings, moveRanking } = useCustomRankingsOrder(rankings)
   const visibleRankings = getVisibleRankings(rankings)
   
   // 編集用の状態
@@ -236,7 +236,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             onEdit={handleEditRanking}
             onDelete={handleDeleteRanking}
             onMoveRanking={moveRanking}
-            onToggleVisibility={toggleVisibility}
           />
           
           {config.tag && config.tag.startsWith('custom:') && (
