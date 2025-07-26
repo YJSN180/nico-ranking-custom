@@ -186,6 +186,20 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange({ ...config, tag: undefined })
   }
 
+  // カスタムジャンル選択時のLocalStorageからの復元
+  useEffect(() => {
+    if (typeof window !== 'undefined' && config.genre === 'custom' && !config.tag && !isLoading) {
+      const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
+      if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
+        // LocalStorageから保存されたカスタムランキングを自動選択
+        if (lastSelectedCustomIdRef.current !== savedCustomId) {
+          lastSelectedCustomIdRef.current = savedCustomId
+          handleCustomRankingSelect(savedCustomId)
+        }
+      }
+    }
+  }, [config.genre, config.tag, rankings, isLoading, handleCustomRankingSelect])
+
   if (loading) {
     return (
       <div className={styles.tagSelectorContainer}>
@@ -204,20 +218,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     return null
   }
   
-  // カスタムジャンル選択時のLocalStorageからの復元
-  useEffect(() => {
-    if (typeof window !== 'undefined' && config.genre === 'custom' && !config.tag && !isLoading) {
-      const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
-      if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
-        // LocalStorageから保存されたカスタムランキングを自動選択
-        if (lastSelectedCustomIdRef.current !== savedCustomId) {
-          lastSelectedCustomIdRef.current = savedCustomId
-          handleCustomRankingSelect(savedCustomId)
-        }
-      }
-    }
-  }, [config.genre, config.tag, rankings, isLoading]) // eslint-disable-line react-hooks/exhaustive-deps
-
   // カスタムジャンルの場合は専用UI
   if (config.genre === 'custom') {
     
