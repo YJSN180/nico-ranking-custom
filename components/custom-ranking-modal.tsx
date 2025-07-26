@@ -26,7 +26,9 @@ function generateConditionDescription(conditions: TagCondition[]): string {
   
   // 最初のタグ（基本条件）
   const base = conditions[0]
-  let description = `「${base.tag}」（${TAG_TYPE_LABELS[base.tagType]}）を含む動画`
+  let description = base.operator === 'NOT' 
+    ? `「${base.tag}」（${TAG_TYPE_LABELS[base.tagType]}）を含まない動画`
+    : `「${base.tag}」（${TAG_TYPE_LABELS[base.tagType]}）を含む動画`
   
   if (conditions.length === 1) return description
   
@@ -314,7 +316,7 @@ export function CustomRankingModal({
                 <h4>新しい条件を追加:</h4>
                 {formData.conditions.length === 0 && (
                   <p className={styles.helpText}>
-                    最初のタグが基本条件となります
+                    最初のタグの条件を設定してください
                   </p>
                 )}
                 <div className={styles.tagInputWrapper}>
@@ -351,35 +353,55 @@ export function CustomRankingModal({
                   )}
                 </div>
 
-                {/* 最初のタグの場合は演算子選択を表示しない */}
-                {formData.conditions.length > 0 && (
-                  <div className={styles.operatorSelect}>
-                    <label>条件の組み合わせ方:</label>
-                    <div className={styles.operatorButtons}>
-                      <button
-                        className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
-                        onClick={() => setTagOperator('AND')}
-                        title="選択したタグをすべて含む動画のみ表示"
-                      >
-                        {OPERATOR_LABELS.AND}
-                      </button>
-                      <button
-                        className={`${styles.operatorButton} ${tagOperator === 'OR' ? styles.active : ''}`}
-                        onClick={() => setTagOperator('OR')}
-                        title="選択したタグのいずれかを含む動画を表示"
-                      >
-                        {OPERATOR_LABELS.OR}
-                      </button>
-                      <button
-                        className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
-                        onClick={() => setTagOperator('NOT')}
-                        title="選択したタグを含まない動画のみ表示"
-                      >
-                        {OPERATOR_LABELS.NOT}
-                      </button>
-                    </div>
+                {/* 演算子選択 */}
+                <div className={styles.operatorSelect}>
+                  <label>条件の組み合わせ方:</label>
+                  <div className={styles.operatorButtons}>
+                    {/* 最初のタグの場合は「含む」「除外する」のみ表示 */}
+                    {formData.conditions.length === 0 ? (
+                      <>
+                        <button
+                          className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
+                          onClick={() => setTagOperator('AND')}
+                          title="選択したタグを含む動画のみ表示"
+                        >
+                          含む
+                        </button>
+                        <button
+                          className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
+                          onClick={() => setTagOperator('NOT')}
+                          title="選択したタグを含まない動画のみ表示"
+                        >
+                          {OPERATOR_LABELS.NOT}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
+                          onClick={() => setTagOperator('AND')}
+                          title="選択したタグをすべて含む動画のみ表示"
+                        >
+                          {OPERATOR_LABELS.AND}
+                        </button>
+                        <button
+                          className={`${styles.operatorButton} ${tagOperator === 'OR' ? styles.active : ''}`}
+                          onClick={() => setTagOperator('OR')}
+                          title="選択したタグのいずれかを含む動画を表示"
+                        >
+                          {OPERATOR_LABELS.OR}
+                        </button>
+                        <button
+                          className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
+                          onClick={() => setTagOperator('NOT')}
+                          title="選択したタグを含まない動画のみ表示"
+                        >
+                          {OPERATOR_LABELS.NOT}
+                        </button>
+                      </>
+                    )}
                   </div>
-                )}
+                </div>
 
                 <div className={styles.tagTypeSelect}>
                   <label>タグ種別:</label>
