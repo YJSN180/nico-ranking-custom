@@ -6,6 +6,7 @@ import type { ExtendedUserNGList } from '../types/ng-list-extended'
 import { useUserPreferences, type ThemeType } from '../hooks/use-user-preferences'
 import { NGBackup } from './ng-backup'
 import { GenreOrderBackup } from './genre-order-backup'
+import { CustomRankingBackup } from './custom-ranking-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
 import styles from './settings-modal.module.css'
@@ -514,6 +515,14 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   ジャンルの表示順序と表示/非表示設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <GenreOrderBackup />
+              </section>
+              
+              <section className={styles.section} style={{ marginTop: '2rem' }}>
+                <h3>⭐ カスタムランキングデータバックアップ</h3>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  カスタムランキング設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
+                </p>
+                <CustomRankingBackup />
               </section>
             </div>
           )}
