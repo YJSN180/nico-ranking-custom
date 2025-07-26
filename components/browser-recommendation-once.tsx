@@ -1,16 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import './browser-recommendation.css'
 
 export function BrowserRecommendationOnce() {
-  const [isDismissed, setIsDismissed] = useState<boolean | null>(null)
-
-  useEffect(() => {
-    // localStorageから既読状態を確認
+  // LocalStorageの初期読み込み（useEffectを使わずに実装）
+  const [isDismissed, setIsDismissed] = useState<boolean | null>(() => {
+    if (typeof window === 'undefined') return null // SSR時
     const dismissed = localStorage.getItem('browser-recommendation-dismissed')
-    setIsDismissed(dismissed === 'true')
-  }, [])
+    return dismissed === 'true'
+  })
 
   const handleDismiss = () => {
     setIsDismissed(true)

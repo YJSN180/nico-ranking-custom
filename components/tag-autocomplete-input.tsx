@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 
 interface TagAutocompleteInputProps {
   value: string
@@ -79,35 +79,45 @@ export function TagAutocompleteInput({
     }
   }
 
-  // デバウンス処理付きオートコンプリート
-  useEffect(() => {
-    const timeoutId = setTimeout(async () => {
-      if (value.trim().length >= 2) {
-        const suggestions = await fetchTagSuggestions(value)
-        setTagSuggestions(suggestions)
-        setShowSuggestions(suggestions.length > 0)
-        setSelectedSuggestionIndex(-1)
-      } else {
-        setTagSuggestions([])
-        setShowSuggestions(false)
-        setSelectedSuggestionIndex(-1)
-      }
-    }, 300) // 300msデバウンス
-
-    return () => clearTimeout(timeoutId)
-  }, [value])
-
-  // 外部クリックで候補を閉じる
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false)
-        setSelectedSuggestionIndex(-1)
-      }
+  // デバウンス処理をuseMemoとuseCallbackで実装
+  const debounceRef = useRef<NodeJS.Timeout>()
+  
+  const updateSuggestions = useCallback(async (query: string) => {
+    if (query.trim().length >= 2) {
+      const suggestions = await fetchTagSuggestions(query)
+      setTagSuggestions(suggestions)
+      setShowSuggestions(suggestions.length > 0)
+      setSelectedSuggestionIndex(-1)
+    } else {
+      setTagSuggestions([])
+      setShowSuggestions(false)
+      setSelectedSuggestionIndex(-1)
     }
+  }, [])
 
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+  const handleInputChange = useCallback((newValue: string) => {
+    onChange(newValue)
+    
+    // デバウンス処理
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
+    
+    debounceRef.current = setTimeout(() => {
+      updateSuggestions(newValue)
+    }, 300)
+  }, [onChange, updateSuggestions])
+
+  // 外部クリック処理をonBlurで実装
+  const handleBlur = useCallback((e: React.FocusEvent) => {
+    // 入力フィールドからフォーカスが外れたとき
+    // すぐに閉じると候補をクリックできないので、少し遅延
+    setTimeout(() => {
+      if (!wrapperRef.current?.contains(document.activeElement)) {
+        setShowSuggestions(false)
+        setSelectedSuggestionIndex(-1)
+      }
+    }, 200)
   }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -147,6 +157,13 @@ export function TagAutocompleteInput({
     setSelectedSuggestionIndex(-1)
     inputRef.current?.focus()
   }
+  
+  // コンポーネントアンマウント時のクリーンアップ
+  const cleanupDebounce = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative', ...style }}>
@@ -154,8 +171,9 @@ export function TagAutocompleteInput({
         ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleInputChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         placeholder={placeholder}
         disabled={disabled}
         className={className}

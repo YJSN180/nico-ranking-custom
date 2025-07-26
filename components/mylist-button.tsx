@@ -11,27 +11,20 @@ interface MylistButtonProps {
 }
 
 export function MylistButton({ video }: MylistButtonProps) {
-  // SSR時はnullを返す
-  const [isClient, setIsClient] = useState(false)
+  // クライアントサイド判定（useStateの初期値で処理）
+  const [isClient] = useState(() => {
+    if (typeof window !== 'undefined') {
+      // @ts-ignore
+      return window.__TEST_ENV__ || true
+    }
+    return false
+  })
   const { mylists, isLoading, addVideoToMylist, removeVideoFromMylist, isVideoInAnyMylist, createMylist } = useMylistOperations()
   const [isInMylist, setIsInMylist] = useState(false)
   const [mylistIds, setMylistIds] = useState<string[]>([])
   const [checkError, setCheckError] = useState<Error | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-
-  // クライアントサイドでのみ実行
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
-
-  // テスト環境では即座にクライアント状態にする
-  useEffect(() => {
-    // @ts-ignore
-    if (typeof window !== 'undefined' && window.__TEST_ENV__) {
-      setIsClient(true)
-    }
-  }, [])
 
   useEffect(() => {
     const checkStatus = async () => {
