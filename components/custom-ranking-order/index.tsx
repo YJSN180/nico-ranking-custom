@@ -18,7 +18,6 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { useCustomRankingsOrder } from '@/hooks/use-custom-rankings-order'
 import { SortableCustomRankingItem } from './sortable-custom-ranking-item'
 import styles from './custom-ranking-order.module.css'
 
@@ -28,6 +27,8 @@ interface CustomRankingOrderProps {
   onSelect: (id: string) => void
   onEdit: (ranking: any) => void
   onDelete: (ranking: any) => void
+  onMoveRanking: (fromId: string, toId: string) => void
+  onToggleVisibility: (id: string) => void
 }
 
 export function CustomRankingOrder({
@@ -35,13 +36,15 @@ export function CustomRankingOrder({
   selectedId,
   onSelect,
   onEdit,
-  onDelete
+  onDelete,
+  onMoveRanking,
+  onToggleVisibility
 }: CustomRankingOrderProps) {
   const [isReordering, setIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const { getSortedRankings, moveRanking, toggleVisibility } = useCustomRankingsOrder(rankings)
   
-  const sortedRankings = getSortedRankings(rankings)
+  // 親から渡されたランキングをそのまま使用（二重ソートを避ける）
+  const sortedRankings = rankings
 
   // センサー設定（マウス、タッチ、キーボード）
   const sensors = useSensors(
@@ -74,7 +77,7 @@ export function CustomRankingOrder({
     const { active, over } = event
     
     if (over && active.id !== over.id) {
-      moveRanking(active.id as string, over.id as string)
+      onMoveRanking(active.id as string, over.id as string)
     }
     
     setActiveId(null)
@@ -121,7 +124,7 @@ export function CustomRankingOrder({
                   onSelect={() => onSelect(ranking.id)}
                   onEdit={() => onEdit(ranking)}
                   onDelete={() => onDelete(ranking)}
-                  onToggleVisibility={() => toggleVisibility(ranking.id)}
+                  onToggleVisibility={() => onToggleVisibility(ranking.id)}
                 />
               ))}
             </div>
