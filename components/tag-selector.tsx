@@ -91,17 +91,14 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     console.log('[DEBUG] handleCustomRankingSelect - selectedRanking:', selectedRanking)
     if (!selectedRanking) return
     
-    // カスタムランキング選択をCookieに保存
-    selectRanking(customId)
-    
-    // baseGenreへリダイレクト（PRの説明に従って）
+    // genre='custom'のまま、tagにカスタムランキングIDを設定
     const newConfig = { 
       ...config, 
-      genre: selectedRanking.baseGenre, 
-      tag: undefined  // タグフィルタリングは将来的に実装予定
+      genre: 'custom' as RankingGenre, 
+      tag: `custom:${customId}`
     }
     // eslint-disable-next-line no-console
-    console.log('[DEBUG] handleCustomRankingSelect - redirecting to baseGenre:', newConfig)
+    console.log('[DEBUG] handleCustomRankingSelect - newConfig:', newConfig)
     onConfigChange(newConfig)
   }
 
@@ -115,11 +112,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       }))
     })
     
-    // 作成後、baseGenreへリダイレクト
+    // 作成後、genre='custom'でそのカスタムランキングを選択
     onConfigChange({ 
       ...config, 
-      genre: data.baseGenre, 
-      tag: undefined
+      genre: 'custom' as RankingGenre, 
+      tag: `custom:${newRanking}`
     })
   }
 
@@ -140,11 +137,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       })
       setEditingRanking(null)
       
-      // 編集後も、baseGenreへリダイレクト
+      // 編集後も、genre='custom'でそのカスタムランキングを選択
       onConfigChange({ 
         ...config, 
-        genre: data.baseGenre, 
-        tag: undefined 
+        genre: 'custom' as RankingGenre, 
+        tag: `custom:${editingRanking.id}` 
       })
     } else {
       handleCreateCustomRanking(data)
@@ -160,7 +157,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     if (deletingRanking) {
       deleteRanking(deletingRanking.id)
       // 削除後は「すべて」ジャンルに戻る
-      if (selectedRanking?.id === deletingRanking.id) {
+      if (config.genre === 'custom' && config.tag === `custom:${deletingRanking.id}`) {
         onConfigChange({ ...config, genre: 'all', tag: undefined })
       }
       setDeletingRanking(null)

@@ -94,15 +94,21 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   popularTags?: string[]
 }> {
   
-  // Customジャンルはクライアントサイドでリダイレクトされるため、
-  // サーバーサイドでは特別な処理は不要
+  // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
+  let actualGenre = genre
+  let actualTag = tag
+  if (genre === 'custom') {
+    // サーバーサイドではlocalStorageが使えないため、空データを返す
+    // クライアントサイドでデータ取得される
+    return { items: [], popularTags: [] }
+  }
   
   // Cloudflare Worker から直接データを取得（Vercel Function をバイパス）
   try {
     const params = new URLSearchParams()
-    params.set('genre', genre)
+    params.set('genre', actualGenre)
     params.set('period', period)
-    if (tag) params.set('tag', tag)
+    if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
     
     // Cloudflare Worker のエンドポイントに直接アクセス
     const apiUrl = `https://nico-rank.com/api/ranking?${params.toString()}`
@@ -219,6 +225,10 @@ export default async function Home({ searchParams }: PageProps) {
         }
         if (!tag && preferences.lastTag) {
           tag = preferences.lastTag
+          // カスタムランキングの場合、genreも'custom'に設定
+          if (tag.startsWith('custom:') && !genre) {
+            genre = 'custom'
+          }
         }
       } catch {
         // パースエラーは無視
@@ -226,8 +236,15 @@ export default async function Home({ searchParams }: PageProps) {
     }
   }
   
-  // デフォルト値を設定
-  genre = genre || 'all'
+  // デフォルト値を設定（カスタムランキングの場合はgenreを維持）
+  if (!genre) {
+    // tagがcustom:で始まる場合はgenreをcustomに設定
+    if (tag?.startsWith('custom:')) {
+      genre = 'custom'
+    } else {
+      genre = 'all'
+    }
+  }
   period = period || '24h'
   page = Math.max(1, page || 1) // ページは最低1
   
@@ -236,8 +253,8 @@ export default async function Home({ searchParams }: PageProps) {
     
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
-    // データがない場合の処理
-    if (rankingData.length === 0) {
+    // カスタムジャンルの場合は、データが空でも通常のページをレンダリング
+    if (rankingData.length === 0 && genre !== 'custom') {
       // タグ検索でデータがない場合は、タグなしでリダイレクト
       if (tag) {
         const { redirect } = await import('next/navigation')
@@ -249,7 +266,8 @@ export default async function Home({ searchParams }: PageProps) {
       }
       
       // ジャンル自体のデータがない場合は総合ランキングへリダイレクト
-      if (genre !== 'all') {
+      // ただし、カスタムジャンルは除外（データがなくても正常）
+      if (genre !== 'all' && genre !== 'custom') {
         const { redirect } = await import('next/navigation')
         redirect('/')
       }

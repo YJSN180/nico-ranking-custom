@@ -30,7 +30,11 @@ export function setUserPreferencesCookieClient(preferences: Partial<UserPreferen
   const value = encodeURIComponent(JSON.stringify(preferences))
   const expires = new Date(Date.now() + COOKIE_MAX_AGE * 1000).toUTCString()
   
-  document.cookie = `${COOKIE_NAME}=${value}; expires=${expires}; path=/; SameSite=Lax${
-    typeof window !== 'undefined' && window.location.protocol === 'https:' ? '; Secure' : ''
+  // Vercelプレビュー環境との互換性のため、SameSite=Noneに設定
+  const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
+  const sameSite = isSecure ? 'None' : 'Lax'
+  
+  document.cookie = `${COOKIE_NAME}=${value}; expires=${expires}; path=/; SameSite=${sameSite}${
+    isSecure ? '; Secure' : ''
   }`
 }
