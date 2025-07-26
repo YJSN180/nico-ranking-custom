@@ -428,25 +428,31 @@ export default {
               const decodedData = decodeRankingData(jsonData)
               
               // デコード済みデータを返す（Cloudflareが必要に応じて再圧縮）
-              return new Response(JSON.stringify(decodedData), {
+              const decodedResponse = new Response(JSON.stringify(decodedData), {
                 status: 200,
                 headers
               })
+              const origin = request.headers.get('Origin')
+              return applyCORSHeaders(decodedResponse, origin, securityHeaders)
             } catch (parseError) {
               console.error('[Worker] Failed to parse or decode JSON:', parseError)
               // パースに失敗した場合は元のデータをそのまま返す
-              return new Response(decompressedData, {
+              const fallbackResponse = new Response(decompressedData, {
                 status: 200,
                 headers
               })
+              const origin = request.headers.get('Origin')
+              return applyCORSHeaders(fallbackResponse, origin, securityHeaders)
             }
           } catch (decompressError) {
             console.error('[Worker] Failed to decompress gzipped data:', decompressError)
             // 解凍に失敗した場合は、元のストリームをそのまま返す
-            return new Response(passthroughStream, {
+            const streamResponse = new Response(passthroughStream, {
               status: 200,
               headers
             })
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(streamResponse, origin, securityHeaders)
           }
         } else {
           // 非圧縮データの場合
@@ -459,17 +465,21 @@ export default {
             const decodedData = decodeRankingData(jsonData)
             
             // デコード済みデータを返す（Cloudflareが自動圧縮する）
-            return new Response(JSON.stringify(decodedData), {
+            const uncompressedResponse = new Response(JSON.stringify(decodedData), {
               status: 200,
               headers
             })
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(uncompressedResponse, origin, securityHeaders)
           } catch (error) {
             console.error('[Worker] Failed to parse or decode JSON:', error)
             // エラーの場合は元のストリームをそのまま返す
-            return new Response(passthroughStream, {
+            const errorFallbackResponse = new Response(passthroughStream, {
               status: 200,
               headers
             })
+            const origin = request.headers.get('Origin')
+            return applyCORSHeaders(errorFallbackResponse, origin, securityHeaders)
           }
         }
         
