@@ -15,7 +15,7 @@ interface TagSelectorProps {
   onConfigChange: (config: RankingConfig) => void
   popularTags?: string[]
   onPrefetchGenre?: (genre: RankingGenre) => void // プリフェッチ用コールバック
-  onCreateCustomRankingWithFilter?: (rankingId: string, baseGenre: RankingGenre, conditions: any[]) => void // 作成時フィルタリング用コールバック
+  onCreateCustomRankingWithFilter?: (rankingId: string, baseGenre: RankingGenre, conditions: any[], title: string) => void // 作成時フィルタリング用コールバック
 }
 
 export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onPrefetchGenre, onCreateCustomRankingWithFilter }: TagSelectorProps) {
@@ -120,17 +120,19 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       lastSelectedCustomIdRef.current = newRanking
     }
     
-    // 作成と同時にフィルタリングを実行
+    // 作成と同時にフィルタリングを実行（改修版：titleパラメータ追加）
     if (onCreateCustomRankingWithFilter && data.baseGenre) {
-      onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions)
+      onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
     }
     
-    // 作成後、genre='custom'でそのカスタムランキングを選択
-    onConfigChange({ 
-      ...config, 
-      genre: 'custom' as RankingGenre, 
-      tag: `custom:${newRanking}`
-    })
+    // 作成後、genre='custom'でそのカスタムランキングを選択（遅延実行で専用状態を優先）
+    setTimeout(() => {
+      onConfigChange({ 
+        ...config, 
+        genre: 'custom' as RankingGenre, 
+        tag: `custom:${newRanking}`
+      })
+    }, 100) // 100ms遅延でフィルタリング表示を優先
   }
 
   const handleEditRanking = (ranking: CustomRanking) => {
@@ -150,17 +152,19 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       })
       setEditingRanking(null)
       
-      // 編集時も即時フィルタリングを実行
+      // 編集時も即時フィルタリングを実行（改修版：titleパラメータ追加）
       if (onCreateCustomRankingWithFilter && data.baseGenre) {
-        onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions)
+        onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
       }
       
-      // 編集後も、genre='custom'でそのカスタムランキングを選択
-      onConfigChange({ 
-        ...config, 
-        genre: 'custom' as RankingGenre, 
-        tag: `custom:${editingRanking.id}` 
-      })
+      // 編集後も、genre='custom'でそのカスタムランキングを選択（遅延実行で専用状態を優先）
+      setTimeout(() => {
+        onConfigChange({ 
+          ...config, 
+          genre: 'custom' as RankingGenre, 
+          tag: `custom:${editingRanking.id}` 
+        })
+      }, 100) // 100ms遅延でフィルタリング表示を優先
     } else {
       handleCreateCustomRanking(data)
     }

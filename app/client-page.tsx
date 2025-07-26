@@ -163,6 +163,15 @@ export default function ClientPage({
   // 外部ナビゲーション中の状態管理（UX制御）
   const [isNavigating, setIsNavigating] = useState(false)
   
+  // カスタムランキング専用状態（即時表示用）
+  const [isShowingCustomRanking, setIsShowingCustomRanking] = useState(false)
+  const [customRankingDisplayData, setCustomRankingDisplayData] = useState<RankingItem[]>([])
+  const [customRankingMetadata, setCustomRankingMetadata] = useState<{
+    title: string
+    conditions: any[]
+    baseGenre: RankingGenre
+  } | null>(null)
+  
   
   // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
   
@@ -400,6 +409,8 @@ export default function ClientPage({
     console.log('[DEBUG] Current config:', config)
     // eslint-disable-next-line no-console
     console.log('[DEBUG] Is initial load:', isInitialLoad)
+    // eslint-disable-next-line no-console
+    console.log('[DEBUG] Is showing custom ranking:', isShowingCustomRanking)
     
     // 初回ロードの場合はSSRのデータをそのまま使用（カスタムジャンルを除く）
     if (isInitialLoad && 
@@ -422,6 +433,27 @@ export default function ClientPage({
       console.log('[DEBUG] No config change, skipping')
       return
     }
+
+    // カスタムランキング表示中で、同じカスタムランキングの場合は専用状態を維持
+    if (isShowingCustomRanking && 
+        newConfig.genre === 'custom' && 
+        newConfig.tag?.startsWith('custom:') &&
+        config.tag === newConfig.tag) {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Maintaining custom ranking display state')
+      setConfig(newConfig)
+      return // データ取得をスキップして専用状態を維持
+    }
+
+    // カスタムランキング以外への切り替え、または異なるカスタムランキングへの切り替え
+    if (isShowingCustomRanking && 
+        (newConfig.genre !== 'custom' || newConfig.tag !== config.tag)) {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Resetting custom ranking display state')
+      setIsShowingCustomRanking(false)
+      setCustomRankingDisplayData([])
+      setCustomRankingMetadata(null)
+    }
     
     setConfig(newConfig)
     setCurrentPage(1) // 設定変更時はページ1にリセット
@@ -443,6 +475,103 @@ export default function ClientPage({
     // eslint-disable-next-line no-console
     console.log('[DEBUG] Pushing to URL:', newUrl)
     router.push(newUrl, { scroll: false })
+
+    // 既存カスタムランキング選択時は即座にフィルタリング表示を試行（エラーハンドリング強化）
+    if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
+      try {
+        const customId = newConfig.tag.replace('custom:', '')
+        
+        // カスタムランキングデータ検証
+        if (!Array.isArray(customRankings)) {
+          console.error('[ERROR] Custom rankings is not an array:', typeof customRankings)
+        } else {
+          const targetRanking = customRankings.find((r: any) => r && r.id === customId)
+          
+          if (targetRanking && targetRanking.baseGenre && targetRanking.conditions?.length > 0) {
+            // ランキングデータ検証
+            if (!targetRanking.title || typeof targetRanking.title !== 'string') {
+              console.warn('[WARN] Invalid ranking title:', targetRanking.title)
+            }
+            
+            if (!Array.isArray(targetRanking.conditions)) {
+              console.error('[ERROR] Invalid ranking conditions:', typeof targetRanking.conditions)
+            } else {
+              // 条件検証
+              const validConditions = targetRanking.conditions.filter((condition: any) => 
+                condition && 
+                typeof condition.tag === 'string' && 
+                condition.tag.trim() !== '' &&
+                ['AND', 'OR', 'NOT'].includes(condition.operator)
+              )
+
+              if (validConditions.length === 0) {
+                console.warn('[WARN] No valid conditions found for custom ranking:', customId)
+              } else {
+                // キャッシュからbaseGenreのデータを取得
+                const cachedData = rankingCache.get(targetRanking.baseGenre, newConfig.period)
+                
+                if (cachedData && cachedData.data) {
+                  // データ形式検証
+                  if (!Array.isArray(cachedData.data)) {
+                    console.error('[ERROR] Invalid cached data format for existing ranking:', typeof cachedData.data)
+                  } else {
+                    // 即座にフィルタリング表示
+                    const filteredData = applyCustomFilters(cachedData.data, validConditions)
+                    
+                    // フィルタリング結果検証
+                    if (!Array.isArray(filteredData)) {
+                      console.error('[ERROR] Filtering returned invalid data for existing ranking:', typeof filteredData)
+                    } else {
+                      setIsShowingCustomRanking(true)
+                      setCustomRankingDisplayData(filteredData)
+                      setCustomRankingMetadata({
+                        title: targetRanking.title || `Custom Ranking ${customId}`,
+                        conditions: validConditions,
+                        baseGenre: targetRanking.baseGenre
+                      })
+                      
+                      // eslint-disable-next-line no-console
+                      console.log('[DEBUG] Applied immediate filtering for existing custom ranking:', {
+                        customId,
+                        originalCount: cachedData.data.length,
+                        filteredCount: filteredData.length,
+                        title: targetRanking.title,
+                        validConditionsCount: validConditions.length,
+                        originalConditionsCount: targetRanking.conditions.length
+                      })
+                      
+                      return // データ取得をスキップ
+                    }
+                  }
+                } else {
+                  // eslint-disable-next-line no-console
+                  console.warn('[DEBUG] No cached data for existing custom ranking:', {
+                    customId,
+                    baseGenre: targetRanking.baseGenre,
+                    period: newConfig.period,
+                    hasCachedData: !!cachedData
+                  })
+                }
+              }
+            }
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn('[DEBUG] Custom ranking not found or invalid:', {
+              customId,
+              found: !!targetRanking,
+              hasBaseGenre: !!(targetRanking && targetRanking.baseGenre),
+              hasConditions: !!(targetRanking && targetRanking.conditions?.length > 0)
+            })
+          }
+        }
+      } catch (error) {
+        console.error('[ERROR] Failed to process existing custom ranking selection:', error)
+        // フォールバック: エラー時は専用状態をリセット
+        setIsShowingCustomRanking(false)
+        setCustomRankingDisplayData([])
+        setCustomRankingMetadata(null)
+      }
+    }
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
@@ -456,7 +585,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
@@ -599,27 +728,94 @@ export default function ClientPage({
     })
   }, [config.period, fetchRankingData])
 
-  // カスタムランキング作成時の即時フィルタリング
-  const handleCreateCustomRankingWithFilter = useCallback((rankingId: string, baseGenre: RankingGenre, conditions: any[]) => {
-    // キャッシュからbaseGenreのデータを取得
-    const cachedData = rankingCache.get(baseGenre, config.period)
-    
-    if (cachedData && cachedData.data && conditions.length > 0) {
-      // キャッシュデータに対してフィルタリングを適用
-      const filteredData = applyCustomFilters(cachedData.data, conditions)
+  // カスタムランキング作成時の即時フィルタリング（改修版 + エラーハンドリング強化）
+  const handleCreateCustomRankingWithFilter = useCallback((
+    rankingId: string, 
+    baseGenre: RankingGenre, 
+    conditions: any[], 
+    title: string
+  ) => {
+    try {
+      // 入力値検証
+      if (!rankingId || !baseGenre || !title || !Array.isArray(conditions)) {
+        console.error('[ERROR] Invalid parameters for custom ranking filter:', {
+          rankingId: !!rankingId,
+          baseGenre: !!baseGenre,
+          title: !!title,
+          conditionsValid: Array.isArray(conditions)
+        })
+        return
+      }
+
+      // キャッシュからbaseGenreのデータを取得
+      const cachedData = rankingCache.get(baseGenre, config.period)
       
-      // フィルタリング済みデータを即座に設定
-      setFullRankingData(filteredData)
-      setRankingData(filteredData)
-      
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Applied custom filters immediately:', {
-        originalCount: cachedData.data.length,
-        filteredCount: filteredData.length,
-        conditions
-      })
+      if (cachedData && cachedData.data && conditions.length > 0) {
+        // データ形式検証
+        if (!Array.isArray(cachedData.data)) {
+          console.error('[ERROR] Invalid cached data format:', typeof cachedData.data)
+          return
+        }
+
+        // フィルタリング条件検証
+        const validConditions = conditions.filter(condition => 
+          condition && 
+          typeof condition.tag === 'string' && 
+          condition.tag.trim() !== '' &&
+          ['AND', 'OR', 'NOT'].includes(condition.operator)
+        )
+
+        if (validConditions.length === 0) {
+          console.warn('[WARN] No valid filtering conditions found')
+          return
+        }
+
+        // キャッシュデータに対してフィルタリングを適用
+        const filteredData = applyCustomFilters(cachedData.data, validConditions)
+        
+        // フィルタリング結果検証
+        if (!Array.isArray(filteredData)) {
+          console.error('[ERROR] Filtering returned invalid data:', typeof filteredData)
+          return
+        }
+
+        // カスタムランキング専用状態に即座に設定（useRankingDataとは独立）
+        setIsShowingCustomRanking(true)
+        setCustomRankingDisplayData(filteredData)
+        setCustomRankingMetadata({
+          title,
+          conditions: validConditions,
+          baseGenre
+        })
+        
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Custom ranking immediate display activated:', {
+          originalCount: cachedData.data.length,
+          filteredCount: filteredData.length,
+          title,
+          conditions: validConditions,
+          validConditionsCount: validConditions.length,
+          originalConditionsCount: conditions.length
+        })
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn('[DEBUG] Cannot apply immediate filtering:', {
+          hasCachedData: !!cachedData,
+          hasValidData: !!(cachedData && cachedData.data),
+          dataIsArray: !!(cachedData && Array.isArray(cachedData.data)),
+          hasConditions: conditions.length > 0,
+          baseGenre,
+          period: config.period
+        })
+      }
+    } catch (error) {
+      console.error('[ERROR] Failed to apply custom ranking filter:', error)
+      // フォールバック: エラー時は専用状態をリセット
+      setIsShowingCustomRanking(false)
+      setCustomRankingDisplayData([])
+      setCustomRankingMetadata(null)
     }
-  }, [config.period, setFullRankingData, setRankingData])
+  }, [config.period])
   
   // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
@@ -739,8 +935,11 @@ export default function ClientPage({
 
   // クライアントサイドページネーション処理 (同期的なNGフィルタリング)
   const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
+    // データソースを決定（カスタムランキング表示中は専用データを使用）
+    const sourceData = isShowingCustomRanking ? customRankingDisplayData : fullRankingData
+    
     // NGフィルタリングを適用
-    const { filteredItems } = filterWithExtendedNGList(fullRankingData, ngList)
+    const { filteredItems } = filterWithExtendedNGList(sourceData, ngList)
     const totalCount = filteredItems.length
     
     // 総ページ数を計算
@@ -759,7 +958,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, currentPage])
+  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、

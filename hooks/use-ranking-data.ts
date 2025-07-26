@@ -137,12 +137,15 @@ export function useRankingData({
             // eslint-disable-next-line no-console
             console.log('[DEBUG] Conditions:', customRankingConditions)
           } else {
-            // カスタムランキングが見つからない場合（IndexedDB読み込み中の可能性）
-            // デフォルトで'all'ジャンルのデータを取得し、後でフィルタリング
+            // カスタムランキングが見つからない場合は空データを返してAPIリクエストを防ぐ
             // eslint-disable-next-line no-console
-            console.log('[DEBUG] Custom ranking not found yet, fetching all genre data for later filtering')
-            actualGenre = 'all' // デフォルトジャンル
-            customRankingConditions = [] // 後でフィルタリング条件が読み込まれたら適用
+            console.log('[DEBUG] Custom ranking not found, returning empty data instead of fallback')
+            setFullRankingData([])
+            setRankingData([])
+            setCurrentPopularTags([])
+            setLoading(false)
+            setError(null)
+            return
           }
         } else {
           // カスタムランキングが選択されているがタグが指定されていない場合
