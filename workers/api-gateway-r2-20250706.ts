@@ -14,6 +14,18 @@ interface Env {
   R2_BUCKET: R2Bucket
 }
 
+// タグ累積データの型定義
+interface TagAccumulationData {
+  tags: string[]
+  metadata: {
+    version: number
+    lastUpdated: string
+    totalUniqueTags: number
+    lastAccumulationSource: string
+    weeklyUpdateCount: number
+  }
+}
+
 // セキュリティヘッダー定義
 const securityHeaders = {
   'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' https://*.vercel-scripts.com; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; media-src 'self' https:; object-src 'none'",
@@ -119,7 +131,7 @@ export default {
         }
 
         // タグ累積データを解析
-        let tagData: any
+        let tagData: TagAccumulationData
         try {
           // gzip圧縮対応
           const reader = tagAccumulationObject.body.getReader()
