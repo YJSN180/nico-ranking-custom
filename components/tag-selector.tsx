@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
+import { useCustomRankingsOrder } from '@/hooks/use-custom-rankings-order'
 import { CustomRankingModal } from './custom-ranking-modal'
+import { DeleteConfirmationModal } from './delete-confirmation-modal'
+import { CustomRankingOrder } from './custom-ranking-order'
 import styles from './selectors.module.css'
 
 interface TagSelectorProps {
@@ -21,8 +24,16 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   // カスタムランキング管理
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
   
+  // カスタムランキング順序管理
+  const { getSortedRankings } = useCustomRankingsOrder(rankings)
+  const sortedRankings = getSortedRankings(rankings)
+  
   // 編集用の状態
   const [editingRanking, setEditingRanking] = useState<any>(null)
+  
+  // 削除確認モーダル用の状態
+  const [deletingRanking, setDeletingRanking] = useState<any>(null)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // propsから渡されたタグを優先的に使用
   useEffect(() => {
@@ -131,12 +142,18 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   }
 
   const handleDeleteRanking = (ranking: any) => {
-    if (window.confirm(`「${ranking.title}」を削除しますか？この操作は取り消せません。`)) {
-      deleteRanking(ranking.id)
+    setDeletingRanking(ranking)
+    setShowDeleteModal(true)
+  }
+
+  const handleConfirmDelete = () => {
+    if (deletingRanking) {
+      deleteRanking(deletingRanking.id)
       // 削除後は「すべて」ジャンルに戻る
-      if (config.genre === ranking.baseGenre) {
+      if (config.genre === 'custom' && config.tag === `custom:${deletingRanking.id}`) {
         onConfigChange({ ...config, genre: 'all', tag: undefined })
       }
+      setDeletingRanking(null)
     }
   }
 
@@ -211,6 +228,15 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             </h2>
           </div>
           
+          {/* カスタムランキング並び替えボタン */}
+          <CustomRankingOrder
+            rankings={sortedRankings}
+            selectedId={config.tag?.replace('custom:', '') || null}
+            onSelect={handleCustomRankingSelect}
+            onEdit={handleEditRanking}
+            onDelete={handleDeleteRanking}
+          />
+          
           {config.tag && config.tag.startsWith('custom:') && (
             <div style={{ marginBottom: '12px' }}>
               <span className={styles.selectedTag}>
@@ -250,7 +276,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
               </button>
               
               {/* 既存のカスタムランキング */}
-              {rankings.map((ranking) => (
+              {sortedRankings.map((ranking) => (
                 <button
                   key={ranking.id}
                   onClick={() => handleCustomRankingSelect(ranking.id)}
@@ -273,37 +299,22 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                 検索条件
               </h2>
               {selectedCustomRanking && (
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className={styles.customRankingActions}>
                   <button
                     onClick={() => handleEditRanking(selectedCustomRanking)}
-                    className={styles.editButton}
+                    className={styles.actionButton}
                     title="編集"
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--surface-secondary)',
-                      cursor: 'pointer',
-                      fontSize: '12px'
-                    }}
                   >
-                    ✏️ 編集
+                    <span className={styles.actionIcon}>✏️</span>
+                    <span className={styles.actionText}>編集</span>
                   </button>
                   <button
                     onClick={() => handleDeleteRanking(selectedCustomRanking)}
-                    className={styles.deleteButton}
+                    className={`${styles.actionButton} ${styles.deleteAction}`}
                     title="削除"
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--error-color)',
-                      backgroundColor: 'var(--error-bg)',
-                      color: 'var(--error-color)',
-                      cursor: 'pointer',
-                      fontSize: '12px'
-                    }}
                   >
-                    🗑️ 削除
+                    <span className={styles.actionIcon}>🗑️</span>
+                    <span className={styles.actionText}>削除</span>
                   </button>
                 </div>
               )}
@@ -375,6 +386,19 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           onSave={handleUpdateRanking}
           existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
           editingRanking={editingRanking}
+        />
+        
+        {/* 削除確認モーダル */}
+        <DeleteConfirmationModal
+          isOpen={showDeleteModal}
+          onClose={() => {
+            setShowDeleteModal(false)
+            setDeletingRanking(null)
+          }}
+          onConfirm={handleConfirmDelete}
+          title="カスタムランキングの削除"
+          message="このカスタムランキングを削除しますか？"
+          itemName={deletingRanking?.title}
         />
       </>
     )

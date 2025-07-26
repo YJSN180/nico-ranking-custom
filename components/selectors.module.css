@@ -314,3 +314,57 @@
     opacity: 1;
   }
 }
+
+/* アクションボタン（編集・削除） */
+.actionButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.actionButton:hover {
+  background: var(--surface-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.actionButton.deleteAction {
+  border-color: var(--error-color, #ef4444);
+  color: var(--error-color, #ef4444);
+  background: var(--error-bg, rgba(239, 68, 68, 0.1));
+}
+
+.actionButton.deleteAction:hover {
+  background: var(--error-color, #ef4444);
+  color: white;
+}
+
+.actionIcon {
+  font-size: 14px;
+  display: inline-block;
+}
+
+.actionText {
+  font-size: 12px;
+}
+
+/* モバイルでアイコンのみ表示 */
+@media (max-width: 480px) {
+  .actionText {
+    display: none;
+  }
+  
+  .actionButton {
+    padding: 6px 10px;
+  }
+}

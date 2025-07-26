@@ -1,0 +1,180 @@
+/* オーバーレイ */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001; /* CustomRankingModalより上に表示 */
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* モーダル本体 */
+.modal {
+  background: var(--surface-color);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  animation: slideUp 0.3s ease-out;
+}
+
+/* ダークモード対応 */
+[data-theme="dark"] .modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="darkblue"] .modal {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* ヘッダー */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  color: var(--text-primary);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.closeButton:hover {
+  background-color: var(--surface-hover);
+}
+
+/* コンテンツ */
+.content {
+  padding: 24px;
+  text-align: center;
+}
+
+.iconContainer {
+  margin-bottom: 16px;
+}
+
+.warningIcon {
+  font-size: 48px;
+  display: inline-block;
+}
+
+.message {
+  margin: 0 0 16px 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.itemName {
+  margin: 0 0 16px 0;
+  padding: 8px 16px;
+  background: var(--surface-hover);
+  border-radius: 8px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: inline-block;
+}
+
+.warning {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--error-color, #ef4444);
+  font-weight: 600;
+}
+
+/* フッター */
+.footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.cancelButton,
+.deleteButton {
+  flex: 1;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelButton {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.cancelButton:hover {
+  background: var(--surface-hover);
+}
+
+.deleteButton {
+  background: var(--error-color, #ef4444);
+  border: none;
+  color: white;
+}
+
+.deleteButton:hover {
+  background: var(--error-hover, #dc2626);
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .modal {
+    width: 95%;
+    max-width: 350px;
+  }
+
+  .content {
+    padding: 20px;
+  }
+
+  .warningIcon {
+    font-size: 36px;
+  }
+}

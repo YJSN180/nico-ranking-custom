@@ -1,0 +1,219 @@
+/* カスタムランキング並び替えコンテナ */
+.container {
+  background: var(--surface-color);
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.reorderButton {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reorderButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--primary-color);
+}
+
+/* 並び替えリスト */
+.reorderList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+/* カスタムランキングアイテム */
+.customRankingItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.customRankingItem.dragging {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  border-color: var(--primary-color);
+}
+
+.customRankingItem.selected {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+}
+
+.customRankingItem.selected .rankingTitle {
+  color: white;
+}
+
+/* ドラッグハンドル */
+.dragHandle {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: grab;
+  font-size: 16px;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.dragHandle:hover {
+  color: var(--text-primary);
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+/* ランキングタイトル */
+.rankingTitle {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.rankingTitle:hover {
+  background: var(--surface-hover);
+}
+
+/* アクションボタン */
+.actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.customRankingItem:hover .actions {
+  opacity: 1;
+}
+
+.editButton,
+.deleteButton {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.editButton:hover {
+  background: var(--primary-color);
+  border-color: var(--primary-color);
+  transform: scale(1.1);
+}
+
+.deleteButton:hover {
+  background: var(--error-color, #ef4444);
+  border-color: var(--error-color, #ef4444);
+  transform: scale(1.1);
+}
+
+/* 通常リスト（並び替えモードでない時） */
+.normalList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* オーバーレイ */
+.itemOverlay {
+  padding: 12px;
+  background: var(--surface-color);
+  border: 2px solid var(--primary-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grabbing;
+}
+
+.overlayHandle {
+  color: var(--primary-color);
+  font-size: 16px;
+}
+
+.overlayTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* ヘルプテキスト */
+.helpText {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: 12px;
+  padding: 8px;
+  background: var(--surface-hover);
+  border-radius: 4px;
+}
+
+/* モバイル対応 */
+@media (max-width: 640px) {
+  .actions {
+    opacity: 1; /* モバイルでは常に表示 */
+  }
+  
+  .container {
+    padding: 12px;
+  }
+  
+  .customRankingItem {
+    padding: 8px;
+  }
+  
+  .rankingTitle {
+    font-size: 13px;
+  }
+}
