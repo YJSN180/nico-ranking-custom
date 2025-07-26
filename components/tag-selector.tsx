@@ -271,7 +271,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           />
           
           {config.tag && config.tag.startsWith('custom:') && (
-            <div style={{ marginBottom: '12px' }}>
+            <div style={{ marginTop: '24px', marginBottom: '16px' }}>
               <span className={styles.selectedTag}>
                 選択中: {(() => {
                   const customId = config.tag?.replace('custom:', '') || ''
