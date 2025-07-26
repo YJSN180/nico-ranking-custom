@@ -209,6 +209,9 @@ export default async function Home({ searchParams }: PageProps) {
     if (preferenceCookie?.value) {
       try {
         const preferences = JSON.parse(preferenceCookie.value)
+        // デバッグログ
+        // eslint-disable-next-line no-console
+        console.log('[SSR] Cookie preferences:', preferences)
         
         // ジャンルの検証（有効なジャンルのみ許可）
         const validGenres = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other', 'custom']
@@ -222,6 +225,10 @@ export default async function Home({ searchParams }: PageProps) {
         }
         if (!tag && preferences.lastTag) {
           tag = preferences.lastTag
+          // カスタムランキングの場合、genreも'custom'に設定
+          if (tag.startsWith('custom:') && !genre) {
+            genre = 'custom'
+          }
         }
       } catch {
         // パースエラーは無視
@@ -229,8 +236,15 @@ export default async function Home({ searchParams }: PageProps) {
     }
   }
   
-  // デフォルト値を設定
-  genre = genre || 'all'
+  // デフォルト値を設定（カスタムランキングの場合はgenreを維持）
+  if (!genre) {
+    // tagがcustom:で始まる場合はgenreをcustomに設定
+    if (tag?.startsWith('custom:')) {
+      genre = 'custom'
+    } else {
+      genre = 'all'
+    }
+  }
   period = period || '24h'
   page = Math.max(1, page || 1) // ページは最低1
   
