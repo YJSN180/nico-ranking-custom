@@ -20,7 +20,6 @@ import {
 } from '@dnd-kit/sortable'
 import { SortableCustomRankingItem } from './sortable-custom-ranking-item'
 import styles from './custom-ranking-order.module.css'
-import tagStyles from '../selectors.module.css'
 
 interface CustomRankingOrderProps {
   rankings: any[]
@@ -29,9 +28,6 @@ interface CustomRankingOrderProps {
   onEdit: (ranking: any) => void
   onDelete: (ranking: any) => void
   onMoveRanking: (fromId: string, toId: string) => void
-  isInHeader?: boolean
-  isReordering?: boolean
-  onReorderingChange?: (reordering: boolean) => void
 }
 
 export function CustomRankingOrder({
@@ -40,17 +36,10 @@ export function CustomRankingOrder({
   onSelect,
   onEdit,
   onDelete,
-  onMoveRanking,
-  isInHeader = false,
-  isReordering: externalIsReordering,
-  onReorderingChange
+  onMoveRanking
 }: CustomRankingOrderProps) {
-  const [internalIsReordering, setInternalIsReordering] = useState(false)
+  const [isReordering, setIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
-  
-  // 外部から制御される場合は外部の状態を使用、そうでなければ内部状態を使用
-  const isReordering = externalIsReordering !== undefined ? externalIsReordering : internalIsReordering
-  const setIsReordering = onReorderingChange || setInternalIsReordering
   
   // 親から渡されたランキングをそのまま使用（二重ソートを避ける）
   const sortedRankings = rankings
@@ -103,7 +92,7 @@ export function CustomRankingOrder({
     return (
       <div className={styles.container}>
         <div className={styles.header}>
-          <h3 className={styles.title}>カスタムランキングの並び替え・編集</h3>
+          <h3 className={styles.title}>カスタムランキングの並び替え</h3>
           <button
             className={styles.reorderButton}
             onClick={() => setIsReordering(false)}
@@ -156,26 +145,15 @@ export function CustomRankingOrder({
   }
 
   // 通常表示モード（並び替えボタンを表示）
-  const reorderButton = (
-    <button
-      className={isInHeader ? tagStyles.actionButton : styles.reorderButton}
-      onClick={() => setIsReordering(true)}
-      title="並び替え・編集"
-    >
-      <span className={isInHeader ? tagStyles.actionIcon : undefined}>↕️</span>
-      <span className={isInHeader ? tagStyles.actionText : undefined}>並び替え・編集</span>
-    </button>
-  )
-
-  // ヘッダー内に表示する場合はボタンのみを返す
-  if (isInHeader) {
-    return reorderButton
-  }
-
-  // それ以外の場合は従来通りdivで囲んで返す
   return (
     <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-      {reorderButton}
+      <button
+        className={styles.reorderButton}
+        onClick={() => setIsReordering(true)}
+      >
+        <span>↕️</span>
+        <span>並び替え</span>
+      </button>
     </div>
   )
 }
