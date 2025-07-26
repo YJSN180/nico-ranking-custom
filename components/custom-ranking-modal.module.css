@@ -178,6 +178,17 @@
   color: var(--text-secondary);
 }
 
+.conditionDescription {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: var(--surface-color);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .conditionsList {
   display: flex;
   flex-direction: column;
@@ -238,6 +249,13 @@
   margin: 0 0 12px 0;
   font-size: 0.875rem;
   color: var(--text-secondary);
+}
+
+.helpText {
+  margin: -8px 0 12px 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
 }
 
 .tagInputWrapper {

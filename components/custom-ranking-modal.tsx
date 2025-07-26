@@ -6,6 +6,56 @@ import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } fro
 import { TagIcon } from './tag-icon'
 import styles from './custom-ranking-modal.module.css'
 
+// 演算子の自然言語ラベル
+const OPERATOR_LABELS: Record<TagOperator, string> = {
+  'AND': 'すべて含む',
+  'OR': 'いずれかを含む',
+  'NOT': '除外する'
+}
+
+// タグタイプのラベル
+const TAG_TYPE_LABELS: Record<'lock' | 'user' | 'both', string> = {
+  'lock': 'ロックタグ',
+  'user': 'ユーザータグ',
+  'both': '全タグ'
+}
+
+// 条件を自然言語で説明する関数
+function generateConditionDescription(conditions: TagCondition[]): string {
+  if (conditions.length === 0) return ''
+  
+  // 最初のタグ（基本条件）
+  const base = conditions[0]
+  let description = `「${base.tag}」（${TAG_TYPE_LABELS[base.tagType]}）を含む動画`
+  
+  if (conditions.length === 1) return description
+  
+  // グループ化
+  const andConditions = conditions.slice(1).filter(c => c.operator === 'AND')
+  const orConditions = conditions.slice(1).filter(c => c.operator === 'OR')
+  const notConditions = conditions.slice(1).filter(c => c.operator === 'NOT')
+  
+  // AND条件
+  if (andConditions.length > 0) {
+    const tags = andConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    description += `で、かつ${tags.join('と')}をすべて含む`
+  }
+  
+  // OR条件
+  if (orConditions.length > 0) {
+    const tags = orConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    description += `${andConditions.length > 0 ? '、さらに' : 'で、'}${tags.join('または')}のいずれかを含む`
+  }
+  
+  // NOT条件
+  if (notConditions.length > 0) {
+    const tags = notConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    description += `${andConditions.length > 0 || orConditions.length > 0 ? '、ただし' : 'で、'}${tags.join('と')}を含まない`
+  }
+  
+  return description
+}
+
 interface CustomRankingModalProps {
   isOpen: boolean
   onClose: () => void
@@ -220,13 +270,16 @@ export function CustomRankingModal({
               {formData.conditions.length > 0 && (
                 <div className={styles.currentConditions}>
                   <h4>現在の条件:</h4>
+                  <div className={styles.conditionDescription}>
+                    {generateConditionDescription(formData.conditions)}
+                  </div>
                   <div className={styles.conditionsList}>
-                    {['AND', 'OR', 'NOT'].map(op => {
+                    {(['AND', 'OR', 'NOT'] as TagOperator[]).map(op => {
                       const conditions = formData.conditions.filter(c => c.operator === op)
                       if (conditions.length === 0) return null
                       return (
                         <div key={op} className={styles.conditionGroup}>
-                          <span className={styles.operatorLabel}>{op}:</span>
+                          <span className={styles.operatorLabel}>{OPERATOR_LABELS[op]}:</span>
                           <div className={styles.tags}>
                             {conditions.map((condition, index) => {
                               const originalIndex = formData.conditions.indexOf(condition)
@@ -259,6 +312,11 @@ export function CustomRankingModal({
               {/* タグ入力 */}
               <div className={styles.tagInputSection}>
                 <h4>新しい条件を追加:</h4>
+                {formData.conditions.length === 0 && (
+                  <p className={styles.helpText}>
+                    最初のタグが基本条件となります
+                  </p>
+                )}
                 <div className={styles.tagInputWrapper}>
                   <input
                     ref={tagInputRef}
@@ -293,29 +351,35 @@ export function CustomRankingModal({
                   )}
                 </div>
 
-                <div className={styles.operatorSelect}>
-                  <label>条件タイプ:</label>
-                  <div className={styles.operatorButtons}>
-                    <button
-                      className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
-                      onClick={() => setTagOperator('AND')}
-                    >
-                      AND
-                    </button>
-                    <button
-                      className={`${styles.operatorButton} ${tagOperator === 'OR' ? styles.active : ''}`}
-                      onClick={() => setTagOperator('OR')}
-                    >
-                      OR
-                    </button>
-                    <button
-                      className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
-                      onClick={() => setTagOperator('NOT')}
-                    >
-                      NOT
-                    </button>
+                {/* 最初のタグの場合は演算子選択を表示しない */}
+                {formData.conditions.length > 0 && (
+                  <div className={styles.operatorSelect}>
+                    <label>条件の組み合わせ方:</label>
+                    <div className={styles.operatorButtons}>
+                      <button
+                        className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
+                        onClick={() => setTagOperator('AND')}
+                        title="選択したタグをすべて含む動画のみ表示"
+                      >
+                        {OPERATOR_LABELS.AND}
+                      </button>
+                      <button
+                        className={`${styles.operatorButton} ${tagOperator === 'OR' ? styles.active : ''}`}
+                        onClick={() => setTagOperator('OR')}
+                        title="選択したタグのいずれかを含む動画を表示"
+                      >
+                        {OPERATOR_LABELS.OR}
+                      </button>
+                      <button
+                        className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
+                        onClick={() => setTagOperator('NOT')}
+                        title="選択したタグを含まない動画のみ表示"
+                      >
+                        {OPERATOR_LABELS.NOT}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className={styles.tagTypeSelect}>
                   <label>タグ種別:</label>
