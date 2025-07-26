@@ -24,35 +24,38 @@ const TAG_TYPE_LABELS: Record<'lock' | 'user' | 'both', string> = {
 function generateConditionDescription(conditions: TagCondition[]): string {
   if (conditions.length === 0) return ''
   
-  // 最初のタグ（基本条件）
-  const base = conditions[0]
-  let description = base.operator === 'NOT' 
-    ? `「${base.tag}」（${TAG_TYPE_LABELS[base.tagType]}）を含まない動画`
-    : `「${base.tag}」（${TAG_TYPE_LABELS[base.tagType]}）を含む動画`
-  
-  if (conditions.length === 1) return description
-  
   // グループ化
-  const andConditions = conditions.slice(1).filter(c => c.operator === 'AND')
-  const orConditions = conditions.slice(1).filter(c => c.operator === 'OR')
-  const notConditions = conditions.slice(1).filter(c => c.operator === 'NOT')
+  const allAndConditions = conditions.filter(c => c.operator === 'AND')
+  const allOrConditions = conditions.filter(c => c.operator === 'OR')
+  const allNotConditions = conditions.filter(c => c.operator === 'NOT')
   
-  // AND条件
-  if (andConditions.length > 0) {
-    const tags = andConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    description += `で、かつ${tags.join('と')}をすべて含む`
-  }
+  let description = ''
   
-  // OR条件
-  if (orConditions.length > 0) {
-    const tags = orConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    description += `${andConditions.length > 0 ? '、さらに' : 'で、'}${tags.join('または')}のいずれかを含む`
+  // AND条件とOR条件の組み合わせパターンを判定
+  if (allAndConditions.length > 0 && allOrConditions.length > 0) {
+    // 両方ある場合: (AND条件) または (OR条件)
+    const andTags = allAndConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    const orTags = allOrConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    
+    description = `${andTags.join('と')}をすべて含む動画、または、${orTags.join('もしくは')}のいずれかを含む動画`
+  } else if (allAndConditions.length > 0) {
+    // AND条件のみ
+    const andTags = allAndConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    description = `${andTags.join('と')}をすべて含む動画`
+  } else if (allOrConditions.length > 0) {
+    // OR条件のみ
+    const orTags = allOrConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    description = `${orTags.join('または')}のいずれかを含む動画`
   }
   
   // NOT条件
-  if (notConditions.length > 0) {
-    const tags = notConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    description += `${andConditions.length > 0 || orConditions.length > 0 ? '、ただし' : 'で、'}${tags.join('と')}を含まない`
+  if (allNotConditions.length > 0) {
+    const notTags = allNotConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    if (description) {
+      description += `（ただし、${notTags.join('と')}を含まない）`
+    } else {
+      description = `${notTags.join('と')}を含まない動画`
+    }
   }
   
   return description

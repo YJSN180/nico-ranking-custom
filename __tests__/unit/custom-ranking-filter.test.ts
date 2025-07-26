@@ -122,7 +122,7 @@ describe('カスタムランキングフィルタリングロジック', () => {
         { tag: '選択タグB', operator: 'OR', tagType: 'both' }
       ]
       const result = applyCustomFilters(items, conditions)
-      expect(result).toHaveLength(2) // 必須タグを含み、かつ選択タグAかBを含む
+      expect(result).toHaveLength(5) // (必須タグを含む動画) OR (選択タグA/Bのいずれかを含む動画)
     })
 
     test('AND + NOT条件の組み合わせ', () => {
@@ -160,7 +160,7 @@ describe('カスタムランキングフィルタリングロジック', () => {
         { tag: 'R-18', operator: 'NOT', tagType: 'both' }
       ]
       const result = applyCustomFilters(items, conditions)
-      expect(result).toHaveLength(4) // ゲームタグ必須、実況系タグのいずれか、R-18除外
+      expect(result).toHaveLength(5) // (ゲームタグを含む動画) OR (実況系タグのいずれかを含む動画)、ただしR-18除外
     })
 
     test('真夏の夜の淫夢タグのケース', () => {

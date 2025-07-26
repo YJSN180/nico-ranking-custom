@@ -54,24 +54,37 @@ function matchesConditions(
     }
   }
 
-  // AND条件のチェック（すべて含まれている必要がある）
-  for (const condition of andConditions) {
-    if (!hasMatchingTag(item, condition)) {
-      return false
+  // 修正済み論理演算: AND条件グループ OR OR条件グループ
+  let andGroupResult = true
+  let orGroupResult = false
+
+  // AND条件グループの評価（すべて満たす必要がある）
+  if (andConditions.length > 0) {
+    for (const condition of andConditions) {
+      if (!hasMatchingTag(item, condition)) {
+        andGroupResult = false
+        break
+      }
     }
+  } else {
+    // AND条件がない場合は、AND群は満たされていない扱い
+    andGroupResult = false
   }
 
-  // OR条件のチェック（少なくとも1つ含まれている必要がある）
+  // OR条件グループの評価（いずれか1つを満たせばOK）
   if (orConditions.length > 0) {
-    const hasAnyOrTag = orConditions.some(condition => 
+    orGroupResult = orConditions.some(condition => 
       hasMatchingTag(item, condition)
     )
-    if (!hasAnyOrTag) {
-      return false
-    }
   }
 
-  return true
+  // 最終結果: AND条件グループ OR OR条件グループ
+  // 両方のグループが存在しない場合は、元の動作を保持
+  if (andConditions.length === 0 && orConditions.length === 0) {
+    return true // NOT条件のみの場合またはフィルタリング条件なし
+  }
+  
+  return andGroupResult || orGroupResult
 }
 
 /**
