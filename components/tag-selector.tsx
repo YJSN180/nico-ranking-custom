@@ -21,6 +21,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const [loading, setLoading] = useState(false)
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
+  const lastSelectedCustomIdRef = useRef<string | null>(null)
   
   // カスタムランキング管理
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading, updateRankingOrder, toggleVisibility } = useCustomRankings()
@@ -85,11 +86,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const handleCustomRankingSelect = (customId: string) => {
     // 選択されたカスタムランキングを取得
     const selectedRanking = rankings.find(r => r.id === customId)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] handleCustomRankingSelect - customId:', customId)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] handleCustomRankingSelect - selectedRanking:', selectedRanking)
     if (!selectedRanking) return
+    
+    // LocalStorageに保存
+    localStorage.setItem('lastSelectedCustomRankingId', customId)
+    lastSelectedCustomIdRef.current = customId
     
     // genre='custom'のまま、tagにカスタムランキングIDを設定
     const newConfig = { 
@@ -97,8 +98,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       genre: 'custom' as RankingGenre, 
       tag: `custom:${customId}`
     }
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] handleCustomRankingSelect - newConfig:', newConfig)
     onConfigChange(newConfig)
   }
 
@@ -111,6 +110,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         orderIndex: index
       }))
     })
+    
+    // LocalStorageに保存
+    localStorage.setItem('lastSelectedCustomRankingId', newRanking)
+    lastSelectedCustomIdRef.current = newRanking
     
     // 作成後、genre='custom'でそのカスタムランキングを選択
     onConfigChange({ 
@@ -158,6 +161,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       deleteRanking(deletingRanking.id)
       // 削除後は「すべて」ジャンルに戻る
       if (config.genre === 'custom' && config.tag === `custom:${deletingRanking.id}`) {
+        // LocalStorageからも削除
+        localStorage.removeItem('lastSelectedCustomRankingId')
+        lastSelectedCustomIdRef.current = null
         onConfigChange({ ...config, genre: 'all', tag: undefined })
       }
       setDeletingRanking(null)
@@ -192,6 +198,20 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     return null
   }
   
+  // カスタムジャンル選択時のLocalStorageからの復元
+  useEffect(() => {
+    if (config.genre === 'custom' && !config.tag && !isLoading) {
+      const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
+      if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
+        // LocalStorageから保存されたカスタムランキングを自動選択
+        if (lastSelectedCustomIdRef.current !== savedCustomId) {
+          lastSelectedCustomIdRef.current = savedCustomId
+          handleCustomRankingSelect(savedCustomId)
+        }
+      }
+    }
+  }, [config.genre, config.tag, rankings, isLoading]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // カスタムジャンルの場合は専用UI
   if (config.genre === 'custom') {
     
@@ -215,15 +235,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     const selectedCustomRanking = (() => {
       if (!config.tag?.startsWith('custom:')) return null
       const customId = config.tag.replace('custom:', '')
-      // デバッグログ
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Custom ranking restoration:', {
-        configTag: config.tag,
-        customId,
-        rankings: rankings.map(r => ({ id: r.id, title: r.title })),
-        selectedRankingId: selectedRanking?.id,
-        found: rankings.find(r => r.id === customId)
-      })
       return rankings.find(r => r.id === customId) || 
              (selectedRanking?.id === customId ? selectedRanking : null)
     })()
