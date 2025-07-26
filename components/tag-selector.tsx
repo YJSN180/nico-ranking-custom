@@ -36,6 +36,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const [deletingRanking, setDeletingRanking] = useState<any>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   
+  // 並び替えモード用の状態
+  const [isReorderingMode, setIsReorderingMode] = useState(false)
+  
 
   // propsを直接使用（stateへのコピーは不要）
   const popularTags = propsTags
@@ -258,6 +261,26 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             <h2 className={styles.tagTitle}>
               カスタムランキング
             </h2>
+            <button
+              className={styles.clearButton}
+              onClick={() => setIsReorderingMode(!isReorderingMode)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '12px',
+                padding: '6px 12px'
+              }}
+            >
+              {isReorderingMode ? (
+                <>完了</>
+              ) : (
+                <>
+                  <span>↕️</span>
+                  <span>並び替え・編集</span>
+                </>
+              )}
+            </button>
           </div>
           
           {/* カスタムランキング並び替えボタン */}
@@ -268,9 +291,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             onEdit={handleEditRanking}
             onDelete={handleDeleteRanking}
             onMoveRanking={moveRanking}
+            isReordering={isReorderingMode}
+            onReorderModeChange={setIsReorderingMode}
           />
           
-          {config.tag && config.tag.startsWith('custom:') && (
+          {!isReorderingMode && config.tag && config.tag.startsWith('custom:') && (
             <div style={{ marginTop: '24px', marginBottom: '16px' }}>
               <span className={styles.selectedTag}>
                 選択中: {(() => {
@@ -289,43 +314,45 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             </div>
           )}
 
-          <div className={styles.scrollContainer}>
-            <div 
-              ref={scrollToSelectedTag}
-              className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
-            >
-              {/* 新規作成ボタン */}
-              <button
-                onClick={() => setShowCustomModal(true)}
-                className={`${styles.button} ${styles.tagButton} ${styles.createButton}`}
-                style={{
-                  backgroundColor: 'var(--surface-secondary)',
-                  border: '2px dashed var(--border-color)',
-                  color: 'var(--primary-color)',
-                  fontWeight: '500'
-                }}
+          {!isReorderingMode && (
+            <div className={styles.scrollContainer}>
+              <div 
+                ref={scrollToSelectedTag}
+                className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
               >
-                ＋ 新しく作成する
-              </button>
-              
-              {/* 既存のカスタムランキング */}
-              {visibleRankings.map((ranking) => (
+                {/* 新規作成ボタン */}
                 <button
-                  key={ranking.id}
-                  onClick={() => handleCustomRankingSelect(ranking.id)}
-                  className={`${styles.button} ${styles.tagButton} ${
-                    config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
-                  }`}
+                  onClick={() => setShowCustomModal(true)}
+                  className={`${styles.button} ${styles.tagButton} ${styles.createButton}`}
+                  style={{
+                    backgroundColor: 'var(--surface-secondary)',
+                    border: '2px dashed var(--border-color)',
+                    color: 'var(--primary-color)',
+                    fontWeight: '500'
+                  }}
                 >
-                  {ranking.title}
+                  ＋ 新しく作成する
                 </button>
-              ))}
+                
+                {/* 既存のカスタムランキング */}
+                {visibleRankings.map((ranking) => (
+                  <button
+                    key={ranking.id}
+                    onClick={() => handleCustomRankingSelect(ranking.id)}
+                    className={`${styles.button} ${styles.tagButton} ${
+                      config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
+                    }`}
+                  >
+                    {ranking.title}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         
         {/* 選択されたカスタムランキングのタグを表示 */}
-        {selectedCustomRanking && customTags.length > 0 && (
+        {!isReorderingMode && selectedCustomRanking && customTags.length > 0 && (
           <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
             <div className={styles.tagHeader}>
               <h2 className={styles.tagTitle}>

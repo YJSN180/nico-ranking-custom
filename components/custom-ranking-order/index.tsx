@@ -28,6 +28,8 @@ interface CustomRankingOrderProps {
   onEdit: (ranking: any) => void
   onDelete: (ranking: any) => void
   onMoveRanking: (fromId: string, toId: string) => void
+  isReordering?: boolean
+  onReorderModeChange?: (isReordering: boolean) => void
 }
 
 export function CustomRankingOrder({
@@ -36,9 +38,10 @@ export function CustomRankingOrder({
   onSelect,
   onEdit,
   onDelete,
-  onMoveRanking
+  onMoveRanking,
+  isReordering = false,
+  onReorderModeChange
 }: CustomRankingOrderProps) {
-  const [isReordering, setIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   
   // 親から渡されたランキングをそのまま使用（二重ソートを避ける）
@@ -91,16 +94,6 @@ export function CustomRankingOrder({
   if (isReordering) {
     return (
       <div className={styles.container}>
-        <div className={styles.header}>
-          <h3 className={styles.title}>カスタムランキングの並び替え</h3>
-          <button
-            className={styles.reorderButton}
-            onClick={() => setIsReordering(false)}
-          >
-            完了
-          </button>
-        </div>
-
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -144,16 +137,6 @@ export function CustomRankingOrder({
     )
   }
 
-  // 通常表示モード（並び替えボタンを表示）
-  return (
-    <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-      <button
-        className={styles.reorderButton}
-        onClick={() => setIsReordering(true)}
-      >
-        <span>↕️</span>
-        <span>並び替え</span>
-      </button>
-    </div>
-  )
+  // 通常表示モード（並び替えボタンは親コンポーネントで管理）
+  return null
 }
