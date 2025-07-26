@@ -51,7 +51,22 @@ export function NGBackup() {
     setImportResult(null)
 
     try {
-      const data = await readExtendedNGListBackupFile(file)
+      // ファイル内容を読み込んで形式を判定
+      const content = await file.text()
+      const rawData = JSON.parse(content)
+      
+      let data: ExtendedNGListBackupData
+      
+      // 統合バックアップファイルの判定と変換
+      if (rawData.version && rawData.data && rawData.data.ngList) {
+        // 統合バックアップから NGList データを抽出
+        data = rawData.data.ngList
+      } else if (rawData.ngList && rawData.metadata && rawData.version) {
+        // 個別NGリストバックアップファイル
+        data = rawData
+      } else {
+        throw new Error('NGリストデータが含まれていません')
+      }
       
       // 重複検出
       const conflicts = detectExtendedConflicts(ngList, data.ngList)

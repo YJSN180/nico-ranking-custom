@@ -575,3 +575,51 @@
     padding: 16px;
   }
 }
+
+/* プレビューセクション */
+.preview {
+  margin-top: 24px;
+  padding: 16px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.previewLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.previewContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+}
+
+/* タグボタンスタイル（タグセレクターと同じ） */
+.tagButton {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 20px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--primary-color);
+  background: var(--primary-color);
+  color: white;
+  cursor: default;
+  font-weight: 500;
+}
+
+/* モバイルでの調整 */
+@media (max-width: 640px) {
+  .tagButton {
+    max-width: 150px;
+  }
+}

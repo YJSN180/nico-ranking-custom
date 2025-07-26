@@ -59,15 +59,30 @@ export function CustomRankingBackup() {
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string
-        const data = JSON.parse(content) as BackupData
+        const rawData = JSON.parse(content)
         
-        // バリデーション
-        if (!data.version || !data.customRankings || !Array.isArray(data.customRankings)) {
-          throw new Error('無効なバックアップファイル形式です')
+        let data: BackupData
+        let customRankingsData: CustomRankingWithConditions[]
+        
+        // 統合バックアップファイルの判定と変換
+        if (rawData.version && rawData.data && rawData.data.customRankings) {
+          // 統合バックアップからカスタムランキングデータを抽出
+          customRankingsData = rawData.data.customRankings
+          data = {
+            version: rawData.version,
+            exportDate: rawData.exportDate,
+            customRankings: customRankingsData
+          }
+        } else if (rawData.version && rawData.customRankings && Array.isArray(rawData.customRankings)) {
+          // 個別カスタムランキングバックアップファイル
+          data = rawData as BackupData
+          customRankingsData = data.customRankings
+        } else {
+          throw new Error('カスタムランキングデータが含まれていません')
         }
 
         // 各ランキングのバリデーション
-        for (const ranking of data.customRankings) {
+        for (const ranking of customRankingsData) {
           if (!ranking.id || !ranking.title || !ranking.baseGenre) {
             throw new Error('無効なカスタムランキングデータが含まれています')
           }

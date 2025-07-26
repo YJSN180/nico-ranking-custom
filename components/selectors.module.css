@@ -177,12 +177,17 @@
   padding: 6px 12px;
   font-size: 13px;
   border-radius: 20px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 640px) {
   .tagButton {
     /* CSS Scroll Snap - 各タグボタンを中央にスナップ */
     scroll-snap-align: center;
+    max-width: 150px; /* モバイルではより狭い幅に制限 */
   }
 
   .tagButtonSelected {
@@ -191,6 +196,7 @@
     transform: scale(1.05);
     /* 選択されたタグボタンも中央にスナップ */
     scroll-snap-align: center;
+    max-width: 180px; /* 選択時は少し広めに */
   }
 }
 

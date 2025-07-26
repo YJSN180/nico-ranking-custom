@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { SortableCustomRankingItem } from './sortable-custom-ranking-item'
 import styles from './custom-ranking-order.module.css'
+import tagStyles from '../tag-selector.module.css'
 
 interface CustomRankingOrderProps {
   rankings: any[]
@@ -28,6 +29,7 @@ interface CustomRankingOrderProps {
   onEdit: (ranking: any) => void
   onDelete: (ranking: any) => void
   onMoveRanking: (fromId: string, toId: string) => void
+  isInHeader?: boolean
 }
 
 export function CustomRankingOrder({
@@ -36,7 +38,8 @@ export function CustomRankingOrder({
   onSelect,
   onEdit,
   onDelete,
-  onMoveRanking
+  onMoveRanking,
+  isInHeader = false
 }: CustomRankingOrderProps) {
   const [isReordering, setIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -145,15 +148,26 @@ export function CustomRankingOrder({
   }
 
   // 通常表示モード（並び替えボタンを表示）
+  const reorderButton = (
+    <button
+      className={isInHeader ? tagStyles.actionButton : styles.reorderButton}
+      onClick={() => setIsReordering(true)}
+      title="並び替え・編集"
+    >
+      <span className={isInHeader ? tagStyles.actionIcon : undefined}>↕️</span>
+      <span className={isInHeader ? tagStyles.actionText : undefined}>並び替え・編集</span>
+    </button>
+  )
+
+  // ヘッダー内に表示する場合はボタンのみを返す
+  if (isInHeader) {
+    return reorderButton
+  }
+
+  // それ以外の場合は従来通りdivで囲んで返す
   return (
     <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'flex-end' }}>
-      <button
-        className={styles.reorderButton}
-        onClick={() => setIsReordering(true)}
-      >
-        <span>↕️</span>
-        <span>並び替え・編集</span>
-      </button>
+      {reorderButton}
     </div>
   )
 }

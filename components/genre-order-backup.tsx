@@ -58,15 +58,38 @@ export function GenreOrderBackup() {
     reader.onload = (e) => {
       try {
         const content = e.target?.result as string
-        const data = JSON.parse(content) as BackupData
+        const rawData = JSON.parse(content)
         
-        // バリデーション
-        if (!data.version || !data.genreOrder || !Array.isArray(data.genreOrder)) {
-          throw new Error('無効なバックアップファイル形式です')
+        let data: BackupData
+        let genreOrderData: GenreItem[]
+        
+        // 統合バックアップファイルの判定と変換
+        if (rawData.version && rawData.data && rawData.data.genreOrder) {
+          // 統合バックアップからジャンル並び替えデータを抽出
+          genreOrderData = rawData.data.genreOrder
+          data = {
+            version: rawData.version,
+            exportDate: rawData.exportDate,
+            genreOrder: genreOrderData
+          }
+        } else if (rawData.version && rawData.genreOrder && Array.isArray(rawData.genreOrder)) {
+          // 個別ジャンル並び替えバックアップファイル
+          data = rawData as BackupData
+          genreOrderData = data.genreOrder
+        } else if (rawData.genreOrder && Array.isArray(rawData.genreOrder)) {
+          // 古い形式（versionなし）もサポート
+          genreOrderData = rawData.genreOrder
+          data = {
+            version: 1,
+            exportDate: new Date().toISOString(),
+            genreOrder: genreOrderData
+          }
+        } else {
+          throw new Error('ジャンル並び替えデータが含まれていません')
         }
 
         // 各アイテムのバリデーション
-        for (const item of data.genreOrder) {
+        for (const item of genreOrderData) {
           if (!item.id || typeof item.isVisible !== 'boolean' || typeof item.order !== 'number') {
             throw new Error('無効なジャンルデータが含まれています')
           }

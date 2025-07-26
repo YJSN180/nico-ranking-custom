@@ -511,7 +511,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <UnifiedBackup />
               </section>
               
-              <section className={styles.section} style={{ marginTop: '2rem' }}>
+              <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>💾 NGリストバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
@@ -519,7 +519,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <NGBackup />
               </section>
               
-              <section className={styles.section} style={{ marginTop: '2rem' }}>
+              <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>🎯 ジャンル並び替えデータバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   ジャンルの表示順序と表示/非表示設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
@@ -527,7 +527,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <GenreOrderBackup />
               </section>
               
-              <section className={styles.section} style={{ marginTop: '2rem' }}>
+              <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>⭐ カスタムランキングデータバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   カスタムランキング設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
@@ -535,7 +535,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <CustomRankingBackup />
               </section>
               
-              <section className={styles.section} style={{ marginTop: '2rem' }}>
+              <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>📚 マイリストデータバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   すべてのマイリストと動画データをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。

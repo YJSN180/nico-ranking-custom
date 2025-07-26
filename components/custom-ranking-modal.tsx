@@ -472,15 +472,17 @@ export function CustomRankingModal({
                 </p>
               )}
 
-              <div className={styles.preview}>
-                <h4>プレビュー:</h4>
-                <div className={styles.previewBox}>
-                  <span className={styles.previewLabel}>選択中のタグ</span>
-                  <select className={styles.previewSelect}>
-                    <option>{formData.title || 'タイトル未設定'}</option>
-                  </select>
+              {/* タグボタンスタイルのプレビュー */}
+              {formData.title && (
+                <div className={styles.preview}>
+                  <p className={styles.previewLabel}>プレビュー:</p>
+                  <div className={styles.previewContainer}>
+                    <button className={`${styles.previewButton} ${styles.tagButton}`} disabled>
+                      {formData.title}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

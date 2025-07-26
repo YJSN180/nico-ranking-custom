@@ -226,17 +226,18 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             <h2 className={styles.tagTitle}>
               カスタムランキング
             </h2>
+            <div className={styles.customRankingActions}>
+              <CustomRankingOrder
+                rankings={visibleRankings}
+                selectedId={config.tag?.replace('custom:', '') || null}
+                onSelect={handleCustomRankingSelect}
+                onEdit={handleEditRanking}
+                onDelete={handleDeleteRanking}
+                onMoveRanking={moveRanking}
+                isInHeader={true}
+              />
+            </div>
           </div>
-          
-          {/* カスタムランキング並び替えボタン */}
-          <CustomRankingOrder
-            rankings={visibleRankings}
-            selectedId={config.tag?.replace('custom:', '') || null}
-            onSelect={handleCustomRankingSelect}
-            onEdit={handleEditRanking}
-            onDelete={handleDeleteRanking}
-            onMoveRanking={moveRanking}
-          />
           
           {config.tag && config.tag.startsWith('custom:') && (
             <div style={{ marginBottom: '12px' }}>
