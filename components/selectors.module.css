@@ -308,6 +308,16 @@
   transform: scale(1.1);
 }
 
+/* 検索条件セクションのヘッダーホバー時に表示 */
+.tagHeader:hover .customRankingActions {
+  opacity: 1;
+}
+
+/* 検索条件セクション内では常時表示 */
+.tagSelectorContainer .customRankingActions {
+  opacity: 1;
+}
+
 /* モバイルでは常に表示 */
 @media (max-width: 640px) {
   .customRankingActions {
