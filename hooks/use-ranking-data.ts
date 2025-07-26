@@ -136,6 +136,48 @@ export function useRankingData({
             console.log('[DEBUG] Actual genre:', actualGenre)
             // eslint-disable-next-line no-console
             console.log('[DEBUG] Conditions:', customRankingConditions)
+          } else {
+            // カスタムランキングが見つからない場合（IndexedDB読み込み中の可能性）
+            // 短時間待ってからリトライ（最大3回）
+            // eslint-disable-next-line no-console
+            console.log('[DEBUG] Custom ranking not found, attempting retry...')
+            
+            // リトライ処理
+            const maxRetries = 3
+            const retryDelay = 500 // 500ms
+            
+            for (let retry = 0; retry < maxRetries; retry++) {
+              // 短時間待機
+              await new Promise(resolve => setTimeout(resolve, retryDelay))
+              
+              // AbortSignalがキャンセルされていないか確認
+              if (signal.aborted) {
+                return
+              }
+              
+              // 再度カスタムランキングを探す
+              const retryRanking = customRankings.find((r: any) => r.id === customId)
+              if (retryRanking && retryRanking.baseGenre) {
+                // 見つかった場合は処理を続行
+                actualGenre = retryRanking.baseGenre
+                customRankingConditions = retryRanking.conditions || []
+                // eslint-disable-next-line no-console
+                console.log('[DEBUG] Custom ranking found on retry', retry + 1)
+                break
+              }
+              
+              // 最後のリトライでも見つからない場合
+              if (retry === maxRetries - 1) {
+                // eslint-disable-next-line no-console
+                console.log('[DEBUG] Custom ranking not found after retries, returning empty data')
+                setFullRankingData([])
+                setRankingData([])
+                setCurrentPopularTags([])
+                setLoading(false)
+                setError(null)
+                return
+              }
+            }
           }
         } else {
           // カスタムランキングが選択されているがタグが指定されていない場合

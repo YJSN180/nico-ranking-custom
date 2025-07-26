@@ -113,6 +113,7 @@ export default function ClientPage({
       handleConfigChange({ ...config, genre: visibleGenres[0], tag: undefined })
     }
   }, [visibleGenres]) // eslint-disable-line react-hooks/exhaustive-deps
+
   
   // NGリストのバージョンを追跡（更新時に強制再レンダリング）
   const ngListVersion = useMemo(() => {
