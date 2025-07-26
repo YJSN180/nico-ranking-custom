@@ -91,7 +91,7 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
           setIsLoading(false)
         }
       } finally {
-        if (mounted && storageBackend !== 'error') {
+        if (mounted) {
           setIsLoading(false)
         }
       }
