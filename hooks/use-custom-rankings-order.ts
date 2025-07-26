@@ -7,59 +7,61 @@ const STORAGE_KEY = 'customRankingsOrder'
 interface CustomRankingOrderItem {
   id: string
   order: number
+  isVisible: boolean
 }
 
 /**
  * カスタムランキング順序管理フック
- * カスタムランキングの表示順序を管理する
+ * カスタムランキングの表示順序と表示・非表示を管理する
  */
 export function useCustomRankingsOrder(rankings: any[]) {
-  const [orderMap, setOrderMap] = useState<Map<string, number>>(() => {
-    if (typeof window === 'undefined') return new Map()
+  const [orderItems, setOrderItems] = useState<CustomRankingOrderItem[]>(() => {
+    if (typeof window === 'undefined') return []
     
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored) as CustomRankingOrderItem[]
-        const map = new Map<string, number>()
-        parsed.forEach(item => {
-          map.set(item.id, item.order)
-        })
-        return map
+        return parsed
       }
     } catch (error) {
       console.error('Failed to load custom rankings order:', error)
     }
     
-    return new Map()
+    return []
   })
 
   // 新しいランキングが追加された場合、最後に追加
   useEffect(() => {
     let hasNewItems = false
-    const newOrderMap = new Map(orderMap)
+    const newOrderItems = [...orderItems]
     
     rankings.forEach((ranking, index) => {
-      if (!orderMap.has(ranking.id)) {
+      const exists = orderItems.find(item => item.id === ranking.id)
+      if (!exists) {
         // 既存の最大order値を取得
-        const maxOrder = Math.max(...Array.from(orderMap.values()), -1)
-        newOrderMap.set(ranking.id, maxOrder + 1 + index)
+        const maxOrder = Math.max(...orderItems.map(item => item.order), -1)
+        newOrderItems.push({
+          id: ranking.id,
+          order: maxOrder + 1 + index,
+          isVisible: true // デフォルトで表示
+        })
         hasNewItems = true
       }
     })
     
-    if (hasNewItems) {
-      setOrderMap(newOrderMap)
-      saveToLocalStorage(newOrderMap)
+    // 削除されたランキングを除去
+    const currentIds = new Set(rankings.map(r => r.id))
+    const filteredItems = newOrderItems.filter(item => currentIds.has(item.id))
+    
+    if (hasNewItems || filteredItems.length !== newOrderItems.length) {
+      setOrderItems(filteredItems)
+      saveToLocalStorage(filteredItems)
     }
-  }, [rankings, orderMap])
+  }, [rankings])
 
-  const saveToLocalStorage = (map: Map<string, number>) => {
+  const saveToLocalStorage = (items: CustomRankingOrderItem[]) => {
     try {
-      const items: CustomRankingOrderItem[] = Array.from(map.entries()).map(([id, order]) => ({
-        id,
-        order
-      }))
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
     } catch (error) {
       console.error('Failed to save custom rankings order:', error)
@@ -70,51 +72,84 @@ export function useCustomRankingsOrder(rankings: any[]) {
    * ランキングを新しい位置に移動
    */
   const moveRanking = useCallback((fromId: string, toId: string) => {
-    setOrderMap(currentMap => {
-      const newMap = new Map(currentMap)
-      const fromOrder = newMap.get(fromId)
-      const toOrder = newMap.get(toId)
+    setOrderItems(currentItems => {
+      const newItems = [...currentItems]
       
-      if (fromOrder === undefined || toOrder === undefined) return currentMap
+      // インデックスを事前に取得
+      const fromIndex = newItems.findIndex(item => item.id === fromId)
+      const toIndex = newItems.findIndex(item => item.id === toId)
       
-      // 全てのアイテムを順序でソート
-      const items = Array.from(newMap.entries()).sort((a, b) => a[1] - b[1])
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return currentItems
       
-      // fromアイテムを削除
-      const fromIndex = items.findIndex(item => item[0] === fromId)
-      const [movedItem] = items.splice(fromIndex, 1)
+      // アイテムを削除
+      const [movedItem] = newItems.splice(fromIndex, 1)
       
-      // toアイテムの位置を見つけて挿入
-      const toIndex = items.findIndex(item => item[0] === toId)
-      items.splice(toIndex, 0, movedItem)
+      // 削除後のインデックス調整
+      // fromIndexがtoIndexより前にあった場合、toIndexは1つ前にずれる
+      const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex
+      
+      // 新しい位置に挿入
+      newItems.splice(adjustedToIndex, 0, movedItem)
       
       // 順序を再計算
-      const updatedMap = new Map<string, number>()
-      items.forEach((item, index) => {
-        updatedMap.set(item[0], index)
+      newItems.forEach((item, index) => {
+        item.order = index
       })
       
-      saveToLocalStorage(updatedMap)
-      return updatedMap
+      saveToLocalStorage(newItems)
+      return newItems
     })
   }, [])
 
   /**
-   * 順序でソートされたランキングを返す
+   * 表示/非表示を切り替える
+   */
+  const toggleVisibility = useCallback((id: string) => {
+    setOrderItems(currentItems => {
+      const newItems = currentItems.map(item =>
+        item.id === id ? { ...item, isVisible: !item.isVisible } : item
+      )
+      saveToLocalStorage(newItems)
+      return newItems
+    })
+  }, [])
+
+  /**
+   * 順序でソートされたランキングを返す（表示・非表示両方）
    */
   const getSortedRankings = useCallback((rankingsToSort: any[]) => {
-    return [...rankingsToSort].sort((a, b) => {
-      const orderA = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER
-      const orderB = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER
-      return orderA - orderB
+    // orderItemsの情報をマップ化
+    const orderMap = new Map<string, CustomRankingOrderItem>()
+    orderItems.forEach(item => {
+      orderMap.set(item.id, item)
     })
-  }, [orderMap])
+    
+    // ランキングにorder情報を付与してソート
+    return [...rankingsToSort]
+      .map(ranking => {
+        const orderItem = orderMap.get(ranking.id)
+        return {
+          ...ranking,
+          order: orderItem?.order ?? Number.MAX_SAFE_INTEGER,
+          isVisible: orderItem?.isVisible ?? true
+        }
+      })
+      .sort((a, b) => a.order - b.order)
+  }, [orderItems])
+
+  /**
+   * 表示されているランキングのみを返す
+   */
+  const getVisibleRankings = useCallback((rankingsToSort: any[]) => {
+    const sorted = getSortedRankings(rankingsToSort)
+    return sorted.filter(ranking => ranking.isVisible)
+  }, [getSortedRankings])
 
   /**
    * 順序をリセット
    */
   const resetOrder = useCallback(() => {
-    setOrderMap(new Map())
+    setOrderItems([])
     try {
       localStorage.removeItem(STORAGE_KEY)
     } catch (error) {
@@ -124,7 +159,9 @@ export function useCustomRankingsOrder(rankings: any[]) {
 
   return {
     getSortedRankings,
+    getVisibleRankings,
     moveRanking,
+    toggleVisibility,
     resetOrder
   }
 }

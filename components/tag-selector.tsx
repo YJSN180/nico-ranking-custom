@@ -25,8 +25,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
   
   // カスタムランキング順序管理
-  const { getSortedRankings } = useCustomRankingsOrder(rankings)
-  const sortedRankings = getSortedRankings(rankings)
+  const { getVisibleRankings } = useCustomRankingsOrder(rankings)
+  const visibleRankings = getVisibleRankings(rankings)
   
   // 編集用の状態
   const [editingRanking, setEditingRanking] = useState<any>(null)
@@ -230,7 +230,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           
           {/* カスタムランキング並び替えボタン */}
           <CustomRankingOrder
-            rankings={sortedRankings}
+            rankings={visibleRankings}
             selectedId={config.tag?.replace('custom:', '') || null}
             onSelect={handleCustomRankingSelect}
             onEdit={handleEditRanking}
@@ -276,7 +276,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
               </button>
               
               {/* 既存のカスタムランキング */}
-              {sortedRankings.map((ranking) => (
+              {visibleRankings.map((ranking) => (
                 <button
                   key={ranking.id}
                   onClick={() => handleCustomRankingSelect(ranking.id)}

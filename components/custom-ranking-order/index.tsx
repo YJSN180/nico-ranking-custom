@@ -39,7 +39,7 @@ export function CustomRankingOrder({
 }: CustomRankingOrderProps) {
   const [isReordering, setIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
-  const { getSortedRankings, moveRanking } = useCustomRankingsOrder(rankings)
+  const { getSortedRankings, moveRanking, toggleVisibility } = useCustomRankingsOrder(rankings)
   
   const sortedRankings = getSortedRankings(rankings)
 
@@ -117,9 +117,11 @@ export function CustomRankingOrder({
                   id={ranking.id}
                   title={ranking.title}
                   isSelected={ranking.id === selectedId}
+                  isVisible={ranking.isVisible}
                   onSelect={() => onSelect(ranking.id)}
                   onEdit={() => onEdit(ranking)}
                   onDelete={() => onDelete(ranking)}
+                  onToggleVisibility={() => toggleVisibility(ranking.id)}
                 />
               ))}
             </div>

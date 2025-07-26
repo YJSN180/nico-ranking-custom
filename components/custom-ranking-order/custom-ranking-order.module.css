@@ -130,6 +130,7 @@
   opacity: 1;
 }
 
+.visibilityButton,
 .editButton,
 .deleteButton {
   width: 28px;
@@ -143,6 +144,12 @@
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s ease;
+}
+
+.visibilityButton:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+  transform: scale(1.1);
 }
 
 .editButton:hover {
