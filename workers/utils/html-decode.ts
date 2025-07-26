@@ -42,13 +42,13 @@ export function decodeRankingItem(item: any): any {
 /**
  * ランキングデータ全体のHTMLエンティティをデコード
  * @param data ランキングデータ
- * @returns デコード済みのランキングデータ（最大500件）
+ * @returns デコード済みのランキングデータ（最大1000件）
  */
 export function decodeRankingData(data: any): any {
   if (!data) return data
   
-  // パフォーマンス最適化: 最大500件に制限
-  const MAX_ITEMS = 500
+  // パフォーマンス最適化: 最大1000件に制限
+  const MAX_ITEMS = 1000
   const items = data.items ? data.items.slice(0, MAX_ITEMS) : []
   
   return {

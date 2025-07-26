@@ -112,9 +112,9 @@ describe('HTML Decode Utilities', () => {
       expect(decoded.popularTags).toEqual([])
     })
 
-    it('should limit items to maximum 500', () => {
-      // 600件のテストデータを作成
-      const items = Array.from({ length: 600 }, (_, i) => ({
+    it('should limit items to maximum 1000', () => {
+      // 1200件のテストデータを作成
+      const items = Array.from({ length: 1200 }, (_, i) => ({
         id: `sm${i + 1}`,
         title: `Video ${i + 1} &amp; Title`,
         authorName: `Author ${i + 1}`
@@ -123,17 +123,17 @@ describe('HTML Decode Utilities', () => {
       const data = {
         items,
         popularTags: [],
-        totalCount: 600
+        totalCount: 1200
       }
 
       const decoded = decodeRankingData(data)
       
-      // 500件に制限されていることを確認
-      expect(decoded.items).toHaveLength(500)
+      // 1000件に制限されていることを確認
+      expect(decoded.items).toHaveLength(1000)
       expect(decoded.items[0].title).toBe('Video 1 & Title')
-      expect(decoded.items[499].title).toBe('Video 500 & Title')
+      expect(decoded.items[999].title).toBe('Video 1000 & Title')
       // 元のtotalCountは保持される
-      expect(decoded.totalCount).toBe(600)
+      expect(decoded.totalCount).toBe(1200)
     })
   })
 })

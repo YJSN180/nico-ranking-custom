@@ -1,6 +1,6 @@
 /**
- * Cloudflare Worker - Green Worker 20250705 with Dynamic TTL & ETag Support
- * Smart Router用Green Worker（動的TTL & ETag対応、2025-07-05版）
+ * Cloudflare Worker - Green Worker 20250726 with Dynamic TTL & ETag Support
+ * Smart Router用Green Worker（動的TTL & ETag対応、2025-07-26版）
  * 
  * 🟢 現在アクティブなWorker (本番環境で使用中)
  * Blue/Green デプロイメント戦略において、このGreen Workerが現在稼働中です
@@ -10,17 +10,20 @@
  * - ETag support for conditional requests
  * - R2 direct access with HTML entity decoding
  * - Smart Router Green Worker deployment
+ * - Tag autocomplete API for search functionality
  * 
- * 実装状況 (2025-07-06更新):
- * ✅ /api/ranking - R2からランキングデータ取得（動的TTL対応）
+ * 実装状況 (2025-07-26更新):
+ * ✅ /api/ranking - R2からランキングデータ取得（動的TTL対応、1000件対応）
  * ✅ /api/metadata - メタデータ取得
  * ✅ /api/debug - デバッグ情報
  * ✅ /api/thumbnail/{videoId} - サムネイル取得API (KVキャッシュなし、CDNキャッシュのみ)
+ * ✅ /api/tags/autocomplete - タグオートコンプリートAPI (R2からタグ累積データ取得)
  * 
  * 注意事項:
  * - サムネイルAPIはKVキャッシュを使用しない（個人差でキャッシュヒット率が低いため）
  * - CDNレベルでキャッシュ: ブラウザ1時間、CDN24時間
  * - サムネイル取得にはnicovideo.gayミラーサイトを使用
+ * - html-decode.tsで最大1000件制限に変更済み（2025-07-26）
  */
 
 /// <reference types="@cloudflare/workers-types" />
@@ -35,6 +38,18 @@ interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
   RATE_LIMITER: any // Cloudflare Rate Limiting binding
+}
+
+// タグ累積データの型定義
+interface TagAccumulationData {
+  tags: string[]
+  metadata: {
+    version: number
+    lastUpdated: string
+    totalUniqueTags: number
+    lastAccumulationSource: string
+    weeklyUpdateCount: number
+  }
 }
 
 // セキュリティヘッダー定義
@@ -105,7 +120,7 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
 }
 
 /**
- * 動的TTL計算 20250705
+ * 動的TTL計算 20250726
  * 実際の更新スケジュール（毎時0,20,40分）に最適化
  * GitHub Actions cron: every 20 minutes (0,20,40)
  */
@@ -139,7 +154,7 @@ function calculateDynamicTTL() {
   // 次の更新時刻までの秒数を計算
   const secondsUntilUpdate = Math.floor((nextUpdate.getTime() - now.getTime()) / 1000)
   
-  // 20250705 TTL戦略：負荷分散と鮮度のバランス
+  // 20250726 TTL戦略：負荷分散と鮮度のバランス
   // Browser: 5分（ユーザーセッション内重複回避）
   // CDN: 10分（地域キャッシュ効率化）  
   // Worker: 動的（更新直前は短く、直後は長く）
@@ -210,8 +225,8 @@ export default {
       const debugOutput = {
         time: new Date().toISOString(),
         headers: Object.fromEntries(request.headers.entries()),
-        worker: 'api-gateway-green-20250705',
-        version: 'green-20250705-dynamic-ttl',
+        worker: 'api-gateway-green-20250726',
+        version: 'green-20250726-dynamic-ttl',
         features: ['dynamic-ttl', 'etag-support', 'html-decode', 'smart-router-compatible'],
         dynamicTTL: {
           ...debugInfo,
@@ -224,7 +239,7 @@ export default {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'X-Worker-Version': 'green-20250705-unified-cors'
+          'X-Worker-Version': 'green-20250726-unified-cors'
         }
       })
       
@@ -244,14 +259,14 @@ export default {
           let metadataText: string
           
           if (contentEncoding === 'gzip') {
-            console.log('[Green Worker 20250705] Metadata is gzipped, decompressing...')
+            console.log('[Green Worker] Metadata is gzipped, decompressing...')
             try {
               const compressedData = await metadataObject.arrayBuffer()
               metadataText = await new Response(
                 new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
               ).text()
             } catch (decompressError) {
-              console.error('[Green Worker 20250705] Failed to decompress metadata:', decompressError)
+              console.error('[Green Worker] Failed to decompress metadata:', decompressError)
               metadataText = await metadataObject.text()
             }
           } else {
@@ -264,7 +279,7 @@ export default {
               'Content-Type': 'application/json',
               'Cache-Control': cacheControl,
               'ETag': metadataObject.httpEtag || `"${metadataObject.etag}"`,
-              'X-Worker-Version': 'green-20250705-unified-cors'
+              'X-Worker-Version': 'green-20250726-unified-cors'
             }
           })
           
@@ -283,6 +298,152 @@ export default {
       
       const origin = request.headers.get('Origin')
       return applyCORSHeaders(emptyResponse, origin, securityHeaders)
+    }
+
+    // タグオートコンプリートAPI
+    if (url.pathname === '/api/tags/autocomplete' && env.R2_BUCKET) {
+      try {
+        const query = url.searchParams.get('q') || ''
+        
+        // クエリが空または2文字未満の場合は空の結果を返す
+        if (!query || query.trim().length < 2) {
+          const emptyResponse = new Response(JSON.stringify({
+            query,
+            suggestions: [],
+            metadata: {
+              total: 0,
+              source: 'query-too-short'
+            }
+          }), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=300' // 5分キャッシュ
+            }
+          })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(emptyResponse, origin, securityHeaders)
+        }
+
+        // R2からタグ累積データを取得
+        const tagAccumulationObject = await env.R2_BUCKET.get('tag-accumulation.json')
+        
+        if (!tagAccumulationObject) {
+          // タグ累積データが存在しない場合
+          const notFoundResponse = new Response(JSON.stringify({
+            query,
+            suggestions: [],
+            metadata: {
+              total: 0,
+              source: 'tag-data-not-found',
+              error: 'Tag accumulation data not available'
+            }
+          }), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=60' // 1分キャッシュ
+            }
+          })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
+        }
+
+        // タグ累積データを解析
+        let tagData: TagAccumulationData
+        try {
+          // gzip圧縮対応
+          const reader = tagAccumulationObject.body.getReader()
+          const { value: firstChunk } = await reader.read()
+          reader.releaseLock()
+          
+          const isGzipped = firstChunk && firstChunk.length >= 2 && 
+                           firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
+          
+          if (isGzipped) {
+            // gzip解凍
+            const compressedData = await tagAccumulationObject.arrayBuffer()
+            const decompressedData = await new Response(
+              new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
+            ).text()
+            tagData = JSON.parse(decompressedData)
+          } else {
+            // 非圧縮データ
+            const textData = await tagAccumulationObject.text()
+            tagData = JSON.parse(textData)
+          }
+        } catch (parseError) {
+          console.error('Failed to parse tag accumulation data:', parseError)
+          const errorResponse = new Response(JSON.stringify({
+            query,
+            suggestions: [],
+            metadata: {
+              total: 0,
+              source: 'parse-error',
+              error: 'Failed to parse tag data'
+            }
+          }), {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache'
+            }
+          })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(errorResponse, origin, securityHeaders)
+        }
+
+        // プレフィックス検索を実行
+        const lowerQuery = query.toLowerCase()
+        const maxResults = parseInt(url.searchParams.get('limit') || '10')
+        const suggestions = (tagData.tags || [])
+          .filter((tag: string) => tag.toLowerCase().startsWith(lowerQuery))
+          .slice(0, maxResults)
+
+        // レスポンスを構築
+        const autocompleteResponse = {
+          query,
+          suggestions,
+          metadata: {
+            total: suggestions.length,
+            maxResults,
+            source: 'r2-tag-accumulation',
+            lastUpdated: tagData.metadata?.lastUpdated || null,
+            totalUniqueTags: tagData.metadata?.totalUniqueTags || 0
+          }
+        }
+
+        const response = new Response(JSON.stringify(autocompleteResponse), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
+          }
+        })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(response, origin, securityHeaders)
+
+      } catch (error) {
+        console.error('Tag autocomplete error:', error)
+        const errorResponse = new Response(JSON.stringify({
+          query: url.searchParams.get('q') || '',
+          suggestions: [],
+          metadata: {
+            total: 0,
+            source: 'error',
+            error: error.message
+          }
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        })
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(errorResponse, origin, securityHeaders)
+      }
     }
     
     // /api/ranking パスの処理
@@ -323,7 +484,7 @@ export default {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Data-Source': 'r2-tag-not-found',
-                'X-Worker-Version': 'green-20250705-unified-cors'
+                'X-Worker-Version': 'green-20250726-unified-cors'
               }
             })
             
@@ -341,7 +502,7 @@ export default {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
                 'X-Data-Source': 'r2-not-found',
-                'X-Worker-Version': 'green-20250705-unified-cors'
+                'X-Worker-Version': 'green-20250726-unified-cors'
               }
             })
             
@@ -365,8 +526,8 @@ export default {
               'CDN-Cache-Control': cdnCacheControl,
               'CF-Cache-Status': 'REVALIDATED',
               'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
-              'X-Worker-Version': 'green-20250705-unified-cors',
-              'X-TTL-Source': 'dynamic-20250705'
+              'X-Worker-Version': 'green-20250726-unified-cors',
+              'X-TTL-Source': 'dynamic-20250726'
             }
           })
           
@@ -386,8 +547,8 @@ export default {
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
         headers.set('CF-Cache-Status', 'MISS')
-        headers.set('X-Worker-Version', 'green-20250705')
-        headers.set('X-TTL-Source', 'dynamic-20250705')
+        headers.set('X-Worker-Version', 'green-20250726')
+        headers.set('X-TTL-Source', 'dynamic-20250726')
         headers.set('Server-Timing', `cfCache;desc="MISS", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`)
         
         // セキュリティヘッダーを追加
@@ -425,7 +586,7 @@ export default {
               const origin = request.headers.get('Origin')
               return applyCORSHeaders(gzipResponse, origin, {})
             } catch (parseError) {
-              console.error('[Green Worker 20250705] Failed to parse or decode JSON:', parseError)
+              console.error('[Green Worker] Failed to parse or decode JSON:', parseError)
               const gzipParseErrorResponse = new Response(decompressedData, {
                 status: 200,
                 headers
@@ -435,7 +596,7 @@ export default {
               return applyCORSHeaders(gzipParseErrorResponse, origin, {})
             }
           } catch (decompressError) {
-            console.error('[Green Worker 20250705] Failed to decompress gzipped data:', decompressError)
+            console.error('[Green Worker] Failed to decompress gzipped data:', decompressError)
             const gzipErrorResponse = new Response(workStream, {
               status: 200,
               headers,
@@ -462,7 +623,7 @@ export default {
             const origin = request.headers.get('Origin')
             return applyCORSHeaders(normalResponse, origin, {})
           } catch (error) {
-            console.error('[Green Worker 20250705] Failed to parse or decode JSON:', error)
+            console.error('[Green Worker] Failed to parse or decode JSON:', error)
             const normalErrorResponse = new Response(workStream, {
               status: 200,
               headers
@@ -474,7 +635,7 @@ export default {
         }
         
       } catch (error) {
-        console.error('[Green Worker 20250705] Error fetching from R2:', error)
+        console.error('[Green Worker] Error fetching from R2:', error)
         const errorResponse = new Response(JSON.stringify({
           error: 'Internal server error',
           message: 'Failed to fetch ranking data'
@@ -483,7 +644,7 @@ export default {
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'X-Worker-Version': 'green-20250705-unified-cors'
+            'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
         
@@ -636,7 +797,7 @@ export default {
             'Content-Type': 'application/json',
             // CDNレベルでのキャッシュのみ（個人差があるためKVキャッシュは使用しない）
             'Cache-Control': 'public, max-age=3600, s-maxage=86400', // ブラウザ1時間、CDN24時間
-            'X-Worker-Version': 'green-20250705-unified-cors'
+            'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
         
@@ -753,7 +914,7 @@ export default {
             'Content-Type': 'application/json',
             'Cache-Control': 'public, max-age=3600, s-maxage=86400',
             'X-HD-Source': 'nicovideo.gay',
-            'X-Worker-Version': 'green-20250705-unified-cors'
+            'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
         
@@ -787,7 +948,7 @@ export default {
     if (isStaticFile) {
       try {
         const r2Key = pathname.startsWith('/') ? `static${pathname}` : `static/${pathname}`
-        console.log(`[Static File 20250705] Trying to fetch from R2: ${r2Key}`)
+        console.log(`[Static File 20250726] Trying to fetch from R2: ${r2Key}`)
         const object = await env.R2_BUCKET.get(r2Key)
         
         if (object) {
@@ -799,7 +960,7 @@ export default {
           headers.set('Cache-Control', 'public, max-age=31536000, immutable')
           headers.set('ETag', object.etag)
           headers.set('X-Data-Source', 'r2-static')
-          headers.set('X-Worker-Version', 'green-20250705')
+          headers.set('X-Worker-Version', 'green-20250726')
           
           Object.entries(securityHeaders).forEach(([key, value]) => {
             headers.set(key, value)
@@ -811,10 +972,10 @@ export default {
           })
         }
       } catch (error) {
-        console.error(`[Static File 20250705] Error fetching from R2:`, error)
+        console.error(`[Static File 20250726] Error fetching from R2:`, error)
       }
       
-      console.log(`[Static File 20250705] Not found in R2, proxying to Vercel: ${pathname}`)
+      console.log(`[Static File 20250726] Not found in R2, proxying to Vercel: ${pathname}`)
       return proxyToVercel(request, env)
     }
     
