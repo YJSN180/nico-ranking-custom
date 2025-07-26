@@ -46,20 +46,45 @@ export function UnifiedBackup() {
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      // 各データをエクスポート
-      const ngListData = exportExtendedNGListData()
-      const mylistData = await exportMylistData()
-      
+      // エクスポートデータを初期化
       const data: UnifiedBackupData = {
         version: 1,
         exportDate: new Date().toISOString(),
         appVersion: '1.0.0', // TODO: 実際のアプリバージョンを取得
-        data: {
-          ngList: ngListData,
-          genreOrder: genreOrderItems,
-          customRankings: customRankings,
-          mylists: mylistData
-        }
+        data: {}
+      }
+      
+      // 各データを個別にエクスポート（エラーが発生しても他のデータは保存）
+      try {
+        const ngListData = exportExtendedNGListData()
+        data.data.ngList = ngListData
+      } catch (error) {
+        console.error('Failed to export NG list:', error)
+      }
+      
+      try {
+        data.data.genreOrder = genreOrderItems
+      } catch (error) {
+        console.error('Failed to export genre order:', error)
+      }
+      
+      try {
+        data.data.customRankings = customRankings
+      } catch (error) {
+        console.error('Failed to export custom rankings:', error)
+      }
+      
+      try {
+        const mylistData = await exportMylistData()
+        data.data.mylists = mylistData
+      } catch (error) {
+        console.error('Failed to export mylist data:', error)
+        // マイリストのエクスポートに失敗した場合でも続行
+      }
+      
+      // エクスポート可能なデータがあるか確認
+      if (Object.keys(data.data).length === 0) {
+        throw new Error('エクスポート可能なデータがありません')
       }
       
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -71,9 +96,28 @@ export function UnifiedBackup() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      
+      // エクスポートされたデータの種類を通知
+      const exportedTypes: string[] = []
+      if (data.data.ngList) exportedTypes.push('NGリスト')
+      if (data.data.genreOrder) exportedTypes.push('ジャンル並び替え')
+      if (data.data.customRankings) exportedTypes.push('カスタムランキング')
+      if (data.data.mylists) exportedTypes.push('マイリスト')
+      
+      console.log(`エクスポート完了: ${exportedTypes.join(', ')}`)
     } catch (error) {
       console.error('Failed to export unified backup:', error)
-      alert('統合バックアップのエクスポートに失敗しました')
+      const errorMessage = error instanceof Error ? error.message : '不明なエラー'
+      alert(`統合バックアップのエクスポートに失敗しました: ${errorMessage}`)
+      
+      // 詳細なエラー情報をコンソールに出力
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        })
+      }
     } finally {
       setIsExporting(false)
     }
