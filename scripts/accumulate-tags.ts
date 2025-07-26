@@ -154,6 +154,52 @@ async function extractTagsFromPartialResults(): Promise<Set<string>> {
   const tmpDir = './tmp'
 
   try {
+    // 最初に集約済みデータファイルの存在を確認
+    const aggregatedDataPath = path.join(tmpDir, 'latest-aggregated-data.json')
+    try {
+      await fs.access(aggregatedDataPath)
+      console.log(`📊 Found aggregated data file, using it for tag extraction`)
+      
+      const aggregatedData = JSON.parse(await fs.readFile(aggregatedDataPath, 'utf-8'))
+      
+      // 全ジャンル・期間のデータからタグを抽出
+      for (const [genre, genreData] of Object.entries(aggregatedData.genres || {})) {
+        for (const [period, periodData] of Object.entries(genreData as any)) {
+          if (!periodData || typeof periodData !== 'object') continue
+          
+          const data = periodData as any
+          
+          // アイテムからタグ抽出
+          if (data.items && Array.isArray(data.items)) {
+            for (const item of data.items) {
+              if (item.tags && Array.isArray(item.tags)) {
+                item.tags.forEach((tag: string) => allTags.add(tag))
+              }
+              if (item.tagDetails && Array.isArray(item.tagDetails)) {
+                item.tagDetails.forEach((detail: TagDetail) => allTags.add(detail.name))
+              }
+            }
+          }
+          
+          // 人気タグ
+          if (data.popularTags && Array.isArray(data.popularTags)) {
+            data.popularTags.forEach((tag: string) => allTags.add(tag))
+          }
+          
+          // タグランキング
+          if (data.tags && typeof data.tags === 'object') {
+            Object.keys(data.tags).forEach(tag => allTags.add(tag))
+          }
+        }
+      }
+      
+      console.log(`✅ Extracted ${allTags.size} unique tags from aggregated data`)
+      return allTags
+    } catch (error) {
+      console.log(`📂 Aggregated data file not found, falling back to group files`)
+    }
+    
+    // フォールバック: 個別の部分的結果ファイルから読み込み
     const files = await fs.readdir(tmpDir)
     const groupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'))
     
