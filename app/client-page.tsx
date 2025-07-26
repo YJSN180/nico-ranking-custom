@@ -477,11 +477,7 @@ export default function ClientPage({
     if (config.period !== '24h') params.set('period', config.period)
     if (config.tag) params.set('tag', config.tag)
     if (page > 1) params.set('page', page.toString())
-    // カスタムジャンルかつ選択されたランキングがある場合、rankingパラメータを追加
-    if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
-      const customId = config.tag.replace('custom:', '')
-      params.set('ranking', customId)
-    }
+    // Customジャンルは廃止されたため、rankingパラメータは使用しない
     
     // URLを更新するが、データの再取得は行わない
     // window.history.replaceStateを使用してブラウザ履歴に追加しない
@@ -786,13 +782,11 @@ export default function ClientPage({
           }}>
             {visibleGenres.length === 0 
               ? '表示する動画がありません' 
-              : config.genre === 'custom' && !config.tag
-                ? 'カスタムランキングを作成するか、既存のカスタムランキングを選択してください'
               : config.tag 
                 ? 'このタグの動画が見つかりません' 
                 : 'ランキングデータがありません'}
           </div>
-          {config.tag && visibleGenres.length > 0 && config.genre !== 'custom' && (
+          {config.tag && visibleGenres.length > 0 && (
             <button
               onClick={() => handleConfigChange({ ...config, tag: undefined })}
               style={{
