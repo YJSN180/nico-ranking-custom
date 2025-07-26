@@ -15,7 +15,7 @@ export interface StoreInfo {
 export class DBManager {
   private db: IDBPDatabase | null = null
   private readonly dbName = 'nicoran-db'
-  private readonly version = 5  // watchHistory削除
+  private readonly version = 6  // カスタムランキング対応
 
   async init(): Promise<void> {
     // eslint-disable-next-line no-console
@@ -109,6 +109,28 @@ export class DBManager {
           mylistVideosStore.createIndex('id', 'id')
           mylistVideosStore.createIndex('addedAt', 'addedAt')
           mylistVideosStore.createIndex('mylistId-addedAt', ['mylistId', 'addedAt'])
+        }
+        
+        // カスタムランキングストア（v6で追加）
+        if (!db.objectStoreNames.contains('customRankings')) {
+          const customRankingStore = db.createObjectStore('customRankings', {
+            keyPath: 'id'
+          })
+          customRankingStore.createIndex('orderIndex', 'orderIndex')
+          customRankingStore.createIndex('createdAt', 'createdAt')
+          customRankingStore.createIndex('updatedAt', 'updatedAt')
+          customRankingStore.createIndex('isVisible', 'isVisible')
+          customRankingStore.createIndex('isVisible-orderIndex', ['isVisible', 'orderIndex'])
+        }
+
+        // カスタムランキング条件ストア（v6で追加）
+        if (!db.objectStoreNames.contains('customRankingConditions')) {
+          const conditionsStore = db.createObjectStore('customRankingConditions', {
+            keyPath: 'id'
+          })
+          conditionsStore.createIndex('rankingId', 'rankingId')
+          conditionsStore.createIndex('orderIndex', 'orderIndex')
+          conditionsStore.createIndex('rankingId-orderIndex', ['rankingId', 'orderIndex'])
         }
         
         // 視聴履歴ストアを削除（v5で削除）

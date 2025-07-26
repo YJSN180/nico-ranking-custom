@@ -79,3 +79,60 @@ export interface MylistSortConfig {
   order: MylistSortOrder
   lastUpdated?: number  // 設定更新日時
 }
+
+// カスタムランキング関連型定義（IndexedDB用）
+import type { RankingGenre } from '@/types/ranking-config'
+
+// タグ条件の演算子
+export type TagOperator = 'AND' | 'OR' | 'NOT'
+
+// IndexedDB用カスタムランキング
+export interface CustomRankingIndexedDB {
+  id: string                    // UUID (Primary Key)
+  title: string                 // ユーザー定義タイトル
+  baseGenre: RankingGenre       // ベースジャンル
+  createdAt: number            // 作成日時
+  updatedAt: number            // 更新日時
+  orderIndex: number           // 表示順序（統合）
+  isVisible: boolean           // 表示/非表示（統合）
+}
+
+// IndexedDB用カスタムランキング条件
+export interface CustomRankingConditionIndexedDB {
+  id: string                   // UUID (Primary Key)
+  rankingId: string           // 関連するランキングID
+  tag: string                 // タグ名
+  operator: TagOperator       // 演算子
+  tagType: 'lock' | 'user' | 'both' // タグ種別
+  orderIndex: number          // 条件内の順序
+}
+
+// 条件付きカスタムランキング（クエリ結果用）
+export interface CustomRankingWithConditions extends CustomRankingIndexedDB {
+  conditions: CustomRankingConditionIndexedDB[]
+}
+
+// カスタムランキング並び替えオプション
+export type CustomRankingSortOrder = 
+  | 'orderIndex-asc'        // 表示順序（昇順）
+  | 'createdAt-desc'        // 作成日（新しい順）
+  | 'createdAt-asc'         // 作成日（古い順）
+  | 'updatedAt-desc'        // 更新日（新しい順）
+  | 'updatedAt-asc'         // 更新日（古い順）
+  | 'title-asc'             // タイトル（昇順）
+  | 'title-desc'            // タイトル（降順）
+
+// カスタムランキング作成データ
+export interface CreateCustomRankingData {
+  title: string
+  baseGenre: RankingGenre
+  conditions: Omit<CustomRankingConditionIndexedDB, 'id' | 'rankingId'>[]
+}
+
+// カスタムランキング更新データ
+export interface UpdateCustomRankingData {
+  title?: string
+  baseGenre?: RankingGenre
+  isVisible?: boolean
+  conditions?: Omit<CustomRankingConditionIndexedDB, 'id' | 'rankingId'>[]
+}
