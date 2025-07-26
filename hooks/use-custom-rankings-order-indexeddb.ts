@@ -35,9 +35,8 @@ export function useCustomRankingsOrderIndexedDB({
     const newRankings = [...rankings]
     const [movedItem] = newRankings.splice(fromIndex, 1)
     
-    // 削除後のインデックス調整
-    const adjustedToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex
-    newRankings.splice(adjustedToIndex, 0, movedItem)
+    // 直接toIndexに挿入（ジャンル並び替えと同じ実装）
+    newRankings.splice(toIndex, 0, movedItem)
     
     // 新しい順序インデックスを計算して更新
     const rankingOrders = newRankings.map((ranking, index) => ({
