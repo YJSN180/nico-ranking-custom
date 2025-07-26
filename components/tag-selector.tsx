@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
+import type { CustomRanking, CustomRankingFormState } from '@/types/custom-ranking'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import { useCustomRankingsOrder } from '@/hooks/use-custom-rankings-order'
 import { CustomRankingModal } from './custom-ranking-modal'
@@ -101,11 +102,14 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange(newConfig)
   }
 
-  const handleCreateCustomRanking = async (data: any) => {
+  const handleCreateCustomRanking = async (data: CustomRankingFormState) => {
     const newRanking = await createRanking({
       title: data.title,
       baseGenre: data.baseGenre,
-      conditions: data.conditions
+      conditions: data.conditions.map((condition, index) => ({
+        ...condition,
+        orderIndex: index
+      }))
     })
     
     // 作成後、genre='custom'でそのカスタムランキングを選択
@@ -126,7 +130,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       updateRanking(editingRanking.id, {
         title: data.title,
         baseGenre: data.baseGenre,
-        conditions: data.conditions
+        conditions: data.conditions.map((condition, index) => ({
+          ...condition,
+          orderIndex: index
+        }))
       })
       setEditingRanking(null)
       
