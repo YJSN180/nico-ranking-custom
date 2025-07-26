@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { CustomRanking, CustomRankingFormState } from '@/types/custom-ranking'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
@@ -17,11 +17,10 @@ interface TagSelectorProps {
 }
 
 export function TagSelector({ config, onConfigChange, popularTags: propsTags = [] }: TagSelectorProps) {
-  const [popularTags, setPopularTags] = useState<string[]>(propsTags)
-  const [loading, setLoading] = useState(false)
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
   const lastSelectedCustomIdRef = useRef<string | null>(null)
+  const hasRestoredCustomRanking = useRef(false)
   
   // カスタムランキング管理
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading, updateRankingOrder, toggleVisibility } = useCustomRankings()
@@ -37,41 +36,37 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const [deletingRanking, setDeletingRanking] = useState<any>(null)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
-  // propsから渡されたタグを優先的に使用
-  useEffect(() => {
-    // propsTagsが変更されたら常に反映
-    setPopularTags(propsTags)
-    setLoading(false)
-  }, [propsTags])
+  // propsを直接使用（stateへのコピーは不要）
+  const popularTags = propsTags
+  const loading = false // 常にfalse（propsで管理）
 
-  // 初回マウント時に選択されたタグが見えるようにスクロール
-  useEffect(() => {
-    if (!tagScrollRef.current || !config.tag) return
+  // スクロール処理をコールバックrefで実装（useEffect不要）
+  const scrollToSelectedTag = useCallback((node: HTMLDivElement | null) => {
+    if (!node || !config.tag) return
     
-    // 選択されたタグのボタンを探す
-    const selectedButton = tagScrollRef.current.querySelector(`.${styles.tagButtonSelected}`)
-    if (selectedButton && selectedButton instanceof HTMLElement) {
-      // ボタンを中央に表示するようにスクロール
-      const container = tagScrollRef.current
-      const buttonLeft = selectedButton.offsetLeft
-      const buttonWidth = selectedButton.offsetWidth
-      const containerWidth = container.offsetWidth
-      
-      // ボタンの中心を計算
-      const buttonCenter = buttonLeft + buttonWidth / 2
-      // コンテナの中心を計算
-      const containerCenter = containerWidth / 2
-      // スクロール位置を計算
-      const scrollLeft = buttonCenter - containerCenter
-      
-      // reduced-motion設定を考慮してスクロール
-      const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)')?.matches
-      container.scrollTo({
-        left: scrollLeft,
-        behavior: prefersReducedMotion ? 'auto' : 'smooth'
-      })
-    }
-  }, [config.tag]) // config.tagが変更されたときに実行
+    // 次のフレームで実行（DOMが更新された後）
+    requestAnimationFrame(() => {
+      const selectedButton = node.querySelector(`.${styles.tagButtonSelected}`)
+      if (selectedButton && selectedButton instanceof HTMLElement) {
+        const buttonLeft = selectedButton.offsetLeft
+        const buttonWidth = selectedButton.offsetWidth
+        const containerWidth = node.offsetWidth
+        
+        const buttonCenter = buttonLeft + buttonWidth / 2
+        const containerCenter = containerWidth / 2
+        const scrollLeft = buttonCenter - containerCenter
+        
+        const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        node.scrollTo({
+          left: scrollLeft,
+          behavior: prefersReducedMotion ? 'auto' : 'smooth'
+        })
+      }
+    })
+    
+    // refを保存
+    tagScrollRef.current = node
+  }, [config.tag])
 
   const handleTagSelect = (tag: string) => {
     if (tag === 'すべて') {
@@ -186,19 +181,22 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange({ ...config, tag: undefined })
   }
 
-  // カスタムジャンル選択時のLocalStorageからの復元
-  useEffect(() => {
-    if (typeof window !== 'undefined' && config.genre === 'custom' && !config.tag && !isLoading) {
-      const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
-      if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
-        // LocalStorageから保存されたカスタムランキングを自動選択
-        if (lastSelectedCustomIdRef.current !== savedCustomId) {
-          lastSelectedCustomIdRef.current = savedCustomId
-          handleCustomRankingSelect(savedCustomId)
-        }
-      }
+  // カスタムランキングの自動復元（レンダリング時の計算として実装）
+  if (typeof window !== 'undefined' && 
+      config.genre === 'custom' && 
+      !config.tag && 
+      !isLoading && 
+      !hasRestoredCustomRanking.current &&
+      rankings.length > 0) {
+    const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
+    if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
+      hasRestoredCustomRanking.current = true
+      // 次のレンダリングサイクルで実行
+      Promise.resolve().then(() => {
+        handleCustomRankingSelect(savedCustomId)
+      })
     }
-  }, [config.genre, config.tag, rankings, isLoading, handleCustomRankingSelect])
+  }
 
   if (loading) {
     return (
@@ -293,7 +291,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
 
           <div className={styles.scrollContainer}>
             <div 
-              ref={tagScrollRef}
+              ref={scrollToSelectedTag}
               className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
             >
               {/* 新規作成ボタン */}
@@ -466,7 +464,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
 
       <div className={styles.scrollContainer}>
         <div 
-          ref={tagScrollRef}
+          ref={scrollToSelectedTag}
           className={`${styles.buttonContainer} ${styles.tagScrollContainer}`}
         >
           {/* 「すべて」タグを最初に表示 */}
