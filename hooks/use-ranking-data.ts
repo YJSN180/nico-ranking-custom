@@ -14,6 +14,7 @@ interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
   ngList: NGList
   ngListVersion: string
+  customRankings?: any[]
 }
 
 interface UseRankingDataReturn {
@@ -35,7 +36,8 @@ interface UseRankingDataReturn {
 export function useRankingData({
   initialData,
   ngList,
-  ngListVersion
+  ngListVersion,
+  customRankings = []
 }: UseRankingDataProps): UseRankingDataReturn {
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
@@ -118,24 +120,22 @@ export function useRankingData({
         // カスタムランキングIDを取得
         if (config.tag?.startsWith('custom:')) {
           const customId = config.tag.replace('custom:', '')
-          const customRankingsStr = localStorage.getItem('custom-rankings')
           // eslint-disable-next-line no-console
           console.log('[DEBUG] Custom ranking ID:', customId)
           // eslint-disable-next-line no-console
-          console.log('[DEBUG] LocalStorage data:', customRankingsStr)
-          if (customRankingsStr) {
-            const customRankings = JSON.parse(customRankingsStr)
-            const targetRanking = customRankings.rankings?.find((r: any) => r.id === customId)
+          console.log('[DEBUG] Custom rankings from props:', customRankings)
+          
+          // propsから渡されたcustomRankingsを使用
+          const targetRanking = customRankings.find((r: any) => r.id === customId)
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Target ranking:', targetRanking)
+          if (targetRanking && targetRanking.baseGenre) {
+            actualGenre = targetRanking.baseGenre
+            customRankingConditions = targetRanking.conditions || []
             // eslint-disable-next-line no-console
-            console.log('[DEBUG] Target ranking:', targetRanking)
-            if (targetRanking && targetRanking.baseGenre) {
-              actualGenre = targetRanking.baseGenre
-              customRankingConditions = targetRanking.conditions || []
-              // eslint-disable-next-line no-console
-              console.log('[DEBUG] Actual genre:', actualGenre)
-              // eslint-disable-next-line no-console
-              console.log('[DEBUG] Conditions:', customRankingConditions)
-            }
+            console.log('[DEBUG] Actual genre:', actualGenre)
+            // eslint-disable-next-line no-console
+            console.log('[DEBUG] Conditions:', customRankingConditions)
           }
         } else {
           // カスタムランキングが選択されているがタグが指定されていない場合
@@ -239,7 +239,7 @@ export function useRankingData({
         setLoading(false)
       }
     }
-  }, [savePopularTagsToCache, deviceType])
+  }, [savePopularTagsToCache, deviceType, customRankings])
 
   // NGリストのフィルタリングはclient-page.tsx側で行うため、
   // ここでは生データをそのまま保持する

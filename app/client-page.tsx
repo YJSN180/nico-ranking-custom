@@ -138,7 +138,8 @@ export default function ClientPage({
   } = useRankingData({
     initialData,
     ngList,
-    ngListVersion
+    ngListVersion,
+    customRankings
   })
   
   // 設定の管理（初期値はURLパラメータから）
