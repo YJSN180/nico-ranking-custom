@@ -322,7 +322,7 @@ async function fetchWithNGFiltering(
   period: '24h' | 'hour',
   ngList: NGList,
   tag?: string,
-  targetItems: number = 500
+  targetItems: number = 1000
 ): Promise<{ items: RankingItem[], popularTags: string[] }> {
   const allItems: RankingItem[] = [];
   let popularTags: string[] = [];

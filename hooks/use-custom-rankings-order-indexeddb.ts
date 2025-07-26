@@ -11,11 +11,13 @@ import type { CustomRankingWithConditions } from '@/lib/storage/types'
 interface UseCustomRankingsOrderIndexedDBProps {
   rankings: CustomRankingWithConditions[]
   updateRankingOrder: (rankingOrders: { id: string; orderIndex: number }[]) => Promise<boolean>
+  toggleVisibility: (id: string) => Promise<boolean>
 }
 
 export function useCustomRankingsOrderIndexedDB({ 
   rankings, 
-  updateRankingOrder 
+  updateRankingOrder,
+  toggleVisibility
 }: UseCustomRankingsOrderIndexedDBProps) {
   
   /**
@@ -79,6 +81,7 @@ export function useCustomRankingsOrderIndexedDB({
     getSortedRankings,
     getVisibleRankings,
     moveRanking,
+    toggleVisibility,
     resetOrder
   }
 }

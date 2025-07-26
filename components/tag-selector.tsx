@@ -22,10 +22,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const tagScrollRef = useRef<HTMLDivElement>(null)
   
   // カスタムランキング管理
-  const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading } = useCustomRankings()
+  const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading, updateRankingOrder, toggleVisibility } = useCustomRankings()
   
   // カスタムランキング順序管理
-  const { getVisibleRankings, moveRanking } = useCustomRankingsOrder(rankings)
+  const { getVisibleRankings, moveRanking } = useCustomRankingsOrder(rankings, updateRankingOrder, toggleVisibility)
   const visibleRankings = getVisibleRankings(rankings)
   
   // 編集用の状態
@@ -101,8 +101,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange(newConfig)
   }
 
-  const handleCreateCustomRanking = (data: any) => {
-    const newRanking = createRanking({
+  const handleCreateCustomRanking = async (data: any) => {
+    const newRanking = await createRanking({
       title: data.title,
       baseGenre: data.baseGenre,
       conditions: data.conditions
@@ -112,7 +112,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange({ 
       ...config, 
       genre: 'custom' as RankingGenre, 
-      tag: `custom:${newRanking.id}`
+      tag: `custom:${newRanking}`
     })
   }
 

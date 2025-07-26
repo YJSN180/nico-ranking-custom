@@ -267,8 +267,10 @@ export class CustomRankingMigrator {
       localStorage.removeItem(this.STORAGE_KEY)
       localStorage.removeItem(this.ORDER_STORAGE_KEY)
       
+      // eslint-disable-next-line no-console
       console.log('localStorage cleanup completed with backup')
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Failed to cleanup localStorage:', error)
     }
   }
@@ -306,8 +308,10 @@ export class CustomRankingMigrator {
     
     try {
       localStorage.removeItem(this.MIGRATION_FLAG_KEY)
+      // eslint-disable-next-line no-console
       console.log('Migration state reset')
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Failed to reset migration state:', error)
     }
   }

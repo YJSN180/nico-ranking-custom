@@ -11,10 +11,7 @@ import type {
   CustomRankingSortOrder 
 } from '@/lib/storage/types'
 
-// localStorage fallback用のインポート
-import { useCustomRankings as useCustomRankingsLocalStorage } from './use-custom-rankings'
-
-type StorageBackend = 'indexeddb' | 'localstorage' | 'loading'
+type StorageBackend = 'indexeddb' | 'loading' | 'error'
 
 interface UseCustomRankingsIndexedDBResult {
   rankings: CustomRankingWithConditions[]
@@ -42,9 +39,6 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
   const dbManagerRef = useRef<DBManager | null>(null)
   const managerRef = useRef<CustomRankingManager | null>(null)
-
-  // localStorage フォールバック用
-  const localStorageHook = useCustomRankingsLocalStorage()
 
   // 初期化とマイグレーション
   useEffect(() => {
@@ -93,11 +87,11 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
       } catch (error) {
         console.error('Failed to initialize IndexedDB:', error)
         if (mounted) {
-          // IndexedDB 失敗時は localStorage にフォールバック
-          setStorageBackend('localstorage')
+          setStorageBackend('error')
+          setIsLoading(false)
         }
       } finally {
-        if (mounted) {
+        if (mounted && storageBackend !== 'error') {
           setIsLoading(false)
         }
       }
@@ -112,71 +106,34 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
   // IndexedDB から selectedId を読み込み（初回のみ）
   useEffect(() => {
-    if (storageBackend === 'indexeddb' && !selectedId && rankings.length > 0) {
-      const storedSelectedId = localStorage.getItem('custom-rankings-selected-id')
-      if (storedSelectedId && rankings.some(r => r.id === storedSelectedId)) {
-        setSelectedId(storedSelectedId)
+    if (storageBackend === 'indexeddb' && !selectedId && rankings.length > 0 && managerRef.current) {
+      // selectedId は状態管理のみで永続化しない（セッションスコープ）
+      // 必要に応じて最初のランキングを自動選択
+      const firstRanking = rankings.find(r => r.isVisible)
+      if (firstRanking) {
+        setSelectedId(firstRanking.id)
       }
     }
   }, [storageBackend, rankings, selectedId])
 
-  // selectedId の永続化
-  const saveSelectedId = useCallback((id: string | undefined) => {
-    try {
-      if (id) {
-        localStorage.setItem('custom-rankings-selected-id', id)
-      } else {
-        localStorage.removeItem('custom-rankings-selected-id')
-      }
-    } catch (error) {
-      console.warn('Failed to save selected ID:', error)
-    }
-  }, [])
 
-  // localStorage フォールバック使用時
-  if (storageBackend === 'localstorage') {
+  // エラー状態の場合は空の結果を返す
+  if (storageBackend === 'error') {
     return {
-      ...localStorageHook,
+      rankings: [],
+      selectedId: undefined,
+      selectedRanking: undefined,
+      createRanking: async () => null,
+      updateRanking: async () => false,
+      deleteRanking: async () => false,
+      selectRanking: async () => false,
+      toggleVisibility: async () => false,
+      updateRankingOrder: async () => false,
+      isUniqueTitle: async () => false,
+      searchRankings: async () => [],
+      isLoading: false,
       storageBackend,
-      migrationStatus,
-      // 型を合わせるための変換
-      rankings: localStorageHook.rankings.map(ranking => ({
-        ...ranking,
-        conditions: ranking.conditions.map((condition, index) => ({
-          id: `${ranking.id}-condition-${index}`,
-          rankingId: ranking.id,
-          tag: condition.tag,
-          operator: condition.operator,
-          tagType: condition.tagType,
-          orderIndex: index
-        })),
-        orderIndex: 0, // localStorage版では orderIndex がないため仮値
-        isVisible: true // localStorage版では isVisible がないため仮値
-      })),
-      searchRankings: async (query: string) => {
-        // localStorage版の検索実装（簡易版）
-        const filtered = localStorageHook.rankings.filter(ranking =>
-          ranking.title.toLowerCase().includes(query.toLowerCase()) ||
-          ranking.conditions.some(condition =>
-            condition.tag.toLowerCase().includes(query.toLowerCase())
-          )
-        )
-        return filtered.map(ranking => ({
-          ...ranking,
-          conditions: ranking.conditions.map((condition, index) => ({
-            id: `${ranking.id}-condition-${index}`,
-            rankingId: ranking.id,
-            tag: condition.tag,
-            operator: condition.operator,
-            tagType: condition.tagType,
-            orderIndex: index
-          })),
-          orderIndex: 0,
-          isVisible: true
-        }))
-      },
-      toggleVisibility: async () => true, // localStorage版では未対応
-      updateRankingOrder: async () => true // localStorage版では未対応
+      migrationStatus
     }
   }
 
@@ -193,14 +150,13 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
       
       // 新規作成したランキングを選択
       setSelectedId(newRankingId)
-      saveSelectedId(newRankingId)
       
       return newRankingId
     } catch (error) {
       console.error('Failed to create ranking:', error)
       return null
     }
-  }, [saveSelectedId])
+  }, [])
 
   const updateRanking = useCallback(async (id: string, updates: UpdateCustomRankingData): Promise<boolean> => {
     if (!managerRef.current) return false
@@ -232,7 +188,6 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
       // 削除されたランキングが選択中だった場合、選択を解除
       if (selectedId === id) {
         setSelectedId(undefined)
-        saveSelectedId(undefined)
       }
       
       return true
@@ -240,18 +195,17 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
       console.error('Failed to delete ranking:', error)
       return false
     }
-  }, [selectedId, saveSelectedId])
+  }, [selectedId])
 
   const selectRanking = useCallback(async (id: string | undefined): Promise<boolean> => {
     try {
       setSelectedId(id)
-      saveSelectedId(id)
       return true
     } catch (error) {
       console.error('Failed to select ranking:', error)
       return false
     }
-  }, [saveSelectedId])
+  }, [])
 
   const toggleVisibility = useCallback(async (id: string): Promise<boolean> => {
     if (!managerRef.current) return false
