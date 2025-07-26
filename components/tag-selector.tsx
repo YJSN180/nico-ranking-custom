@@ -88,9 +88,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     const selectedRanking = rankings.find(r => r.id === customId)
     if (!selectedRanking) return
     
-    // LocalStorageに保存
-    localStorage.setItem('lastSelectedCustomRankingId', customId)
-    lastSelectedCustomIdRef.current = customId
+    // LocalStorageに保存（クライアントサイドのみ）
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lastSelectedCustomRankingId', customId)
+      lastSelectedCustomIdRef.current = customId
+    }
     
     // genre='custom'のまま、tagにカスタムランキングIDを設定
     const newConfig = { 
@@ -111,9 +113,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       }))
     })
     
-    // LocalStorageに保存
-    localStorage.setItem('lastSelectedCustomRankingId', newRanking)
-    lastSelectedCustomIdRef.current = newRanking
+    // LocalStorageに保存（クライアントサイドのみ）
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('lastSelectedCustomRankingId', newRanking)
+      lastSelectedCustomIdRef.current = newRanking
+    }
     
     // 作成後、genre='custom'でそのカスタムランキングを選択
     onConfigChange({ 
@@ -161,9 +165,11 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       deleteRanking(deletingRanking.id)
       // 削除後は「すべて」ジャンルに戻る
       if (config.genre === 'custom' && config.tag === `custom:${deletingRanking.id}`) {
-        // LocalStorageからも削除
-        localStorage.removeItem('lastSelectedCustomRankingId')
-        lastSelectedCustomIdRef.current = null
+        // LocalStorageからも削除（クライアントサイドのみ）
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('lastSelectedCustomRankingId')
+          lastSelectedCustomIdRef.current = null
+        }
         onConfigChange({ ...config, genre: 'all', tag: undefined })
       }
       setDeletingRanking(null)
@@ -200,7 +206,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   
   // カスタムジャンル選択時のLocalStorageからの復元
   useEffect(() => {
-    if (config.genre === 'custom' && !config.tag && !isLoading) {
+    if (typeof window !== 'undefined' && config.genre === 'custom' && !config.tag && !isLoading) {
       const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
       if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
         // LocalStorageから保存されたカスタムランキングを自動選択
