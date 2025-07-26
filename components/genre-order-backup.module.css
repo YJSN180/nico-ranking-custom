@@ -100,6 +100,56 @@
   color: var(--text-secondary);
 }
 
+/* エクスポート統計 */
+.exportStats {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.statItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.statItem:last-child {
+  margin-bottom: 0;
+}
+
+.statLabel {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.statValue {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.statValue small {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+/* カスタムランキング用 */
+.rankingList {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: var(--surface-color);
+  border-radius: 4px;
+}
+
 /* インポート確認 */
 .importInfo {
   margin: 1rem 0;
@@ -207,5 +257,15 @@
   .dialogButton {
     width: 100%;
     justify-content: center;
+  }
+
+  .exportStats {
+    font-size: 0.85rem;
+  }
+
+  .statItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
 }

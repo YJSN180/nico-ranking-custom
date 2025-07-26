@@ -15,6 +15,7 @@ export function CustomRankingBackup() {
   const { rankings } = useCustomRankings()
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<BackupData | null>(null)
@@ -38,6 +39,7 @@ export function CustomRankingBackup() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      setExportConfirmOpen(false)
     } catch (error) {
       console.error('Failed to export custom rankings:', error)
       alert('カスタムランキングデータのエクスポートに失敗しました')
@@ -189,7 +191,7 @@ export function CustomRankingBackup() {
       <div className={styles.backupActions}>
         {/* エクスポートボタン */}
         <button
-          onClick={handleExport}
+          onClick={() => setExportConfirmOpen(true)}
           disabled={isExporting}
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-custom-ranking-button"
@@ -216,6 +218,47 @@ export function CustomRankingBackup() {
           インポート
         </label>
       </div>
+
+      {/* エクスポート確認ダイアログ */}
+      {exportConfirmOpen && (
+        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
+          <div 
+            className={styles.backupDialog} 
+            onClick={(e) => e.stopPropagation()}
+            data-testid="export-confirm-dialog"
+          >
+            <h3>カスタムランキングデータをエクスポート</h3>
+            <p>現在のカスタムランキング設定をJSON形式でダウンロードします。</p>
+            <div className={styles.exportStats}>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>カスタムランキング数:</span>
+                <span className={styles.statValue}>{rankings.length}件</span>
+              </div>
+              {rankings.length > 0 && (
+                <div className={styles.rankingList}>
+                  「{rankings.map(r => r.title).join('」「')}」
+                </div>
+              )}
+            </div>
+            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
+            <div className={styles.dialogActions}>
+              <button 
+                onClick={() => setExportConfirmOpen(false)}
+                className={`${styles.dialogButton} ${styles.cancelButton}`}
+              >
+                キャンセル
+              </button>
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`${styles.dialogButton} ${styles.confirmButton}`}
+              >
+                {isExporting ? 'エクスポート中...' : 'ダウンロード'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* インポート確認ダイアログ */}
       {importConfirmOpen && pendingImportData && (

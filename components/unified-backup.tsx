@@ -38,6 +38,7 @@ export function UnifiedBackup() {
   
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<UnifiedBackupData | null>(null)
@@ -59,18 +60,21 @@ export function UnifiedBackup() {
         const ngListData = exportExtendedNGListData()
         data.data.ngList = ngListData
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to export NG list:', error)
       }
       
       try {
         data.data.genreOrder = genreOrderItems
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to export genre order:', error)
       }
       
       try {
         data.data.customRankings = customRankings
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to export custom rankings:', error)
       }
       
@@ -78,6 +82,7 @@ export function UnifiedBackup() {
         const mylistData = await exportMylistData()
         data.data.mylists = mylistData
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to export mylist data:', error)
         // マイリストのエクスポートに失敗した場合でも続行
       }
@@ -104,14 +109,18 @@ export function UnifiedBackup() {
       if (data.data.customRankings) exportedTypes.push('カスタムランキング')
       if (data.data.mylists) exportedTypes.push('マイリスト')
       
+      // eslint-disable-next-line no-console
       console.log(`エクスポート完了: ${exportedTypes.join(', ')}`)
+      setExportConfirmOpen(false)
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to export unified backup:', error)
       const errorMessage = error instanceof Error ? error.message : '不明なエラー'
       alert(`統合バックアップのエクスポートに失敗しました: ${errorMessage}`)
       
       // 詳細なエラー情報をコンソールに出力
       if (error instanceof Error) {
+        // eslint-disable-next-line no-console
         console.error('Error details:', {
           message: error.message,
           stack: error.stack,
@@ -186,6 +195,7 @@ export function UnifiedBackup() {
         setPendingImportData(data)
         setImportConfirmOpen(true)
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Failed to import unified backup:', error)
         setImportMessage({ 
           type: 'error', 
@@ -311,6 +321,7 @@ export function UnifiedBackup() {
         }, 1500)
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to apply import:', error)
       setImportMessage({ 
         type: 'error', 
@@ -326,7 +337,7 @@ export function UnifiedBackup() {
       <div className={styles.backupActions}>
         {/* エクスポートボタン */}
         <button
-          onClick={handleExport}
+          onClick={() => setExportConfirmOpen(true)}
           disabled={isExporting}
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-unified-button"
@@ -353,6 +364,58 @@ export function UnifiedBackup() {
           まとめてインポート
         </label>
       </div>
+
+      {/* エクスポート確認ダイアログ */}
+      {exportConfirmOpen && (
+        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
+          <div 
+            className={styles.backupDialog} 
+            onClick={(e) => e.stopPropagation()}
+            data-testid="export-confirm-dialog"
+          >
+            <h3>統合バックアップをエクスポート</h3>
+            <p>
+              すべての設定データ（NGリスト、ジャンル並び替え、カスタムランキング、マイリスト）を一つのファイルにまとめてJSON形式でダウンロードします。
+            </p>
+            
+            <div className={styles.exportStats}>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>NGリスト:</span>
+                <span className={styles.statValue}>{ngList.totalCount}件</span>
+              </div>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>ジャンル並び替え:</span>
+                <span className={styles.statValue}>{genreOrderItems.length}件</span>
+              </div>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>カスタムランキング:</span>
+                <span className={styles.statValue}>{customRankings.length}件</span>
+              </div>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>マイリスト:</span>
+                <span className={styles.statValue}>データベースから取得</span>
+              </div>
+            </div>
+            
+            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
+            <div className={styles.dialogActions}>
+              <button 
+                onClick={() => setExportConfirmOpen(false)}
+                className={`${styles.dialogButton} ${styles.cancelButton}`}
+              >
+                キャンセル
+              </button>
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`${styles.dialogButton} ${styles.confirmButton}`}
+              >
+                {isExporting ? 'エクスポート中...' : 'ダウンロード'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* インポート確認ダイアログ */}
       {importConfirmOpen && pendingImportData && (

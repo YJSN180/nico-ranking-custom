@@ -15,6 +15,7 @@ export function GenreOrderBackup() {
   const { items } = useGenreOrderV2()
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<BackupData | null>(null)
@@ -37,6 +38,7 @@ export function GenreOrderBackup() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      setExportConfirmOpen(false)
     } catch (error) {
       console.error('Failed to export genre order:', error)
       alert('ジャンル並び替えデータのエクスポートに失敗しました')
@@ -127,7 +129,7 @@ export function GenreOrderBackup() {
       <div className={styles.backupActions}>
         {/* エクスポートボタン */}
         <button
-          onClick={handleExport}
+          onClick={() => setExportConfirmOpen(true)}
           disabled={isExporting}
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-genre-order-button"
@@ -154,6 +156,50 @@ export function GenreOrderBackup() {
           インポート
         </label>
       </div>
+
+      {/* エクスポート確認ダイアログ */}
+      {exportConfirmOpen && (
+        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
+          <div 
+            className={styles.backupDialog} 
+            onClick={(e) => e.stopPropagation()}
+            data-testid="export-confirm-dialog"
+          >
+            <h3>ジャンル並び替えデータをエクスポート</h3>
+            <p>現在のジャンル並び替え設定をJSON形式でダウンロードします。</p>
+            <div className={styles.exportStats}>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>ジャンル数:</span>
+                <span className={styles.statValue}>{items.length}件</span>
+              </div>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>表示中:</span>
+                <span className={styles.statValue}>{items.filter(item => item.isVisible).length}件</span>
+              </div>
+              <div className={styles.statItem}>
+                <span className={styles.statLabel}>非表示:</span>
+                <span className={styles.statValue}>{items.filter(item => !item.isVisible).length}件</span>
+              </div>
+            </div>
+            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
+            <div className={styles.dialogActions}>
+              <button 
+                onClick={() => setExportConfirmOpen(false)}
+                className={`${styles.dialogButton} ${styles.cancelButton}`}
+              >
+                キャンセル
+              </button>
+              <button 
+                onClick={handleExport}
+                disabled={isExporting}
+                className={`${styles.dialogButton} ${styles.confirmButton}`}
+              >
+                {isExporting ? 'エクスポート中...' : 'ダウンロード'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* インポート確認ダイアログ */}
       {importConfirmOpen && pendingImportData && (
