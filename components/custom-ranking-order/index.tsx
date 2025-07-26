@@ -30,6 +30,8 @@ interface CustomRankingOrderProps {
   onDelete: (ranking: any) => void
   onMoveRanking: (fromId: string, toId: string) => void
   isInHeader?: boolean
+  isReordering?: boolean
+  onReorderingChange?: (reordering: boolean) => void
 }
 
 export function CustomRankingOrder({
@@ -39,10 +41,16 @@ export function CustomRankingOrder({
   onEdit,
   onDelete,
   onMoveRanking,
-  isInHeader = false
+  isInHeader = false,
+  isReordering: externalIsReordering,
+  onReorderingChange
 }: CustomRankingOrderProps) {
-  const [isReordering, setIsReordering] = useState(false)
+  const [internalIsReordering, setInternalIsReordering] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
+  
+  // 外部から制御される場合は外部の状態を使用、そうでなければ内部状態を使用
+  const isReordering = externalIsReordering !== undefined ? externalIsReordering : internalIsReordering
+  const setIsReordering = onReorderingChange || setInternalIsReordering
   
   // 親から渡されたランキングをそのまま使用（二重ソートを避ける）
   const sortedRankings = rankings
