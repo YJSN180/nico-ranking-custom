@@ -9,6 +9,7 @@ import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
+import { useDeviceType, getDeviceBasedLimit } from '@/hooks/use-device-type'
 
 // 直接インポート（まず動作確認）
 import Pagination from '@/components/pagination'
@@ -40,10 +41,6 @@ interface ClientPageProps {
 
 // ページネーション設定
 const ITEMS_PER_PAGE = 100   // ページあたりの表示件数（DOM要素数削減のため）
-const DISPLAY_LIMITS = {
-  TAG: 300,      // タグ別ランキングは全300件取得
-  GENRE: 500,    // ジャンル別ランキングは500件取得
-}
 
 // PWAモードかどうかを検出
 const isPWA = () => {

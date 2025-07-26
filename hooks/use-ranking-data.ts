@@ -8,6 +8,7 @@ import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
+import { useDeviceType, getDeviceBasedLimit } from './use-device-type'
 
 interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
@@ -31,11 +32,6 @@ interface UseRankingDataReturn {
   isFallbackInitiatedRef: React.MutableRefObject<boolean>
 }
 
-const DISPLAY_LIMITS = {
-  TAG: 300,       // タグ別ランキングは全300件取得
-  GENRE: 500,     // ジャンル別ランキングは500件取得
-}
-
 export function useRankingData({
   initialData,
   ngList,
@@ -50,6 +46,9 @@ export function useRankingData({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(initialData?.popularTags || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  
+  // デバイスタイプを取得
+  const deviceType = useDeviceType()
   
   // リクエストキャンセル用のAbortController
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -104,7 +103,7 @@ export function useRankingData({
       }
 
       // APIから取得
-      const limit = config.tag ? DISPLAY_LIMITS.TAG : DISPLAY_LIMITS.GENRE
+      const limit = getDeviceBasedLimit(deviceType, !!config.tag)
       
       // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
       let actualGenre = config.genre
@@ -234,7 +233,7 @@ export function useRankingData({
         setLoading(false)
       }
     }
-  }, [savePopularTagsToCache])
+  }, [savePopularTagsToCache, deviceType])
 
   // NGリストのフィルタリングはclient-page.tsx側で行うため、
   // ここでは生データをそのまま保持する
