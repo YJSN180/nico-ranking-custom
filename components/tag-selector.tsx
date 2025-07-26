@@ -116,12 +116,12 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     })
   }
 
-  const handleEditRanking = (ranking: any) => {
+  const handleEditRanking = (ranking: CustomRanking) => {
     setEditingRanking(ranking)
     setShowCustomModal(true)
   }
 
-  const handleUpdateRanking = (data: any) => {
+  const handleUpdateRanking = (data: CustomRankingFormState) => {
     if (editingRanking) {
       updateRanking(editingRanking.id, {
         title: data.title,
@@ -141,7 +141,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     }
   }
 
-  const handleDeleteRanking = (ranking: any) => {
+  const handleDeleteRanking = (ranking: CustomRanking) => {
     setDeletingRanking(ranking)
     setShowDeleteModal(true)
   }

@@ -17,7 +17,7 @@ export class CustomRankingManager {
   async createRanking(data: CreateCustomRankingData): Promise<string> {
     const db = this.dbManager.getDB()
     const now = Date.now()
-    const rankingId = crypto.randomUUID()
+    const rankingId = crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
     // 次の表示順序を取得
     const nextOrderIndex = await this.getNextOrderIndex()
@@ -33,7 +33,7 @@ export class CustomRankingManager {
     }
     
     const conditions: CustomRankingConditionIndexedDB[] = data.conditions.map((condition, index) => ({
-      id: crypto.randomUUID(),
+      id: crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       rankingId,
       ...condition,
       orderIndex: index
@@ -93,7 +93,7 @@ export class CustomRankingManager {
         
         // 新しい条件を追加
         const newConditions: CustomRankingConditionIndexedDB[] = updates.conditions.map((condition, index) => ({
-          id: crypto.randomUUID(),
+          id: crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           rankingId,
           ...condition,
           orderIndex: index

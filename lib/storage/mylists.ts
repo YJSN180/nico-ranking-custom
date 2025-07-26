@@ -12,7 +12,7 @@ export class MylistManager {
   async createMylist(name: string, description?: string): Promise<string> {
     const db = this.dbManager.getDB()
     const now = Date.now()
-    const id = crypto.randomUUID()
+    const id = crypto?.randomUUID?.() ?? `mylist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     
     const mylist: Mylist = {
       id,
@@ -64,7 +64,7 @@ export class MylistManager {
     // マイリストが1つもない場合は初期マイリストを作成
     if (allMylists.length === 0) {
       const now = Date.now()
-      const id = crypto.randomUUID()
+      const id = crypto?.randomUUID?.() ?? `mylist-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       const newInitialMylist: Mylist = {
         id,
         name: 'とりあえずマイリスト',
