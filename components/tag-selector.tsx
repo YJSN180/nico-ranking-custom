@@ -215,6 +215,15 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     const selectedCustomRanking = (() => {
       if (!config.tag?.startsWith('custom:')) return null
       const customId = config.tag.replace('custom:', '')
+      // デバッグログ
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Custom ranking restoration:', {
+        configTag: config.tag,
+        customId,
+        rankings: rankings.map(r => ({ id: r.id, title: r.title })),
+        selectedRankingId: selectedRanking?.id,
+        found: rankings.find(r => r.id === customId)
+      })
       return rankings.find(r => r.id === customId) || 
              (selectedRanking?.id === customId ? selectedRanking : null)
     })()
