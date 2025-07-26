@@ -18,7 +18,8 @@ interface TagDisplayProviderProps {
 export function TagDisplayProvider({ children }: TagDisplayProviderProps) {
   const { preferences, updatePreferences } = useUserPreferences()
   // showTagsがundefinedの場合のみfalseにする（trueの場合はtrueを保持）
-  const showTags = preferences.showTags !== undefined ? preferences.showTags : false
+  // preferencesがnullの場合も考慮してフォールバック
+  const showTags = (preferences?.showTags !== undefined ? preferences.showTags : false) ?? false
   
   // デバッグログ（本番環境では削除）
   if (process.env.NODE_ENV === 'development') {

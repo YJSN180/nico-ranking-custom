@@ -118,9 +118,8 @@ function hasMatchingTag(item: RankingItem, condition: TagCondition): boolean {
   if (item.tags && item.tags.length > 0) {
     const hasTag = item.tags.some(tag => tag.toLowerCase() === tagNameLower)
     if (hasTag) {
-      // tagDetailsがない場合は、'both'の場合のみ一致とする
-      // 'lock'や'user'の場合は正確な判定ができないため除外
-      return condition.tagType === 'both'
+      // tagDetailsがない場合は後方互換性のため、タグタイプに関わらず一致とする
+      return true
     }
   }
 

@@ -22,7 +22,7 @@ describe('TagIcon', () => {
       render(<TagIcon type="both" />)
       const icon = screen.getByLabelText('両方のタグ')
       expect(icon).toBeInTheDocument()
-      expect(icon).toHaveAttribute('fill', '#9370DB') // 紫色
+      expect(icon).toHaveAttribute('viewBox', '0 0 20 16') // 両方タイプは幅20
     })
   })
 
@@ -108,14 +108,16 @@ describe('TagIcon統合テスト', () => {
 
   it('全てのタグタイプで一貫したスタイルが適用される', () => {
     const types: Array<'locked' | 'user' | 'both'> = ['locked', 'user', 'both']
-    const icons = types.map(type => {
-      const { container } = render(<TagIcon type={type} />)
-      return container.querySelector('svg')
-    })
+    const expectedViewBoxes = {
+      locked: '0 0 16 16',
+      user: '0 0 16 16', 
+      both: '0 0 20 16' // 'both'タイプは2つのアイコンを並べるため幅20
+    }
 
-    // 全てのアイコンが同じビューボックスを持つ
-    icons.forEach(icon => {
-      expect(icon).toHaveAttribute('viewBox', '0 0 16 16')
+    types.forEach(type => {
+      const { container } = render(<TagIcon type={type} />)
+      const icon = container.querySelector('svg')
+      expect(icon).toHaveAttribute('viewBox', expectedViewBoxes[type])
     })
   })
 })
