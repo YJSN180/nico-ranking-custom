@@ -68,6 +68,152 @@ export default {
       const origin = request.headers.get('Origin')
       return applyCORSHeaders(emptyResponse, origin, securityHeaders)
     }
+
+    // タグオートコンプリートAPI
+    if (url.pathname === '/api/tags/autocomplete' && env.R2_BUCKET) {
+      try {
+        const query = url.searchParams.get('q') || ''
+        
+        // クエリが空または2文字未満の場合は空の結果を返す
+        if (!query || query.trim().length < 2) {
+          const emptyResponse = new Response(JSON.stringify({
+            query,
+            suggestions: [],
+            metadata: {
+              total: 0,
+              source: 'query-too-short'
+            }
+          }), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=300' // 5分キャッシュ
+            }
+          })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(emptyResponse, origin, securityHeaders)
+        }
+
+        // R2からタグ累積データを取得
+        const tagAccumulationObject = await env.R2_BUCKET.get('tag-accumulation.json')
+        
+        if (!tagAccumulationObject) {
+          // タグ累積データが存在しない場合
+          const notFoundResponse = new Response(JSON.stringify({
+            query,
+            suggestions: [],
+            metadata: {
+              total: 0,
+              source: 'tag-data-not-found',
+              error: 'Tag accumulation data not available'
+            }
+          }), {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'public, max-age=60' // 1分キャッシュ
+            }
+          })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
+        }
+
+        // タグ累積データを解析
+        let tagData: any
+        try {
+          // gzip圧縮対応
+          const reader = tagAccumulationObject.body.getReader()
+          const { value: firstChunk } = await reader.read()
+          reader.releaseLock()
+          
+          const isGzipped = firstChunk && firstChunk.length >= 2 && 
+                           firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
+          
+          if (isGzipped) {
+            // gzip解凍
+            const compressedData = await tagAccumulationObject.arrayBuffer()
+            const decompressedData = await new Response(
+              new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
+            ).text()
+            tagData = JSON.parse(decompressedData)
+          } else {
+            // 非圧縮データ
+            const textData = await tagAccumulationObject.text()
+            tagData = JSON.parse(textData)
+          }
+        } catch (parseError) {
+          console.error('Failed to parse tag accumulation data:', parseError)
+          const errorResponse = new Response(JSON.stringify({
+            query,
+            suggestions: [],
+            metadata: {
+              total: 0,
+              source: 'parse-error',
+              error: 'Failed to parse tag data'
+            }
+          }), {
+            status: 500,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache'
+            }
+          })
+          const origin = request.headers.get('Origin')
+          return applyCORSHeaders(errorResponse, origin, securityHeaders)
+        }
+
+        // プレフィックス検索を実行
+        const lowerQuery = query.toLowerCase()
+        const maxResults = parseInt(url.searchParams.get('limit') || '10')
+        const suggestions = (tagData.tags || [])
+          .filter((tag: string) => tag.toLowerCase().startsWith(lowerQuery))
+          .slice(0, maxResults)
+
+        // レスポンスを構築
+        const autocompleteResponse = {
+          query,
+          suggestions,
+          metadata: {
+            total: suggestions.length,
+            maxResults,
+            source: 'r2-tag-accumulation',
+            lastUpdated: tagData.metadata?.lastUpdated || null,
+            totalUniqueTags: tagData.metadata?.totalUniqueTags || 0
+          }
+        }
+
+        const response = new Response(JSON.stringify(autocompleteResponse), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
+          }
+        })
+        
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(response, origin, securityHeaders)
+
+      } catch (error) {
+        console.error('Tag autocomplete error:', error)
+        const errorResponse = new Response(JSON.stringify({
+          query: url.searchParams.get('q') || '',
+          suggestions: [],
+          metadata: {
+            total: 0,
+            source: 'error',
+            error: error.message
+          }
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache'
+          }
+        })
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(errorResponse, origin, securityHeaders)
+      }
+    }
     
     // デバッグエンドポイント
     if (url.pathname === '/api/debug') {
@@ -227,10 +373,7 @@ export default {
         headers.set('CDN-Cache-Control', 'public, max-age=1200')
         headers.set('X-Data-Source', 'r2-direct')
         
-        // CORSとセキュリティヘッダーを追加
-        Object.entries(corsHeaders).forEach(([key, value]) => {
-          headers.set(key, value)
-        })
+        // セキュリティヘッダーを追加
         Object.entries(securityHeaders).forEach(([key, value]) => {
           headers.set(key, value)
         })

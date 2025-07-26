@@ -181,6 +181,28 @@ jobs:
         fi
         
         npx tsx scripts/aggregate-ranking-results-direct.ts
+
+    - name: Accumulate tags for autocomplete
+      env:
+        # Cloudflare credentials for tag accumulation
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        # R2 credentials for tag storage
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        # Add KV Namespace ID fallback
+        CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+      run: |
+        echo "🏷️  Accumulating tags for autocomplete functionality..."
+        
+        # Use fallback if KV_NAMESPACE_ID is not set
+        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
+          export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
+          echo "Using fallback KV namespace ID for tag accumulation"
+        fi
+        
+        npx tsx scripts/accumulate-tags.ts
     
     - name: Write to R2
       if: success()

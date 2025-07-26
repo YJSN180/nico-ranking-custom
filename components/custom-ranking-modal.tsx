@@ -86,9 +86,80 @@ export function CustomRankingModal({
   const [tagType, setTagType] = useState<'lock' | 'user' | 'both'>('both')
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
   
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
+
+  // オートコンプリート用のAPIエンドポイント
+  const getAutocompleteEndpoint = () => {
+    // 本番環境とローカル開発環境でエンドポイントを切り替え
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname
+      if (hostname === 'nico-rank.com') {
+        return 'https://nico-rank.com/api/tags/autocomplete'
+      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return '/api/tags/autocomplete'
+      } else if (hostname.includes('vercel.app')) {
+        return '/api/tags/autocomplete'
+      }
+    }
+    return '/api/tags/autocomplete'
+  }
+
+  // タグのオートコンプリート候補を取得
+  const fetchTagSuggestions = async (query: string): Promise<string[]> => {
+    if (!query || query.trim().length < 2) {
+      return []
+    }
+
+    try {
+      setIsLoadingSuggestions(true)
+      const endpoint = getAutocompleteEndpoint()
+      const url = new URL(endpoint, window.location.origin)
+      url.searchParams.set('q', query.trim())
+      url.searchParams.set('limit', '10')
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        console.warn('Failed to fetch tag suggestions:', response.status)
+        return []
+      }
+
+      const data = await response.json()
+      return data.suggestions || []
+    } catch (error) {
+      console.error('Error fetching tag suggestions:', error)
+      return []
+    } finally {
+      setIsLoadingSuggestions(false)
+    }
+  }
+
+  // デバウンス処理付きオートコンプリート
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      if (tagInput.trim().length >= 2) {
+        const suggestions = await fetchTagSuggestions(tagInput)
+        setTagSuggestions(suggestions)
+        setShowSuggestions(suggestions.length > 0)
+        setSelectedSuggestionIndex(-1) // 候補リストが更新されたら選択をリセット
+      } else {
+        setTagSuggestions([])
+        setShowSuggestions(false)
+        setSelectedSuggestionIndex(-1)
+      }
+    }, 300) // 300msデバウンス
+
+    return () => clearTimeout(timeoutId)
+  }, [tagInput])
 
   // モーダルが開いた時にリセットまたは初期化
   useEffect(() => {
@@ -112,6 +183,9 @@ export function CustomRankingModal({
       setTagInput('')
       setTagOperator('AND')
       setTagType('both')
+      setTagSuggestions([])
+      setShowSuggestions(false)
+      setSelectedSuggestionIndex(-1)
     }
   }, [isOpen, editingRanking])
 
@@ -328,27 +402,63 @@ export function CustomRankingModal({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        handleAddTag()
+                        if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < tagSuggestions.length) {
+                          // 選択された候補を使用
+                          setTagInput(tagSuggestions[selectedSuggestionIndex])
+                          setShowSuggestions(false)
+                          setSelectedSuggestionIndex(-1)
+                        } else {
+                          // 通常のタグ追加
+                          handleAddTag()
+                        }
+                      } else if (e.key === 'Escape') {
+                        // オートコンプリートを閉じる
+                        setShowSuggestions(false)
+                        setSelectedSuggestionIndex(-1)
+                      } else if (e.key === 'ArrowDown' && showSuggestions) {
+                        e.preventDefault()
+                        setSelectedSuggestionIndex(prev => 
+                          prev < tagSuggestions.length - 1 ? prev + 1 : 0
+                        )
+                      } else if (e.key === 'ArrowUp' && showSuggestions) {
+                        e.preventDefault()
+                        setSelectedSuggestionIndex(prev => 
+                          prev > 0 ? prev - 1 : tagSuggestions.length - 1
+                        )
                       }
                     }}
                     placeholder="タグを入力"
                     className={styles.tagInput}
                   />
-                  {showSuggestions && tagSuggestions.length > 0 && (
+                  {showSuggestions && (
                     <div className={styles.suggestions}>
-                      {tagSuggestions.map(suggestion => (
-                        <button
-                          key={suggestion}
-                          className={styles.suggestionItem}
-                          onClick={() => {
-                            setTagInput(suggestion)
-                            setShowSuggestions(false)
-                            tagInputRef.current?.focus()
-                          }}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
+                      {isLoadingSuggestions ? (
+                        <div className={styles.loadingMessage}>
+                          検索中...
+                        </div>
+                      ) : tagSuggestions.length > 0 ? (
+                        tagSuggestions.map((suggestion, index) => (
+                          <button
+                            key={suggestion}
+                            className={`${styles.suggestionItem} ${
+                              index === selectedSuggestionIndex ? styles.suggestionItemSelected : ''
+                            }`}
+                            onClick={() => {
+                              setTagInput(suggestion)
+                              setShowSuggestions(false)
+                              setSelectedSuggestionIndex(-1)
+                              tagInputRef.current?.focus()
+                            }}
+                            onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                          >
+                            {suggestion}
+                          </button>
+                        ))
+                      ) : (
+                        <div className={styles.noResultsMessage}>
+                          候補が見つかりませんでした
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

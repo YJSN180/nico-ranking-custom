@@ -20,7 +20,7 @@ import {
 } from '@dnd-kit/sortable'
 import { SortableCustomRankingItem } from './sortable-custom-ranking-item'
 import styles from './custom-ranking-order.module.css'
-import tagStyles from '../tag-selector.module.css'
+import tagStyles from '../selectors.module.css'
 
 interface CustomRankingOrderProps {
   rankings: any[]

@@ -295,6 +295,32 @@ async function writeToR2() {
         // メタデータのアップロード失敗は警告のみ（必須ではない）
       })
   )
+
+  // タグ累積データをアップロード（オートコンプリート用）
+  console.log('\n🏷️  Uploading tag accumulation data...')
+  const tagAccumulationPath = resolve(__dirname, '../tmp/tag-accumulation.json')
+  if (existsSync(tagAccumulationPath)) {
+    const tagAccumulationData = readFileSync(tagAccumulationPath, 'utf-8')
+    const tagAccumulationKey = 'tag-accumulation.json'
+    
+    uploadPromises.push(
+      uploadIfChanged(tagAccumulationKey, tagAccumulationData, 'application/json', 'public, max-age=86400', true) // 24時間キャッシュ、gzip圧縮
+        .then(uploaded => {
+          if (uploaded) {
+            uploadCount++
+            console.log('✅ Tag accumulation data uploaded successfully')
+          } else {
+            console.log('⏭️  Tag accumulation data skipped (no changes)')
+          }
+        })
+        .catch(error => {
+          console.error(`❌ Failed to upload tag accumulation data:`, error)
+          // タグ累積データのアップロード失敗は警告のみ（オートコンプリートに影響するが必須ではない）
+        })
+    )
+  } else {
+    console.log('⚠️  Tag accumulation data not found, skipping...')
+  }
   
   // すべてのアップロードを待つ
   await Promise.all(uploadPromises)
