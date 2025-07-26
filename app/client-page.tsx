@@ -579,6 +579,23 @@ export default function ClientPage({
       alert(existingMessage)
     }
   }, [ngList, saveNGListDirectly])
+
+  // カスタムランキング作成時のプリフェッチハンドラ
+  const handlePrefetchGenre = useCallback((genre: RankingGenre) => {
+    // 現在の設定を維持しつつ、指定されたジャンルのデータをプリフェッチ
+    const prefetchConfig: RankingConfig = {
+      genre,
+      period: config.period,
+      tag: undefined // ジャンル全体のデータを取得
+    }
+    
+    // バックグラウンドでデータを取得（UIは更新しない）
+    // fetchRankingDataの結果はrankingCacheに自動的に保存される
+    fetchRankingData(prefetchConfig).catch(error => {
+      // プリフェッチエラーは無視（ユーザー体験に影響しない）
+      console.error('Prefetch error:', error)
+    })
+  }, [config.period, fetchRankingData])
   
   // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
@@ -741,7 +758,8 @@ export default function ClientPage({
         <TagSelector 
           config={config} 
           onConfigChange={handleConfigChange} 
-          popularTags={currentPopularTags} 
+          popularTags={currentPopularTags}
+          onPrefetchGenre={handlePrefetchGenre}
         />
         <TagToggleButton />
       </div>

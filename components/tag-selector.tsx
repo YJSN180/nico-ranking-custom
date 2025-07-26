@@ -14,9 +14,10 @@ interface TagSelectorProps {
   config: RankingConfig
   onConfigChange: (config: RankingConfig) => void
   popularTags?: string[]
+  onPrefetchGenre?: (genre: RankingGenre) => void // プリフェッチ用コールバック
 }
 
-export function TagSelector({ config, onConfigChange, popularTags: propsTags = [] }: TagSelectorProps) {
+export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onPrefetchGenre }: TagSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
   const lastSelectedCustomIdRef = useRef<string | null>(null)
@@ -446,6 +447,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           onSave={handleUpdateRanking}
           existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
           editingRanking={editingRanking}
+          onGenreSelect={onPrefetchGenre}
         />
         
         {/* 削除確認モーダル */}

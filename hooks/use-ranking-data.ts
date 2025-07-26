@@ -138,46 +138,11 @@ export function useRankingData({
             console.log('[DEBUG] Conditions:', customRankingConditions)
           } else {
             // カスタムランキングが見つからない場合（IndexedDB読み込み中の可能性）
-            // 短時間待ってからリトライ（最大3回）
+            // デフォルトで'all'ジャンルのデータを取得し、後でフィルタリング
             // eslint-disable-next-line no-console
-            console.log('[DEBUG] Custom ranking not found, attempting retry...')
-            
-            // リトライ処理
-            const maxRetries = 3
-            const retryDelay = 500 // 500ms
-            
-            for (let retry = 0; retry < maxRetries; retry++) {
-              // 短時間待機
-              await new Promise(resolve => setTimeout(resolve, retryDelay))
-              
-              // AbortSignalがキャンセルされていないか確認
-              if (signal.aborted) {
-                return
-              }
-              
-              // 再度カスタムランキングを探す
-              const retryRanking = customRankings.find((r: any) => r.id === customId)
-              if (retryRanking && retryRanking.baseGenre) {
-                // 見つかった場合は処理を続行
-                actualGenre = retryRanking.baseGenre
-                customRankingConditions = retryRanking.conditions || []
-                // eslint-disable-next-line no-console
-                console.log('[DEBUG] Custom ranking found on retry', retry + 1)
-                break
-              }
-              
-              // 最後のリトライでも見つからない場合
-              if (retry === maxRetries - 1) {
-                // eslint-disable-next-line no-console
-                console.log('[DEBUG] Custom ranking not found after retries, returning empty data')
-                setFullRankingData([])
-                setRankingData([])
-                setCurrentPopularTags([])
-                setLoading(false)
-                setError(null)
-                return
-              }
-            }
+            console.log('[DEBUG] Custom ranking not found yet, fetching all genre data for later filtering')
+            actualGenre = 'all' // デフォルトジャンル
+            customRankingConditions = [] // 後でフィルタリング条件が読み込まれたら適用
           }
         } else {
           // カスタムランキングが選択されているがタグが指定されていない場合

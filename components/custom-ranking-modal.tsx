@@ -64,6 +64,7 @@ interface CustomRankingModalProps {
   onSave: (data: CustomRankingFormState) => void
   existingTitles?: string[]
   editingRanking?: any // 編集対象のランキング
+  onGenreSelect?: (genre: RankingGenre) => void // プリフェッチ用コールバック
 }
 
 export function CustomRankingModal({ 
@@ -71,7 +72,8 @@ export function CustomRankingModal({
   onClose, 
   onSave, 
   existingTitles = [],
-  editingRanking
+  editingRanking,
+  onGenreSelect
 }: CustomRankingModalProps) {
   const [currentStep, setCurrentStep] = useState<ModalStep>(1)
   const [formData, setFormData] = useState<CustomRankingFormState>({
@@ -209,6 +211,11 @@ export function CustomRankingModal({
   const handleGenreSelect = (genre: RankingGenre) => {
     if (genre === 'custom') return // カスタムは選択不可
     setFormData(prev => ({ ...prev, baseGenre: genre }))
+    
+    // データのプリフェッチを親コンポーネントに通知
+    if (onGenreSelect) {
+      onGenreSelect(genre)
+    }
   }
 
   // タグ追加（Step 2）
