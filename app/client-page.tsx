@@ -28,6 +28,7 @@ import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
+import { serverLog } from '@/lib/server-log'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -419,23 +420,46 @@ export default function ClientPage({
   
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] handleConfigChange called with:', newConfig)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] Current config:', config)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] Is initial load:', isInitialLoad)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] Is showing custom ranking:', isShowingCustomRanking)
+    // Vercelログに設定変更情報を出力
+    serverLog.info('handleConfigChange called', {
+      newConfig,
+      currentConfig: config,
+      isInitialLoad,
+      isShowingCustomRanking,
+      force
+    })
     
-    // 初回ロードの場合はSSRのデータをそのまま使用（カスタムジャンルを除く）
-    if (isInitialLoad && 
-        newConfig.genre === initialGenre && 
-        newConfig.period === initialPeriod && 
-        newConfig.tag === initialTag &&
-        newConfig.genre !== 'custom') {
-      setIsInitialLoad(false)
-      return
+    // 初回ロードの処理
+    if (isInitialLoad) {
+      // カスタムランキングの場合は必ずデータフェッチを実行
+      if (newConfig.genre === 'custom') {
+        serverLog.info('Initial load for custom ranking - proceeding with data fetch', {
+          newConfig,
+          customRankingsCount: customRankings.length
+        })
+        setIsInitialLoad(false)
+        // データフェッチに続行
+      } else if (newConfig.genre === initialGenre && 
+                 newConfig.period === initialPeriod && 
+                 newConfig.tag === initialTag) {
+        // 通常のジャンルで同じ設定の場合はSSRデータを使用
+        serverLog.info('Initial load - using SSR data, skipping API fetch', {
+          initialGenre,
+          initialPeriod,
+          initialTag,
+          newConfigGenre: newConfig.genre
+        })
+        setIsInitialLoad(false)
+        return
+      } else {
+        // 設定が異なる場合はデータフェッチを実行
+        serverLog.info('Initial load with different config - proceeding with data fetch', {
+          initialConfig: { genre: initialGenre, period: initialPeriod, tag: initialTag },
+          newConfig
+        })
+        setIsInitialLoad(false)
+        // データフェッチに続行
+      }
     }
     
     // 変更がない場合は何もしない（強制更新でない限り）
@@ -445,8 +469,14 @@ export default function ClientPage({
       newConfig.period === config.period &&
       newConfig.tag === config.tag
     ) {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] No config change, skipping')
+      serverLog.info('No config change detected, skipping', {
+        force,
+        configComparison: {
+          genre: { current: config.genre, new: newConfig.genre },
+          period: { current: config.period, new: newConfig.period },
+          tag: { current: config.tag, new: newConfig.tag }
+        }
+      })
       return
     }
 

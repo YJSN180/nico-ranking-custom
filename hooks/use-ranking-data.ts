@@ -9,6 +9,7 @@ import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 import { useDeviceType, getDeviceBasedLimit } from './use-device-type'
+import { serverLog } from '@/lib/server-log'
 
 interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
@@ -141,9 +142,15 @@ export function useRankingData({
       const isTagRanking = !!config.tag && !config.tag.startsWith('custom:')
       const limit = getDeviceBasedLimit(deviceType, isTagRanking)
       
-      // デバッグ情報を出力
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Device type:', deviceType, 'Tag:', config.tag, 'isTagRanking:', isTagRanking, 'Limit:', limit)
+      // デバッグ情報をVercelログに出力
+      serverLog.info('Device type and API request info', {
+        deviceType,
+        tag: config.tag,
+        isTagRanking,
+        limit,
+        genre: config.genre,
+        period: config.period
+      })
       
       // actualGenreの設定（カスタムランキングの場合は既に処理済みのcacheGenreを使用）
       let actualGenre = isCustomRanking ? cacheGenre : config.genre
@@ -151,6 +158,11 @@ export function useRankingData({
       // カスタムランキングが選択されているがタグが指定されていない場合
       if (config.genre === 'custom' && !config.tag?.startsWith('custom:')) {
         // 空データを返してAPIリクエストを防ぐ
+        serverLog.info('Custom genre without custom tag - returning empty data', {
+          genre: config.genre,
+          tag: config.tag,
+          hasCustomRankings: customRankings.length > 0
+        })
         setFullRankingData([])
         setRankingData([])
         setCurrentPopularTags([])
@@ -159,10 +171,14 @@ export function useRankingData({
         return
       }
       
-      // デバッグ情報を出力（カスタムランキングの場合）
+      // デバッグ情報をVercelログに出力（カスタムランキングの場合）
       if (isCustomRanking) {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Custom ranking - actualGenre:', actualGenre, 'conditions:', customRankingConditions)
+        serverLog.info('Custom ranking configuration', {
+          actualGenre,
+          customRankingConditions,
+          customId: config.tag?.replace('custom:', ''),
+          cacheGenre
+        })
       }
       
       const baseParams = new URLSearchParams({
@@ -194,31 +210,38 @@ export function useRankingData({
 
       const data: RankingData = await response.json()
       
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] API response items count:', data?.items?.length)
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] First 3 items:', data?.items?.slice(0, 3).map(item => ({
-        title: item.title,
-        tags: item.tags,
-        tagDetails: item.tagDetails
-      })))
+      // APIレスポンス情報をVercelログに出力
+      serverLog.info('API response received', {
+        itemsCount: data?.items?.length || 0,
+        hasPopularTags: !!data?.popularTags,
+        firstThreeItems: data?.items?.slice(0, 3).map(item => ({
+          title: item.title,
+          tags: item.tags,
+          tagDetails: item.tagDetails
+        })) || []
+      })
       
       if (data && data.items && Array.isArray(data.items)) {
         let itemsToSet = data.items
         
         // カスタムランキングの場合、タグ条件でフィルタリング
         if (config.genre === 'custom' && customRankingConditions.length > 0) {
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Before filtering:', itemsToSet.length)
+          const beforeCount = itemsToSet.length
           itemsToSet = applyCustomFilters(data.items, customRankingConditions)
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] After filtering:', itemsToSet.length)
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Filtered items:', itemsToSet.slice(0, 3).map(item => ({
-            title: item.title,
-            tags: item.tags,
-            tagDetails: item.tagDetails
-          })))
+          const afterCount = itemsToSet.length
+          
+          // フィルタリング結果をVercelログに出力
+          serverLog.info('Custom ranking filtering applied', {
+            beforeCount,
+            afterCount,
+            filteredOutCount: beforeCount - afterCount,
+            conditionsApplied: customRankingConditions.length,
+            firstThreeFiltered: itemsToSet.slice(0, 3).map(item => ({
+              title: item.title,
+              tags: item.tags,
+              tagDetails: item.tagDetails
+            }))
+          })
         }
         
         // フィルタリング後のデータを保存
@@ -242,6 +265,14 @@ export function useRankingData({
         }
       } else {
         // カスタムランキングで空のデータを受信
+        serverLog.warn('Empty data received from API', {
+          apiResponse: data,
+          config: {
+            genre: config.genre,
+            period: config.period,
+            tag: config.tag
+          }
+        })
         setFullRankingData([])
         setRankingData([])
       }
