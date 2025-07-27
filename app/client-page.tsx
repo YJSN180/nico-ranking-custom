@@ -507,8 +507,6 @@ export default function ClientPage({
         newConfig.tag?.startsWith('custom:') &&
         config.tag === newConfig.tag &&
         config.period === newConfig.period) {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Maintaining custom ranking display state')
       setConfig(newConfig)
       return // データ取得をスキップして専用状態を維持
     }
@@ -516,8 +514,6 @@ export default function ClientPage({
     // カスタムランキング以外への切り替え、または異なるカスタムランキングへの切り替え
     if (isShowingCustomRanking && 
         (newConfig.genre !== 'custom' || newConfig.tag !== config.tag)) {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Resetting custom ranking display state')
       setIsShowingCustomRanking(false)
       setCustomRankingDisplayData([])
       setCustomRankingMetadata(null)
@@ -540,8 +536,6 @@ export default function ClientPage({
     if (newConfig.tag) params.set('tag', newConfig.tag)
     
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] Pushing to URL:', newUrl)
     router.push(newUrl, { scroll: false })
 
     // 既存カスタムランキング選択時は即座にフィルタリング表示を試行（エラーハンドリング強化）
@@ -599,38 +593,16 @@ export default function ClientPage({
                         baseGenre: targetRanking.baseGenre
                       })
                       
-                      // eslint-disable-next-line no-console
-                      console.log('[DEBUG] Applied immediate filtering for existing custom ranking:', {
-                        customId,
-                        originalCount: cachedData.data.length,
-                        filteredCount: filteredData.length,
-                        title: targetRanking.title,
-                        validConditionsCount: validConditions.length,
-                        originalConditionsCount: targetRanking.conditions.length
-                      })
-                      
                       return // データ取得をスキップ
                     }
                   }
                 } else {
-                  // eslint-disable-next-line no-console
-                  console.warn('[DEBUG] No cached data for existing custom ranking:', {
-                    customId,
-                    baseGenre: targetRanking.baseGenre,
-                    period: newConfig.period,
-                    hasCachedData: !!cachedData
-                  })
+                  // No cached data for existing custom ranking
                 }
               }
             }
           } else {
-            // eslint-disable-next-line no-console
-            console.warn('[DEBUG] Custom ranking not found or invalid:', {
-              customId,
-              found: !!targetRanking,
-              hasBaseGenre: !!(targetRanking && targetRanking.baseGenre),
-              hasConditions: !!(targetRanking && targetRanking.conditions?.length > 0)
-            })
+            // Custom ranking not found or invalid
           }
         }
       } catch (error) {
@@ -649,19 +621,16 @@ export default function ClientPage({
       // 新規作成されたランキングがまだ反映されていない可能性をチェック
       if (newlyCreatedRanking && newlyCreatedRanking.id === customId) {
         // eslint-disable-next-line no-console
-        console.log('[DEBUG] Newly created custom ranking detected, waiting for state update')
         
         // 既にフィルタリング済みデータがある場合はスキップ
         if (isShowingCustomRanking && customRankingDisplayData.length > 0) {
           // eslint-disable-next-line no-console
-          console.log('[DEBUG] Using existing filtered data for newly created ranking')
           return
         }
         
         // データがない場合は、少し待ってから再試行
         setTimeout(() => {
           // eslint-disable-next-line no-console
-          console.log('[DEBUG] Retrying after state update')
           fetchRankingData(newConfig)
         }, 200)
         return
@@ -678,33 +647,19 @@ export default function ClientPage({
       const customId = newConfig.tag.replace('custom:', '')
       if (newlyCreatedRanking?.id === customId || 
           (config.tag === newConfig.tag && config.period === newConfig.period)) {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Skipping data fetch for custom ranking display (new or existing)', {
-          isNewlyCreated: newlyCreatedRanking?.id === customId,
-          customId,
-          dataCount: customRankingDisplayData.length
-        })
         return
       }
     }
     
     // カスタムランキング作成中の場合はfetchRankingDataをスキップ
     if (isCreatingCustomRanking && newConfig.genre === 'custom') {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Skipping fetchRankingData during custom ranking creation')
       return
     }
     
     // フックのfetchRankingData関数を使用してデータ取得
     try {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Fetching ranking data...')
       await fetchRankingData(newConfig)
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Ranking data fetched successfully')
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking])
@@ -855,23 +810,15 @@ export default function ClientPage({
   // カスタムランキング用データプリフェッチ
   const handlePrefetchData = useCallback(async (baseGenre: RankingGenre, period: string) => {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Prefetching data for custom ranking:', { baseGenre, period })
-      
       // キャッシュに既にデータがある場合はスキップ
       const cachedData = rankingCache.get(baseGenre, period)
       if (cachedData && cachedData.data) {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Data already in cache, skipping prefetch')
         return
       }
       
       // fetchRankingDataを使ってデータを取得
       const tempConfig = { genre: baseGenre, period: period as RankingPeriod, tag: undefined }
       await fetchRankingData(tempConfig)
-      
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Prefetch completed successfully')
     } catch (error) {
       console.error('[ERROR] Failed to prefetch data:', error)
       throw error // エラーを上位に伝播
@@ -906,12 +853,6 @@ export default function ClientPage({
       )
 
       // 新しく作成したランキング情報を最初に保存（重要：onConfigChangeより前に実行）
-      console.log('[DEBUG] Setting newlyCreatedRanking:', {
-        id: rankingId,
-        title,
-        baseGenre,
-        timestamp: new Date().toISOString()
-      })
       setNewlyCreatedRanking({
         id: rankingId,
         title,
@@ -921,8 +862,6 @@ export default function ClientPage({
       
       // 作成中フラグを設定（404エラーを防ぐため）
       setIsCreatingCustomRanking(true)
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] isCreatingCustomRanking flag set to true')
 
       // まずデータを取得（エラーをキャッチして処理続行）
       const tempConfig = { ...config, genre: baseGenre }
@@ -965,26 +904,8 @@ export default function ClientPage({
           conditions: validConditions,
           baseGenre
         })
-        
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Custom ranking immediate display activated:', {
-          originalCount: cachedData.data.length,
-          filteredCount: filteredData.length,
-          title,
-          conditions: validConditions,
-          validConditionsCount: validConditions.length,
-          originalConditionsCount: conditions.length
-        })
       } else {
-        // eslint-disable-next-line no-console
-        console.warn('[DEBUG] Cannot apply immediate filtering:', {
-          hasCachedData: !!cachedData,
-          hasValidData: !!(cachedData && cachedData.data),
-          dataIsArray: !!(cachedData && Array.isArray(cachedData.data)),
-          hasConditions: conditions.length > 0,
-          baseGenre,
-          period: config.period
-        })
+        // Cannot apply immediate filtering
       }
     } catch (error) {
       console.error('[ERROR] Failed to apply custom ranking filter:', error)
@@ -995,8 +916,6 @@ export default function ClientPage({
     } finally {
       // 作成中フラグをクリア（成功・失敗問わず）
       setIsCreatingCustomRanking(false)
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] isCreatingCustomRanking flag cleared')
     }
   }, [config, fetchRankingData])
   
