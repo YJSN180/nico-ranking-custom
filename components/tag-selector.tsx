@@ -106,34 +106,54 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   }
 
   const handleCreateCustomRanking = async (data: CustomRankingFormState) => {
-    const newRanking = await createRanking({
-      title: data.title,
-      baseGenre: data.baseGenre,
-      conditions: data.conditions.map((condition, index) => ({
-        ...condition,
-        orderIndex: index
-      }))
-    })
-    
-    // LocalStorageに保存（クライアントサイドのみ）
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('lastSelectedCustomRankingId', newRanking)
-      lastSelectedCustomIdRef.current = newRanking
-    }
-    
-    // 作成と同時にフィルタリングを実行（改修版：titleパラメータ追加）
-    if (onCreateCustomRankingWithFilter && data.baseGenre) {
-      await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
-    }
-    
-    // 作成後、genre='custom'でそのカスタムランキングを選択（遅延実行で専用状態を優先）
-    setTimeout(() => {
-      onConfigChange({ 
-        ...config, 
-        genre: 'custom' as RankingGenre, 
-        tag: `custom:${newRanking}`
+    try {
+      // ローディング表示用（オプション）
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Creating custom ranking...')
+      
+      const newRanking = await createRanking({
+        title: data.title,
+        baseGenre: data.baseGenre,
+        conditions: data.conditions.map((condition, index) => ({
+          ...condition,
+          orderIndex: index
+        }))
       })
-    }, 100) // 100ms遅延でフィルタリング表示を優先
+      
+      // LocalStorageに保存（クライアントサイドのみ）
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('lastSelectedCustomRankingId', newRanking)
+        lastSelectedCustomIdRef.current = newRanking
+      }
+      
+      // データの準備（フェッチとフィルタリング）
+      if (onCreateCustomRankingWithFilter && data.baseGenre) {
+        await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
+        
+        // データ準備が完了したことを確認
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Data preparation completed, performing force reload...')
+      }
+      
+      // 強制リロードで確実に反映（URLパラメータ付き）
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href)
+        url.searchParams.set('genre', 'custom')
+        url.searchParams.set('tag', `custom:${newRanking}`)
+        // 期間も保持
+        if (config.period && config.period !== '24h') {
+          url.searchParams.set('period', config.period)
+        }
+        
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Reloading to:', url.toString())
+        window.location.href = url.toString()
+      }
+    } catch (error) {
+      console.error('[ERROR] Failed to create custom ranking:', error)
+      // エラー時は通常のフローで処理
+      alert('カスタムランキングの作成に失敗しました。もう一度お試しください。')
+    }
   }
 
   const handleEditRanking = (ranking: CustomRanking) => {
@@ -143,29 +163,46 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
 
   const handleUpdateRanking = async (data: CustomRankingFormState) => {
     if (editingRanking) {
-      updateRanking(editingRanking.id, {
-        title: data.title,
-        baseGenre: data.baseGenre,
-        conditions: data.conditions.map((condition, index) => ({
-          ...condition,
-          orderIndex: index
-        }))
-      })
-      setEditingRanking(null)
-      
-      // 編集時も即時フィルタリングを実行（改修版：titleパラメータ追加）
-      if (onCreateCustomRankingWithFilter && data.baseGenre) {
-        await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
-      }
-      
-      // 編集後も、genre='custom'でそのカスタムランキングを選択（遅延実行で専用状態を優先）
-      setTimeout(() => {
-        onConfigChange({ 
-          ...config, 
-          genre: 'custom' as RankingGenre, 
-          tag: `custom:${editingRanking.id}` 
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Updating custom ranking...')
+        
+        await updateRanking(editingRanking.id, {
+          title: data.title,
+          baseGenre: data.baseGenre,
+          conditions: data.conditions.map((condition, index) => ({
+            ...condition,
+            orderIndex: index
+          }))
         })
-      }, 100) // 100ms遅延でフィルタリング表示を優先
+        setEditingRanking(null)
+        
+        // データの準備（フェッチとフィルタリング）
+        if (onCreateCustomRankingWithFilter && data.baseGenre) {
+          await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
+          
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Data preparation completed for update, performing force reload...')
+        }
+        
+        // 編集後も強制リロードで確実に反映
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href)
+          url.searchParams.set('genre', 'custom')
+          url.searchParams.set('tag', `custom:${editingRanking.id}`)
+          // 期間も保持
+          if (config.period && config.period !== '24h') {
+            url.searchParams.set('period', config.period)
+          }
+          
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Reloading after update to:', url.toString())
+          window.location.href = url.toString()
+        }
+      } catch (error) {
+        console.error('[ERROR] Failed to update custom ranking:', error)
+        alert('カスタムランキングの更新に失敗しました。もう一度お試しください。')
+      }
     } else {
       handleCreateCustomRanking(data)
     }
