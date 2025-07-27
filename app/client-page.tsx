@@ -105,14 +105,6 @@ export default function ClientPage({
   const { visibleGenres } = useGenreOrderV2()
   const { rankings: customRankings, selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
   
-  // customRankingsとnewlyCreatedRankingをマージ
-  const mergedCustomRankings = useMemo(() => {
-    if (newlyCreatedRanking && !customRankings.some((r: any) => r.id === newlyCreatedRanking.id)) {
-      return [...customRankings, newlyCreatedRanking]
-    }
-    return customRankings
-  }, [customRankings, newlyCreatedRanking])
-  
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
   
@@ -130,6 +122,14 @@ export default function ClientPage({
     // 軽量なハッシュ関数を使用（JSON.stringifyよりも高速）
     return generateNGListHash(ngList).toString()
   }, [ngList])
+  
+  // 新しく作成したカスタムランキングの一時保存（customRankings配列に反映されるまでの間）
+  const [newlyCreatedRanking, setNewlyCreatedRanking] = useState<{
+    id: string
+    title: string
+    conditions: any[]
+    baseGenre: RankingGenre
+  } | null>(null)
   
   // ランキングデータ管理フック
   const {
@@ -150,7 +150,8 @@ export default function ClientPage({
     initialData,
     ngList,
     ngListVersion,
-    customRankings: mergedCustomRankings
+    customRankings,
+    newlyCreatedRanking
   })
   
   // 設定の管理（初期値はURLパラメータから）
@@ -175,14 +176,6 @@ export default function ClientPage({
   const [isShowingCustomRanking, setIsShowingCustomRanking] = useState(false)
   const [customRankingDisplayData, setCustomRankingDisplayData] = useState<RankingItem[]>([])
   const [customRankingMetadata, setCustomRankingMetadata] = useState<{
-    title: string
-    conditions: any[]
-    baseGenre: RankingGenre
-  } | null>(null)
-  
-  // 新しく作成したカスタムランキングの一時保存（customRankings配列に反映されるまでの間）
-  const [newlyCreatedRanking, setNewlyCreatedRanking] = useState<{
-    id: string
     title: string
     conditions: any[]
     baseGenre: RankingGenre
@@ -505,10 +498,11 @@ export default function ClientPage({
         const customId = newConfig.tag.replace('custom:', '')
         
         // カスタムランキングデータ検証
-        if (!Array.isArray(mergedCustomRankings)) {
-          console.error('[ERROR] Merged custom rankings is not an array:', typeof mergedCustomRankings)
+        if (!Array.isArray(customRankings)) {
+          console.error('[ERROR] Custom rankings is not an array:', typeof customRankings)
         } else {
-          const targetRanking = mergedCustomRankings.find((r: any) => r && r.id === customId)
+          const targetRanking = customRankings.find((r: any) => r && r.id === customId) || 
+                                (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
           
           if (targetRanking && targetRanking.baseGenre && targetRanking.conditions?.length > 0) {
             // ランキングデータ検証
@@ -608,7 +602,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, mergedCustomRankings])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings, newlyCreatedRanking])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {

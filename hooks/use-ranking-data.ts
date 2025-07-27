@@ -5,7 +5,7 @@ import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { rankingCache } from '@/lib/ranking-cache'
 import { requestThrottle } from '@/lib/request-throttle'
 import type { RankingData, RankingItem } from '@/types/ranking'
-import type { RankingConfig } from '@/types/ranking-config'
+import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 import { useDeviceType, getDeviceBasedLimit } from './use-device-type'
@@ -15,6 +15,12 @@ interface UseRankingDataProps {
   ngList: NGList
   ngListVersion: string
   customRankings?: any[]
+  newlyCreatedRanking?: {
+    id: string
+    title: string
+    conditions: any[]
+    baseGenre: RankingGenre
+  } | null
 }
 
 interface UseRankingDataReturn {
@@ -37,7 +43,8 @@ export function useRankingData({
   initialData,
   ngList,
   ngListVersion,
-  customRankings = []
+  customRankings = [],
+  newlyCreatedRanking = null
 }: UseRankingDataProps): UseRankingDataReturn {
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
@@ -127,8 +134,9 @@ export function useRankingData({
           // eslint-disable-next-line no-console
           console.log('[DEBUG] Custom rankings from props:', customRankings)
           
-          // propsから渡されたcustomRankingsを使用
-          const targetRanking = customRankings.find((r: any) => r.id === customId)
+          // propsから渡されたcustomRankingsまたはnewlyCreatedRankingを使用
+          const targetRanking = customRankings.find((r: any) => r.id === customId) || 
+                                (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
           // eslint-disable-next-line no-console
           console.log('[DEBUG] Target ranking:', targetRanking)
           if (targetRanking && targetRanking.baseGenre) {
