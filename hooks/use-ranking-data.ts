@@ -106,12 +106,35 @@ export function useRankingData({
       if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
         isCustomRanking = true
         const customId = config.tag.replace('custom:', '')
+        
+        console.log('[DEBUG] Looking for custom ranking:', {
+          customId,
+          newlyCreatedRankingId: newlyCreatedRanking?.id,
+          newlyCreatedRankingMatches: newlyCreatedRanking?.id === customId,
+          customRankingsCount: customRankings.length,
+          timestamp: new Date().toISOString()
+        })
+        
         const targetRanking = customRankings.find((r: any) => r.id === customId) || 
                               (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
         
         if (targetRanking?.baseGenre) {
           cacheGenre = targetRanking.baseGenre
           customRankingConditions = targetRanking.conditions || []
+        } else {
+          // targetRankingが見つからない場合は早期リターン（404エラーを防ぐ）
+          serverLog.warn('Custom ranking not found, returning empty data to prevent 404', {
+            customId,
+            customRankingsCount: customRankings.length,
+            hasNewlyCreated: !!newlyCreatedRanking,
+            newlyCreatedId: newlyCreatedRanking?.id
+          })
+          setFullRankingData([])
+          setRankingData([])
+          setCurrentPopularTags([])
+          setLoading(false)
+          setError(null)
+          return
         }
       }
       

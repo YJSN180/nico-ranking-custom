@@ -125,6 +125,10 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         genre: 'custom' as RankingGenre,
         tag: `custom:${newRanking}`
       }
+      console.log('[DEBUG] Calling onConfigChange after creation:', {
+        newConfig,
+        timestamp: new Date().toISOString()
+      })
       onConfigChange(newConfig)
     } catch (error) {
       console.error('[ERROR] Failed to create custom ranking:', error)

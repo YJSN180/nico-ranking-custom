@@ -132,6 +132,9 @@ export default function ClientPage({
     baseGenre: RankingGenre
   } | null>(null)
   
+  // 新規作成中フラグ（404エラーを防ぐため）
+  const [isCreatingCustomRanking, setIsCreatingCustomRanking] = useState(false)
+  
   // ランキングデータ管理フック
   const {
     rankingData,
@@ -685,6 +688,13 @@ export default function ClientPage({
       }
     }
     
+    // カスタムランキング作成中の場合はfetchRankingDataをスキップ
+    if (isCreatingCustomRanking && newConfig.genre === 'custom') {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Skipping fetchRankingData during custom ranking creation')
+      return
+    }
+    
     // フックのfetchRankingData関数を使用してデータ取得
     try {
       // eslint-disable-next-line no-console
@@ -697,7 +707,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading, setPendingCustomConfig])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking])
   // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
   // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
@@ -887,6 +897,33 @@ export default function ClientPage({
         return
       }
 
+      // フィルタリング条件検証（早期実行）
+      const validConditions = conditions.filter(condition => 
+        condition && 
+        typeof condition.tag === 'string' && 
+        condition.tag.trim() !== '' &&
+        ['AND', 'OR', 'NOT'].includes(condition.operator)
+      )
+
+      // 新しく作成したランキング情報を最初に保存（重要：onConfigChangeより前に実行）
+      console.log('[DEBUG] Setting newlyCreatedRanking:', {
+        id: rankingId,
+        title,
+        baseGenre,
+        timestamp: new Date().toISOString()
+      })
+      setNewlyCreatedRanking({
+        id: rankingId,
+        title,
+        conditions: validConditions,
+        baseGenre
+      })
+      
+      // 作成中フラグを設定（404エラーを防ぐため）
+      setIsCreatingCustomRanking(true)
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] isCreatingCustomRanking flag set to true')
+
       // まずデータを取得（エラーをキャッチして処理続行）
       const tempConfig = { ...config, genre: baseGenre }
       try {
@@ -906,14 +943,6 @@ export default function ClientPage({
           return
         }
 
-        // フィルタリング条件検証
-        const validConditions = conditions.filter(condition => 
-          condition && 
-          typeof condition.tag === 'string' && 
-          condition.tag.trim() !== '' &&
-          ['AND', 'OR', 'NOT'].includes(condition.operator)
-        )
-
         if (validConditions.length === 0) {
           console.warn('[WARN] No valid filtering conditions found')
           return
@@ -932,14 +961,6 @@ export default function ClientPage({
         setIsShowingCustomRanking(true)
         setCustomRankingDisplayData(filteredData)
         setCustomRankingMetadata({
-          title,
-          conditions: validConditions,
-          baseGenre
-        })
-        
-        // 新しく作成したランキング情報を保存
-        setNewlyCreatedRanking({
-          id: rankingId,
           title,
           conditions: validConditions,
           baseGenre
@@ -971,6 +992,11 @@ export default function ClientPage({
       setIsShowingCustomRanking(false)
       setCustomRankingDisplayData([])
       setCustomRankingMetadata(null)
+    } finally {
+      // 作成中フラグをクリア（成功・失敗問わず）
+      setIsCreatingCustomRanking(false)
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] isCreatingCustomRanking flag cleared')
     }
   }, [config, fetchRankingData])
   
