@@ -15,9 +15,11 @@ interface TagSelectorProps {
   onConfigChange: (config: RankingConfig) => void
   popularTags?: string[]
   onCreateCustomRankingWithFilter?: (rankingId: string, baseGenre: RankingGenre, conditions: any[], title: string) => Promise<void> // 作成時フィルタリング用コールバック
+  onPrefetchData?: (baseGenre: RankingGenre, period: string) => Promise<void> // データプリフェッチ用
+  currentPeriod?: string // 現在の期間設定
 }
 
-export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onCreateCustomRankingWithFilter }: TagSelectorProps) {
+export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onCreateCustomRankingWithFilter, onPrefetchData, currentPeriod }: TagSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
   const lastSelectedCustomIdRef = useRef<string | null>(null)
@@ -461,6 +463,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           onSave={handleUpdateRanking}
           existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
           editingRanking={editingRanking}
+          onPrefetchData={onPrefetchData}
+          currentPeriod={currentPeriod}
         />
         
         {/* 削除確認モーダル */}

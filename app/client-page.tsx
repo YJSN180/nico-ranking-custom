@@ -22,7 +22,7 @@ import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import { rankingCache } from '@/lib/ranking-cache'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 import type { RankingData, RankingItem } from '@/types/ranking'
-import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
+import type { RankingConfig, RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
@@ -742,6 +742,32 @@ export default function ClientPage({
     }
   }, [ngList, saveNGListDirectly])
 
+  // カスタムランキング用データプリフェッチ
+  const handlePrefetchData = useCallback(async (baseGenre: RankingGenre, period: string) => {
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Prefetching data for custom ranking:', { baseGenre, period })
+      
+      // キャッシュに既にデータがある場合はスキップ
+      const cachedData = rankingCache.get(baseGenre, period)
+      if (cachedData && cachedData.data) {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Data already in cache, skipping prefetch')
+        return
+      }
+      
+      // fetchRankingDataを使ってデータを取得
+      const tempConfig = { genre: baseGenre, period: period as RankingPeriod, tag: undefined }
+      await fetchRankingData(tempConfig)
+      
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Prefetch completed successfully')
+    } catch (error) {
+      console.error('[ERROR] Failed to prefetch data:', error)
+      throw error // エラーを上位に伝播
+    }
+  }, [fetchRankingData])
+  
   // カスタムランキング作成時の即時フィルタリング（改修版 + エラーハンドリング強化）
   const handleCreateCustomRankingWithFilter = useCallback(async (
     rankingId: string, 
@@ -1009,6 +1035,8 @@ export default function ClientPage({
           onConfigChange={handleConfigChange} 
           popularTags={currentPopularTags}
           onCreateCustomRankingWithFilter={handleCreateCustomRankingWithFilter}
+          onPrefetchData={handlePrefetchData}
+          currentPeriod={config.period}
         />
         <TagToggleButton />
       </div>

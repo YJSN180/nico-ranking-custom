@@ -67,6 +67,8 @@ interface CustomRankingModalProps {
   onSave: (data: CustomRankingFormState) => void
   existingTitles?: string[]
   editingRanking?: any // 編集対象のランキング
+  onPrefetchData?: (baseGenre: RankingGenre, period: string) => Promise<void> // データプリフェッチ用
+  currentPeriod?: string // 現在の期間設定
 }
 
 export function CustomRankingModal({ 
@@ -74,7 +76,9 @@ export function CustomRankingModal({
   onClose, 
   onSave, 
   existingTitles = [],
-  editingRanking
+  editingRanking,
+  onPrefetchData,
+  currentPeriod = '24h'
 }: CustomRankingModalProps) {
   const [currentStep, setCurrentStep] = useState<ModalStep>(1)
   const [formData, setFormData] = useState<CustomRankingFormState>({
@@ -252,7 +256,7 @@ export function CustomRankingModal({
   }
 
   // 次へ進む
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep === 1 && !formData.baseGenre) return
     if (currentStep === 2 && formData.conditions.length === 0) return
     if (currentStep === 3) {
@@ -263,6 +267,22 @@ export function CustomRankingModal({
       }
       return
     }
+    
+    // ステップ2で「次へ」を押した時、baseGenreのデータをプリフェッチ
+    if (currentStep === 2 && formData.baseGenre && onPrefetchData) {
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Prefetching data for baseGenre:', formData.baseGenre, 'period:', currentPeriod)
+        await onPrefetchData(formData.baseGenre, currentPeriod)
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Prefetch completed')
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[DEBUG] Prefetch failed:', error)
+        // エラーが発生しても次のステップには進む
+      }
+    }
+    
     setCurrentStep((prev) => (prev + 1) as ModalStep)
   }
 
