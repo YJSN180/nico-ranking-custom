@@ -22,8 +22,6 @@ interface TagSelectorProps {
 export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onCreateCustomRankingWithFilter, onPrefetchData, currentPeriod }: TagSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
-  const lastSelectedCustomIdRef = useRef<string | null>(null)
-  const hasRestoredCustomRanking = useRef(false)
   
   // カスタムランキング管理
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading, updateRankingOrder, toggleVisibility } = useCustomRankings()
@@ -90,11 +88,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     const selectedRanking = rankings.find(r => r.id === customId)
     if (!selectedRanking) return
     
-    // LocalStorageに保存（クライアントサイドのみ）
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('lastSelectedCustomRankingId', customId)
-      lastSelectedCustomIdRef.current = customId
-    }
     
     // genre='custom'のまま、tagにカスタムランキングIDを設定
     const newConfig = { 
@@ -120,42 +113,23 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         }))
       })
       
-      // LocalStorageに保存（クライアントサイドのみ）
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('lastSelectedCustomRankingId', newRanking)
-        lastSelectedCustomIdRef.current = newRanking
-      }
       
       // データの準備（フェッチとフィルタリング）
       if (onCreateCustomRankingWithFilter && data.baseGenre) {
         await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
       }
       
-      // 他の設定インポート機能と同様の確認ダイアログ付きリロード
+      // 自動リロードして変更を反映
       setTimeout(() => {
-        if (confirm('カスタムランキングが作成されました。ページをリロードして変更を反映しますか？')) {
-          const url = new URL(window.location.href)
-          url.searchParams.set('genre', 'custom')
-          url.searchParams.set('tag', `custom:${newRanking}`)
-          // 期間も保持
-          if (config.period && config.period !== '24h') {
-            url.searchParams.set('period', config.period)
-          }
-          window.location.href = url.toString()
-        } else {
-          // リロードしない場合は、URLパラメータのみ更新（onConfigChangeは呼ばない）
-          // 理由: handleConfigChange の再実行により fetchRankingData が空データで上書きするのを防ぐ
-          if (typeof window !== 'undefined') {
-            const url = new URL(window.location.href)
-            url.searchParams.set('genre', 'custom')
-            url.searchParams.set('tag', `custom:${newRanking}`)
-            if (config.period && config.period !== '24h') {
-              url.searchParams.set('period', config.period)
-            }
-            window.history.replaceState(null, '', url.toString())
-          }
+        const url = new URL(window.location.href)
+        url.searchParams.set('genre', 'custom')
+        url.searchParams.set('tag', `custom:${newRanking}`)
+        // 期間も保持
+        if (config.period && config.period !== '24h') {
+          url.searchParams.set('period', config.period)
         }
-      }, 500) // 少し遅延してダイアログを表示
+        window.location.href = url.toString()
+      }, 500) // 少し遅延して処理を実行
     } catch (error) {
       console.error('[ERROR] Failed to create custom ranking:', error)
       // エラー時は通常のフローで処理
@@ -189,31 +163,17 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
         }
         
-        // 他の設定インポート機能と同様の確認ダイアログ付きリロード
+        // 自動リロードして変更を反映
         setTimeout(() => {
-          if (confirm('カスタムランキングが更新されました。ページをリロードして変更を反映しますか？')) {
-            const url = new URL(window.location.href)
-            url.searchParams.set('genre', 'custom')
-            url.searchParams.set('tag', `custom:${editingRanking.id}`)
-            // 期間も保持
-            if (config.period && config.period !== '24h') {
-              url.searchParams.set('period', config.period)
-            }
-            window.location.href = url.toString()
-          } else {
-            // リロードしない場合は、URLパラメータのみ更新（onConfigChangeは呼ばない）
-            // 理由: handleConfigChange の再実行により fetchRankingData が空データで上書きするのを防ぐ
-            if (typeof window !== 'undefined') {
-              const url = new URL(window.location.href)
-              url.searchParams.set('genre', 'custom')
-              url.searchParams.set('tag', `custom:${editingRanking.id}`)
-              if (config.period && config.period !== '24h') {
-                url.searchParams.set('period', config.period)
-              }
-              window.history.replaceState(null, '', url.toString())
-            }
+          const url = new URL(window.location.href)
+          url.searchParams.set('genre', 'custom')
+          url.searchParams.set('tag', `custom:${editingRanking.id}`)
+          // 期間も保持
+          if (config.period && config.period !== '24h') {
+            url.searchParams.set('period', config.period)
           }
-        }, 500) // 少し遅延してダイアログを表示
+          window.location.href = url.toString()
+        }, 500) // 少し遅延して処理を実行
       } catch (error) {
         console.error('[ERROR] Failed to update custom ranking:', error)
         alert('カスタムランキングの更新に失敗しました。もう一度お試しください。')
@@ -233,11 +193,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       deleteRanking(deletingRanking.id)
       // 削除後はカスタムジャンル（タグ未選択状態）に戻る
       if (config.genre === 'custom' && config.tag === `custom:${deletingRanking.id}`) {
-        // LocalStorageからも削除（クライアントサイドのみ）
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('lastSelectedCustomRankingId')
-          lastSelectedCustomIdRef.current = null
-        }
         onConfigChange({ ...config, genre: 'custom', tag: undefined })
       }
       setDeletingRanking(null)
@@ -254,22 +209,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange({ ...config, tag: undefined })
   }
 
-  // カスタムランキングの自動復元（レンダリング時の計算として実装）
-  if (typeof window !== 'undefined' && 
-      config.genre === 'custom' && 
-      !config.tag && 
-      !isLoading && 
-      !hasRestoredCustomRanking.current &&
-      rankings.length > 0) {
-    const savedCustomId = localStorage.getItem('lastSelectedCustomRankingId')
-    if (savedCustomId && rankings.find(r => r.id === savedCustomId)) {
-      hasRestoredCustomRanking.current = true
-      // 次のレンダリングサイクルで実行
-      Promise.resolve().then(() => {
-        handleCustomRankingSelect(savedCustomId)
-      })
-    }
-  }
 
   if (loading) {
     return (
