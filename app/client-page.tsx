@@ -711,25 +711,8 @@ export default function ClientPage({
     }
   }, [ngList, saveNGListDirectly])
 
-  // カスタムランキング作成時のプリフェッチハンドラ
-  const handlePrefetchGenre = useCallback((genre: RankingGenre) => {
-    // 現在の設定を維持しつつ、指定されたジャンルのデータをプリフェッチ
-    const prefetchConfig: RankingConfig = {
-      genre,
-      period: config.period,
-      tag: undefined // ジャンル全体のデータを取得
-    }
-    
-    // バックグラウンドでデータを取得（UIは更新しない）
-    // fetchRankingDataの結果はrankingCacheに自動的に保存される
-    fetchRankingData(prefetchConfig).catch(error => {
-      // プリフェッチエラーは無視（ユーザー体験に影響しない）
-      console.error('Prefetch error:', error)
-    })
-  }, [config.period, fetchRankingData])
-
   // カスタムランキング作成時の即時フィルタリング（改修版 + エラーハンドリング強化）
-  const handleCreateCustomRankingWithFilter = useCallback((
+  const handleCreateCustomRankingWithFilter = useCallback(async (
     rankingId: string, 
     baseGenre: RankingGenre, 
     conditions: any[], 
@@ -747,7 +730,11 @@ export default function ClientPage({
         return
       }
 
-      // キャッシュからbaseGenreのデータを取得
+      // まずデータを取得
+      const tempConfig = { ...config, genre: baseGenre }
+      await fetchRankingData(tempConfig)
+      
+      // 取得したデータをキャッシュから取得
       const cachedData = rankingCache.get(baseGenre, config.period)
       
       if (cachedData && cachedData.data && conditions.length > 0) {
@@ -815,7 +802,7 @@ export default function ClientPage({
       setCustomRankingDisplayData([])
       setCustomRankingMetadata(null)
     }
-  }, [config.period])
+  }, [config, fetchRankingData])
   
   // localStorageから設定を復元（フォールバック戦略付き）
   useEffect(() => {
@@ -982,7 +969,6 @@ export default function ClientPage({
           config={config} 
           onConfigChange={handleConfigChange} 
           popularTags={currentPopularTags}
-          onPrefetchGenre={handlePrefetchGenre}
           onCreateCustomRankingWithFilter={handleCreateCustomRankingWithFilter}
         />
         <TagToggleButton />

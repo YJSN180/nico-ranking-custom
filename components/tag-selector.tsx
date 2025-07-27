@@ -14,11 +14,10 @@ interface TagSelectorProps {
   config: RankingConfig
   onConfigChange: (config: RankingConfig) => void
   popularTags?: string[]
-  onPrefetchGenre?: (genre: RankingGenre) => void // プリフェッチ用コールバック
-  onCreateCustomRankingWithFilter?: (rankingId: string, baseGenre: RankingGenre, conditions: any[], title: string) => void // 作成時フィルタリング用コールバック
+  onCreateCustomRankingWithFilter?: (rankingId: string, baseGenre: RankingGenre, conditions: any[], title: string) => Promise<void> // 作成時フィルタリング用コールバック
 }
 
-export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onPrefetchGenre, onCreateCustomRankingWithFilter }: TagSelectorProps) {
+export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onCreateCustomRankingWithFilter }: TagSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false)
   const tagScrollRef = useRef<HTMLDivElement>(null)
   const lastSelectedCustomIdRef = useRef<string | null>(null)
@@ -122,7 +121,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     
     // 作成と同時にフィルタリングを実行（改修版：titleパラメータ追加）
     if (onCreateCustomRankingWithFilter && data.baseGenre) {
-      onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
+      await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
     }
     
     // 作成後、genre='custom'でそのカスタムランキングを選択（遅延実行で専用状態を優先）
@@ -140,7 +139,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     setShowCustomModal(true)
   }
 
-  const handleUpdateRanking = (data: CustomRankingFormState) => {
+  const handleUpdateRanking = async (data: CustomRankingFormState) => {
     if (editingRanking) {
       updateRanking(editingRanking.id, {
         title: data.title,
@@ -154,7 +153,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       
       // 編集時も即時フィルタリングを実行（改修版：titleパラメータ追加）
       if (onCreateCustomRankingWithFilter && data.baseGenre) {
-        onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
+        await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
       }
       
       // 編集後も、genre='custom'でそのカスタムランキングを選択（遅延実行で専用状態を優先）
@@ -462,7 +461,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           onSave={handleUpdateRanking}
           existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
           editingRanking={editingRanking}
-          onGenreSelect={onPrefetchGenre}
         />
         
         {/* 削除確認モーダル */}
