@@ -423,6 +423,9 @@ export default function ClientPage({
   
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
+    // 設定変更時は必ず前回のエラーをクリア
+    setError(null)
+    
     // Vercelログに設定変更情報を出力
     serverLog.info('handleConfigChange called', {
       newConfig,
@@ -884,9 +887,14 @@ export default function ClientPage({
         return
       }
 
-      // まずデータを取得
+      // まずデータを取得（エラーをキャッチして処理続行）
       const tempConfig = { ...config, genre: baseGenre }
-      await fetchRankingData(tempConfig)
+      try {
+        await fetchRankingData(tempConfig)
+      } catch (fetchError) {
+        // データ取得エラーはログに記録するが、処理は続行（キャッシュデータを試す）
+        console.warn('[WARN] Failed to fetch data for custom ranking, will try cache:', fetchError)
+      }
       
       // 取得したデータをキャッシュから取得
       const cachedData = rankingCache.get(baseGenre, config.period)
