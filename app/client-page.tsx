@@ -172,6 +172,21 @@ export default function ClientPage({
     baseGenre: RankingGenre
   } | null>(null)
   
+  // 新しく作成したカスタムランキングの一時保存（customRankings配列に反映されるまでの間）
+  const [newlyCreatedRanking, setNewlyCreatedRanking] = useState<{
+    id: string
+    title: string
+    conditions: any[]
+    baseGenre: RankingGenre
+  } | null>(null)
+  
+  
+  // 新しく作成したカスタムランキングがcustomRankings配列に反映されたらクリア
+  useEffect(() => {
+    if (newlyCreatedRanking && customRankings.some((r: any) => r.id === newlyCreatedRanking.id)) {
+      setNewlyCreatedRanking(null)
+    }
+  }, [customRankings, newlyCreatedRanking])
   
   // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
   
@@ -485,7 +500,8 @@ export default function ClientPage({
         if (!Array.isArray(customRankings)) {
           console.error('[ERROR] Custom rankings is not an array:', typeof customRankings)
         } else {
-          const targetRanking = customRankings.find((r: any) => r && r.id === customId)
+          const targetRanking = customRankings.find((r: any) => r && r.id === customId) || 
+                                (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
           
           if (targetRanking && targetRanking.baseGenre && targetRanking.conditions?.length > 0) {
             // ランキングデータ検証
@@ -585,7 +601,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings, newlyCreatedRanking])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
@@ -770,6 +786,14 @@ export default function ClientPage({
         setIsShowingCustomRanking(true)
         setCustomRankingDisplayData(filteredData)
         setCustomRankingMetadata({
+          title,
+          conditions: validConditions,
+          baseGenre
+        })
+        
+        // 新しく作成したランキング情報を保存
+        setNewlyCreatedRanking({
+          id: rankingId,
           title,
           conditions: validConditions,
           baseGenre

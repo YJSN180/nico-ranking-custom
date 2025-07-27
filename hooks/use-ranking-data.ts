@@ -90,18 +90,20 @@ export function useRankingData({
     setError(null)
 
     try {
-      // キャッシュから取得を試行
-      const cacheKey = `${config.genre}-${config.period}${config.tag ? `-tag-${config.tag}` : ''}`
-      const cachedData = rankingCache.get(config.genre, config.period, config.tag)
-      
-      if (cachedData) {
-        setFullRankingData(cachedData.data)
-        setRankingData(cachedData.data)
-        if (cachedData.popularTags) {
-          setCurrentPopularTags(cachedData.popularTags)
+      // キャッシュから取得を試行（カスタムランキングの場合はスキップ）
+      if (config.genre !== 'custom') {
+        const cacheKey = `${config.genre}-${config.period}${config.tag ? `-tag-${config.tag}` : ''}`
+        const cachedData = rankingCache.get(config.genre, config.period, config.tag)
+        
+        if (cachedData) {
+          setFullRankingData(cachedData.data)
+          setRankingData(cachedData.data)
+          if (cachedData.popularTags) {
+            setCurrentPopularTags(cachedData.popularTags)
+          }
+          setLoading(false)
+          return
         }
-        setLoading(false)
-        return
       }
 
       // APIから取得
@@ -137,15 +139,11 @@ export function useRankingData({
             // eslint-disable-next-line no-console
             console.log('[DEBUG] Conditions:', customRankingConditions)
           } else {
-            // カスタムランキングが見つからない場合は空データを返してAPIリクエストを防ぐ
+            // カスタムランキングが見つからない場合
             // eslint-disable-next-line no-console
-            console.log('[DEBUG] Custom ranking not found, returning empty data instead of fallback')
-            setFullRankingData([])
-            setRankingData([])
-            setCurrentPopularTags([])
-            setLoading(false)
-            setError(null)
-            return
+            console.log('[DEBUG] Custom ranking not found, will fetch base genre data')
+            // baseGenreを取得できないため、custom genreのまま続行
+            // 注: この場合、APIからは空データが返ってくる可能性が高い
           }
         } else {
           // カスタムランキングが選択されているがタグが指定されていない場合
@@ -225,8 +223,10 @@ export function useRankingData({
           savePopularTagsToCache(data.popularTags, config.genre, config.period)
         }
         
-        // キャッシュに保存（フィルタリング後のデータを保存）
-        rankingCache.set(config.genre, config.period, itemsToSet, data.popularTags, config.tag)
+        // キャッシュに保存（カスタムランキングの場合はスキップ）
+        if (config.genre !== 'custom') {
+          rankingCache.set(config.genre, config.period, itemsToSet, data.popularTags, config.tag)
+        }
       } else {
         // カスタムランキングで空のデータを受信
         setFullRankingData([])
