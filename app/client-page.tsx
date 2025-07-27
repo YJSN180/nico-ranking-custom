@@ -371,19 +371,6 @@ export default function ClientPage({
     }
   }, [initialRanking, customRankingsLoading, selectRanking, config])
   
-  // IndexedDBの読み込みが完了したとき、保留中のカスタムランキング設定を実行
-  useEffect(() => {
-    // 初回ロードでカスタムジャンルが選択されている場合
-    if (!customRankingsLoading && isInitialLoad && config.genre === 'custom') {
-      serverLog.info('IndexedDB loaded - executing pending custom ranking config', {
-        config,
-        customRankingsCount: customRankings.length
-      })
-      // handleConfigChangeを再実行してデータフェッチを開始
-      handleConfigChange(config, true)
-    }
-  }, [customRankingsLoading, isInitialLoad, config, customRankings, handleConfigChange])
-  
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -709,6 +696,19 @@ export default function ClientPage({
   // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  
+  // IndexedDBの読み込みが完了したとき、保留中のカスタムランキング設定を実行
+  useEffect(() => {
+    // 初回ロードでカスタムジャンルが選択されている場合
+    if (!customRankingsLoading && isInitialLoad && config.genre === 'custom') {
+      serverLog.info('IndexedDB loaded - executing pending custom ranking config', {
+        config,
+        customRankingsCount: customRankings.length
+      })
+      // handleConfigChangeを再実行してデータフェッチを開始
+      handleConfigChange(config, true)
+    }
+  }, [customRankingsLoading, isInitialLoad, config, customRankings, handleConfigChange])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
