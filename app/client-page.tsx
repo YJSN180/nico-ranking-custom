@@ -418,6 +418,9 @@ export default function ClientPage({
   // 外部リンク（ニコニコ動画）クリック時に状態を保存し、
   // ブラウザの戻るボタンで戻ってきた際に復元される
   
+  // カスタムランキングの保留中の設定を保存
+  const [pendingCustomConfig, setPendingCustomConfig] = useState<RankingConfig | null>(null)
+  
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
   const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
     // Vercelログに設定変更情報を出力
@@ -440,8 +443,8 @@ export default function ClientPage({
             newConfig,
             customRankingsLoading
           })
-          // IndexedDBの読み込み完了を待つために早期リターン
-          // customRankingsLoadingがfalseになったら再度呼ばれる
+          // 保留中の設定として保存
+          setPendingCustomConfig(newConfig)
           return
         }
         
@@ -691,24 +694,26 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading, setPendingCustomConfig])
   // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
   // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
   // eslint-disable-next-line react-hooks/exhaustive-deps
   
-  // IndexedDBの読み込みが完了したとき、保留中のカスタムランキング設定を実行
-  useEffect(() => {
-    // 初回ロードでカスタムジャンルが選択されている場合
-    if (!customRankingsLoading && isInitialLoad && config.genre === 'custom') {
-      serverLog.info('IndexedDB loaded - executing pending custom ranking config', {
-        config,
-        customRankingsCount: customRankings.length
-      })
-      // handleConfigChangeを再実行してデータフェッチを開始
-      handleConfigChange(config, true)
-    }
-  }, [customRankingsLoading, isInitialLoad, config, customRankings, handleConfigChange])
+  // IndexedDBの読み込みが完了し、保留中の設定がある場合は実行
+  if (!customRankingsLoading && pendingCustomConfig && isInitialLoad) {
+    serverLog.info('IndexedDB loaded - executing pending custom ranking config', {
+      pendingCustomConfig,
+      customRankingsCount: customRankings.length
+    })
+    // 保留中の設定をクリアして実行
+    const configToExecute = pendingCustomConfig
+    setPendingCustomConfig(null)
+    // 次のレンダリングサイクルで実行
+    requestAnimationFrame(() => {
+      handleConfigChange(configToExecute, true)
+    })
+  }
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
