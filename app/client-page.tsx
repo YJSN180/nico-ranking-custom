@@ -450,11 +450,12 @@ export default function ClientPage({
       return
     }
 
-    // カスタムランキング表示中で、同じカスタムランキングの場合は専用状態を維持
+    // カスタムランキング表示中で、同じカスタムランキングかつ同じ期間の場合は専用状態を維持
     if (isShowingCustomRanking && 
         newConfig.genre === 'custom' && 
         newConfig.tag?.startsWith('custom:') &&
-        config.tag === newConfig.tag) {
+        config.tag === newConfig.tag &&
+        config.period === newConfig.period) {
       // eslint-disable-next-line no-console
       console.log('[DEBUG] Maintaining custom ranking display state')
       setConfig(newConfig)
@@ -590,6 +591,19 @@ export default function ClientPage({
       }
     }
     
+    // カスタムランキング作成直後かつ専用状態が設定済みの場合のみデータ取得をスキップ
+    if (isShowingCustomRanking && 
+        newConfig.genre === 'custom' && 
+        newConfig.tag?.startsWith('custom:') &&
+        config.genre === newConfig.genre &&
+        config.tag === newConfig.tag &&
+        config.period === newConfig.period &&
+        customRankingDisplayData.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log('[DEBUG] Skipping data fetch for freshly created custom ranking')
+      return
+    }
+    
     // フックのfetchRankingData関数を使用してデータ取得
     try {
       // eslint-disable-next-line no-console
@@ -602,7 +616,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings, newlyCreatedRanking])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings, newlyCreatedRanking, customRankingDisplayData])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
