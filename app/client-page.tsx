@@ -433,7 +433,7 @@ export default function ClientPage({
         newConfig.genre === initialGenre && 
         newConfig.period === initialPeriod && 
         newConfig.tag === initialTag &&
-        true) {
+        newConfig.genre !== 'custom') {
       setIsInitialLoad(false)
       return
     }
