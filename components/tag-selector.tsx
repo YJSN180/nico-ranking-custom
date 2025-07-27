@@ -119,17 +119,13 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
       }
       
-      // 自動リロードして変更を反映
-      setTimeout(() => {
-        const url = new URL(window.location.href)
-        url.searchParams.set('genre', 'custom')
-        url.searchParams.set('tag', `custom:${newRanking}`)
-        // 期間も保持
-        if (config.period && config.period !== '24h') {
-          url.searchParams.set('period', config.period)
-        }
-        window.location.href = url.toString()
-      }, 500) // 少し遅延して処理を実行
+      // React Routerを使用して内部遷移（リロードを避ける）
+      const newConfig = {
+        ...config,
+        genre: 'custom' as RankingGenre,
+        tag: `custom:${newRanking}`
+      }
+      onConfigChange(newConfig)
     } catch (error) {
       console.error('[ERROR] Failed to create custom ranking:', error)
       // エラー時は通常のフローで処理
@@ -163,17 +159,13 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
         }
         
-        // 自動リロードして変更を反映
-        setTimeout(() => {
-          const url = new URL(window.location.href)
-          url.searchParams.set('genre', 'custom')
-          url.searchParams.set('tag', `custom:${editingRanking.id}`)
-          // 期間も保持
-          if (config.period && config.period !== '24h') {
-            url.searchParams.set('period', config.period)
-          }
-          window.location.href = url.toString()
-        }, 500) // 少し遅延して処理を実行
+        // React Routerを使用して内部遷移（リロードを避ける）
+        const newConfig = {
+          ...config,
+          genre: 'custom' as RankingGenre,
+          tag: `custom:${editingRanking.id}`
+        }
+        onConfigChange(newConfig)
       } catch (error) {
         console.error('[ERROR] Failed to update custom ranking:', error)
         alert('カスタムランキングの更新に失敗しました。もう一度お試しください。')

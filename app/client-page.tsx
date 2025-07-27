@@ -371,6 +371,19 @@ export default function ClientPage({
     }
   }, [initialRanking, customRankingsLoading, selectRanking, config])
   
+  // IndexedDBの読み込みが完了したとき、保留中のカスタムランキング設定を実行
+  useEffect(() => {
+    // 初回ロードでカスタムジャンルが選択されている場合
+    if (!customRankingsLoading && isInitialLoad && config.genre === 'custom') {
+      serverLog.info('IndexedDB loaded - executing pending custom ranking config', {
+        config,
+        customRankingsCount: customRankings.length
+      })
+      // handleConfigChangeを再実行してデータフェッチを開始
+      handleConfigChange(config, true)
+    }
+  }, [customRankingsLoading, isInitialLoad, config, customRankings, handleConfigChange])
+  
   
   // 初期表示時に人気タグがない場合は動的に取得
   useEffect(() => {
@@ -426,6 +439,7 @@ export default function ClientPage({
       currentConfig: config,
       isInitialLoad,
       isShowingCustomRanking,
+      customRankingsLoading,
       force
     })
     
@@ -433,6 +447,17 @@ export default function ClientPage({
     if (isInitialLoad) {
       // カスタムランキングの場合は必ずデータフェッチを実行
       if (newConfig.genre === 'custom') {
+        // IndexedDBの読み込みが完了するまで待機
+        if (customRankingsLoading) {
+          serverLog.info('Initial load for custom ranking - waiting for IndexedDB', {
+            newConfig,
+            customRankingsLoading
+          })
+          // IndexedDBの読み込み完了を待つために早期リターン
+          // customRankingsLoadingがfalseになったら再度呼ばれる
+          return
+        }
+        
         serverLog.info('Initial load for custom ranking - proceeding with data fetch', {
           newConfig,
           customRankingsCount: customRankings.length
@@ -648,16 +673,23 @@ export default function ClientPage({
     }
     
     // 既存のカスタムランキング専用状態のチェック
+    // 新規作成時も含めて、すでに表示中のデータがある場合はスキップ
     if (isShowingCustomRanking && 
         newConfig.genre === 'custom' && 
         newConfig.tag?.startsWith('custom:') &&
-        config.genre === newConfig.genre &&
-        config.tag === newConfig.tag &&
-        config.period === newConfig.period &&
         customRankingDisplayData.length > 0) {
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Skipping data fetch for existing custom ranking display')
-      return
+      // 新規作成時または同じカスタムランキングの再選択時
+      const customId = newConfig.tag.replace('custom:', '')
+      if (newlyCreatedRanking?.id === customId || 
+          (config.tag === newConfig.tag && config.period === newConfig.period)) {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Skipping data fetch for custom ranking display (new or existing)', {
+          isNewlyCreated: newlyCreatedRanking?.id === customId,
+          customId,
+          dataCount: customRankingDisplayData.length
+        })
+        return
+      }
     }
     
     // フックのfetchRankingData関数を使用してデータ取得
@@ -672,7 +704,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading])
   // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
   // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
