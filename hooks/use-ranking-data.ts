@@ -97,15 +97,38 @@ export function useRankingData({
     setError(null)
 
     try {
-      // キャッシュから取得を試行（カスタムランキングの場合はスキップ）
-      if (config.genre !== 'custom') {
-        const cacheKey = `${config.genre}-${config.period}${config.tag ? `-tag-${config.tag}` : ''}`
-        const cachedData = rankingCache.get(config.genre, config.period, config.tag)
+      // カスタムランキングの場合、ベースジャンルを特定
+      let cacheGenre = config.genre
+      let isCustomRanking = false
+      let customRankingConditions: any[] = []
+      
+      if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
+        isCustomRanking = true
+        const customId = config.tag.replace('custom:', '')
+        const targetRanking = customRankings.find((r: any) => r.id === customId) || 
+                              (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
+        
+        if (targetRanking?.baseGenre) {
+          cacheGenre = targetRanking.baseGenre
+          customRankingConditions = targetRanking.conditions || []
+        }
+      }
+      
+      // キャッシュから取得を試行（カスタムランキングの場合はベースジャンルのキャッシュを使用）
+      if (cacheGenre !== 'custom') {
+        const cachedData = rankingCache.get(cacheGenre, config.period)
         
         if (cachedData) {
-          setFullRankingData(cachedData.data)
-          setRankingData(cachedData.data)
-          if (cachedData.popularTags) {
+          let itemsToSet = cachedData.data
+          
+          // カスタムランキングの場合はフィルタリングを適用
+          if (isCustomRanking && customRankingConditions.length > 0) {
+            itemsToSet = applyCustomFilters(cachedData.data, customRankingConditions)
+          }
+          
+          setFullRankingData(itemsToSet)
+          setRankingData(itemsToSet)
+          if (cachedData.popularTags && !isCustomRanking) {
             setCurrentPopularTags(cachedData.popularTags)
           }
           setLoading(false)
@@ -231,8 +254,13 @@ export function useRankingData({
           savePopularTagsToCache(data.popularTags, config.genre, config.period)
         }
         
-        // キャッシュに保存（カスタムランキングの場合はスキップ）
-        if (config.genre !== 'custom') {
+        // キャッシュに保存
+        // カスタムランキングの場合は、ベースジャンルのキャッシュとして保存
+        if (config.genre === 'custom' && actualGenre !== 'custom') {
+          // ベースジャンルのフィルタリング前データをキャッシュ
+          rankingCache.set(actualGenre, config.period, data.items, data.popularTags)
+        } else if (config.genre !== 'custom') {
+          // 通常のランキングデータをキャッシュ
           rankingCache.set(config.genre, config.period, itemsToSet, data.popularTags, config.tag)
         }
       } else {
@@ -257,7 +285,7 @@ export function useRankingData({
         setLoading(false)
       }
     }
-  }, [savePopularTagsToCache, deviceType, customRankings])
+  }, [savePopularTagsToCache, deviceType, customRankings, newlyCreatedRanking])
 
   // NGリストのフィルタリングはclient-page.tsx側で行うため、
   // ここでは生データをそのまま保持する

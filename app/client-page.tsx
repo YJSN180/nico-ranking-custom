@@ -591,7 +591,33 @@ export default function ClientPage({
       }
     }
     
-    // カスタムランキング作成直後かつ専用状態が設定済みの場合のみデータ取得をスキップ
+    // カスタムランキング作成直後の場合の特別処理
+    if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
+      const customId = newConfig.tag.replace('custom:', '')
+      
+      // 新規作成されたランキングがまだ反映されていない可能性をチェック
+      if (newlyCreatedRanking && newlyCreatedRanking.id === customId) {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Newly created custom ranking detected, waiting for state update')
+        
+        // 既にフィルタリング済みデータがある場合はスキップ
+        if (isShowingCustomRanking && customRankingDisplayData.length > 0) {
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Using existing filtered data for newly created ranking')
+          return
+        }
+        
+        // データがない場合は、少し待ってから再試行
+        setTimeout(() => {
+          // eslint-disable-next-line no-console
+          console.log('[DEBUG] Retrying after state update')
+          fetchRankingData(newConfig)
+        }, 200)
+        return
+      }
+    }
+    
+    // 既存のカスタムランキング専用状態のチェック
     if (isShowingCustomRanking && 
         newConfig.genre === 'custom' && 
         newConfig.tag?.startsWith('custom:') &&
@@ -600,7 +626,7 @@ export default function ClientPage({
         config.period === newConfig.period &&
         customRankingDisplayData.length > 0) {
       // eslint-disable-next-line no-console
-      console.log('[DEBUG] Skipping data fetch for freshly created custom ranking')
+      console.log('[DEBUG] Skipping data fetch for existing custom ranking display')
       return
     }
     
