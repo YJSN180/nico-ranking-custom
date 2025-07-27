@@ -5,8 +5,12 @@
 type LogLevel = 'info' | 'warn' | 'error'
 
 async function sendLogToServer(level: LogLevel, message: string, data?: any) {
+  // 開発環境判定（クライアントサイド用）
+  const isDevelopment = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  
   // 開発環境では通常のconsole.logも併用
-  if (process.env.NODE_ENV === 'development') {
+  if (isDevelopment) {
     if (level === 'error') {
       // eslint-disable-next-line no-console
       console.error(`[DEBUG] ${message}`, data)

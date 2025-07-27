@@ -672,7 +672,11 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings, newlyCreatedRanking, customRankingDisplayData])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking])
+  // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
+  // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
+  // fetchRankingData が空データで上書きしてしまう問題を防ぐため
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {

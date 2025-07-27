@@ -129,26 +129,33 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       // データの準備（フェッチとフィルタリング）
       if (onCreateCustomRankingWithFilter && data.baseGenre) {
         await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
-        
-        // データ準備が完了したことを確認
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Data preparation completed, performing force reload...')
       }
       
-      // 強制リロードで確実に反映（URLパラメータ付き）
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href)
-        url.searchParams.set('genre', 'custom')
-        url.searchParams.set('tag', `custom:${newRanking}`)
-        // 期間も保持
-        if (config.period && config.period !== '24h') {
-          url.searchParams.set('period', config.period)
+      // 他の設定インポート機能と同様の確認ダイアログ付きリロード
+      setTimeout(() => {
+        if (confirm('カスタムランキングが作成されました。ページをリロードして変更を反映しますか？')) {
+          const url = new URL(window.location.href)
+          url.searchParams.set('genre', 'custom')
+          url.searchParams.set('tag', `custom:${newRanking}`)
+          // 期間も保持
+          if (config.period && config.period !== '24h') {
+            url.searchParams.set('period', config.period)
+          }
+          window.location.href = url.toString()
+        } else {
+          // リロードしない場合は、URLパラメータのみ更新（onConfigChangeは呼ばない）
+          // 理由: handleConfigChange の再実行により fetchRankingData が空データで上書きするのを防ぐ
+          if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href)
+            url.searchParams.set('genre', 'custom')
+            url.searchParams.set('tag', `custom:${newRanking}`)
+            if (config.period && config.period !== '24h') {
+              url.searchParams.set('period', config.period)
+            }
+            window.history.replaceState(null, '', url.toString())
+          }
         }
-        
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Reloading to:', url.toString())
-        window.location.href = url.toString()
-      }
+      }, 500) // 少し遅延してダイアログを表示
     } catch (error) {
       console.error('[ERROR] Failed to create custom ranking:', error)
       // エラー時は通常のフローで処理
@@ -180,25 +187,33 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         // データの準備（フェッチとフィルタリング）
         if (onCreateCustomRankingWithFilter && data.baseGenre) {
           await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
-          
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Data preparation completed for update, performing force reload...')
         }
         
-        // 編集後も強制リロードで確実に反映
-        if (typeof window !== 'undefined') {
-          const url = new URL(window.location.href)
-          url.searchParams.set('genre', 'custom')
-          url.searchParams.set('tag', `custom:${editingRanking.id}`)
-          // 期間も保持
-          if (config.period && config.period !== '24h') {
-            url.searchParams.set('period', config.period)
+        // 他の設定インポート機能と同様の確認ダイアログ付きリロード
+        setTimeout(() => {
+          if (confirm('カスタムランキングが更新されました。ページをリロードして変更を反映しますか？')) {
+            const url = new URL(window.location.href)
+            url.searchParams.set('genre', 'custom')
+            url.searchParams.set('tag', `custom:${editingRanking.id}`)
+            // 期間も保持
+            if (config.period && config.period !== '24h') {
+              url.searchParams.set('period', config.period)
+            }
+            window.location.href = url.toString()
+          } else {
+            // リロードしない場合は、URLパラメータのみ更新（onConfigChangeは呼ばない）
+            // 理由: handleConfigChange の再実行により fetchRankingData が空データで上書きするのを防ぐ
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href)
+              url.searchParams.set('genre', 'custom')
+              url.searchParams.set('tag', `custom:${editingRanking.id}`)
+              if (config.period && config.period !== '24h') {
+                url.searchParams.set('period', config.period)
+              }
+              window.history.replaceState(null, '', url.toString())
+            }
           }
-          
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Reloading after update to:', url.toString())
-          window.location.href = url.toString()
-        }
+        }, 500) // 少し遅延してダイアログを表示
       } catch (error) {
         console.error('[ERROR] Failed to update custom ranking:', error)
         alert('カスタムランキングの更新に失敗しました。もう一度お試しください。')
