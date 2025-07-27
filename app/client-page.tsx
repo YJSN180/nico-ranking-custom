@@ -105,6 +105,14 @@ export default function ClientPage({
   const { visibleGenres } = useGenreOrderV2()
   const { rankings: customRankings, selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
   
+  // customRankingsとnewlyCreatedRankingをマージ
+  const mergedCustomRankings = useMemo(() => {
+    if (newlyCreatedRanking && !customRankings.some((r: any) => r.id === newlyCreatedRanking.id)) {
+      return [...customRankings, newlyCreatedRanking]
+    }
+    return customRankings
+  }, [customRankings, newlyCreatedRanking])
+  
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
   
@@ -142,7 +150,7 @@ export default function ClientPage({
     initialData,
     ngList,
     ngListVersion,
-    customRankings
+    customRankings: mergedCustomRankings
   })
   
   // 設定の管理（初期値はURLパラメータから）
@@ -497,11 +505,10 @@ export default function ClientPage({
         const customId = newConfig.tag.replace('custom:', '')
         
         // カスタムランキングデータ検証
-        if (!Array.isArray(customRankings)) {
-          console.error('[ERROR] Custom rankings is not an array:', typeof customRankings)
+        if (!Array.isArray(mergedCustomRankings)) {
+          console.error('[ERROR] Merged custom rankings is not an array:', typeof mergedCustomRankings)
         } else {
-          const targetRanking = customRankings.find((r: any) => r && r.id === customId) || 
-                                (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
+          const targetRanking = mergedCustomRankings.find((r: any) => r && r.id === customId)
           
           if (targetRanking && targetRanking.baseGenre && targetRanking.conditions?.length > 0) {
             // ランキングデータ検証
@@ -601,7 +608,7 @@ export default function ClientPage({
       console.log('[DEBUG] Error fetching ranking data:', error)
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, customRankings, newlyCreatedRanking])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, isShowingCustomRanking, mergedCustomRankings])
   
   // ページ変更時の処理（クライアントサイドページネーション）
   const handlePageChange = useCallback((page: number) => {
