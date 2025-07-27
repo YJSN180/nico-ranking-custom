@@ -145,47 +145,24 @@ export function useRankingData({
       // eslint-disable-next-line no-console
       console.log('[DEBUG] Device type:', deviceType, 'Tag:', config.tag, 'isTagRanking:', isTagRanking, 'Limit:', limit)
       
-      // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
-      let actualGenre = config.genre
-      let customRankingConditions: any[] = []
-      if (config.genre === 'custom') {
-        // カスタムランキングIDを取得
-        if (config.tag?.startsWith('custom:')) {
-          const customId = config.tag.replace('custom:', '')
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Custom ranking ID:', customId)
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Custom rankings from props:', customRankings)
-          
-          // propsから渡されたcustomRankingsまたはnewlyCreatedRankingを使用
-          const targetRanking = customRankings.find((r: any) => r.id === customId) || 
-                                (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
-          // eslint-disable-next-line no-console
-          console.log('[DEBUG] Target ranking:', targetRanking)
-          if (targetRanking && targetRanking.baseGenre) {
-            actualGenre = targetRanking.baseGenre
-            customRankingConditions = targetRanking.conditions || []
-            // eslint-disable-next-line no-console
-            console.log('[DEBUG] Actual genre:', actualGenre)
-            // eslint-disable-next-line no-console
-            console.log('[DEBUG] Conditions:', customRankingConditions)
-          } else {
-            // カスタムランキングが見つからない場合
-            // eslint-disable-next-line no-console
-            console.log('[DEBUG] Custom ranking not found, will fetch base genre data')
-            // baseGenreを取得できないため、custom genreのまま続行
-            // 注: この場合、APIからは空データが返ってくる可能性が高い
-          }
-        } else {
-          // カスタムランキングが選択されているがタグが指定されていない場合
-          // 空データを返してAPIリクエストを防ぐ
-          setFullRankingData([])
-          setRankingData([])
-          setCurrentPopularTags([])
-          setLoading(false)
-          setError(null)
-          return
-        }
+      // actualGenreの設定（カスタムランキングの場合は既に処理済みのcacheGenreを使用）
+      let actualGenre = isCustomRanking ? cacheGenre : config.genre
+      
+      // カスタムランキングが選択されているがタグが指定されていない場合
+      if (config.genre === 'custom' && !config.tag?.startsWith('custom:')) {
+        // 空データを返してAPIリクエストを防ぐ
+        setFullRankingData([])
+        setRankingData([])
+        setCurrentPopularTags([])
+        setLoading(false)
+        setError(null)
+        return
+      }
+      
+      // デバッグ情報を出力（カスタムランキングの場合）
+      if (isCustomRanking) {
+        // eslint-disable-next-line no-console
+        console.log('[DEBUG] Custom ranking - actualGenre:', actualGenre, 'conditions:', customRankingConditions)
       }
       
       const baseParams = new URLSearchParams({
