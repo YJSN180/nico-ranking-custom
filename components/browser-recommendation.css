@@ -51,10 +51,11 @@
 /* 閉じるボタン */
 .browser-recommendation-close {
   position: absolute;
-  top: -10px;
-  right: -10px;
+  top: -16px;
+  right: -16px;
   width: 32px;
   height: 32px;
+  padding: 6px;
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 50%;
