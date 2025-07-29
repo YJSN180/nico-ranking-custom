@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { ExtendedNGList } from '../types/ng-list-extended'
 import { TagIcon, getTagTypeLabel } from './tag-icon'
+import { TagAutocompleteInput } from './tag-autocomplete-input'
 import styles from './settings-modal.module.css'
 
 interface NGTagsSectionProps {
@@ -236,12 +237,17 @@ export function NGTagsSection({ tags, onUpdate }: NGTagsSectionProps) {
 
       {/* タグ追加入力 */}
       <div className={styles.inputRow}>
-        <input
-          type="text"
+        <TagAutocompleteInput
           value={inputTag}
-          onChange={(e) => setInputTag(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+          onChange={setInputTag}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              handleAddTag()
+            }
+          }}
           placeholder="タグ名を入力"
+          style={{ flex: 1 }}
         />
         <button onClick={handleAddTag}>追加</button>
       </div>

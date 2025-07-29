@@ -39,7 +39,9 @@
     "update-video-stats": "tsx scripts/update-video-stats.ts",
     "update-ng-list": "tsx scripts/update-ng-list.ts",
     "test:kv-api": "vitest run __tests__/unit/cloudflare-kv.test.ts",
-    "test:kv-optimization": "vitest run __tests__/integration/workers-kv-optimization.test.ts"
+    "test:kv-optimization": "vitest run __tests__/integration/workers-kv-optimization.test.ts",
+    "generate-tag-accumulation": "tsx scripts/generate-tag-accumulation.ts",
+    "upload-tag-accumulation": "tsx scripts/upload-tag-accumulation.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.731.0",
