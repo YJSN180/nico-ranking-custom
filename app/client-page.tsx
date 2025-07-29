@@ -656,6 +656,17 @@ export default function ClientPage({
       return
     }
     
+    // カスタムランキングが既に表示されている場合で、
+    // 新規作成されたランキングを選択している場合はスキップ
+    if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
+      const customId = newConfig.tag.replace('custom:', '')
+      if (newlyCreatedRanking && newlyCreatedRanking.id === customId && 
+          isShowingCustomRanking && customRankingDisplayData.length > 0) {
+        // 新規作成したランキングのデータが既に設定されているのでスキップ
+        return
+      }
+    }
+    
     // フックのfetchRankingData関数を使用してデータ取得
     try {
       await fetchRankingData(newConfig)
@@ -852,16 +863,16 @@ export default function ClientPage({
         ['AND', 'OR', 'NOT'].includes(condition.operator)
       )
 
-      // 新しく作成したランキング情報を最初に保存（重要：onConfigChangeより前に実行）
+      // 作成中フラグを最初に設定（404エラーを防ぐため）
+      setIsCreatingCustomRanking(true)
+      
+      // 新しく作成したランキング情報を保存（重要：onConfigChangeより前に実行）
       setNewlyCreatedRanking({
         id: rankingId,
         title,
         conditions: validConditions,
         baseGenre
       })
-      
-      // 作成中フラグを設定（404エラーを防ぐため）
-      setIsCreatingCustomRanking(true)
 
       // まずデータを取得（エラーをキャッチして処理続行）
       const tempConfig = { ...config, genre: baseGenre }
@@ -914,8 +925,10 @@ export default function ClientPage({
       setCustomRankingDisplayData([])
       setCustomRankingMetadata(null)
     } finally {
-      // 作成中フラグをクリア（成功・失敗問わず）
-      setIsCreatingCustomRanking(false)
+      // 作成中フラグを少し遅延してクリア（onConfigChangeの処理が完了するまで待つ）
+      setTimeout(() => {
+        setIsCreatingCustomRanking(false)
+      }, 100)
     }
   }, [config, fetchRankingData])
   

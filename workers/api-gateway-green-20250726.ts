@@ -352,23 +352,20 @@ export default {
         // タグ累積データを解析
         let tagData: TagAccumulationData
         try {
-          // gzip圧縮対応
-          const reader = tagAccumulationObject.body.getReader()
-          const { value: firstChunk } = await reader.read()
-          reader.releaseLock()
+          // R2 ObjectのhttpMetadataからContent-Encodingを確認
+          const contentEncoding = tagAccumulationObject.httpMetadata?.contentEncoding
           
-          const isGzipped = firstChunk && firstChunk.length >= 2 && 
-                           firstChunk[0] === 0x1f && firstChunk[1] === 0x8b
-          
-          if (isGzipped) {
-            // gzip解凍
+          if (contentEncoding === 'gzip') {
+            // gzipデータとして解凍
+            console.log('[Green Worker] Tag data is gzipped, decompressing...')
             const compressedData = await tagAccumulationObject.arrayBuffer()
             const decompressedData = await new Response(
               new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
             ).text()
             tagData = JSON.parse(decompressedData)
           } else {
-            // 非圧縮データ
+            // 非圧縮データとして直接パース
+            console.log('[Green Worker] Loading uncompressed tag data...')
             const textData = await tagAccumulationObject.text()
             tagData = JSON.parse(textData)
           }

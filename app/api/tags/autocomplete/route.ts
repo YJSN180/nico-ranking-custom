@@ -1,37 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { readFileSync, existsSync } from 'fs'
+import { join } from 'path'
 
 /**
  * タグオートコンプリートAPI（Next.js版）
  * ローカル開発環境用のAPIエンドポイント
+ * 実際のタグ累積データを使用
  */
-
-// モックタグデータ（開発・テスト用）
-const MOCK_TAGS = [
-  'ゲーム', 'ゲーム実況', 'ゲーム音楽', 'ゲームPV', 'ゲーム紹介',
-  'アニメ', 'アニメOP', 'アニメED', 'アニメMAD', 'アニメソング',
-  'VOCALOID', 'VOCALOID-Original', 'VOCALOID-Cover', 'VOCALOID新曲リンク',
-  '音楽', '音楽・サウンド', '音ゲー', '音MAD',
-  '歌ってみた', '歌い手', '歌', '歌謡曲',
-  '踊ってみた', 'ダンス', 'ダンスロボットダンス',
-  '実況プレイ', '実況プレイPart1リンク', '実況プレイ動画',
-  '料理', '料理動画', '料理実況', '料理レシピ',
-  'MMD', 'MMDドラマ', 'MMDアクション', 'MMD艦これ', 'MMD刀剣乱舞',
-  '東方', '東方アレンジ', '東方手書き劇場', '東方MMD', '東方Project',
-  'アイドルマスター', 'im@s架空戦記', 'iM@SノーマルPV', 'アイマス',
-  '艦隊これくしょん', '艦これ', '艦これMMD', '艦これMAD',
-  '刀剣乱舞', '刀剣乱舞MMD', '刀剣乱舞手描き', '刀剣乱舞MAD',
-  'FGO', 'Fate/Grand_Order', 'Fate', 'FateMMD',
-  'ポケモン', 'ポケットモンスター', 'ポケモン実況', 'ポケモンBGM',
-  'マインクラフト', 'Minecraft', 'マイクラ', 'マイクラ実況',
-  'スプラトゥーン', 'スプラトゥーン2', 'スプラトゥーン3', 'Splatoon',
-  '技術', '技術・工学', 'ニコニコ技術部', 'プログラミング',
-  '描いてみた', 'お絵かき', 'イラスト', 'デジタルアート',
-  '作ってみた', 'ニコニコ手芸部', '手作り', 'DIY',
-  'RTA', 'RTA in Japan', 'TAS', 'TAS動画',
-  'バーチャルYouTuber', 'VTuber', 'にじさんじ', 'ホロライブ',
-  'レトロゲーム', 'FC', 'SFC', 'PS', 'PS2', 'ゲームボーイ',
-  'Nintendo_Switch', 'ニンテンドースイッチ', 'Switch', 'スイッチ'
-]
 
 interface TagAccumulationData {
   tags: string[]
@@ -40,7 +15,40 @@ interface TagAccumulationData {
     lastUpdated: string
     totalUniqueTags: number
     lastAccumulationSource: string
+    weeklyUpdateCount?: number
   }
+}
+
+// タグ累積データをメモリにキャッシュ（開発時のパフォーマンス向上）
+let cachedTagData: string[] | null = null
+let cacheTimestamp = 0
+const CACHE_DURATION = 5 * 60 * 1000 // 5分間キャッシュ
+
+function loadTagData(): string[] {
+  const now = Date.now()
+  
+  // キャッシュが有効な場合はそれを使用
+  if (cachedTagData && (now - cacheTimestamp) < CACHE_DURATION) {
+    return cachedTagData
+  }
+  
+  try {
+    // data/tag-accumulation.jsonから読み込み
+    const dataPath = join(process.cwd(), 'data', 'tag-accumulation.json')
+    if (existsSync(dataPath)) {
+      const data = JSON.parse(readFileSync(dataPath, 'utf-8')) as TagAccumulationData
+      cachedTagData = data.tags || []
+      cacheTimestamp = now
+      console.log(`[Tag Autocomplete] Loaded ${cachedTagData.length} tags from tag-accumulation.json`)
+      return cachedTagData
+    }
+  } catch (error) {
+    console.error('[Tag Autocomplete] Failed to load tag data:', error)
+  }
+  
+  // フォールバック: 空の配列を返す
+  console.warn('[Tag Autocomplete] No tag data found, returning empty array')
+  return []
 }
 
 export async function GET(request: NextRequest) {
@@ -61,10 +69,13 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // プレフィックス検索を実行
+    // タグデータを読み込み
+    const tagData = loadTagData()
+    
+    // プレフィックス検索を実行（大文字小文字を区別しない）
     const lowerQuery = query.toLowerCase()
-    const suggestions = MOCK_TAGS
-      .filter(tag => tag.toLowerCase().startsWith(lowerQuery))
+    const suggestions = tagData
+      .filter(tag => tag.toLowerCase().includes(lowerQuery))
       .slice(0, limit)
 
     // レスポンスを構築
@@ -74,9 +85,9 @@ export async function GET(request: NextRequest) {
       metadata: {
         total: suggestions.length,
         maxResults: limit,
-        source: 'next-api-mock',
+        source: 'next-api-tagdata',
         lastUpdated: new Date().toISOString(),
-        totalUniqueTags: MOCK_TAGS.length
+        totalUniqueTags: tagData.length
       }
     }
 
