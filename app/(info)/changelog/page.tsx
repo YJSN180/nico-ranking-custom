@@ -25,10 +25,6 @@ const CHANGELOG: ChangelogEntry[] = [
     version: 'v1.1.0',
     changes: [
       { type: 'feature', description: 'カスタムランキング作成機能（特定のタグの動画を集めたランキング）' },
-      { type: 'feature', description: 'カスタムランキングの並び替え・管理機能' },
-      { type: 'feature', description: 'カスタムランキングのエクスポート・インポート対応' },
-      { type: 'improvement', description: 'タグオートコンプリート機能の改善（26,636個のタグデータに対応）' },
-      { type: 'improvement', description: 'Chrome推奨ポップアップの閉じるボタン当たり判定改善' },
     ],
   },
   {
