@@ -39,7 +39,6 @@ function loadTagData(): string[] {
       const data = JSON.parse(readFileSync(dataPath, 'utf-8')) as TagAccumulationData
       cachedTagData = data.tags || []
       cacheTimestamp = now
-      console.log(`[Tag Autocomplete] Loaded ${cachedTagData.length} tags from tag-accumulation.json`)
       return cachedTagData
     }
   } catch (error) {
