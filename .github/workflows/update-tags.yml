@@ -1,0 +1,76 @@
+name: Update Tag Accumulation Data
+
+on:
+  schedule:
+    # 毎日午前3時（JST）= UTC 18:00
+    - cron: '0 18 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  update-tags:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Collect tags from API
+      run: |
+        echo "📊 タグ収集開始 (全23ジャンル)"
+        node scripts/fetch-tags-from-api.cjs
+      timeout-minutes: 10
+    
+    - name: Install wrangler
+      run: npm install -g wrangler@latest
+    
+    - name: Upload to R2
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      run: |
+        echo "📤 R2へアップロード開始"
+        # R2への効率的な1キー書き込み
+        wrangler r2 object put nico-ranking/tag-accumulation.json --file data/tag-accumulation.json
+        
+        # gzip版も作成してアップロード（オプション）
+        gzip -c data/tag-accumulation.json > data/tag-accumulation.json.gz
+        wrangler r2 object put nico-ranking/tag-accumulation.json.gz --file data/tag-accumulation.json.gz
+        
+        echo "✅ アップロード完了"
+    
+    - name: Verify upload
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      run: |
+        # ファイルサイズを確認
+        wrangler r2 object get nico-ranking/tag-accumulation.json --pipe | wc -c
+    
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## タグ累積データ更新結果" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        if [ -f data/tag-accumulation.json ]; then
+          TAG_COUNT=$(jq '.tags | length' data/tag-accumulation.json)
+          FILE_SIZE=$(du -h data/tag-accumulation.json | cut -f1)
+          echo "- ✅ タグ数: $TAG_COUNT" >> $GITHUB_STEP_SUMMARY
+          echo "- 📦 ファイルサイズ: $FILE_SIZE" >> $GITHUB_STEP_SUMMARY
+          echo "- 🕐 更新時刻: $(date '+%Y-%m-%d %H:%M:%S JST')" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ タグデータ生成失敗" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Error notification
+      if: failure()
+      run: |
+        echo "::error::タグ累積データの更新に失敗しました"
