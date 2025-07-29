@@ -2,6 +2,8 @@
  * Vercelログに出力するためのクライアントサイドログ関数
  */
 
+import { requestThrottle } from './request-throttle'
+
 type LogLevel = 'info' | 'warn' | 'error'
 
 async function sendLogToServer(level: LogLevel, message: string, data?: any) {
@@ -24,6 +26,9 @@ async function sendLogToServer(level: LogLevel, message: string, data?: any) {
   }
 
   try {
+    // レート制限を適用してからリクエスト
+    await requestThrottle.throttle('/api/debug-log')
+    
     await fetch('/api/debug-log', {
       method: 'POST',
       headers: {
