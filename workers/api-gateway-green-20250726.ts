@@ -81,7 +81,7 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
     // レート制限キー（IP + エンドポイント）
     const limitKey = `${clientIP}:${endpoint}`
     
-    // Rate Limiting APIを使用（10req/分制限）
+    // Rate Limiting APIを使用（20req/分制限）
     const { success } = await env.RATE_LIMITER.limit({
       key: limitKey
     })
@@ -98,7 +98,7 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
           headers: {
             'Content-Type': 'application/json',
             'Retry-After': '60',
-            'X-RateLimit-Limit': '10',
+            'X-RateLimit-Limit': '20',
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': Math.floor(Date.now() / 1000 + 60).toString()
           }
