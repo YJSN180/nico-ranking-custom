@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
 import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
 import { TagIcon } from './tag-icon'
@@ -116,7 +116,7 @@ export function CustomRankingModal({
   }
 
   // タグのオートコンプリート候補を取得
-  const fetchTagSuggestions = async (query: string): Promise<string[]> => {
+  const fetchTagSuggestions = useCallback(async (query: string): Promise<string[]> => {
     if (!query || query.trim().length < 2) {
       return []
     }
@@ -148,7 +148,7 @@ export function CustomRankingModal({
     } finally {
       setIsLoadingSuggestions(false)
     }
-  }
+  }, [])
 
   // デバウンス処理付きオートコンプリート
   useEffect(() => {
@@ -166,7 +166,7 @@ export function CustomRankingModal({
     }, 300) // 300msデバウンス
 
     return () => clearTimeout(timeoutId)
-  }, [tagInput])
+  }, [tagInput, fetchTagSuggestions])
 
   // モーダルが開いた時にリセットまたは初期化
   useEffect(() => {

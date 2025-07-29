@@ -45,7 +45,7 @@ export function TagAutocompleteInput({
   }
 
   // タグのオートコンプリート候補を取得
-  const fetchTagSuggestions = async (query: string): Promise<string[]> => {
+  const fetchTagSuggestions = useCallback(async (query: string): Promise<string[]> => {
     if (!query || query.trim().length < 2) {
       return []
     }
@@ -77,7 +77,7 @@ export function TagAutocompleteInput({
     } finally {
       setIsLoadingSuggestions(false)
     }
-  }
+  }, [])
 
   // デバウンス処理をuseMemoとuseCallbackで実装
   const debounceRef = useRef<NodeJS.Timeout>()
@@ -93,7 +93,7 @@ export function TagAutocompleteInput({
       setShowSuggestions(false)
       setSelectedSuggestionIndex(-1)
     }
-  }, [])
+  }, [fetchTagSuggestions])
 
   const handleInputChange = useCallback((newValue: string) => {
     onChange(newValue)
