@@ -665,9 +665,13 @@ export default function ClientPage({
       }
     }
     
-    // カスタムランキング作成中の場合はfetchRankingDataをスキップ
-    if (isCreatingCustomRanking && newConfig.genre === 'custom') {
-      return
+    // カスタムランキング作成中の場合でも、新規作成されたランキングの選択時はデータフェッチを実行
+    if (isCreatingCustomRanking && newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
+      const customId = newConfig.tag.replace('custom:', '')
+      // 新規作成されたランキングでない場合のみスキップ
+      if (!newlyCreatedRankings.has(customId)) {
+        return
+      }
     }
     
     // カスタムランキングが既に表示されている場合で、
