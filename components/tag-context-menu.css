@@ -1,0 +1,181 @@
+/* タグコンテキストメニュー スタイル */
+
+.tag-context-menu-container {
+  position: relative;
+  display: inline-block;
+  /* タッチイベントを正しく受け取るため */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tag-context-menu-trigger {
+  /* トリガー要素は子要素の形状をそのまま維持 */
+  display: contents;
+}
+
+/* 背景オーバーレイ */
+.tag-context-menu-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 998;
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* コンテキストメニュー本体 */
+.tag-context-menu {
+  position: fixed;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 220px;
+  z-index: 999;
+  animation: slideIn 0.2s ease-out;
+  
+  /* メニューが画面外に出ないよう調整 */
+  transform: translate(-50%, -100%);
+  margin-top: -8px;
+}
+
+/* メニューアイテム */
+.tag-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  font-family: inherit;
+  white-space: nowrap;
+  
+  /* タッチデバイスでのハイライト無効化 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tag-context-menu__item:hover {
+  background: var(--surface-secondary);
+}
+
+.tag-context-menu__item:active {
+  background: var(--surface-hover);
+  transform: scale(0.98);
+}
+
+/* タグ専用アイコン */
+.tag-context-menu__icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* 区切り線 */
+.tag-context-menu__divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 8px;
+}
+
+/* 成功メッセージ */
+.tag-context-menu__success {
+  padding: 16px 20px;
+  font-size: 14px;
+  color: var(--success-color);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  justify-content: center;
+  white-space: pre-line; /* 改行対応 */
+}
+
+/* アニメーション */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+/* タッチデバイス対応 */
+@media (hover: none) and (pointer: coarse) {
+  .tag-context-menu {
+    min-width: 240px;
+  }
+  
+  .tag-context-menu__item {
+    padding: 14px 18px;
+    font-size: 15px;
+    gap: 14px;
+  }
+  
+  .tag-context-menu__icon {
+    font-size: 18px;
+    width: 22px;
+  }
+}
+
+/* PWAスタンドアロンモードでの調整 */
+@media (display-mode: standalone) {
+  .tag-context-menu {
+    min-width: 260px;
+  }
+  
+  .tag-context-menu__item {
+    padding: 16px 20px;
+    font-size: 16px;
+  }
+}
+
+/* ダークモード対応 */
+@media (prefers-color-scheme: dark) {
+  .tag-context-menu {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* 画面端での位置調整 */
+@media (max-width: 420px) {
+  .tag-context-menu {
+    /* 小画面では幅を調整 */
+    min-width: min(260px, calc(100vw - 40px));
+    left: 50% !important;
+    right: auto;
+  }
+}
+
+/* 横向きモバイルデバイス対応 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .tag-context-menu {
+    /* 横向きでは高さを抑える */
+    transform: translate(-50%, -50%);
+    margin-top: 0;
+  }
+}

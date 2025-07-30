@@ -8,7 +8,9 @@ import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import { useTagDisplay } from '@/contexts/tag-display-context'
+import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import { TagIcon } from './tag-icon'
+import { TagContextMenu } from './tag-context-menu'
 import type { RankingItem } from '@/types/ranking'
 import type { NGType } from './quick-ng-button'
 
@@ -24,6 +26,7 @@ interface RankingItemProps {
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
 const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd }: RankingItemProps) {
   const { showTags } = useTagDisplay()
+  const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const rankColors: Record<number, string> = {
     1: 'var(--rank-gold)',
     2: 'var(--rank-silver)', 
@@ -410,56 +413,104 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               {/* タグ詳細がある場合は詳細を使用、ない場合は従来のタグを使用 */}
               {item.tagDetails && item.tagDetails.length > 0 ? (
                 item.tagDetails.map((tagDetail, index) => (
-                  <span
+                  <TagContextMenu
                     key={index}
-                    style={{
-                      background: 'var(--surface-secondary)',
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      padding: '4px 6px 4px 8px',
-                      borderRadius: '14px',
-                      border: '1px solid var(--border-color)',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      lineHeight: '12px',
-                      boxSizing: 'border-box'
+                    tagDetail={tagDetail}
+                    ngList={ngList}
+                    saveNGListDirectly={saveNGListDirectly}
+                    onNGAdded={(tagName, withAttribute) => {
+                      if (onQuickNGAdd) {
+                        // タグNG追加時の処理をQuickNGButtonと同様に実行
+                        onQuickNGAdd(item, 'tags', tagName)
+                      }
                     }}
-                    title={tagDetail.name}
                   >
-                    {/* タグアイコン */}
-                    <TagIcon 
-                      type={tagDetail.isLocked ? 'locked' : 'user'} 
-                      size={12}
-                    />
-                    <span>
-                      {tagDetail.name}
+                    <span
+                      style={{
+                        background: 'var(--surface-secondary)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '11px',
+                        padding: '4px 6px 4px 8px',
+                        borderRadius: '14px',
+                        border: '1px solid var(--border-color)',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        lineHeight: '12px',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title={`${tagDetail.name} (クリックでメニュー)`}
+                      onMouseEnter={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                        }
+                      }}
+                    >
+                      {/* タグアイコン */}
+                      <TagIcon 
+                        type={tagDetail.isLocked ? 'locked' : 'user'} 
+                        size={12}
+                      />
+                      <span>
+                        {tagDetail.name}
+                      </span>
                     </span>
-                  </span>
+                  </TagContextMenu>
                 ))
               ) : (
-                // 従来のタグ表示（後方互換性）
+                // 従来のタグ表示（後方互換性） - ユーザータグとして扱う
                 item.tags?.map((tag, index) => (
-                  <span
+                  <TagContextMenu
                     key={index}
-                    style={{
-                      background: 'var(--surface-secondary)',
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      padding: '4px 10px',
-                      borderRadius: '14px',
-                      border: '1px solid var(--border-color)',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-block',
-                      verticalAlign: 'middle',
-                      lineHeight: '12px',
-                      boxSizing: 'border-box'
+                    tagDetail={{ name: tag, isLocked: false }}
+                    ngList={ngList}
+                    saveNGListDirectly={saveNGListDirectly}
+                    onNGAdded={(tagName, withAttribute) => {
+                      if (onQuickNGAdd) {
+                        // タグNG追加時の処理をQuickNGButtonと同様に実行
+                        onQuickNGAdd(item, 'tags', tagName)
+                      }
                     }}
-                    title={tag}
                   >
-                    {tag}
-                  </span>
+                    <span
+                      style={{
+                        background: 'var(--surface-secondary)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '11px',
+                        padding: '4px 10px',
+                        borderRadius: '14px',
+                        border: '1px solid var(--border-color)',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-block',
+                        verticalAlign: 'middle',
+                        lineHeight: '12px',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title={`${tag} (クリックでメニュー)`}
+                      onMouseEnter={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                        }
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  </TagContextMenu>
                 ))
               )}
             </div>

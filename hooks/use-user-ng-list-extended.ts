@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import type { ExtendedUserNGList } from '../types/ng-list-extended'
 import { migrateToExtendedNGList, createEmptyTagNGList } from '../lib/ng-list-migration-extended'
 
@@ -22,72 +22,36 @@ const defaultNGList: ExtendedUserNGList = {
   updatedAt: new Date().toISOString(),
 }
 
+// localStorageから初期データを読み込む関数（useEffect不要）
+const loadInitialNGList = (): ExtendedUserNGList => {
+  if (typeof window === 'undefined') return defaultNGList
+  
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      
+      // バージョン1の場合はマイグレーション
+      if (parsed.version === 1) {
+        const migrated = migrateToExtendedNGList(parsed) as ExtendedUserNGList
+        migrated.version = CURRENT_VERSION
+        // マイグレーションしたデータを保存
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
+        return migrated
+      } else if (parsed.version === CURRENT_VERSION) {
+        return parsed
+      }
+    }
+  } catch (error) {
+    // エラーは無視してデフォルト値を使用
+  }
+  
+  return defaultNGList
+}
+
 export function useUserNGListExtended() {
-  const [ngList, setNGList] = useState<ExtendedUserNGList>(defaultNGList)
-
-  // 初回読み込みとストレージ変更の監視
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const loadNGList = () => {
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY)
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          
-          // バージョン1の場合はマイグレーション
-          if (parsed.version === 1) {
-            const migrated = migrateToExtendedNGList(parsed) as ExtendedUserNGList
-            migrated.version = CURRENT_VERSION
-            setNGList(migrated)
-            // マイグレーションしたデータを保存
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
-          } else if (parsed.version === CURRENT_VERSION) {
-            setNGList(parsed)
-          }
-        }
-      } catch (error) {
-        // エラーは無視してデフォルト値を使用
-      }
-    }
-    
-    // 初回読み込み
-    loadNGList()
-    
-    // storageイベントを監視（他のタブでの変更を検知）
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === STORAGE_KEY && e.newValue) {
-        try {
-          const parsed = JSON.parse(e.newValue)
-          if (parsed.version === CURRENT_VERSION) {
-            setNGList(parsed)
-          } else if (parsed.version === 1) {
-            // 他のタブでv1データが保存された場合もマイグレーション
-            const migrated = migrateToExtendedNGList(parsed) as ExtendedUserNGList
-            migrated.version = CURRENT_VERSION
-            setNGList(migrated)
-          }
-        } catch (error) {
-          // エラーは無視
-        }
-      }
-    }
-    
-    // ngListUpdatedイベントを監視（他のコンポーネントからの変更を検知）
-    const handleNGListUpdated = (e: CustomEvent) => {
-      if (e.detail && e.detail.ngList) {
-        setNGList(e.detail.ngList)
-      }
-    }
-    
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('ngListUpdated', handleNGListUpdated as EventListener)
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('ngListUpdated', handleNGListUpdated as EventListener)
-    }
-  }, [])
+  // useEffectを使わずに初期化（useStateの遅延初期化を使用）
+  const [ngList, setNGList] = useState<ExtendedUserNGList>(() => loadInitialNGList())
 
   // 総数を再計算（タグも含む）
   const recalculateTotalCount = useCallback((list: ExtendedUserNGList): number => {

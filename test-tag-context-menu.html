@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>タグコンテキストメニューテスト</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .tag-test {
+            display: inline-block;
+            background: #e2e8f0;
+            color: #4a5568;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 14px;
+            border: 1px solid #cbd5e0;
+            margin: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .tag-test:hover {
+            background: #cbd5e0;
+        }
+        .context-menu {
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 4px;
+            min-width: 220px;
+            z-index: 999;
+            display: none;
+        }
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+            text-align: left;
+        }
+        .context-menu-item:hover {
+            background: #f1f5f9;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 998;
+            display: none;
+        }
+        .success-message {
+            padding: 10px;
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>タグコンテキストメニューテスト</h1>
+        <p>以下のタグをクリックしてください：</p>
+        
+        <div class="success-message" id="successMessage"></div>
+        
+        <div class="tags-container">
+            <span class="tag-test" data-tag="ロックタグ例" data-locked="true">🔒 ロックタグ例</span>
+            <span class="tag-test" data-tag="ユーザータグ例" data-locked="false">👤 ユーザータグ例</span>
+            <span class="tag-test" data-tag="アニメ" data-locked="false">👤 アニメ</span>
+            <span class="tag-test" data-tag="音楽" data-locked="true">🔒 音楽</span>
+            <span class="tag-test" data-tag="実況プレイ動画" data-locked="false">👤 実況プレイ動画</span>
+        </div>
+        
+        <h2>テスト項目</h2>
+        <ul>
+            <li>✅ タグをクリックでメニューが表示される</li>
+            <li>✅ 「タグ名をコピー」でクリップボードにコピーされる</li>
+            <li>✅ 「このロック/ユーザータグをNGリストに追加」で属性を考慮して追加</li>
+            <li>✅ 「タグ名そのものをNGリストに追加」で属性を無視して追加</li>
+            <li>✅ オーバーレイクリックでメニューが閉じる</li>
+            <li>✅ 成功メッセージが表示される</li>
+        </ul>
+        
+        <h3>NGリスト状況（開発者ツールでlocalStorageを確認）</h3>
+        <pre id="ngListDisplay">localStorage['user-ng-list']を確認してください</pre>
+    </div>
+    
+    <!-- オーバーレイ -->
+    <div class="overlay" id="overlay"></div>
+    
+    <!-- コンテキストメニュー -->
+    <div class="context-menu" id="contextMenu">
+        <button class="context-menu-item" id="copyTag">
+            <span>📋</span>
+            タグ名をコピー
+        </button>
+        <button class="context-menu-item" id="addNGWithAttribute">
+            <span>🚫</span>
+            <span id="ngAttributeText">このタグをNGリストに追加</span>
+        </button>
+        <hr style="margin: 4px 8px; border: none; height: 1px; background: #e2e8f0;">
+        <button class="context-menu-item" id="addNGWithoutAttribute">
+            <span>⚫</span>
+            タグ名そのものをNGリストに追加
+        </button>
+    </div>
+
+    <script>
+        let currentTag = null;
+        let currentIsLocked = false;
+        
+        const overlay = document.getElementById('overlay');
+        const contextMenu = document.getElementById('contextMenu');
+        const successMessage = document.getElementById('successMessage');
+        const ngAttributeText = document.getElementById('ngAttributeText');
+        
+        // NGリスト管理
+        function getNGList() {
+            try {
+                const stored = localStorage.getItem('user-ng-list');
+                if (stored) {
+                    return JSON.parse(stored);
+                }
+            } catch (e) {}
+            
+            return {
+                videoIds: [],
+                videoTitles: { exact: [], partial: [] },
+                authorIds: [],
+                authorNames: { exact: [], partial: [] },
+                tags: {
+                    locked: { exact: [], partial: [] },
+                    user: { exact: [], partial: [] },
+                    both: { exact: [], partial: [] }
+                },
+                version: 2,
+                totalCount: 0,
+                updatedAt: new Date().toISOString()
+            };
+        }
+        
+        function saveNGList(ngList) {
+            try {
+                localStorage.setItem('user-ng-list', JSON.stringify(ngList));
+                updateNGListDisplay();
+            } catch (e) {
+                console.error('NGリスト保存エラー:', e);
+            }
+        }
+        
+        function updateNGListDisplay() {
+            const ngList = getNGList();
+            document.getElementById('ngListDisplay').textContent = JSON.stringify(ngList, null, 2);
+        }
+        
+        // シンプルクリックでメニュー表示
+        document.querySelectorAll('.tag-test').forEach(tag => {
+            tag.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                showContextMenu(e.clientX, e.clientY, tag.dataset.tag, tag.dataset.locked === 'true');
+            });
+        });
+        
+        function showContextMenu(x, y, tagName, isLocked) {
+            currentTag = tagName;
+            currentIsLocked = isLocked;
+            
+            // メニューテキスト更新
+            ngAttributeText.textContent = `この${isLocked ? 'ロック' : 'ユーザー'}タグをNGリストに追加`;
+            
+            // メニュー位置調整
+            contextMenu.style.left = `${x}px`;
+            contextMenu.style.top = `${y}px`;
+            contextMenu.style.display = 'block';
+            overlay.style.display = 'block';
+        }
+        
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+            overlay.style.display = 'none';
+            currentTag = null;
+            currentIsLocked = false;
+        }
+        
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            setTimeout(() => {
+                successMessage.style.display = 'none';
+            }, 3000);
+        }
+        
+        // メニューアイテムイベント
+        document.getElementById('copyTag').addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(currentTag);
+                showSuccess(`✓ "${currentTag}" をコピーしました`);
+            } catch (e) {
+                showSuccess('❌ コピーに失敗しました');
+            }
+            hideContextMenu();
+        });
+        
+        document.getElementById('addNGWithAttribute').addEventListener('click', () => {
+            const ngList = getNGList();
+            
+            if (!ngList.tags) {
+                ngList.tags = {
+                    locked: { exact: [], partial: [] },
+                    user: { exact: [], partial: [] },
+                    both: { exact: [], partial: [] }
+                };
+            }
+            
+            const targetArray = currentIsLocked ? ngList.tags.locked.exact : ngList.tags.user.exact;
+            if (!targetArray.includes(currentTag)) {
+                targetArray.push(currentTag);
+                saveNGList(ngList);
+                showSuccess(`✓ "${currentTag}" を${currentIsLocked ? 'ロックタグ' : 'ユーザータグ'}として追加しました`);
+            } else {
+                showSuccess('既にNGリストに登録済みです');
+            }
+            hideContextMenu();
+        });
+        
+        document.getElementById('addNGWithoutAttribute').addEventListener('click', () => {
+            const ngList = getNGList();
+            
+            if (!ngList.tags) {
+                ngList.tags = {
+                    locked: { exact: [], partial: [] },
+                    user: { exact: [], partial: [] },
+                    both: { exact: [], partial: [] }
+                };
+            }
+            
+            if (!ngList.tags.both.exact.includes(currentTag)) {
+                ngList.tags.both.exact.push(currentTag);
+                saveNGList(ngList);
+                showSuccess(`✓ "${currentTag}" をタグ名として追加しました`);
+            } else {
+                showSuccess('既にNGリストに登録済みです');
+            }
+            hideContextMenu();
+        });
+        
+        // オーバーレイクリックで閉じる
+        overlay.addEventListener('click', hideContextMenu);
+        
+        // 初期表示
+        updateNGListDisplay();
+    </script>
+</body>
+</html>
