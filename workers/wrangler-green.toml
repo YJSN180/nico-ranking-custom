@@ -11,5 +11,13 @@ id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 binding = "R2_BUCKET"
 bucket_name = "nico-ranking"
 
+# Rate Limiting binding
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+# 20 requests per minute (1分間に20リクエスト)
+simple = { limit = 20, period = 60 }
+
 [vars]
 VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
