@@ -134,7 +134,8 @@ export function TagContextMenu({ tagDetail, children, ngList, saveNGListDirectly
   }
   
   // オーバーレイクリックで閉じる（useEffect不要）
-  const handleOverlayClick = () => {
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
     closeMenu()
   }
 
@@ -150,7 +151,7 @@ export function TagContextMenu({ tagDetail, children, ngList, saveNGListDirectly
       {showMenu && (
         <>
           {/* 背景オーバーレイ */}
-          <div className="tag-context-menu-overlay" onClick={closeMenu} />
+          <div className="tag-context-menu-overlay" onClick={handleOverlayClick} />
           
           {/* コンテキストメニュー */}
           <div 

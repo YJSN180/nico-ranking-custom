@@ -271,8 +271,11 @@
             hideContextMenu();
         });
         
-        // オーバーレイクリックで閉じる
-        overlay.addEventListener('click', hideContextMenu);
+        // オーバーレイクリックで閉じる（伝播を防ぐ）
+        overlay.addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideContextMenu();
+        });
         
         // 初期表示
         updateNGListDisplay();
