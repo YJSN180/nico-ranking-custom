@@ -106,10 +106,6 @@ const nextConfig = {
             key: 'Expect-CT',
             value: 'max-age=86400, enforce'
           },
-          {
-            key: 'Feature-Policy',
-            value: "camera 'none'; microphone 'none'; geolocation 'none'; usb 'none'; payment 'none'; fullscreen 'self'"
-          }
         ]
       },
       // Note: API route cache headers are now handled by middleware.ts
@@ -139,6 +135,8 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    // CSS chunking設定: CSSがscriptタグで読み込まれる問題を修正
+    cssChunking: 'strict', // CSS順序を厳密に制御し、適切にlinkタグで読み込み
     // メモリ使用量を削減
     workerThreads: false,
     cpus: 1,
@@ -249,14 +247,9 @@ const nextConfig = {
             priority: 20,
             maxSize: 30000 // 30KB以下に分割
           },
-          // スタイル（CSS in JS）
-          styles: {
-            name: 'styles',
-            test: /\.(css|scss|sass)$/,
-            chunks: 'all',
-            priority: 15,
-            enforce: true
-          }
+          // 注意: CSSファイルはsplitChunksで処理してはいけません
+          // Next.jsには既に最適化されたCSS処理機能があります
+          // CSSをsplitChunksに含めると<script>タグで読み込まれてしまいます
         }
       }
       
@@ -500,7 +493,10 @@ const pwaConfig = withPWA({
     {
       urlPattern: ({ url }) => {
         const isSameOrigin = self.origin === url.origin
-        return !isSameOrigin
+        // Cloudflare関連のドメインを除外
+        const isCloudflare = url.hostname.includes('cloudflareinsights.com') || 
+                            url.hostname.includes('cloudflare.com')
+        return !isSameOrigin && !isCloudflare
       },
       handler: 'NetworkFirst',
       options: {

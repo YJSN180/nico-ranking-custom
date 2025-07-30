@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NGリスト即時反映テスト</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #3182ce;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NGリスト即時反映テスト</h1>
+        
+        <div id="status" class="result">ステータス: 初期化中...</div>
+        
+        <h2>現在のNGリスト</h2>
+        <div id="current-ng-list" class="result">読み込み中...</div>
+        
+        <h2>テスト操作</h2>
+        <button onclick="addTagToNG('テストタグ', true)">ロックタグ「テストタグ」をNGに追加</button>
+        <button onclick="addTagToNG('ユーザータグ', false)">ユーザータグ「ユーザータグ」をNGに追加</button>
+        <button onclick="addTagToNG('両方タグ', null)">「両方タグ」を属性無視でNGに追加</button>
+        <button onclick="clearNGList()">NGリストをクリア</button>
+        
+        <h2>イベントログ</h2>
+        <div id="event-log" class="result" style="height: 200px; overflow-y: auto;">イベント待機中...</div>
+    </div>
+
+    <script>
+        let eventCount = 0;
+        const eventLog = document.getElementById('event-log');
+        const statusDiv = document.getElementById('status');
+        const ngListDiv = document.getElementById('current-ng-list');
+        
+        // NGリストを表示
+        function displayNGList() {
+            try {
+                const stored = localStorage.getItem('user-ng-list');
+                if (stored) {
+                    const ngList = JSON.parse(stored);
+                    ngListDiv.textContent = JSON.stringify(ngList, null, 2);
+                } else {
+                    ngListDiv.textContent = 'NGリストが空です';
+                }
+            } catch (e) {
+                ngListDiv.textContent = 'エラー: ' + e.message;
+            }
+        }
+        
+        // イベントリスナー設定
+        window.addEventListener('ngListUpdated', (event) => {
+            eventCount++;
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] イベント #${eventCount}: ngListUpdated
+詳細: ${JSON.stringify(event.detail, null, 2)}
+-------------------
+`;
+            eventLog.textContent = logEntry + eventLog.textContent;
+            statusDiv.innerHTML = `<span class="success">✅ NGリスト更新イベントを検出しました！（計${eventCount}回）</span>`;
+            
+            // NGリスト表示を更新
+            displayNGList();
+        });
+        
+        // NGリスト取得
+        function getNGList() {
+            try {
+                const stored = localStorage.getItem('user-ng-list');
+                if (stored) {
+                    return JSON.parse(stored);
+                }
+            } catch (e) {}
+            
+            return {
+                videoIds: [],
+                videoTitles: { exact: [], partial: [] },
+                authorIds: [],
+                authorNames: { exact: [], partial: [] },
+                tags: {
+                    locked: { exact: [], partial: [] },
+                    user: { exact: [], partial: [] },
+                    both: { exact: [], partial: [] }
+                },
+                version: 2,
+                totalCount: 0,
+                updatedAt: new Date().toISOString()
+            };
+        }
+        
+        // NGリスト保存（イベント発火付き）
+        function saveNGList(ngList) {
+            // totalCount再計算
+            let count = 
+                ngList.videoIds.length +
+                ngList.videoTitles.exact.length +
+                ngList.videoTitles.partial.length +
+                ngList.authorIds.length +
+                ngList.authorNames.exact.length +
+                ngList.authorNames.partial.length;
+            
+            if (ngList.tags) {
+                count += 
+                    ngList.tags.locked.exact.length +
+                    ngList.tags.locked.partial.length +
+                    ngList.tags.user.exact.length +
+                    ngList.tags.user.partial.length +
+                    ngList.tags.both.exact.length +
+                    ngList.tags.both.partial.length;
+            }
+            
+            ngList.totalCount = count;
+            ngList.updatedAt = new Date().toISOString();
+            
+            // 保存
+            localStorage.setItem('user-ng-list', JSON.stringify(ngList));
+            
+            // イベント発火
+            window.dispatchEvent(new CustomEvent('ngListUpdated', { 
+                detail: { ngList: ngList } 
+            }));
+        }
+        
+        // タグをNGに追加
+        function addTagToNG(tagName, isLocked) {
+            const ngList = getNGList();
+            
+            if (!ngList.tags) {
+                ngList.tags = {
+                    locked: { exact: [], partial: [] },
+                    user: { exact: [], partial: [] },
+                    both: { exact: [], partial: [] }
+                };
+            }
+            
+            // 追加先を決定
+            let targetArray;
+            if (isLocked === null) {
+                targetArray = ngList.tags.both.exact;
+            } else if (isLocked) {
+                targetArray = ngList.tags.locked.exact;
+            } else {
+                targetArray = ngList.tags.user.exact;
+            }
+            
+            // 重複チェック
+            if (!targetArray.includes(tagName)) {
+                targetArray.push(tagName);
+                saveNGList(ngList);
+                alert(`✅ "${tagName}" をNGリストに追加しました`);
+            } else {
+                alert(`⚠️ "${tagName}" は既にNGリストに登録済みです`);
+            }
+        }
+        
+        // NGリストクリア
+        function clearNGList() {
+            if (confirm('NGリストをクリアしますか？')) {
+                const emptyList = {
+                    videoIds: [],
+                    videoTitles: { exact: [], partial: [] },
+                    authorIds: [],
+                    authorNames: { exact: [], partial: [] },
+                    tags: {
+                        locked: { exact: [], partial: [] },
+                        user: { exact: [], partial: [] },
+                        both: { exact: [], partial: [] }
+                    },
+                    version: 2,
+                    totalCount: 0,
+                    updatedAt: new Date().toISOString()
+                };
+                saveNGList(emptyList);
+                alert('✅ NGリストをクリアしました');
+            }
+        }
+        
+        // 初期表示
+        displayNGList();
+        statusDiv.innerHTML = '<span class="success">✅ 準備完了</span>';
+    </script>
+</body>
+</html>

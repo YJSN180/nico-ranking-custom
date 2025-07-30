@@ -109,6 +109,20 @@ export default function ClientPage({
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
   
+  // NGリスト更新を監視して即座に反映（useEffectは必要最小限の使用）
+  const [ngListVersion, setNgListVersion] = useState(0)
+  useEffect(() => {
+    const handleNGListUpdate = () => {
+      // NGリストの変更を検知して再レンダリングを促す
+      setNgListVersion(prev => prev + 1)
+    }
+    
+    window.addEventListener('ngListUpdated', handleNGListUpdate)
+    return () => {
+      window.removeEventListener('ngListUpdated', handleNGListUpdate)
+    }
+  }, [])
+  
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
     if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
@@ -1095,7 +1109,7 @@ export default function ClientPage({
       totalPages: calculatedTotalPages,
       totalItemsCount: totalCount
     }
-  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData])
+  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, ngListVersion])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
