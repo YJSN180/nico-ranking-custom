@@ -125,12 +125,13 @@ export default function ClientPage({
   }, [ngList])
   
   // 新しく作成したカスタムランキングの一時保存（customRankings配列に反映されるまでの間）
-  const [newlyCreatedRanking, setNewlyCreatedRanking] = useState<{
+  // Map構造で複数の作成中ランキングを管理（競合状態を防ぐ）
+  const [newlyCreatedRankings, setNewlyCreatedRankings] = useState<Map<string, {
     id: string
     title: string
     conditions: any[]
     baseGenre: RankingGenre
-  } | null>(null)
+  }>>(new Map())
   
   // 新規作成中フラグ（404エラーを防ぐため）
   const [isCreatingCustomRanking, setIsCreatingCustomRanking] = useState(false)
@@ -155,7 +156,7 @@ export default function ClientPage({
     ngList,
     ngListVersion,
     customRankings,
-    newlyCreatedRanking
+    newlyCreatedRankings
   })
   
   // 設定の管理（初期値はURLパラメータから）
@@ -188,10 +189,23 @@ export default function ClientPage({
   
   // 新しく作成したカスタムランキングがcustomRankings配列に反映されたらクリア
   useEffect(() => {
-    if (newlyCreatedRanking && customRankings.some((r: any) => r.id === newlyCreatedRanking.id)) {
-      setNewlyCreatedRanking(null)
+    if (newlyCreatedRankings.size > 0) {
+      const updatedMap = new Map(newlyCreatedRankings)
+      let hasChanges = false
+      
+      // IndexedDBに保存されたランキングをMapから削除
+      for (const [id, ranking] of newlyCreatedRankings) {
+        if (customRankings.some((r: any) => r.id === id)) {
+          updatedMap.delete(id)
+          hasChanges = true
+        }
+      }
+      
+      if (hasChanges) {
+        setNewlyCreatedRankings(updatedMap)
+      }
     }
-  }, [customRankings, newlyCreatedRanking])
+  }, [customRankings, newlyCreatedRankings])
   
   // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
   
@@ -548,7 +562,7 @@ export default function ClientPage({
           console.error('[ERROR] Custom rankings is not an array:', typeof customRankings)
         } else {
           const targetRanking = customRankings.find((r: any) => r && r.id === customId) || 
-                                (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
+                                newlyCreatedRankings.get(customId) || null
           
           if (targetRanking && targetRanking.baseGenre && targetRanking.conditions?.length > 0) {
             // ランキングデータ検証
@@ -619,7 +633,7 @@ export default function ClientPage({
       const customId = newConfig.tag.replace('custom:', '')
       
       // 新規作成されたランキングがまだ反映されていない可能性をチェック
-      if (newlyCreatedRanking && newlyCreatedRanking.id === customId) {
+      if (newlyCreatedRankings.has(customId)) {
         // eslint-disable-next-line no-console
         
         // 既にフィルタリング済みデータがある場合はスキップ
@@ -645,7 +659,7 @@ export default function ClientPage({
         customRankingDisplayData.length > 0) {
       // 新規作成時または同じカスタムランキングの再選択時
       const customId = newConfig.tag.replace('custom:', '')
-      if (newlyCreatedRanking?.id === customId || 
+      if (newlyCreatedRankings.has(customId) || 
           (config.tag === newConfig.tag && config.period === newConfig.period)) {
         return
       }
@@ -660,7 +674,7 @@ export default function ClientPage({
     // 新規作成されたランキングを選択している場合はスキップ
     if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
       const customId = newConfig.tag.replace('custom:', '')
-      if (newlyCreatedRanking && newlyCreatedRanking.id === customId && 
+      if (newlyCreatedRankings.has(customId) && 
           isShowingCustomRanking && customRankingDisplayData.length > 0) {
         // 新規作成したランキングのデータが既に設定されているのでスキップ
         return
@@ -673,7 +687,7 @@ export default function ClientPage({
     } catch (error) {
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRanking, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking, setError])
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRankings, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking, setError])
   // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
   // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
@@ -867,11 +881,15 @@ export default function ClientPage({
       setIsCreatingCustomRanking(true)
       
       // 新しく作成したランキング情報を保存（重要：onConfigChangeより前に実行）
-      setNewlyCreatedRanking({
-        id: rankingId,
-        title,
-        conditions: validConditions,
-        baseGenre
+      setNewlyCreatedRankings(prev => {
+        const newMap = new Map(prev)
+        newMap.set(rankingId, {
+          id: rankingId,
+          title,
+          conditions: validConditions,
+          baseGenre
+        })
+        return newMap
       })
 
       // まずデータを取得（エラーをキャッチして処理続行）

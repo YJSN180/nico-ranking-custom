@@ -16,12 +16,12 @@ interface UseRankingDataProps {
   ngList: NGList
   ngListVersion: string
   customRankings?: any[]
-  newlyCreatedRanking?: {
+  newlyCreatedRankings?: Map<string, {
     id: string
     title: string
     conditions: any[]
     baseGenre: RankingGenre
-  } | null
+  }>
 }
 
 interface UseRankingDataReturn {
@@ -45,7 +45,7 @@ export function useRankingData({
   ngList,
   ngListVersion,
   customRankings = [],
-  newlyCreatedRanking = null
+  newlyCreatedRankings = new Map()
 }: UseRankingDataProps): UseRankingDataReturn {
   const [rankingData, setRankingData] = useState<RankingItem[]>(initialData?.items || [])
   const [fullRankingData, setFullRankingData] = useState<RankingItem[]>(() => {
@@ -109,14 +109,14 @@ export function useRankingData({
         
         console.log('[DEBUG] Looking for custom ranking:', {
           customId,
-          newlyCreatedRankingId: newlyCreatedRanking?.id,
-          newlyCreatedRankingMatches: newlyCreatedRanking?.id === customId,
+          hasNewlyCreated: newlyCreatedRankings.has(customId),
+          newlyCreatedCount: newlyCreatedRankings.size,
           customRankingsCount: customRankings.length,
           timestamp: new Date().toISOString()
         })
         
         const targetRanking = customRankings.find((r: any) => r.id === customId) || 
-                              (newlyCreatedRanking && newlyCreatedRanking.id === customId ? newlyCreatedRanking : null)
+                              newlyCreatedRankings.get(customId) || null
         
         if (targetRanking?.baseGenre) {
           cacheGenre = targetRanking.baseGenre
@@ -126,8 +126,8 @@ export function useRankingData({
           serverLog.warn('Custom ranking not found, returning empty data to prevent 404', {
             customId,
             customRankingsCount: customRankings.length,
-            hasNewlyCreated: !!newlyCreatedRanking,
-            newlyCreatedId: newlyCreatedRanking?.id
+            hasNewlyCreated: newlyCreatedRankings.size > 0,
+            newlyCreatedIds: Array.from(newlyCreatedRankings.keys())
           })
           setFullRankingData([])
           setRankingData([])
@@ -316,7 +316,7 @@ export function useRankingData({
         setLoading(false)
       }
     }
-  }, [savePopularTagsToCache, deviceType, customRankings, newlyCreatedRanking])
+  }, [savePopularTagsToCache, deviceType, customRankings, newlyCreatedRankings])
 
   // NGリストのフィルタリングはclient-page.tsx側で行うため、
   // ここでは生データをそのまま保持する

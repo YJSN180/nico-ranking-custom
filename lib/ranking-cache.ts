@@ -81,6 +81,12 @@ class RankingCache {
   }
 
   set(genre: string, period: string, data: RankingItem[], popularTags?: string[], tag?: string) {
+    // 空データのキャッシュを防ぐバリデーション
+    if (!data || data.length === 0) {
+      console.warn('[RankingCache] Attempted to cache empty data, skipping', { genre, period, tag })
+      return
+    }
+    
     const key = this.getCacheKey(genre, period, tag)
     const size = this.estimateSize(data, popularTags)
     
