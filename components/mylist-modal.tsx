@@ -57,6 +57,14 @@ export function MylistModal({
       <div 
         className={styles.overlay} 
         onClick={onClose} 
+        onTouchStart={(e) => {
+          // タッチ開始時点でイベント伝播を止めて、親の長押し検出を防ぐ
+          e.stopPropagation()
+        }}
+        onTouchMove={(e) => {
+          // タッチ移動中もイベント伝播を止める
+          e.stopPropagation()
+        }}
         onTouchEnd={(e) => {
           // タッチイベントの伝播を止めて、親の長押し検出を防ぐ
           e.stopPropagation()
@@ -69,6 +77,18 @@ export function MylistModal({
         role="dialog" 
         aria-labelledby="mylist-modal-title"
         onClick={handleModalClick}
+        onTouchStart={(e) => {
+          // モーダル内のタッチイベントが外部に伝播しないようにする
+          e.stopPropagation()
+        }}
+        onTouchMove={(e) => {
+          // タッチ移動中もイベント伝播を止める
+          e.stopPropagation()
+        }}
+        onTouchEnd={(e) => {
+          // タッチ終了時もイベント伝播を止める
+          e.stopPropagation()
+        }}
         data-testid="mylist-modal"
       >
         <div className={styles.header}>
@@ -76,6 +96,10 @@ export function MylistModal({
           <button 
             className={styles.closeButton}
             onClick={onClose}
+            onTouchStart={(e) => {
+              // タッチ開始時点でイベント伝播を止める
+              e.stopPropagation()
+            }}
             onTouchEnd={(e) => {
               // タッチイベントの伝播を止める
               e.stopPropagation()
