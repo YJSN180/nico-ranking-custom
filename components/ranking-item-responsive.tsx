@@ -166,23 +166,91 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           {item.rank}
         </div>
         
-        {/* サムネイル */}
+        {/* モバイル用左側カラム（順位 + サムネイル） */}
+        <div className="ranking-item-responsive__left-column">
+          {/* モバイル用順位 */}
+          <div 
+            className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
+            style={{
+              background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+              color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
+              fontWeight: '700',
+              userSelect: 'none',
+              '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+              '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
+            } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
+          >
+            {item.rank}
+          </div>
+          
+          {/* サムネイル（モバイル用：左側カラム内） */}
+          {item.thumbURL && (
+            <div className="ranking-item-responsive__thumbnail ranking-item-responsive__thumbnail--mobile">
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                target={getLinkTarget()}
+                rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
+                style={{ display: 'block', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (disabled) {
+                    e.preventDefault()
+                    return false
+                  }
+                  
+                  // PWA環境でのナビゲーション処理
+                  const url = `https://www.nicovideo.jp/watch/${item.id}`
+                  if (getLinkTarget() === '_self') {
+                    e.preventDefault()
+                    navigateToVideo(url, e)
+                  }
+                  
+                  // サムネイルクリック時も訪問済みとして記録
+                  try {
+                    const visitedKey = 'visited-videos'
+                    const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+                    if (!visited.includes(item.id)) {
+                      visited.push(item.id)
+                      if (visited.length > 1000) {
+                        visited.shift()
+                      }
+                      localStorage.setItem(visitedKey, JSON.stringify(visited))
+                      setIsVisited(true)
+                    }
+                  } catch {
+                    // エラーは無視
+                  }
+                }}
+              >
+                <OptimizedImage
+                  src={item.thumbURL}
+                  alt={item.title}
+                  width={160}
+                  height={90}
+                  style={{ 
+                    objectFit: 'cover',
+                    borderRadius: '4px',
+                    width: '100%',
+                    height: 'auto',
+                    aspectRatio: '16 / 9'
+                  }}
+                  loading={item.rank <= 3 ? undefined : "lazy"}
+                  priority={item.rank <= 3}
+                />
+              </a>
+              {/* 再生時間オーバーレイ */}
+              {item.duration && (
+                <div className="ranking-item-responsive__duration">
+                  {formatDuration(item.duration)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        
+        {/* サムネイル（デスクトップ用） */}
         {item.thumbURL && (
           <div className="ranking-item-responsive__thumbnail">
-            {/* モバイル用順位オーバーレイ */}
-            <div 
-              className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
-              style={{
-                background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-                color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
-                fontWeight: '700',
-                userSelect: 'none',
-                '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-                '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
-              } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
-            >
-              {item.rank}
-            </div>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               target={getLinkTarget()}

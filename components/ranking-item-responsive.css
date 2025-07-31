@@ -9,6 +9,10 @@
   --mobile-title-size: 15px;
   --mobile-gap: 8px;
   --mobile-duration-size: 11px;
+  /* 新レイアウト用変数 */
+  --mobile-left-column-width: 120px;
+  --mobile-button-size: 36px;
+  --mobile-button-gap: 6px;
 }
 
 /* タッチデバイスでホバー効果を無効化 */
@@ -62,6 +66,16 @@
   width: 160px;
   flex-shrink: 0;
   position: relative;
+}
+
+/* 左側カラム（モバイル用） - デスクトップでは非表示 */
+.ranking-item-responsive__left-column {
+  display: none;
+}
+
+/* モバイル用サムネイル - デスクトップでは非表示 */
+.ranking-item-responsive__thumbnail--mobile {
+  display: none;
 }
 
 /* コンテンツエリア */
@@ -188,11 +202,15 @@
   }
   
   .ranking-item-responsive__content {
-    /* モバイルレイアウト: 2カラム（サムネイル + 詳細） */
-    grid-template-columns: var(--mobile-thumbnail-width) 1fr;
-    grid-template-areas: "thumbnail details";
+    /* モバイルレイアウト: 3カラム（左側カラム + 詳細 + ボタン） */
+    grid-template-columns: var(--mobile-left-column-width) 1fr auto;
+    grid-template-areas: 
+      "left-column details buttons"
+      "left-column details buttons"
+      "left-column stats stats";
+    grid-template-rows: auto auto auto;
     gap: var(--mobile-gap);
-    padding: 2px;
+    padding: 4px;
     min-height: 75px;
   }
   
@@ -201,28 +219,42 @@
     display: none !important;
   }
   
-  /* モバイル順位を表示 */
+  /* 左側カラムのコンテナ */
+  .ranking-item-responsive__left-column {
+    grid-area: left-column;
+    display: flex !important; /* デスクトップのdisplay:noneを上書き */
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  /* モバイル順位を表示（新レイアウト） */
   .ranking-item-responsive__rank--mobile {
-    /* 順位をサムネイルの左上にオーバーレイ */
+    /* 順位を左側カラムの上部に配置 */
     display: flex !important;
-    position: absolute;
-    top: 0;
-    left: 0;
-    min-width: var(--mobile-rank-size);
-    height: var(--mobile-rank-size);
+    position: static;
+    min-width: 30px;
+    height: 20px;
     font-size: 12px;
     font-weight: 700;
     align-items: center;
-    justify-content: center;
-    border-radius: 0 0 4px 0;
+    justify-content: flex-start;
+    border-radius: 4px;
+    padding: 0 6px;
     /* モバイルでは背景色を適用（不透明） */
     background: var(--mobile-rank-bg) !important;
     color: var(--mobile-rank-color) !important;
   }
   
-  .ranking-item-responsive__thumbnail {
-    grid-area: thumbnail;
-    width: var(--mobile-thumbnail-width);
+  /* デスクトップ用サムネイルを非表示 */
+  .ranking-item-responsive__thumbnail:not(.ranking-item-responsive__thumbnail--mobile) {
+    display: none;
+  }
+  
+  /* モバイル用サムネイルを表示 */
+  .ranking-item-responsive__thumbnail--mobile {
+    display: block !important;
+    grid-area: unset;
+    width: 100%;
     position: relative;
     margin-top: 0;
   }
@@ -233,20 +265,18 @@
     overflow: hidden;
   }
   
-  /* モバイルでタイトル行を追加 */
+  /* モバイルでタイトル行を調整（ボタンは別カラムへ移動） */
   .ranking-item-responsive__title-row {
-    display: flex;
-    gap: var(--mobile-gap);
-    align-items: flex-start;
+    display: block;
     margin-bottom: 4px;
   }
   
   .ranking-item-responsive__title {
     font-size: var(--mobile-title-size);
     margin-bottom: 0;
-    /* モバイルでは2行まで表示 */
+    /* モバイルでは3行まで表示 */
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.3;
@@ -266,6 +296,7 @@
   }
   
   .ranking-item-responsive__stats {
+    grid-area: stats;
     font-size: 14px;
     gap: var(--mobile-gap);
     flex-wrap: wrap; /* 横スクロールを削除、折り返しを許可 */
@@ -274,39 +305,38 @@
   
   /* モバイルでのマイリストエリア調整 */
   .ranking-item-responsive__mylist-area {
-    /* グリッドから外れてタイトル行内に配置されるため、特別な調整は不要 */
-    display: none; /* 元のグリッドエリアは非表示 */
-  }
-  
-  /* モバイルでタイトル行内のマイリストボタンを表示 */
-  .ranking-item-responsive__mylist-button {
+    /* 新しいボタンカラムとして表示 */
+    grid-area: buttons;
     display: flex;
-    flex-direction: column; /* ボタンを縦並びに */
-    gap: 4px; /* ボタン間のスペース */
-    flex-shrink: 0;
-    /* タッチターゲットを拡大 */
-    position: relative;
-    /* 見た目よりも大きなタッチ領域を作成 */
-    padding: 5px;
-    margin: -5px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--mobile-button-gap);
+    padding: 0 4px;
   }
   
-  /* モバイルでボタンのサイズ調整 */
-  .ranking-item-responsive__mylist-button > button {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 16px !important; /* アイコンサイズ調整 */
+  /* モバイルでタイトル行内のマイリストボタンを非表示 */
+  .ranking-item-responsive__mylist-button {
+    display: none;
   }
   
-  .ranking-item-responsive__mylist-button .quick-ng-button {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 16px !important;
+  /* モバイルでボタンのサイズ調整（新サイズ: 36×36px） */
+  .ranking-item-responsive__mylist-area > button,
+  .ranking-item-responsive__mylist-area .mylist-button {
+    width: var(--mobile-button-size) !important;
+    height: var(--mobile-button-size) !important;
+    font-size: 18px !important; /* アイコンサイズ調整 */
+  }
+  
+  .ranking-item-responsive__mylist-area .quick-ng-button {
+    width: var(--mobile-button-size) !important;
+    height: var(--mobile-button-size) !important;
+    border-radius: 18px !important;
     padding: 0 !important;
   }
   
-  .ranking-item-responsive__mylist-button .quick-ng-button__icon {
-    font-size: 14px !important; /* 禁止アイコンのサイズ調整 */
+  .ranking-item-responsive__mylist-area .quick-ng-button__icon {
+    font-size: 16px !important; /* 禁止アイコンのサイズ調整 */
   }
 }
 
