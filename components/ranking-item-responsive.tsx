@@ -1,5 +1,6 @@
 'use client'
 
+import './ranking-item-responsive.css'
 import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'

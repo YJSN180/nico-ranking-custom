@@ -10,7 +10,6 @@ import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { PWARegister } from '@/components/pwa-register'
 import { OfflineIndicator } from '@/components/offline-indicator'
 import './globals.css'
-import '@/components/ranking-item-responsive.css'
 
 const inter = Inter({ 
   subsets: ['latin'],
