@@ -1,6 +1,5 @@
 'use client'
 
-import './ranking-item-responsive.css'
 import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
@@ -99,6 +98,118 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   }
 
   return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        /* モバイルレイアウト用CSS（重要な部分のみ） */
+        @media (max-width: 640px) {
+          .ranking-item-responsive__content {
+            display: grid !important;
+            grid-template-columns: 120px 1fr auto !important;
+            grid-template-areas: 
+              "left-column details buttons"
+              "left-column details buttons"
+              "left-column stats stats" !important;
+            grid-template-rows: auto auto auto !important;
+            gap: 8px !important;
+            padding: 4px !important;
+          }
+          
+          .ranking-item-responsive__rank--desktop {
+            display: none !important;
+          }
+          
+          .ranking-item-responsive__left-column {
+            grid-area: left-column !important;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 4px !important;
+          }
+          
+          .ranking-item-responsive__rank--mobile {
+            display: flex !important;
+            position: static !important;
+            min-width: 30px !important;
+            height: 20px !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            border-radius: 4px !important;
+            padding: 0 6px !important;
+          }
+          
+          .ranking-item-responsive__thumbnail:not(.ranking-item-responsive__thumbnail--mobile) {
+            display: none !important;
+          }
+          
+          .ranking-item-responsive__thumbnail--mobile {
+            display: block !important;
+            grid-area: unset !important;
+            width: 100% !important;
+            position: relative !important;
+            margin-top: 0 !important;
+          }
+          
+          .ranking-item-responsive__details {
+            grid-area: details !important;
+            gap: 4px !important;
+            overflow: hidden !important;
+          }
+          
+          .ranking-item-responsive__title-row {
+            display: block !important;
+            margin-bottom: 4px !important;
+          }
+          
+          .ranking-item-responsive__title {
+            font-size: 15px !important;
+            margin-bottom: 0 !important;
+            display: -webkit-box !important;
+            -webkit-line-clamp: 3 !important;
+            -webkit-box-orient: vertical !important;
+            overflow: hidden !important;
+            line-height: 1.3 !important;
+            flex: 1 !important;
+            min-width: 0 !important;
+          }
+          
+          .ranking-item-responsive__stats {
+            grid-area: stats !important;
+            font-size: 14px !important;
+            gap: 8px !important;
+            flex-wrap: wrap !important;
+            overflow-x: visible !important;
+          }
+          
+          .ranking-item-responsive__mylist-area {
+            grid-area: buttons !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            gap: 6px !important;
+            padding: 0 4px !important;
+          }
+          
+          .ranking-item-responsive__mylist-button {
+            display: none !important;
+          }
+          
+          .ranking-item-responsive__mylist-area > button,
+          .ranking-item-responsive__mylist-area .mylist-button {
+            width: 36px !important;
+            height: 36px !important;
+            font-size: 18px !important;
+          }
+          
+          .ranking-item-responsive__mylist-area .quick-ng-button {
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 18px !important;
+            padding: 0 !important;
+          }
+        }
+      ` }} />
     <div 
       data-testid="ranking-item"
       data-video-id={item.id}
@@ -597,6 +708,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         </div>
       </div>
     </div>
+    </>
   )
 })
 
