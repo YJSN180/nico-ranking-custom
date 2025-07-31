@@ -30,7 +30,6 @@ import { useNavigationState } from '@/hooks/use-navigation-state'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import { serverLog } from '@/lib/server-log'
 import './client-page.css'
-import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
