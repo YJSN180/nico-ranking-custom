@@ -129,7 +129,7 @@ export default async function RootLayout({
           [data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:12px;padding:16px}
           .skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite alternate}
           @keyframes skeleton-pulse{0%{opacity:0.6}100%{opacity:1}}
-          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}.ranking-item-responsive__title{font-size:15px;line-height:1.3;-webkit-line-clamp:2}}
+          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}.ranking-item-responsive__title{font-size:15px;line-height:1.3;-webkit-line-clamp:3}}
         ` }} />
         <script
           type="application/ld+json"

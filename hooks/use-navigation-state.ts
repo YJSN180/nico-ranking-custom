@@ -26,7 +26,7 @@ export function useNavigationState() {
    */
   const saveState = useCallback(() => {
     // PWAでない場合は保存しない
-    if (!isPWA()) return
+    if (!isPWA() || !searchParams) return
     
     const state: NavigationState = {
       pathname,
@@ -47,7 +47,7 @@ export function useNavigationState() {
    */
   const restoreState = useCallback(() => {
     // PWAでない場合は復元しない
-    if (!isPWA()) return
+    if (!isPWA() || !searchParams) return
     
     try {
       const savedState = sessionStorage.getItem(STORAGE_KEY)
