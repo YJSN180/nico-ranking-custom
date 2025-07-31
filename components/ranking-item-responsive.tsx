@@ -244,279 +244,280 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           </div>
         )}
         
-        {/* コンテンツエリア - グリッドレイアウト内の各要素 */}
-        {/* タイトル行 */}
-        <div className="ranking-item-responsive__title-row">
-          <a
-            href={`https://www.nicovideo.jp/watch/${item.id}`}
-            target={getLinkTarget()}
-            rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
-            className="ranking-item-responsive__title"
-            data-testid="video-title"
-            style={{ 
-              cursor: disabled ? 'not-allowed' : 'pointer', 
-              opacity: disabled ? 0.6 : 1,
-              // PWA環境での訪問済みスタイル
-              color: isVisited ? 'var(--link-visited-color)' : undefined
-            }}
-            onClick={(e) => {
-              e.stopPropagation()
-              if (disabled) {
-                e.preventDefault()
-                return false
-              }
-              
-              // PWA環境でのナビゲーション処理
-              const url = `https://www.nicovideo.jp/watch/${item.id}`
-              if (getLinkTarget() === '_self') {
-                e.preventDefault()
-                navigateToVideo(url, e)
-              }
-              
-              // クリック時も訪問済みとして記録
-              try {
-                const visitedKey = 'visited-videos'
-                const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
-                if (!visited.includes(item.id)) {
-                  visited.push(item.id)
-                  if (visited.length > 1000) {
-                    visited.shift()
-                  }
-                  localStorage.setItem(visitedKey, JSON.stringify(visited))
-                  setIsVisited(true)
-                }
-              } catch {
-                // エラーは無視
-              }
-            }}
-          >
-            {item.title}
-          </a>
-        </div>
-        
-        {/* 投稿者情報 */}
-        <div className="ranking-item-responsive__author">
-          {(item.authorName || item.authorId) && item.authorId && (
+        {/* コンテンツエリア */}
+        <div className="ranking-item-responsive__details">
+          {/* タイトル行（モバイルではマイリストボタンを含む） */}
+          <div className="ranking-item-responsive__title-row">
+            {/* タイトル */}
             <a
-              href={item.authorId.startsWith('channel/') 
-                ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
-                : item.authorId.startsWith('community/') 
-                ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
-                : `https://www.nicovideo.jp/user/${item.authorId}`
-              }
+              href={`https://www.nicovideo.jp/watch/${item.id}`}
+              target={getLinkTarget()}
+              rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
+              className="ranking-item-responsive__title"
+              data-testid="video-title"
+              style={{ 
+                cursor: disabled ? 'not-allowed' : 'pointer', 
+                opacity: disabled ? 0.6 : 1,
+                // PWA環境での訪問済みスタイル
+                color: isVisited ? 'var(--link-visited-color)' : undefined
+              }}
               onClick={(e) => {
                 e.stopPropagation()
                 if (disabled) {
                   e.preventDefault()
                   return false
                 }
-              }}
-              style={{ 
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                textDecoration: 'none',
-                color: 'inherit',
-                padding: '3px 6px',
-                margin: '-3px -6px',
-                borderRadius: '4px',
-                transition: 'background-color 0.2s',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-                opacity: disabled ? 0.6 : 1
-              }}
-              onMouseEnter={(e) => {
-                if (!disabled) {
-                  e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                
+                // PWA環境でのナビゲーション処理
+                const url = `https://www.nicovideo.jp/watch/${item.id}`
+                if (getLinkTarget() === '_self') {
+                  e.preventDefault()
+                  navigateToVideo(url, e)
                 }
-              }}
-              onMouseLeave={(e) => {
-                if (!disabled) {
-                  e.currentTarget.style.backgroundColor = 'transparent'
+                
+                // クリック時も訪問済みとして記録
+                try {
+                  const visitedKey = 'visited-videos'
+                  const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+                  if (!visited.includes(item.id)) {
+                    visited.push(item.id)
+                    if (visited.length > 1000) {
+                      visited.shift()
+                    }
+                    localStorage.setItem(visitedKey, JSON.stringify(visited))
+                    setIsVisited(true)
+                  }
+                } catch {
+                  // エラーは無視
                 }
               }}
             >
-              {item.authorIcon && (
-                <OptimizedImage
-                  src={item.authorIcon}
-                  alt={item.authorName || ''}
-                  width={18}
-                  height={18}
-                  sizes="18px"
-                  style={{ 
-                    borderRadius: '50%',
-                    border: '1px solid var(--border-color)',
-                    flexShrink: 0
-                  }}
-                  loading="lazy"
-                />
-              )}
-              <span className="ranking-item-responsive__author-name">
-                {item.authorName || item.authorId}
-              </span>
+              {item.title}
             </a>
-          )}
-          <span className="ranking-item-responsive__separator">·</span>
-          <span 
-            className="ranking-item-responsive__date"
-            style={{ 
-              color: isNew ? '#c53030' : 'var(--text-secondary)',
-              fontWeight: isNew ? '600' : '400'
-            }}
-          >
-            {dateDisplay}
-          </span>
-        </div>
-        
-        {/* 統計情報 */}
-        <div 
-          className="ranking-item-responsive__stats"
-          data-testid="video-stats"
-        >
-          <span className="ranking-item-responsive__stat">
-            ▶️ {formatNumberMobile(item.views)}
-          </span>
-          <span className="ranking-item-responsive__stat">
-            💬 {formatNumberMobile(item.comments || 0)}
-          </span>
-          <span className="ranking-item-responsive__stat">
-            ❤️ {formatNumberMobile(item.likes || 0)}
-          </span>
-          <span className="ranking-item-responsive__stat">
-            📁 {formatNumberMobile(item.mylists || 0)}
-          </span>
-        </div>
-        
-        {/* タグ情報 */}
-        {showTags && ((item.tags && item.tags.length > 0) || (item.tagDetails && item.tagDetails.length > 0)) && (
-          <div 
-            className="ranking-item-responsive__tags"
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '4px',
-              marginTop: '8px',
-              paddingTop: '8px',
-              borderTop: '1px solid var(--border-color)',
-              gridColumn: 'span 3' // タグはグリッド全体に広がる
-            }}
-          >
-            {/* タグ詳細がある場合は詳細を使用、ない場合は従来のタグを使用 */}
-            {item.tagDetails && item.tagDetails.length > 0 ? (
-              item.tagDetails.map((tagDetail, index) => (
-                <TagContextMenu
-                  key={index}
-                  tagDetail={tagDetail}
-                  ngList={ngList}
-                  saveNGListDirectly={saveNGListDirectly}
-                  onNGAdded={(tagName, withAttribute) => {
-                    if (onQuickNGAdd) {
-                      // タグNG追加時の処理をQuickNGButtonと同様に実行
-                      onQuickNGAdd(item, 'tags', tagName)
-                    }
-                  }}
-                >
-                  <span
-                    style={{
-                      background: 'var(--surface-secondary)',
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      padding: '4px 6px 4px 8px',
-                      borderRadius: '14px',
-                      border: '1px solid var(--border-color)',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      lineHeight: '12px',
-                      boxSizing: 'border-box',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                    title={`${tagDetail.name} (クリックでメニュー)`}
-                    onMouseEnter={(e) => {
-                      if (!disabled && !('ontouchstart' in window)) {
-                        e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!disabled && !('ontouchstart' in window)) {
-                        e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
-                      }
-                    }}
-                  >
-                    {/* タグアイコン */}
-                    <TagIcon 
-                      type={tagDetail.isLocked ? 'locked' : 'user'} 
-                      size={12}
-                    />
-                    <span>
-                      {tagDetail.name}
-                    </span>
-                  </span>
-                </TagContextMenu>
-              ))
-            ) : (
-              // 従来のタグ表示（後方互換性） - ユーザータグとして扱う
-              item.tags?.map((tag, index) => (
-                <TagContextMenu
-                  key={index}
-                  tagDetail={{ name: tag, isLocked: false }}
-                  ngList={ngList}
-                  saveNGListDirectly={saveNGListDirectly}
-                  onNGAdded={(tagName, withAttribute) => {
-                    if (onQuickNGAdd) {
-                      // タグNG追加時の処理をQuickNGButtonと同様に実行
-                      onQuickNGAdd(item, 'tags', tagName)
-                    }
-                  }}
-                >
-                  <span
-                    style={{
-                      background: 'var(--surface-secondary)',
-                      color: 'var(--text-secondary)',
-                      fontSize: '11px',
-                      padding: '4px 10px',
-                      borderRadius: '14px',
-                      border: '1px solid var(--border-color)',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-block',
-                      verticalAlign: 'middle',
-                      lineHeight: '12px',
-                      boxSizing: 'border-box',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                    title={`${tag} (クリックでメニュー)`}
-                    onMouseEnter={(e) => {
-                      if (!disabled && !('ontouchstart' in window)) {
-                        e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!disabled && !('ontouchstart' in window)) {
-                        e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
-                      }
-                    }}
-                  >
-                    {tag}
-                  </span>
-                </TagContextMenu>
-              ))
-            )}
+            {/* モバイル用マイリストボタン・NGボタン（CSSで表示制御） */}
+            <div className="ranking-item-responsive__mylist-button">
+              <MylistButton video={item} />
+              <QuickNGButton 
+                video={item} 
+                disabled={disabled}
+                onNGAdded={handleNGAdded}
+              />
+            </div>
           </div>
-        )}
-        
-        {/* モバイル用ボタンエリア（3列グリッドのbuttonsエリア） */}
-        <div className="ranking-item-responsive__buttons">
-          <MylistButton video={item} />
-          <QuickNGButton 
-            video={item} 
-            disabled={disabled}
-            onNGAdded={handleNGAdded}
-          />
+          
+          {/* 投稿者情報 */}
+          <div className="ranking-item-responsive__author">
+            {(item.authorName || item.authorId) && item.authorId && (
+              <a
+                href={item.authorId.startsWith('channel/') 
+                  ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
+                  : item.authorId.startsWith('community/') 
+                  ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
+                  : `https://www.nicovideo.jp/user/${item.authorId}`
+                }
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (disabled) {
+                    e.preventDefault()
+                    return false
+                  }
+                }}
+                style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  padding: '3px 6px',
+                  margin: '-3px -6px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.6 : 1
+                }}
+                onMouseEnter={(e) => {
+                  if (!disabled) {
+                    e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!disabled) {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                  }
+                }}
+              >
+                {item.authorIcon && (
+                  <OptimizedImage
+                    src={item.authorIcon}
+                    alt={item.authorName || ''}
+                    width={18}
+                    height={18}
+                    sizes="18px"
+                    style={{ 
+                      borderRadius: '50%',
+                      border: '1px solid var(--border-color)',
+                      flexShrink: 0
+                    }}
+                    loading="lazy"
+                  />
+                )}
+                <span className="ranking-item-responsive__author-name">
+                  {item.authorName || item.authorId}
+                </span>
+              </a>
+            )}
+            <span className="ranking-item-responsive__separator">·</span>
+            <span 
+              className="ranking-item-responsive__date"
+              style={{ 
+                color: isNew ? '#c53030' : 'var(--text-secondary)',
+                fontWeight: isNew ? '600' : '400'
+              }}
+            >
+              {dateDisplay}
+            </span>
+          </div>
+          
+          {/* 統計情報 */}
+          <div 
+            className="ranking-item-responsive__stats"
+            data-testid="video-stats"
+          >
+            <span className="ranking-item-responsive__stat">
+              ▶️ {formatNumberMobile(item.views)}
+            </span>
+            <span className="ranking-item-responsive__stat">
+              💬 {formatNumberMobile(item.comments || 0)}
+            </span>
+            <span className="ranking-item-responsive__stat">
+              ❤️ {formatNumberMobile(item.likes || 0)}
+            </span>
+            <span className="ranking-item-responsive__stat">
+              📁 {formatNumberMobile(item.mylists || 0)}
+            </span>
+          </div>
+          
+          {/* タグ情報 */}
+          {showTags && ((item.tags && item.tags.length > 0) || (item.tagDetails && item.tagDetails.length > 0)) && (
+            <div 
+              className="ranking-item-responsive__tags"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '4px',
+                marginTop: '8px',
+                paddingTop: '8px',
+                borderTop: '1px solid var(--border-color)'
+              }}
+            >
+              {/* タグ詳細がある場合は詳細を使用、ない場合は従来のタグを使用 */}
+              {item.tagDetails && item.tagDetails.length > 0 ? (
+                item.tagDetails.map((tagDetail, index) => (
+                  <TagContextMenu
+                    key={index}
+                    tagDetail={tagDetail}
+                    ngList={ngList}
+                    saveNGListDirectly={saveNGListDirectly}
+                    onNGAdded={(tagName, withAttribute) => {
+                      if (onQuickNGAdd) {
+                        // タグNG追加時の処理をQuickNGButtonと同様に実行
+                        onQuickNGAdd(item, 'tags', tagName)
+                      }
+                    }}
+                  >
+                    <span
+                      style={{
+                        background: 'var(--surface-secondary)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '11px',
+                        padding: '4px 6px 4px 8px',
+                        borderRadius: '14px',
+                        border: '1px solid var(--border-color)',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        lineHeight: '12px',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title={`${tagDetail.name} (クリックでメニュー)`}
+                      onMouseEnter={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                        }
+                      }}
+                    >
+                      {/* タグアイコン */}
+                      <TagIcon 
+                        type={tagDetail.isLocked ? 'locked' : 'user'} 
+                        size={12}
+                      />
+                      <span>
+                        {tagDetail.name}
+                      </span>
+                    </span>
+                  </TagContextMenu>
+                ))
+              ) : (
+                // 従来のタグ表示（後方互換性） - ユーザータグとして扱う
+                item.tags?.map((tag, index) => (
+                  <TagContextMenu
+                    key={index}
+                    tagDetail={{ name: tag, isLocked: false }}
+                    ngList={ngList}
+                    saveNGListDirectly={saveNGListDirectly}
+                    onNGAdded={(tagName, withAttribute) => {
+                      if (onQuickNGAdd) {
+                        // タグNG追加時の処理をQuickNGButtonと同様に実行
+                        onQuickNGAdd(item, 'tags', tagName)
+                      }
+                    }}
+                  >
+                    <span
+                      style={{
+                        background: 'var(--surface-secondary)',
+                        color: 'var(--text-secondary)',
+                        fontSize: '11px',
+                        padding: '4px 10px',
+                        borderRadius: '14px',
+                        border: '1px solid var(--border-color)',
+                        whiteSpace: 'nowrap',
+                        display: 'inline-block',
+                        verticalAlign: 'middle',
+                        lineHeight: '12px',
+                        boxSizing: 'border-box',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title={`${tag} (クリックでメニュー)`}
+                      onMouseEnter={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!disabled && !('ontouchstart' in window)) {
+                          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                        }
+                      }}
+                    >
+                      {tag}
+                    </span>
+                  </TagContextMenu>
+                ))
+              )}
+            </div>
+          )}
         </div>
         
-        {/* デスクトップ用ボタンエリア（4列グリッドのmylist-buttonエリア） */}
+        {/* マイリストボタン・NGボタンエリア */}
         <div className="ranking-item-responsive__mylist-area">
           <MylistButton video={item} />
           <QuickNGButton 
