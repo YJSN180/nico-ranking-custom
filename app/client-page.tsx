@@ -111,7 +111,8 @@ export default function ClientPage({
   
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
-    if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
+    // SSR/hydration安全性：visibleGenresがundefinedの場合は処理をスキップ
+    if (visibleGenres && visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
       // 現在のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替え
       handleConfigChange({ ...config, genre: visibleGenres[0], tag: undefined })
     }

@@ -193,7 +193,6 @@
     grid-template-areas: "thumbnail details";
     gap: var(--mobile-gap);
     padding: 2px;
-    padding-top: 32px; /* 順位表示のためのスペースを確保 */
     min-height: 75px;
   }
   
@@ -204,18 +203,18 @@
   
   /* モバイル順位を表示 */
   .ranking-item-responsive__rank--mobile {
-    /* 順位をサムネイルの上のスペースに配置（左詰め） */
+    /* 順位をサムネイルの左上にオーバーレイ */
     display: flex !important;
     position: absolute;
-    top: 4px; /* コンテナの上部に配置 */
-    left: 8px; /* 左詰めで配置 */
-    min-width: 24px;
-    height: 24px;
-    font-size: 14px;
+    top: 0;
+    left: 0;
+    min-width: var(--mobile-rank-size);
+    height: var(--mobile-rank-size);
+    font-size: 12px;
     font-weight: 700;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: 0 0 4px 0;
     /* モバイルでは背景色を適用（不透明） */
     background: var(--mobile-rank-bg) !important;
     color: var(--mobile-rank-color) !important;
@@ -322,7 +321,6 @@
     grid-template-columns: 100px 1fr;
     grid-template-areas: "thumbnail details";
     padding: 2px;
-    padding-top: 28px; /* 超モバイルでも順位表示スペースを確保 */
     gap: 6px;
     min-height: 70px;
   }
@@ -331,8 +329,6 @@
     min-width: 16px !important;
     height: 16px !important;
     font-size: 10px !important;
-    top: 4px !important; /* 超モバイルでも上部に配置 */
-    left: 6px !important; /* 超モバイルでは少し内側に */
   }
   
   .ranking-item-responsive__thumbnail {

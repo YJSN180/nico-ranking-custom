@@ -164,16 +164,18 @@ export function useGenreOrderV2() {
 
   /**
    * 現在の表示順序（表示されているもののみ）
+   * SSR/hydrationミスマッチ対策：tempItemsがundefinedの場合は空配列にフォールバック
    */
-  const visibleGenres = tempItems
+  const visibleGenres = (tempItems || [])
     .filter(item => item.isVisible)
     .sort((a, b) => a.order - b.order)
     .map(item => item.id)
 
   /**
    * 現在の非表示リスト
+   * SSR/hydrationミスマッチ対策：tempItemsがundefinedの場合は空配列にフォールバック
    */
-  const hiddenGenres = tempItems
+  const hiddenGenres = (tempItems || [])
     .filter(item => !item.isVisible)
     .map(item => item.id)
 

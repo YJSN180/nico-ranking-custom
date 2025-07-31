@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams, usePathname } from 'next/navigation'
 import { isPWA } from '@/lib/pwa-utils'
 
@@ -21,6 +21,11 @@ export function useNavigationState() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   
+  // searchParamsを安定化してReact Hook依存配列の問題を解決
+  const stableSearchParams = useMemo(() => {
+    return searchParams ? searchParams.toString() : ''
+  }, [searchParams])
+  
   /**
    * 現在の状態を保存
    */
@@ -30,7 +35,7 @@ export function useNavigationState() {
     
     const state: NavigationState = {
       pathname,
-      searchParams: searchParams.toString(),
+      searchParams: stableSearchParams,
       scrollPosition: window.scrollY,
       timestamp: Date.now()
     }
@@ -40,7 +45,7 @@ export function useNavigationState() {
     } catch (e) {
       console.warn('Failed to save navigation state:', e)
     }
-  }, [pathname, searchParams])
+  }, [pathname, stableSearchParams])
   
   /**
    * 保存された状態を復元
@@ -62,7 +67,7 @@ export function useNavigationState() {
       }
       
       // パスとクエリパラメータが一致する場合のみ復元
-      if (state.pathname === pathname && state.searchParams === searchParams.toString()) {
+      if (state.pathname === pathname && state.searchParams === stableSearchParams) {
         // スクロール位置を復元（少し遅延させて確実に復元）
         requestAnimationFrame(() => {
           window.scrollTo(0, state.scrollPosition)
@@ -71,7 +76,7 @@ export function useNavigationState() {
     } catch (e) {
       console.warn('Failed to restore navigation state:', e)
     }
-  }, [pathname, searchParams])
+  }, [pathname, stableSearchParams])
   
   /**
    * 状態をクリア
