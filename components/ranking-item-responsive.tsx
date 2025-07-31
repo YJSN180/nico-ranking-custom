@@ -383,17 +383,21 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             className="ranking-item-responsive__stats"
             data-testid="video-stats"
           >
+            {/* 再生数（最重要・常時表示） */}
             <span className="ranking-item-responsive__stat">
               ▶️ {formatNumberMobile(item.views)}
             </span>
-            <span className="ranking-item-responsive__stat">
-              💬 {formatNumberMobile(item.comments || 0)}
-            </span>
-            <span className="ranking-item-responsive__stat">
-              ❤️ {formatNumberMobile(item.likes || 0)}
-            </span>
+            {/* マイリスト数（重要・常時表示） */}
             <span className="ranking-item-responsive__stat">
               📁 {formatNumberMobile(item.mylists || 0)}
+            </span>
+            {/* コメント数（モバイルでは条件付き表示） */}
+            <span className="ranking-item-responsive__stat ranking-item-responsive__stat--secondary">
+              💬 {formatNumberMobile(item.comments || 0)}
+            </span>
+            {/* いいね数（モバイルでは条件付き表示） */}
+            <span className="ranking-item-responsive__stat ranking-item-responsive__stat--secondary">
+              ❤️ {formatNumberMobile(item.likes || 0)}
             </span>
           </div>
           

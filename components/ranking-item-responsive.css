@@ -11,10 +11,44 @@
   --mobile-duration-size: 11px;
 }
 
-/* タッチデバイスでホバー効果を無効化 */
+/* タッチデバイス用のアクティブフィードバック */
 @media (hover: none) and (pointer: coarse) {
   .ranking-item-responsive:hover {
     background-color: var(--surface-color) !important;
+  }
+  
+  /* タッチ開始時のフィードバック */
+  .ranking-item-responsive:active {
+    background-color: var(--surface-hover) !important;
+    transform: scale(0.995) !important;
+    transition: all 0.1s ease !important;
+  }
+  
+  /* タッチ時のリップル効果 */
+  .ranking-item-responsive {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .ranking-item-responsive::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background-color: rgba(59, 130, 246, 0.1); /* 青色の半透明 */
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: width 0.2s ease, height 0.2s ease, opacity 0.2s ease;
+    opacity: 0;
+  }
+  
+  .ranking-item-responsive:active::after {
+    width: 150px;
+    height: 150px;
+    opacity: 1;
   }
 }
 
@@ -22,6 +56,7 @@
 @media (hover: hover) and (pointer: fine) {
   .ranking-item-responsive:hover {
     background-color: var(--surface-hover);
+    transition: background-color 0.2s ease;
   }
 }
 
@@ -273,6 +308,11 @@
     overflow-x: visible;
   }
   
+  /* モバイルでは主要な統計のみ表示（優先度: 再生数 > マイリスト > コメント > いいね） */
+  .ranking-item-responsive__stat--secondary {
+    display: none; /* コメントといいねを非表示 */
+  }
+  
   /* モバイルでのマイリストエリア調整 */
   .ranking-item-responsive__mylist-area {
     /* グリッドから外れてタイトル行内に配置されるため、特別な調整は不要 */
@@ -292,22 +332,40 @@
     margin: -5px;
   }
   
-  /* モバイルでボタンのサイズ調整 */
+  /* モバイルでボタンのサイズ調整 - Apple/Googleガイドライン準拠の44x44px */
   .ranking-item-responsive__mylist-button > button {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 16px !important; /* アイコンサイズ調整 */
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 18px !important; /* アイコンサイズ調整 */
+    border-radius: 8px !important; /* より大きなボタンに合わせて角丸調整 */
+    /* タッチフィードバック改善 */
+    transition: all 0.15s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
   }
   
   .ranking-item-responsive__mylist-button .quick-ng-button {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 16px !important;
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 22px !important; /* 円形ボタンの半径調整 */
     padding: 0 !important;
+    /* タッチフィードバック改善 */
+    transition: all 0.15s ease !important;
+    -webkit-tap-highlight-color: transparent !important;
   }
   
   .ranking-item-responsive__mylist-button .quick-ng-button__icon {
-    font-size: 14px !important; /* 禁止アイコンのサイズ調整 */
+    font-size: 16px !important; /* 禁止アイコンのサイズ調整 */
+  }
+  
+  /* タッチ操作時のアクティブフィードバック */
+  .ranking-item-responsive__mylist-button > button:active {
+    transform: scale(0.95) !important;
+    background-color: var(--primary-color-hover) !important;
+  }
+  
+  .ranking-item-responsive__mylist-button .quick-ng-button:active {
+    transform: scale(0.95) !important;
+    background-color: var(--error-color-hover) !important;
   }
 }
 
