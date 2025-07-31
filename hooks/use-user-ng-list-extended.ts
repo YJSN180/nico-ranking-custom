@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { ExtendedUserNGList } from '../types/ng-list-extended'
 import { migrateToExtendedNGList, createEmptyTagNGList } from '../lib/ng-list-migration-extended'
 
@@ -52,6 +52,23 @@ const loadInitialNGList = (): ExtendedUserNGList => {
 export function useUserNGListExtended() {
   // useEffectを使わずに初期化（useStateの遅延初期化を使用）
   const [ngList, setNGList] = useState<ExtendedUserNGList>(() => loadInitialNGList())
+  
+  // 他のコンポーネントからのNGリスト更新を監視（最小限のuseEffect使用）
+  useEffect(() => {
+    const handleNGListUpdated = (e: Event) => {
+      const event = e as CustomEvent<{ ngList: ExtendedUserNGList }>
+      if (event.detail && event.detail.ngList) {
+        // ローカルストレージから再読み込みして最新状態を確実に取得
+        const updatedList = loadInitialNGList()
+        setNGList(updatedList)
+      }
+    }
+    
+    window.addEventListener('ngListUpdated', handleNGListUpdated)
+    return () => {
+      window.removeEventListener('ngListUpdated', handleNGListUpdated)
+    }
+  }, [])
 
   // 総数を再計算（タグも含む）
   const recalculateTotalCount = useCallback((list: ExtendedUserNGList): number => {
