@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 /**
  * HD サムネイル取得API (1280x720)
  * nicovideo.gay からのog:image取得によるテスト実装
+ * "so"動画の場合は直接ニコニコ動画から取得
  */
 export async function GET(
   request: NextRequest,
@@ -20,22 +21,53 @@ export async function GET(
     
     // eslint-disable-next-line no-console
     console.log(`[HD Thumbnail] Fetching HD thumbnail for ${videoId}`)
-    const nicogayUrl = `https://www.nicovideo.gay/watch/${videoId}`
     
-    const response = await fetch(nicogayUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-        'Accept-Language': 'ja,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    let html = ''
+    let source = 'nicovideo.gay'
+    
+    // Try nicovideo.gay first for non-so videos
+    if (!videoId.startsWith('so')) {
+      const nicogayUrl = `https://www.nicovideo.gay/watch/${videoId}`
+      
+      try {
+        const response = await fetch(nicogayUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+            'Accept-Language': 'ja,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+          }
+        })
+        
+        if (response.ok) {
+          html = await response.text()
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.log(`[HD Thumbnail] nicovideo.gay failed for ${videoId}, trying direct access`)
       }
-    })
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch from nicovideo.gay: ${response.status}`)
     }
     
-    const html = await response.text()
+    // Fallback to direct nicovideo.jp access for "so" videos or when nicovideo.gay fails
+    if (!html || videoId.startsWith('so')) {
+      const nicovideoUrl = `https://www.nicovideo.jp/watch/${videoId}`
+      source = 'nicovideo.jp'
+      
+      const response = await fetch(nicovideoUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'ja,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from nicovideo.jp: ${response.status}`)
+      }
+      
+      html = await response.text()
+    }
     
     // og:image メタタグから1280x720サムネイルURL取得
     // 属性の順序が異なる場合も対応（content が先にくる場合）
@@ -85,7 +117,7 @@ export async function GET(
       videoId,
       thumbnail: hdThumbnailUrl,
       resolution: hdThumbnailUrl ? '1280x720 (HD)' : 'Not available',
-      source: 'nicovideo.gay og:image',
+      source: `${source} og:image`,
       timestamp: new Date().toISOString()
     }
     
@@ -93,7 +125,7 @@ export async function GET(
       status: 200,
       headers: {
         'Cache-Control': 'public, max-age=3600, s-maxage=86400',
-        'X-HD-Source': 'nicovideo.gay'
+        'X-HD-Source': source
       }
     })
     
