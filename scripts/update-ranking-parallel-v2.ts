@@ -573,6 +573,14 @@ async function processGenre(
   
   console.log(`[${new Date().toISOString()}] Completed ${genre} (24h: ${data24h.items.length} items, hour: ${dataHour.items.length} items, ${popularTags.length} tags)`);
   
+  // DEBUG: Tag fetching results
+  console.log(`[DEBUG] Stored ${Object.keys(result.data['24h'].tags).length} tags for ${genre}/24h`);
+  console.log(`[DEBUG] Stored ${Object.keys(result.data['hour'].tags).length} tags for ${genre}/hour`);
+  if (Object.keys(result.data['24h'].tags).length > 0) {
+    const firstTag = Object.keys(result.data['24h'].tags)[0];
+    console.log(`[DEBUG] Sample tag "${firstTag}" has ${result.data['24h'].tags[firstTag].length} items`);
+  }
+  
   return result;
 }
 

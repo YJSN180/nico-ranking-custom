@@ -177,6 +177,13 @@ async function writeToR2() {
         continue
       }
       
+      // DEBUG: Tag data received
+      const tagCount = genreData.tags ? Object.keys(genreData.tags).length : 0;
+      console.log(`[DEBUG] ${genre}/${period}: Received ${tagCount} tags to write`);
+      if (tagCount === 0 && genreData.popularTags && genreData.popularTags.length > 0) {
+        console.error(`⚠️ WARNING: ${genre}/${period} has ${genreData.popularTags.length} popular tags but no tag data!`);
+      }
+      
       // デバッグ: genreDataの構造を確認
       console.log(`\n🔍 Debug ${genre}/${period}: has tags? ${!!genreData.tags}, tag count: ${genreData.tags ? Object.keys(genreData.tags).length : 0}`)
       if (genreData.tags && Object.keys(genreData.tags).length > 0) {
