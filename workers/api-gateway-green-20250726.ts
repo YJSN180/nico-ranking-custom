@@ -445,6 +445,12 @@ export default {
     
     // /api/ranking パスの処理
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
+      // レート制限チェック（ランキングAPI用）
+      const rateLimitCheck = await checkRateLimit(request, env, 'ranking')
+      if (!rateLimitCheck.success) {
+        return rateLimitCheck.error!
+      }
+      
       const genre = url.searchParams.get('genre') || 'all'
       const period = url.searchParams.get('period') || '24h'
       const tag = url.searchParams.get('tag') || ''
@@ -479,9 +485,11 @@ export default {
               status: 200,
               headers: {
                 'Content-Type': 'application/json',
-                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                // タグが見つからない場合も短時間キャッシュ（5分）して負荷軽減
+                'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=60',
                 'X-Data-Source': 'r2-tag-not-found',
-                'X-Worker-Version': 'green-20250726-unified-cors'
+                'X-Worker-Version': 'green-20250726-unified-cors',
+                'X-Cache-Note': 'Tag not found - cached for 5 minutes to reduce load'
               }
             })
             
@@ -497,7 +505,8 @@ export default {
               status: 404,
               headers: {
                 'Content-Type': 'application/json',
-                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                // 404エラーも短時間キャッシュして負荷軽減
+                'Cache-Control': 'public, max-age=60, s-maxage=60',
                 'X-Data-Source': 'r2-not-found',
                 'X-Worker-Version': 'green-20250726-unified-cors'
               }
@@ -640,7 +649,8 @@ export default {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            // エラー時も短時間キャッシュ
+            'Cache-Control': 'public, max-age=30, s-maxage=30',
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
