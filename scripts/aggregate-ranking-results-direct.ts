@@ -273,6 +273,19 @@ async function main() {
         }
         
         rankingData.genres[result.genre] = result.data;
+        // DEBUG: Tag data structure
+        if (result.data['24h'].tags && Object.keys(result.data['24h'].tags).length > 0) {
+          console.log(`  ✅ Genre ${result.genre} has ${Object.keys(result.data['24h'].tags).length} tags in 24h`);
+          console.log(`     First 3 tags: ${Object.keys(result.data['24h'].tags).slice(0, 3).join(', ')}`);
+        } else {
+          console.log(`  ❌ Genre ${result.genre} has NO tags in 24h`);
+        }
+        
+        if (result.data['hour'].tags && Object.keys(result.data['hour'].tags).length > 0) {
+          console.log(`  ✅ Genre ${result.genre} has ${Object.keys(result.data['hour'].tags).length} tags in hour`);
+        } else {
+          console.log(`  ❌ Genre ${result.genre} has NO tags in hour`);
+        }
         
         // Count items
         totalItemsCount += result.data['24h'].items.length;
