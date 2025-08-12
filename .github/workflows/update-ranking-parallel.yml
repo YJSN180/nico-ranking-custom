@@ -116,13 +116,13 @@ jobs:
       run: mkdir -p ./tmp
     
     - name: Download ranking artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         path: ./tmp
         pattern: ranking-data-group-*
     
     - name: Download NG derived artifacts (if exists)
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         path: ./tmp
         pattern: ng-derived-group-*

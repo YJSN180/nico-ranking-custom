@@ -34,7 +34,7 @@ jobs:
       run: mkdir -p ./tmp
     
     - name: Download artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         path: ./tmp
         pattern: ranking-data-group-*
