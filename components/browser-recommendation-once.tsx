@@ -16,12 +16,6 @@ export function BrowserRecommendationOnce() {
     localStorage.setItem('browser-recommendation-dismissed', 'true')
   }
 
-  const handleChromeOpen = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    // リンククリック時も非表示にする
-    localStorage.setItem('browser-recommendation-dismissed', 'true')
-    setIsDismissed(true)
-    // デフォルトのリンク動作は続行（新しいタブで開く）
-  }
 
   // SSR/CSRミスマッチを防ぐため、CSSで制御
   const className = isDismissed === null 
@@ -49,19 +43,10 @@ export function BrowserRecommendationOnce() {
           <h3>推奨ブラウザのお知らせ</h3>
           <p>
             特定のブラウザ（Safari/Samsung Browser）では表示が遅くなる場合があります。
-            <strong>Google Chrome</strong>での閲覧を推奨します。
+            <strong>Brave/Vivaldi/Firefox/Google Chrome</strong>などでの閲覧を推奨します。
           </p>
           
           <div className="browser-recommendation-links">
-            <a
-              href="https://www.google.com/chrome/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="browser-recommendation-button"
-              onClick={handleChromeOpen}
-            >
-              Chromeを開く
-            </a>
           </div>
           
           <p className="browser-recommendation-note">

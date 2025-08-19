@@ -41,6 +41,14 @@ describe('BrowserRecommendationOnce', () => {
       expect(screen.getByText(/特定のブラウザ（Safari\/Samsung Browser）/)).toBeInTheDocument()
     })
 
+    it('推奨ブラウザリストが正しく表示される', () => {
+      // Arrange & Act
+      render(<BrowserRecommendationOnce />)
+      
+      // Assert
+      expect(screen.getByText(/Brave\/Vivaldi\/Firefox\/Google Chrome/)).toBeInTheDocument()
+    })
+
     it('タイトルが「推奨ブラウザのお知らせ」である', () => {
       // Arrange & Act
       render(<BrowserRecommendationOnce />)
@@ -49,13 +57,6 @@ describe('BrowserRecommendationOnce', () => {
       expect(screen.getByText('推奨ブラウザのお知らせ')).toBeInTheDocument()
     })
 
-    it('「Chromeを開く」ボタンが表示される', () => {
-      // Arrange & Act
-      render(<BrowserRecommendationOnce />)
-      
-      // Assert
-      expect(screen.getByRole('link', { name: /Chrome.*開く/ })).toBeInTheDocument()
-    })
 
     it('「閉じる」ボタンが表示される', () => {
       // Arrange & Act
@@ -95,33 +96,6 @@ describe('BrowserRecommendationOnce', () => {
       expect(localStorage.getItem('browser-recommendation-dismissed')).toBe('true')
     })
 
-    it('「Chromeを開く」をクリックすると通知が非表示になる', () => {
-      // Arrange
-      render(<BrowserRecommendationOnce />)
-      const chromeLink = screen.getByRole('link', { name: /Chrome.*開く/ })
-      const alert = screen.getByRole('alert')
-      
-      // Act
-      fireEvent.click(chromeLink)
-      
-      // Assert
-      // DOMには存在するが、browser-recommendation--hiddenクラスで非表示
-      expect(alert).toBeInTheDocument()
-      expect(alert).toHaveClass('browser-recommendation--hidden')
-      // CSSクラスで非表示を管理しているため、クラスの存在を確認
-    })
-
-    it('「Chromeを開く」をクリックするとlocalStorageに記録される', () => {
-      // Arrange
-      render(<BrowserRecommendationOnce />)
-      const chromeLink = screen.getByRole('link', { name: /Chrome.*開く/ })
-      
-      // Act
-      fireEvent.click(chromeLink)
-      
-      // Assert
-      expect(localStorage.getItem('browser-recommendation-dismissed')).toBe('true')
-    })
 
     it('localStorageに記録がある場合は初回でも表示されない', () => {
       // Arrange
@@ -138,14 +112,4 @@ describe('BrowserRecommendationOnce', () => {
     })
   })
 
-  describe('ブラウザ別のリンク表示', () => {
-    it('通常は汎用的なChromeダウンロードリンクが表示される', () => {
-      // Arrange & Act
-      render(<BrowserRecommendationOnce />)
-      
-      // Assert
-      const link = screen.getByRole('link', { name: /Chrome.*開く/ })
-      expect(link).toHaveAttribute('href', 'https://www.google.com/chrome/')
-    })
-  })
 })
