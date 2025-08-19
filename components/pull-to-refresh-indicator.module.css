@@ -1,0 +1,71 @@
+.indicator {
+  position: fixed;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.iconWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--card-bg);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-color);
+}
+
+.iconWrapper svg {
+  color: var(--primary-color);
+}
+
+.text {
+  position: absolute;
+  bottom: -30px;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  padding: 4px 8px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* ローディング状態 */
+body.pull-to-refresh-loading .indicator {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.1);
+  }
+}
+
+/* レディ状態 */
+body.pull-to-refresh-ready .iconWrapper {
+  background: var(--primary-color);
+}
+
+body.pull-to-refresh-ready .iconWrapper svg {
+  color: white;
+}
+
+/* ダークモード対応 */
+:root[data-theme="dark"] .iconWrapper {
+  background: var(--card-bg-dark, #2a2a2a);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme="darkblue"] .iconWrapper {
+  background: var(--card-bg-darkblue, #1a2e46);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}

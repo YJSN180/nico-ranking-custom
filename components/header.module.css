@@ -61,12 +61,20 @@
   margin-right: 4px;
 }
 
-/* 設定ボタン */
-.settingsButton {
+/* ヘッダーボタングループ */
+.headerButtons {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+}
+
+/* 設定ボタン */
+.settingsButton {
   background: rgba(255, 255, 255, 0.25);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 6px;
@@ -77,12 +85,11 @@
   transition: all 0.2s;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 10;
 }
 
 .settingsButton:hover {
   background-color: rgba(255, 255, 255, 0.35);
-  transform: translateY(-50%) scale(1.05);
+  transform: scale(1.05);
 }
 
 /* コントロールボタンコンテナ */

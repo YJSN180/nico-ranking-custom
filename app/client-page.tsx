@@ -29,6 +29,9 @@ import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import { serverLog } from '@/lib/server-log'
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
+import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -108,6 +111,10 @@ export default function ClientPage({
   
   // PWA環境でのナビゲーション状態管理
   useNavigationState()
+  
+  // PWAリロード機能
+  const { isPulling, pullDistance } = usePullToRefresh()
+  useKeyboardShortcuts()
   
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
@@ -1120,6 +1127,7 @@ export default function ClientPage({
   try {
     return (
       <TagDisplayProvider>
+        <PullToRefreshIndicator isPulling={isPulling} pullDistance={pullDistance} />
         <div className="selectors-container">
         <RankingSelector 
           config={config} 
