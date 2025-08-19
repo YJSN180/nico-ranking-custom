@@ -498,12 +498,23 @@ export default function ClientPage({
     }
     
     // 変更がない場合は何もしない（強制更新でない限り）
-    if (
-      !force &&
-      newConfig.genre === config.genre &&
-      newConfig.period === config.period &&
-      newConfig.tag === config.tag
-    ) {
+    // タグの比較は undefined と空文字列を区別する必要がある
+    const hasConfigChanged = force || 
+      newConfig.genre !== config.genre ||
+      newConfig.period !== config.period ||
+      newConfig.tag !== config.tag
+    
+    // タグ変更の詳細ログ
+    if (newConfig.tag !== config.tag) {
+      serverLog.info('Tag change detected', {
+        previousTag: config.tag || 'undefined',
+        newTag: newConfig.tag || 'undefined',
+        genre: newConfig.genre,
+        period: newConfig.period
+      })
+    }
+    
+    if (!hasConfigChanged) {
       serverLog.info('No config change detected, skipping', {
         force,
         configComparison: {
