@@ -45,17 +45,15 @@ export function useUserPreferences() {
         return merged
       }
       
-      // Cookieがない場合、localStorageから移行を試みる（後方互換性）
+      // Cookieがない場合、localStorageから読み込む（PWA対応）
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
           const parsed = JSON.parse(stored)
           // バージョンチェック
           if (parsed.version === CURRENT_VERSION) {
-            // Cookieに移行
+            // Cookieにも同期を試みる
             setUserPreferencesCookieClient(parsed)
-            // localStorageからは削除
-            localStorage.removeItem(STORAGE_KEY)
             return parsed
           }
         }
@@ -92,6 +90,18 @@ export function useUserPreferences() {
         }
       }
       
+      // localStorageにも保存（PWA環境のフォールバック）
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[UserPreferences] localStorage saved successfully')
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[UserPreferences] localStorage save error:', error)
+        }
+      }
+      
       return newPrefs
     })
   }, [])
@@ -109,6 +119,13 @@ export function useUserPreferences() {
     } catch (error) {
       // エラーは無視
     }
+    
+    // localStorageもリセット
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
+    } catch (error) {
+      // エラーは無視
+    }
   }, [])
 
   return {
@@ -118,7 +135,7 @@ export function useUserPreferences() {
   }
 }
 
-// クライアントサイドで使用する関数（Cookieから取得）
+// クライアントサイドで使用する関数（Cookie/localStorageから取得）
 export function getStoredPreferences(): Partial<UserPreferences> | null {
   // サーバーサイドではCookieが使えないのでnullを返す
   if (typeof window === 'undefined') {
@@ -131,15 +148,14 @@ export function getStoredPreferences(): Partial<UserPreferences> | null {
     return cookiePrefs
   }
   
-  // 後方互換性のためlocalStorageもチェック
+  // localStorageからも読み込み（PWA対応）
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = JSON.parse(stored)
       if (parsed.version === CURRENT_VERSION) {
-        // Cookieに移行
+        // Cookieに同期を試みる
         setUserPreferencesCookieClient(parsed)
-        localStorage.removeItem(STORAGE_KEY)
         return parsed
       }
     }

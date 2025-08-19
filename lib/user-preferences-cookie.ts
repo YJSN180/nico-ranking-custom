@@ -30,11 +30,36 @@ export function setUserPreferencesCookieClient(preferences: Partial<UserPreferen
   const value = encodeURIComponent(JSON.stringify(preferences))
   const expires = new Date(Date.now() + COOKIE_MAX_AGE * 1000).toUTCString()
   
-  // Vercelプレビュー環境との互換性のため、SameSite=Noneに設定
+  // PWA環境での永続性を改善
   const isSecure = typeof window !== 'undefined' && window.location.protocol === 'https:'
-  const sameSite = isSecure ? 'None' : 'Lax'
+  // PWAではSameSite=Laxを使用して永続性を確保
+  // Vercelプレビュー環境（異なるドメイン）ではSameSite=Noneを使用
+  const isVercelPreview = typeof window !== 'undefined' && 
+    (window.location.hostname.includes('vercel.app') || 
+     window.location.hostname.includes('vercel-'))
   
-  document.cookie = `${COOKIE_NAME}=${value}; expires=${expires}; path=/; SameSite=${sameSite}${
-    isSecure ? '; Secure' : ''
-  }`
+  let cookieString = `${COOKIE_NAME}=${value}; expires=${expires}; path=/`
+  
+  if (isVercelPreview && isSecure) {
+    // Vercelプレビュー環境では SameSite=None; Secure が必要
+    cookieString += '; SameSite=None; Secure'
+  } else if (isSecure) {
+    // 本番HTTPS環境では SameSite=Lax; Secure で永続性を確保
+    cookieString += '; SameSite=Lax; Secure'
+  } else {
+    // HTTP環境では SameSite=Lax のみ
+    cookieString += '; SameSite=Lax'
+  }
+  
+  document.cookie = cookieString
+  
+  // デバッグログ（開発環境のみ）
+  if (process.env.NODE_ENV === 'development') {
+    // eslint-disable-next-line no-console
+    console.log('[Cookie] Setting with:', {
+      isSecure,
+      isVercelPreview,
+      cookieString: cookieString.substring(0, 100) + '...'
+    })
+  }
 }
