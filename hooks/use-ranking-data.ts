@@ -140,9 +140,18 @@ export function useRankingData({
       
       // キャッシュから取得を試行（カスタムランキングの場合はベースジャンルのキャッシュを使用）
       if (cacheGenre !== 'custom') {
-        const cachedData = rankingCache.get(cacheGenre, config.period)
+        // タグランキングの場合はタグも含めてキャッシュキーを生成
+        const cacheTag = config.tag && !config.tag.startsWith('custom:') ? config.tag : undefined
+        const cachedData = rankingCache.get(cacheGenre, config.period, cacheTag)
         
         if (cachedData) {
+          // キャッシュヒット時のログ
+          serverLog.info('Cache hit for ranking data', {
+            genre: cacheGenre,
+            period: config.period,
+            tag: cacheTag || 'none',
+            itemCount: cachedData.data?.length || 0
+          })
           let itemsToSet = cachedData.data
           
           // カスタムランキングの場合はフィルタリングを適用
@@ -157,6 +166,14 @@ export function useRankingData({
           }
           setLoading(false)
           return
+        } else {
+          // キャッシュミス時のログ
+          serverLog.info('Cache miss for ranking data', {
+            genre: cacheGenre,
+            period: config.period,
+            tag: cacheTag || 'none',
+            reason: 'No cached data found'
+          })
         }
       }
 
