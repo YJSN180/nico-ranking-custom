@@ -1,0 +1,50 @@
+'use client'
+
+import { RefreshCw } from 'lucide-react'
+import { isPWA } from '@/lib/pwa-utils'
+import { useState } from 'react'
+import styles from './reload-button.module.css'
+
+export function ReloadButton() {
+  const [isReloading, setIsReloading] = useState(false)
+
+  const handleReload = async () => {
+    setIsReloading(true)
+    
+    // Service Workerのキャッシュをクリア
+    if ('caches' in window) {
+      try {
+        const cacheNames = await caches.keys()
+        await Promise.all(
+          cacheNames.map(name => caches.delete(name))
+        )
+      } catch (error) {
+        console.error('Failed to clear caches:', error)
+      }
+    }
+    
+    // 少し待ってからリロード（アニメーション表示のため）
+    setTimeout(() => {
+      window.location.reload()
+    }, 500)
+  }
+
+  // PWA環境でのみ表示
+  if (!isPWA()) return null
+
+  return (
+    <button
+      onClick={handleReload}
+      disabled={isReloading}
+      className={styles.reloadButton}
+      aria-label="ページをリロード"
+      title="ページをリロード (Ctrl+R)"
+    >
+      <RefreshCw 
+        size={20} 
+        className={isReloading ? styles.spinning : ''} 
+      />
+      <span className={styles.tooltip}>リロード</span>
+    </button>
+  )
+}

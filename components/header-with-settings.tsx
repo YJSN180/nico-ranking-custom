@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { SettingsModal } from './settings-modal'
 import { Navigation } from './navigation'
+import { ReloadButton } from './reload-button'
 import styles from './header.module.css'
 
 export function HeaderWithSettings() {
@@ -72,13 +73,16 @@ export function HeaderWithSettings() {
           </Link>
         </div>
         
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className={styles.settingsButton}
-          aria-label="設定"
-        >
-          ⚙️
-        </button>
+        <div className={styles.headerButtons}>
+          <ReloadButton />
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className={styles.settingsButton}
+            aria-label="設定"
+          >
+            ⚙️
+          </button>
+        </div>
       </header>
       
       <SettingsModal 

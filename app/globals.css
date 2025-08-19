@@ -64,6 +64,10 @@
   --input-background: #ffffff;
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.15);
   --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.2);
+  
+  /* リロードボタン用ツールチップ */
+  --tooltip-bg: rgba(0, 0, 0, 0.8);
+  --tooltip-text: white;
 }
 
 /* ダークテーマ - 継承 */
@@ -120,6 +124,10 @@
   --input-background: #2a2a2a;
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.5);
   --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.7);
+  
+  /* リロードボタン用ツールチップ */
+  --tooltip-bg: rgba(255, 255, 255, 0.9);
+  --tooltip-text: #1a1a1a;
 }
 
 /* ダークブルーテーマ (X/Twitter風) */
@@ -176,6 +184,10 @@
   --input-background: #22303c;
   --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.6);
   --shadow-xl: 0 8px 24px rgba(0, 0, 0, 0.8);
+  
+  /* リロードボタン用ツールチップ */
+  --tooltip-bg: rgba(26, 46, 68, 0.95);
+  --tooltip-text: #e8f0ff;
 }
 
 body {
