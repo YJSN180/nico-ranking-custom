@@ -2,11 +2,20 @@
 
 import { RefreshCw } from 'lucide-react'
 import { isPWA } from '@/lib/pwa-utils'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import styles from './reload-button.module.css'
 
 export function ReloadButton() {
   const [isReloading, setIsReloading] = useState(false)
+  const [isDebugMode, setIsDebugMode] = useState(false)
+  
+  useEffect(() => {
+    // URLパラメータでデバッグモードをチェック
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      setIsDebugMode(params.get('debug-pwa') === 'true')
+    }
+  }, [])
 
   const handleReload = async () => {
     setIsReloading(true)
@@ -29,8 +38,8 @@ export function ReloadButton() {
     }, 500)
   }
 
-  // PWA環境でのみ表示
-  if (!isPWA()) return null
+  // PWA環境またはデバッグモードでのみ表示
+  if (!isPWA() && !isDebugMode) return null
 
   return (
     <button
