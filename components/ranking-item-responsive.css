@@ -56,12 +56,31 @@
   display: none;
 }
 
+/* 新しいモバイル順位表示（デスクトップでは非表示） */
+.ranking-item-responsive__rank--mobile-bottom {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-top: 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  user-select: none;
+  background: var(--mobile-rank-bg);
+  color: var(--mobile-rank-color);
+}
+
 /* サムネイル */
 .ranking-item-responsive__thumbnail {
   grid-area: thumbnail;
   width: 160px;
   flex-shrink: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 /* コンテンツエリア */
@@ -201,23 +220,14 @@
     display: none !important;
   }
   
-  /* モバイル順位を表示 */
+  /* 既存のモバイル順位オーバーレイを無効化 */
   .ranking-item-responsive__rank--mobile {
-    /* 順位をサムネイルの左上にオーバーレイ */
+    display: none !important;
+  }
+  
+  /* 新しいモバイル順位表示（サムネイル下）を有効化 */
+  .ranking-item-responsive__rank--mobile-bottom {
     display: flex !important;
-    position: absolute;
-    top: 0;
-    left: 0;
-    min-width: var(--mobile-rank-size);
-    height: var(--mobile-rank-size);
-    font-size: 12px;
-    font-weight: 700;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0 0 4px 0;
-    /* モバイルでは背景色を適用（不透明） */
-    background: var(--mobile-rank-bg) !important;
-    color: var(--mobile-rank-color) !important;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -325,10 +335,17 @@
     min-height: 70px;
   }
   
-  .ranking-item-responsive__rank--mobile {
-    min-width: 16px !important;
-    height: 16px !important;
+  /* 超モバイルでも新しいモバイル順位表示を使用 */
+  .ranking-item-responsive__rank--mobile-bottom {
     font-size: 10px !important;
+    padding: 4px 6px !important;
+    gap: 4px !important;
+  }
+  
+  /* 超モバイルでの王冠アイコンサイズ調整 */
+  .ranking-item-responsive__crown-icon {
+    width: 12px !important;
+    height: 12px !important;
   }
   
   .ranking-item-responsive__thumbnail {

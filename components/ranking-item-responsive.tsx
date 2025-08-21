@@ -4,6 +4,7 @@ import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
 import { QuickNGButton } from './quick-ng-button'
+import { CrownIcon } from './crown-icon'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
@@ -169,7 +170,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         {/* サムネイル */}
         {item.thumbURL && (
           <div className="ranking-item-responsive__thumbnail">
-            {/* モバイル用順位オーバーレイ */}
+            {/* モバイル用順位オーバーレイ（既存） */}
             <div 
               className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
               style={{
@@ -241,6 +242,27 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 {formatDuration(item.duration)}
               </div>
             )}
+            
+            {/* 新しいモバイル順位表示（サムネイル下部） */}
+            <div 
+              className="ranking-item-responsive__rank--mobile-bottom"
+              style={{
+                background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+                color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
+                '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
+                '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
+              } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
+            >
+              <CrownIcon 
+                size={14}
+                rank={item.rank <= 3 ? (item.rank as 1 | 2 | 3) : undefined}
+                color={item.rank <= 3 ? 'currentColor' : undefined}
+                className="ranking-item-responsive__crown-icon"
+              />
+              <span style={{ fontWeight: '700', userSelect: 'none' }}>
+                {item.rank}位
+              </span>
+            </div>
           </div>
         )}
         
