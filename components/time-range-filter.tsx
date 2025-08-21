@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import styles from './time-range-filter.module.css'
 
-export type TimeRangeValue = '24h' | '1w' | '1m' | 'all'
+export type TimeRangeValue = '24h' | '1w' | '1m' | '6m' | '1y' | 'all'
 
 interface TimeRangeOption {
   value: TimeRangeValue
@@ -23,7 +23,9 @@ const timeRangeOptions: TimeRangeOption[] = [
   { value: 'all', label: 'すべて表示', shortLabel: '全て' },
   { value: '24h', label: '過去24時間', shortLabel: '24h' },
   { value: '1w', label: '過去1週間', shortLabel: '1w' },
-  { value: '1m', label: '過去1ヶ月', shortLabel: '1m' }
+  { value: '1m', label: '過去1ヶ月', shortLabel: '1m' },
+  { value: '6m', label: '過去6ヶ月', shortLabel: '6m' },
+  { value: '1y', label: '過去1年', shortLabel: '1y' }
 ]
 
 export function TimeRangeFilter({
@@ -153,6 +155,12 @@ export function filterByTimeRange<T extends { registeredAt?: string }>(
       break
     case '1m':
       cutoffDate.setMonth(now.getMonth() - 1)
+      break
+    case '6m':
+      cutoffDate.setMonth(now.getMonth() - 6)
+      break
+    case '1y':
+      cutoffDate.setFullYear(now.getFullYear() - 1)
       break
     default:
       return items

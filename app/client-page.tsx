@@ -193,7 +193,7 @@ export default function ClientPage({
     if (typeof window !== 'undefined') {
       try {
         const saved = localStorage.getItem('timeRangeFilter')
-        if (saved && ['all', '24h', '1w', '1m'].includes(saved)) {
+        if (saved && ['all', '24h', '1w', '1m', '6m', '1y'].includes(saved)) {
           return saved as TimeRangeValue
         }
       } catch (e) {
