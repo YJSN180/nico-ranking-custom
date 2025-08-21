@@ -8,7 +8,6 @@ export type TimeRangeValue = '24h' | '1w' | '1m' | '6m' | '1y' | 'all'
 interface TimeRangeOption {
   value: TimeRangeValue
   label: string
-  shortLabel: string
 }
 
 interface TimeRangeFilterProps {
@@ -20,12 +19,12 @@ interface TimeRangeFilterProps {
 }
 
 const timeRangeOptions: TimeRangeOption[] = [
-  { value: 'all', label: 'すべて表示', shortLabel: '全て' },
-  { value: '24h', label: '過去24時間', shortLabel: '24h' },
-  { value: '1w', label: '過去1週間', shortLabel: '1w' },
-  { value: '1m', label: '過去1ヶ月', shortLabel: '1m' },
-  { value: '6m', label: '過去6ヶ月', shortLabel: '6m' },
-  { value: '1y', label: '過去1年', shortLabel: '1y' }
+  { value: 'all', label: 'すべて表示' },
+  { value: '24h', label: '過去24時間' },
+  { value: '1w', label: '過去1週間' },
+  { value: '1m', label: '過去1ヶ月' },
+  { value: '6m', label: '過去6ヶ月' },
+  { value: '1y', label: '過去1年' }
 ]
 
 export function TimeRangeFilter({
@@ -99,8 +98,7 @@ export function TimeRangeFilter({
       >
         <span className={styles.icon}>⏰</span>
         <span className={styles.label}>
-          <span className={styles.labelDesktop}>{currentOption.label}</span>
-          <span className={styles.labelMobile}>{currentOption.shortLabel}</span>
+          {currentOption.label}
         </span>
         <span className={styles.arrow}>▼</span>
       </button>
@@ -118,8 +116,7 @@ export function TimeRangeFilter({
             >
               {option.value === value && <span className={styles.check}>✓</span>}
               <span className={styles.optionLabel}>
-                <span className={styles.labelDesktop}>{option.label}</span>
-                <span className={styles.labelMobile}>{option.shortLabel}</span>
+                {option.label}
               </span>
             </button>
           ))}
