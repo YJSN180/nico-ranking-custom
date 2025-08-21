@@ -15,6 +15,21 @@
   }
 }
 
+/* フィルターボタンコンテナ */
+.filter-buttons-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .filter-buttons-container {
+    gap: 6px;
+    margin-top: 6px;
+  }
+}
+
 /* ランキングリストコンテナ */
 .ranking-list-container {
   /* 初期表示時の高さを確保してガタつきを防ぐ */
