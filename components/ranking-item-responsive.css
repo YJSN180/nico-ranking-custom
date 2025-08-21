@@ -61,11 +61,11 @@
   display: none;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 8px;
+  padding: 8px 12px;
   margin-top: 4px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 24px;
   font-weight: 700;
   text-align: center;
   user-select: none;
@@ -337,15 +337,15 @@
   
   /* 超モバイルでも新しいモバイル順位表示を使用 */
   .ranking-item-responsive__rank--mobile-bottom {
-    font-size: 10px !important;
-    padding: 4px 6px !important;
-    gap: 4px !important;
+    font-size: 20px !important;
+    padding: 6px 10px !important;
+    gap: 6px !important;
   }
   
   /* 超モバイルでの王冠アイコンサイズ調整 */
   .ranking-item-responsive__crown-icon {
-    width: 12px !important;
-    height: 12px !important;
+    width: 24px !important;
+    height: 24px !important;
   }
   
   .ranking-item-responsive__thumbnail {

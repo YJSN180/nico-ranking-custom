@@ -184,6 +184,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             >
               {item.rank}
             </div>
+            {/* サムネイル画像のwrapper */}
+            <div className="ranking-item-responsive__thumbnail-wrapper" style={{ position: 'relative' }}>
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               target={getLinkTarget()}
@@ -242,6 +244,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 {formatDuration(item.duration)}
               </div>
             )}
+            </div>
             
             {/* 新しいモバイル順位表示（サムネイル下部） */}
             <div 
@@ -254,13 +257,13 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
             >
               <CrownIcon 
-                size={14}
+                size={28}
                 rank={item.rank <= 3 ? (item.rank as 1 | 2 | 3) : undefined}
                 color={item.rank <= 3 ? 'currentColor' : undefined}
                 className="ranking-item-responsive__crown-icon"
               />
               <span style={{ fontWeight: '700', userSelect: 'none' }}>
-                {item.rank}位
+                {item.rank}
               </span>
             </div>
           </div>
