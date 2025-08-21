@@ -32,6 +32,7 @@ import { serverLog } from '@/lib/server-log'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
+import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -183,6 +184,21 @@ export default function ClientPage({
   
   // 外部ナビゲーション中の状態管理（UX制御）
   const [isNavigating, setIsNavigating] = useState(false)
+  
+  // 時間範囲フィルター状態（localStorageから復元）
+  const [timeRange, setTimeRange] = useState<TimeRangeValue>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('timeRangeFilter')
+        if (saved && ['all', '24h', '1w', '1m'].includes(saved)) {
+          return saved as TimeRangeValue
+        }
+      } catch (e) {
+        // localStorage使用不可の場合は無視
+      }
+    }
+    return 'all'
+  })
   
   // カスタムランキング専用状態（即時表示用）
   const [isShowingCustomRanking, setIsShowingCustomRanking] = useState(false)
@@ -754,6 +770,19 @@ export default function ClientPage({
     window.history.replaceState(null, '', newUrl)
   }, [currentPage, config])
   
+  // 時間範囲フィルター変更時の処理
+  const handleTimeRangeChange = useCallback((value: TimeRangeValue) => {
+    setTimeRange(value)
+    setCurrentPage(1) // フィルター変更時は1ページ目にリセット
+    
+    // localStorageに保存
+    try {
+      localStorage.setItem('timeRangeFilter', value)
+    } catch (e) {
+      // localStorage使用不可の場合は無視
+    }
+  }, [])
+  
   // QuickNG: NG追加処理
   const handleQuickNGAdd = useCallback((video: RankingItem, type: NGType, value: string | string[]) => {
     const stringValue = Array.isArray(value) ? value[0] : value
@@ -1088,14 +1117,18 @@ export default function ClientPage({
   
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
-  // クライアントサイドページネーション処理 (同期的なNGフィルタリング)
-  const { displayItems, totalPages, totalItemsCount } = useMemo(() => {
+  // クライアントサイドページネーション処理 (同期的なNGフィルタリング + 時間範囲フィルタリング)
+  const { displayItems, totalPages, totalItemsCount, totalBeforeTimeFilter } = useMemo(() => {
     // データソースを決定（カスタムランキング表示中は専用データを使用）
     const sourceData = isShowingCustomRanking ? customRankingDisplayData : fullRankingData
     
     // NGフィルタリングを適用
     const { filteredItems } = filterWithExtendedNGList(sourceData, ngList)
-    const totalCount = filteredItems.length
+    const totalBeforeTime = filteredItems.length
+    
+    // 時間範囲フィルタリングを適用
+    const timeFilteredItems = filterByTimeRange(filteredItems, timeRange)
+    const totalCount = timeFilteredItems.length
     
     // 総ページ数を計算
     const calculatedTotalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
@@ -1103,7 +1136,7 @@ export default function ClientPage({
     // 現在のページのアイテムを抽出
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
-    const pageItems = filteredItems.slice(startIndex, endIndex)
+    const pageItems = timeFilteredItems.slice(startIndex, endIndex)
     
     // ページ内のアイテムをそのまま返す（rankは既にfilterWithNGListで再計算済み）
     const result = pageItems
@@ -1111,9 +1144,10 @@ export default function ClientPage({
     return {
       displayItems: result,
       totalPages: calculatedTotalPages,
-      totalItemsCount: totalCount
+      totalItemsCount: totalCount,
+      totalBeforeTimeFilter: totalBeforeTime
     }
-  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData])
+  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -1143,6 +1177,12 @@ export default function ClientPage({
           currentPeriod={config.period}
         />
         <TagToggleButton />
+        <TimeRangeFilter
+          value={timeRange}
+          onChange={handleTimeRangeChange}
+          totalCount={totalBeforeTimeFilter}
+          filteredCount={totalItemsCount}
+        />
       </div>
       
       {loading && (
