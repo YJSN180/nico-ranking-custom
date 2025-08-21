@@ -141,23 +141,23 @@ export function filterByTimeRange<T extends { registeredAt?: string }>(
   if (range === 'all') return items
   
   const now = new Date()
-  const cutoffDate = new Date()
+  const cutoffDate = new Date(now.getTime())
   
   switch(range) {
     case '24h':
-      cutoffDate.setHours(now.getHours() - 24)
+      cutoffDate.setTime(now.getTime() - 24 * 60 * 60 * 1000)
       break
     case '1w':
-      cutoffDate.setDate(now.getDate() - 7)
+      cutoffDate.setTime(now.getTime() - 7 * 24 * 60 * 60 * 1000)
       break
     case '1m':
-      cutoffDate.setMonth(now.getMonth() - 1)
+      cutoffDate.setMonth(cutoffDate.getMonth() - 1)
       break
     case '6m':
-      cutoffDate.setMonth(now.getMonth() - 6)
+      cutoffDate.setMonth(cutoffDate.getMonth() - 6)
       break
     case '1y':
-      cutoffDate.setFullYear(now.getFullYear() - 1)
+      cutoffDate.setFullYear(cutoffDate.getFullYear() - 1)
       break
     default:
       return items
