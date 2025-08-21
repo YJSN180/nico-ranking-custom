@@ -5,6 +5,10 @@
   /* RankingSelectorとTagSelectorの高さを事前に確保 */
   min-height: auto; /* 内容に応じて自動調整 */
   position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {
@@ -12,6 +16,10 @@
     min-height: auto; /* 内容に応じて自動調整 */
     /* 総合ジャンルで人気タグセレクターがない場合の余白調整 */
     margin-bottom: -12px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
   }
 }
 

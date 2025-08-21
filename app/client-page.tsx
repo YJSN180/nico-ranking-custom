@@ -74,7 +74,10 @@ function TagToggleButton() {
         cursor: 'pointer',
         transition: 'all 0.2s',
         fontWeight: '500',
-        whiteSpace: 'nowrap'
+        whiteSpace: 'nowrap',
+        display: 'inline-flex',
+        alignItems: 'center',
+        height: '31px'
       }}
       onMouseEnter={(e) => {
         if (!showTags) {
