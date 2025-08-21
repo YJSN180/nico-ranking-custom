@@ -25,8 +25,6 @@ const CHANGELOG: ChangelogEntry[] = [
     version: 'v1.1.1',
     changes: [
       { type: 'feature', description: '時間範囲フィルタリング機能（過去24時間・1週間・1ヶ月・6ヶ月・1年でフィルター）' },
-      { type: 'improvement', description: 'フィルター状態のlocalStorage保存による永続化' },
-      { type: 'improvement', description: '動的ページネーション（フィルター結果に応じてページ数が自動調整）' },
     ],
   },
   {
