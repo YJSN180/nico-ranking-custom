@@ -65,7 +65,7 @@
   padding: 8px 12px;
   margin-top: 16px;  /* 12pt = 16px */
   border-radius: 6px;
-  font-size: 32px;  /* さらに大きく */
+  font-size: 28px;  /* モバイル: 28px */
   font-weight: 700;
   text-align: center;
   user-select: none;
@@ -337,7 +337,7 @@
   
   /* 超モバイルでも新しいモバイル順位表示を使用 */
   .ranking-item-responsive__rank--mobile-bottom {
-    font-size: 28px !important;  /* 超モバイルでも大きめに */
+    font-size: 24px !important;  /* 超モバイル: 24px */
     padding: 6px 10px !important;
     gap: 6px !important;
     margin-top: 12px !important;  /* 超モバイルでも間隔を確保 */
