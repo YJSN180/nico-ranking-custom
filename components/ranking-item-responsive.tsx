@@ -257,7 +257,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
             >
               <CrownIcon 
-                size={28}
+                size={32}
                 rank={item.rank <= 3 ? (item.rank as 1 | 2 | 3) : undefined}
                 color={item.rank <= 3 ? 'currentColor' : undefined}
                 className="ranking-item-responsive__crown-icon"
