@@ -5,10 +5,6 @@
   /* RankingSelectorとTagSelectorの高さを事前に確保 */
   min-height: auto; /* 内容に応じて自動調整 */
   position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
 }
 
 @media (max-width: 640px) {
@@ -16,10 +12,21 @@
     min-height: auto; /* 内容に応じて自動調整 */
     /* 総合ジャンルで人気タグセレクターがない場合の余白調整 */
     margin-bottom: -12px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+  }
+}
+
+/* フィルターボタンコンテナ */
+.filter-buttons-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .filter-buttons-container {
     gap: 6px;
+    margin-top: 6px;
   }
 }
 

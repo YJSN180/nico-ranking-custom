@@ -1179,13 +1179,15 @@ export default function ClientPage({
           onPrefetchData={handlePrefetchData}
           currentPeriod={config.period}
         />
-        <TagToggleButton />
-        <TimeRangeFilter
-          value={timeRange}
-          onChange={handleTimeRangeChange}
-          totalCount={totalBeforeTimeFilter}
-          filteredCount={totalItemsCount}
-        />
+        <div className="filter-buttons-container">
+          <TagToggleButton />
+          <TimeRangeFilter
+            value={timeRange}
+            onChange={handleTimeRangeChange}
+            totalCount={totalBeforeTimeFilter}
+            filteredCount={totalItemsCount}
+          />
+        </div>
       </div>
       
       {loading && (
