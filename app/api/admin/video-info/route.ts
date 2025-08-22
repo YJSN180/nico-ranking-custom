@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         foundVideos.push({
           id: video.contentId,
           title: video.title || 'タイトル不明',
-          authorName: video.channelId || video.userId || '投稿者不明',
+          authorName: `投稿者ID: ${video.channelId || video.userId || '不明'}`,
           url: `https://www.nicovideo.jp/watch/${video.contentId}`,
           viewCount: video.viewCounter || 0,
           commentCount: video.commentCounter || 0,

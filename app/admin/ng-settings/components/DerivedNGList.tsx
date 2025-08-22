@@ -254,7 +254,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
                   <div>{info?.title || '読み込み中...'}</div>
                   {info?.authorName && (
                     <div style={{ fontSize: '0.9em', color: '#666' }}>
-                      投稿者: {info.authorName}
+                      {typeof info.authorName === 'number' ? `投稿者ID: ${info.authorName}` : info.authorName}
                     </div>
                   )}
                 </td>

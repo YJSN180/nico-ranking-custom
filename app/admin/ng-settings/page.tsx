@@ -105,6 +105,7 @@ export default function NGSettingsPage() {
     saveAbortControllerRef.current = controller
     
     setSaving(true)
+    
     try {
       const response = await fetch('/api/admin/ng-list', {
         method: 'POST',
