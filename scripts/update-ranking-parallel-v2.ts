@@ -3,6 +3,7 @@ import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
 import { enrichRankingItemsWithTagDetails } from '../lib/tag-fetcher-simple'
+import { GENRE_ID_MAP as STATIC_GENRE_ID_MAP } from '../lib/genre-mapping'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 
@@ -15,32 +16,8 @@ const ALL_GENRES: RankingGenre[] = [
   'sports', 'animal', 'other'
 ];
 
-// Genre ID mapping
-const GENRE_ID_MAP: Record<RankingGenre, string> = {
-  all: 'e9uj2uks',
-  game: '4eet3ca4',
-  anime: 'zc49b03a',
-  vocaloid: 'dshv5do5',
-  voicesynthesis: 'wnm2mhv0',
-  entertainment: '8kjl94d9',
-  music: 'wq76qdin',
-  sing: '1ya6bnqd',
-  dance: '6yuf530c',
-  play: '6r5jr8nd',
-  commentary: 'v6wdx6p5',
-  cooking: 'lq8d5918',
-  travel: 'k1libcse',
-  nature: '24aa8fkw',
-  vehicle: '3d8zlls9',
-  technology: 'n46kcz9u',
-  society: 'lzicx0y6',
-  mmd: 'p1acxuoz',
-  vtuber: '6mkdo4xd',
-  radio: 'oxzi6bje',
-  sports: '4w3p65pf',
-  animal: 'ne72lua2',
-  other: 'ramuboyn'
-};
+// Dynamic genre ID mapping (can be updated at runtime)
+const GENRE_ID_MAP: Record<RankingGenre, string> = { ...STATIC_GENRE_ID_MAP };
 
 // Custom group definitions for 8-group strategy
 const CUSTOM_GROUPS: string[][] = [
@@ -252,7 +229,7 @@ async function fetchRankingPageWithRetry(
   page: number = 1,
   maxRetries: number = 3
 ): Promise<{ items: RankingItem[], popularTags: string[] }> {
-  const genreId = GENRE_ID_MAP[genre];
+  let genreId = GENRE_ID_MAP[genre];
   let url = `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${period}`;
   
   if (tag) {
@@ -268,6 +245,64 @@ async function fetchRankingPageWithRetry(
     try {
       const response = await fetchWithGooglebot(url);
       const html = await response.text();
+      
+      // Auto-detect genre ID changes
+      const canonicalMatch = html.match(/<link rel="canonical" href="https:\/\/www\.nicovideo\.jp\/ranking\/genre\/([^?/"]+)/);
+      const actualGenreId = canonicalMatch ? canonicalMatch[1] : null;
+      
+      if (actualGenreId && actualGenreId !== genreId) {
+        // Check if this is not a fallback to general ranking
+        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+        const isGeneralFallback = titleMatch && titleMatch[1].includes('総合');
+        
+        if (!isGeneralFallback) {
+          // Genre ID has changed - auto-update
+          console.log(`⚠️ Genre ID change detected for ${genre}:`);
+          console.log(`   Old ID: ${genreId}`);
+          console.log(`   New ID: ${actualGenreId}`);
+          console.log(`   ✅ Auto-updating to use new ID...`);
+          
+          // Update the in-memory map
+          GENRE_ID_MAP[genre] = actualGenreId;
+          genreId = actualGenreId;
+          
+          // Retry with the new ID
+          url = `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${period}`;
+          if (tag) url += `&tag=${encodeURIComponent(tag)}`;
+          if (page > 1) url += `&page=${page}`;
+          
+          // Fetch again with the corrected ID
+          const correctedResponse = await fetchWithGooglebot(url);
+          const correctedHtml = await correctedResponse.text();
+          const correctedServerData = extractServerResponseData(correctedHtml);
+          const correctedRankingData = correctedServerData.data?.response?.$getTeibanRanking?.data;
+          
+          if (!correctedRankingData) {
+            throw new Error('ランキングデータが見つかりません（修正後）');
+          }
+          
+          const popularTags = extractTrendTags(correctedServerData);
+          const startRank = (page - 1) * 100 + 1;
+          const items: RankingItem[] = (correctedRankingData.items || []).map((item: any, index: number) => ({
+            rank: startRank + index,
+            id: item.id,
+            title: item.title,
+            thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
+            views: item.count?.view || 0,
+            comments: item.count?.comment || 0,
+            mylists: item.count?.mylist || 0,
+            likes: item.count?.like || 0,
+            tags: item.tags || [],
+            authorId: item.owner?.id || item.user?.id,
+            authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
+            authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
+            registeredAt: item.registeredAt || item.startTime || item.createTime,
+            duration: item.duration
+          }));
+          
+          return { items, popularTags };
+        }
+      }
       
       const serverData = extractServerResponseData(html);
       const rankingData = serverData.data?.response?.$getTeibanRanking?.data;
