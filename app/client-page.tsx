@@ -1207,7 +1207,7 @@ export default function ClientPage({
         </div>
       </div>
       
-      {loading && (
+      {(loading || (error === '読み込み中...')) && (
         <div className="loading-container">
           <div style={{ 
             fontSize: '16px', 
@@ -1227,7 +1227,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {error && !loading && (
+      {error && error !== '読み込み中...' && !loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
@@ -1251,7 +1251,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
+      {!loading && (!error || error === '読み込み中...') && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
@@ -1285,7 +1285,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && finalDisplayItems.length > 0 && visibleGenres.length > 0 && (
+      {!loading && (!error || error === '読み込み中...') && finalDisplayItems.length > 0 && visibleGenres.length > 0 && (
         <>
           {/* リアルタイム更新インジケーター */}
           <div style={{
