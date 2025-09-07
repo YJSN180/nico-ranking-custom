@@ -10,6 +10,7 @@ import { generateNGListHash } from '@/lib/ng-list-hash'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import { useDeviceType, getDeviceBasedLimit } from '@/hooks/use-device-type'
+import { useDebouncedCallback } from '@/hooks/use-debounce'
 
 // 直接インポート（まず動作確認）
 import Pagination from '@/components/pagination'
@@ -154,6 +155,8 @@ export default function ClientPage({
     currentPopularTags,
     loading,
     error,
+    isRetrying,
+    retryCount,
     fetchRankingData,
     setCurrentPopularTags,
     setRankingData,
@@ -465,7 +468,7 @@ export default function ClientPage({
   const [pendingCustomConfig, setPendingCustomConfig] = useState<RankingConfig | null>(null)
   
   // 設定変更時の処理 (新しいフックを使用してシンプル化)
-  const handleConfigChange = useCallback(async (newConfig: RankingConfig, force = false) => {
+  const handleConfigChangeCore = useCallback(async (newConfig: RankingConfig, force = false) => {
     // 設定変更時は必ず前回のエラーをクリア
     setError(null)
     
@@ -733,6 +736,20 @@ export default function ClientPage({
   // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  
+  // デバウンスされた設定変更ハンドラー（300ms遅延）
+  const handleConfigChangeDebounced = useDebouncedCallback(handleConfigChangeCore, 300)
+  
+  // 即座に実行する必要がある場合とデバウンスを使い分けるラッパー
+  const handleConfigChange = useCallback((newConfig: RankingConfig, force = false) => {
+    if (force) {
+      // 強制更新または初回ロード時は即座に実行
+      handleConfigChangeCore(newConfig, force)
+    } else {
+      // 通常の設定変更はデバウンス
+      handleConfigChangeDebounced(newConfig, false)
+    }
+  }, [handleConfigChangeCore, handleConfigChangeDebounced])
   
   // IndexedDBの読み込みが完了し、保留中の設定がある場合は実行
   if (!customRankingsLoading && pendingCustomConfig && isInitialLoad) {
@@ -1194,20 +1211,42 @@ export default function ClientPage({
         <div className="loading-container">
           <div style={{ 
             fontSize: '16px', 
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px'
           }}>
-            読み込み中...
+            <div>読み込み中...</div>
+            {isRetrying && (
+              <div style={{ fontSize: '14px' }}>
+                再試行中 ({retryCount}/3)
+              </div>
+            )}
           </div>
         </div>
       )}
       
-      {error && (
+      {error && !loading && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
-            color: 'var(--error-color)'
+            color: 'var(--error-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            エラー: {typeof error === 'string' ? error : JSON.stringify(error)}
+            <div>{typeof error === 'string' ? error : JSON.stringify(error)}</div>
+            {error.includes('制限') && (
+              <div style={{ 
+                fontSize: '14px', 
+                color: 'var(--text-secondary)',
+                marginTop: '8px'
+              }}>
+                しばらく待ってから再度お試しください
+              </div>
+            )}
           </div>
         </div>
       )}

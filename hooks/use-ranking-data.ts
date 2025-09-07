@@ -30,6 +30,8 @@ interface UseRankingDataReturn {
   currentPopularTags: string[]
   loading: boolean
   error: string | null
+  isRetrying: boolean
+  retryCount: number
   fetchRankingData: (config: RankingConfig) => Promise<void>
   setCurrentPopularTags: (tags: string[]) => void
   setRankingData: (data: RankingItem[]) => void
@@ -56,6 +58,8 @@ export function useRankingData({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>(initialData?.popularTags || [])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
   
   // デバイスタイプを取得
   const deviceType = useDeviceType()
@@ -96,6 +100,8 @@ export function useRankingData({
 
     setLoading(true)
     setError(null)
+    setRetryCount(0)
+    setIsRetrying(false)
 
     try {
       // カスタムランキングの場合、ベースジャンルを特定
@@ -242,10 +248,57 @@ export function useRankingData({
       // リクエスト制限を適用
       await requestThrottle.throttle(apiUrl)
 
-      const response = await fetch(apiUrl, { signal })
+      // リトライロジック（429エラー対応）
+      let response: Response | null = null
+      let lastError: Error | null = null
+      const maxRetries = 3
+      const baseDelay = 1000 // 1秒
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            setIsRetrying(true)
+            setRetryCount(attempt)
+            // 指数バックオフ: 1秒, 2秒, 4秒
+            const delay = baseDelay * Math.pow(2, attempt - 1)
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
+          
+          response = await fetch(apiUrl, { signal })
+          
+          if (response.ok) {
+            break // 成功したらループを抜ける
+          }
+          
+          if (response.status === 429) {
+            // レート制限エラー - リトライ
+            const retryAfter = response.headers.get('Retry-After')
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt)
+            
+            if (attempt < maxRetries) {
+              console.log(`Rate limited (429). Retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
+              lastError = new Error(`一時的にアクセスが制限されています。${Math.ceil(waitTime/1000)}秒後に再試行します...`)
+              setError(lastError.message)
+              continue
+            }
+          }
+          
+          // その他のエラー - リトライしない
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            throw err // Abortエラーは再スロー
+          }
+          lastError = err as Error
+          if (attempt === maxRetries) {
+            throw lastError
+          }
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw lastError || new Error('Failed to fetch data after retries')
       }
 
       const data: RankingData = await response.json()
@@ -322,15 +375,29 @@ export function useRankingData({
         return
       }
       
-      // カスタムランキングAPIエラーは内部で処理
+      // より分かりやすいエラーメッセージ
+      let errorMessage = 'データの取得に失敗しました'
       
-      setError(err instanceof Error ? err.message : 'データの取得に失敗しました')
+      if (err instanceof Error) {
+        if (err.message.includes('429') || err.message.includes('制限')) {
+          errorMessage = 'アクセスが集中しています。しばらくお待ちください...'
+        } else if (err.message.includes('network') || err.message.includes('fetch')) {
+          errorMessage = 'ネットワークエラーが発生しました。接続を確認してください'
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'タイムアウトしました。もう一度お試しください'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      setError(errorMessage)
       setFullRankingData([])
       setRankingData([])
     } finally {
       // AbortErrorの場合はローディング状態を維持
       if (!isFallbackInitiatedRef.current && abortControllerRef.current?.signal.aborted !== true) {
         setLoading(false)
+        setIsRetrying(false)
       }
     }
   }, [savePopularTagsToCache, deviceType, customRankings, newlyCreatedRankings])
@@ -347,6 +414,8 @@ export function useRankingData({
     currentPopularTags,
     loading,
     error,
+    isRetrying,
+    retryCount,
     fetchRankingData,
     setCurrentPopularTags,
     setRankingData,

@@ -41,6 +41,8 @@ export function useRankingDataOptimized({
   const [currentPopularTags, setCurrentPopularTags] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
+  const [isRetrying, setIsRetrying] = useState(false)
   
   const abortControllerRef = useRef<AbortController | null>(null)
   const tagsAbortControllerRef = useRef<AbortController | null>(null)
@@ -104,6 +106,8 @@ export function useRankingDataOptimized({
     
     setLoading(true)
     setError(null)
+    setRetryCount(0)
+    setIsRetrying(false)
     isFallbackInitiatedRef.current = false
     
     try {
@@ -113,14 +117,60 @@ export function useRankingDataOptimized({
       params.set('period', config.period)
       if (config.tag) params.set('tag', config.tag)
       
-      // Fetch data
-      const response = await fetch(`/api/ranking?${params.toString()}`, {
-        signal: abortControllerRef.current.signal
-        // Remove Cache-Control header to let server control caching
-      })
+      // Fetch data with retry logic
+      let response: Response | null = null
+      let lastError: Error | null = null
+      const maxRetries = 3
+      const baseDelay = 1000 // 1 second
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          if (attempt > 0) {
+            setIsRetrying(true)
+            setRetryCount(attempt)
+            // Exponential backoff: 1s, 2s, 4s
+            const delay = baseDelay * Math.pow(2, attempt - 1)
+            await new Promise(resolve => setTimeout(resolve, delay))
+          }
+          
+          response = await fetch(`/api/ranking?${params.toString()}`, {
+            signal: abortControllerRef.current.signal
+            // Remove Cache-Control header to let server control caching
+          })
+          
+          if (response.ok) {
+            break // Success, exit retry loop
+          }
+          
+          if (response.status === 429) {
+            // Rate limit error - retry with backoff
+            const retryAfter = response.headers.get('Retry-After')
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt)
+            
+            if (attempt < maxRetries) {
+              console.log(`Rate limited (429). Retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
+              lastError = new Error(`一時的にアクセスが制限されています。${Math.ceil(waitTime/1000)}秒後に再試行します...`)
+              setError(lastError.message)
+              continue
+            }
+          }
+          
+          // Other errors - don't retry
+          throw new Error(`HTTP error! status: ${response.status}`)
+          
+        } catch (err) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            throw err // Re-throw abort errors
+          }
+          lastError = err as Error
+          if (attempt === maxRetries) {
+            throw lastError
+          }
+        }
+      }
+      
+      if (!response || !response.ok) {
+        throw lastError || new Error('Failed to fetch data after retries')
       }
       
       const data = await response.json()
@@ -139,10 +189,26 @@ export function useRankingDataOptimized({
         return
       }
       
-      setError(err instanceof Error ? err.message : 'Unknown error')
+      // More user-friendly error messages
+      let errorMessage = 'データの取得に失敗しました'
+      
+      if (err instanceof Error) {
+        if (err.message.includes('429') || err.message.includes('制限')) {
+          errorMessage = 'アクセスが集中しています。しばらくお待ちください...'
+        } else if (err.message.includes('network') || err.message.includes('fetch')) {
+          errorMessage = 'ネットワークエラーが発生しました。接続を確認してください'
+        } else if (err.message.includes('timeout')) {
+          errorMessage = 'タイムアウトしました。もう一度お試しください'
+        } else {
+          errorMessage = err.message
+        }
+      }
+      
+      setError(errorMessage)
       console.error('Fetch error:', err)
     } finally {
       setLoading(false)
+      setIsRetrying(false)
     }
   }, [])
   
@@ -152,6 +218,8 @@ export function useRankingDataOptimized({
     currentPopularTags,
     loading,
     error,
+    isRetrying,
+    retryCount,
     fetchRankingData,
     setCurrentPopularTags,
     setRankingData,
