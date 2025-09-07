@@ -737,8 +737,8 @@ export default function ClientPage({
   // fetchRankingData が空データで上書きしてしまう問題を防ぐため
   // eslint-disable-next-line react-hooks/exhaustive-deps
   
-  // デバウンスされた設定変更ハンドラー（300ms遅延）
-  const handleConfigChangeDebounced = useDebouncedCallback(handleConfigChangeCore, 300)
+  // デバウンスされた設定変更ハンドラー（500ms遅延）
+  const handleConfigChangeDebounced = useDebouncedCallback(handleConfigChangeCore, 500)
   
   // 即座に実行する必要がある場合とデバウンスを使い分けるラッパー
   const handleConfigChange = useCallback((newConfig: RankingConfig, force = false) => {

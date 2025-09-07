@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { rankingCache } from '@/lib/ranking-cache'
-import { requestThrottle } from '@/lib/request-throttle'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
@@ -245,62 +244,41 @@ export function useRankingData({
       
       // カスタムランキングAPIリクエストの詳細情報は内部で処理
       
-      // リクエスト制限を適用
-      await requestThrottle.throttle(apiUrl)
+      // クライアント側のthrottle処理を削除（サーバー側に任せる）
+      // await requestThrottle.throttle(apiUrl) // 削除: 二重制限を回避
 
-      // リトライロジック（429エラー対応）
+      // 429エラー対応 - シンプルで確実な処理
       let response: Response | null = null
-      let lastError: Error | null = null
-      const maxRetries = 3
-      const baseDelay = 1000 // 1秒
       
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-          if (attempt > 0) {
-            setIsRetrying(true)
-            setRetryCount(attempt)
-            // 指数バックオフ: 1秒, 2秒, 4秒
-            const delay = baseDelay * Math.pow(2, attempt - 1)
-            await new Promise(resolve => setTimeout(resolve, delay))
-          }
+      try {
+        response = await fetch(apiUrl, { signal })
+        
+        if (response.ok) {
+          // 成功 - データ処理へ進む
+        } else if (response.status === 429) {
+          // 429エラー検出 - 即座にページリロード
+          console.log('Rate limited (429). Reloading page immediately to reset state...')
+          setError('アクセス制限を検出しました。ページを再読み込みします...')
           
-          response = await fetch(apiUrl, { signal })
-          
-          if (response.ok) {
-            break // 成功したらループを抜ける
-          }
-          
-          if (response.status === 429) {
-            // レート制限エラー - throttleMapをリセットしてリトライ
-            requestThrottle.reset(apiUrl)
-            
-            const retryAfter = response.headers.get('Retry-After')
-            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt)
-            
-            if (attempt < maxRetries) {
-              console.log(`Rate limited (429). Resetting throttle and retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
-              lastError = new Error(`一時的にアクセスが制限されています。${Math.ceil(waitTime/1000)}秒後に再試行します...`)
-              setError(lastError.message)
-              continue
-            }
-          }
-          
-          // その他のエラー - リトライしない
+          // 1秒待ってからリロード（メッセージを表示する時間）
+          setTimeout(() => {
+            window.location.reload()
+          }, 1000)
+          return
+        } else {
+          // その他のエラー
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-          
-        } catch (err) {
-          if (err instanceof Error && err.name === 'AbortError') {
-            throw err // Abortエラーは再スロー
-          }
-          lastError = err as Error
-          if (attempt === maxRetries) {
-            throw lastError
-          }
         }
+      } catch (err: any) {
+        // ネットワークエラーなど
+        if (err.name === 'AbortError') {
+          return // キャンセルは無視
+        }
+        throw err
       }
       
       if (!response || !response.ok) {
-        throw lastError || new Error('Failed to fetch data after retries')
+        throw new Error('Failed to fetch data')
       }
 
       const data: RankingData = await response.json()
