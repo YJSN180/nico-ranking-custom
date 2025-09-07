@@ -130,7 +130,7 @@ export function useRankingDataOptimized({
         } else if (response.status === 429) {
           // 429エラー - 即座にページリロード
           console.log('Rate limited (429). Reloading page to reset state...')
-          setError('アクセス制限を検出しました。ページを再読み込みします...')
+          setError('読み込み中...')
           
           setTimeout(() => {
             window.location.reload()
@@ -166,22 +166,8 @@ export function useRankingDataOptimized({
         return
       }
       
-      // More user-friendly error messages
-      let errorMessage = 'データの取得に失敗しました'
-      
-      if (err instanceof Error) {
-        if (err.message.includes('429') || err.message.includes('制限')) {
-          errorMessage = 'アクセスが集中しています。しばらくお待ちください...'
-        } else if (err.message.includes('network') || err.message.includes('fetch')) {
-          errorMessage = 'ネットワークエラーが発生しました。接続を確認してください'
-        } else if (err.message.includes('timeout')) {
-          errorMessage = 'タイムアウトしました。もう一度お試しください'
-        } else {
-          errorMessage = err.message
-        }
-      }
-      
-      setError(errorMessage)
+      // シンプルなエラーメッセージ
+      setError('読み込み中...')
       console.error('Fetch error:', err)
     } finally {
       setLoading(false)
