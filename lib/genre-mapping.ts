@@ -6,7 +6,7 @@ export const GENRE_ID_MAP: Record<RankingGenre, string> = {
   game: '4eet3ca4',
   anime: 'zc49b03a',
   vocaloid: 'dshv5do5',
-  voicesynthesis: 'e2bi9pt8',
+  voicesynthesis: 'wnm2mhv0',
   entertainment: '8kjl94d9',
   music: 'wq76qdin',
   sing: '1ya6bnqd',
