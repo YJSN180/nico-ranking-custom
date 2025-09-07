@@ -74,6 +74,17 @@ class RequestThrottle {
       }
     }
   }
+  
+  // Reset throttle state for a specific URL (429エラー時にリセット)
+  reset(url: string) {
+    const key = this.getKey(url)
+    this.throttleMap.delete(key)
+  }
+  
+  // Reset all throttle states (全リセット)
+  resetAll() {
+    this.throttleMap.clear()
+  }
 }
 
 // Singleton instance

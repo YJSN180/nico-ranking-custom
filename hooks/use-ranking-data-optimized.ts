@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRankingProcessorWorker } from './use-ranking-processor-worker'
+import { requestThrottle } from '@/lib/request-throttle'
 import type { RankingItem } from '@/types/ranking'
 import type { RankingConfig } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
@@ -143,12 +144,14 @@ export function useRankingDataOptimized({
           }
           
           if (response.status === 429) {
-            // Rate limit error - retry with backoff
+            // Rate limit error - reset throttle and retry with backoff
+            requestThrottle.reset(`/api/ranking?${params.toString()}`)
+            
             const retryAfter = response.headers.get('Retry-After')
             const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt)
             
             if (attempt < maxRetries) {
-              console.log(`Rate limited (429). Retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
+              console.log(`Rate limited (429). Resetting throttle and retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
               lastError = new Error(`一時的にアクセスが制限されています。${Math.ceil(waitTime/1000)}秒後に再試行します...`)
               setError(lastError.message)
               continue

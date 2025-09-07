@@ -271,12 +271,14 @@ export function useRankingData({
           }
           
           if (response.status === 429) {
-            // レート制限エラー - リトライ
+            // レート制限エラー - throttleMapをリセットしてリトライ
+            requestThrottle.reset(apiUrl)
+            
             const retryAfter = response.headers.get('Retry-After')
             const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay * Math.pow(2, attempt)
             
             if (attempt < maxRetries) {
-              console.log(`Rate limited (429). Retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
+              console.log(`Rate limited (429). Resetting throttle and retrying in ${waitTime/1000}s... (attempt ${attempt + 1}/${maxRetries})`)
               lastError = new Error(`一時的にアクセスが制限されています。${Math.ceil(waitTime/1000)}秒後に再試行します...`)
               setError(lastError.message)
               continue
