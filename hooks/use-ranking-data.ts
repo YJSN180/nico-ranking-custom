@@ -256,13 +256,21 @@ export function useRankingData({
         if (response.ok) {
           // 成功 - データ処理へ進む
         } else if (response.status === 429) {
-          // 429エラー検出 - 即座にページリロード
+          // 429エラー検出 - URLを更新してからページリロード
           console.log('Rate limited (429). Reloading page immediately to reset state...')
           setError('読み込み中...')
           
-          // 1秒待ってからリロード（メッセージを表示する時間）
+          // URLパラメータを構築
+          const params = new URLSearchParams()
+          if (config.genre !== 'all') params.set('genre', config.genre)
+          if (config.period !== '24h') params.set('period', config.period)
+          if (config.tag) params.set('tag', config.tag)
+          
+          const newUrl = params.toString() ? `?${params.toString()}` : '/'
+          
+          // 1秒待ってからURLを更新してリロード
           setTimeout(() => {
-            window.location.reload()
+            window.location.href = newUrl
           }, 1000)
           return
         } else {

@@ -128,12 +128,21 @@ export function useRankingDataOptimized({
         if (response.ok) {
           // 成功 - データ処理へ
         } else if (response.status === 429) {
-          // 429エラー - 即座にページリロード
+          // 429エラー - URLを更新してからページリロード
           console.log('Rate limited (429). Reloading page to reset state...')
           setError('読み込み中...')
           
+          // URLパラメータを構築
+          const params = new URLSearchParams()
+          if (config.genre !== 'all') params.set('genre', config.genre)
+          if (config.period !== '24h') params.set('period', config.period)
+          if (config.tag) params.set('tag', config.tag)
+          
+          const newUrl = params.toString() ? `?${params.toString()}` : '/'
+          
+          // 1秒待ってからURLを更新してリロード
           setTimeout(() => {
-            window.location.reload()
+            window.location.href = newUrl
           }, 1000)
           return
         } else {

@@ -590,7 +590,7 @@ export default function ClientPage({
     if (newConfig.tag) params.set('tag', newConfig.tag)
     
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
-    router.push(newUrl, { scroll: false })
+    await router.push(newUrl, { scroll: false })
 
     // 既存カスタムランキング選択時は即座にフィルタリング表示を試行（エラーハンドリング強化）
     if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
