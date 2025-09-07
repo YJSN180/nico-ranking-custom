@@ -6,8 +6,8 @@ interface ThrottleEntry {
 }
 
 const WINDOW_SIZE = 60 * 1000 // 60 seconds window (1分間)
-const MAX_REQUESTS_PER_WINDOW = 40 // Max 40 requests per minute (タグ切り替えを考慮して増加)
-const MIN_REQUEST_INTERVAL = 1500 // Minimum 1.5s between requests (40req/60s = 1.5s/req)
+const MAX_REQUESTS_PER_WINDOW = 120 // Max 120 requests per minute (大幅緩和: ユーザー承認済み)
+const MIN_REQUEST_INTERVAL = 500 // Minimum 0.5s between requests (120req/60s = 0.5s/req)
 
 class RequestThrottle {
   private throttleMap = new Map<string, ThrottleEntry>()

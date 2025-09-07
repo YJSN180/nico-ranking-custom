@@ -115,10 +115,8 @@ export function useRankingDataOptimized({
       
       // Fetch data
       const response = await fetch(`/api/ranking?${params.toString()}`, {
-        signal: abortControllerRef.current.signal,
-        headers: {
-          'Cache-Control': 'max-age=300' // 5 minutes cache
-        }
+        signal: abortControllerRef.current.signal
+        // Remove Cache-Control header to let server control caching
       })
       
       if (!response.ok) {

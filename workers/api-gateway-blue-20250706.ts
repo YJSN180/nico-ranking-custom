@@ -154,7 +154,7 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=300',
+            'Cache-Control': 'public, max-age=1200, s-maxage=1200, stale-while-revalidate=2400',
             'X-Data-Source': 'r2-blue-worker',
             'X-Worker-Version': 'blue-20250706-unified-cors'
           }

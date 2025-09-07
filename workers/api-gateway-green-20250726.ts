@@ -154,13 +154,13 @@ function calculateDynamicTTL() {
   // 次の更新時刻までの秒数を計算
   const secondsUntilUpdate = Math.floor((nextUpdate.getTime() - now.getTime()) / 1000)
   
-  // 20250726 TTL戦略：負荷分散と鮮度のバランス
-  // Browser: 5分（ユーザーセッション内重複回避）
-  // CDN: 10分（地域キャッシュ効率化）  
+  // 20250726 TTL戦略：キャッシュヒット率向上のため統一化
+  // Browser: 20分（cache-durations.tsと統一）
+  // CDN: 20分（cache-durations.tsと統一）  
   // Worker: 動的（更新直前は短く、直後は長く）
   
-  const browserTTL = 300  // 5分固定
-  const cdnTTL = 600      // 10分固定  
+  const browserTTL = 1200  // 20分固定（cache-durations.ts準拠）
+  const cdnTTL = 1200      // 20分固定（cache-durations.ts準拠）  
   const workerTTL = Math.min(secondsUntilUpdate - 60, 1080) // 更新1分前まで、最大18分
   
   // 安全な最小値を設定
@@ -168,9 +168,9 @@ function calculateDynamicTTL() {
   const safeWorkerTTL = Math.max(workerTTL, 180) // 最低3分
   
   // Cache-Controlヘッダーを生成
-  // stale-while-revalidate: 15分（適度な猶予）
+  // stale-while-revalidate: 40分（cache-durations.ts準拠）
   // stale-if-error: 1時間（障害時の可用性確保）
-  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${safeCdnTTL}, stale-while-revalidate=900, stale-if-error=3600`
+  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${safeCdnTTL}, stale-while-revalidate=2400, stale-if-error=3600`
   const cdnCacheControl = `public, max-age=${safeCdnTTL}`
   
   return {
