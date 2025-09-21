@@ -21,6 +21,13 @@ type ChangelogEntry = {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    date: '2025-09-21',
+    version: 'v1.1.2',
+    changes: [
+      { type: 'feature', description: 'NGリスト一括追加機能（複数項目を改行区切りで入力）' },
+    ],
+  },
+  {
     date: '2025-08-22',
     version: 'v1.1.1',
     changes: [
