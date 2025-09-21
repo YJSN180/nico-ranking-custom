@@ -47,6 +47,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [showBulkTags, setShowBulkTags] = useState(false)
   const [bulkTagType, setBulkTagType] = useState<'locked' | 'user' | 'both'>('both')
   const [bulkTagMatchType, setBulkTagMatchType] = useState<'exact' | 'partial'>('partial')
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   
@@ -365,6 +366,51 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
   
+  // 一括リセット処理
+  const handleBulkReset = () => {
+    setShowResetConfirm(true)
+  }
+
+  const handleConfirmReset = () => {
+    // すべてのNGリストをリセット
+    setTempNGList({
+      videoIds: [],
+      videoTitles: {
+        exact: [],
+        partial: []
+      },
+      authorIds: [],
+      authorNames: {
+        exact: [],
+        partial: []
+      },
+      tags: {
+        locked: {
+          exact: [],
+          partial: []
+        },
+        user: {
+          exact: [],
+          partial: []
+        },
+        both: {
+          exact: [],
+          partial: []
+        }
+      },
+      version: 2,
+      totalCount: 0,
+      updatedAt: new Date().toISOString()
+    } as ExtendedUserNGList)
+
+    setShowResetConfirm(false)
+    setHasChanges(true)
+  }
+
+  const handleCancelReset = () => {
+    setShowResetConfirm(false)
+  }
+
   // 閉じる処理
   const handleClose = () => {
     // ドラッグ中は閉じない
@@ -903,6 +949,119 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   onBulkAddTags={handleBulkAddTags}
                 />
               )}
+
+              {/* 一括リセットセクション */}
+              <section className={styles.section} style={{ marginTop: '24px', borderTop: '2px solid var(--border-color)', paddingTop: '24px' }}>
+                <h3 style={{ color: 'var(--error-color)' }}>⚠️ 危険な操作</h3>
+
+                {!showResetConfirm ? (
+                  <div>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '12px', fontSize: '14px' }}>
+                      すべてのNGリスト設定を一括で削除します。この操作は取り消せません。
+                    </p>
+                    <button
+                      onClick={handleBulkReset}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'var(--error-color)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '14px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '0.9'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '1'
+                      }}
+                    >
+                      🗑️ すべてのNGリストをリセット
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    background: 'var(--background-secondary)',
+                    padding: '16px',
+                    borderRadius: '4px',
+                    border: '2px solid var(--error-color)'
+                  }}>
+                    <p style={{
+                      color: 'var(--error-color)',
+                      fontWeight: 'bold',
+                      marginBottom: '12px',
+                      fontSize: '16px'
+                    }}>
+                      本当にすべてのNGリストを削除しますか？
+                    </p>
+                    <p style={{
+                      color: 'var(--text-secondary)',
+                      marginBottom: '16px',
+                      fontSize: '14px'
+                    }}>
+                      この操作により、以下のすべての項目が削除されます：
+                    </p>
+                    <ul style={{
+                      color: 'var(--text-secondary)',
+                      marginBottom: '16px',
+                      fontSize: '14px',
+                      paddingLeft: '20px'
+                    }}>
+                      <li>動画ID: {tempNGList.videoIds.length}件</li>
+                      <li>動画タイトル（完全一致）: {tempNGList.videoTitles.exact.length}件</li>
+                      <li>動画タイトル（部分一致）: {tempNGList.videoTitles.partial.length}件</li>
+                      <li>投稿者ID: {tempNGList.authorIds.length}件</li>
+                      <li>投稿者名（完全一致）: {tempNGList.authorNames.exact.length}件</li>
+                      <li>投稿者名（部分一致）: {tempNGList.authorNames.partial.length}件</li>
+                      {tempNGList.tags && (
+                        <>
+                          <li>ロックタグ: {tempNGList.tags.locked.exact.length + tempNGList.tags.locked.partial.length}件</li>
+                          <li>ユーザータグ: {tempNGList.tags.user.exact.length + tempNGList.tags.user.partial.length}件</li>
+                          <li>両方タグ: {tempNGList.tags.both.exact.length + tempNGList.tags.both.partial.length}件</li>
+                        </>
+                      )}
+                    </ul>
+                    <div style={{
+                      marginTop: '16px',
+                      display: 'flex',
+                      gap: '12px',
+                      justifyContent: 'flex-end'
+                    }}>
+                      <button
+                        onClick={handleCancelReset}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--background-color)',
+                          color: 'var(--text-color)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '14px'
+                        }}
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        onClick={handleConfirmReset}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--error-color)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '14px'
+                        }}
+                      >
+                        削除する
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           ) : activeTab === 'genre-order' ? (
             <div className={styles.genreOrderSettings}>
