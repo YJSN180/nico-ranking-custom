@@ -34,6 +34,20 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [showBulkVideoIds, setShowBulkVideoIds] = useState(false)
   const [showBulkAuthorIds, setShowBulkAuthorIds] = useState(false)
 
+  // 動画タイトル一括追加用
+  const [bulkVideoTitles, setBulkVideoTitles] = useState('')
+  const [showBulkVideoTitles, setShowBulkVideoTitles] = useState(false)
+
+  // 投稿者名一括追加用
+  const [bulkAuthorNames, setBulkAuthorNames] = useState('')
+  const [showBulkAuthorNames, setShowBulkAuthorNames] = useState(false)
+
+  // タグ一括追加用
+  const [bulkTags, setBulkTags] = useState('')
+  const [showBulkTags, setShowBulkTags] = useState(false)
+  const [bulkTagType, setBulkTagType] = useState<'locked' | 'user' | 'both'>('both')
+  const [bulkTagMatchType, setBulkTagMatchType] = useState<'exact' | 'partial'>('partial')
+
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   
   // 一時的なNGリストの状態
@@ -216,6 +230,119 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       alert(`${newIds.length}件の投稿者IDを追加しました`)
     } else {
       alert('追加する新しいIDがありません（すべて重複しています）')
+    }
+  }
+
+  // 動画タイトル一括追加処理
+  const handleBulkAddVideoTitles = () => {
+    const input = bulkVideoTitles.trim()
+    if (!input) {
+      alert('動画タイトルを入力してください')
+      return
+    }
+
+    const newTitles = input
+      .split(/[\r\n]+/)
+      .map(title => title.trim())
+      .filter(title => title !== '')
+      .filter(title => !tempNGList.videoTitles[videoTitleType].includes(title))
+
+    if (newTitles.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        videoTitles: {
+          ...prev.videoTitles,
+          [videoTitleType]: [...prev.videoTitles[videoTitleType], ...newTitles]
+        },
+        totalCount: prev.totalCount + newTitles.length
+      }))
+      setBulkVideoTitles('')
+      setShowBulkVideoTitles(false)
+      alert(`${newTitles.length}件の動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
+    } else {
+      alert('追加する新しいタイトルがありません（すべて重複しています）')
+    }
+  }
+
+  // 投稿者名一括追加処理
+  const handleBulkAddAuthorNames = () => {
+    const input = bulkAuthorNames.trim()
+    if (!input) {
+      alert('投稿者名を入力してください')
+      return
+    }
+
+    const newNames = input
+      .split(/[\r\n]+/)
+      .map(name => name.trim())
+      .filter(name => name !== '')
+      .filter(name => !tempNGList.authorNames[authorNameType].includes(name))
+
+    if (newNames.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        authorNames: {
+          ...prev.authorNames,
+          [authorNameType]: [...prev.authorNames[authorNameType], ...newNames]
+        },
+        totalCount: prev.totalCount + newNames.length
+      }))
+      setBulkAuthorNames('')
+      setShowBulkAuthorNames(false)
+      alert(`${newNames.length}件の投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
+    } else {
+      alert('追加する新しい名前がありません（すべて重複しています）')
+    }
+  }
+
+  // タグ一括追加処理
+  const handleBulkAddTags = () => {
+    const input = bulkTags.trim()
+    if (!input) {
+      alert('タグを入力してください')
+      return
+    }
+
+    const newTags = input
+      .split(/[\r\n]+/)
+      .map(tag => tag.trim())
+      .filter(tag => tag !== '')
+
+    // タグが存在することを確認
+    if (!tempNGList.tags) {
+      setTempNGList(prev => ({
+        ...prev,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        }
+      }))
+    }
+
+    const existingTags = tempNGList.tags?.[bulkTagType]?.[bulkTagMatchType] || []
+    const uniqueNewTags = newTags.filter(tag => !existingTags.includes(tag))
+
+    if (uniqueNewTags.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        tags: {
+          ...prev.tags!,
+          [bulkTagType]: {
+            ...prev.tags![bulkTagType],
+            [bulkTagMatchType]: [...(prev.tags?.[bulkTagType]?.[bulkTagMatchType] || []), ...uniqueNewTags]
+          }
+        },
+        totalCount: prev.totalCount + uniqueNewTags.length
+      }))
+      setBulkTags('')
+      setShowBulkTags(false)
+
+      const typeLabel = bulkTagType === 'locked' ? '大百科タグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'
+      const matchLabel = bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'
+      alert(`${uniqueNewTags.length}件のタグ（${typeLabel}・${matchLabel}）を追加しました`)
+    } else {
+      alert('追加する新しいタグがありません（すべて重複しています）')
     }
   }
 
@@ -512,6 +639,61 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   />
                   <button onClick={handleAddVideoTitle}>追加</button>
                 </div>
+
+                {/* 動画タイトル一括追加セクション */}
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={() => setShowBulkVideoTitles(!showBulkVideoTitles)}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--border-color)',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: 'var(--text-color)',
+                      width: '100%',
+                      textAlign: 'left'
+                    }}
+                  >
+                    {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加（{videoTitleType === 'exact' ? '完全一致' : '部分一致'}）
+                  </button>
+                  {showBulkVideoTitles && (
+                    <div style={{ marginTop: '12px' }}>
+                      <textarea
+                        value={bulkVideoTitles}
+                        onChange={(e) => setBulkVideoTitles(e.target.value)}
+                        placeholder={`動画タイトルを改行区切りで入力\n例:\nアニメ総集編\nMAD動画\n歌ってみた`}
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          padding: '8px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          fontSize: '13px',
+                          fontFamily: 'inherit',
+                          resize: 'vertical'
+                        }}
+                      />
+                      <button
+                        onClick={handleBulkAddVideoTitles}
+                        style={{
+                          marginTop: '8px',
+                          padding: '8px 16px',
+                          background: 'var(--primary-color)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        一括追加
+                      </button>
+                    </div>
+                  )}
+                </div>
               </section>
 
               {/* 投稿者 */}
@@ -641,20 +823,209 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     />
                     <button onClick={handleAddAuthorName}>追加</button>
                   </div>
+
+                  {/* 投稿者名一括追加セクション */}
+                  <div style={{ marginTop: '12px' }}>
+                    <button
+                      onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid var(--border-color)',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        color: 'var(--text-color)',
+                        width: '100%',
+                        textAlign: 'left'
+                      }}
+                    >
+                      {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加（{authorNameType === 'exact' ? '完全一致' : '部分一致'}）
+                    </button>
+                    {showBulkAuthorNames && (
+                      <div style={{ marginTop: '12px' }}>
+                        <textarea
+                          value={bulkAuthorNames}
+                          onChange={(e) => setBulkAuthorNames(e.target.value)}
+                          placeholder={`投稿者名を改行区切りで入力\n例:\nテスト投稿者\nサンプルユーザー\n投稿者A`}
+                          style={{
+                            width: '100%',
+                            height: '120px',
+                            padding: '8px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            fontSize: '13px',
+                            fontFamily: 'inherit',
+                            resize: 'vertical'
+                          }}
+                        />
+                        <button
+                          onClick={handleBulkAddAuthorNames}
+                          style={{
+                            marginTop: '8px',
+                            padding: '8px 16px',
+                            background: 'var(--primary-color)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          一括追加
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 
               {/* タグ */}
               {tempNGList.tags && (
-                <NGTagsSection
-                  tags={tempNGList.tags}
-                  onUpdate={(tags) => {
-                    setTempNGList(prev => ({
-                      ...prev,
-                      tags
-                    }))
-                  }}
-                />
+                <>
+                  <NGTagsSection
+                    tags={tempNGList.tags}
+                    onUpdate={(tags) => {
+                      setTempNGList(prev => ({
+                        ...prev,
+                        tags
+                      }))
+                    }}
+                  />
+
+                  {/* タグ一括追加セクション */}
+                  <section className={styles.section} style={{ marginTop: '-20px' }}>
+                    <div style={{ marginTop: '12px' }}>
+                      <button
+                        onClick={() => setShowBulkTags(!showBulkTags)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid var(--border-color)',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          color: 'var(--text-color)',
+                          width: '100%',
+                          textAlign: 'left'
+                        }}
+                      >
+                        {showBulkTags ? '▼' : '▶'} 複数タグを一括追加
+                      </button>
+                      {showBulkTags && (
+                        <div style={{ marginTop: '12px' }}>
+                          {/* タグタイプ選択 */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                              タグの種類:
+                            </label>
+                            <select
+                              value={bulkTagType}
+                              onChange={(e) => setBulkTagType(e.target.value as 'locked' | 'user' | 'both')}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '4px',
+                                fontSize: '14px',
+                                background: 'var(--background-color)',
+                                color: 'var(--text-color)',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <option value="locked">🔒 大百科タグ（公式タグ）</option>
+                              <option value="user">👤 ユーザータグ</option>
+                              <option value="both">🌐 両方（大百科・ユーザー問わず）</option>
+                            </select>
+                          </div>
+
+                          {/* マッチタイプ選択 */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                              マッチ方法:
+                            </label>
+                            <div style={{ display: 'flex', gap: '16px' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                <input
+                                  type="radio"
+                                  value="exact"
+                                  checked={bulkTagMatchType === 'exact'}
+                                  onChange={(e) => setBulkTagMatchType(e.target.value as 'exact' | 'partial')}
+                                  style={{ marginRight: '6px' }}
+                                />
+                                <span style={{ fontSize: '14px' }}>完全一致</span>
+                              </label>
+                              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                                <input
+                                  type="radio"
+                                  value="partial"
+                                  checked={bulkTagMatchType === 'partial'}
+                                  onChange={(e) => setBulkTagMatchType(e.target.value as 'exact' | 'partial')}
+                                  style={{ marginRight: '6px' }}
+                                />
+                                <span style={{ fontSize: '14px' }}>部分一致</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* 選択状態の説明 */}
+                          <div style={{
+                            padding: '8px 12px',
+                            background: 'var(--background-secondary)',
+                            borderRadius: '4px',
+                            marginBottom: '12px',
+                            fontSize: '13px',
+                            color: 'var(--text-secondary)'
+                          }}>
+                            現在の設定:
+                            <strong style={{ color: 'var(--text-color)' }}>
+                              {bulkTagType === 'locked' ? '大百科タグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'}
+                            </strong>
+                            の
+                            <strong style={{ color: 'var(--text-color)' }}>
+                              {bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'}
+                            </strong>
+                            に追加されます
+                          </div>
+
+                          {/* タグ入力エリア */}
+                          <textarea
+                            value={bulkTags}
+                            onChange={(e) => setBulkTags(e.target.value)}
+                            placeholder={`タグを改行区切りで入力\n例:\nゲーム実況\nVOCALOID\n東方\nアニメ`}
+                            style={{
+                              width: '100%',
+                              height: '120px',
+                              padding: '8px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              fontSize: '13px',
+                              fontFamily: 'inherit',
+                              resize: 'vertical'
+                            }}
+                          />
+                          <button
+                            onClick={handleBulkAddTags}
+                            style={{
+                              marginTop: '8px',
+                              padding: '8px 16px',
+                              background: 'var(--primary-color)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            一括追加
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                </>
               )}
             </div>
           ) : activeTab === 'genre-order' ? (
