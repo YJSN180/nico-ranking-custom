@@ -203,9 +203,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       }))
       setBulkVideoIds('')
       setShowBulkVideoIds(false)
-      alert(`${newIds.length}件の動画IDを追加しました`)
+      // alert(`${newIds.length}件の動画IDを追加しました`)
     } else {
-      alert('追加する新しいIDがありません（すべて重複しています）')
+      // alert('追加する新しいIDがありません（すべて重複しています）')
     }
   }
 
@@ -227,9 +227,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       }))
       setBulkAuthorIds('')
       setShowBulkAuthorIds(false)
-      alert(`${newIds.length}件の投稿者IDを追加しました`)
+      // alert(`${newIds.length}件の投稿者IDを追加しました`)
     } else {
-      alert('追加する新しいIDがありません（すべて重複しています）')
+      // alert('追加する新しいIDがありません（すべて重複しています）')
     }
   }
 
@@ -237,7 +237,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleBulkAddVideoTitles = () => {
     const input = bulkVideoTitles.trim()
     if (!input) {
-      alert('動画タイトルを入力してください')
+      // alert('動画タイトルを入力してください')
       return
     }
 
@@ -258,9 +258,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       }))
       setBulkVideoTitles('')
       setShowBulkVideoTitles(false)
-      alert(`${newTitles.length}件の動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
+      // alert(`${newTitles.length}件の動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
     } else {
-      alert('追加する新しいタイトルがありません（すべて重複しています）')
+      // alert('追加する新しいタイトルがありません（すべて重複しています）')
     }
   }
 
@@ -268,7 +268,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleBulkAddAuthorNames = () => {
     const input = bulkAuthorNames.trim()
     if (!input) {
-      alert('投稿者名を入力してください')
+      // alert('投稿者名を入力してください')
       return
     }
 
@@ -289,9 +289,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       }))
       setBulkAuthorNames('')
       setShowBulkAuthorNames(false)
-      alert(`${newNames.length}件の投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
+      // alert(`${newNames.length}件の投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
     } else {
-      alert('追加する新しい名前がありません（すべて重複しています）')
+      // alert('追加する新しい名前がありません（すべて重複しています）')
     }
   }
 
@@ -299,7 +299,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleBulkAddTags = () => {
     const input = bulkTags.trim()
     if (!input) {
-      alert('タグを入力してください')
+      // alert('タグを入力してください')
       return
     }
 
@@ -340,9 +340,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
       const typeLabel = bulkTagType === 'locked' ? 'ロックタグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'
       const matchLabel = bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'
-      alert(`${uniqueNewTags.length}件のタグ（${typeLabel}・${matchLabel}）を追加しました`)
+      // alert(`${uniqueNewTags.length}件のタグ（${typeLabel}・${matchLabel}）を追加しました`)
     } else {
-      alert('追加する新しいタグがありません（すべて重複しています）')
+      // alert('追加する新しいタグがありません（すべて重複しています）')
     }
   }
 
