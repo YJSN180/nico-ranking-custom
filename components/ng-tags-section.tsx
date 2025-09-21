@@ -9,12 +9,34 @@ import styles from './settings-modal.module.css'
 interface NGTagsSectionProps {
   tags: ExtendedNGList['tags']
   onUpdate: (tags: ExtendedNGList['tags']) => void
+  // 一括追加機能用のprops
+  bulkTags?: string
+  onBulkTagsChange?: (value: string) => void
+  showBulkTags?: boolean
+  onShowBulkTagsToggle?: () => void
+  bulkTagType?: 'locked' | 'user' | 'both'
+  onBulkTagTypeChange?: (type: 'locked' | 'user' | 'both') => void
+  bulkTagMatchType?: 'exact' | 'partial'
+  onBulkTagMatchTypeChange?: (type: 'exact' | 'partial') => void
+  onBulkAddTags?: () => void
 }
 
 type TagType = 'locked' | 'user' | 'both'
 type MatchType = 'exact' | 'partial'
 
-export function NGTagsSection({ tags, onUpdate }: NGTagsSectionProps) {
+export function NGTagsSection({
+  tags,
+  onUpdate,
+  bulkTags = '',
+  onBulkTagsChange,
+  showBulkTags = false,
+  onShowBulkTagsToggle,
+  bulkTagType = 'both',
+  onBulkTagTypeChange,
+  bulkTagMatchType = 'partial',
+  onBulkTagMatchTypeChange,
+  onBulkAddTags
+}: NGTagsSectionProps) {
   const [inputTag, setInputTag] = useState('')
   const [tagType, setTagType] = useState<TagType>('both')
   const [matchType, setMatchType] = useState<MatchType>('partial')
@@ -251,6 +273,139 @@ export function NGTagsSection({ tags, onUpdate }: NGTagsSectionProps) {
         />
         <button onClick={handleAddTag}>追加</button>
       </div>
+
+      {/* タグ一括追加セクション */}
+      {onShowBulkTagsToggle && (
+        <div style={{ marginTop: '12px' }}>
+          <button
+            onClick={onShowBulkTagsToggle}
+            style={{
+              background: 'var(--primary-color)',
+              color: 'white',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            {showBulkTags ? '▼' : '▶'} 複数タグを一括追加
+          </button>
+
+          {showBulkTags && (
+            <div style={{ marginTop: '12px' }}>
+              {/* タグタイプ選択 */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  タグの種類:
+                </label>
+                <select
+                  value={bulkTagType}
+                  onChange={(e) => onBulkTagTypeChange?.(e.target.value as 'locked' | 'user' | 'both')}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    background: 'var(--background-color)',
+                    color: 'var(--text-color)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="locked">🔒 ロックタグ</option>
+                  <option value="user">🔖 ユーザータグ</option>
+                  <option value="both">🏷️ 両方（ロック・ユーザー問わず）</option>
+                </select>
+              </div>
+
+              {/* マッチタイプ選択 */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ fontSize: '13px', color: 'var(--text-secondary)', display: 'block', marginBottom: '6px' }}>
+                  マッチ方法:
+                </label>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="exact"
+                      checked={bulkTagMatchType === 'exact'}
+                      onChange={(e) => onBulkTagMatchTypeChange?.(e.target.value as 'exact' | 'partial')}
+                      style={{ marginRight: '6px' }}
+                    />
+                    <span style={{ fontSize: '14px' }}>完全一致</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      value="partial"
+                      checked={bulkTagMatchType === 'partial'}
+                      onChange={(e) => onBulkTagMatchTypeChange?.(e.target.value as 'exact' | 'partial')}
+                      style={{ marginRight: '6px' }}
+                    />
+                    <span style={{ fontSize: '14px' }}>部分一致</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* 選択状態の説明 */}
+              <div style={{
+                padding: '8px 12px',
+                background: 'var(--background-secondary)',
+                borderRadius: '4px',
+                marginBottom: '12px',
+                fontSize: '13px',
+                color: 'var(--text-secondary)'
+              }}>
+                現在の設定:
+                <strong style={{ color: 'var(--text-color)' }}>
+                  {bulkTagType === 'locked' ? 'ロックタグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'}
+                </strong>
+                の
+                <strong style={{ color: 'var(--text-color)' }}>
+                  {bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'}
+                </strong>
+                に追加されます
+              </div>
+
+              {/* タグ入力エリア */}
+              <textarea
+                value={bulkTags}
+                onChange={(e) => onBulkTagsChange?.(e.target.value)}
+                placeholder={`タグを改行区切りで入力\n例:\nゲーム実況\nVOCALOID\n東方\nアニメ`}
+                style={{
+                  width: '100%',
+                  height: '120px',
+                  padding: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  backgroundColor: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical'
+                }}
+              />
+              <button
+                onClick={onBulkAddTags}
+                style={{
+                  marginTop: '8px',
+                  padding: '8px 16px',
+                  background: 'var(--primary-color)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold'
+                }}
+              >
+                一括追加
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }
