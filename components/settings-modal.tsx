@@ -765,7 +765,7 @@ sm11111111`}
                       value={inputAuthorId}
                       onChange={(e) => setInputAuthorId(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorId()}
-                      placeholder="投稿者ID"
+                      placeholder="投稿者ID（数字）"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
                   </div>
@@ -793,10 +793,11 @@ sm11111111`}
                           value={bulkAuthorIds}
                           onChange={(e) => setBulkAuthorIds(e.target.value)}
                           placeholder={`複数の投稿者IDを改行区切りで入力
-例:
-user123
-user456
-user789`}
+例（ユーザー）:
+12345678
+98765432
+例（チャンネル）:
+channel/ch2625894`}
                           style={{
                             width: '100%',
                             height: '120px',
