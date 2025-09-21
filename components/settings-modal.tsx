@@ -557,7 +557,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       <textarea
                         value={bulkVideoIds}
                         onChange={(e) => setBulkVideoIds(e.target.value)}
-                        placeholder="複数の動画IDを改行区切りで入力&#10;例:&#10;sm12345678&#10;sm87654321&#10;sm11111111"
+                        placeholder="複数の動画IDを改行区切りで入力\n例:\nsm12345678\nsm87654321\nsm11111111"
                         style={{
                           width: '100%',
                           height: '120px',
@@ -567,7 +567,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           backgroundColor: 'var(--bg-secondary)',
                           color: 'var(--text-primary)',
                           fontSize: '14px',
-                          fontFamily: 'monospace',
+                          fontFamily: 'inherit',
                           resize: 'vertical'
                         }}
                       />
@@ -671,7 +671,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           backgroundColor: 'var(--bg-secondary)',
                           color: 'var(--text-primary)',
                           fontSize: '14px',
-                          fontFamily: 'monospace',
+                          fontFamily: 'inherit',
                           resize: 'vertical'
                         }}
                       />
@@ -725,7 +725,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     <button
                       onClick={() => setShowBulkAuthorIds(!showBulkAuthorIds)}
                       style={{
-                        background: 'none',
+                        background: 'var(--primary-color)',
+                        color: 'white',
                         border: 'none',
                         padding: '6px 12px',
                         borderRadius: '4px',
@@ -751,7 +752,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                             backgroundColor: 'var(--bg-secondary)',
                             color: 'var(--text-primary)',
                             fontSize: '14px',
-                            fontFamily: 'monospace',
+                            fontFamily: 'inherit',
                             resize: 'vertical'
                           }}
                         />
@@ -828,7 +829,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     <button
                       onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
                       style={{
-                        background: 'none',
+                        background: 'var(--primary-color)',
+                        color: 'white',
                         border: 'none',
                         padding: '6px 12px',
                         borderRadius: '4px',
@@ -853,7 +855,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                             backgroundColor: 'var(--bg-secondary)',
                             color: 'var(--text-primary)',
                             fontSize: '14px',
-                            fontFamily: 'monospace',
+                            fontFamily: 'inherit',
                             resize: 'vertical'
                           }}
                         />
@@ -898,7 +900,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       <button
                         onClick={() => setShowBulkTags(!showBulkTags)}
                         style={{
-                          background: 'none',
+                          background: 'var(--primary-color)',
+                          color: 'white',
                           border: 'none',
                           padding: '6px 12px',
                           borderRadius: '4px',
@@ -988,7 +991,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           <textarea
                             value={bulkTags}
                             onChange={(e) => setBulkTags(e.target.value)}
-                            placeholder="タグを改行区切りで入力\n例:\nゲーム実況\nVOCALOID\n東方\nアニメ"
+                            placeholder={`タグを改行区切りで入力\n例:\nゲーム実況\nVOCALOID\n東方\nアニメ`}
                             style={{
                               width: '100%',
                               height: '120px',
