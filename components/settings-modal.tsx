@@ -603,7 +603,11 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       <textarea
                         value={bulkVideoIds}
                         onChange={(e) => setBulkVideoIds(e.target.value)}
-                        placeholder="複数の動画IDを改行区切りで入力\n例:\nsm12345678\nsm87654321\nsm11111111"
+                        placeholder={`複数の動画IDを改行区切りで入力
+例:
+sm12345678
+sm87654321
+sm11111111`}
                         style={{
                           width: '100%',
                           height: '120px',
@@ -788,7 +792,11 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                         <textarea
                           value={bulkAuthorIds}
                           onChange={(e) => setBulkAuthorIds(e.target.value)}
-                          placeholder="複数の投稿者IDを改行区切りで入力\n例:\nuser123\nuser456\nuser789"
+                          placeholder={`複数の投稿者IDを改行区切りで入力
+例:
+user123
+user456
+user789`}
                           style={{
                             width: '100%',
                             height: '120px',
