@@ -30,7 +30,6 @@
 
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
-import { handleWithCache } from './utils/cache-handler'
 
 interface Env {
   R2_BUCKET: R2Bucket
@@ -444,23 +443,21 @@ export default {
       }
     }
     
-    // /api/ranking パスの処理 - Cache API対応
+    // /api/ranking パスの処理
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       // レート制限チェック（ランキングAPI用）
       const rateLimitCheck = await checkRateLimit(request, env, 'ranking')
       if (!rateLimitCheck.success) {
         return rateLimitCheck.error!
       }
-
-      // Cache APIを使用した処理
-      return handleWithCache(url, async () => {
-        const genre = url.searchParams.get('genre') || 'all'
-        const period = url.searchParams.get('period') || '24h'
-        const tag = url.searchParams.get('tag') || ''
-
-        console.log(`[Worker v2.0 + Cache] Request processing - Genre: ${genre}, Period: ${period}, Tag: ${tag}`)
-
-        try {
+      
+      const genre = url.searchParams.get('genre') || 'all'
+      const period = url.searchParams.get('period') || '24h'
+      const tag = url.searchParams.get('tag') || ''
+      
+      console.log(`[Worker v2.0] Request received - Genre: ${genre}, Period: ${period}, Tag: ${tag}`)
+      
+      try {
         // R2からデータを取得
         const r2Key = tag 
           ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
@@ -657,11 +654,10 @@ export default {
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
-
+        
         const origin = request.headers.get('Origin')
         return applyCORSHeaders(errorResponse, origin, securityHeaders)
-        }
-      }, ctx) // Cache APIのhandleWithCacheクロージング
+      }
     }
     
     // /api/thumbnail/{videoId} パスの処理

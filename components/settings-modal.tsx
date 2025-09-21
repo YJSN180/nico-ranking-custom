@@ -34,6 +34,21 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [showBulkVideoIds, setShowBulkVideoIds] = useState(false)
   const [showBulkAuthorIds, setShowBulkAuthorIds] = useState(false)
 
+  // 動画タイトル一括追加用
+  const [bulkVideoTitles, setBulkVideoTitles] = useState('')
+  const [showBulkVideoTitles, setShowBulkVideoTitles] = useState(false)
+
+  // 投稿者名一括追加用
+  const [bulkAuthorNames, setBulkAuthorNames] = useState('')
+  const [showBulkAuthorNames, setShowBulkAuthorNames] = useState(false)
+
+  // タグ一括追加用
+  const [bulkTags, setBulkTags] = useState('')
+  const [showBulkTags, setShowBulkTags] = useState(false)
+  const [bulkTagType, setBulkTagType] = useState<'locked' | 'user' | 'both'>('both')
+  const [bulkTagMatchType, setBulkTagMatchType] = useState<'exact' | 'partial'>('partial')
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   
   // 一時的なNGリストの状態
@@ -189,9 +204,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       }))
       setBulkVideoIds('')
       setShowBulkVideoIds(false)
-      alert(`${newIds.length}件の動画IDを追加しました`)
+      // alert(`${newIds.length}件の動画IDを追加しました`)
     } else {
-      alert('追加する新しいIDがありません（すべて重複しています）')
+      // alert('追加する新しいIDがありません（すべて重複しています）')
     }
   }
 
@@ -213,9 +228,122 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       }))
       setBulkAuthorIds('')
       setShowBulkAuthorIds(false)
-      alert(`${newIds.length}件の投稿者IDを追加しました`)
+      // alert(`${newIds.length}件の投稿者IDを追加しました`)
     } else {
-      alert('追加する新しいIDがありません（すべて重複しています）')
+      // alert('追加する新しいIDがありません（すべて重複しています）')
+    }
+  }
+
+  // 動画タイトル一括追加処理
+  const handleBulkAddVideoTitles = () => {
+    const input = bulkVideoTitles.trim()
+    if (!input) {
+      // alert('動画タイトルを入力してください')
+      return
+    }
+
+    const newTitles = input
+      .split(/[\r\n]+/)
+      .map(title => title.trim())
+      .filter(title => title !== '')
+      .filter(title => !tempNGList.videoTitles[videoTitleType].includes(title))
+
+    if (newTitles.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        videoTitles: {
+          ...prev.videoTitles,
+          [videoTitleType]: [...prev.videoTitles[videoTitleType], ...newTitles]
+        },
+        totalCount: prev.totalCount + newTitles.length
+      }))
+      setBulkVideoTitles('')
+      setShowBulkVideoTitles(false)
+      // alert(`${newTitles.length}件の動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
+    } else {
+      // alert('追加する新しいタイトルがありません（すべて重複しています）')
+    }
+  }
+
+  // 投稿者名一括追加処理
+  const handleBulkAddAuthorNames = () => {
+    const input = bulkAuthorNames.trim()
+    if (!input) {
+      // alert('投稿者名を入力してください')
+      return
+    }
+
+    const newNames = input
+      .split(/[\r\n]+/)
+      .map(name => name.trim())
+      .filter(name => name !== '')
+      .filter(name => !tempNGList.authorNames[authorNameType].includes(name))
+
+    if (newNames.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        authorNames: {
+          ...prev.authorNames,
+          [authorNameType]: [...prev.authorNames[authorNameType], ...newNames]
+        },
+        totalCount: prev.totalCount + newNames.length
+      }))
+      setBulkAuthorNames('')
+      setShowBulkAuthorNames(false)
+      // alert(`${newNames.length}件の投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を追加しました`)
+    } else {
+      // alert('追加する新しい名前がありません（すべて重複しています）')
+    }
+  }
+
+  // タグ一括追加処理
+  const handleBulkAddTags = () => {
+    const input = bulkTags.trim()
+    if (!input) {
+      // alert('タグを入力してください')
+      return
+    }
+
+    const newTags = input
+      .split(/[\r\n]+/)
+      .map(tag => tag.trim())
+      .filter(tag => tag !== '')
+
+    // タグが存在することを確認
+    if (!tempNGList.tags) {
+      setTempNGList(prev => ({
+        ...prev,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        }
+      }))
+    }
+
+    const existingTags = tempNGList.tags?.[bulkTagType]?.[bulkTagMatchType] || []
+    const uniqueNewTags = newTags.filter(tag => !existingTags.includes(tag))
+
+    if (uniqueNewTags.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        tags: {
+          ...prev.tags!,
+          [bulkTagType]: {
+            ...prev.tags![bulkTagType],
+            [bulkTagMatchType]: [...(prev.tags?.[bulkTagType]?.[bulkTagMatchType] || []), ...uniqueNewTags]
+          }
+        },
+        totalCount: prev.totalCount + uniqueNewTags.length
+      }))
+      setBulkTags('')
+      setShowBulkTags(false)
+
+      const typeLabel = bulkTagType === 'locked' ? 'ロックタグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'
+      const matchLabel = bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'
+      // alert(`${uniqueNewTags.length}件のタグ（${typeLabel}・${matchLabel}）を追加しました`)
+    } else {
+      // alert('追加する新しいタグがありません（すべて重複しています）')
     }
   }
 
@@ -238,6 +366,51 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
   
+  // 一括リセット処理
+  const handleBulkReset = () => {
+    setShowResetConfirm(true)
+  }
+
+  const handleConfirmReset = () => {
+    // すべてのNGリストをリセット
+    setTempNGList({
+      videoIds: [],
+      videoTitles: {
+        exact: [],
+        partial: []
+      },
+      authorIds: [],
+      authorNames: {
+        exact: [],
+        partial: []
+      },
+      tags: {
+        locked: {
+          exact: [],
+          partial: []
+        },
+        user: {
+          exact: [],
+          partial: []
+        },
+        both: {
+          exact: [],
+          partial: []
+        }
+      },
+      version: 2,
+      totalCount: 0,
+      updatedAt: new Date().toISOString()
+    } as ExtendedUserNGList)
+
+    setShowResetConfirm(false)
+    setHasChanges(true)
+  }
+
+  const handleCancelReset = () => {
+    setShowResetConfirm(false)
+  }
+
   // 閉じる処理
   const handleClose = () => {
     // ドラッグ中は閉じない
@@ -430,7 +603,11 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       <textarea
                         value={bulkVideoIds}
                         onChange={(e) => setBulkVideoIds(e.target.value)}
-                        placeholder="複数の動画IDを改行区切りで入力&#10;例:&#10;sm12345678&#10;sm87654321&#10;sm11111111"
+                        placeholder={`複数の動画IDを改行区切りで入力
+例:
+sm12345678
+sm87654321
+sm11111111`}
                         style={{
                           width: '100%',
                           height: '120px',
@@ -440,7 +617,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           backgroundColor: 'var(--bg-secondary)',
                           color: 'var(--text-primary)',
                           fontSize: '14px',
-                          fontFamily: 'monospace',
+                          fontFamily: 'inherit',
                           resize: 'vertical'
                         }}
                       />
@@ -512,6 +689,61 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   />
                   <button onClick={handleAddVideoTitle}>追加</button>
                 </div>
+
+                {/* 動画タイトル一括追加セクション */}
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={() => setShowBulkVideoTitles(!showBulkVideoTitles)}
+                    style={{
+                      background: 'var(--primary-color)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加
+                  </button>
+                  {showBulkVideoTitles && (
+                    <div style={{ marginTop: '12px' }}>
+                      <textarea
+                        value={bulkVideoTitles}
+                        onChange={(e) => setBulkVideoTitles(e.target.value)}
+                        placeholder={`動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力\n例:\nアニメ総集編\nMAD動画\n歌ってみた`}
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          padding: '8px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          backgroundColor: 'var(--bg-secondary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '14px',
+                          fontFamily: 'inherit',
+                          resize: 'vertical'
+                        }}
+                      />
+                      <button
+                        onClick={handleBulkAddVideoTitles}
+                        style={{
+                          marginTop: '8px',
+                          padding: '8px 16px',
+                          background: 'var(--primary-color)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        一括追加
+                      </button>
+                    </div>
+                  )}
+                </div>
               </section>
 
               {/* 投稿者 */}
@@ -533,7 +765,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       value={inputAuthorId}
                       onChange={(e) => setInputAuthorId(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorId()}
-                      placeholder="投稿者ID"
+                      placeholder="投稿者ID（数字）"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
                   </div>
@@ -560,7 +792,12 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                         <textarea
                           value={bulkAuthorIds}
                           onChange={(e) => setBulkAuthorIds(e.target.value)}
-                          placeholder="複数の投稿者IDを改行区切りで入力&#10;例:&#10;user123&#10;user456&#10;user789"
+                          placeholder={`複数の投稿者IDを改行区切りで入力
+例（ユーザー）:
+12345678
+98765432
+例（チャンネル）:
+ch2625894`}
                           style={{
                             width: '100%',
                             height: '120px',
@@ -570,7 +807,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                             backgroundColor: 'var(--bg-secondary)',
                             color: 'var(--text-primary)',
                             fontSize: '14px',
-                            fontFamily: 'monospace',
+                            fontFamily: 'inherit',
                             resize: 'vertical'
                           }}
                         />
@@ -641,6 +878,61 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     />
                     <button onClick={handleAddAuthorName}>追加</button>
                   </div>
+
+                  {/* 投稿者名一括追加セクション */}
+                  <div style={{ marginTop: '12px' }}>
+                    <button
+                      onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
+                      style={{
+                        background: 'var(--primary-color)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加
+                    </button>
+                    {showBulkAuthorNames && (
+                      <div style={{ marginTop: '12px' }}>
+                        <textarea
+                          value={bulkAuthorNames}
+                          onChange={(e) => setBulkAuthorNames(e.target.value)}
+                          placeholder={`投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力\n例:\nテスト投稿者\nサンプルユーザー\n投稿者A`}
+                          style={{
+                            width: '100%',
+                            height: '120px',
+                            padding: '8px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px',
+                            fontFamily: 'inherit',
+                            resize: 'vertical'
+                          }}
+                        />
+                        <button
+                          onClick={handleBulkAddAuthorNames}
+                          style={{
+                            marginTop: '8px',
+                            padding: '8px 16px',
+                            background: 'var(--primary-color)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          一括追加
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 
@@ -654,8 +946,131 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       tags
                     }))
                   }}
+                  // 一括追加機能のprops
+                  bulkTags={bulkTags}
+                  onBulkTagsChange={setBulkTags}
+                  showBulkTags={showBulkTags}
+                  onShowBulkTagsToggle={() => setShowBulkTags(!showBulkTags)}
+                  bulkTagType={bulkTagType}
+                  onBulkTagTypeChange={setBulkTagType}
+                  bulkTagMatchType={bulkTagMatchType}
+                  onBulkTagMatchTypeChange={setBulkTagMatchType}
+                  onBulkAddTags={handleBulkAddTags}
                 />
               )}
+
+              {/* 一括リセットセクション */}
+              <section className={styles.section} style={{ marginTop: '24px', borderTop: '2px solid var(--border-color)', paddingTop: '24px' }}>
+                <h3 style={{ color: 'var(--error-color)' }}>⚠️ 危険な操作</h3>
+
+                {!showResetConfirm ? (
+                  <div>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '12px', fontSize: '14px' }}>
+                      すべてのNGリスト設定を一括で削除します。この操作は取り消せません。
+                    </p>
+                    <button
+                      onClick={handleBulkReset}
+                      style={{
+                        padding: '8px 16px',
+                        background: 'var(--error-color)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        fontSize: '14px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.opacity = '0.9'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.opacity = '1'
+                      }}
+                    >
+                      🗑️ すべてのNGリストをリセット
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    background: 'var(--background-secondary)',
+                    padding: '16px',
+                    borderRadius: '4px',
+                    border: '2px solid var(--error-color)'
+                  }}>
+                    <p style={{
+                      color: 'var(--error-color)',
+                      fontWeight: 'bold',
+                      marginBottom: '12px',
+                      fontSize: '16px'
+                    }}>
+                      本当にすべてのNGリストを削除しますか？
+                    </p>
+                    <p style={{
+                      color: 'var(--text-secondary)',
+                      marginBottom: '16px',
+                      fontSize: '14px'
+                    }}>
+                      この操作により、以下のすべての項目が削除されます：
+                    </p>
+                    <ul style={{
+                      color: 'var(--text-secondary)',
+                      marginBottom: '16px',
+                      fontSize: '14px',
+                      paddingLeft: '20px'
+                    }}>
+                      <li>動画ID: {tempNGList.videoIds.length}件</li>
+                      <li>動画タイトル（完全一致）: {tempNGList.videoTitles.exact.length}件</li>
+                      <li>動画タイトル（部分一致）: {tempNGList.videoTitles.partial.length}件</li>
+                      <li>投稿者ID: {tempNGList.authorIds.length}件</li>
+                      <li>投稿者名（完全一致）: {tempNGList.authorNames.exact.length}件</li>
+                      <li>投稿者名（部分一致）: {tempNGList.authorNames.partial.length}件</li>
+                      {tempNGList.tags && (
+                        <>
+                          <li>ロックタグ: {tempNGList.tags.locked.exact.length + tempNGList.tags.locked.partial.length}件</li>
+                          <li>ユーザータグ: {tempNGList.tags.user.exact.length + tempNGList.tags.user.partial.length}件</li>
+                          <li>両方タグ: {tempNGList.tags.both.exact.length + tempNGList.tags.both.partial.length}件</li>
+                        </>
+                      )}
+                    </ul>
+                    <div style={{
+                      marginTop: '16px',
+                      display: 'flex',
+                      gap: '12px',
+                      justifyContent: 'flex-end'
+                    }}>
+                      <button
+                        onClick={handleCancelReset}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--background-color)',
+                          color: 'var(--text-color)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '14px'
+                        }}
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        onClick={handleConfirmReset}
+                        style={{
+                          padding: '8px 16px',
+                          background: 'var(--error-color)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          fontSize: '14px'
+                        }}
+                      >
+                        削除する
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           ) : activeTab === 'genre-order' ? (
             <div className={styles.genreOrderSettings}>
