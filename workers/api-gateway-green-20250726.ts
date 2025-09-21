@@ -121,27 +121,27 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
 }
 
 /**
- * 動的TTL計算 20250726
- * 実際の更新スケジュール（毎時0,20,40分）に最適化
- * GitHub Actions cron: every 20 minutes (0,20,40)
+ * 動的TTL計算 20250922修正版
+ * 実際の更新スケジュール（毎時20,50分）に最適化
+ * GitHub Actions cron: '20,50 * * * *' (実際のスケジュール)
  */
 function calculateDynamicTTL() {
   const now = new Date()
   const currentMinute = now.getMinutes()
-  
-  // 次の更新時刻を計算（毎時0,20,40分）
+
+  // 次の更新時刻を計算（毎時20,50分）
   let nextUpdateMinute: number
   let hoursToAdd = 0
-  
+
   if (currentMinute < 20) {
     // 0-19分：次は20分
     nextUpdateMinute = 20
-  } else if (currentMinute < 40) {
-    // 20-39分：次は40分  
-    nextUpdateMinute = 40
+  } else if (currentMinute < 50) {
+    // 20-49分：次は50分
+    nextUpdateMinute = 50
   } else {
-    // 40-59分：次は翌時の0分
-    nextUpdateMinute = 0
+    // 50-59分：次は翌時の20分
+    nextUpdateMinute = 20
     hoursToAdd = 1
   }
   
@@ -155,23 +155,40 @@ function calculateDynamicTTL() {
   // 次の更新時刻までの秒数を計算
   const secondsUntilUpdate = Math.floor((nextUpdate.getTime() - now.getTime()) / 1000)
   
-  // 20250726 TTL戦略：キャッシュヒット率向上のため統一化
-  // Browser: 20分（cache-durations.tsと統一）
-  // CDN: 20分（cache-durations.tsと統一）  
-  // Worker: 動的（更新直前は短く、直後は長く）
+  // 20250922 TTL戦略：20,50分スケジュールに最適化
+  // 更新間隔30分を考慮した段階的TTL
+  // Browser: 15分（更新間隔の半分）
+  // CDN: 25分（更新間隔よりやや短め）
+  // Worker: 動的（次の更新までの時間に基づく）
+
+  // 次の更新までの時間に基づいた動的TTL
+  let browserTTL: number
+  let cdnTTL: number
+
+  if (secondsUntilUpdate > 1500) {
+    // 25分以上ある場合（更新直後）
+    browserTTL = 900      // 15分
+    cdnTTL = 1500        // 25分
+  } else if (secondsUntilUpdate > 600) {
+    // 10-25分の場合（中間期）
+    browserTTL = 600      // 10分
+    cdnTTL = 900         // 15分
+  } else {
+    // 10分未満の場合（更新近づく）
+    browserTTL = 300      // 5分
+    cdnTTL = 300         // 5分
+  }
+
+  const workerTTL = Math.min(secondsUntilUpdate - 120, 1680) // 更新2分前まで、最大28分
   
-  const browserTTL = 1200  // 20分固定（cache-durations.ts準拠）
-  const cdnTTL = 1200      // 20分固定（cache-durations.ts準拠）  
-  const workerTTL = Math.min(secondsUntilUpdate - 60, 1080) // 更新1分前まで、最大18分
-  
-  // 安全な最小値を設定
-  const safeCdnTTL = Math.max(cdnTTL, 300)  // 最低5分
-  const safeWorkerTTL = Math.max(workerTTL, 180) // 最低3分
+  // 安全な最小値を設定（更新遅延を考慮）
+  const safeCdnTTL = Math.max(cdnTTL, 180)   // 最低3分
+  const safeWorkerTTL = Math.max(workerTTL, 120) // 最低2分
   
   // Cache-Controlヘッダーを生成
-  // stale-while-revalidate: 40分（cache-durations.ts準拠）
-  // stale-if-error: 1時間（障害時の可用性確保）
-  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${safeCdnTTL}, stale-while-revalidate=2400, stale-if-error=3600`
+  // stale-while-revalidate: 5分（更新遅延許容）
+  // stale-if-error: 60分（障害時の可用性確保）
+  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${safeCdnTTL}, stale-while-revalidate=300, stale-if-error=3600`
   const cdnCacheControl = `public, max-age=${safeCdnTTL}`
   
   return {
@@ -186,7 +203,9 @@ function calculateDynamicTTL() {
       browserTTL,
       cdnTTL: safeCdnTTL,
       calculatedWorkerTTL: workerTTL,
-      safeWorkerTTL: safeWorkerTTL
+      safeWorkerTTL: safeWorkerTTL,
+      updateSchedule: '20,50分',
+      ttlStrategy: '動的段階的TTL'
     }
   }
 }
