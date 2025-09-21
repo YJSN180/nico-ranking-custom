@@ -645,7 +645,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   <button
                     onClick={() => setShowBulkVideoTitles(!showBulkVideoTitles)}
                     style={{
-                      background: 'none',
+                      background: 'var(--primary-color)',
+                      color: 'white',
                       border: 'none',
                       padding: '6px 12px',
                       borderRadius: '4px',
@@ -660,7 +661,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       <textarea
                         value={bulkVideoTitles}
                         onChange={(e) => setBulkVideoTitles(e.target.value)}
-                        placeholder={`動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力&#10;例:&#10;アニメ総集編&#10;MAD動画&#10;歌ってみた`}
+                        placeholder={`動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力\n例:\nアニメ総集編\nMAD動画\n歌ってみた`}
                         style={{
                           width: '100%',
                           height: '120px',
@@ -740,7 +741,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                         <textarea
                           value={bulkAuthorIds}
                           onChange={(e) => setBulkAuthorIds(e.target.value)}
-                          placeholder="複数の投稿者IDを改行区切りで入力&#10;例:&#10;user123&#10;user456&#10;user789"
+                          placeholder="複数の投稿者IDを改行区切りで入力\n例:\nuser123\nuser456\nuser789"
                           style={{
                             width: '100%',
                             height: '120px',
@@ -842,7 +843,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                         <textarea
                           value={bulkAuthorNames}
                           onChange={(e) => setBulkAuthorNames(e.target.value)}
-                          placeholder={`投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力&#10;例:&#10;テスト投稿者&#10;サンプルユーザー&#10;投稿者A`}
+                          placeholder={`投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力\n例:\nテスト投稿者\nサンプルユーザー\n投稿者A`}
                           style={{
                             width: '100%',
                             height: '120px',
@@ -928,7 +929,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                                 cursor: 'pointer'
                               }}
                             >
-                              <option value="locked">🔒 ロックタグ（大百科タグ）</option>
+                              <option value="locked">🔒 ロックタグ</option>
                               <option value="user">🔖 ユーザータグ</option>
                               <option value="both">🏷️ 両方（ロック・ユーザー問わず）</option>
                             </select>
@@ -987,7 +988,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           <textarea
                             value={bulkTags}
                             onChange={(e) => setBulkTags(e.target.value)}
-                            placeholder="タグを改行区切りで入力&#10;例:&#10;ゲーム実況&#10;VOCALOID&#10;東方&#10;アニメ"
+                            placeholder="タグを改行区切りで入力\n例:\nゲーム実況\nVOCALOID\n東方\nアニメ"
                             style={{
                               width: '100%',
                               height: '120px',
@@ -997,7 +998,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                               backgroundColor: 'var(--bg-secondary)',
                               color: 'var(--text-primary)',
                               fontSize: '14px',
-                              fontFamily: 'monospace',
+                              fontFamily: 'inherit',
                               resize: 'vertical'
                             }}
                           />
