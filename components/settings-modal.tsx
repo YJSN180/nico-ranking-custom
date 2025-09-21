@@ -338,7 +338,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       setBulkTags('')
       setShowBulkTags(false)
 
-      const typeLabel = bulkTagType === 'locked' ? '大百科タグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'
+      const typeLabel = bulkTagType === 'locked' ? 'ロックタグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'
       const matchLabel = bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'
       alert(`${uniqueNewTags.length}件のタグ（${typeLabel}・${matchLabel}）を追加しました`)
     } else {
@@ -645,33 +645,32 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   <button
                     onClick={() => setShowBulkVideoTitles(!showBulkVideoTitles)}
                     style={{
-                      background: 'transparent',
-                      border: '1px solid var(--border-color)',
+                      background: 'none',
+                      border: 'none',
                       padding: '6px 12px',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '13px',
-                      color: 'var(--text-color)',
-                      width: '100%',
-                      textAlign: 'left'
+                      fontSize: '14px'
                     }}
                   >
-                    {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加（{videoTitleType === 'exact' ? '完全一致' : '部分一致'}）
+                    {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加
                   </button>
                   {showBulkVideoTitles && (
                     <div style={{ marginTop: '12px' }}>
                       <textarea
                         value={bulkVideoTitles}
                         onChange={(e) => setBulkVideoTitles(e.target.value)}
-                        placeholder={`動画タイトルを改行区切りで入力\n例:\nアニメ総集編\nMAD動画\n歌ってみた`}
+                        placeholder={`動画タイトル（${videoTitleType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力&#10;例:&#10;アニメ総集編&#10;MAD動画&#10;歌ってみた`}
                         style={{
                           width: '100%',
                           height: '120px',
                           padding: '8px',
                           border: '1px solid var(--border-color)',
                           borderRadius: '4px',
-                          fontSize: '13px',
-                          fontFamily: 'inherit',
+                          backgroundColor: 'var(--bg-secondary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '14px',
+                          fontFamily: 'monospace',
                           resize: 'vertical'
                         }}
                       />
@@ -725,8 +724,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     <button
                       onClick={() => setShowBulkAuthorIds(!showBulkAuthorIds)}
                       style={{
-                        background: 'var(--primary-color)',
-                        color: 'white',
+                        background: 'none',
                         border: 'none',
                         padding: '6px 12px',
                         borderRadius: '4px',
@@ -829,33 +827,32 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     <button
                       onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
                       style={{
-                        background: 'transparent',
-                        border: '1px solid var(--border-color)',
+                        background: 'none',
+                        border: 'none',
                         padding: '6px 12px',
                         borderRadius: '4px',
                         cursor: 'pointer',
-                        fontSize: '13px',
-                        color: 'var(--text-color)',
-                        width: '100%',
-                        textAlign: 'left'
+                        fontSize: '14px'
                       }}
                     >
-                      {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加（{authorNameType === 'exact' ? '完全一致' : '部分一致'}）
+                      {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加
                     </button>
                     {showBulkAuthorNames && (
                       <div style={{ marginTop: '12px' }}>
                         <textarea
                           value={bulkAuthorNames}
                           onChange={(e) => setBulkAuthorNames(e.target.value)}
-                          placeholder={`投稿者名を改行区切りで入力\n例:\nテスト投稿者\nサンプルユーザー\n投稿者A`}
+                          placeholder={`投稿者名（${authorNameType === 'exact' ? '完全一致' : '部分一致'}）を改行区切りで入力&#10;例:&#10;テスト投稿者&#10;サンプルユーザー&#10;投稿者A`}
                           style={{
                             width: '100%',
                             height: '120px',
                             padding: '8px',
                             border: '1px solid var(--border-color)',
                             borderRadius: '4px',
-                            fontSize: '13px',
-                            fontFamily: 'inherit',
+                            backgroundColor: 'var(--bg-secondary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px',
+                            fontFamily: 'monospace',
                             resize: 'vertical'
                           }}
                         />
@@ -900,15 +897,12 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       <button
                         onClick={() => setShowBulkTags(!showBulkTags)}
                         style={{
-                          background: 'transparent',
-                          border: '1px solid var(--border-color)',
+                          background: 'none',
+                          border: 'none',
                           padding: '6px 12px',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          fontSize: '13px',
-                          color: 'var(--text-color)',
-                          width: '100%',
-                          textAlign: 'left'
+                          fontSize: '14px'
                         }}
                       >
                         {showBulkTags ? '▼' : '▶'} 複数タグを一括追加
@@ -934,9 +928,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                                 cursor: 'pointer'
                               }}
                             >
-                              <option value="locked">🔒 大百科タグ（公式タグ）</option>
-                              <option value="user">👤 ユーザータグ</option>
-                              <option value="both">🌐 両方（大百科・ユーザー問わず）</option>
+                              <option value="locked">🔒 ロックタグ（大百科タグ）</option>
+                              <option value="user">🔖 ユーザータグ</option>
+                              <option value="both">🏷️ 両方（ロック・ユーザー問わず）</option>
                             </select>
                           </div>
 
@@ -980,7 +974,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           }}>
                             現在の設定:
                             <strong style={{ color: 'var(--text-color)' }}>
-                              {bulkTagType === 'locked' ? '大百科タグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'}
+                              {bulkTagType === 'locked' ? 'ロックタグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'}
                             </strong>
                             の
                             <strong style={{ color: 'var(--text-color)' }}>
@@ -993,15 +987,17 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                           <textarea
                             value={bulkTags}
                             onChange={(e) => setBulkTags(e.target.value)}
-                            placeholder={`タグを改行区切りで入力\n例:\nゲーム実況\nVOCALOID\n東方\nアニメ`}
+                            placeholder="タグを改行区切りで入力&#10;例:&#10;ゲーム実況&#10;VOCALOID&#10;東方&#10;アニメ"
                             style={{
                               width: '100%',
                               height: '120px',
                               padding: '8px',
                               border: '1px solid var(--border-color)',
                               borderRadius: '4px',
-                              fontSize: '13px',
-                              fontFamily: 'inherit',
+                              backgroundColor: 'var(--bg-secondary)',
+                              color: 'var(--text-primary)',
+                              fontSize: '14px',
+                              fontFamily: 'monospace',
                               resize: 'vertical'
                             }}
                           />
