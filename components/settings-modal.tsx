@@ -28,6 +28,12 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const [inputAuthorName, setInputAuthorName] = useState('')
   const [authorNameType, setAuthorNameType] = useState<'exact' | 'partial'>('exact')
 
+  // 一括追加用のstate
+  const [bulkVideoIds, setBulkVideoIds] = useState('')
+  const [bulkAuthorIds, setBulkAuthorIds] = useState('')
+  const [showBulkVideoIds, setShowBulkVideoIds] = useState(false)
+  const [showBulkAuthorIds, setShowBulkAuthorIds] = useState(false)
+
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   
   // 一時的なNGリストの状態
@@ -163,7 +169,56 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       totalCount: prev.totalCount - 1
     }))
   }
-  
+
+  // 一括追加処理
+  const handleBulkAddVideoIds = () => {
+    const input = bulkVideoIds.trim()
+    if (!input) return
+
+    const newIds = input
+      .split(/[\r\n]+/)
+      .map(id => id.trim())
+      .filter(id => id !== '')
+      .filter(id => !tempNGList.videoIds.includes(id))
+
+    if (newIds.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        videoIds: [...prev.videoIds, ...newIds],
+        totalCount: prev.totalCount + newIds.length
+      }))
+      setBulkVideoIds('')
+      setShowBulkVideoIds(false)
+      alert(`${newIds.length}件の動画IDを追加しました`)
+    } else {
+      alert('追加する新しいIDがありません（すべて重複しています）')
+    }
+  }
+
+  const handleBulkAddAuthorIds = () => {
+    const input = bulkAuthorIds.trim()
+    if (!input) return
+
+    const newIds = input
+      .split(/[\r\n]+/)
+      .map(id => id.trim())
+      .filter(id => id !== '')
+      .filter(id => !tempNGList.authorIds.includes(id))
+
+    if (newIds.length > 0) {
+      setTempNGList(prev => ({
+        ...prev,
+        authorIds: [...prev.authorIds, ...newIds],
+        totalCount: prev.totalCount + newIds.length
+      }))
+      setBulkAuthorIds('')
+      setShowBulkAuthorIds(false)
+      alert(`${newIds.length}件の投稿者IDを追加しました`)
+    } else {
+      alert('追加する新しいIDがありません（すべて重複しています）')
+    }
+  }
+
   // 適用処理
   const handleApply = () => {
     if (activeTab === 'nglist') {
@@ -352,6 +407,62 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   />
                   <button onClick={handleAddVideoId}>追加</button>
                 </div>
+
+                {/* 一括追加セクション */}
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={() => setShowBulkVideoIds(!showBulkVideoIds)}
+                    style={{
+                      background: 'var(--primary-color)',
+                      color: 'white',
+                      border: 'none',
+                      padding: '6px 12px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    {showBulkVideoIds ? '▼' : '▶'} 複数IDを一括追加
+                  </button>
+
+                  {showBulkVideoIds && (
+                    <div style={{ marginTop: '12px' }}>
+                      <textarea
+                        value={bulkVideoIds}
+                        onChange={(e) => setBulkVideoIds(e.target.value)}
+                        placeholder="複数の動画IDを改行区切りで入力&#10;例:&#10;sm12345678&#10;sm87654321&#10;sm11111111"
+                        style={{
+                          width: '100%',
+                          height: '120px',
+                          padding: '8px',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '4px',
+                          backgroundColor: 'var(--bg-secondary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '14px',
+                          fontFamily: 'monospace',
+                          resize: 'vertical'
+                        }}
+                      />
+                      <button
+                        onClick={handleBulkAddVideoIds}
+                        style={{
+                          marginTop: '8px',
+                          padding: '8px 16px',
+                          background: 'var(--primary-color)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        一括追加
+                      </button>
+                    </div>
+                  )}
+                </div>
               </section>
 
               {/* 動画タイトル */}
@@ -425,6 +536,62 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       placeholder="投稿者ID"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
+                  </div>
+
+                  {/* 投稿者ID一括追加セクション */}
+                  <div style={{ marginTop: '12px' }}>
+                    <button
+                      onClick={() => setShowBulkAuthorIds(!showBulkAuthorIds)}
+                      style={{
+                        background: 'var(--primary-color)',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
+                      }}
+                    >
+                      {showBulkAuthorIds ? '▼' : '▶'} 複数IDを一括追加
+                    </button>
+
+                    {showBulkAuthorIds && (
+                      <div style={{ marginTop: '12px' }}>
+                        <textarea
+                          value={bulkAuthorIds}
+                          onChange={(e) => setBulkAuthorIds(e.target.value)}
+                          placeholder="複数の投稿者IDを改行区切りで入力&#10;例:&#10;user123&#10;user456&#10;user789"
+                          style={{
+                            width: '100%',
+                            height: '120px',
+                            padding: '8px',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: '4px',
+                            backgroundColor: 'var(--bg-secondary)',
+                            color: 'var(--text-primary)',
+                            fontSize: '14px',
+                            fontFamily: 'monospace',
+                            resize: 'vertical'
+                          }}
+                        />
+                        <button
+                          onClick={handleBulkAddAuthorIds}
+                          style={{
+                            marginTop: '8px',
+                            padding: '8px 16px',
+                            background: 'var(--primary-color)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          一括追加
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
