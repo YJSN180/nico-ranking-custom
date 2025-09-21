@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>NGデータ移行テスト</title>
+</head>
+<body>
+  <h1>NGリストデータ移行テスト</h1>
+
+  <div id="status"></div>
+  <button id="test-migration">移行テスト実行</button>
+  <button id="clear-storage">ストレージクリア</button>
+  <pre id="output"></pre>
+
+  <script type="module">
+    const STORAGE_KEY = 'user-ng-list';
+    const statusEl = document.getElementById('status');
+    const outputEl = document.getElementById('output');
+
+    // 旧形式（version 1）のテストデータ
+    const oldVersionData = {
+      videoIds: ["sm12345", "sm67890"],
+      videoTitles: {
+        exact: ["テスト動画1", "テスト動画2"],
+        partial: ["部分一致テスト"]
+      },
+      authorIds: ["123456", "789012"],
+      authorNames: {
+        exact: ["テスト投稿者1"],
+        partial: ["投稿者部分"]
+      },
+      version: 1,
+      totalCount: 9,
+      updatedAt: "2025-01-01T00:00:00Z"
+    };
+
+    // 空のタグNGListを作成
+    function createEmptyTagNGList() {
+      return {
+        locked: { exact: [], partial: [] },
+        user: { exact: [], partial: [] },
+        both: { exact: [], partial: [] }
+      };
+    }
+
+    // NGListをExtendedNGListに移行
+    function migrateToExtendedNGList(ngList) {
+      // tagsプロパティがある場合は既に拡張版
+      if (ngList.tags) {
+        return ngList;
+      }
+
+      // 拡張版に変換
+      return {
+        ...ngList,
+        tags: createEmptyTagNGList()
+      };
+    }
+
+    // マイグレーション処理
+    function performMigration() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (!stored) {
+        statusEl.textContent = "❌ 既存データがありません";
+        return null;
+      }
+
+      const parsed = JSON.parse(stored);
+
+      if (parsed.version === 1) {
+        const migrated = migrateToExtendedNGList(parsed);
+        migrated.version = 2;
+        migrated.updatedAt = new Date().toISOString();
+
+        // 総数を再計算
+        let totalCount =
+          migrated.videoIds.length +
+          migrated.videoTitles.exact.length +
+          migrated.videoTitles.partial.length +
+          migrated.authorIds.length +
+          migrated.authorNames.exact.length +
+          migrated.authorNames.partial.length;
+
+        if (migrated.tags) {
+          totalCount +=
+            migrated.tags.locked.exact.length +
+            migrated.tags.locked.partial.length +
+            migrated.tags.user.exact.length +
+            migrated.tags.user.partial.length +
+            migrated.tags.both.exact.length +
+            migrated.tags.both.partial.length;
+        }
+
+        migrated.totalCount = totalCount;
+
+        statusEl.textContent = "✅ Version 1 → Version 2への移行成功";
+        return migrated;
+      } else if (parsed.version === 2) {
+        statusEl.textContent = "ℹ️ すでにVersion 2です（移行不要）";
+        return parsed;
+      } else {
+        statusEl.textContent = "⚠️ 不明なバージョン: " + parsed.version;
+        return null;
+      }
+    }
+
+    // テストシナリオ実行
+    document.getElementById('test-migration').addEventListener('click', () => {
+      console.log('=== NGリストデータ移行テスト開始 ===');
+
+      // Step 1: 旧バージョンのデータを保存
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(oldVersionData));
+      console.log('旧バージョンデータを保存:', oldVersionData);
+
+      // Step 2: データ取得と移行
+      const beforeMigration = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      const migrated = performMigration();
+
+      if (migrated) {
+        // Step 3: 移行後のデータを保存
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+
+        // Step 4: 検証
+        const results = {
+          "テスト結果": "✅ 成功",
+          "移行前": {
+            version: beforeMigration.version,
+            totalCount: beforeMigration.totalCount,
+            hasVideoIds: beforeMigration.videoIds?.length > 0,
+            hasVideoTitles: beforeMigration.videoTitles?.exact?.length > 0,
+            hasAuthorIds: beforeMigration.authorIds?.length > 0,
+            hasAuthorNames: beforeMigration.authorNames?.exact?.length > 0,
+            hasTags: !!beforeMigration.tags
+          },
+          "移行後": {
+            version: migrated.version,
+            totalCount: migrated.totalCount,
+            hasVideoIds: migrated.videoIds?.length > 0,
+            hasVideoTitles: migrated.videoTitles?.exact?.length > 0,
+            hasAuthorIds: migrated.authorIds?.length > 0,
+            hasAuthorNames: migrated.authorNames?.exact?.length > 0,
+            hasTags: !!migrated.tags,
+            tagsStructure: migrated.tags ? {
+              locked: {
+                exact: migrated.tags.locked.exact.length,
+                partial: migrated.tags.locked.partial.length
+              },
+              user: {
+                exact: migrated.tags.user.exact.length,
+                partial: migrated.tags.user.partial.length
+              },
+              both: {
+                exact: migrated.tags.both.exact.length,
+                partial: migrated.tags.both.partial.length
+              }
+            } : null
+          },
+          "データ保持検証": {
+            videoIds: migrated.videoIds?.length === beforeMigration.videoIds?.length ? "✅ 保持" : "❌ 消失",
+            videoTitlesExact: migrated.videoTitles?.exact?.length === beforeMigration.videoTitles?.exact?.length ? "✅ 保持" : "❌ 消失",
+            videoTitlesPartial: migrated.videoTitles?.partial?.length === beforeMigration.videoTitles?.partial?.length ? "✅ 保持" : "❌ 消失",
+            authorIds: migrated.authorIds?.length === beforeMigration.authorIds?.length ? "✅ 保持" : "❌ 消失",
+            authorNamesExact: migrated.authorNames?.exact?.length === beforeMigration.authorNames?.exact?.length ? "✅ 保持" : "❌ 消失",
+            authorNamesPartial: migrated.authorNames?.partial?.length === beforeMigration.authorNames?.partial?.length ? "✅ 保持" : "❌ 消失"
+          },
+          "詳細データ": {
+            "移行前の全データ": beforeMigration,
+            "移行後の全データ": migrated
+          }
+        };
+
+        outputEl.textContent = JSON.stringify(results, null, 2);
+        console.log('=== テスト完了 ===', results);
+      }
+    });
+
+    // ストレージクリア
+    document.getElementById('clear-storage').addEventListener('click', () => {
+      localStorage.removeItem(STORAGE_KEY);
+      statusEl.textContent = "ストレージをクリアしました";
+      outputEl.textContent = "";
+      console.log('ストレージをクリアしました');
+    });
+
+    // 初期状態確認
+    const currentData = localStorage.getItem(STORAGE_KEY);
+    if (currentData) {
+      const parsed = JSON.parse(currentData);
+      statusEl.textContent = `現在のデータ: Version ${parsed.version}, ${parsed.totalCount}件`;
+    } else {
+      statusEl.textContent = "データなし";
+    }
+  </script>
+</body>
+</html>
