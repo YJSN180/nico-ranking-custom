@@ -52,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: 'https://gokulin.info/search/', label: 'ニコニコ超検索', icon: <ExternalLinkIcon />, external: true, section: 'external' },
 
   // 情報セクション
+  { href: 'https://www.nicovideo.jp/watch/sm45425793', label: '使い方（動画）', icon: <GuideIcon />, external: true, section: 'info' },
   { href: '/about', label: 'このサイトについて', icon: <InfoIcon />, section: 'info' },
   { href: '/contact', label: 'お問い合わせ', icon: <MailIcon />, section: 'info' },
   { href: '/privacy', label: 'プライバシーポリシー', icon: <ShieldIcon />, section: 'info' },
