@@ -374,11 +374,11 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 {item.authorIcon && (
                   <OptimizedImage
                     src={item.authorIcon}
-                    alt={item.authorName || ''}
+                    alt=""
                     width={18}
                     height={18}
                     sizes="18px"
-                    style={{ 
+                    style={{
                       borderRadius: '50%',
                       border: '1px solid var(--border-color)',
                       flexShrink: 0
