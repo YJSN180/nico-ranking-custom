@@ -87,16 +87,21 @@ async function getPopularTagsFromKV(
   try {
     // For 'all' genre, aggregate from multiple genres
     if (genre === 'all') {
-      const genres = ['game', 'anime', 'entertainment', 'technology', 'voicesynthesis', 'other']
+      const genres = ['game', 'anime', 'entertainment', 'technology', 'voicesynthesis', 'vocaloid', 'music']
       const tagCountMap = new Map<string, number>()
+
+      console.log(`Aggregating tags for 'all' from genres: ${genres.join(', ')}`)
 
       for (const g of genres) {
         const result = await getGenreTagsFromKV(env, g, period)
         if (result && result.tags) {
+          console.log(`  Got ${result.tags.length} tags from ${g}`)
           result.tags.forEach((tag, index) => {
             const score = result.tags.length - index
             tagCountMap.set(tag, (tagCountMap.get(tag) || 0) + score)
           })
+        } else {
+          console.log(`  No tags from ${g}`)
         }
       }
 
@@ -105,6 +110,7 @@ async function getPopularTagsFromKV(
         .slice(0, 15)
         .map(([tag]) => tag)
 
+      console.log(`Aggregated ${sortedTags.length} tags for 'all'`)
       return { tags: sortedTags, source: 'kv' }
     }
 
@@ -130,18 +136,47 @@ async function getGenreTagsFromKV(
   const keyName = RANKING_GROUP_KEYS[groupId]
 
   try {
-    const dataStr = await env.RANKING_DATA.get(keyName, 'text')
-    if (!dataStr) {
+    // First try to get as arrayBuffer to check if compressed
+    const dataBuffer = await env.RANKING_DATA.get(keyName, 'arrayBuffer')
+    if (!dataBuffer) {
+      console.log(`No data found for ${keyName}`)
       return null
     }
 
-    const data: KVRankingData = JSON.parse(dataStr)
+    let data: KVRankingData
+
+    // Check if data is gzipped (starts with 0x1f 0x8b)
+    const view = new Uint8Array(dataBuffer)
+    if (view.length >= 2 && view[0] === 0x1f && view[1] === 0x8b) {
+      // Data is gzipped, use DecompressionStream
+      try {
+        const stream = new Response(dataBuffer).body
+        if (!stream) throw new Error('No stream')
+
+        const decompressedStream = stream.pipeThrough(new DecompressionStream('gzip'))
+        const decompressedResponse = new Response(decompressedStream)
+        const text = await decompressedResponse.text()
+        data = JSON.parse(text)
+      } catch (e) {
+        console.error(`Failed to decompress gzipped data for ${keyName}:`, e)
+        // Try as plain text as fallback
+        const text = new TextDecoder().decode(dataBuffer)
+        data = JSON.parse(text)
+      }
+    } else {
+      // Not gzipped, parse as text
+      const text = new TextDecoder().decode(dataBuffer)
+      data = JSON.parse(text)
+    }
+
     const genreData = data.genres?.[genre]?.[period]
 
     if (genreData?.popularTags && genreData.popularTags.length > 0) {
+      console.log(`Found ${genreData.popularTags.length} popular tags for ${genre}/${period}`)
       return { tags: genreData.popularTags, source: 'kv' }
     }
 
+    console.log(`No popular tags found for ${genre}/${period} in ${keyName}`)
     return null
   } catch (error) {
     console.error(`Error reading ${keyName}:`, error)
@@ -150,8 +185,18 @@ async function getGenreTagsFromKV(
 }
 
 function generateETag(data: any): string {
-  const hash = btoa(JSON.stringify(data)).slice(0, 16)
-  return `W/"${hash}"`
+  // Use TextEncoder to handle Unicode characters properly
+  const encoder = new TextEncoder()
+  const dataBytes = encoder.encode(JSON.stringify(data))
+
+  // Simple hash function for ETag
+  let hash = 0
+  for (let i = 0; i < dataBytes.length; i++) {
+    hash = ((hash << 5) - hash) + dataBytes[i]
+    hash = hash & hash // Convert to 32-bit integer
+  }
+
+  return `W/"${Math.abs(hash).toString(16)}"`
 }
 
 function isAllowedOrigin(origin: string | null): boolean {
@@ -210,63 +255,81 @@ export default {
 
     // Handle popular-tags endpoint
     if (url.pathname === '/api/popular-tags') {
-      console.log('[Green Worker] Handling popular-tags endpoint')
+      try {
+        console.log('[Green Worker] Handling popular-tags endpoint')
 
-      // Parse query parameters
-      const genre = url.searchParams.get('genre') || 'all'
-      const period = (url.searchParams.get('period') || '24h') as '24h' | 'hour'
-      const page = parseInt(url.searchParams.get('page') || '1', 10)
-      const limit = parseInt(url.searchParams.get('limit') || '50', 10)
+        // Parse query parameters
+        const genre = url.searchParams.get('genre') || 'all'
+        const period = (url.searchParams.get('period') || '24h') as '24h' | 'hour'
+        const page = parseInt(url.searchParams.get('page') || '1', 10)
+        const limit = parseInt(url.searchParams.get('limit') || '50', 10)
 
-      // Get tags from KV or fallback
-      const result = await getPopularTagsFromKV(env, genre, period) || {
-        tags: [],
-        source: 'fallback' as const
-      }
+        console.log(`Request: genre=${genre}, period=${period}, page=${page}, limit=${limit}`)
 
-      // Apply pagination
-      const start = (page - 1) * limit
-      const paginatedTags = result.tags.slice(start, start + limit)
+        // Get tags from KV or fallback
+        const result = await getPopularTagsFromKV(env, genre, period) || {
+          tags: [],
+          source: 'fallback' as const
+        }
 
-      // Prepare response data
-      const responseData = {
-        tags: paginatedTags,
-        total: result.tags.length,
-        page,
-        limit,
-        genre,
-        period
-      }
+        console.log(`Got ${result.tags.length} tags from source: ${result.source}`)
 
-      // Generate ETag
-      const etag = generateETag(responseData)
+        // Apply pagination
+        const start = (page - 1) * limit
+        const paginatedTags = result.tags.slice(start, start + limit)
 
-      // Check If-None-Match header
-      const ifNoneMatch = request.headers.get('if-none-match')
-      if (ifNoneMatch === etag) {
-        return new Response(null, {
-          status: 304,
+        // Prepare response data
+        const responseData = {
+          tags: paginatedTags,
+          total: result.tags.length,
+          page,
+          limit,
+          genre,
+          period
+        }
+
+        // Generate ETag
+        const etag = generateETag(responseData)
+
+        // Check If-None-Match header
+        const ifNoneMatch = request.headers.get('if-none-match')
+        if (ifNoneMatch === etag) {
+          return new Response(null, {
+            status: 304,
+            headers: {
+              ...createSecureCORSHeaders(origin),
+              'etag': etag,
+              'cache-control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
+              'X-Worker-Version': 'green-with-popular-tags'
+            }
+          })
+        }
+
+        // Return JSON response
+        return new Response(JSON.stringify(responseData), {
+          status: 200,
           headers: {
             ...createSecureCORSHeaders(origin),
-            'etag': etag,
+            'content-type': 'application/json',
             'cache-control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
+            'etag': etag,
+            'x-data-source': result.source,
             'X-Worker-Version': 'green-with-popular-tags'
           }
         })
+      } catch (error) {
+        console.error('Error in popular-tags endpoint:', error)
+        return new Response(JSON.stringify({
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        }), {
+          status: 500,
+          headers: {
+            ...createSecureCORSHeaders(origin),
+            'content-type': 'application/json'
+          }
+        })
       }
-
-      // Return JSON response
-      return new Response(JSON.stringify(responseData), {
-        status: 200,
-        headers: {
-          ...createSecureCORSHeaders(origin),
-          'content-type': 'application/json',
-          'cache-control': 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400',
-          'etag': etag,
-          'x-data-source': result.source,
-          'X-Worker-Version': 'green-with-popular-tags'
-        }
-      })
     }
 
     // For all other requests, delegate to the original Green Worker
