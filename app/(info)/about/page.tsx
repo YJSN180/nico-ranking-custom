@@ -68,7 +68,6 @@ export default function AboutPage() {
           lineHeight: '1.8',
         }}>
           <li>このサイトの詳しい使い方については、こちらの動画をご覧ください：<a href="https://www.nicovideo.jp/watch/sm45425793" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>使い方説明動画</a></li>
-          <li>基本的な操作方法から詳細な機能の使い方まで分かりやすく説明しています。</li>
         </ul>
       </section>
 
