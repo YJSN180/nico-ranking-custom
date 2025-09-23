@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit')
     const offset = searchParams.get('offset')
 
-    let responseData = { tags, genre, period }
+    let responseData: any = { tags, genre, period }
 
     if (limit || offset) {
       const paginatedResult = paginate(tags, {
