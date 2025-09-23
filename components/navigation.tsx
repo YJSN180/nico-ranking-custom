@@ -49,7 +49,8 @@ const NAV_ITEMS: NavItem[] = [
   },
   { href: 'https://www.nicochart.jp', label: 'ニコニコチャート', icon: <ExternalLinkIcon />, external: true, section: 'external' },
   { href: 'https://www.nicolog.jp', label: 'ニコログ', icon: <ExternalLinkIcon />, external: true, section: 'external' },
-  
+  { href: 'https://gokulin.info/search/', label: 'ニコニコ超検索', icon: <ExternalLinkIcon />, external: true, section: 'external' },
+
   // 情報セクション
   { href: '/about', label: 'このサイトについて', icon: <InfoIcon />, section: 'info' },
   { href: '/contact', label: 'お問い合わせ', icon: <MailIcon />, section: 'info' },
