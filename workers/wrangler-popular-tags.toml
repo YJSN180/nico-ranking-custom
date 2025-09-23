@@ -2,7 +2,7 @@
 # Migrated from Vercel Functions to reduce costs
 
 name = "nico-ranking-popular-tags-api"
-main = "workers/popular-tags-api.ts"
+main = "popular-tags-api.ts"
 compatibility_date = "2025-06-24"
 
 # Workers configuration
@@ -28,10 +28,18 @@ WORKER_ENV = "production"
 name = "nico-ranking-popular-tags-dev"
 vars = { WORKER_ENV = "development" }
 
+[[env.dev.kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
 # Staging environment
 [env.staging]
 name = "nico-ranking-popular-tags-staging"
 vars = { WORKER_ENV = "staging" }
+
+[[env.staging.kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
 # Enable smart placement for optimal performance
 [placement]
@@ -48,7 +56,6 @@ cpu_ms = 50
 # Build configuration
 [build]
 command = ""
-watch_paths = ["workers/popular-tags-api.ts"]
 
 # Observability
 [observability]
