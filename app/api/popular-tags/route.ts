@@ -3,6 +3,8 @@ import { getPopularTags } from '@/lib/popular-tags'
 import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { getCacheHeaders } from '@/lib/cache-durations'
 
+export const runtime = 'edge'
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const genre = searchParams.get('genre') as RankingGenre || 'all'
