@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 /**
  * サムネイル画像プロキシAPI
  * CORSを回避してニコニコ動画のサムネイルをダウンロード可能にする

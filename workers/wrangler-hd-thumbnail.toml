@@ -1,0 +1,27 @@
+# HD Thumbnail Worker Configuration
+name = "nico-ranking-hd-thumbnail"
+main = "hd-thumbnail.ts"
+compatibility_date = "2025-06-24"
+workers_dev = true
+
+# Environment
+[env.production]
+name = "nico-ranking-hd-thumbnail"
+vars = { ENVIRONMENT = "production" }
+
+# R2 Bucket binding (for caching HD images)
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# Routes (production)
+[[routes]]
+pattern = "nico-rank.com/api/hd-thumbnail/*"
+zone_name = "nico-rank.com"
+
+# Performance settings
+[limits]
+cpu_ms = 50
+
+[placement]
+mode = "smart"

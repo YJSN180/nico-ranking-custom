@@ -1,62 +1,15 @@
 #!/bin/bash
-# Green Worker 20250705 デプロイスクリプト
-# Smart Router用動的TTL対応Worker
+# Deploy Green Worker with popular tags
 
-set -e
+set -a
+source .env.local
+set +a
 
-echo "🚀 Green Worker 20250705 デプロイ開始..."
+cd workers
 
-# 設定確認
-CONFIG_FILE="wrangler-green-20250705.toml"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "❌ エラー: $CONFIG_FILE が見つかりません"
-    exit 1
-fi
+echo "🚀 Deploying Green Worker with popular tags support..."
+wrangler deploy api-gateway-green-with-popular-tags.ts \
+  --name nico-ranking-api-gateway-green \
+  --compatibility-date 2025-06-24
 
-echo "📁 設定ファイル: $CONFIG_FILE"
-echo "🔧 Worker: nico-ranking-green-20250705"
-
-# WORKER_AUTH_KEY Secretの確認
-echo ""
-echo "🔐 セキュリティチェック..."
-read -p "WORKER_AUTH_KEYをCloudflare Secretsに設定済みですか? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo ""
-    echo "⚠️  WORKER_AUTH_KEYの設定が必要です："
-    echo "wrangler secret put WORKER_AUTH_KEY -c $CONFIG_FILE"
-    echo ""
-    read -p "今すぐ設定しますか? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "現在のキー: c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
-        wrangler secret put WORKER_AUTH_KEY -c "$CONFIG_FILE"
-    else
-        echo "❌ セキュリティ設定が未完了のため、デプロイを中止します"
-        exit 1
-    fi
-fi
-
-# デプロイ実行
-echo ""
-echo "🚀 Green Workerをデプロイ中..."
-wrangler deploy -c "$CONFIG_FILE"
-
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Green Worker デプロイ完了！"
-    echo ""
-    echo "🔍 動作確認:"
-    echo "curl -I https://nico-ranking-green-20250705.example.workers.dev/api/debug"
-    echo ""
-    echo "🔄 Smart Router切り替え（テスト用）:"
-    echo "wrangler kv:key put --binding=MAINTENANCE_FLAGS \"active_worker\" \"green\""
-    echo ""
-    echo "🔙 ロールバック（緊急時）:"
-    echo "wrangler kv:key put --binding=MAINTENANCE_FLAGS \"active_worker\" \"blue\""
-    echo ""
-    echo "📊 詳細な手順: DEPLOY_GREEN_20250705.md を参照"
-else
-    echo "❌ デプロイに失敗しました"
-    exit 1
-fi
+echo "✅ Deployment complete!"

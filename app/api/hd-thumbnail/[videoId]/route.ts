@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+export const runtime = 'edge'
+
 /**
  * HD サムネイル取得API (1280x720)
  * nicovideo.gay からのog:image取得によるテスト実装
