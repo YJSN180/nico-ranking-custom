@@ -1,6 +1,6 @@
 # Tag Autocomplete Worker Configuration
 name = "nico-ranking-tag-autocomplete"
-main = "tag-autocomplete.ts"
+main = "tag-autocomplete-simplified.ts"
 compatibility_date = "2025-06-24"
 workers_dev = true
 
@@ -9,14 +9,19 @@ workers_dev = true
 name = "nico-ranking-tag-autocomplete"
 vars = { ENVIRONMENT = "production" }
 
-# KV Namespaces for tag data
+# KV Namespaces - use existing NICO_RANKING namespace
 [[kv_namespaces]]
-binding = "TAG_INDEX"
-id = "409d414b309e49a9b9b36b3f08a428d9"
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 
-[[kv_namespaces]]
-binding = "TAG_DATA"
-id = "4192117779df49ba8550a961e12dfd81"
+# Optional: Separate tag index (currently unused)
+#[[kv_namespaces]]
+#binding = "TAG_INDEX"
+#id = "409d414b309e49a9b9b36b3f08a428d9"
+
+#[[kv_namespaces]]
+#binding = "TAG_DATA"
+#id = "4192117779df49ba8550a961e12dfd81"
 
 # Routes (production)
 [[routes]]
