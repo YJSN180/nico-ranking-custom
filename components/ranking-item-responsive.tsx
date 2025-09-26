@@ -39,6 +39,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   
   // PWA環境での訪問済み状態を管理
   const [isVisited, setIsVisited] = useState(false)
+  // ZenzaWatch統合用のホバー状態
+  const [showZenButton, setShowZenButton] = useState(false)
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // 初回マウント時に訪問済みかチェック
   useEffect(() => {
@@ -63,7 +66,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   // 動画クリック時に動画ページを開く
   const handleVideoClick = () => {
     if (disabled) return
-    
+
     // PWA環境での訪問済みリンク履歴を手動で記録
     try {
       const visitedKey = 'visited-videos'
@@ -80,10 +83,69 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     } catch {
       // localStorage エラーは無視
     }
-    
+
     // 新しいタブで開く
     window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank', 'noopener,noreferrer')
   }
+
+  // ZenzaWatch統合: location.hashを使った動画再生
+  const handleZenzaWatchOpen = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // ZenzaWatch用のパラメータを準備
+    const zenzaParams = {
+      videoId: item.id,
+      title: item.title,
+      query: '' // 必要に応じてクエリパラメータを追加
+    }
+
+    // JSON文字列にエンコード
+    const hashData = encodeURIComponent(JSON.stringify(zenzaParams))
+
+    // ext.nicovideo.jpにlocation.hashで遷移
+    // ZenzaWatchがインストールされていれば、自動的にプレイヤーが開く
+    window.open(
+      `https://ext.nicovideo.jp/#ZenzaWatch:${hashData}`,
+      '_blank',
+      'noopener,noreferrer'
+    )
+
+    // ホバーボタンを非表示
+    setShowZenButton(false)
+  }
+
+  // サムネイルホバー時の処理
+  const handleThumbnailMouseEnter = () => {
+    if (disabled || 'ontouchstart' in window) return
+
+    // 500ms後に「Zen」ボタンを表示
+    hoverTimerRef.current = setTimeout(() => {
+      setShowZenButton(true)
+    }, 500)
+  }
+
+  // サムネイルホバー解除時の処理
+  const handleThumbnailMouseLeave = () => {
+    // タイマーをクリア
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+    // ボタンを非表示（少し遅延を持たせる）
+    setTimeout(() => {
+      setShowZenButton(false)
+    }, 300)
+  }
+
+  // クリーンアップ
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current)
+      }
+    }
+  }, [])
 
   // NG追加処理
   const handleNGAdded = (type: NGType, value: string | string[]) => {
@@ -185,7 +247,12 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               {item.rank}
             </div>
             {/* サムネイル画像のwrapper */}
-            <div className="ranking-item-responsive__thumbnail-wrapper" style={{ position: 'relative' }}>
+            <div
+              className="ranking-item-responsive__thumbnail-wrapper"
+              style={{ position: 'relative' }}
+              onMouseEnter={handleThumbnailMouseEnter}
+              onMouseLeave={handleThumbnailMouseLeave}
+            >
             <a
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               target={getLinkTarget()}
@@ -243,6 +310,41 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               <div className="ranking-item-responsive__duration">
                 {formatDuration(item.duration)}
               </div>
+            )}
+            {/* ZenzaWatch統合ボタン */}
+            {showZenButton && (
+              <button
+                onClick={handleZenzaWatchOpen}
+                onMouseEnter={(e) => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  padding: '4px 8px',
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  color: 'white',
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  zIndex: 10,
+                  backdropFilter: 'blur(2px)',
+                  animation: 'zenFadeIn 0.2s ease-out'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.9)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)'
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)'
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)'
+                }}
+                title="ZenzaWatchで開く"
+              >
+                Zen
+              </button>
             )}
             </div>
             
