@@ -1,6 +1,6 @@
 'use client'
 
-import { memo, useRef, useEffect, useState } from 'react'
+import { memo, useRef, useEffect, useState, useCallback } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
 import { QuickNGButton } from './quick-ng-button'
@@ -39,6 +39,10 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   
   // PWA環境での訪問済み状態を管理
   const [isVisited, setIsVisited] = useState(false)
+
+  // ZenzaWatch Zenポップアップ状態管理
+  const [showZenPopup, setShowZenPopup] = useState(false)
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   // 初回マウント時に訪問済みかチェック
   useEffect(() => {
@@ -59,11 +63,108 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
       element.style.backgroundColor = 'var(--surface-color)';
     }
   }
+
+  // ZenzaWatch Zenポップアップ表示処理
+  const handleZenHover = useCallback((e: React.MouseEvent) => {
+    // disabled状態またはタッチデバイスでは動作しない
+    if (disabled || 'ontouchstart' in window) return
+
+    // 既存のタイマーをクリア
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+    }
+
+    // 500ms後にポップアップ表示（ZenzaWatchと同じタイミング）
+    hoverTimerRef.current = setTimeout(() => {
+      setShowZenPopup(true)
+
+      // ZenzaWatchにホバー通知（オプション）
+      try {
+        const channel = new BroadcastChannel('ZenzaWatch')
+        channel.postMessage({
+          id: 'ZenzaWatch',
+          body: {
+            command: 'hover',
+            params: {
+              watchId: item.id,
+              eventType: 'hover'
+            }
+          }
+        })
+        channel.close()
+      } catch {
+        // フォールバック
+        try {
+          localStorage.setItem('ZenzaWatch_hover', JSON.stringify({
+            watchId: item.id,
+            timestamp: Date.now()
+          }))
+          setTimeout(() => {
+            try {
+              localStorage.removeItem('ZenzaWatch_hover')
+            } catch {}
+          }, 100)
+        } catch {}
+      }
+    }, 500)
+  }, [item.id, disabled])
+
+  const handleZenLeave = useCallback(() => {
+    // タイマーをクリア
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current)
+      hoverTimerRef.current = null
+    }
+
+    // ポップアップを非表示
+    setShowZenPopup(false)
+  }, [])
+
+  const handleZenPopupClick = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // ZenzaWatchに動画オープン通知
+    try {
+      const channel = new BroadcastChannel('ZenzaWatch')
+      channel.postMessage({
+        id: 'ZenzaWatch',
+        body: {
+          command: 'openVideo',
+          params: {
+            watchId: item.id,
+            eventType: 'zen-popup-click'
+          }
+        }
+      })
+      channel.close()
+    } catch {
+      // フォールバック
+      try {
+        localStorage.setItem('ZenzaWatch_message', JSON.stringify({
+          command: 'openVideo',
+          params: {
+            watchId: item.id,
+            url: `https://www.nicovideo.jp/watch/${item.id}`,
+            timestamp: Date.now()
+          }
+        }))
+        setTimeout(() => {
+          try {
+            localStorage.removeItem('ZenzaWatch_message')
+          } catch {}
+        }, 100)
+      } catch {}
+    }
+
+    // ポップアップを非表示
+    setShowZenPopup(false)
+  }, [item.id])
   
   // 動画クリック時に動画ページを開く
   const handleVideoClick = () => {
     if (disabled) return
-    
+
     // PWA環境での訪問済みリンク履歴を手動で記録
     try {
       const visitedKey = 'visited-videos'
@@ -80,9 +181,58 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     } catch {
       // localStorage エラーは無視
     }
-    
-    // 新しいタブで開く
-    window.open(`https://www.nicovideo.jp/watch/${item.id}`, '_blank', 'noopener,noreferrer')
+
+    const videoUrl = `https://www.nicovideo.jp/watch/${item.id}`
+
+    // ZenzaWatch連携: BroadcastChannel/localStorage経由で通知
+    // ZenzaWatchがインストールされている場合、これらの通知を検知して動画を開くことができる
+    if (typeof window !== 'undefined') {
+      // 1. BroadcastChannel経由（同一オリジン内での通信）
+      if (window.BroadcastChannel) {
+        try {
+          const channel = new BroadcastChannel('ZenzaWatch')
+          channel.postMessage({
+            id: 'ZenzaWatch',
+            body: {
+              command: 'openVideo',
+              params: {
+                watchId: item.id,
+                eventType: 'click'
+              }
+            }
+          })
+          channel.close()
+        } catch (e) {
+          // BroadcastChannelが利用できない環境では無視
+        }
+      }
+
+      // 2. localStorage経由（フォールバック）
+      // ZenzaWatchがlocalStorageの変更を監視している場合のための通知
+      try {
+        const message = {
+          command: 'openVideo',
+          params: {
+            watchId: item.id,
+            url: videoUrl,
+            timestamp: Date.now()
+          }
+        }
+        localStorage.setItem('ZenzaWatch_message', JSON.stringify(message))
+        // 100ms後に削除（一時的なメッセージとして扱う）
+        setTimeout(() => {
+          try {
+            localStorage.removeItem('ZenzaWatch_message')
+          } catch {}
+        }, 100)
+      } catch {
+        // localStorageが使えない環境では無視
+      }
+    }
+
+    // 通常の動作（新しいタブで開く）
+    // ZenzaWatchが処理しない場合のフォールバック
+    window.open(videoUrl, '_blank', 'noopener,noreferrer')
   }
 
   // NG追加処理
@@ -190,7 +340,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               href={`https://www.nicovideo.jp/watch/${item.id}`}
               target={getLinkTarget()}
               rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
-              style={{ display: 'block', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1 }}
+              style={{ display: 'block', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.6 : 1, position: 'relative' }}
+              onMouseEnter={handleZenHover}
+              onMouseLeave={handleZenLeave}
               onClick={(e) => {
                 e.stopPropagation()
                 if (disabled) {
@@ -237,6 +389,36 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 loading={item.rank <= 3 ? undefined : "lazy"}
                 priority={item.rank <= 3}
               />
+
+              {/* Zenポップアップ - サムネイル左上に固定表示 */}
+              {showZenPopup && (
+                <div
+                  className="zen-popup"
+                  onClick={handleZenPopupClick}
+                  style={{
+                    position: 'absolute',
+                    left: '8px',
+                    top: '8px',
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    color: '#fff',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    zIndex: 1000,
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 1px 4px rgba(0, 0, 0, 0.3)',
+                    userSelect: 'none',
+                    pointerEvents: 'auto',
+                    transition: 'opacity 0.2s',
+                    animation: 'zenFadeIn 0.2s ease-out',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  Zen
+                </div>
+              )}
             </a>
             {/* 再生時間オーバーレイ */}
             {item.duration && (
@@ -280,12 +462,15 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
               className="ranking-item-responsive__title"
               data-testid="video-title"
-              style={{ 
-                cursor: disabled ? 'not-allowed' : 'pointer', 
+              style={{
+                cursor: disabled ? 'not-allowed' : 'pointer',
                 opacity: disabled ? 0.6 : 1,
                 // PWA環境での訪問済みスタイル
-                color: isVisited ? 'var(--link-visited-color)' : undefined
+                color: isVisited ? 'var(--link-visited-color)' : undefined,
+                position: 'relative'
               }}
+              onMouseEnter={handleZenHover}
+              onMouseLeave={handleZenLeave}
               onClick={(e) => {
                 e.stopPropagation()
                 if (disabled) {
@@ -318,6 +503,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               }}
             >
               {item.title}
+
             </a>
             {/* モバイル用マイリストボタン・NGボタン（CSSで表示制御） */}
             <div className="ranking-item-responsive__mylist-button">
