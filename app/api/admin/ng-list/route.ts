@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getNGListManual, setNGListManual } from '@/lib/ng-list-server'
 
-export const runtime = 'edge'
-
 export async function GET(request: NextRequest) {
   // Basic authentication check
   const authHeader = request.headers.get('authorization')

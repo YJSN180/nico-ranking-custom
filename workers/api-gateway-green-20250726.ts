@@ -186,8 +186,9 @@ function calculateDynamicTTL() {
   const safeWorkerTTL = Math.max(workerTTL, 120) // 最低2分
   
   // Cache-Controlヘッダーを生成
-  // stale-while-revalidate と stale-if-error を削除して即座に最新データを提供
-  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${safeCdnTTL}`
+  // stale-while-revalidate: 5分（更新遅延許容）
+  // stale-if-error: 60分（障害時の可用性確保）
+  const cacheControl = `public, max-age=${browserTTL}, s-maxage=${safeCdnTTL}, stale-while-revalidate=300, stale-if-error=3600`
   const cdnCacheControl = `public, max-age=${safeCdnTTL}`
   
   return {
@@ -507,7 +508,7 @@ export default {
               headers: {
                 'Content-Type': 'application/json',
                 // タグが見つからない場合も短時間キャッシュ（5分）して負荷軽減
-                'Cache-Control': 'public, max-age=300, s-maxage=300',
+                'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=60',
                 'X-Data-Source': 'r2-tag-not-found',
                 'X-Worker-Version': 'green-20250726-unified-cors',
                 'X-Cache-Note': 'Tag not found - cached for 5 minutes to reduce load'

@@ -216,7 +216,7 @@ jobs:
           fi
         env:
           CI: true
-          NODE_OPTIONS: '--max-old-space-size=20480 --expose-gc'  # メモリ不足エラー対策: 20GB + GC制御
+          NODE_OPTIONS: '--max-old-space-size=16384 --expose-gc'  # メモリ不足エラー対策: 16GB + GC制御
           FORCE_COLOR: 0
           VITEST_SHARD: '${{ matrix.shard }}'  # 各シャードの実際の番号を設定
           

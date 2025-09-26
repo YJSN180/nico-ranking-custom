@@ -144,7 +144,7 @@ export default async function RootLayout({
             <OfflineIndicator />
             {children}
             {process.env.NODE_ENV !== 'test' && <Analytics />}
-            {process.env.NODE_ENV !== 'test' && <SpeedInsights sampleRate={0.1} />}
+            {process.env.NODE_ENV !== 'test' && <SpeedInsights />}
           </MylistOperationsProvider>
         </ThemeProvider>
       </body>

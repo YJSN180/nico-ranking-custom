@@ -10,20 +10,7 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
-
-  // Fast Origin Transfer最適化: 静的アセットは即座にスキップ
-  if (pathname.match(/\.(css|js|map|woff2?|ttf|eot|png|jpg|jpeg|gif|webp|svg|ico|avif)$/)) {
-    return NextResponse.next()
-  }
-
-  // Fast Origin Transfer最適化: キャッシュヒットは早期リターン
-  const ifNoneMatch = request.headers.get('if-none-match')
-  const ifModifiedSince = request.headers.get('if-modified-since')
-  if (ifNoneMatch || ifModifiedSince) {
-    // キャッシュ検証はアプリケーション層で処理
-    return NextResponse.next()
-  }
-
+  
   // SECURITY FIX: /api/admin/* は認証チェックを通す
   // 一般的な公開APIのみ認証をスキップ
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
@@ -253,21 +240,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // 管理者領域 - 認証必須
     '/admin/:path*',
     '/api/admin/:path*',
-
-    // 主要なAPIエンドポイントのみ
-    '/api/ranking',
-    '/api/popular-tags',
-    '/api/thumbnail-proxy',
-    '/api/cron/:path*',
-
-    // メインページとダイナミックルート
-    '/',
-    '/test-:path',
-
-    // 除外: 静的アセット、フォント、画像、マニフェスト等
-    // Fast Origin Transfer最適化: matcherを最小限に
+    '/((?!_next/static|_next/image|favicon.ico|fonts|icon|og-image.png|manifest.json).*)', // その他のページ
   ]
 }

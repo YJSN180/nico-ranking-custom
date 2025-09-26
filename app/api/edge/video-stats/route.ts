@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCacheHeaders } from '@/lib/cache-durations'
 
 // This API fetches video stats from Cloudflare KV
-// Uses Edge runtime for better performance
-export const runtime = 'edge'
+// Uses Node.js runtime for KV access compatibility
+export const runtime = 'nodejs'
 
 // Cache configuration
 // revalidateを削除してCache-Controlヘッダーで制御

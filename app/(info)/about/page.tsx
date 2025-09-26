@@ -59,25 +59,6 @@ export default function AboutPage() {
           color: 'var(--text-primary)',
           fontWeight: 'bold',
         }}>
-          使い方
-        </h2>
-        <ul style={{
-          listStyle: 'disc',
-          paddingLeft: '20px',
-          color: 'var(--text-secondary)',
-          lineHeight: '1.8',
-        }}>
-          <li>このサイトの詳しい使い方については、こちらの動画をご覧ください：<a href="https://www.nicovideo.jp/watch/sm45425793" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline' }}>使い方説明動画</a></li>
-        </ul>
-      </section>
-
-      <section style={{ marginBottom: '40px' }}>
-        <h2 style={{
-          fontSize: '1.5rem',
-          marginBottom: '16px',
-          color: 'var(--text-primary)',
-          fontWeight: 'bold',
-        }}>
           推奨ブラウザについて
         </h2>
         <ul style={{

@@ -163,11 +163,11 @@ const MylistVideoItem = memo(function MylistVideoItem({
               {video.authorIcon && (
                 <OptimizedImage
                   src={video.authorIcon}
-                  alt=""
+                  alt={`${video.authorName}のアイコン`}
                   width={18}
                   height={18}
                   sizes="18px"
-                  style={{
+                  style={{ 
                     borderRadius: '50%',
                     border: '1px solid var(--border-color)',
                     objectFit: 'cover',

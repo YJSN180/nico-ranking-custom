@@ -205,9 +205,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   if (loading) {
     return (
       <div className={styles.tagSelectorContainer}>
-        <h3 className={styles.tagTitle}>
+        <h2 className={styles.tagTitle}>
           人気タグ
-        </h3>
+        </h2>
         <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
           タグを読み込み中...
         </div>
@@ -228,9 +228,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       return (
         <div className={styles.tagSelectorContainer}>
           <div className={styles.tagHeader}>
-            <h3 className={styles.tagTitle}>
+            <h2 className={styles.tagTitle}>
               カスタムランキング
-            </h3>
+            </h2>
           </div>
           <div style={{ color: 'var(--text-secondary)', fontSize: '14px', padding: '20px 0' }}>
             読み込み中...
@@ -258,9 +258,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       <>
         <div className={styles.tagSelectorContainer}>
           <div className={styles.tagHeader}>
-            <h3 className={styles.tagTitle}>
+            <h2 className={styles.tagTitle}>
               カスタムランキング
-            </h3>
+            </h2>
             <button
               className={styles.clearButton}
               onClick={() => setIsReorderingMode(!isReorderingMode)}
@@ -355,9 +355,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         {!isReorderingMode && selectedCustomRanking && customTags.length > 0 && (
           <div className={styles.tagSelectorContainer} style={{ marginTop: '20px' }}>
             <div className={styles.tagHeader}>
-              <h3 className={styles.tagTitle}>
+              <h2 className={styles.tagTitle}>
                 検索条件
-              </h3>
+              </h2>
               {selectedCustomRanking && (
                 <div className={styles.customRankingActions}>
                   <button
@@ -470,9 +470,9 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   return (
     <div className={styles.tagSelectorContainer}>
       <div className={styles.tagHeader}>
-        <h3 className={styles.tagTitle}>
+        <h2 className={styles.tagTitle}>
           人気タグ
-        </h3>
+        </h2>
         {config.tag && (
           <button
             onClick={clearTag}

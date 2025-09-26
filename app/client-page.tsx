@@ -1182,10 +1182,6 @@ export default function ClientPage({
     return (
       <TagDisplayProvider>
         <PullToRefreshIndicator isPulling={isPulling} pullDistance={pullDistance} />
-
-        {/* Main content heading for proper accessibility hierarchy */}
-        <h2 className="sr-only">ランキング選択と表示</h2>
-
         <div className="selectors-container">
         <RankingSelector 
           config={config} 

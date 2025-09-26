@@ -5,44 +5,6 @@ import withPWA from 'next-pwa'
 const nextConfig = {
   // 本番でのソースマップ無効化（セキュリティ・パフォーマンス向上）
   productionBrowserSourceMaps: false,
-
-  // Vercel Functions を完全バイパスして Cloudflare Workers に直接接続
-  // これにより月間 $150-200 のコストを $0 に削減
-  async rewrites() {
-    // 本番環境でのみ有効（開発環境では既存のAPIを使用）
-    if (process.env.NODE_ENV === 'production') {
-      return [
-        // 高トラフィックAPI - コスト削減効果大
-        {
-          source: '/api/ranking',
-          destination: 'https://nico-rank.com/api/ranking',
-        },
-        {
-          source: '/api/popular-tags',
-          destination: 'https://nico-ranking-green.yjsn180180.workers.dev/popular-tags',
-        },
-        {
-          source: '/api/thumbnail-proxy',
-          destination: 'https://nico-ranking-thumbnail-proxy.yjsn180180.workers.dev/',
-        },
-        {
-          source: '/api/hd-thumbnail/:videoId',
-          destination: 'https://nico-ranking-hd-thumbnail.yjsn180180.workers.dev/:videoId',
-        },
-        {
-          source: '/api/tags/autocomplete',
-          destination: 'https://nico-ranking-tag-autocomplete.yjsn180180.workers.dev/',
-        },
-        // 中トラフィックAPI
-        {
-          source: '/api/edge/video-stats',
-          destination: 'https://nico-ranking-api-gateway.yjsn180180.workers.dev/video-stats',
-        },
-        // 注: admin系APIは認証が必要なため、Vercel Functionsのまま維持
-      ]
-    }
-    return []
-  },
   images: {
     // ローカル画像（ロゴ等）は最適化を有効にしてWebP/AVIF変換
     // 外部画像（ニコニコ動画サムネイル）のみ最適化を無効化
