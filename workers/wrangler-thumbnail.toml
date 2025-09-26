@@ -1,0 +1,27 @@
+# Thumbnail Proxy Worker Configuration
+name = "nico-ranking-thumbnail-proxy"
+main = "thumbnail-proxy.ts"
+compatibility_date = "2025-06-24"
+workers_dev = true
+
+# Environment
+[env.production]
+name = "nico-ranking-thumbnail-proxy"
+vars = { ENVIRONMENT = "production" }
+
+# R2 Bucket binding (optional - for caching)
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# Routes (production)
+[[routes]]
+pattern = "nico-rank.com/api/thumbnail-proxy/*"
+zone_name = "nico-rank.com"
+
+# Performance settings
+[limits]
+cpu_ms = 50
+
+[placement]
+mode = "smart"
