@@ -164,3 +164,4 @@ __pycache__/
 SuperClaude/
 
 # Workers環境変数（上記で包含済み）
+AGENTS.md

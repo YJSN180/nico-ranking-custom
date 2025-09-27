@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { 
   exportExtendedNGListData, 
-  readExtendedNGListBackupFile, 
+  readExtendedNGListBackupFile,
   importExtendedNGListData,
   detectExtendedConflicts,
   type ExtendedNGListBackupData,
@@ -17,7 +17,6 @@ import styles from './ng-backup.module.css'
 export function NGBackup() {
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
-  const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false)
   const [importResult, setImportResult] = useState<ExtendedNGListImportResult | null>(null)
   const [conflictData, setConflictData] = useState<{
@@ -25,15 +24,30 @@ export function NGBackup() {
     conflicts: ExtendedConflictDetectionResult
   } | null>(null)
 
-  const { ngList } = useUserNGListExtended()
+  const { ngList, saveNGListDirectly } = useUserNGListExtended()
+
+  const syncLatestNGList = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('user-ng-list')
+      if (!stored) return
+      const parsed = JSON.parse(stored)
+      saveNGListDirectly(parsed)
+    } catch (error) {
+      console.error('Failed to sync NG list after import:', error)
+    }
+  }, [saveNGListDirectly])
 
   // エクスポート処理
   const handleExport = async () => {
     setIsExporting(true)
     try {
+      try {
+        localStorage.setItem('user-ng-list', JSON.stringify(ngList))
+      } catch (storageError) {
+        console.warn('Failed to sync NG list before export:', storageError)
+      }
       const data = exportExtendedNGListData()
       downloadNGListBackup(data as any) // downloadNGListBackupは共通で使える
-      setExportConfirmOpen(false)
     } catch (error) {
       console.error('Export failed:', error)
       alert(`エクスポートに失敗しました: ${error}`)
@@ -44,43 +58,25 @@ export function NGBackup() {
 
   // インポート処理（ファイル選択）
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const input = event.target
+    const file = input.files?.[0]
     if (!file) return
 
     setIsImporting(true)
     setImportResult(null)
 
     try {
-      // ファイル内容を読み込んで形式を判定
-      const content = await file.text()
-      const rawData = JSON.parse(content)
-      
-      let data: ExtendedNGListBackupData
-      
-      // 統合バックアップファイルの判定と変換
-      if (rawData.version && rawData.data && rawData.data.ngList) {
-        // 統合バックアップから NGList データを抽出
-        data = rawData.data.ngList
-      } else if (rawData.ngList && rawData.metadata && rawData.version) {
-        // 個別NGリストバックアップファイル
-        data = rawData
-      } else {
-        throw new Error('NGリストデータが含まれていません')
-      }
-      
-      // 重複検出
+      const data = await readExtendedNGListBackupFile(file)
+
       const conflicts = detectExtendedConflicts(ngList, data.ngList)
-      
+
       if (conflicts.hasConflicts) {
-        // 重複がある場合は確認ダイアログを表示
         setConflictData({ backup: data, conflicts })
         setConflictDialogOpen(true)
       } else {
-        // 重複がない場合は直接インポート
-        const result = await importExtendedNGListData(data, 'merge')
+        const result = importExtendedNGListData(data, 'merge')
+        syncLatestNGList()
         setImportResult(result)
-        
-        // NGリストは即座に反映されるのでリロード不要
       }
     } catch (error) {
       setImportResult({
@@ -105,8 +101,7 @@ export function NGBackup() {
       })
     } finally {
       setIsImporting(false)
-      // ファイル入力をリセット
-      event.target.value = ''
+      input.value = ''
     }
   }
 
@@ -116,7 +111,8 @@ export function NGBackup() {
 
     setIsImporting(true)
     try {
-      const result = await importExtendedNGListData(conflictData.backup, resolution)
+      const result = importExtendedNGListData(conflictData.backup, resolution)
+      syncLatestNGList()
       setImportResult(result)
       setConflictDialogOpen(false)
       setConflictData(null)
@@ -153,7 +149,7 @@ export function NGBackup() {
       <div className={styles.backupActions}>
         {/* エクスポートボタン */}
         <button
-          onClick={() => setExportConfirmOpen(true)}
+          onClick={handleExport}
           disabled={isExporting}
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-ng-list-button"
@@ -180,71 +176,6 @@ export function NGBackup() {
           インポート
         </label>
       </div>
-
-      {/* エクスポート確認ダイアログ */}
-      {exportConfirmOpen && (
-        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
-          <div 
-            className={styles.backupDialog} 
-            onClick={(e) => e.stopPropagation()}
-            data-testid="export-confirm-dialog"
-          >
-            <h3>NGリストをエクスポート</h3>
-            <p>現在適用されているNGリストをJSON形式でダウンロードします。</p>
-            <div className={styles.exportStats}>
-              <div className={styles.statItem}>
-                <span className={styles.statLabel}>動画ID:</span>
-                <span className={styles.statValue}>{ngList.videoIds.length}件</span>
-              </div>
-              <div className={styles.statItem}>
-                <span className={styles.statLabel}>動画タイトル:</span>
-                <span className={styles.statValue}>
-                  {ngList.videoTitles.exact.length + ngList.videoTitles.partial.length}件
-                  <small>（完全:{ngList.videoTitles.exact.length} / 部分:{ngList.videoTitles.partial.length}）</small>
-                </span>
-              </div>
-              <div className={styles.statItem}>
-                <span className={styles.statLabel}>投稿者:</span>
-                <span className={styles.statValue}>
-                  {ngList.authorIds.length + ngList.authorNames.exact.length + ngList.authorNames.partial.length}件
-                  <small>（ID:{ngList.authorIds.length} / 名前:{ngList.authorNames.exact.length + ngList.authorNames.partial.length}）</small>
-                </span>
-              </div>
-              {ngList.tags && (
-                <div className={styles.statItem}>
-                  <span className={styles.statLabel}>タグ:</span>
-                  <span className={styles.statValue}>
-                    {ngList.tags.locked.exact.length + ngList.tags.locked.partial.length + 
-                     ngList.tags.user.exact.length + ngList.tags.user.partial.length + 
-                     ngList.tags.both.exact.length + ngList.tags.both.partial.length}件
-                    <small>
-                      （ロック:{ngList.tags.locked.exact.length + ngList.tags.locked.partial.length} / 
-                       ユーザー:{ngList.tags.user.exact.length + ngList.tags.user.partial.length} / 
-                       両方:{ngList.tags.both.exact.length + ngList.tags.both.partial.length}）
-                    </small>
-                  </span>
-                </div>
-              )}
-            </div>
-            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
-            <div className={styles.dialogActions}>
-              <button 
-                onClick={() => setExportConfirmOpen(false)}
-                className={`${styles.dialogButton} ${styles.cancelButton}`}
-              >
-                キャンセル
-              </button>
-              <button 
-                onClick={handleExport}
-                disabled={isExporting}
-                className={`${styles.dialogButton} ${styles.confirmButton}`}
-              >
-                {isExporting ? 'エクスポート中...' : 'ダウンロード'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 重複解決ダイアログ */}
       {conflictDialogOpen && conflictData && (

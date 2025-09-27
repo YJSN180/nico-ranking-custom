@@ -41,39 +41,15 @@ export function MylistBackup() {
 
   // インポート処理（ファイル選択）
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const input = event.target
+    const file = input.files?.[0]
     if (!file) return
 
     setIsImporting(true)
     setImportResult(null)
 
     try {
-      // ファイル内容を読み込んで形式を判定
-      const content = await file.text()
-      const rawData = JSON.parse(content)
-      
-      let data: BackupData
-      
-      // 統合バックアップファイルの判定と変換
-      if (rawData.version && rawData.data && rawData.data.mylists) {
-        // 統合バックアップからマイリストデータを抽出
-        data = {
-          version: rawData.data.mylists.version || rawData.version,
-          exportDate: rawData.data.mylists.exportDate || rawData.exportDate,
-          mylists: rawData.data.mylists.mylists,
-          mylistVideos: rawData.data.mylists.mylistVideos,
-          metadata: rawData.data.mylists.metadata || {
-            totalMylists: rawData.data.mylists.mylists.length,
-            totalVideos: rawData.data.mylists.mylistVideos.length,
-            appVersion: rawData.appVersion || '1.0.0'
-          }
-        }
-      } else if (rawData.mylists && rawData.mylistVideos && rawData.version) {
-        // 個別マイリストバックアップファイル
-        data = await readBackupFile(file)
-      } else {
-        throw new Error('マイリストデータが含まれていません')
-      }
+      const data = await readBackupFile(file)
       
       // 重複検出
       const conflicts = await detectMylistConflicts(data)
@@ -123,7 +99,7 @@ export function MylistBackup() {
     } finally {
       setIsImporting(false)
       // ファイル入力をリセット
-      event.target.value = ''
+      input.value = ''
     }
   }
 

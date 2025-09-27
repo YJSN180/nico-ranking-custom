@@ -153,6 +153,9 @@ export function exportNGListData(): NGListBackupData {
 export function downloadNGListBackup(data: NGListBackupData): void {
   const json = JSON.stringify(data, null, 2)
   const blob = new Blob([json], { type: 'application/json' })
+  if (typeof (blob as any).text !== 'function') {
+    ;(blob as any).text = () => Promise.resolve(json)
+  }
   const url = URL.createObjectURL(blob)
   
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)

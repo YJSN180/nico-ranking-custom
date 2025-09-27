@@ -10,6 +10,11 @@ vi.mock('next/server', () => ({
       url,
       status,
       type: 'redirect'
+    })),
+    json: vi.fn((data: unknown, init?: ResponseInit) => ({
+      data,
+      status: init?.status ?? 200,
+      type: 'json'
     }))
   }
 }))
@@ -26,7 +31,7 @@ describe('API Ranking Route Redirect', () => {
       url: 'http://localhost:3000/api/ranking?genre=all&period=24h',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'nico-ranking.com'
           return null
         })
       }
@@ -50,7 +55,7 @@ describe('API Ranking Route Redirect', () => {
       url: 'http://localhost:3000/api/ranking?genre=game&period=hour&tag=実況プレイ動画',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'nico-ranking.com'
           return null
         })
       }
@@ -71,7 +76,7 @@ describe('API Ranking Route Redirect', () => {
       url: 'http://localhost:3000/api/ranking',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'nico-ranking.com'
           return null
         })
       }
@@ -90,7 +95,7 @@ describe('API Ranking Route Redirect', () => {
       url: 'http://localhost:3000/api/ranking',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'nico-ranking.com'
           return null
         })
       }
@@ -109,7 +114,7 @@ describe('API Ranking Route Redirect', () => {
       url: 'http://localhost:3000/api/ranking?genre=all',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'nico-ranking.com'
           return null
         })
       }

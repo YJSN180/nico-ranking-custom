@@ -15,45 +15,43 @@ const STORAGE_KEY = 'nicoRankingGenreOrder'
 export function useGenreOrderV2() {
   // 永続化された状態
   const [savedItems, setSavedItems] = useState<GenreItem[]>(() => {
-    if (typeof window === 'undefined') return createDefaultGenreItems()
-    
+    const defaultItems = createDefaultGenreItems()
+    if (typeof window === 'undefined') return defaultItems
+
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored) as GenreItem[]
-        // 不正なデータのバリデーション
+        const parsed = JSON.parse(stored)
+
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // 既存のlocalStorageデータに新しいジャンルが含まれているか確認
-          const defaultItems = createDefaultGenreItems()
-          const existingIds = new Set(parsed.map(item => item.id))
-          const missingItems: GenreItem[] = []
-          
-          // デフォルトのジャンルリストに存在するが、保存データに存在しないジャンルを検出
-          defaultItems.forEach(defaultItem => {
-            if (!existingIds.has(defaultItem.id)) {
-              // 新しいジャンルを最後に追加（表示状態で）
-              missingItems.push({
-                id: defaultItem.id,
-                isVisible: true,
-                order: parsed.length + missingItems.length
-              })
-            }
-          })
-          
-          // 新しいジャンルが見つかった場合は追加
-          if (missingItems.length > 0) {
-            console.log('新しいジャンルを検出:', missingItems.map(item => item.id))
-            return [...parsed, ...missingItems]
+          const validIds = new Set(defaultItems.map(item => item.id))
+
+          const sanitized = parsed
+            .filter((item: any): item is GenreItem => item && validIds.has(item.id))
+            .map((item, index) => ({
+              id: item.id,
+              isVisible: typeof item.isVisible === 'boolean' ? item.isVisible : true,
+              order: index
+            }))
+
+          if (sanitized.length > 0) {
+            const existingIds = new Set(sanitized.map(item => item.id))
+            const missingItems = defaultItems
+              .filter(item => !existingIds.has(item.id))
+              .map((item, index) => ({
+                ...item,
+                order: sanitized.length + index
+              }))
+
+            return [...sanitized, ...missingItems]
           }
-          
-          return parsed
         }
       }
     } catch (error) {
       console.error('Failed to load genre order:', error)
     }
-    
-    return createDefaultGenreItems()
+
+    return defaultItems
   })
 
   // 一時的な編集状態

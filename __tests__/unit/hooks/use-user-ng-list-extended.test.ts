@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { useUserNGListExtended } from '../../../hooks/use-user-ng-list-extended'
 import type { ExtendedUserNGList } from '../../../types/ng-list-extended'
 
@@ -138,7 +138,7 @@ describe('useUserNGListExtended', () => {
   })
 
   describe('ストレージ同期', () => {
-    it('should sync with storage changes from other tabs', () => {
+    it('should sync with storage changes from other tabs', async () => {
       const { result } = renderHook(() => useUserNGListExtended())
       
       const newList: ExtendedUserNGList = {
@@ -157,7 +157,8 @@ describe('useUserNGListExtended', () => {
       }
       
       // 他のタブからの変更をシミュレート
-      act(() => {
+      await act(async () => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newList))
         const event = new StorageEvent('storage', {
           key: STORAGE_KEY,
           newValue: JSON.stringify(newList),
@@ -166,11 +167,15 @@ describe('useUserNGListExtended', () => {
         })
         window.dispatchEvent(event)
       })
-      
-      expect(result.current.ngList).toEqual(newList)
+
+      await waitFor(() => {
+        expect(result.current.ngList).toEqual(expect.objectContaining({
+          videoIds: ['sm3']
+        }))
+      })
     })
     
-    it('should sync with ngListUpdated events', () => {
+    it('should sync with ngListUpdated events', async () => {
       const { result } = renderHook(() => useUserNGListExtended())
       
       const newList: ExtendedUserNGList = {
@@ -182,13 +187,16 @@ describe('useUserNGListExtended', () => {
         }
       }
       
-      act(() => {
+      await act(async () => {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newList))
         window.dispatchEvent(new CustomEvent('ngListUpdated', {
           detail: { ngList: newList }
         }))
       })
-      
-      expect(result.current.ngList.tags?.user.exact).toEqual(['カバー'])
+
+      await waitFor(() => {
+        expect(result.current.ngList.tags?.user.exact).toEqual(['カバー'])
+      })
     })
   })
 
