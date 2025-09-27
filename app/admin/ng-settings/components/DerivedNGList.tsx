@@ -22,6 +22,30 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
   const itemsPerPage = 50
   const { videoInfo, isLoading } = useVideoInfo(videoIds, currentPage, itemsPerPage)
   
+  // 最新リストが渡されたときにUI状態を同期
+  useEffect(() => {
+    setVideoIds(prev => {
+      if (prev.length === initialData.length && prev.every((id, index) => id === initialData[index])) {
+        return prev
+      }
+      return initialData
+    })
+    setSelectedIds(prev => {
+      if (prev.size === 0) return prev
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (initialData.includes(id)) {
+          next.add(id)
+        }
+      }
+      return next
+    })
+    setCurrentPage(prev => {
+      const totalPages = Math.max(1, Math.ceil(initialData.length / itemsPerPage))
+      return Math.min(prev, totalPages)
+    })
+  }, [initialData, itemsPerPage])
+  
   // Cleanup on unmount
   useEffect(() => {
     return () => {
