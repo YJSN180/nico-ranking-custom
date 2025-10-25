@@ -6,7 +6,7 @@
 :root {
   --mobile-thumbnail-width: 140px;
   --mobile-rank-size: 18px;
-  --mobile-title-size: 15px;
+  --mobile-title-size: 14px;
   --mobile-gap: 8px;
   --mobile-duration-size: 11px;
 }
@@ -99,6 +99,13 @@
   margin-bottom: 6px;
 }
 
+.ranking-item-responsive__title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 /* タイトル */
 .ranking-item-responsive__title {
   color: var(--link-color);
@@ -107,7 +114,7 @@
   font-weight: 600;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -228,6 +235,15 @@
   /* 新しいモバイル順位表示（サムネイル下）を有効化 */
   .ranking-item-responsive__rank--mobile-bottom {
     display: flex !important;
+    font-size: 16px;
+    padding: 4px 8px;
+    margin-top: 8px;
+    gap: 4px;
+  }
+
+  .ranking-item-responsive__crown-icon {
+    width: 20px !important;
+    height: 20px !important;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -250,35 +266,39 @@
     align-items: flex-start;
     margin-bottom: 2px;
   }
+
+  .ranking-item-responsive__title-stack {
+    flex: 1;
+    gap: 4px;
+  }
   
   .ranking-item-responsive__title {
     font-size: var(--mobile-title-size);
     margin-bottom: 0;
-    /* モバイルでは3行まで表示 */
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
     line-height: 1.3;
     flex: 1;
-    min-width: 0; /* flexbox内でのtext-overflow対応 */
+    min-width: 0;
   }
   
   .ranking-item-responsive__author {
-    font-size: 14px;
+    font-size: 12px;
     gap: 4px;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
   
   
   .ranking-item-responsive__author-name {
-    max-width: 120px;
+    max-width: 130px;
   }
   
   .ranking-item-responsive__stats {
-    font-size: 14px;
-    gap: var(--mobile-gap);
-    flex-wrap: wrap; /* 横スクロールを削除、折り返しを許可 */
+    font-size: 12px;
+    gap: 6px;
+    flex-wrap: wrap;
     overflow-x: visible;
   }
   
@@ -337,16 +357,16 @@
   
   /* 超モバイルでも新しいモバイル順位表示を使用 */
   .ranking-item-responsive__rank--mobile-bottom {
-    font-size: 24px !important;  /* 超モバイル: 24px */
-    padding: 6px 10px !important;
-    gap: 6px !important;
-    margin-top: 12px !important;  /* 超モバイルでも間隔を確保 */
+    font-size: 14px !important;
+    padding: 3px 6px !important;
+    gap: 4px !important;
+    margin-top: 6px !important;
   }
   
   /* 超モバイルでの王冠アイコンサイズ調整 */
   .ranking-item-responsive__crown-icon {
-    width: 28px !important;
-    height: 28px !important;
+    width: 18px !important;
+    height: 18px !important;
   }
   
   .ranking-item-responsive__thumbnail {
@@ -356,7 +376,7 @@
   }
   
   .ranking-item-responsive__title {
-    font-size: 13px;
+    font-size: 12.5px;
   }
   
   .ranking-item-responsive__author {

@@ -273,52 +273,126 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         <div className="ranking-item-responsive__details">
           {/* タイトル行（モバイルではマイリストボタンを含む） */}
           <div className="ranking-item-responsive__title-row">
-            {/* タイトル */}
-            <a
-              href={`https://www.nicovideo.jp/watch/${item.id}`}
-              target={getLinkTarget()}
-              rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
-              className="ranking-item-responsive__title"
-              data-testid="video-title"
-              style={{ 
-                cursor: disabled ? 'not-allowed' : 'pointer', 
-                opacity: disabled ? 0.6 : 1,
-                // PWA環境での訪問済みスタイル
-                color: isVisited ? 'var(--link-visited-color)' : undefined
-              }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (disabled) {
-                  e.preventDefault()
-                  return false
-                }
-                
-                // PWA環境でのナビゲーション処理
-                const url = `https://www.nicovideo.jp/watch/${item.id}`
-                if (getLinkTarget() === '_self') {
-                  e.preventDefault()
-                  navigateToVideo(url, e)
-                }
-                
-                // クリック時も訪問済みとして記録
-                try {
-                  const visitedKey = 'visited-videos'
-                  const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
-                  if (!visited.includes(item.id)) {
-                    visited.push(item.id)
-                    if (visited.length > 1000) {
-                      visited.shift()
-                    }
-                    localStorage.setItem(visitedKey, JSON.stringify(visited))
-                    setIsVisited(true)
+            <div className="ranking-item-responsive__title-stack">
+              {/* タイトル */}
+              <a
+                href={`https://www.nicovideo.jp/watch/${item.id}`}
+                target={getLinkTarget()}
+                rel={getLinkTarget() === '_blank' ? 'noopener noreferrer' : undefined}
+                className="ranking-item-responsive__title"
+                data-testid="video-title"
+                style={{ 
+                  cursor: disabled ? 'not-allowed' : 'pointer', 
+                  opacity: disabled ? 0.6 : 1,
+                  // PWA環境での訪問済みスタイル
+                  color: isVisited ? 'var(--link-visited-color)' : undefined
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (disabled) {
+                    e.preventDefault()
+                    return false
                   }
-                } catch {
-                  // エラーは無視
-                }
-              }}
-            >
-              {item.title}
-            </a>
+                  
+                  // PWA環境でのナビゲーション処理
+                  const url = `https://www.nicovideo.jp/watch/${item.id}`
+                  if (getLinkTarget() === '_self') {
+                    e.preventDefault()
+                    navigateToVideo(url, e)
+                  }
+                  
+                  // クリック時も訪問済みとして記録
+                  try {
+                    const visitedKey = 'visited-videos'
+                    const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+                    if (!visited.includes(item.id)) {
+                      visited.push(item.id)
+                      if (visited.length > 1000) {
+                        visited.shift()
+                      }
+                      localStorage.setItem(visitedKey, JSON.stringify(visited))
+                      setIsVisited(true)
+                    }
+                  } catch {
+                    // エラーは無視
+                  }
+                }}
+              >
+                {item.title}
+              </a>
+              {/* 投稿者情報 */}
+              <div className="ranking-item-responsive__author">
+                {(item.authorName || item.authorId) && item.authorId && (
+                  <a
+                    href={item.authorId.startsWith('channel/') 
+                      ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
+                      : item.authorId.startsWith('community/') 
+                      ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
+                      : `https://www.nicovideo.jp/user/${item.authorId}`
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (disabled) {
+                        e.preventDefault()
+                        return false
+                      }
+                    }}
+                    style={{ 
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      textDecoration: 'none',
+                      color: 'inherit',
+                      padding: '3px 6px',
+                      margin: '-3px -6px',
+                      borderRadius: '4px',
+                      transition: 'background-color 0.2s',
+                      cursor: disabled ? 'not-allowed' : 'pointer',
+                      opacity: disabled ? 0.6 : 1
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!disabled) {
+                        e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!disabled) {
+                        e.currentTarget.style.backgroundColor = 'transparent'
+                      }
+                    }}
+                  >
+                    {item.authorIcon && (
+                      <OptimizedImage
+                        src={item.authorIcon}
+                        alt={item.authorName || ''}
+                        width={18}
+                        height={18}
+                        sizes="18px"
+                        style={{ 
+                          borderRadius: '50%',
+                          border: '1px solid var(--border-color)',
+                          flexShrink: 0
+                        }}
+                        loading="lazy"
+                      />
+                    )}
+                    <span className="ranking-item-responsive__author-name">
+                      {item.authorName || item.authorId}
+                    </span>
+                  </a>
+                )}
+                <span className="ranking-item-responsive__separator">·</span>
+                <span 
+                  className="ranking-item-responsive__date"
+                  style={{ 
+                    color: isNew ? '#c53030' : 'var(--text-secondary)',
+                    fontWeight: isNew ? '600' : '400'
+                  }}
+                >
+                  {dateDisplay}
+                </span>
+              </div>
+            </div>
             {/* モバイル用マイリストボタン・NGボタン（CSSで表示制御） */}
             <div className="ranking-item-responsive__mylist-button">
               <MylistButton video={item} />
@@ -328,79 +402,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 onNGAdded={handleNGAdded}
               />
             </div>
-          </div>
-          
-          {/* 投稿者情報 */}
-          <div className="ranking-item-responsive__author">
-            {(item.authorName || item.authorId) && item.authorId && (
-              <a
-                href={item.authorId.startsWith('channel/') 
-                  ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
-                  : item.authorId.startsWith('community/') 
-                  ? `https://com.nicovideo.jp/${item.authorId.replace('community/', '')}`
-                  : `https://www.nicovideo.jp/user/${item.authorId}`
-                }
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (disabled) {
-                    e.preventDefault()
-                    return false
-                  }
-                }}
-                style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  textDecoration: 'none',
-                  color: 'inherit',
-                  padding: '3px 6px',
-                  margin: '-3px -6px',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s',
-                  cursor: disabled ? 'not-allowed' : 'pointer',
-                  opacity: disabled ? 0.6 : 1
-                }}
-                onMouseEnter={(e) => {
-                  if (!disabled) {
-                    e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!disabled) {
-                    e.currentTarget.style.backgroundColor = 'transparent'
-                  }
-                }}
-              >
-                {item.authorIcon && (
-                  <OptimizedImage
-                    src={item.authorIcon}
-                    alt={item.authorName || ''}
-                    width={18}
-                    height={18}
-                    sizes="18px"
-                    style={{ 
-                      borderRadius: '50%',
-                      border: '1px solid var(--border-color)',
-                      flexShrink: 0
-                    }}
-                    loading="lazy"
-                  />
-                )}
-                <span className="ranking-item-responsive__author-name">
-                  {item.authorName || item.authorId}
-                </span>
-              </a>
-            )}
-            <span className="ranking-item-responsive__separator">·</span>
-            <span 
-              className="ranking-item-responsive__date"
-              style={{ 
-                color: isNew ? '#c53030' : 'var(--text-secondary)',
-                fontWeight: isNew ? '600' : '400'
-              }}
-            >
-              {dateDisplay}
-            </span>
           </div>
           
           {/* 統計情報 */}
