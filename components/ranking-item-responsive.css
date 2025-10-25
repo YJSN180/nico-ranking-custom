@@ -99,6 +99,13 @@
   margin-bottom: 6px;
 }
 
+.ranking-item-responsive__title-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
 /* タイトル */
 .ranking-item-responsive__title {
   color: var(--link-color);
@@ -107,7 +114,7 @@
   font-weight: 600;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -258,6 +265,11 @@
     gap: var(--mobile-gap);
     align-items: flex-start;
     margin-bottom: 2px;
+  }
+
+  .ranking-item-responsive__title-stack {
+    flex: 1;
+    gap: 4px;
   }
   
   .ranking-item-responsive__title {
