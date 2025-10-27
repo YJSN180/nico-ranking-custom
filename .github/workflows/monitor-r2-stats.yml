@@ -73,7 +73,7 @@ jobs:
           EOF
       
       - name: Upload Statistics
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: resource-usage-statistics
           path: stats/

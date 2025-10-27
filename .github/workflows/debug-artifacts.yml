@@ -17,7 +17,7 @@ jobs:
         echo '[{"genre": "test${{ matrix.group }}", "data": {"24h": {"items": [], "popularTags": []}, "hour": {"items": [], "popularTags": []}}}]' > tmp/ranking-group-${{ matrix.group }}.json
     
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: ranking-data-group-${{ matrix.group }}
         path: ./tmp/ranking-group-${{ matrix.group }}.json
