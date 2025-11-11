@@ -34,6 +34,7 @@ import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
+import { ScrollToTopButton } from '@/components/scroll-to-top-button'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -767,9 +768,13 @@ export default function ClientPage({
   }
   
   // ページ変更時の処理（クライアントサイドページネーション）
-  const handlePageChange = useCallback((page: number) => {
+  const resultsTopRef = useRef<HTMLDivElement | null>(null)
+  const scrollNextPageRef = useRef(false)
+
+  const triggerPageChange = useCallback((page: number, { jumpToTop }: { jumpToTop: boolean } = { jumpToTop: false }) => {
     if (page === currentPage) return
     
+    scrollNextPageRef.current = jumpToTop && page > currentPage
     setCurrentPage(page)
     
     // クライアントサイドページネーション: URLのみ更新（データ再取得なし）
@@ -788,7 +793,34 @@ export default function ClientPage({
     // window.history.replaceStateを使用してブラウザ履歴に追加しない
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
     window.history.replaceState(null, '', newUrl)
+
   }, [currentPage, config])
+
+  const handlePageChangeTop = useCallback(
+    (page: number) => triggerPageChange(page, { jumpToTop: false }),
+    [triggerPageChange]
+  )
+
+  const handlePageChangeBottom = useCallback(
+    (page: number) => triggerPageChange(page, { jumpToTop: true }),
+    [triggerPageChange]
+  )
+
+  useEffect(() => {
+    if (!scrollNextPageRef.current) return
+    if (typeof window === 'undefined') return
+    scrollNextPageRef.current = false
+    requestAnimationFrame(() => {
+      const anchor = resultsTopRef.current
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect()
+        const targetTop = Math.max(0, rect.top + window.scrollY - 8)
+        window.scrollTo({ top: targetTop, behavior: 'auto' })
+      } else {
+        window.scrollTo({ top: 0, behavior: 'auto' })
+      }
+    })
+  }, [currentPage])
   
   // 時間範囲フィルター変更時の処理
   const handleTimeRangeChange = useCallback((value: TimeRangeValue) => {
@@ -1320,7 +1352,7 @@ export default function ClientPage({
             totalPages={totalPages}
             totalItems={totalItemsCount}
             itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={handlePageChange}
+            onPageChange={handlePageChangeTop}
           />
           
           {/* 件数表示（ページネーションなしの場合） */}
@@ -1338,6 +1370,7 @@ export default function ClientPage({
           )}
           
           {/* ランキングリスト */}
+          <div ref={resultsTopRef} aria-hidden="true" />
           <ul key={`${ngListVersion}-${config.period}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <li key={item.id} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -1358,7 +1391,7 @@ export default function ClientPage({
             totalPages={totalPages}
             totalItems={totalItemsCount}
             itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={handlePageChange}
+            onPageChange={handlePageChangeBottom}
           />
           
           {/* 件数表示（ページネーションなしの場合） */}
@@ -1376,6 +1409,8 @@ export default function ClientPage({
           )}
         </>
       )}
+
+      <ScrollToTopButton />
       </TagDisplayProvider>
   )
   } catch (error) {

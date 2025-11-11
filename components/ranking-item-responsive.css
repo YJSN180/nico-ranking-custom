@@ -140,7 +140,6 @@
   gap: 6px;
   font-size: 14px;
   color: var(--text-secondary);
-  margin-bottom: 6px;
 }
 
 .ranking-item-responsive__author-name {
@@ -172,6 +171,7 @@
   user-select: none;
   flex-wrap: wrap;
   align-items: center;
+  margin-top: 2px;
 }
 
 .ranking-item-responsive__stat {
