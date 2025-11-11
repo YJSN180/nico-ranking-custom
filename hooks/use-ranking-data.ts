@@ -236,9 +236,13 @@ export function useRankingData({
         baseParams.set('tag', config.tag)
       }
 
-      // 開発環境ではプロキシを使用、本番環境では直接APIゲートウェイを使用
-      const isDevelopment = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      const apiUrl = isDevelopment 
+      // プレビュー環境では常にNext API経由で同一オリジンから取得し、CORSを回避
+      const isClient = typeof window !== 'undefined'
+      const hostname = isClient ? window.location.hostname : ''
+      const isDevelopment = isClient && (hostname === 'localhost' || hostname === '127.0.0.1')
+      const isPreviewHost = isClient && hostname.endsWith('.vercel.app') && !hostname.includes('nico-rank.com')
+      const shouldProxyThroughNextApi = isDevelopment || isPreviewHost
+      const apiUrl = shouldProxyThroughNextApi
         ? `/api/ranking?${baseParams.toString()}`
         : `${process.env.NEXT_PUBLIC_API_GATEWAY_URL || ''}/api/ranking?${baseParams.toString()}`
       
