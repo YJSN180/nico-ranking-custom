@@ -771,10 +771,10 @@ export default function ClientPage({
   const resultsTopRef = useRef<HTMLDivElement | null>(null)
   const scrollNextPageRef = useRef(false)
 
-  const handlePageChange = useCallback((page: number) => {
+  const triggerPageChange = useCallback((page: number, { jumpToTop }: { jumpToTop: boolean } = { jumpToTop: false }) => {
     if (page === currentPage) return
     
-    scrollNextPageRef.current = page > currentPage
+    scrollNextPageRef.current = jumpToTop && page > currentPage
     setCurrentPage(page)
     
     // クライアントサイドページネーション: URLのみ更新（データ再取得なし）
@@ -795,6 +795,16 @@ export default function ClientPage({
     window.history.replaceState(null, '', newUrl)
 
   }, [currentPage, config])
+
+  const handlePageChangeTop = useCallback(
+    (page: number) => triggerPageChange(page, { jumpToTop: false }),
+    [triggerPageChange]
+  )
+
+  const handlePageChangeBottom = useCallback(
+    (page: number) => triggerPageChange(page, { jumpToTop: true }),
+    [triggerPageChange]
+  )
 
   useEffect(() => {
     if (!scrollNextPageRef.current) return
@@ -1342,7 +1352,7 @@ export default function ClientPage({
             totalPages={totalPages}
             totalItems={totalItemsCount}
             itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={handlePageChange}
+            onPageChange={handlePageChangeTop}
           />
           
           {/* 件数表示（ページネーションなしの場合） */}
@@ -1381,7 +1391,7 @@ export default function ClientPage({
             totalPages={totalPages}
             totalItems={totalItemsCount}
             itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={handlePageChange}
+            onPageChange={handlePageChangeBottom}
           />
           
           {/* 件数表示（ページネーションなしの場合） */}
