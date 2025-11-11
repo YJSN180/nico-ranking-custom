@@ -13,9 +13,10 @@ export async function GET(request: NextRequest) {
   // プレビュー環境かどうかを判定
   const host = request.headers.get('host') || ''
   const isVercelApp = host.includes('.vercel.app')
-  const hasRandomString = /nico-ranking-custom-[a-z0-9]+-yjsns-projects/.test(host)
+  const isGitPreviewDomain = /nico-ranking-custom-(?:git-[a-z0-9-]+|[a-z0-9]+)-yjsns-projects/.test(host)
   const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1') || host.includes('0.0.0.0')
-  const isPreview = (isVercelApp && hasRandomString) || isLocalhost
+  const isPreviewEnv = process.env.VERCEL_ENV === 'preview'
+  const isPreview = isLocalhost || isPreviewEnv || (isVercelApp && isGitPreviewDomain)
   
   if (isPreview) {
     // プレビュー環境ではプロキシとして動作
