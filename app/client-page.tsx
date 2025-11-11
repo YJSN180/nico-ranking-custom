@@ -789,6 +789,12 @@ export default function ClientPage({
     // window.history.replaceStateを使用してブラウザ履歴に追加しない
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
     window.history.replaceState(null, '', newUrl)
+
+    if (page > currentPage && typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      })
+    }
   }, [currentPage, config])
   
   // 時間範囲フィルター変更時の処理
