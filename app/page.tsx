@@ -103,45 +103,48 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     return { items: [], popularTags: [] }
   }
   
-  // Cloudflare Worker から直接データを取得（Vercel Function をバイパス）
+  const params = new URLSearchParams()
+  params.set('genre', actualGenre)
+  params.set('period', period)
+  if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
+  
+  const isProduction = process.env.VERCEL_ENV === 'production'
+  const hasWorkerKey = Boolean(process.env.WORKER_AUTH_KEY)
+  const shouldUseSignedWorker = isProduction && hasWorkerKey
+
+  const resolveBaseUrl = () => {
+    const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
+    if (explicitSite) return explicitSite.replace(/\/$/, '')
+    const vercelUrl = process.env.VERCEL_URL
+    if (vercelUrl) {
+      const normalized = vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`
+      return normalized.replace(/\/$/, '')
+    }
+    return process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://nico-ranking-custom.vercel.app'
+  }
+
+  const signedWorkerBase = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
+  const proxyBase = resolveBaseUrl()
+  const apiUrl = shouldUseSignedWorker
+    ? `${signedWorkerBase.replace(/\/$/, '')}/api/ranking?${params.toString()}`
+    : `${proxyBase}/api/ranking?${params.toString()}`
+
   try {
-    const params = new URLSearchParams()
-    params.set('genre', actualGenre)
-    params.set('period', period)
-    if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
+    const headers: HeadersInit = {
+      'Accept-Encoding': 'gzip, deflate, br',
+      Accept: 'application/json'
+    }
+    if (shouldUseSignedWorker && process.env.WORKER_AUTH_KEY) {
+      headers['X-Worker-Auth'] = process.env.WORKER_AUTH_KEY
+      headers['X-SSR-Request'] = 'true'
+    }
     
-    // Cloudflare Worker のエンドポイントに直接アクセス
-    const apiUrl = `https://nico-rank.com/api/ranking?${params.toString()}`
-    // eslint-disable-next-line no-console
-    console.log(`[SSR] Fetching directly from Cloudflare Worker: ${apiUrl}`)
-    // eslint-disable-next-line no-console
-    console.log(`[SSR] WORKER_AUTH_KEY present: ${!!process.env.WORKER_AUTH_KEY}`)
-    // eslint-disable-next-line no-console
-    console.log(`[SSR] WORKER_AUTH_KEY length: ${process.env.WORKER_AUTH_KEY?.length}`)
-    // eslint-disable-next-line no-console
-    console.log(`[SSR] Headers to send: X-Worker-Auth=${process.env.WORKER_AUTH_KEY ? `${process.env.WORKER_AUTH_KEY.substring(0, 10)}...` : 'missing'}, X-SSR-Request=true`)
-    
-    // SSRでのfetch（Node.js環境）
     const response = await fetch(apiUrl, {
-      next: { revalidate: 1200 }, // 20分間キャッシュ
-      headers: {
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Accept': 'application/json',
-        // Worker認証ヘッダー
-        'X-Worker-Auth': process.env.WORKER_AUTH_KEY || '',
-        // SSRであることを示すヘッダー
-        'X-SSR-Request': 'true'
-      }
+      next: { revalidate: 1200 },
+      headers
     })
     
     if (!response.ok) {
-      // eslint-disable-next-line no-console
-      console.log(`[SSR] Response status: ${response.status}`)
-      // eslint-disable-next-line no-console
-      console.log(`[SSR] Response headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()))}`)
-      const errorText = await response.text()
-      // eslint-disable-next-line no-console
-      console.log(`[SSR] Error response body:`, errorText.substring(0, 500))
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
     
@@ -153,16 +156,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       data = await response.json()
     } catch (jsonError) {
       // JSONパースに失敗した場合、テキストとして取得して再度パース
-      // eslint-disable-next-line no-console
-      console.warn('[SSR] Initial JSON parse failed, trying text approach:', jsonError)
       const text = await response.text()
       try {
         data = JSON.parse(text)
       } catch (parseError) {
-        // eslint-disable-next-line no-console
-        console.error('[SSR] Failed to parse response:', parseError)
-        // eslint-disable-next-line no-console
-        console.error('[SSR] Response text (first 500 chars):', text.substring(0, 500))
         throw new Error('Invalid JSON response from API')
       }
     }
@@ -173,13 +170,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       return filteredData
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
-    // eslint-disable-next-line no-console
-    console.error(`[SSR] Error details: ${JSON.stringify({
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    })}`)
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
+    }
   }
 
   // エラーの場合は空のデータを返す
