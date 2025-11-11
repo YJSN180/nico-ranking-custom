@@ -34,6 +34,7 @@ import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
+import { ScrollToTopButton } from '@/components/scroll-to-top-button'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -1376,6 +1377,8 @@ export default function ClientPage({
           )}
         </>
       )}
+
+      <ScrollToTopButton />
       </TagDisplayProvider>
   )
   } catch (error) {
