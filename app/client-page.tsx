@@ -768,9 +768,13 @@ export default function ClientPage({
   }
   
   // ページ変更時の処理（クライアントサイドページネーション）
+  const resultsTopRef = useRef<HTMLDivElement | null>(null)
+  const scrollNextPageRef = useRef(false)
+
   const handlePageChange = useCallback((page: number) => {
     if (page === currentPage) return
     
+    scrollNextPageRef.current = page > currentPage
     setCurrentPage(page)
     
     // クライアントサイドページネーション: URLのみ更新（データ再取得なし）
@@ -790,12 +794,23 @@ export default function ClientPage({
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
     window.history.replaceState(null, '', newUrl)
 
-    if (page > currentPage && typeof window !== 'undefined') {
-      requestAnimationFrame(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-      })
-    }
   }, [currentPage, config])
+
+  useEffect(() => {
+    if (!scrollNextPageRef.current) return
+    if (typeof window === 'undefined') return
+    scrollNextPageRef.current = false
+    requestAnimationFrame(() => {
+      const anchor = resultsTopRef.current
+      if (anchor) {
+        const rect = anchor.getBoundingClientRect()
+        const targetTop = Math.max(0, rect.top + window.scrollY - 8)
+        window.scrollTo({ top: targetTop, behavior: 'auto' })
+      } else {
+        window.scrollTo({ top: 0, behavior: 'auto' })
+      }
+    })
+  }, [currentPage])
   
   // 時間範囲フィルター変更時の処理
   const handleTimeRangeChange = useCallback((value: TimeRangeValue) => {
@@ -1345,6 +1360,7 @@ export default function ClientPage({
           )}
           
           {/* ランキングリスト */}
+          <div ref={resultsTopRef} aria-hidden="true" />
           <ul key={`${ngListVersion}-${config.period}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <li key={item.id} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
