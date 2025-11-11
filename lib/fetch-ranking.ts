@@ -5,6 +5,61 @@ import { scrapeRankingPage, fetchVideoDetailsBatch } from './scraper'
 import type { RankingItem, RankingData } from '@/types/ranking'
 import type { RankingPeriod, RankingGenre } from '@/types/ranking-config'
 
+const DEFAULT_API_GATEWAY = 'https://nico-rank.com'
+
+function shouldUseApiGateway(): boolean {
+  if (process.env.FORCE_SCRAPER_FETCH === 'true') {
+    return false
+  }
+  if (process.env.VERCEL === '1') {
+    return true
+  }
+  if (process.env.VERCEL_ENV === 'preview') {
+    return true
+  }
+  return process.env.USE_RANKING_GATEWAY_FOR_SSR === 'true'
+}
+
+function resolveApiGatewayBase(): string {
+  const explicitGateway = process.env.NEXT_PUBLIC_API_GATEWAY_URL
+  if (explicitGateway && explicitGateway.startsWith('http')) {
+    return explicitGateway.replace(/\/$/, '')
+  }
+  const vercelUrl = process.env.VERCEL_URL
+  if (vercelUrl) {
+    const normalized = vercelUrl.startsWith('http') ? vercelUrl : `https://${vercelUrl}`
+    return normalized.replace(/\/$/, '')
+  }
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000'
+  }
+  return DEFAULT_API_GATEWAY
+}
+
+async function fetchRankingViaGateway(period: RankingPeriod, genre: RankingGenre, tag?: string): Promise<RankingData> {
+  const params = new URLSearchParams({ genre, period })
+  if (tag) {
+    params.set('tag', tag)
+  }
+  const baseUrl = resolveApiGatewayBase()
+  const targetUrl = `${baseUrl}/api/ranking?${params.toString()}`
+  const response = await fetch(targetUrl, {
+    headers: {
+      Accept: 'application/json'
+    },
+    // SSR からの取得はキャッシュを尊重
+    next: { revalidate: 1800 }
+  })
+  if (!response.ok) {
+    throw new Error(`API gateway responded with ${response.status}`)
+  }
+  const data = (await response.json()) as RankingData
+  if (!data || !Array.isArray(data.items)) {
+    throw new Error('Invalid response from API gateway')
+  }
+  return data
+}
+
 /**
  * ランキングデータを取得（すべてスクレイピングベース）
  * @param period - 期間（24h or hour）
@@ -17,7 +72,16 @@ export async function fetchRankingData(
   genre: RankingGenre = 'all',
   tag?: string
 ): Promise<RankingData> {
-  // スクレイピングでランキングを取得
+  if (shouldUseApiGateway()) {
+    try {
+      return await fetchRankingViaGateway(period, genre, tag)
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[fetchRankingData] API gateway fallback triggered:', error)
+      }
+      // フォールバックとしてスクレイピングに切り替える
+    }
+  }
   return fetchRankingWithScraping(period, genre, tag)
 }
 
