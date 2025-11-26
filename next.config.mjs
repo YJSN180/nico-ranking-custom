@@ -315,8 +315,9 @@ const withBundleAnalyzer = bundleAnalyzer({
 const pwaConfig = withPWA({
   dest: 'public',
   register: true,
-  skipWaiting: false,    // ユーザーがページを閉じるまで待機
-  clientsClaim: false,   // 新しいページのみ新しいSWが制御
+  // 新しいSWを即時適用し、古いキャッシュを握らせない
+  skipWaiting: true,
+  clientsClaim: true,
   disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
   fallbacks: {
     document: '/offline.html'
@@ -330,13 +331,14 @@ const pwaConfig = withPWA({
     // API routes - StaleWhileRevalidate for ranking data
     {
       urlPattern: /^\/api\/ranking/i,
-      handler: 'StaleWhileRevalidate',
+      handler: 'NetworkFirst',
       options: {
-        cacheName: 'ranking-api',
+        cacheName: 'ranking-api-v2',
         expiration: {
           maxEntries: 100,
-          maxAgeSeconds: 20 * 60 // 20 minutes
-        }
+          maxAgeSeconds: 10 * 60 // 10 minutes: staleデータ滞留を短縮
+        },
+        networkTimeoutSeconds: 8
       }
     },
     // External API (Niconico)
