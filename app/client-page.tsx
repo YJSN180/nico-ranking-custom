@@ -35,6 +35,7 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
 import { ScrollToTopButton } from '@/components/scroll-to-top-button'
+import { ServiceWorkerClearer } from '@/components/sw-cache-clearer'
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -1213,6 +1214,7 @@ export default function ClientPage({
   try {
     return (
       <TagDisplayProvider>
+        <ServiceWorkerClearer />
         <PullToRefreshIndicator isPulling={isPulling} pullDistance={pullDistance} />
         <div className="selectors-container">
         <RankingSelector 
