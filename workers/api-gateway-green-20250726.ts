@@ -1049,7 +1049,7 @@ function getContentType(extension: string): string {
 // Vercelへのプロキシ関数（フォールバック用）
 async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
-  const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom.vercel.app'
+  const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
   
   const targetHost = new URL(targetUrl).hostname
   const proxyUrl = new URL(url.pathname + url.search, targetUrl)
