@@ -323,13 +323,8 @@ const pwaConfig = withPWA({
     disablePrecacheFallback: true
   },
   disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
-  fallbacks: {
-    document: '/offline.html'
-  },
-  additionalManifestEntries: [
-    { url: '/offline.html', revision: '1' }
-  ],
-  buildExcludes: [/app-build-manifest\.json$/],
+  // offline.html を precache しない（Workbox v7 の precacheFallback 問題を回避）
+  buildExcludes: [/app-build-manifest\.json$/, /offline\.html$/],
   // Workbox configuration
   runtimeCaching: [
     // API routes - StaleWhileRevalidate for ranking data
