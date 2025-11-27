@@ -201,17 +201,20 @@ export async function middleware(request: NextRequest) {
   }
   
   // APIルートの最適化
+  // API /ranking と ルートHTML は no-store を強制（動的レンダリングと整合）
+  // /api/ranking は鮮度優先だが、負荷対策で短いCDNキャッシュを許可（15分）
   if (request.nextUrl.pathname.startsWith('/api/ranking')) {
-    response.headers.set('Cache-Control', getCacheHeaders('ranking'))
-    // Cloudflare用のキャッシュヘッダー
-    response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
+    const smax = 900
+    response.headers.set('Cache-Control', `public, max-age=0, s-maxage=${smax}, stale-while-revalidate=${smax}`)
+    response.headers.set('CDN-Cache-Control', `public, s-maxage=${smax}`)
+    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${smax}`)
   }
-  
-  // メインページのキャッシュ（ISRの代替として）
+
+  // HTML は依然 no-store（dplずれ防止）
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
-    // Cloudflare CDNで20分間キャッシュ
-    response.headers.set('Cache-Control', getCacheHeaders('ranking'))
-    response.headers.set('CDN-Cache-Control', `public, s-maxage=${CACHE_DURATIONS.CDN_CACHE.RANKING}`)
+    response.headers.set('Cache-Control', 'no-store')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   }
   
   // 静的アセットの長期キャッシュ設定

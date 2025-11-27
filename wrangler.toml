@@ -35,7 +35,7 @@ WORKER_AUTH_KEY = "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa
 
 # Custom domain
 [[routes]]
-pattern = "nico-rank.com/api/*"
+pattern = "nico-rank.com/*"
 zone_name = "nico-rank.com"
 
 # Service Bindings - 他のWorkerへの接続
