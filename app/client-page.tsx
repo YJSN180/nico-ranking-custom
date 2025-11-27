@@ -59,6 +59,23 @@ const isPWA = () => {
          document.referrer.includes('android-app://') // Androidの場合
 }
 
+export function shouldSkipInitialFetch(
+  isInitialLoad: boolean,
+  force: boolean,
+  cfg: RankingConfig,
+  initialGenre: string,
+  initialPeriod: string,
+  initialTag?: string,
+) {
+  if (!isInitialLoad) return false
+  if (force) return false
+  return (
+    cfg.genre === initialGenre &&
+    cfg.period === initialPeriod &&
+    cfg.tag === initialTag
+  )
+}
+
 // タグ表示トグルボタンコンポーネント
 function TagToggleButton() {
   const { showTags, toggleTags } = useTagDisplay()
@@ -495,6 +512,7 @@ export default function ClientPage({
     
     // 初回ロードの処理
     if (isInitialLoad) {
+      const initialMatch = shouldSkipInitialFetch(isInitialLoad, force, newConfig, initialGenre, initialPeriod, initialTag)
       // カスタムランキングの場合は必ずデータフェッチを実行
       if (newConfig.genre === 'custom') {
         // IndexedDBの読み込みが完了するまで待機
@@ -514,9 +532,7 @@ export default function ClientPage({
         })
         setIsInitialLoad(false)
         // データフェッチに続行
-      } else if (newConfig.genre === initialGenre && 
-                 newConfig.period === initialPeriod && 
-                 newConfig.tag === initialTag) {
+      } else if (initialMatch) {
         // 通常のジャンルで同じ設定の場合はSSRデータを使用
         serverLog.info('Initial load - using SSR data, skipping API fetch', {
           initialGenre,
