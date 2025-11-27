@@ -97,7 +97,6 @@ export function useRankingData({
     abortControllerRef.current = new AbortController()
     const signal = abortControllerRef.current.signal
 
-    setLoading(true)
     setError(null)
     setRetryCount(0)
     setIsRetrying(false)
@@ -148,7 +147,7 @@ export function useRankingData({
         // タグランキングの場合はタグも含めてキャッシュキーを生成
         const cacheTag = config.tag && !config.tag.startsWith('custom:') ? config.tag : undefined
         const cachedData = rankingCache.get(cacheGenre, config.period, cacheTag)
-        
+
         if (cachedData) {
           // キャッシュヒット時のログ
           serverLog.info('Cache hit for ranking data', {
@@ -186,6 +185,7 @@ export function useRankingData({
       // カスタムランキングの場合はタグランキングとして扱わない
       const isTagRanking = !!config.tag && !config.tag.startsWith('custom:')
       const limit = getDeviceBasedLimit(deviceType, isTagRanking)
+      setLoading(true)
       
       // デバッグ情報をVercelログに出力
       serverLog.info('Device type and API request info', {
@@ -260,22 +260,14 @@ export function useRankingData({
         if (response.ok) {
           // 成功 - データ処理へ進む
         } else if (response.status === 429) {
-          // 429エラー検出 - URLを更新してからページリロード
-          console.log('Rate limited (429). Reloading page immediately to reset state...')
-          setError('読み込み中...')
-          
-          // URLパラメータを構築
-          const params = new URLSearchParams()
-          if (config.genre !== 'all') params.set('genre', config.genre)
-          if (config.period !== '24h') params.set('period', config.period)
-          if (config.tag) params.set('tag', config.tag)
-          
-          const newUrl = params.toString() ? `?${params.toString()}` : '/'
-          
-          // 1秒待ってからURLを更新してリロード
-          setTimeout(() => {
-            window.location.href = newUrl
-          }, 1000)
+          // 429エラー検出 - リロードせずユーザーに待機を促す
+          serverLog.warn('Rate limited (429) - skipping auto reload', {
+            genre: config.genre,
+            period: config.period,
+            tag: config.tag
+          })
+          setError('リクエストが集中しています。しばらく待ってから再度お試しください。')
+          setLoading(false)
           return
         } else {
           // その他のエラー。AdBlock等で net::ERR_BLOCKED_BY_CLIENT の場合 status は 0 になることがある
