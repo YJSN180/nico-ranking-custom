@@ -11,6 +11,9 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   
+  // キャッシュ禁止対象パス
+  const noStorePaths = ['/api/ranking']
+  
   // SECURITY FIX: /api/admin/* は認証チェックを通す
   // 一般的な公開APIのみ認証をスキップ
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
@@ -174,6 +177,15 @@ export async function middleware(request: NextRequest) {
     }
   }
   
+  // 特定パスはここで即返し、ヘッダーを強制上書き
+  if (noStorePaths.some(p => pathname.startsWith(p))) {
+    const res = NextResponse.next()
+    res.headers.set('Cache-Control', 'no-store')
+    res.headers.set('CDN-Cache-Control', 'no-store')
+    res.headers.set('Vercel-CDN-Cache-Control', 'no-store')
+    return res
+  }
+
   const response = NextResponse.next()
   
   // パフォーマンス最適化ヘッダー

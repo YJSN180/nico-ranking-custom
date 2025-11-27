@@ -545,13 +545,13 @@ export default {
         // If-None-Matchチェック
         const ifNoneMatch = request.headers.get('If-None-Match')
         if (ifNoneMatch && isETagMatch(etag, ifNoneMatch)) {
-          const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
+          const { workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
           const notModifiedResponse = new Response(null, {
             status: 304,
             headers: {
               'ETag': etag,
-              'Cache-Control': cacheControl,
-              'CDN-Cache-Control': cdnCacheControl,
+              'Cache-Control': 'no-store',
+              'CDN-Cache-Control': 'no-store',
               'CF-Cache-Status': 'REVALIDATED',
               'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
               'X-Worker-Version': 'green-20250726-unified-cors',
@@ -560,17 +560,24 @@ export default {
           })
           
           const origin = request.headers.get('Origin')
-          return applyCORSHeaders(notModifiedResponse, origin, securityHeaders)
+          return applyCORSHeaders(notModifiedResponse, origin, {
+            ...securityHeaders,
+            'Cache-Control': 'no-store',
+            'CDN-Cache-Control': 'no-store',
+            'Vercel-CDN-Cache-Control': 'no-store'
+          })
         }
         
-        // 動的TTL v2.0を計算
-        const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
+        // 動的TTL v2.0を計算（ログ用途のみ）
+        const { workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
         
         // R2から取得したデータを返す
         const headers = new Headers()
         headers.set('Content-Type', 'application/json')
-        headers.set('Cache-Control', cacheControl)
-        headers.set('CDN-Cache-Control', cdnCacheControl)
+        // キャッシュ禁止（ブラウザ・CDNとも）
+        headers.set('Cache-Control', 'no-store')
+        headers.set('CDN-Cache-Control', 'no-store')
+        headers.set('Vercel-CDN-Cache-Control', 'no-store')
         headers.set('ETag', etag)
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
@@ -648,8 +655,12 @@ export default {
               headers
             })
             
-            const origin = request.headers.get('Origin')
-            return applyCORSHeaders(normalResponse, origin, {})
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(normalResponse, origin, {
+          'Cache-Control': 'no-store',
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store'
+        })
           } catch (error) {
             console.error('[Green Worker] Failed to parse or decode JSON:', error)
             const normalErrorResponse = new Response(workStream, {
@@ -1044,7 +1055,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const proxyUrl = new URL(url.pathname + url.search, targetUrl)
   
   const headers = new Headers(request.headers)
-  headers.set('Host', targetHost)
+  // Hostはfetchに任せる（明示するとリダイレクトループの原因になる）
   headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
@@ -1063,35 +1074,31 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   try {
     const response = await fetch(proxyRequest)
     
-    // 307リダイレクトの処理（無限ループ防止）
+    // 30xリダイレクトの処理（無限ループ防止）
     if (response.status === 307 || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 308) {
       const location = response.headers.get('Location')
       console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location}`)
       
-      // リダイレクト先がnico-rank.comの場合は無視して200を返す
-      if (location && (location.includes('nico-rank.com') || location.includes('nico-ranking-custom'))) {
-        console.warn('[Green Worker] Preventing redirect loop, returning 200 instead')
-        // リダイレクトを無視してVercelからコンテンツを取得
-        const finalResponse = await fetch(location || proxyUrl.toString(), {
+      if (location) {
+        // ループを避けるため、Hostヘッダーを外した状態で追跡
+        const followHeaders = new Headers(request.headers)
+        followHeaders.delete('Host')
+        followHeaders.set('X-Forwarded-Host', url.hostname)
+        followHeaders.set('X-Forwarded-Proto', 'https')
+        followHeaders.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
+        const followed = await fetch(location, {
           method: 'GET',
-          headers: headers,
+          headers: followHeaders,
           redirect: 'follow'
         })
-        
-        const finalHeaders = new Headers(finalResponse.headers)
-        Object.entries(securityHeaders).forEach(([key, value]) => {
-          finalHeaders.set(key, value)
-        })
-        // CORS headers will be applied later with applyCORSHeaders
-        
-        const finalProxyResponse = new Response(finalResponse.body, {
-          status: 200,
-          statusText: 'OK',
-          headers: finalHeaders
-        })
-        
         const origin = request.headers.get('Origin')
-        return applyCORSHeaders(finalProxyResponse, origin, {})
+        const safeHeaders = new Headers(followed.headers)
+        Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))
+        return applyCORSHeaders(new Response(followed.body, {
+          status: followed.status,
+          statusText: followed.statusText,
+          headers: safeHeaders
+        }), origin, {})
       }
     }
     

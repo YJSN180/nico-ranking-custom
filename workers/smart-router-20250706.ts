@@ -32,6 +32,27 @@ const securityHeaders = {
 
 // CORSヘッダーは ./utils/cors-config.ts で統一管理
 
+async function proxyToVercel(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-2ezx48med-yjsns-projects.vercel.app'
+  const target = new URL(url.pathname + url.search, targetBase)
+
+  // Hostヘッダーはfetchに任せ、オリジナルHost情報だけ伝える
+  const headers = new Headers(request.headers)
+  headers.set('X-Forwarded-Host', url.hostname)
+  headers.set('X-Forwarded-Proto', 'https')
+
+  const proxiedRequest = new Request(target.toString(), {
+    method: request.method,
+    headers,
+    body: request.body,
+    redirect: 'follow'
+  })
+
+  const response = await fetch(proxiedRequest)
+  return response
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
@@ -48,9 +69,47 @@ export default {
       
       // アクティブWorkerに基づいてFetcherを選択
       const targetWorker = activeWorker === 'green' ? env.WORKER_GREEN : env.WORKER_BLUE
+
+      // HTMLや静的リソースは直接Vercelへプロキシ（APIのみブルー/グリーンを経由）
+      const isApiRequest = url.pathname.startsWith('/api/')
+      if (!isApiRequest) {
+        const proxied = await proxyToVercel(request, env)
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(proxied, origin, {
+          ...securityHeaders,
+          'X-Active-Worker': activeWorker,
+          'X-Router-Version': 'smart-router-20250706-fixed-html-direct'
+        })
+      }
       
       // リクエストを対象Workerに転送
       const response = await targetWorker.fetch(request)
+      
+      // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）
+      const forceNoStore =
+        url.pathname.startsWith('/api/ranking') ||
+        url.pathname.startsWith('/api/metadata') ||
+        url.pathname.startsWith('/api/tags/autocomplete')
+      
+      if (forceNoStore) {
+        const headers = new Headers(response.headers)
+        headers.set('Cache-Control', 'no-store')
+        headers.set('CDN-Cache-Control', 'no-store')
+        headers.set('Vercel-CDN-Cache-Control', 'no-store')
+        const body = response.body ? response.body : null
+        const modified = new Response(body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers
+        })
+        const origin = request.headers.get('Origin')
+        const modifiedResponse = applyCORSHeaders(modified, origin, {
+          ...securityHeaders,
+          'X-Active-Worker': activeWorker,
+          'X-Router-Version': 'smart-router-20250706-fixed'
+        })
+        return modifiedResponse
+      }
       
       // CORS重複問題を回避して安全なヘッダーを適用
       const origin = request.headers.get('Origin')
