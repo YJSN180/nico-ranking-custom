@@ -48,12 +48,11 @@ describe('OptimizedImage', () => {
 
       const img = container.querySelector('img')
       expect(img).toBeTruthy()
-      // ニコニコ動画CDNの画像は通常の<img>タグで表示される
-      // そのため、Next.js Image固有の属性（data-sizes, data-fill等）は設定されない
-      expect(img?.getAttribute('data-sizes')).toBeNull()
+      // ニコニコ動画CDNの画像でも next/image を使用しつつ最適化を無効化する
+      expect(img?.getAttribute('data-sizes')).toBe('100px')
       expect(img?.getAttribute('data-fill')).toBeNull()
       expect(img?.getAttribute('data-priority')).toBeNull()
-      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      expect(img?.getAttribute('data-unoptimized')).toBe('true')
     })
 
     it('ニコニコ動画の各種CDNドメインが正しく識別されること', () => {
@@ -76,7 +75,7 @@ describe('OptimizedImage', () => {
         const img = container.querySelector('img')
         expect(img).toBeTruthy()
         // 通常の<img>タグが使用されていることを確認
-        expect(img?.getAttribute('data-unoptimized')).toBeNull()
+        expect(img?.getAttribute('data-unoptimized')).toBe('true')
       })
     })
   })
@@ -94,8 +93,8 @@ describe('OptimizedImage', () => {
 
       const img = container.querySelector('img')
       expect(img).toBeTruthy()
-      // unoptimizedが設定されていないこと（最適化が有効）
-      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      // unoptimized=false で Next.js の最適化が有効になる
+      expect(img?.getAttribute('data-unoptimized')).toBe('false')
     })
 
     it('ローカル画像に対してNext.jsの画像最適化が有効になること（unoptimized未設定）', () => {
@@ -111,10 +110,10 @@ describe('OptimizedImage', () => {
       const img = container.querySelector('img')
       expect(img).toBeTruthy()
       // unoptimizedが設定されていないこと
-      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      expect(img?.getAttribute('data-unoptimized')).toBe('false')
     })
 
-    it('投稿者アイコンサイズ（18x18）で正しくレンダリングされること', () => {
+    it('投稿者アイコンサイズ（18x18）でも最適化を無効化してレンダリングされること', () => {
       const { container } = render(
         <OptimizedImage
           src="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/1234567.jpg"
@@ -129,10 +128,10 @@ describe('OptimizedImage', () => {
       expect(img).toBeTruthy()
       expect(img?.getAttribute('width')).toBe('18')
       expect(img?.getAttribute('height')).toBe('18')
-      // ニコニコ動画CDNの画像は通常の<img>タグで表示されるため、sizesは適用されない
-      expect(img?.getAttribute('data-sizes')).toBeNull()
-      // ニコニコ動画CDNの画像は直接表示されるため、data-unoptimizedも設定されない
-      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      // ニコニコ動画CDNの画像でも指定したsizesがそのまま適用される
+      expect(img?.getAttribute('data-sizes')).toBe('18px')
+      // unoptimized=true で Next.js 最適化をバイパスする
+      expect(img?.getAttribute('data-unoptimized')).toBe('true')
     })
   })
 
@@ -217,7 +216,7 @@ describe('OptimizedImage', () => {
       const img = container.querySelector('img')
       expect(img).toBeTruthy()
       // unoptimizedが設定されていない = 最適化有効 = WebP/AVIFサポート
-      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      expect(img?.getAttribute('data-unoptimized')).toBe('false')
     })
 
     it('外部画像でもWebP/AVIFフォーマットがサポートされること（最適化有効）', () => {
@@ -233,7 +232,7 @@ describe('OptimizedImage', () => {
       const img = container.querySelector('img')
       expect(img).toBeTruthy()
       // unoptimizedが設定されていない = 最適化有効 = WebP/AVIFサポートあり
-      expect(img?.getAttribute('data-unoptimized')).toBeNull()
+      expect(img?.getAttribute('data-unoptimized')).toBe('false')
     })
   })
 
@@ -352,10 +351,10 @@ describe('OptimizedImage', () => {
       })
     })
 
-    it('フォールバック画像でも最適化設定が維持されること', async () => {
+    it('ニコ動サムネイルからフォールバックした場合は最適化が再有効化されること', async () => {
       const { container } = render(
         <OptimizedImage
-          src="https://example.com/broken-image.jpg"
+          src="https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/1234567.jpg"
           alt="Broken image"
           width={100}
           height={100}
@@ -364,12 +363,14 @@ describe('OptimizedImage', () => {
       )
 
       const img = container.querySelector('img')
+      expect(img?.getAttribute('data-unoptimized')).toBe('true')
+
       fireEvent.error(img!)
 
       await waitFor(() => {
         expect(img?.getAttribute('src')).toBe('/cantwatch.jpg')
-        // 全ての画像に対してunoptimizedは未設定（最適化有効）
-        expect(img?.getAttribute('data-unoptimized')).toBeNull()
+        // フォールバック画像ではNext.js最適化を再度有効化
+        expect(img?.getAttribute('data-unoptimized')).toBe('false')
       })
     })
   })
@@ -455,7 +456,7 @@ describe('OptimizedImage', () => {
       expect(img?.getAttribute('loading')).toBe('lazy')
       expect(img?.className).toBe('thumbnail')
       expect(img?.style.borderRadius).toBe('4px')
-      expect(img?.getAttribute('data-unoptimized')).toBeNull() // ローカル画像なので最適化有効
+      expect(img?.getAttribute('data-unoptimized')).toBe('false') // ローカル画像なので最適化有効
 
       fireEvent.click(img!)
       expect(onClick).toHaveBeenCalled()

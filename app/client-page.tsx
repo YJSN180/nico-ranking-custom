@@ -233,6 +233,16 @@ export default function ClientPage({
     conditions: any[]
     baseGenre: RankingGenre
   } | null>(null)
+  const isShowingCustomRankingRef = useRef(isShowingCustomRanking)
+  const customRankingDisplayCountRef = useRef(customRankingDisplayData.length)
+
+  useEffect(() => {
+    isShowingCustomRankingRef.current = isShowingCustomRanking
+  }, [isShowingCustomRanking])
+
+  useEffect(() => {
+    customRankingDisplayCountRef.current = customRankingDisplayData.length
+  }, [customRankingDisplayData.length])
   
   
   // 新しく作成したカスタムランキングがcustomRankings配列に反映されたらクリア
@@ -474,16 +484,12 @@ export default function ClientPage({
   
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
+    const abortController = abortControllerRef.current
+    const tagsAbortController = tagsAbortControllerRef.current
+
     return () => {
-      const abortController = abortControllerRef.current
-      const tagsAbortController = tagsAbortControllerRef.current
-      
-      if (abortController) {
-        abortController.abort()
-      }
-      if (tagsAbortController) {
-        tagsAbortController.abort()
-      }
+      abortController?.abort()
+      tagsAbortController?.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -499,13 +505,16 @@ export default function ClientPage({
   const handleConfigChangeCore = useCallback(async (newConfig: RankingConfig, force = false) => {
     // 設定変更時は必ず前回のエラーをクリア
     setError(null)
-    
+
+    const currentlyShowingCustomRanking = isShowingCustomRankingRef.current
+    const customDisplayCount = customRankingDisplayCountRef.current
+
     // Vercelログに設定変更情報を出力
     serverLog.info('handleConfigChange called', {
       newConfig,
       currentConfig: config,
       isInitialLoad,
-      isShowingCustomRanking,
+      isShowingCustomRanking: currentlyShowingCustomRanking,
       customRankingsLoading,
       force
     })
@@ -583,7 +592,7 @@ export default function ClientPage({
     }
 
     // カスタムランキング表示中で、同じカスタムランキングかつ同じ期間の場合は専用状態を維持
-    if (isShowingCustomRanking && 
+    if (currentlyShowingCustomRanking && 
         newConfig.genre === 'custom' && 
         newConfig.tag?.startsWith('custom:') &&
         config.tag === newConfig.tag &&
@@ -593,7 +602,7 @@ export default function ClientPage({
     }
 
     // カスタムランキング以外への切り替え、または異なるカスタムランキングへの切り替え
-    if (isShowingCustomRanking && 
+    if (currentlyShowingCustomRanking && 
         (newConfig.genre !== 'custom' || newConfig.tag !== config.tag)) {
       setIsShowingCustomRanking(false)
       setCustomRankingDisplayData([])
@@ -704,7 +713,7 @@ export default function ClientPage({
         // eslint-disable-next-line no-console
         
         // 既にフィルタリング済みデータがある場合はスキップ
-        if (isShowingCustomRanking && customRankingDisplayData.length > 0) {
+        if (currentlyShowingCustomRanking && customDisplayCount > 0) {
           // eslint-disable-next-line no-console
           return
         }
@@ -720,10 +729,10 @@ export default function ClientPage({
     
     // 既存のカスタムランキング専用状態のチェック
     // 新規作成時も含めて、すでに表示中のデータがある場合はスキップ
-    if (isShowingCustomRanking && 
+    if (currentlyShowingCustomRanking && 
         newConfig.genre === 'custom' && 
         newConfig.tag?.startsWith('custom:') &&
-        customRankingDisplayData.length > 0) {
+        customDisplayCount > 0) {
       // 新規作成時または同じカスタムランキングの再選択時
       const customId = newConfig.tag.replace('custom:', '')
       if (newlyCreatedRankings.has(customId) || 
@@ -746,7 +755,7 @@ export default function ClientPage({
     if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {
       const customId = newConfig.tag.replace('custom:', '')
       if (newlyCreatedRankings.has(customId) && 
-          isShowingCustomRanking && customRankingDisplayData.length > 0) {
+          currentlyShowingCustomRanking && customDisplayCount > 0) {
         // 新規作成したランキングのデータが既に設定されているのでスキップ
         return
       }
@@ -759,9 +768,8 @@ export default function ClientPage({
       // エラーはフック内で処理済み
     }
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRankings, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking, setError])
-  // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
-  // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
-  // fetchRankingData が空データで上書きしてしまう問題を防ぐため
+  // 注意: カスタムランキングの表示状態は useRef で追跡しているため
+  // 依存配列に含めずとも最新値を参照できる
   // eslint-disable-next-line react-hooks/exhaustive-deps
   
   // デバウンスされた設定変更ハンドラー（500ms遅延）

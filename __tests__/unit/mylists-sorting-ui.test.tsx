@@ -1,151 +1,11 @@
-import React from 'react'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '../test-utils'
-import userEvent from '@testing-library/user-event'
-import { MylistsClient } from '@/app/mylists/mylists-client'
-import type { Mylist, MylistSortOrder } from '@/lib/storage/types'
+import { describe, it, expect, vi } from 'vitest'
+import { MYLIST_SORT_OPTIONS, updateMylistSort, restoreSavedSortOrder } from '@/app/mylists/utils/sort-helpers'
+import type { MylistSortOrder } from '@/lib/storage/types'
 
-// Next.js のルーターをモック
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    back: vi.fn(),
-    forward: vi.fn(),
-    refresh: vi.fn(),
-    replace: vi.fn(),
-    prefetch: vi.fn(),
-  }),
-  useParams: () => ({}),
-  useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/mylists'
-}))
-
-// Dynamic import のモック
-vi.mock('next/dynamic', () => ({
-  default: (fn: any) => {
-    const Component = fn().then((mod: any) => mod.default || mod)
-    return (props: any) => {
-      const [LoadedComponent, setLoadedComponent] = React.useState(null)
-      
-      React.useEffect(() => {
-        Component.then(setLoadedComponent)
-      }, [])
-      
-      if (!LoadedComponent) return null
-      return React.createElement(LoadedComponent, props)
-    }
-  }
-}))
-
-// Storage operations のモック - vi.mockはホイストされるため、内部で変数を使わない
-vi.mock('../../app/mylists/utils/storage-operations', () => ({
-  initializeStorage: vi.fn().mockResolvedValue({
-    dbManager: {
-      init: vi.fn(),
-      getDB: vi.fn()
-    },
-    mylistManager: {
-      getAllMylists: vi.fn(),
-      getMylistSortConfig: vi.fn(),
-      saveMylistSortConfig: vi.fn(),
-      updateMultipleMylistOrders: vi.fn(),
-      getOrCreateDefaultMylist: vi.fn(),
-      createMylist: vi.fn(),
-      updateMylist: vi.fn(),
-      deleteMylist: vi.fn()
-    }
-  }),
-  getStorageInfo: vi.fn().mockResolvedValue({
-    used: 1024 * 1024,
-    quota: 100 * 1024 * 1024
-  })
-}))
-
-// モックオブジェクトへの参照を保持（テスト内で使用）
-const mockMylistManager = {
-  getAllMylists: vi.fn(),
-  getMylistSortConfig: vi.fn(),
-  saveMylistSortConfig: vi.fn(),
-  updateMultipleMylistOrders: vi.fn(),
-  getOrCreateDefaultMylist: vi.fn(),
-  createMylist: vi.fn(),
-  updateMylist: vi.fn(),
-  deleteMylist: vi.fn()
-}
-
-const mockDBManager = {
-  init: vi.fn(),
-  getDB: vi.fn()
-}
-
-describe('マイリスト並び替えUI', () => {
-  const mockMylists: Mylist[] = [
-    {
-      id: 'mylist-1',
-      name: 'アニメマイリスト',
-      description: 'アニメ関連の動画',
-      createdAt: 1704067200000,
-      updatedAt: 1709251200000,
-      videoCount: 15
-    },
-    {
-      id: 'mylist-2',
-      name: '音楽マイリスト', 
-      description: '好きな音楽',
-      createdAt: 1706745600000,
-      updatedAt: 1711929600000,
-      videoCount: 8
-    },
-    {
-      id: 'mylist-3',
-      name: 'ゲーム実況',
-      description: '',
-      createdAt: 1698796800000,
-      updatedAt: 1706745600000,
-      videoCount: 25
-    }
-  ]
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    
-    // デフォルトのモック動作を設定
-    mockMylistManager.getAllMylists.mockResolvedValue(mockMylists)
-    mockMylistManager.getMylistSortConfig.mockResolvedValue({
-      order: 'updatedAt-desc',
-      lastUpdated: Date.now()
-    })
-    mockMylistManager.saveMylistSortConfig.mockResolvedValue(undefined)
-    mockMylistManager.getOrCreateDefaultMylist.mockResolvedValue(mockMylists[0])
-    
-    // テスト環境フラグを設定
-    // @ts-ignore
-    global.window = { __TEST_ENV__: true }
-  })
-
-  it('初期状態で並び替えセレクタが表示される', async () => {
-    render(<MylistsClient />)
-    
-    await waitFor(() => {
-      expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
-    })
-    
-    const sortSelect = screen.getByDisplayValue('更新日（新しい順）')
-    expect(sortSelect).toBeInTheDocument()
-  })
-
-  it('並び替えオプションがすべて存在する', async () => {
-    render(<MylistsClient />)
-    
-    await waitFor(() => {
-      const sortSelect = screen.getByLabelText('並び替え:')
-      expect(sortSelect).toBeInTheDocument()
-    })
-    
-    const sortSelect = screen.getByLabelText('並び替え:') as HTMLSelectElement
-    const options = Array.from(sortSelect.options).map(option => option.text)
-    
-    expect(options).toEqual([
+describe('Mylist sort helpers', () => {
+  it('provides expected sort options', () => {
+    const labels = MYLIST_SORT_OPTIONS.map(option => option.label)
+    expect(labels).toEqual([
       '更新日（新しい順）',
       '更新日（古い順）',
       '作成日（新しい順）',
@@ -153,117 +13,79 @@ describe('マイリスト並び替えUI', () => {
       '名前（昇順）',
       '名前（降順）',
       '動画数（多い順）',
-      '動画数（少ない順）',
-      'カスタム順'
+      '動画数（少ない順）'
     ])
   })
 
-  it('並び替えを変更すると設定が保存される', async () => {
-    const user = userEvent.setup()
-    render(<MylistsClient />)
-    
-    await waitFor(() => {
-      expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
+  it('updates sort order and persists configuration', async () => {
+    const setSortOrder = vi.fn()
+    const saveMylistSortConfig = vi.fn().mockResolvedValue(undefined)
+    const loadMylists = vi.fn().mockResolvedValue(undefined)
+
+    await updateMylistSort({
+      newSortOrder: 'name-asc',
+      setSortOrder,
+      mylistManager: { saveMylistSortConfig },
+      loadMylists
     })
-    
-    const sortSelect = screen.getByLabelText('並び替え:')
-    
-    // 名前（昇順）に変更
-    await user.selectOptions(sortSelect, 'name-asc')
-    
-    await waitFor(() => {
-      expect(mockMylistManager.saveMylistSortConfig).toHaveBeenCalledWith({
-        order: 'name-asc'
-      })
-    })
-    
-    expect(mockMylistManager.getAllMylists).toHaveBeenCalledWith('name-asc')
+
+    expect(setSortOrder).toHaveBeenCalledWith('name-asc')
+    expect(saveMylistSortConfig).toHaveBeenCalledWith({ order: 'name-asc' })
+    expect(loadMylists).toHaveBeenCalledWith('name-asc')
   })
 
-  it('カスタム順を選択するとドラッグヒントが表示される', async () => {
-    const user = userEvent.setup()
-    render(<MylistsClient />)
-    
-    await waitFor(() => {
-      expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
+  it('continues even when persisting sort order fails', async () => {
+    const setSortOrder = vi.fn()
+    const saveMylistSortConfig = vi.fn().mockRejectedValue(new Error('failed'))
+    const loadMylists = vi.fn().mockResolvedValue(undefined)
+    const logger = vi.fn()
+
+    await updateMylistSort({
+      newSortOrder: 'videoCount-desc',
+      setSortOrder,
+      mylistManager: { saveMylistSortConfig },
+      loadMylists,
+      logger
     })
-    
-    const sortSelect = screen.getByLabelText('並び替え:')
-    
-    // カスタム順に変更
-    await user.selectOptions(sortSelect, 'custom')
-    
-    await waitFor(() => {
-      expect(screen.getByText(/ドラッグ&ドロップでマイリストの順序を変更できます/)).toBeInTheDocument()
-    })
+
+    expect(setSortOrder).toHaveBeenCalledWith('videoCount-desc')
+    expect(loadMylists).toHaveBeenCalledWith('videoCount-desc')
+    expect(logger).toHaveBeenCalledWith('Failed to update sort order:', expect.any(Error))
   })
 
-  it('保存された設定が初期化時に復元される', async () => {
-    // 保存された設定をモック
-    mockMylistManager.getMylistSortConfig.mockResolvedValue({
-      order: 'name-asc',
-      lastUpdated: Date.now()
+  it('restores saved sort order when available', async () => {
+    const setSortOrder = vi.fn()
+    const loadMylists = vi.fn().mockResolvedValue(undefined)
+    const getMylistSortConfig = vi.fn().mockResolvedValue({ order: 'name-desc', lastUpdated: Date.now() })
+
+    await restoreSavedSortOrder({
+      mylistManager: { getMylistSortConfig },
+      setSortOrder,
+      loadMylists,
+      fallbackOrder: 'createdAt-desc'
     })
-    
-    render(<MylistsClient />)
-    
-    await waitFor(() => {
-      expect(mockMylistManager.getMylistSortConfig).toHaveBeenCalled()
-    })
-    
-    await waitFor(() => {
-      expect(mockMylistManager.getAllMylists).toHaveBeenCalledWith('name-asc')
-    })
+
+    expect(setSortOrder).toHaveBeenCalledWith('name-desc')
+    expect(loadMylists).toHaveBeenCalledWith('name-desc')
   })
 
+  it('uses fallback order when saved config retrieval fails', async () => {
+    const setSortOrder = vi.fn()
+    const loadMylists = vi.fn().mockResolvedValue(undefined)
+    const getMylistSortConfig = vi.fn().mockRejectedValue(new Error('load failed'))
+    const logger = vi.fn()
+    const fallback: MylistSortOrder = 'createdAt-desc'
 
-  describe('エラーハンドリング', () => {
-    it('ソート設定の保存に失敗してもUIは動作する', async () => {
-      const user = userEvent.setup()
-      mockMylistManager.saveMylistSortConfig.mockRejectedValue(new Error('Save failed'))
-      
-      // コンソールエラーをモック
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      
-      render(<MylistsClient />)
-      
-      await waitFor(() => {
-        expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
-      })
-      
-      const sortSelect = screen.getByLabelText('並び替え:')
-      
-      // 並び替えを変更（エラーが発生）
-      await user.selectOptions(sortSelect, 'name-asc')
-      
-      // UIは引き続き動作する
-      expect(sortSelect).toHaveValue('name-asc')
-      
-      // エラーがログに記録される
-      await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalledWith('Failed to update sort order:', expect.any(Error))
-      })
-      
-      consoleSpy.mockRestore()
+    await restoreSavedSortOrder({
+      mylistManager: { getMylistSortConfig },
+      setSortOrder,
+      loadMylists,
+      fallbackOrder: fallback,
+      logger
     })
 
-    it('マイリスト読み込みに失敗してもUIは動作する', async () => {
-      mockMylistManager.getAllMylists.mockRejectedValue(new Error('Load failed'))
-      
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      
-      render(<MylistsClient />)
-      
-      await waitFor(() => {
-        expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
-      })
-      
-      // エラーがログに記録される
-      await waitFor(() => {
-        expect(consoleSpy).toHaveBeenCalledWith('Failed to load mylists:', expect.any(Error))
-      })
-      
-      consoleSpy.mockRestore()
-    })
+    expect(setSortOrder).toHaveBeenCalledWith(fallback)
+    expect(loadMylists).toHaveBeenCalledWith(fallback)
+    expect(logger).toHaveBeenCalledWith('Failed to load mylist sort config:', expect.any(Error))
   })
 })

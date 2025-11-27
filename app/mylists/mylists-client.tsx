@@ -3,13 +3,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import type { Mylist, MylistSortOrder, MylistSortConfig } from '@/lib/storage/types'
+import type { Mylist, MylistSortOrder } from '@/lib/storage/types'
 import type { DBManager } from '@/lib/storage/db-manager'
 import type { MylistManager } from '@/lib/storage/mylists'
 import { BackLink } from '@/components/back-link'
 import { MylistBackup } from '@/components/mylist-backup'
 import { formatBytes, formatDate } from './utils/format-utils'
 import { initializeStorage, getStorageInfo } from './utils/storage-operations'
+import { MYLIST_SORT_OPTIONS, updateMylistSort, restoreSavedSortOrder } from './utils/sort-helpers'
 import { MylistSkeleton } from './components/mylist-skeleton'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import styles from './mylists.module.css'
@@ -103,14 +104,20 @@ export function MylistsClient() {
         // デフォルトマイリストを確保
         await mylistManagerRef.current.getOrCreateDefaultMylist()
         
-        // 保存されたソート設定を読み込み
         if (mylistManagerRef.current) {
-          const savedConfig = await mylistManagerRef.current.getMylistSortConfig()
-          setSortOrder(savedConfig.order)
+          await restoreSavedSortOrder({
+            mylistManager: mylistManagerRef.current,
+            setSortOrder,
+            loadMylists,
+            fallbackOrder: 'createdAt-desc',
+            logger: (message, error) => {
+              // eslint-disable-next-line no-console
+              console.error(message, error)
+            }
+          })
+        } else {
+          await loadMylists()
         }
-        
-        // マイリスト一覧を取得
-        await loadMylists()
         
         // ストレージ情報を取得（動的インポート）
         const storageInfo = await getStorageInfo()
@@ -153,21 +160,17 @@ export function MylistsClient() {
 
   const handleSortChange = async (newSortOrder: MylistSortOrder) => {
     if (!mylistManagerRef.current) return
-    
-    setSortOrder(newSortOrder)
-    
-    try {
-      // ソート設定を保存
-      await mylistManagerRef.current.saveMylistSortConfig({
-        order: newSortOrder
-      })
-      
-      // マイリストを再読み込み
-      await loadMylists(newSortOrder)
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to update sort order:', error)
-    }
+
+    await updateMylistSort({
+      newSortOrder,
+      setSortOrder,
+      mylistManager: mylistManagerRef.current,
+      loadMylists,
+      logger: (message, error) => {
+        // eslint-disable-next-line no-console
+        console.error(message, error)
+      }
+    })
   }
   
   const handleCreateMylist = async (name: string, description?: string) => {
@@ -248,14 +251,11 @@ export function MylistsClient() {
             value={sortOrder}
             onChange={(e) => handleSortChange(e.target.value as MylistSortOrder)}
           >
-            <option value="createdAt-desc">作成日（新しい順）</option>
-            <option value="createdAt-asc">作成日（古い順）</option>
-            <option value="updatedAt-desc">更新日（新しい順）</option>
-            <option value="updatedAt-asc">更新日（古い順）</option>
-            <option value="name-asc">名前（昇順）</option>
-            <option value="name-desc">名前（降順）</option>
-            <option value="videoCount-desc">動画数（多い順）</option>
-            <option value="videoCount-asc">動画数（少ない順）</option>
+            {MYLIST_SORT_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -368,4 +368,3 @@ export function MylistsClient() {
     </div>
   )
 }
-

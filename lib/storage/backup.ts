@@ -679,15 +679,40 @@ export async function readBackupFile(file: File): Promise<BackupData> {
     
     reader.onload = (event) => {
       try {
-        const text = event.target?.result as string
-        const data = JSON.parse(text)
-        
-        if (!validateBackupData(data)) {
-          reject(new Error('無効なファイル形式です'))
+        const text = event.target?.result
+        if (typeof text !== 'string') {
+          reject(new Error('ファイルの読み込みに失敗しました'))
           return
         }
-        
-        resolve(data)
+
+        const rawData = JSON.parse(text)
+
+        if (validateBackupData(rawData)) {
+          resolve(rawData)
+          return
+        }
+
+        const aggregated = rawData?.data?.mylists
+        if (aggregated && typeof aggregated === 'object') {
+          const transformed: BackupData = {
+            version: aggregated.version || rawData.version || '1.0.0',
+            exportDate: aggregated.exportDate || rawData.exportDate || new Date().toISOString(),
+            mylists: aggregated.mylists || [],
+            mylistVideos: aggregated.mylistVideos || [],
+            metadata: aggregated.metadata || {
+              totalMylists: Array.isArray(aggregated.mylists) ? aggregated.mylists.length : 0,
+              totalVideos: Array.isArray(aggregated.mylistVideos) ? aggregated.mylistVideos.length : 0,
+              appVersion: rawData.appVersion || '1.0.0'
+            }
+          }
+
+          if (validateBackupData(transformed)) {
+            resolve(transformed)
+            return
+          }
+        }
+
+        reject(new Error('無効なファイル形式です'))
       } catch (error) {
         reject(new Error(`ファイルの読み込みに失敗しました: ${error}`))
       }

@@ -20,11 +20,11 @@ export interface GenreOrderState {
  * デフォルトのジャンル順序
  */
 export const DEFAULT_GENRE_ORDER: RankingGenre[] = [
-  'all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 
-  'entertainment', 'music', 'sing', 'dance', 'play', 
-  'commentary', 'cooking', 'travel', 'nature', 'vehicle', 
-  'technology', 'society', 'mmd', 'vtuber', 'radio', 
-  'sports', 'animal', 'other', 'custom'
+  'all', 'game', 'anime', 'vocaloid', 'voicesynthesis',
+  'entertainment', 'music', 'sing', 'dance', 'play',
+  'commentary', 'cooking', 'travel', 'nature', 'vehicle',
+  'technology', 'society', 'mmd', 'vtuber', 'radio',
+  'sports', 'animal', 'other'
 ]
 
 /**

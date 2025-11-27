@@ -60,8 +60,9 @@ describe('useGenreOrderV2', () => {
     
     const { result } = renderHook(() => useGenreOrderV2())
     
-    expect(result.current.items).toEqual(savedData)
-    expect(result.current.visibleGenres).toEqual(['game'])
+    expect(result.current.items.slice(0, savedData.length)).toEqual(savedData)
+    expect(result.current.items).toHaveLength(23)
+    expect(result.current.visibleGenres[0]).toBe('game')
     expect(result.current.hiddenGenres).toEqual(['all'])
   })
 

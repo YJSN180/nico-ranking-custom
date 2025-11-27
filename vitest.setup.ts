@@ -18,6 +18,7 @@
 import './__tests__/test-environment'
 
 import '@testing-library/jest-dom'
+import type { ReactNode } from 'react'
 import { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest'
 import './__tests__/mocks/next-router'
 import React from 'react'
@@ -259,6 +260,55 @@ if (typeof Element !== 'undefined') {
 
 // Mock window.confirm for JSDOM
 if (typeof window !== 'undefined') {
+  const ensureClipboard = (nav: Navigator | undefined | null) => {
+    if (!nav) return
+    const existing = Object.getOwnPropertyDescriptor(nav, 'clipboard')
+    if (existing && existing.value) return
+
+    const clipboardStub = {
+      writeText: vi.fn().mockResolvedValue(undefined),
+      readText: vi.fn().mockResolvedValue('')
+    }
+
+    try {
+      Object.defineProperty(nav, 'clipboard', {
+        configurable: true,
+        writable: true,
+        enumerable: true,
+        value: clipboardStub
+      })
+    } catch (error) {
+      try {
+        ;(nav as any).clipboard = clipboardStub
+      } catch (_) {
+        // ignore
+      }
+    }
+  }
+
+  ensureClipboard(navigator)
+  ensureClipboard(window.navigator)
+  ensureClipboard(document?.defaultView?.navigator || null)
+  if (typeof window.ClipboardEvent === 'undefined') {
+    class ClipboardEventMock extends Event {
+      clipboardData: DataTransfer | null
+      constructor(type: string, eventInitDict?: ClipboardEventInit) {
+        super(type, eventInitDict)
+        this.clipboardData = eventInitDict?.clipboardData ?? null
+      }
+    }
+    Object.defineProperty(window, 'ClipboardEvent', {
+      value: ClipboardEventMock,
+      configurable: true
+    })
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).ClipboardEvent === 'undefined') {
+      Object.defineProperty(globalThis, 'ClipboardEvent', {
+        value: ClipboardEventMock,
+        configurable: true,
+        writable: true
+      })
+    }
+  }
   window.confirm = vi.fn(() => true)
   
   // Ensure Document constructor is available
@@ -326,6 +376,20 @@ if (typeof global.CompressionStream === 'undefined') {
     }
   }
 }
+
+const ensureConstructor = (name: string) => {
+  if (!(globalThis as any)[name]) {
+    (globalThis as any)[name] = class {}
+  }
+  if (typeof window !== 'undefined' && !(window as any)[name]) {
+    (window as any)[name] = (globalThis as any)[name]
+  }
+}
+
+ensureConstructor('HTMLIFrameElement')
+ensureConstructor('SVGElement')
+ensureConstructor('MediaQueryList')
+ensureConstructor('HTMLDocument')
 
 // Mock CSS modules - Using individual mock approach for CI compatibility
 // The wildcard pattern doesn't work reliably in CI environment
@@ -397,6 +461,17 @@ afterEach(() => {
   }
 })
 
+process.on('unhandledRejection', reason => {
+  const message = typeof reason === 'string' ? reason : (reason as any)?.code || (reason as any)?.message
+  if (message && message.includes && message.includes('ERR_IPC_CHANNEL_CLOSED')) {
+    return
+  }
+  if ((reason as any)?.code === 'ERR_IPC_CHANNEL_CLOSED') {
+    return
+  }
+  throw reason
+})
+
 // Set up test environment before each test
 beforeEach(() => {
   // Reset any global state
@@ -462,7 +537,21 @@ vi.mock('@/context/mylist-operations-context', () => {
   
   return {
     useMylistOperations: mockUseMylistOperations,
-    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+    MylistOperationsProvider: ({ children }: { children: ReactNode }) => children
+  }
+})
+
+// Simplified TagDisplay context for unit tests
+vi.mock('@/contexts/tag-display-context', () => {
+  const mockContext = {
+    showTags: true,
+    setShowTags: vi.fn(),
+    toggleTags: vi.fn()
+  }
+
+  return {
+    TagDisplayProvider: ({ children }: { children: ReactNode }) => children,
+    useTagDisplay: () => mockContext
   }
 })
 

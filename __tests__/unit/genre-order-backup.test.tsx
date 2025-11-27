@@ -179,7 +179,7 @@ describe('GenreOrderBackup', () => {
     fireEvent.change(input, { target: { files: [file] } })
     
     await waitFor(() => {
-      expect(screen.getByText('無効なバックアップファイル形式です')).toBeInTheDocument()
+      expect(screen.getByText('ジャンル並び替えデータが含まれていません')).toBeInTheDocument()
     })
   })
 

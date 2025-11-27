@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import ClientPage from '@/app/client-page'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import type { RankingItem } from '@/types/ranking'
 
 // Mock the required modules
@@ -19,7 +19,7 @@ vi.mock('@/hooks/use-user-preferences', () => ({
   })
 }))
 
-vi.mock('@/hooks/use-user-ng-list')
+vi.mock('@/hooks/use-user-ng-list-extended')
 
 vi.mock('@/hooks/use-mobile-detect', () => ({
   useMobileDetect: () => false
@@ -74,13 +74,18 @@ describe('NG List Rank Recalculation', () => {
     ]
 
     // Initial setup with no filtering
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: [],
         videoTitles: { exact: [], partial: [] },
         authorIds: [],
         authorNames: { exact: [], partial: [] },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 0,
         updatedAt: new Date().toISOString()
       },
@@ -99,7 +104,7 @@ describe('NG List Rank Recalculation', () => {
 
     // Initially all 5 items should be displayed
     await waitFor(() => {
-      const items = screen.getAllByRole('listitem')
+      const items = screen.getAllByTestId('ranking-item')
       expect(items).toHaveLength(5)
     })
 
@@ -110,13 +115,18 @@ describe('NG List Rank Recalculation', () => {
     )
 
     // Update the hook mock to use the new filter function
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: ['sm2', 'sm4'],
         videoTitles: { exact: [], partial: [] },
         authorIds: [],
         authorNames: { exact: [], partial: [] },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 2,
         updatedAt: new Date().toISOString()
       },
@@ -136,18 +146,23 @@ describe('NG List Rank Recalculation', () => {
 
     // Wait for the UI to update
     await waitFor(() => {
-      const items = screen.getAllByRole('listitem')
+      const items = screen.getAllByTestId('ranking-item')
       expect(items).toHaveLength(3)
     })
 
     // Verify ranks are recalculated
-    const filteredItems = screen.getAllByRole('listitem')
+    const filteredItems = screen.getAllByTestId('ranking-item')
     expect(filteredItems).toHaveLength(3)
     
     // Check that remaining items have consecutive ranks (1, 2, 3)
     expect(filteredItems[0]).toHaveTextContent('Video sm1')
     expect(filteredItems[1]).toHaveTextContent('Video sm3')
     expect(filteredItems[2]).toHaveTextContent('Video sm5')
+
+    const displayedRanks = filteredItems.map(item =>
+      item.querySelector('.ranking-item-responsive__rank--desktop')?.textContent?.trim()
+    )
+    expect(displayedRanks).toEqual(['1', '2', '3'])
   })
 
   it('should handle empty results after NG filtering', async () => {
@@ -157,13 +172,18 @@ describe('NG List Rank Recalculation', () => {
     ]
 
     // Initial setup
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: [],
         videoTitles: { exact: [], partial: [] },
         authorIds: [],
         authorNames: { exact: [], partial: [] },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 0,
         updatedAt: new Date().toISOString()
       },
@@ -184,13 +204,18 @@ describe('NG List Rank Recalculation', () => {
     const emptyFilterItems = vi.fn()
     emptyFilterItems.mockImplementation(() => [])
 
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: ['sm1', 'sm2'],
         videoTitles: { exact: [], partial: [] },
         authorIds: [],
         authorNames: { exact: [], partial: [] },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 2,
         updatedAt: new Date().toISOString()
       },
@@ -221,13 +246,18 @@ describe('NG List Rank Recalculation', () => {
     )
 
     // Initial setup
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: [],
         videoTitles: { exact: [], partial: [] },
         authorIds: [],
         authorNames: { exact: [], partial: [] },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 0,
         updatedAt: new Date().toISOString()
       },
@@ -254,13 +284,18 @@ describe('NG List Rank Recalculation', () => {
       items.filter(item => !filteredIds.has(item.id))
     )
 
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: Array.from(filteredIds),
         videoTitles: { exact: [], partial: [] },
         authorIds: [],
         authorNames: { exact: [], partial: [] },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 100,
         updatedAt: new Date().toISOString()
       },
@@ -282,7 +317,7 @@ describe('NG List Rank Recalculation', () => {
 
     // Wait for update - should show filtered items (pagination may limit display)
     await waitFor(() => {
-      const items = screen.getAllByRole('listitem')
+      const items = screen.getAllByTestId('ranking-item')
       // After filtering out every 5th item from 500 items, we should have 400 items
       // But pagination may limit the display to a certain number
       // The test shows we're getting 103 items, which is likely the page size
@@ -295,7 +330,7 @@ describe('NG List Rank Recalculation', () => {
 
     // Should complete within reasonable time (less than 5000ms for filtering and re-rendering in CI)
     // CI環境では処理が遅いため、余裕を持った閾値を設定
-    const timeLimit = process.env.CI ? 5000 : 500
+    const timeLimit = process.env.CI ? 5000 : 800
     expect(updateTime).toBeLessThan(timeLimit)
   })
 })

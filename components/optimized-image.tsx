@@ -43,12 +43,9 @@ export function OptimizedImage({
   const [imgSrc, setImgSrc] = useState(src)
   const [hasError, setHasError] = useState(false)
   
-  // ニコニコ動画CDNのサムネイル判定
-  const isNicoThumbnail = src && (
-    src.includes('tn.smilevideo.jp') ||
-    src.includes('nicovideo.cdn.nimg.jp') ||
-    src.includes('secure-dcdn.cdn.nimg.jp')
-  )
+  // ニコニコ動画CDNのサムネイル判定（現在描画している画像ソース基準）
+  const nicoDomains = ['tn.smilevideo.jp', 'nicovideo.cdn.nimg.jp', 'secure-dcdn.cdn.nimg.jp']
+  const isNicoThumbnail = typeof imgSrc === 'string' && nicoDomains.some(domain => imgSrc.includes(domain))
   
   const handleError = () => {
     if (!hasError && fallbackSrc) {
@@ -58,25 +55,6 @@ export function OptimizedImage({
     onError?.()
   }
   
-  // ニコニコ動画サムネイルは直接表示（Next.js最適化バイパス）
-  if (isNicoThumbnail) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={imgSrc}
-        alt={hasError ? '視聴できません' : alt}
-        width={width}
-        height={height}
-        style={style}
-        loading={loading}
-        className={className}
-        onClick={onClick}
-        onError={handleError}
-      />
-    )
-  }
-  
-  // その他の画像は Next.js最適化を使用
   return (
     <Image
       src={imgSrc}
@@ -91,6 +69,7 @@ export function OptimizedImage({
       className={className}
       onClick={onClick}
       onError={handleError}
+      unoptimized={isNicoThumbnail}
     />
   )
 }

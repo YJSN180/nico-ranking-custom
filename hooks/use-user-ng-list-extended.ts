@@ -63,10 +63,19 @@ export function useUserNGListExtended() {
         setNGList(updatedList)
       }
     }
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEY) {
+        const updatedList = loadInitialNGList()
+        setNGList(updatedList)
+      }
+    }
     
     window.addEventListener('ngListUpdated', handleNGListUpdated)
+    window.addEventListener('storage', handleStorageChange)
     return () => {
       window.removeEventListener('ngListUpdated', handleNGListUpdated)
+      window.removeEventListener('storage', handleStorageChange)
     }
   }, [])
 

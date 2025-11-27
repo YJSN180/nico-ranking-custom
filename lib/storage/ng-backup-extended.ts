@@ -691,15 +691,26 @@ export async function readExtendedNGListBackupFile(file: File): Promise<Extended
     
     reader.onload = (event) => {
       try {
-        const text = event.target?.result as string
-        const data = JSON.parse(text)
-        
-        if (!validateExtendedNGListBackup(data)) {
-          reject(new Error('NGリストのバックアップファイルではありません'))
+        const text = event.target?.result
+        if (typeof text !== 'string') {
+          reject(new Error('ファイルの読み込みに失敗しました'))
           return
         }
-        
-        resolve(data)
+
+        const rawData = JSON.parse(text)
+
+        if (validateExtendedNGListBackup(rawData)) {
+          resolve(rawData)
+          return
+        }
+
+        const aggregatedCandidate = rawData?.data?.ngList
+        if (validateExtendedNGListBackup(aggregatedCandidate)) {
+          resolve(aggregatedCandidate)
+          return
+        }
+
+        reject(new Error('NGリストのバックアップファイルではありません'))
       } catch (error) {
         reject(new Error(`ファイルの読み込みに失敗しました: ${error}`))
       }
