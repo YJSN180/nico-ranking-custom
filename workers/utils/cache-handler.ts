@@ -127,8 +127,8 @@ export function getRankingCacheOptions(url: URL): CacheOptions {
   // パスに応じてTTLを設定
   if (path.includes('/api/ranking')) {
     return {
-      cacheTTL: 1200,  // 20分（GitHub Actions実行間隔に合わせる）
-      cacheKeyPrefix: 'ranking-v1',
+      cacheTTL: 60,  // 暫定で短縮して切り分け（1分）
+      cacheKeyPrefix: 'ranking-v2', // 新prefixで旧キャッシュを無視
       bypassCache: url.searchParams.get('nocache') === 'true'
     }
   }
