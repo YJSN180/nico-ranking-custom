@@ -257,10 +257,16 @@ export default {
         }
       }
       
-      // Next.js ビルド成果物（/_next/*）は直接Vercelへリダイレクトしてループ・タイムアウトを防止
+      // Next.js ビルド成果物（/_next/*）は素通しでオリジン(Vercel)へプロキシ
       if (url.pathname.startsWith('/_next/')) {
-        const targetUrl = new URL(url.pathname + url.search, env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app')
-        return Response.redirect(targetUrl.toString(), 302)
+        const originResponse = await fetch(request)
+        const proxiedHeaders = new Headers(originResponse.headers)
+        Object.entries(securityHeaders).forEach(([key, value]) => proxiedHeaders.set(key, value))
+        return new Response(originResponse.body, {
+          status: originResponse.status,
+          statusText: originResponse.statusText,
+          headers: proxiedHeaders
+        })
       }
 
       // その他のパス（/, /about など）はVercelへプロキシ
