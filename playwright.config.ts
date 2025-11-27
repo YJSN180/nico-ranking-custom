@@ -20,7 +20,7 @@ export default defineConfig({
     // サービスワーカーをブロック（APIモックのため）
     serviceWorkers: 'block',
     // タイムアウト設定を調整
-    actionTimeout: 15000, // アクションタイムアウトを15秒に増加
+    actionTimeout: 30000, // カスタムタブ表示遅延に対応して30秒へ拡大
     navigationTimeout: 45000, // ナビゲーションタイムアウトを45秒に増加
     // ネットワークの不安定性に対する対策
     acceptDownloads: false,
