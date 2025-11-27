@@ -27,13 +27,13 @@ const nextConfig = {
   },
   async headers() {
     return [
-      // API ranking は完全 no-store
+      // API ranking は短期CDNキャッシュ（15分）
       {
         source: '/api/ranking',
         headers: [
-          { key: 'Cache-Control', value: 'no-store' },
-          { key: 'CDN-Cache-Control', value: 'no-store' },
-          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
+          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=900, stale-while-revalidate=900' },
+          { key: 'CDN-Cache-Control', value: 'public, s-maxage=900' },
+          { key: 'Vercel-CDN-Cache-Control', value: 'public, s-maxage=900' },
         ]
       },
       {
@@ -118,13 +118,13 @@ const nextConfig = {
         ]
       },
       // Note: API route cache headers are now handled by middleware.ts
-      // This configuration is kept as a fallback
+      // This configuration is kept as a fallback（middlewareと同じ値に揃える）
       {
         source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, s-maxage=1200, stale-while-revalidate=2400' // Updated to 20min
+            value: 'public, s-maxage=900, stale-while-revalidate=900'
           }
         ]
       },

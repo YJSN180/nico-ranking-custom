@@ -210,11 +210,12 @@ export async function middleware(request: NextRequest) {
     response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${smax}`)
   }
 
-  // HTML は依然 no-store（dplずれ防止）
+  // ルートHTMLは短期キャッシュ（5分）で性能と鮮度を両立
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
-    response.headers.set('Cache-Control', 'no-store')
-    response.headers.set('CDN-Cache-Control', 'no-store')
-    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
+    const smax = 300
+    response.headers.set('Cache-Control', `public, max-age=0, s-maxage=${smax}, stale-while-revalidate=${smax}`)
+    response.headers.set('CDN-Cache-Control', `public, s-maxage=${smax}`)
+    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${smax}`)
   }
   
   // 静的アセットの長期キャッシュ設定
