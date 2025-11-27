@@ -123,4 +123,5 @@ describe('useRankingData', () => {
     expect(hook.result.current.rankingData).toHaveLength(1)
     expect(hook.result.current.error).toBeNull()
   })
+
 })
