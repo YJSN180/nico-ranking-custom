@@ -15,8 +15,8 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
-// ISRを使用してFunction Invocationsを削減
-export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
+// 完全動的レンダリング（Data Cache も無効化して毎回最新を取得）
+export const revalidate = 0
 
 // Dynamic imports for better code splitting
 export const dynamic = 'force-dynamic'
@@ -140,7 +140,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     }
     
     const response = await fetch(apiUrl, {
-      next: { revalidate: 1200 },
+      cache: 'no-store',
       headers
     })
     
