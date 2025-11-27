@@ -1080,13 +1080,26 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
       console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location}`)
       
       if (location) {
+        const loc = new URL(location, url)
+        // 同一ホストへのリダイレクトは追跡せずそのまま返す（自身に戻るループを防止）
+        if (loc.hostname === url.hostname) {
+          const origin = request.headers.get('Origin')
+          const safeHeaders = new Headers(response.headers)
+          Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))
+          return applyCORSHeaders(new Response(response.body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: safeHeaders
+          }), origin, {})
+        }
+        
         // ループを避けるため、Hostヘッダーを外した状態で追跡
         const followHeaders = new Headers(request.headers)
         followHeaders.delete('Host')
         followHeaders.set('X-Forwarded-Host', url.hostname)
         followHeaders.set('X-Forwarded-Proto', 'https')
         followHeaders.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
-        const followed = await fetch(location, {
+        const followed = await fetch(loc.toString(), {
           method: 'GET',
           headers: followHeaders,
           redirect: 'follow'
