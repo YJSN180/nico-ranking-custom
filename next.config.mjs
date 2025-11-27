@@ -27,6 +27,15 @@ const nextConfig = {
   },
   async headers() {
     return [
+      // API ranking は完全 no-store
+      {
+        source: '/api/ranking',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store' },
+          { key: 'CDN-Cache-Control', value: 'no-store' },
+          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
+        ]
+      },
       {
         source: '/:path*',
         headers: [

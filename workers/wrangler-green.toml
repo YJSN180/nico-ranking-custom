@@ -20,4 +20,4 @@ namespace_id = "1001"
 simple = { limit = 20, period = 60 }
 
 [vars]
-VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-2ezx48med-yjsns-projects.vercel.app"
