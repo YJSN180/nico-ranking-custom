@@ -347,8 +347,10 @@ export default function ClientPage({
     // SSRから渡されたrankingパラメータがある場合の処理は別のuseEffectで行う
     // (カスタムランキングの読み込み完了を待つため)
     
-    // 初回レンダリング時はSSRのデータを使用するため、追加のAPI呼び出しを避ける
-    // これにより二重リクエストを防ぐ
+    // SSR初期データが空だった場合は強制的に再フェッチ（SSR失敗フォールバック）
+    if (!initialData.items || initialData.items.length === 0) {
+      handleConfigChange(config, true /* force */).catch(() => {})
+    }
     
     // 人気タグをlocalStorageから復元（ブラウザバック対応）
     const storageKey = `popular-tags-${initialGenre}-${initialPeriod}`
