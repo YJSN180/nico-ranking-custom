@@ -15,8 +15,8 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
-// ISRを使用してFunction Invocationsを削減
-export const revalidate = 1200 // 20分間キャッシュ（鮮度重視）
+// ISRを使用してFunction Invocationsを削減（ただし実データ取得は no-store で常に最新を優先）
+export const revalidate = 1200 // ページ自体の再検証間隔
 
 // Dynamic imports for better code splitting
 export const dynamic = 'force-dynamic'
@@ -24,7 +24,8 @@ export const dynamic = 'force-dynamic'
 // Browser recommendation component is temporarily disabled due to missing lucide-react dependency
 
 // Prefetch hints
-export const fetchCache = 'default-cache'
+// データキャッシュを完全に無効化して、SSR初期データの陳腐化を防ぐ
+export const fetchCache = 'force-no-store'
 export const preferredRegion = 'auto'
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
@@ -177,7 +178,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
     // 1st: 通常キャッシュ経路
     const { json: primaryJson, meta: primaryMeta } = await doFetch(apiUrl, {
-      next: { revalidate: 1200 },
+      cache: 'no-store',
       headers
     })
     const primaryResult = await buildResult(primaryJson, primaryMeta)
