@@ -278,9 +278,8 @@ export function useRankingData({
           }, 1000)
           return
         } else {
-          // その他のエラー。AdBlock等で net::ERR_BLOCKED_BY_CLIENT の場合 status は 0 になることがある
-          const statusCode = response.status || 0
-          throw new Error(`HTTP ${statusCode}: ${response.statusText || 'client-blocked'}`)
+          // その他のエラー
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
         }
       } catch (err: any) {
         // ネットワークエラーなど

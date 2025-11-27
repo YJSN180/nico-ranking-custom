@@ -56,13 +56,12 @@ export async function GET(request: NextRequest) {
         clearTimeout(timeoutId)
       })
       
-      // 304 Not Modifiedの場合はそのまま返す（ただしキャッシュ禁止）
+      // 304 Not Modifiedの場合はそのまま返す
       if (response.status === 304) {
         return new NextResponse(null, {
           status: 304,
           headers: {
-            'cache-control': 'no-store',
-            'cdn-cache-control': 'no-store',
+            'cache-control': 'public, max-age=1800, s-maxage=3600',
             'etag': response.headers.get('etag') || ''
           }
         })
@@ -77,6 +76,7 @@ export async function GET(request: NextRequest) {
       // 必要なヘッダーのみコピー
       const etag = response.headers.get('etag')
       const lastModified = response.headers.get('last-modified')
+      const cacheControl = response.headers.get('cache-control')
       
       if (etag) responseHeaders.set('etag', etag)
       if (lastModified) responseHeaders.set('last-modified', lastModified)
@@ -84,10 +84,11 @@ export async function GET(request: NextRequest) {
       // Content-Type
       responseHeaders.set('content-type', 'application/json')
       
-      // キャッシュ禁止（ブラウザ・CDN・Vercel Edge）
-      responseHeaders.set('cache-control', 'no-store')
-      responseHeaders.set('cdn-cache-control', 'no-store')
-      responseHeaders.set('vercel-cdn-cache-control', 'no-store')
+      // キャッシュヘッダー（Vercel Edge Cacheも活用）
+      responseHeaders.set('cache-control', cacheControl || 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=86400')
+      
+      // CDN-Cache-Control（Vercel専用）
+      responseHeaders.set('cdn-cache-control', 'max-age=3600, stale-while-revalidate=86400')
       
       return new NextResponse(data, {
         status: response.status,
