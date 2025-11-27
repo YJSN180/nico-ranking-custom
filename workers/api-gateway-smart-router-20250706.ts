@@ -222,8 +222,8 @@ export default {
       }
       
       // 特定の静的ファイル（Next.js publicディレクトリのファイル）はVercelから配信
-      const publicFiles = ['/icon.png', '/icon-192.png', '/icon-512.png', '/og-image.png', '/manifest.json', '/robots.txt'];
-      const isPublicFile = publicFiles.includes(url.pathname) || url.pathname.startsWith('/fonts/');
+      const publicFiles = ['/icon.png', '/icon.svg', '/icon-192.png', '/icon-512.png', '/og-image.png', '/manifest.json', '/robots.txt'];
+      const isPublicFile = publicFiles.includes(url.pathname) || url.pathname.startsWith('/fonts/') || url.pathname.startsWith('/_next/static/');
       
       if (isPublicFile) {
         // Next.jsのpublicディレクトリのファイルはVercelから配信
@@ -257,18 +257,6 @@ export default {
         }
       }
       
-      // Next.js ビルド成果物（/_next/*）は素通しでオリジン(Vercel)へプロキシ
-      if (url.pathname.startsWith('/_next/')) {
-        const originResponse = await fetch(request)
-        const proxiedHeaders = new Headers(originResponse.headers)
-        Object.entries(securityHeaders).forEach(([key, value]) => proxiedHeaders.set(key, value))
-        return new Response(originResponse.body, {
-          status: originResponse.status,
-          statusText: originResponse.statusText,
-          headers: proxiedHeaders
-        })
-      }
-
       // その他のパス（/, /about など）はVercelへプロキシ
       return proxyToVercel(request, env);
       
@@ -300,7 +288,8 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   // リクエストヘッダーの準備
   const headers = new Headers(request.headers)
   headers.set('Host', targetHost)
-  headers.set('X-Forwarded-Host', url.hostname)
+  // avoid Vercel canonical redirect loops by aligning forwarded host with target
+  headers.set('X-Forwarded-Host', targetHost)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
   
