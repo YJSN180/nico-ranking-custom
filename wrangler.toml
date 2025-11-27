@@ -1,0 +1,97 @@
+name = "nico-ranking-api-gateway"
+account_id = "5984977746a3dfcd71415bed5c324eb1"
+main = "workers/smart-router-20250706.ts"
+compatibility_date = "2025-06-24"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespace bindings (for video stats)
+[[kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+# KV namespace for maintenance flags
+[[kv_namespaces]]
+binding = "MAINTENANCE_FLAGS"
+id = "19c56f381658417397c0b19320167a26"
+preview_id = "5a1a431dc05942ca84e29de4a86f6932"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# Rate Limiting binding
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+# 120 requests per minute (1分間に120リクエスト - 大幅緩和)
+simple = { limit = 120, period = 60 }
+
+# 環境変数
+[vars]
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+WORKER_AUTH_KEY = "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
+
+# Custom domain
+[[routes]]
+pattern = "nico-rank.com/api/*"
+zone_name = "nico-rank.com"
+
+# Service Bindings - 他のWorkerへの接続
+[[services]]
+binding = "WORKER_BLUE"
+service = "nico-ranking-blue-20250706"
+
+[[services]]
+binding = "WORKER_GREEN"
+service = "nico-ranking-api-gateway-green"
+
+
+# TypeScript設定
+[build]
+command = ""
+
+# プレビュー環境設定
+[env.preview]
+name = "nico-ranking-api-gateway-preview"
+# プレビュー環境では同じWorkerコードを使用
+main = "workers/smart-router-20250706.ts"
+
+# KV namespace bindings (プレビュー用)
+[[env.preview.kv_namespaces]]
+binding = "RANKING_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[[env.preview.kv_namespaces]]
+binding = "MAINTENANCE_FLAGS"
+id = "19c56f381658417397c0b19320167a26"
+preview_id = "5a1a431dc05942ca84e29de4a86f6932"
+
+# R2 bucket binding (本番と同じバケットを使用)
+[[env.preview.r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+# Rate Limiting binding
+[[env.preview.unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+# 120 requests per minute (1分間に120リクエスト - 大幅緩和)
+simple = { limit = 120, period = 60 }
+
+# 環境変数（プレビュー用）
+[env.preview.vars]
+VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+WORKER_AUTH_KEY = "preview-c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
+ENVIRONMENT = "preview"
+
+# Service Bindings - プレビュー環境でも同じWorkerに接続
+[[env.preview.services]]
+binding = "WORKER_BLUE"
+service = "nico-ranking-blue-20250706"
+
+[[env.preview.services]]
+binding = "WORKER_GREEN"
+service = "nico-ranking-api-gateway-green"

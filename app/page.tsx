@@ -108,10 +108,6 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   params.set('period', period)
   if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
   
-  const isProduction = process.env.VERCEL_ENV === 'production'
-  const hasWorkerKey = Boolean(process.env.WORKER_AUTH_KEY)
-  const shouldUseSignedWorker = isProduction && hasWorkerKey
-
   const resolveBaseUrl = () => {
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
@@ -123,11 +119,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     return process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://nico-ranking-custom.vercel.app'
   }
 
-  const signedWorkerBase = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
+  // すべての環境で同一オリジンの Next API を経由する（CORS/ドメイン差異による失敗を避ける）
   const proxyBase = resolveBaseUrl()
-  const apiUrl = shouldUseSignedWorker
-    ? `${signedWorkerBase.replace(/\/$/, '')}/api/ranking?${params.toString()}`
-    : `${proxyBase}/api/ranking?${params.toString()}`
+  const apiUrl = `${proxyBase}/api/ranking?${params.toString()}`
 
   try {
     const headers: HeadersInit = {
