@@ -318,6 +318,10 @@ const pwaConfig = withPWA({
   // 新しいSWを即時適用し、古いキャッシュを握らせない
   skipWaiting: true,
   clientsClaim: true,
+  // Workbox v7 では precacheFallback 設定を無効化しないとエラーになるため追加
+  workboxOptions: {
+    disablePrecacheFallback: true
+  },
   disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
   fallbacks: {
     document: '/offline.html'
