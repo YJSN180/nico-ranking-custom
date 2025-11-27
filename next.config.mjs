@@ -331,15 +331,7 @@ const pwaConfig = withPWA({
     // API routes - StaleWhileRevalidate for ranking data
     {
       urlPattern: /^\/api\/ranking/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'ranking-api-v2',
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 10 * 60 // 10 minutes: staleデータ滞留を短縮
-        },
-        networkTimeoutSeconds: 8
-      }
+      handler: 'NetworkOnly'
     },
     // External API (Niconico)
     {
