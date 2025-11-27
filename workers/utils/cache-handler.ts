@@ -127,9 +127,9 @@ export function getRankingCacheOptions(url: URL): CacheOptions {
   // パスに応じてTTLを設定
   if (path.includes('/api/ranking')) {
     return {
-      cacheTTL: 60,  // 暫定で短縮して切り分け（1分）
-      cacheKeyPrefix: 'ranking-v2', // 新prefixで旧キャッシュを無視
-      bypassCache: url.searchParams.get('nocache') === 'true'
+      cacheTTL: 0,
+      cacheKeyPrefix: 'ranking-bypass',
+      bypassCache: true
     }
   }
 

@@ -569,8 +569,9 @@ export default {
         // R2から取得したデータを返す
         const headers = new Headers()
         headers.set('Content-Type', 'application/json')
-        headers.set('Cache-Control', cacheControl)
-        headers.set('CDN-Cache-Control', cdnCacheControl)
+        // キャッシュ禁止（ブラウザ・CDNとも）
+        headers.set('Cache-Control', 'no-store')
+        headers.set('CDN-Cache-Control', 'no-store')
         headers.set('ETag', etag)
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
