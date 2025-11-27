@@ -318,28 +318,25 @@ const pwaConfig = withPWA({
   // 新しいSWを即時適用し、古いキャッシュを握らせない
   skipWaiting: true,
   clientsClaim: true,
-  disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
-  fallbacks: {
-    document: '/offline.html'
+  // Workbox v7 では precacheFallback 設定を無効化しないとエラーになるため追加
+  workboxOptions: {
+    disablePrecacheFallback: true
   },
-  additionalManifestEntries: [
-    { url: '/offline.html', revision: '1' }
-  ],
-  buildExcludes: [/app-build-manifest\.json$/],
+  // オフラインフォールバックを無効化（Build時のprecacheFallback参照を防ぐ）
+  fallbacks: {
+    document: null,
+    data: null,
+    image: null
+  },
+  disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
+  // offline.html を precache しない（Workbox v7 の precacheFallback 問題を回避）
+  buildExcludes: [/app-build-manifest\.json$/, /offline\.html$/],
   // Workbox configuration
   runtimeCaching: [
     // API routes - StaleWhileRevalidate for ranking data
     {
       urlPattern: /^\/api\/ranking/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'ranking-api-v2',
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 10 * 60 // 10 minutes: staleデータ滞留を短縮
-        },
-        networkTimeoutSeconds: 8
-      }
+      handler: 'NetworkOnly'
     },
     // External API (Niconico)
     {
