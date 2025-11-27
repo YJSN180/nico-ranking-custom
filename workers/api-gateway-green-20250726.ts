@@ -545,13 +545,13 @@ export default {
         // If-None-Matchチェック
         const ifNoneMatch = request.headers.get('If-None-Match')
         if (ifNoneMatch && isETagMatch(etag, ifNoneMatch)) {
-          const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
+          const { workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
           const notModifiedResponse = new Response(null, {
             status: 304,
             headers: {
               'ETag': etag,
-              'Cache-Control': cacheControl,
-              'CDN-Cache-Control': cdnCacheControl,
+              'Cache-Control': 'no-store',
+              'CDN-Cache-Control': 'no-store',
               'CF-Cache-Status': 'REVALIDATED',
               'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
               'X-Worker-Version': 'green-20250726-unified-cors',
@@ -563,12 +563,13 @@ export default {
           return applyCORSHeaders(notModifiedResponse, origin, {
             ...securityHeaders,
             'Cache-Control': 'no-store',
-            'CDN-Cache-Control': 'no-store'
+            'CDN-Cache-Control': 'no-store',
+            'Vercel-CDN-Cache-Control': 'no-store'
           })
         }
         
-        // 動的TTL v2.0を計算
-        const { cacheControl, cdnCacheControl, workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
+        // 動的TTL v2.0を計算（ログ用途のみ）
+        const { workerTTL, secondsUntilUpdate } = calculateDynamicTTL()
         
         // R2から取得したデータを返す
         const headers = new Headers()
@@ -576,6 +577,7 @@ export default {
         // キャッシュ禁止（ブラウザ・CDNとも）
         headers.set('Cache-Control', 'no-store')
         headers.set('CDN-Cache-Control', 'no-store')
+        headers.set('Vercel-CDN-Cache-Control', 'no-store')
         headers.set('ETag', etag)
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
@@ -656,7 +658,8 @@ export default {
         const origin = request.headers.get('Origin')
         return applyCORSHeaders(normalResponse, origin, {
           'Cache-Control': 'no-store',
-          'CDN-Cache-Control': 'no-store'
+          'CDN-Cache-Control': 'no-store',
+          'Vercel-CDN-Cache-Control': 'no-store'
         })
           } catch (error) {
             console.error('[Green Worker] Failed to parse or decode JSON:', error)
