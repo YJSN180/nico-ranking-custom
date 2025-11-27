@@ -138,37 +138,64 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       headers['X-Worker-Auth'] = process.env.WORKER_AUTH_KEY
       headers['X-SSR-Request'] = 'true'
     }
-    
-    const response = await fetch(apiUrl, {
+
+    const logEmpty = (meta: Record<string, unknown>) => {
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('[SSR] Empty items', meta)
+      }
+    }
+
+    const doFetch = async (url: string, options?: RequestInit) => {
+      const res = await fetch(url, options)
+      const meta = {
+        status: res.status,
+        statusText: res.statusText,
+        contentLength: res.headers.get('content-length'),
+        cacheControl: res.headers.get('cache-control'),
+        cfCacheStatus: res.headers.get('cf-cache-status'),
+        etag: res.headers.get('etag'),
+        url
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+
+      let json: any
+      try {
+        json = await res.clone().json()
+      } catch {
+        const text = await res.text()
+        json = JSON.parse(text)
+      }
+      return { json, meta }
+    }
+
+    const buildResult = async (data: any, meta: Record<string, unknown>) => {
+      if (!data || !Array.isArray(data.items)) throw new Error('Invalid data structure: missing items array')
+      const { filteredData } = await filterRankingDataServer(data)
+      if (filteredData.items.length === 0) logEmpty(meta)
+      return filteredData
+    }
+
+    // 1st: 通常キャッシュ経路
+    const { json: primaryJson, meta: primaryMeta } = await doFetch(apiUrl, {
       next: { revalidate: 1200 },
       headers
     })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    const primaryResult = await buildResult(primaryJson, primaryMeta)
+
+    // 空配列だった場合のみ cache-bust 再取得（偶発的な空キャッシュを避ける）
+    if (primaryResult.items.length === 0) {
+      const cacheBustUrl = `${apiUrl}&_cb=${Date.now()}`
+      const { json: freshJson, meta: freshMeta } = await doFetch(cacheBustUrl, {
+        cache: 'no-store',
+        headers: {
+          ...headers,
+          'Cache-Control': 'no-cache'
+        }
+      })
+      return await buildResult(freshJson, { ...freshMeta, cacheBust: true })
     }
-    
-    // レスポンスをテキストとして取得してJSONパース
-    // Content-Encodingヘッダーの問題を回避
-    let data: any
-    try {
-      // まずJSONとして直接パースを試みる
-      data = await response.json()
-    } catch (jsonError) {
-      // JSONパースに失敗した場合、テキストとして取得して再度パース
-      const text = await response.text()
-      try {
-        data = JSON.parse(text)
-      } catch (parseError) {
-        throw new Error('Invalid JSON response from API')
-      }
-    }
-    
-    if (data && data.items && Array.isArray(data.items)) {
-      // NGフィルタリングを適用
-      const { filteredData } = await filterRankingDataServer(data)
-      return filteredData
-    }
+
+    return primaryResult
   } catch (error) {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
