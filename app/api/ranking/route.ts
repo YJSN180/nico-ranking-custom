@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         clearTimeout(timeoutId)
       })
       
-      // 304 Not Modifiedの場合はそのまま返す
+      // 304 Not Modifiedの場合はそのまま返す（ただしキャッシュ禁止）
       if (response.status === 304) {
         return new NextResponse(null, {
           status: 304,
@@ -77,7 +77,6 @@ export async function GET(request: NextRequest) {
       // 必要なヘッダーのみコピー
       const etag = response.headers.get('etag')
       const lastModified = response.headers.get('last-modified')
-      // const cacheControl = response.headers.get('cache-control')
       
       if (etag) responseHeaders.set('etag', etag)
       if (lastModified) responseHeaders.set('last-modified', lastModified)
