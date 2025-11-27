@@ -257,6 +257,12 @@ export default {
         }
       }
       
+      // Next.js ビルド成果物（/_next/*）は直接Vercelへリダイレクトしてループ・タイムアウトを防止
+      if (url.pathname.startsWith('/_next/')) {
+        const targetUrl = new URL(url.pathname + url.search, env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app')
+        return Response.redirect(targetUrl.toString(), 302)
+      }
+
       // その他のパス（/, /about など）はVercelへプロキシ
       return proxyToVercel(request, env);
       
