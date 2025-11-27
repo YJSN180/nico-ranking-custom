@@ -7,6 +7,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next'
 import { ThemeProvider } from '@/components/theme-provider'
 import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
+import { PWARegister } from '@/components/pwa-register'
 import { OfflineIndicator } from '@/components/offline-indicator'
 import './globals.css'
 
@@ -139,6 +140,7 @@ export default async function RootLayout({
         <ThemeProvider>
           <MylistOperationsProvider>
             <ClientOnlyWebVitals />
+            <PWARegister />
             <OfflineIndicator />
             {children}
             {process.env.NODE_ENV !== 'test' && <Analytics />}
