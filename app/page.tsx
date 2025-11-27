@@ -128,11 +128,6 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       'Accept-Encoding': 'gzip, deflate, br',
       Accept: 'application/json'
     }
-    if (shouldUseSignedWorker && process.env.WORKER_AUTH_KEY) {
-      headers['X-Worker-Auth'] = process.env.WORKER_AUTH_KEY
-      headers['X-SSR-Request'] = 'true'
-    }
-
     const logEmpty = (meta: Record<string, unknown>) => {
       if (process.env.NODE_ENV !== 'production') {
         console.warn('[SSR] Empty items', meta)
