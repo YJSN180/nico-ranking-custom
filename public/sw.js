@@ -1,4 +1,4 @@
-// Kill-switch Service Worker: immediately unregister and wipe caches
+// Hard kill-switch Service Worker
 self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
@@ -12,6 +12,8 @@ self.addEventListener('activate', (event) => {
       // ignore
     }
     try {
+      const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      clientList.forEach((client) => client.navigate(client.url))
       await self.clients.claim()
       await self.registration.unregister()
     } catch (e) {
@@ -21,5 +23,5 @@ self.addEventListener('activate', (event) => {
 })
 
 self.addEventListener('fetch', () => {
-  // no-op: let network handle everything
+  // no-op: network only
 })
