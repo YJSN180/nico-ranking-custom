@@ -177,14 +177,16 @@ export async function middleware(request: NextRequest) {
     }
   }
   
-  const response = NextResponse.next()
-  
-  // 特定パスはキャッシュ完全禁止（ブラウザ・CDN・Vercel Edge）
+  // 特定パスはここで即返し、ヘッダーを強制上書き
   if (noStorePaths.some(p => pathname.startsWith(p))) {
-    response.headers.set('Cache-Control', 'no-store')
-    response.headers.set('CDN-Cache-Control', 'no-store')
-    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
+    const res = NextResponse.next()
+    res.headers.set('Cache-Control', 'no-store')
+    res.headers.set('CDN-Cache-Control', 'no-store')
+    res.headers.set('Vercel-CDN-Cache-Control', 'no-store')
+    return res
   }
+
+  const response = NextResponse.next()
   
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
