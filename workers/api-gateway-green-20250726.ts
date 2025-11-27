@@ -1044,9 +1044,8 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const proxyUrl = new URL(url.pathname + url.search, targetUrl)
   
   const headers = new Headers(request.headers)
-  // Vercelがカスタムドメインへリダイレクトしないよう、Forwarded/Host を targetHost に揃える
   headers.set('Host', targetHost)
-  headers.set('X-Forwarded-Host', targetHost)
+  headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
   
