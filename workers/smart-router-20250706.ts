@@ -52,6 +52,32 @@ export default {
       // リクエストを対象Workerに転送
       const response = await targetWorker.fetch(request)
       
+      // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）
+      const forceNoStore =
+        url.pathname.startsWith('/api/ranking') ||
+        url.pathname.startsWith('/api/metadata') ||
+        url.pathname.startsWith('/api/tags/autocomplete')
+      
+      if (forceNoStore) {
+        const headers = new Headers(response.headers)
+        headers.set('Cache-Control', 'no-store')
+        headers.set('CDN-Cache-Control', 'no-store')
+        headers.set('Vercel-CDN-Cache-Control', 'no-store')
+        const body = response.body ? response.body : null
+        const modified = new Response(body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers
+        })
+        const origin = request.headers.get('Origin')
+        const modifiedResponse = applyCORSHeaders(modified, origin, {
+          ...securityHeaders,
+          'X-Active-Worker': activeWorker,
+          'X-Router-Version': 'smart-router-20250706-fixed'
+        })
+        return modifiedResponse
+      }
+      
       // CORS重複問題を回避して安全なヘッダーを適用
       const origin = request.headers.get('Origin')
       const modifiedResponse = applyCORSHeaders(response, origin, {
