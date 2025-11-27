@@ -560,7 +560,11 @@ export default {
           })
           
           const origin = request.headers.get('Origin')
-          return applyCORSHeaders(notModifiedResponse, origin, securityHeaders)
+          return applyCORSHeaders(notModifiedResponse, origin, {
+            ...securityHeaders,
+            'Cache-Control': 'no-store',
+            'CDN-Cache-Control': 'no-store'
+          })
         }
         
         // 動的TTL v2.0を計算
@@ -649,8 +653,11 @@ export default {
               headers
             })
             
-            const origin = request.headers.get('Origin')
-            return applyCORSHeaders(normalResponse, origin, {})
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(normalResponse, origin, {
+          'Cache-Control': 'no-store',
+          'CDN-Cache-Control': 'no-store'
+        })
           } catch (error) {
             console.error('[Green Worker] Failed to parse or decode JSON:', error)
             const normalErrorResponse = new Response(workStream, {
