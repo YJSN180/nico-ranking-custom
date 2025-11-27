@@ -84,9 +84,10 @@ export async function GET(request: NextRequest) {
       // Content-Type
       responseHeaders.set('content-type', 'application/json')
       
-      // キャッシュ禁止（ブラウザもCDNも）
+      // キャッシュ禁止（ブラウザ・CDN・Vercel Edge）
       responseHeaders.set('cache-control', 'no-store')
       responseHeaders.set('cdn-cache-control', 'no-store')
+      responseHeaders.set('vercel-cdn-cache-control', 'no-store')
       
       return new NextResponse(data, {
         status: response.status,
