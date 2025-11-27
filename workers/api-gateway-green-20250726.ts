@@ -1055,7 +1055,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const proxyUrl = new URL(url.pathname + url.search, targetUrl)
   
   const headers = new Headers(request.headers)
-  headers.set('Host', targetHost)
+  // Hostはfetchに任せる（明示するとリダイレクトループの原因になる）
   headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
@@ -1074,35 +1074,31 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   try {
     const response = await fetch(proxyRequest)
     
-    // 307リダイレクトの処理（無限ループ防止）
+    // 30xリダイレクトの処理（無限ループ防止）
     if (response.status === 307 || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 308) {
       const location = response.headers.get('Location')
       console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location}`)
       
-      // リダイレクト先がnico-rank.comの場合は無視して200を返す
-      if (location && (location.includes('nico-rank.com') || location.includes('nico-ranking-custom'))) {
-        console.warn('[Green Worker] Preventing redirect loop, returning 200 instead')
-        // リダイレクトを無視してVercelからコンテンツを取得
-        const finalResponse = await fetch(location || proxyUrl.toString(), {
+      if (location) {
+        // ループを避けるため、Hostヘッダーを外した状態で追跡
+        const followHeaders = new Headers(request.headers)
+        followHeaders.delete('Host')
+        followHeaders.set('X-Forwarded-Host', url.hostname)
+        followHeaders.set('X-Forwarded-Proto', 'https')
+        followHeaders.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
+        const followed = await fetch(location, {
           method: 'GET',
-          headers: headers,
+          headers: followHeaders,
           redirect: 'follow'
         })
-        
-        const finalHeaders = new Headers(finalResponse.headers)
-        Object.entries(securityHeaders).forEach(([key, value]) => {
-          finalHeaders.set(key, value)
-        })
-        // CORS headers will be applied later with applyCORSHeaders
-        
-        const finalProxyResponse = new Response(finalResponse.body, {
-          status: 200,
-          statusText: 'OK',
-          headers: finalHeaders
-        })
-        
         const origin = request.headers.get('Origin')
-        return applyCORSHeaders(finalProxyResponse, origin, {})
+        const safeHeaders = new Headers(followed.headers)
+        Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))
+        return applyCORSHeaders(new Response(followed.body, {
+          status: followed.status,
+          statusText: followed.statusText,
+          headers: safeHeaders
+        }), origin, {})
       }
     }
     

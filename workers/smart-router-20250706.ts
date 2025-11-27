@@ -32,6 +32,27 @@ const securityHeaders = {
 
 // CORSヘッダーは ./utils/cors-config.ts で統一管理
 
+async function proxyToVercel(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url)
+  const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-2ezx48med-yjsns-projects.vercel.app'
+  const target = new URL(url.pathname + url.search, targetBase)
+
+  // Hostヘッダーはfetchに任せ、オリジナルHost情報だけ伝える
+  const headers = new Headers(request.headers)
+  headers.set('X-Forwarded-Host', url.hostname)
+  headers.set('X-Forwarded-Proto', 'https')
+
+  const proxiedRequest = new Request(target.toString(), {
+    method: request.method,
+    headers,
+    body: request.body,
+    redirect: 'follow'
+  })
+
+  const response = await fetch(proxiedRequest)
+  return response
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
@@ -48,6 +69,18 @@ export default {
       
       // アクティブWorkerに基づいてFetcherを選択
       const targetWorker = activeWorker === 'green' ? env.WORKER_GREEN : env.WORKER_BLUE
+
+      // HTMLや静的リソースは直接Vercelへプロキシ（APIのみブルー/グリーンを経由）
+      const isApiRequest = url.pathname.startsWith('/api/')
+      if (!isApiRequest) {
+        const proxied = await proxyToVercel(request, env)
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(proxied, origin, {
+          ...securityHeaders,
+          'X-Active-Worker': activeWorker,
+          'X-Router-Version': 'smart-router-20250706-fixed-html-direct'
+        })
+      }
       
       // リクエストを対象Workerに転送
       const response = await targetWorker.fetch(request)
