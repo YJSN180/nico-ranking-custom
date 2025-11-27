@@ -1,5 +1,4 @@
 import bundleAnalyzer from '@next/bundle-analyzer'
-import withPWA from 'next-pwa'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -318,7 +317,8 @@ const pwaConfig = withPWA({
   // 新しいSWを即時適用し、古いキャッシュを握らせない
   skipWaiting: true,
   clientsClaim: true,
-  disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA !== 'true',
+  // SWを一時停止してビルド・キャッシュ干渉を防ぐ
+  disable: true,
   fallbacks: {
     document: '/offline.html'
   },
