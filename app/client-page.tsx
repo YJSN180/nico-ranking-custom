@@ -349,7 +349,14 @@ export default function ClientPage({
     
     // SSR初期データが空だった場合は強制的に再フェッチ（SSR失敗フォールバック）
     if (!initialData.items || initialData.items.length === 0) {
-      handleConfigChange(config, true /* force */).catch(() => {})
+      // fire-and-forget再フェッチ（エラーは握りつぶす）
+      void (async () => {
+        try {
+          await handleConfigChange(config, true /* force */)
+        } catch {
+          // ignore
+        }
+      })()
     }
     
     // 人気タグをlocalStorageから復元（ブラウザバック対応）
