@@ -85,8 +85,8 @@ export async function GET(request: NextRequest) {
       responseHeaders.set('content-type', 'application/json')
       
       // キャッシュ禁止（ブラウザ・CDN・Vercel Edge）
-      // 短期エッジキャッシュ + SWR で鮮度と性能を両立
-      const sMaxage = 60
+      // 短期エッジキャッシュ + SWR で鮮度と性能を両立（10分）
+      const sMaxage = 600
       const swr = 540
       responseHeaders.set('cache-control', `public, max-age=0, s-maxage=${sMaxage}, stale-while-revalidate=${swr}`)
       responseHeaders.set('cdn-cache-control', `public, s-maxage=${sMaxage}`)
