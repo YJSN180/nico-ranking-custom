@@ -9,12 +9,11 @@ import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { OfflineIndicator } from '@/components/offline-indicator'
 import './globals.css'
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
-  preload: true,
-  adjustFontFallback: true, // フォールバックフォントの最適化
-  variable: '--font-inter'  // CSS変数として使用
+  weight: ['400','600','700'],
+  variable: '--font-inter'
 })
 
 export const metadata: Metadata = {
@@ -108,29 +107,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://secure-dcdn.cdn.nimg.jp" />
         <link rel="preconnect" href="https://nicovideo.cdn.nimg.jp" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://tn.smilevideo.jp" crossOrigin="anonymous" />
-        {/* フォントのプリロード - WOFF2を最優先で読み込む */}
-        <link rel="preload" href="/fonts/nicomoji-plus-v2.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
-        <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
-        {/* クリティカルCSSをインライン化 */}
-        <style dangerouslySetInnerHTML={{ __html: `
-          /* クリティカルフォント定義 - WOFF2優先フォールバック戦略 */
-          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:fallback;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
-          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:fallback;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
-          /* クリティカルCSS - LCPに必要な最小限のスタイル */
-          body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-          /* テーマのデフォルトスタイル - ちらつき防止 */
-          [data-theme="dark"] body{color:#fff;background-color:#121212}
-          [data-theme="darkblue"] body{color:#fff;background-color:#15202b}
-          .header-container{background:linear-gradient(135deg,#0066CC 0%,#004B99 100%);padding:8px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.1);margin-bottom:20px}
-          .selectors-container{min-height:200px}
-          .ranking-video-link{color:#0066cc;text-decoration:none}
-          .ranking-video-link--desktop{font-size:16px;font-weight:600;line-height:1.4;display:block;margin-bottom:6px;word-break:break-word}
-          .ranking-item-responsive__title{color:var(--link-color);text-decoration:none;font-size:16px;font-weight:600;line-height:1.4;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;word-break:break-word}
-          [data-testid="ranking-item"]{background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:12px;padding:16px}
-          .skeleton-pulse{animation:skeleton-pulse 1.5s ease-in-out infinite alternate}
-          @keyframes skeleton-pulse{0%{opacity:0.6}100%{opacity:1}}
-          @media(max-width:640px){.header-container{padding:5px 12px}.selectors-container{min-height:250px}.ranking-video-link--mobile{font-size:15px;font-weight:600;line-height:1.3}.ranking-item-responsive__title{font-size:15px;line-height:1.3;-webkit-line-clamp:2}}
-        ` }} />
+        {/* フォントは next/font に集約。手動プリロードやインラインfont-faceは削除。 */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
