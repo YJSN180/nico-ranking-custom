@@ -201,16 +201,24 @@ export default function ClientPage({
       tag: initialTag
     }
   })
-  
+  const configRef = useRef(config)
+  useEffect(() => {
+    configRef.current = config
+  }, [config])
+
   // 初回ロードを追跡（二重リクエスト防止用）
   const [isInitialLoad, setIsInitialLoad] = useState(true)
-  
+
   // ページ状態の管理
   const [currentPage, setCurrentPage] = useState(initialPage)
-  
+  const currentPageRef = useRef(currentPage)
+  useEffect(() => {
+    currentPageRef.current = currentPage
+  }, [currentPage])
+
   // 外部ナビゲーション中の状態管理（UX制御）
   const [isNavigating, setIsNavigating] = useState(false)
-  
+
   // 時間範囲フィルター状態（localStorageから復元）
   const [timeRange, setTimeRange] = useState<TimeRangeValue>(() => {
     if (typeof window !== 'undefined') {
@@ -262,16 +270,20 @@ export default function ClientPage({
   useEffect(() => {
     migrateLocalStorageData()
   }, [])
-  
+  const popularTagsRef = useRef<string[]>(currentPopularTags)
+  useEffect(() => {
+    popularTagsRef.current = currentPopularTags
+  }, [currentPopularTags])
+
   // ページ離脱時に現在の設定をlocalStorageに保存（PWA対応）
   useEffect(() => {
     const saveCurrentState = () => {
       const stateToSave = {
-        genre: config.genre,
-        period: config.period,
-        tag: config.tag,
-        page: currentPage,
-        popularTags: currentPopularTags,
+        genre: configRef.current.genre,
+        period: configRef.current.period,
+        tag: configRef.current.tag,
+        page: currentPageRef.current,
+        popularTags: popularTagsRef.current,
         scrollPosition: window.pageYOffset || document.documentElement.scrollTop || 0,
         savedAt: Date.now()
       }
@@ -337,7 +349,7 @@ export default function ClientPage({
     
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('focus', handleFocus)
-    
+
     return () => {
       window.removeEventListener('beforeunload', saveCurrentState)
       window.removeEventListener('pagehide', saveCurrentState)
@@ -346,7 +358,7 @@ export default function ClientPage({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [config, currentPopularTags, currentPage])
+  }, [])
   
   // localStorageから復元する設定を管理
   const [shouldRestore, setShouldRestore] = useState(null)
@@ -618,7 +630,11 @@ export default function ClientPage({
     if (newConfig.tag) params.set('tag', newConfig.tag)
     
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
-    await router.push(newUrl, { scroll: false })
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', newUrl)
+    } else {
+      await router.replace(newUrl, { scroll: false })
+    }
 
     // 既存カスタムランキング選択時は即座にフィルタリング表示を試行（エラーハンドリング強化）
     if (newConfig.genre === 'custom' && newConfig.tag?.startsWith('custom:')) {

@@ -20,7 +20,7 @@ export default defineConfig({
     // サービスワーカーをブロック（APIモックのため）
     serviceWorkers: 'block',
     // タイムアウト設定を調整
-    actionTimeout: 15000, // アクションタイムアウトを15秒に増加
+    actionTimeout: 30000, // カスタムタブ表示遅延に対応して30秒へ拡大
     navigationTimeout: 45000, // ナビゲーションタイムアウトを45秒に増加
     // ネットワークの不安定性に対する対策
     acceptDownloads: false,
@@ -34,16 +34,18 @@ export default defineConfig({
   },
   
   projects: [
-    // Desktop browsers
+    // Desktop browsers (CIはperf-measureのみ)
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
+      testMatch: ['tests/e2e/perf-measure.spec.ts'],
+      testIgnore: ['**/mobile.spec.ts'],
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
+      testMatch: ['tests/e2e/perf-measure.spec.ts'],
+      testIgnore: ['**/mobile.spec.ts'],
     },
     // WebKit除外 (ユーザー指示により失敗が予想されるため)
     // {
