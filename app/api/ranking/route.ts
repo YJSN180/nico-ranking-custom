@@ -85,9 +85,12 @@ export async function GET(request: NextRequest) {
       responseHeaders.set('content-type', 'application/json')
       
       // キャッシュ禁止（ブラウザ・CDN・Vercel Edge）
-      responseHeaders.set('cache-control', 'no-store')
-      responseHeaders.set('cdn-cache-control', 'no-store')
-      responseHeaders.set('vercel-cdn-cache-control', 'no-store')
+      // 短期エッジキャッシュ + SWR で鮮度と性能を両立
+      const sMaxage = 60
+      const swr = 540
+      responseHeaders.set('cache-control', `public, max-age=0, s-maxage=${sMaxage}, stale-while-revalidate=${swr}`)
+      responseHeaders.set('cdn-cache-control', `public, s-maxage=${sMaxage}`)
+      responseHeaders.set('vercel-cdn-cache-control', `public, s-maxage=${sMaxage}`)
       
       return new NextResponse(data, {
         status: response.status,
