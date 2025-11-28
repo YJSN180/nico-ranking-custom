@@ -34,16 +34,18 @@ export default defineConfig({
   },
   
   projects: [
-    // Desktop browsers
+    // Desktop browsers (CIはperf-measureのみ)
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: ['**/mobile.spec.ts', '**/smoke/custom-*.spec.ts', '**/custom-*.spec.ts'], // 重い/不安定なカスタム系をCIから除外
+      testMatch: ['tests/e2e/perf-measure.spec.ts'],
+      testIgnore: ['**/mobile.spec.ts'],
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: ['**/mobile.spec.ts', '**/smoke/custom-*.spec.ts', '**/custom-*.spec.ts'],
+      testMatch: ['tests/e2e/perf-measure.spec.ts'],
+      testIgnore: ['**/mobile.spec.ts'],
     },
     // WebKit除外 (ユーザー指示により失敗が予想されるため)
     // {
