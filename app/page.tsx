@@ -6,8 +6,6 @@ import { HeaderWithSettings } from '@/components/header-with-settings'
 import { SuspenseWrapper } from '@/components/suspense-wrapper'
 import { FooterLazy } from '@/components/footer-lazy'
 import { BrowserRecommendationSSR } from '@/components/browser-recommendation-ssr'
-import { cookies } from 'next/headers'
-import { COOKIE_NAME } from '@/lib/user-preferences-cookie'
 import { getPopularTags } from '@/lib/popular-tags'
 import { filterRankingDataServer } from '@/lib/ng-filter-server'
 // import { getGenreRanking } from '@/lib/cloudflare-kv' // R2移行完了により不要
@@ -197,10 +195,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
 export default async function Home({ searchParams }: PageProps) {
   // 並列でPromiseを解決してTTFBを改善
-  const [params, cookieStore] = await Promise.all([
-    searchParams,
-    cookies()
-  ])
+  const params = await searchParams
   
   // URLパラメータが優先、なければCookieから、それもなければデフォルト値
   let genre = params.genre as string
@@ -208,39 +203,6 @@ export default async function Home({ searchParams }: PageProps) {
   let tag = params.tag as string | undefined
   let ranking = params.ranking as string | undefined
   let page = parseInt((params.page as string) || '1', 10)
-  
-  // Cookieから設定を読み取る（無効なジャンルを除外）
-  if (!genre || !period) {
-    const preferenceCookie = cookieStore.get(COOKIE_NAME)
-    if (preferenceCookie?.value) {
-      try {
-        const preferences = JSON.parse(preferenceCookie.value)
-        // デバッグログ
-        // eslint-disable-next-line no-console
-        console.log('[SSR] Cookie preferences:', preferences)
-        
-        // ジャンルの検証（有効なジャンルのみ許可）
-        const validGenres = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other', 'custom']
-        const validPeriods = ['24h', 'hour']
-        
-        if (!genre && preferences.lastGenre && validGenres.includes(preferences.lastGenre)) {
-          genre = preferences.lastGenre
-        }
-        if (!period && preferences.lastPeriod && validPeriods.includes(preferences.lastPeriod)) {
-          period = preferences.lastPeriod
-        }
-        if (!tag && preferences.lastTag) {
-          tag = preferences.lastTag
-          // カスタムランキングの場合、genreも'custom'に設定
-          if (tag.startsWith('custom:') && !genre) {
-            genre = 'custom'
-          }
-        }
-      } catch {
-        // パースエラーは無視
-      }
-    }
-  }
   
   // デフォルト値を設定（カスタムランキングの場合はgenreを維持）
   if (!genre) {
