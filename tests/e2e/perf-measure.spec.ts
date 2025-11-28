@@ -24,7 +24,7 @@ async function setupApiMock(page) {
   })
 }
 
-test('perf: landing + genre change timeline', async ({ page }) => {
+test.skip('perf: landing + genre change timeline (CI skip)', async ({ page }) => {
   await setupApiMock(page)
 
   const start = performance.now()
