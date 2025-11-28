@@ -12,7 +12,7 @@ export async function middleware(request: NextRequest) {
   const host = request.headers.get('host')
   
   // キャッシュ禁止対象パス
-  const noStorePaths = ['/api/ranking']
+const noStorePaths: string[] = []
   
   // SECURITY FIX: /api/admin/* は認証チェックを通す
   // 一般的な公開APIのみ認証をスキップ

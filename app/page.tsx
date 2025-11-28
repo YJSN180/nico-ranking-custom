@@ -16,15 +16,12 @@ import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
 // 旧ISRキャッシュが古データを返していたため完全動的に変更
-export const revalidate = 0
-
-// Dynamic imports for better code splitting
-export const dynamic = 'force-dynamic'
+// → キャッシュ戦略を見直し、短期ISRで性能と鮮度を両立
+export const revalidate = 60
 
 // Browser recommendation component is temporarily disabled due to missing lucide-react dependency
 
 // Prefetch hints
-export const fetchCache = 'force-no-store'
 export const preferredRegion = 'auto'
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
@@ -164,9 +161,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       return filteredData
     }
 
-    // 1st: 常に最新を取得（サーバーキャッシュ無効化）
+    // 1st: キャッシュを活かしつつ短周期で再検証
     const { json: primaryJson, meta: primaryMeta } = await doFetch(apiUrl, {
-      cache: 'no-store',
+      next: { revalidate: 60 },
       headers
     })
     const primaryResult = await buildResult(primaryJson, primaryMeta)
@@ -175,7 +172,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     if (primaryResult.items.length === 0) {
       const cacheBustUrl = `${apiUrl}&_cb=${Date.now()}`
       const { json: freshJson, meta: freshMeta } = await doFetch(cacheBustUrl, {
-        cache: 'no-store',
+        next: { revalidate: 0 },
         headers: {
           ...headers,
           'Cache-Control': 'no-cache'
