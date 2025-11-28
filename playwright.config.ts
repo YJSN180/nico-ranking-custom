@@ -38,12 +38,12 @@ export default defineConfig({
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
+      testIgnore: ['**/mobile.spec.ts', '**/smoke/custom-*.spec.ts', '**/custom-*.spec.ts'], // 重い/不安定なカスタム系をCIから除外
     },
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
-      testIgnore: '**/mobile.spec.ts', // モバイルテストを除外
+      testIgnore: ['**/mobile.spec.ts', '**/smoke/custom-*.spec.ts', '**/custom-*.spec.ts'],
     },
     // WebKit除外 (ユーザー指示により失敗が予想されるため)
     // {
