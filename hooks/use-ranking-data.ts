@@ -272,6 +272,15 @@ export function useRankingData({
         } else {
           // その他のエラー。AdBlock等で net::ERR_BLOCKED_BY_CLIENT の場合 status は 0 になることがある
           const statusCode = response.status || 0
+          const vercelId = response.headers.get('x-vercel-id') || 'n/a'
+          const cfRay = response.headers.get('cf-ray') || 'n/a'
+          serverLog.warn('Ranking API non-200', {
+            url: apiUrl,
+            status: statusCode,
+            statusText: response.statusText,
+            vercelId,
+            cfRay,
+          })
           throw new Error(`HTTP ${statusCode}: ${response.statusText || 'client-blocked'}`)
         }
       } catch (err: any) {
@@ -279,6 +288,12 @@ export function useRankingData({
         if (err.name === 'AbortError') {
           return // キャンセルは無視
         }
+        serverLog.error('Ranking API fetch failed', {
+          url: apiUrl,
+          message: err?.message,
+          name: err?.name,
+          stack: err?.stack,
+        })
         throw err
       }
       
