@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import Script from 'next/script'
-import { cookies } from 'next/headers'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -54,7 +53,7 @@ export const viewport = {
   maximumScale: 5,
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
@@ -81,23 +80,25 @@ export default async function RootLayout({
     inLanguage: 'ja',
   }
 
-  // サーバーサイドでテーマを取得
-  const cookieStore = await cookies()
-  const preferenceCookie = cookieStore.get('user-preferences')
-  let theme = 'light'
-  
-  if (preferenceCookie?.value) {
-    try {
-      const preferences = JSON.parse(preferenceCookie.value)
-      theme = preferences.theme || 'light'
-    } catch {
-      // デフォルトのテーマを使用
-    }
-  }
-
   return (
-    <html lang="ja" data-theme={theme} suppressHydrationWarning>
+    <html lang="ja" data-theme="light" suppressHydrationWarning>
       <head>
+        {/* クライアントでテーマ適用（サーバー側での cookies 参照を排除） */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const pref = localStorage.getItem('user-preferences')
+                if (pref) {
+                  const { theme } = JSON.parse(pref)
+                  if (theme) document.documentElement.setAttribute('data-theme', theme)
+                }
+              } catch (e) {
+                // noop
+              }
+            `
+          }}
+        />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0080ff" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
