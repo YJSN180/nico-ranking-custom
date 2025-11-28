@@ -51,7 +51,8 @@ interface ClientPageProps {
 }
 
 // ページネーション設定
-const ITEMS_PER_PAGE = 100   // ページあたりの表示件数（DOM要素数削減のため）
+// 初期DOM負荷を抑えるため一度に描画する件数を減らす
+const ITEMS_PER_PAGE = 50
 
 // PWAモードかどうかを検出
 const isPWA = () => {
