@@ -28,6 +28,7 @@ import type { NGList } from '@/types/ng-list'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
+import { useBFCacheRefresh, usePWAResumeRefresh } from '@/hooks/use-bfcache-refresh'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import { serverLog } from '@/lib/server-log'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
@@ -140,7 +141,7 @@ export default function ClientPage({
   // PWAリロード機能
   const { isPulling, pullDistance } = usePullToRefresh()
   useKeyboardShortcuts()
-  
+
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
     if (visibleGenres.length > 0 && !visibleGenres.includes(config.genre)) {
@@ -205,6 +206,24 @@ export default function ClientPage({
   useEffect(() => {
     configRef.current = config
   }, [config])
+
+  // BFCache/PWA復元時のデータリフレッシュ用コールバック
+  const handleBFCacheRefresh = useCallback(() => {
+    // BFCacheから復元された場合、現在のconfig設定でデータを再取得
+    const currentConfig = configRef.current
+    if (currentConfig) {
+      // キャッシュをクリアして新鮮なデータを取得
+      rankingCache.clear()
+      fetchRankingData(currentConfig)
+    }
+  }, [fetchRankingData])
+
+  // BFCache（Back-Forward Cache）からの復元を検出してデータを再取得
+  // ブラウザの「戻る」操作やPWAでの復帰時に古いデータが表示される問題を防ぐ
+  useBFCacheRefresh(handleBFCacheRefresh, { maxAge: 3 * 60 * 1000 }) // 3分以上経過していたらリフレッシュ
+
+  // PWAがバックグラウンドから復帰した際にデータをリフレッシュ
+  usePWAResumeRefresh(handleBFCacheRefresh, { maxAge: 5 * 60 * 1000 }) // 5分以上経過していたらリフレッシュ
 
   // 初回ロードを追跡（二重リクエスト防止用）
   const [isInitialLoad, setIsInitialLoad] = useState(true)

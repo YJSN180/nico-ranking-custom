@@ -75,10 +75,37 @@ export default {
       if (!isApiRequest) {
         const proxied = await proxyToVercel(request, env)
         const origin = request.headers.get('Origin')
+
+        // HTMLページ（ルートまたは拡張子なしのパス）はブラウザキャッシュを無効化
+        // これによりBFCache復元時の古いデータ問題を防ぐ
+        const isHtmlPage = url.pathname === '/' ||
+          (!url.pathname.includes('.') && !url.pathname.startsWith('/_next/'))
+
+        if (isHtmlPage) {
+          const headers = new Headers(proxied.headers)
+          // no-storeでブラウザキャッシュを完全無効化
+          // must-revalidateで条件付きリクエストを強制
+          headers.set('Cache-Control', 'no-store, must-revalidate')
+          headers.set('CDN-Cache-Control', 'no-store')
+          headers.set('Vercel-CDN-Cache-Control', 'no-store')
+
+          const modifiedHtml = new Response(proxied.body, {
+            status: proxied.status,
+            statusText: proxied.statusText,
+            headers
+          })
+          return applyCORSHeaders(modifiedHtml, origin, {
+            ...securityHeaders,
+            'X-Active-Worker': activeWorker,
+            'X-Router-Version': 'smart-router-20250706-bfcache-fix'
+          })
+        }
+
+        // 静的アセット（JS、CSS、画像など）は通常のキャッシュを維持
         return applyCORSHeaders(proxied, origin, {
           ...securityHeaders,
           'X-Active-Worker': activeWorker,
-          'X-Router-Version': 'smart-router-20250706-fixed-html-direct'
+          'X-Router-Version': 'smart-router-20250706-bfcache-fix'
         })
       }
       
@@ -106,17 +133,17 @@ export default {
         const modifiedResponse = applyCORSHeaders(modified, origin, {
           ...securityHeaders,
           'X-Active-Worker': activeWorker,
-          'X-Router-Version': 'smart-router-20250706-fixed'
+          'X-Router-Version': 'smart-router-20250706-bfcache-fix'
         })
         return modifiedResponse
       }
-      
+
       // CORS重複問題を回避して安全なヘッダーを適用
       const origin = request.headers.get('Origin')
       const modifiedResponse = applyCORSHeaders(response, origin, {
         ...securityHeaders,
         'X-Active-Worker': activeWorker,
-        'X-Router-Version': 'smart-router-20250706-fixed'
+        'X-Router-Version': 'smart-router-20250706-bfcache-fix'
       })
       
       return modifiedResponse
@@ -131,12 +158,12 @@ export default {
         return applyCORSHeaders(fallbackResponse, origin, {
           ...securityHeaders,
           'X-Active-Worker': 'blue-fallback',
-          'X-Router-Version': 'smart-router-20250706-fixed',
+          'X-Router-Version': 'smart-router-20250706-bfcache-fix',
           'X-Router-Error': 'fallback-activated'
         })
       } catch (fallbackError) {
         console.error('Fallback Error:', fallbackError)
-        
+
         // 最終フォールバック: エラーレスポンス
         const origin = request.headers.get('Origin')
         const errorResponse = new Response('Internal Server Error', {
@@ -144,7 +171,7 @@ export default {
           headers: {
             'Content-Type': 'text/plain',
             'X-Router-Error': 'all-workers-failed',
-            'X-Router-Version': 'smart-router-20250706-fixed'
+            'X-Router-Version': 'smart-router-20250706-bfcache-fix'
           }
         })
         return applyCORSHeaders(errorResponse, origin, securityHeaders)
