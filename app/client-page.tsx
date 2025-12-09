@@ -284,10 +284,37 @@ export default function ClientPage({
   }, [customRankings, newlyCreatedRankings])
   
   // CSS-onlyレスポンシブ対応により、JSでのモバイル検出は不要
-  
+
   // 初回マウント時にデータ移行を実行
   useEffect(() => {
     migrateLocalStorageData()
+  }, [])
+
+  // ページリロード時のキャッシュクリア
+  // SSRで取得した最新データを優先し、古いメモリキャッシュを使用しないようにする
+  useEffect(() => {
+    // リロード検出: performance.navigation.type または performance.getEntriesByType
+    const isReload = (() => {
+      if (typeof window === 'undefined') return false
+
+      // Modern API (推奨)
+      const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+      if (navEntries.length > 0 && navEntries[0].type === 'reload') {
+        return true
+      }
+
+      // Fallback for older browsers
+      if ((performance as any).navigation?.type === 1) {
+        return true
+      }
+
+      return false
+    })()
+
+    if (isReload) {
+      serverLog.info('Page reload detected - clearing ranking cache to use fresh SSR data')
+      rankingCache.clear()
+    }
   }, [])
   const popularTagsRef = useRef<string[]>(currentPopularTags)
   useEffect(() => {
