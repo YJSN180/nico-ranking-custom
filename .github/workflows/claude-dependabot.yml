@@ -6,6 +6,12 @@ name: Claude Dependabot Auto-Merge
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to test (for manual testing)'
+        required: true
+        type: number
 
 # 同時実行を制御
 concurrency:
@@ -14,8 +20,8 @@ concurrency:
 
 jobs:
   claude-review:
-    # Dependabot PRの場合のみ実行
-    if: github.actor == 'dependabot[bot]'
+    # Dependabot PRの場合、または手動トリガーの場合に実行
+    if: github.actor == 'dependabot[bot]' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -91,10 +97,19 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER_FROM_EVENT: ${{ github.event.pull_request.number }}
+          PR_NUMBER_FROM_INPUT: ${{ github.event.inputs.pr_number }}
         run: |
           echo "Claude review completed successfully."
           echo "Enabling auto-merge for this Dependabot PR..."
+
+          # PR番号を決定（手動トリガーの場合はinputから取得）
+          PR_NUMBER="${PR_NUMBER_FROM_EVENT:-$PR_NUMBER_FROM_INPUT}"
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR number available. Skipping auto-merge."
+            exit 0
+          fi
 
           # PRにauto-mergeを設定（squash merge）
           gh pr merge "$PR_NUMBER" \
