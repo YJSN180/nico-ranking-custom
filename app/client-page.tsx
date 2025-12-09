@@ -117,17 +117,51 @@ function TagToggleButton() {
   )
 }
 
-export default function ClientPage({ 
-  initialData, 
-  initialGenre = 'all', 
-  initialPeriod = '24h', 
-  initialTag, 
+// リロード検出用のユーティリティ（コンポーネント外で定義）
+const detectPageReload = (): boolean => {
+  if (typeof window === 'undefined') return false
+
+  try {
+    // Modern API (推奨)
+    const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+    if (navEntries.length > 0 && navEntries[0].type === 'reload') {
+      return true
+    }
+
+    // Fallback for older browsers
+    if ((performance as any).navigation?.type === 1) {
+      return true
+    }
+  } catch {
+    // Performance API が利用できない環境では false を返す
+  }
+
+  return false
+}
+
+export default function ClientPage({
+  initialData,
+  initialGenre = 'all',
+  initialPeriod = '24h',
+  initialTag,
   initialRanking,
   initialPage = 1,
   popularTags = []
 }: ClientPageProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // ★ 重要: useEffectより前に同期的にキャッシュをクリア
+  // useRefで1回だけ実行を保証（Strict Modeでも安全）
+  const hasCleanedCacheRef = useRef(false)
+  if (!hasCleanedCacheRef.current) {
+    hasCleanedCacheRef.current = true
+    if (detectPageReload()) {
+      // リロード時はSSRの最新データを使用するためキャッシュをクリア
+      rankingCache.clear()
+      serverLog.info('Page reload detected - cleared ranking cache before any useEffect runs')
+    }
+  }
   
   // ユーザー設定の永続化
   const { preferences, updatePreferences } = useUserPreferences()
@@ -290,32 +324,9 @@ export default function ClientPage({
     migrateLocalStorageData()
   }, [])
 
-  // ページリロード時のキャッシュクリア
-  // SSRで取得した最新データを優先し、古いメモリキャッシュを使用しないようにする
-  useEffect(() => {
-    // リロード検出: performance.navigation.type または performance.getEntriesByType
-    const isReload = (() => {
-      if (typeof window === 'undefined') return false
+  // 注: リロード時のキャッシュクリアはコンポーネント本体で同期的に実行済み
+  // (hasCleanedCacheRef を使用、useEffectより前に実行されることを保証)
 
-      // Modern API (推奨)
-      const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
-      if (navEntries.length > 0 && navEntries[0].type === 'reload') {
-        return true
-      }
-
-      // Fallback for older browsers
-      if ((performance as any).navigation?.type === 1) {
-        return true
-      }
-
-      return false
-    })()
-
-    if (isReload) {
-      serverLog.info('Page reload detected - clearing ranking cache to use fresh SSR data')
-      rankingCache.clear()
-    }
-  }, [])
   const popularTagsRef = useRef<string[]>(currentPopularTags)
   useEffect(() => {
     popularTagsRef.current = currentPopularTags
