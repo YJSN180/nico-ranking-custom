@@ -1,0 +1,141 @@
+name: Vercel Cache Refresh
+
+# Vercel CDNキャッシュを更新するためのワークフロー
+# 問題: SSRで生成されたHTMLがVercel CDNにキャッシュされ、
+# ページリロード時に古いデータ（PRマージ時点のデータ）が表示される
+# 解決: Vercel Redeploy APIを使用して定期的に再デプロイを実行
+
+on:
+  schedule:
+    # 毎日日本時間の6:00, 12:00, 18:00, 0:00に実行
+    # UTC: 21:00, 3:00, 9:00, 15:00
+    - cron: '0 21,3,9,15 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual trigger'
+        required: false
+        default: 'Manual cache refresh'
+
+# 同時実行を防ぐ
+concurrency:
+  group: vercel-cache-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh-cache:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Trigger Vercel Redeploy
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        VERCEL_TEAM_ID: ${{ secrets.VERCEL_ORG_ID }}
+      run: |
+        echo "🔄 Triggering Vercel redeploy to refresh CDN cache..."
+        echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+        # Get the latest deployment to redeploy
+        LATEST_DEPLOYMENT=$(curl -s -X GET \
+          "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}&limit=1&state=READY&target=production" \
+          -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+          -H "Content-Type: application/json")
+
+        DEPLOYMENT_ID=$(echo $LATEST_DEPLOYMENT | jq -r '.deployments[0].uid')
+
+        if [ -z "$DEPLOYMENT_ID" ] || [ "$DEPLOYMENT_ID" = "null" ]; then
+          echo "❌ Failed to get latest deployment ID"
+          echo "Response: $LATEST_DEPLOYMENT"
+          exit 1
+        fi
+
+        echo "📦 Latest deployment ID: $DEPLOYMENT_ID"
+
+        # Trigger redeploy using the create deployment API with the same deployment
+        # This creates a new deployment from the same git commit
+        REDEPLOY_RESPONSE=$(curl -s -X POST \
+          "https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}" \
+          -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"name\": \"nico-ranking-custom\",
+            \"deploymentId\": \"${DEPLOYMENT_ID}\",
+            \"target\": \"production\"
+          }")
+
+        NEW_DEPLOYMENT_ID=$(echo $REDEPLOY_RESPONSE | jq -r '.id')
+        DEPLOYMENT_URL=$(echo $REDEPLOY_RESPONSE | jq -r '.url')
+
+        if [ -z "$NEW_DEPLOYMENT_ID" ] || [ "$NEW_DEPLOYMENT_ID" = "null" ]; then
+          echo "❌ Failed to trigger redeploy"
+          echo "Response: $REDEPLOY_RESPONSE"
+          exit 1
+        fi
+
+        echo "✅ Redeploy triggered successfully!"
+        echo "New deployment ID: $NEW_DEPLOYMENT_ID"
+        echo "Deployment URL: $DEPLOYMENT_URL"
+
+    - name: Wait for deployment
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        VERCEL_TEAM_ID: ${{ secrets.VERCEL_ORG_ID }}
+      run: |
+        echo "⏳ Waiting for deployment to complete..."
+
+        # Wait up to 10 minutes for deployment
+        MAX_ATTEMPTS=60
+        ATTEMPT=0
+
+        while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+          ATTEMPT=$((ATTEMPT + 1))
+
+          # Get latest production deployment status
+          STATUS_RESPONSE=$(curl -s -X GET \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}&limit=1&target=production" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}")
+
+          STATE=$(echo $STATUS_RESPONSE | jq -r '.deployments[0].state')
+
+          echo "Attempt $ATTEMPT/$MAX_ATTEMPTS - State: $STATE"
+
+          if [ "$STATE" = "READY" ]; then
+            echo "✅ Deployment completed successfully!"
+            break
+          elif [ "$STATE" = "ERROR" ] || [ "$STATE" = "CANCELED" ]; then
+            echo "❌ Deployment failed with state: $STATE"
+            exit 1
+          fi
+
+          sleep 10
+        done
+
+        if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+          echo "⚠️ Deployment did not complete within timeout, but may still succeed"
+        fi
+
+    - name: Verify cache refresh
+      run: |
+        echo "🔍 Verifying cache refresh..."
+
+        # Wait a bit for CDN propagation
+        sleep 30
+
+        # Check if the site returns fresh data
+        RESPONSE=$(curl -s -I "https://nico-rank.com/" | head -20)
+
+        echo "Response headers:"
+        echo "$RESPONSE"
+
+        # Check cache status
+        if echo "$RESPONSE" | grep -qi "x-vercel-cache: HIT"; then
+          echo "⚠️ Cache is still HIT - may need more time to propagate"
+        else
+          echo "✅ Cache appears to be refreshed"
+        fi
+
+        echo ""
+        echo "🎉 Vercel cache refresh workflow completed!"
+        echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
