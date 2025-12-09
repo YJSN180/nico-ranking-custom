@@ -13,9 +13,10 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
-// 旧ISRキャッシュが古データを返していたため完全動的に変更
-// → キャッシュ戦略を見直し、短期ISRで性能と鮮度を両立
-export const revalidate = 60
+// 動的レンダリング強制: CDNキャッシュが古いデータを返す問題を防ぐ
+// キャッシュは Cloudflare Workers 側で管理し、Vercel側は常に最新データを取得
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 // Browser recommendation component is temporarily disabled due to missing lucide-react dependency
 
@@ -159,9 +160,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       return filteredData
     }
 
-    // 1st: キャッシュを活かしつつ短周期で再検証
+    // キャッシュなし: 常に最新データを取得（古いデータ問題の根本対策）
     const { json: primaryJson, meta: primaryMeta } = await doFetch(apiUrl, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
       headers
     })
     const primaryResult = await buildResult(primaryJson, primaryMeta)

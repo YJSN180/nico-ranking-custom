@@ -201,21 +201,20 @@ const noStorePaths: string[] = []
   }
   
   // APIルートの最適化
-  // API /ranking と ルートHTML は no-store を強制（動的レンダリングと整合）
-  // /api/ranking は鮮度優先だが、負荷対策で短いCDNキャッシュを許可（15分）
+  // /api/ranking: no-store を強制（古いデータ問題の根本原因だったため）
+  // CDNキャッシュは Cloudflare Workers 側で管理するため、Vercel側はキャッシュしない
   if (request.nextUrl.pathname.startsWith('/api/ranking')) {
-    const smax = 900
-    response.headers.set('Cache-Control', `public, max-age=0, s-maxage=${smax}, stale-while-revalidate=${smax}`)
-    response.headers.set('CDN-Cache-Control', `public, s-maxage=${smax}`)
-    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${smax}`)
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   }
 
-  // ルートHTMLは短期キャッシュ（5分）で性能と鮮度を両立
+  // ルートHTML: no-store を強制（BFCache/PWA復帰時の古いデータ問題を防ぐ）
+  // SSRは毎回実行し、最新データを取得する
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
-    const smax = 300
-    response.headers.set('Cache-Control', `public, max-age=0, s-maxage=${smax}, stale-while-revalidate=${smax}`)
-    response.headers.set('CDN-Cache-Control', `public, s-maxage=${smax}`)
-    response.headers.set('Vercel-CDN-Cache-Control', `public, s-maxage=${smax}`)
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   }
   
   // 静的アセットの長期キャッシュ設定
