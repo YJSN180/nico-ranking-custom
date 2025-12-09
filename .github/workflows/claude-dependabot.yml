@@ -1,0 +1,104 @@
+name: Claude Dependabot Auto-Merge
+
+# DependabotのPRを自動的にレビュー・修正・マージするワークフロー
+# Claude Code (OAuth版) を使用してPRの内容を分析し、必要に応じて修正を行う
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# 同時実行を制御
+concurrency:
+  group: claude-dependabot-${{ github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    # Dependabot PRの場合のみ実行
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Claude Code Action
+        uses: grll/claude-code-action@beta
+        with:
+          use_oauth: true
+          claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          secrets_admin_pat: ${{ secrets.SECRETS_ADMIN_PAT }}
+          timeout_minutes: "30"
+          direct_prompt: |
+            This is a Dependabot pull request for dependency updates.
+
+            Please perform the following tasks:
+
+            1. **Review the changes**: Analyze the dependency updates in this PR.
+               - Check if the updated packages have any breaking changes
+               - Review the changelog/release notes if available
+               - Identify any potential security implications
+
+            2. **Run tests**: Execute the test suite to verify compatibility.
+               - Run `npm run typecheck` to check TypeScript types
+               - Run `npm run lint` to check code style
+               - Run `npm test` if tests exist
+
+            3. **Fix issues if needed**: If there are any type errors, lint errors, or test failures:
+               - Make necessary code adjustments to fix compatibility issues
+               - Update type definitions if needed
+               - Commit the fixes with a clear message
+
+            4. **Provide a summary**: Give a brief summary of:
+               - What packages were updated
+               - Whether all checks passed
+               - Any fixes that were applied
+               - Whether this PR is safe to merge
+
+            If all checks pass and no issues are found, indicate that the PR is ready for merge.
+            If there are unresolvable issues, explain what manual intervention is needed.
+
+          allowed_tools: |
+            Bash(npm run typecheck)
+            Bash(npm run lint)
+            Bash(npm test)
+            Bash(npm run build)
+            Bash(npm ci)
+            Bash(git status)
+            Bash(git diff)
+            Edit
+            Replace
+
+      - name: Auto-merge if approved
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Claude review completed successfully."
+          echo "Enabling auto-merge for this Dependabot PR..."
+
+          # PRにauto-mergeを設定（squash merge）
+          gh pr merge "$PR_NUMBER" \
+            --auto \
+            --squash \
+            --delete-branch \
+            || echo "Auto-merge could not be enabled. Manual review may be required."
