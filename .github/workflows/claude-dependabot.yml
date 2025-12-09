@@ -46,6 +46,7 @@ jobs:
           claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
           claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
           secrets_admin_pat: ${{ secrets.SECRETS_ADMIN_PAT }}
+          github_token: ${{ secrets.SECRETS_ADMIN_PAT }}
           timeout_minutes: "30"
           direct_prompt: |
             This is a Dependabot pull request for dependency updates.
