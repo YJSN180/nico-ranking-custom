@@ -51,13 +51,57 @@ jobs:
 
     - name: Deploy to Vercel
       id: deploy
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       run: |
         echo "🔄 Deploying to Vercel to refresh CDN cache..."
         echo "Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 
-        DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
+        # Deploy with --prod flag
+        DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN 2>&1)
         echo "deployment_url=$DEPLOYMENT_URL" >> $GITHUB_OUTPUT
         echo "✅ Deployment completed: $DEPLOYMENT_URL"
+
+        # Extract deployment ID from URL and ensure it's promoted to production
+        # Wait for deployment to be ready
+        sleep 10
+
+        # Get the latest deployment ID we just created
+        DEPLOYMENT_ID=$(curl -s -X GET \
+          "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&limit=5" \
+          -H "Authorization: Bearer ${VERCEL_TOKEN}" | jq -r '.deployments[0].uid')
+
+        echo "📦 Deployment ID: $DEPLOYMENT_ID"
+
+        # Explicitly promote to production using Vercel API
+        echo "🚀 Promoting deployment to production..."
+        PROMOTE_RESPONSE=$(curl -s -X POST \
+          "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/promote/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+          -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+          -H "Content-Type: application/json")
+
+        echo "Promote response: $PROMOTE_RESPONSE"
+
+        # Check if promotion was successful
+        if echo "$PROMOTE_RESPONSE" | jq -e '.jobId' > /dev/null 2>&1; then
+          echo "✅ Promotion initiated successfully!"
+        else
+          echo "⚠️ Promotion may have failed, checking deployment status..."
+        fi
+
+    - name: Wait for promotion
+      env:
+        VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      run: |
+        echo "⏳ Waiting for production promotion to complete..."
+        sleep 30
+
+        # Verify the deployment is now production
+        CURRENT_PROD=$(curl -s -X GET \
+          "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&limit=1&target=production&state=READY" \
+          -H "Authorization: Bearer ${VERCEL_TOKEN}" | jq -r '.deployments[0].uid')
+
+        echo "Current production deployment: $CURRENT_PROD"
 
     - name: Verify cache refresh
       run: |
