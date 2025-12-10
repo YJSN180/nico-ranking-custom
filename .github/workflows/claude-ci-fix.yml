@@ -13,7 +13,7 @@ name: Claude CI Auto-Fix
 # 3. 修正を実装（テスト修正またはコード修正）
 # 4. 修正をコミット・プッシュ
 # 5. CIを再実行して確認
-# 6. 成功するまで最大3回繰り返す
+# 6. 成功するまで最大10回繰り返す
 #
 # セキュリティ注: ユーザー入力はenv:経由で変数化し、run:内で直接使用しない
 
@@ -215,14 +215,14 @@ jobs:
           # Claude Code Actionをトリガーするコメントを追加
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@claude
 
-          ## 🔧 CI/CD 自動修復依頼 (試行 ${ATTEMPT}/3)
+          ## 🔧 CI/CD 自動修復依頼 (試行 ${ATTEMPT}/10)
 
           CI/CDパイプラインが失敗しました。以下の情報を基に、問題を分析・修正してください。
 
           ### 📋 失敗情報
           - **失敗タイプ**: ${FAILURE_TYPE}
           - **PR番号**: #${PR_NUMBER}
-          - **試行回数**: ${ATTEMPT}/3
+          - **試行回数**: ${ATTEMPT}/10
 
           ### 📜 エラーログ（抜粋）
           \`\`\`
@@ -270,7 +270,7 @@ jobs:
              git add -A
              git commit -m \"fix: CI/CD failure - ${FAILURE_TYPE}
 
-             Auto-fix attempt ${ATTEMPT}/3 by Claude Code Action
+             Auto-fix attempt ${ATTEMPT}/10 by Claude Code Action
 
              🤖 Generated with Claude Code\"
              git push
@@ -281,7 +281,7 @@ jobs:
              以下の形式でコメントしてください：
 
              \`\`\`markdown
-             ## 🤖 Claude CI Auto-Fix レポート (試行 ${ATTEMPT}/3)
+             ## 🤖 Claude CI Auto-Fix レポート (試行 ${ATTEMPT}/10)
 
              ### 結果
              - [ ] ✅ 修正成功 / [ ] ❌ 修正失敗
@@ -310,8 +310,8 @@ jobs:
           ---
 
           ## ⚠️ 注意事項
-          - 最大3回まで修正を試行します（現在: ${ATTEMPT}/3）
-          - 3回失敗した場合は手動対応が必要です
+          - 最大10回まで修正を試行します（現在: ${ATTEMPT}/10）
+          - 10回失敗した場合は手動対応が必要です
           - プロダクションコードの大規模な変更は避けてください
           - テストの期待値変更は慎重に行ってください
           "
@@ -323,7 +323,7 @@ jobs:
     name: Max Retries Notification
     runs-on: ubuntu-latest
     needs: detect-and-collect
-    if: needs.detect-and-collect.outputs.should_fix == 'true' && needs.detect-and-collect.outputs.attempt == '3'
+    if: needs.detect-and-collect.outputs.should_fix == 'true' && needs.detect-and-collect.outputs.attempt == '10'
 
     permissions:
       pull-requests: write
@@ -338,7 +338,7 @@ jobs:
         run: |
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## ⚠️ CI Auto-Fix: 最大試行回数到達
 
-          自動修復を3回試行しましたが、CI/CDパイプラインの問題を解決できませんでした。
+          自動修復を10回試行しましたが、CI/CDパイプラインの問題を解決できませんでした。
 
           ### 推奨アクション
           1. 手動でエラーログを確認してください
