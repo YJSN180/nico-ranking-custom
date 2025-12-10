@@ -1,0 +1,113 @@
+name: Claude Token Keepalive
+
+# OAuthトークンを定期的に使用して、リフレッシュトークンの無効化を防ぐ
+#
+# 動作:
+# 1. 毎日実行でOAuthトークンを使用
+# 2. アクセストークンが期限切れの場合、自動リフレッシュ
+# 3. リフレッシュ後、GitHub Secretsを自動更新
+#
+# これにより、リフレッシュトークンが「使用されている」状態を維持し、
+# Anthropic側での無効化を防ぎます。
+
+on:
+  schedule:
+    # 毎日JST 6:00 (UTC 21:00) に実行
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Run in test mode (minimal prompt)'
+        required: false
+        default: 'true'
+        type: boolean
+
+concurrency:
+  group: claude-token-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keepalive:
+    name: Keep OAuth Token Alive
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Claude Code Action (keepalive)
+        id: claude
+        uses: grll/claude-code-action@beta
+        continue-on-error: true
+        with:
+          use_oauth: true
+          claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          secrets_admin_pat: ${{ secrets.SECRETS_ADMIN_PAT }}
+          direct_prompt: |
+            This is a keepalive request to maintain OAuth token validity.
+            Please respond with exactly: "Token keepalive successful"
+          timeout_minutes: 2
+          allowed_tools: ""
+
+      - name: Check result
+        env:
+          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "$CONCLUSION" == "success" ]; then
+            echo "✅ Token keepalive successful"
+            echo "OAuth tokens are valid and have been refreshed if needed."
+          else
+            echo "❌ Token keepalive failed"
+            echo "OAuth tokens may be invalid. Creating an issue..."
+
+            # 既存のissueがあるか確認
+            EXISTING=$(gh issue list --repo "$REPO" --state open --label "oauth-token" --json number -q '.[0].number' 2>/dev/null || echo "")
+
+            if [ -z "$EXISTING" ]; then
+              gh issue create \
+                --repo "$REPO" \
+                --title "🔑 Claude OAuth Token Needs Re-authentication" \
+                --label "oauth-token,urgent" \
+                --body "## OAuth Token Issue Detected
+
+The Claude OAuth token keepalive workflow failed, indicating the tokens may be invalid.
+
+### Required Action
+
+1. Run the following command locally:
+   \`\`\`bash
+   npx claude-code-login
+   \`\`\`
+
+2. Update the following GitHub Secrets with the new values:
+   - \`CLAUDE_ACCESS_TOKEN\`
+   - \`CLAUDE_REFRESH_TOKEN\`
+   - \`CLAUDE_EXPIRES_AT\`
+
+3. After updating, manually trigger this workflow to verify:
+   - Go to Actions → Claude Token Keepalive → Run workflow
+
+### Why This Happened
+
+Refresh tokens can become invalid due to:
+- Extended period of non-use
+- Token revocation on Anthropic's side
+- Manual logout from Claude.ai
+
+---
+🤖 This issue was created automatically by the token keepalive workflow."
+              echo "Created issue for token re-authentication"
+            else
+              echo "Issue #$EXISTING already exists"
+            fi
+
+            exit 1
+          fi

@@ -1,0 +1,180 @@
+name: Claude Token Monitor
+
+# OAuthトークンの有効期限を監視し、期限切れが近い場合に通知
+#
+# 動作:
+# 1. 毎日トークンの有効期限をチェック
+# 2. 24時間以内に期限切れの場合、Issueを作成
+# 3. 既に期限切れの場合も通知
+#
+# セキュリティ注: このワークフローではユーザー入力を使用しません
+
+on:
+  schedule:
+    # 毎日JST 9:00 (UTC 0:00) に実行
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: claude-token-monitor
+  cancel-in-progress: false
+
+jobs:
+  check-token:
+    name: Check Token Validity
+    runs-on: ubuntu-latest
+
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check token expiration
+        id: check
+        env:
+          EXPIRES_AT: ${{ secrets.CLAUDE_EXPIRES_AT }}
+        run: |
+          if [ -z "$EXPIRES_AT" ]; then
+            echo "⚠️ CLAUDE_EXPIRES_AT secret is not set"
+            echo "status=not_set" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          NOW=$(date +%s)000
+
+          if [ "$EXPIRES_AT" -lt "$NOW" ]; then
+            echo "❌ Token has expired"
+            echo "status=expired" >> $GITHUB_OUTPUT
+
+            # 期限切れからの経過時間を計算
+            DIFF_MS=$((NOW - EXPIRES_AT))
+            DIFF_HOURS=$((DIFF_MS / 1000 / 60 / 60))
+            echo "expired_hours_ago=$DIFF_HOURS" >> $GITHUB_OUTPUT
+          else
+            DIFF_MS=$((EXPIRES_AT - NOW))
+            DIFF_HOURS=$((DIFF_MS / 1000 / 60 / 60))
+            echo "hours_left=$DIFF_HOURS" >> $GITHUB_OUTPUT
+
+            if [ "$DIFF_HOURS" -lt 24 ]; then
+              echo "⚠️ Token expires in less than 24 hours"
+              echo "status=expiring_soon" >> $GITHUB_OUTPUT
+            elif [ "$DIFF_HOURS" -lt 72 ]; then
+              echo "⚠️ Token expires in less than 72 hours"
+              echo "status=expiring_warning" >> $GITHUB_OUTPUT
+            else
+              echo "✅ Token is valid for $DIFF_HOURS more hours"
+              echo "status=valid" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Report status
+        env:
+          STATUS: ${{ steps.check.outputs.status }}
+          HOURS_LEFT: ${{ steps.check.outputs.hours_left }}
+          EXPIRED_HOURS_AGO: ${{ steps.check.outputs.expired_hours_ago }}
+        run: |
+          echo "=== Token Status Report ==="
+          echo "Status: $STATUS"
+
+          case "$STATUS" in
+            "valid")
+              echo "Hours remaining: $HOURS_LEFT"
+              ;;
+            "expiring_warning")
+              echo "Hours remaining: $HOURS_LEFT (warning threshold)"
+              ;;
+            "expiring_soon")
+              echo "Hours remaining: $HOURS_LEFT (critical threshold)"
+              ;;
+            "expired")
+              echo "Expired $EXPIRED_HOURS_AGO hours ago"
+              ;;
+            "not_set")
+              echo "Secret not configured"
+              ;;
+          esac
+
+      - name: Create issue if attention needed
+        if: steps.check.outputs.status == 'expired' || steps.check.outputs.status == 'expiring_soon' || steps.check.outputs.status == 'not_set'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          STATUS: ${{ steps.check.outputs.status }}
+          HOURS_LEFT: ${{ steps.check.outputs.hours_left }}
+          EXPIRED_HOURS_AGO: ${{ steps.check.outputs.expired_hours_ago }}
+        run: |
+          # 既存のissueがあるか確認
+          EXISTING=$(gh issue list --repo "$REPO" --state open --label "oauth-token" --json number -q '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING" ]; then
+            echo "Issue #$EXISTING already exists, skipping creation"
+            exit 0
+          fi
+
+          # ステータスに応じたメッセージを設定
+          case "$STATUS" in
+            "expired")
+              TITLE="🔴 Claude OAuth Token Has Expired"
+              URGENCY="**CRITICAL**: Token expired $EXPIRED_HOURS_AGO hours ago"
+              ;;
+            "expiring_soon")
+              TITLE="🟡 Claude OAuth Token Expires Soon"
+              URGENCY="**WARNING**: Token expires in $HOURS_LEFT hours"
+              ;;
+            "not_set")
+              TITLE="⚪ Claude OAuth Token Not Configured"
+              URGENCY="**INFO**: CLAUDE_EXPIRES_AT secret is not set"
+              ;;
+          esac
+
+          gh issue create \
+            --repo "$REPO" \
+            --title "$TITLE" \
+            --label "oauth-token" \
+            --body "## OAuth Token Status Alert
+
+$URGENCY
+
+### Required Action
+
+1. Run the following command locally:
+   \`\`\`bash
+   npx claude-code-login
+   \`\`\`
+
+2. Update the following GitHub Secrets with the new values:
+   - \`CLAUDE_ACCESS_TOKEN\`
+   - \`CLAUDE_REFRESH_TOKEN\`
+   - \`CLAUDE_EXPIRES_AT\`
+
+3. After updating, verify with:
+   - Actions → Claude Token Keepalive → Run workflow
+
+### Token Information
+
+| Field | Value |
+|-------|-------|
+| Status | $STATUS |
+| Hours Left | ${HOURS_LEFT:-N/A} |
+| Expired Hours Ago | ${EXPIRED_HOURS_AGO:-N/A} |
+| Check Time | $(date -u +%Y-%m-%dT%H:%M:%SZ) |
+
+---
+🤖 This issue was created automatically by the token monitor workflow."
+
+          echo "Created issue for token attention"
+
+      - name: Close existing issue if token is valid
+        if: steps.check.outputs.status == 'valid'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          # 既存のoauth-token issueを探して閉じる
+          EXISTING=$(gh issue list --repo "$REPO" --state open --label "oauth-token" --json number -q '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" --repo "$REPO" --comment "✅ OAuth token is now valid. Closing this issue automatically."
+            echo "Closed issue #$EXISTING"
+          else
+            echo "No open oauth-token issues to close"
+          fi
