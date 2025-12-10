@@ -84,10 +84,10 @@ export async function GET(request: NextRequest) {
       // Content-Type
       responseHeaders.set('content-type', 'application/json')
       
-      // キャッシュ禁止（ブラウザ・CDN・Vercel Edge）
-      // 短期エッジキャッシュ + SWR で鮮度と性能を両立（10分）
-      const sMaxage = 600
-      const swr = 540
+      // キャッシュを短縮（5分）して、より頻繁に新しいデータを取得
+      // ただし、完全に無効にするとパフォーマンスに影響するため、SWRで対応
+      const sMaxage = 300 // 5分
+      const swr = 60 // 1分のSWR
       responseHeaders.set('cache-control', `public, max-age=0, s-maxage=${sMaxage}, stale-while-revalidate=${swr}`)
       responseHeaders.set('cdn-cache-control', `public, s-maxage=${sMaxage}`)
       responseHeaders.set('vercel-cdn-cache-control', `public, s-maxage=${sMaxage}`)
