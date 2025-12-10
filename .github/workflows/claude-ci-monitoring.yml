@@ -1,0 +1,408 @@
+name: Claude CI Monitoring
+
+# 定期的にmainブランチのテストを実行し、失敗があればClaudeが自動修正PRを作成
+#
+# 動作:
+# 1. 定期実行（毎日JST 10:00）でmainブランチのCI/CDを実行
+# 2. 失敗を検知したら自動修正用のブランチを作成
+# 3. Claudeが問題を分析・修正
+# 4. 修正PRを作成
+# 5. PRがマージされるまで監視・追加修正
+#
+# セキュリティ注: ユーザー入力は使用せず、ジョブ出力とシークレットのみ使用
+
+on:
+  schedule:
+    # 毎日 JST 10:00 (UTC 1:00)
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      force_check:
+        description: 'Force check even if recent run passed'
+        required: false
+        default: 'false'
+        type: boolean
+
+concurrency:
+  group: claude-ci-monitoring
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # Job 1: メインブランチのCI実行
+  run-ci-checks:
+    name: Run CI Checks on Main
+    runs-on: ubuntu-latest
+
+    outputs:
+      typecheck_status: ${{ steps.checks.outputs.typecheck_status }}
+      lint_status: ${{ steps.checks.outputs.lint_status }}
+      build_status: ${{ steps.checks.outputs.build_status }}
+      has_failures: ${{ steps.checks.outputs.has_failures }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run checks and collect results
+        id: checks
+        run: |
+          HAS_FAILURES="false"
+
+          # TypeScript check
+          echo "Running typecheck..."
+          if npm run typecheck 2>&1 | tee typecheck.log; then
+            echo "typecheck_status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "typecheck_status=fail" >> $GITHUB_OUTPUT
+            HAS_FAILURES="true"
+          fi
+
+          # Lint check
+          echo "Running lint..."
+          if npm run lint 2>&1 | tee lint.log; then
+            echo "lint_status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "lint_status=fail" >> $GITHUB_OUTPUT
+            HAS_FAILURES="true"
+          fi
+
+          # Build check
+          echo "Running build..."
+          if npm run build 2>&1 | tee build.log; then
+            echo "build_status=pass" >> $GITHUB_OUTPUT
+          else
+            echo "build_status=fail" >> $GITHUB_OUTPUT
+            HAS_FAILURES="true"
+          fi
+
+          echo "has_failures=$HAS_FAILURES" >> $GITHUB_OUTPUT
+
+      - name: Prepare failure logs
+        if: steps.checks.outputs.has_failures == 'true'
+        run: |
+          echo "=== TypeScript Errors ===" > failure_logs.txt
+          tail -100 typecheck.log >> failure_logs.txt 2>/dev/null || true
+          echo "" >> failure_logs.txt
+          echo "=== Lint Errors ===" >> failure_logs.txt
+          tail -100 lint.log >> failure_logs.txt 2>/dev/null || true
+          echo "" >> failure_logs.txt
+          echo "=== Build Errors ===" >> failure_logs.txt
+          tail -100 build.log >> failure_logs.txt 2>/dev/null || true
+
+      - name: Upload failure logs
+        if: steps.checks.outputs.has_failures == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs
+          path: |
+            failure_logs.txt
+            typecheck.log
+            lint.log
+            build.log
+          retention-days: 1
+
+  # Job 2: 失敗検知時にPR作成
+  create-fix-pr:
+    name: Create Fix PR
+    runs-on: ubuntu-latest
+    needs: run-ci-checks
+    if: needs.run-ci-checks.outputs.has_failures == 'true'
+
+    outputs:
+      pr_number: ${{ steps.create-pr.outputs.pr_number }}
+      branch_name: ${{ steps.create-branch.outputs.branch_name }}
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.SECRETS_ADMIN_PAT }}
+
+      - name: Setup git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create fix branch
+        id: create-branch
+        run: |
+          BRANCH_NAME="fix/ci-auto-fix-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Download failure logs
+        uses: actions/download-artifact@v4
+        with:
+          name: failure-logs
+          path: .
+
+      - name: Create placeholder commit
+        env:
+          TYPECHECK_STATUS: ${{ needs.run-ci-checks.outputs.typecheck_status }}
+          LINT_STATUS: ${{ needs.run-ci-checks.outputs.lint_status }}
+          BUILD_STATUS: ${{ needs.run-ci-checks.outputs.build_status }}
+        run: |
+          echo "CI Auto-Fix initiated at $(date -u +%Y-%m-%dT%H:%M:%SZ)" > .ci-fix-marker
+          git add .ci-fix-marker
+          git commit -m "chore: initiate CI auto-fix
+
+          This branch was created automatically to fix CI failures detected on main.
+
+          Failures detected:
+          - TypeScript: $TYPECHECK_STATUS
+          - Lint: $LINT_STATUS
+          - Build: $BUILD_STATUS
+
+          Claude Code Action will analyze and fix these issues.
+
+          🤖 Generated with Claude Code"
+
+      - name: Push branch
+        env:
+          BRANCH_NAME: ${{ steps.create-branch.outputs.branch_name }}
+        run: |
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Create PR
+        id: create-pr
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
+          BRANCH_NAME: ${{ steps.create-branch.outputs.branch_name }}
+          TYPECHECK_STATUS: ${{ needs.run-ci-checks.outputs.typecheck_status }}
+          LINT_STATUS: ${{ needs.run-ci-checks.outputs.lint_status }}
+          BUILD_STATUS: ${{ needs.run-ci-checks.outputs.build_status }}
+        run: |
+          # 失敗ログを読み込み（最大3000文字）
+          LOGS=""
+          if [ -f "failure_logs.txt" ]; then
+            LOGS=$(head -c 3000 failure_logs.txt)
+          fi
+
+          PR_BODY="## 🔧 CI Auto-Fix PR
+
+          This PR was created automatically to fix CI failures detected on the main branch.
+
+          ### 📋 Detected Failures
+          | Check | Status |
+          |-------|--------|
+          | TypeScript | ${TYPECHECK_STATUS} |
+          | Lint | ${LINT_STATUS} |
+          | Build | ${BUILD_STATUS} |
+
+          ### 📜 Error Logs
+          \`\`\`
+          ${LOGS}
+          \`\`\`
+
+          ### 🤖 Next Steps
+          Claude Code Action will be triggered to analyze and fix these issues.
+
+          ---
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+
+          PR_URL=$(gh pr create \
+            --title "fix: Auto-fix CI failures detected on main" \
+            --body "$PR_BODY" \
+            --base main \
+            --head "$BRANCH_NAME")
+
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "Created PR #$PR_NUMBER"
+
+  # Job 3: Claude Code Actionをトリガー
+  trigger-claude-fix:
+    name: Trigger Claude Fix
+    runs-on: ubuntu-latest
+    needs: [run-ci-checks, create-fix-pr]
+    if: needs.run-ci-checks.outputs.has_failures == 'true'
+
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Download failure logs
+        uses: actions/download-artifact@v4
+        with:
+          name: failure-logs
+          path: .
+
+      - name: Trigger Claude Code Action
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
+          PR_NUMBER: ${{ needs.create-fix-pr.outputs.pr_number }}
+          TYPECHECK_STATUS: ${{ needs.run-ci-checks.outputs.typecheck_status }}
+          LINT_STATUS: ${{ needs.run-ci-checks.outputs.lint_status }}
+          BUILD_STATUS: ${{ needs.run-ci-checks.outputs.build_status }}
+          REPO: ${{ github.repository }}
+        run: |
+          # 失敗ログを読み込み（最大4000文字）
+          LOGS=""
+          if [ -f "failure_logs.txt" ]; then
+            LOGS=$(head -c 4000 failure_logs.txt)
+          fi
+
+          # 失敗タイプを特定
+          FAILURE_TYPES=""
+          if [ "$TYPECHECK_STATUS" == "fail" ]; then
+            FAILURE_TYPES+="TypeScript, "
+          fi
+          if [ "$LINT_STATUS" == "fail" ]; then
+            FAILURE_TYPES+="Lint, "
+          fi
+          if [ "$BUILD_STATUS" == "fail" ]; then
+            FAILURE_TYPES+="Build, "
+          fi
+          FAILURE_TYPES=${FAILURE_TYPES%, }
+
+          # Claude Code Actionをトリガーするコメント
+          COMMENT_BODY="@claude
+
+          ## 🔧 定期CI監視: 自動修復依頼
+
+          mainブランチの定期CI実行で問題が検出されました。完全自動で修復してください。
+
+          ### 📋 検出された問題
+          - **失敗タイプ**: ${FAILURE_TYPES}
+          - **TypeScript**: ${TYPECHECK_STATUS}
+          - **Lint**: ${LINT_STATUS}
+          - **Build**: ${BUILD_STATUS}
+
+          ### 📜 エラーログ
+          \`\`\`
+          ${LOGS}
+          \`\`\`
+
+          ---
+
+          ## 🎯 完全自動修復タスク
+
+          ### Phase 1: 深掘り分析
+          1. **Taskサブエージェントで問題を調査**
+             - \`subagent_type: Explore\` でコードベースを調査
+             - 関連ファイルと依存関係を特定
+
+          2. **根本原因の特定**
+             - 型エラー: 型定義の不整合、missing exports
+             - Lintエラー: unused imports、style violations
+             - ビルドエラー: モジュール解決、設定問題
+
+          ### Phase 2: 修正実装
+          3. **Edit/MultiEditで修正を適用**
+             - 型定義の修正
+             - インポート/エクスポートの修正
+             - コードスタイルの修正
+
+          4. **ローカル検証**
+             \`\`\`bash
+             npm ci
+             npm run typecheck
+             npm run lint
+             npm run build
+             \`\`\`
+
+          ### Phase 3: コミット＆検証
+          5. **修正をコミット**
+             \`\`\`bash
+             git add -A
+             git commit -m \"fix: resolve CI failures (${FAILURE_TYPES})
+
+             Auto-fix by Claude Code Action
+
+             🤖 Generated with Claude Code\"
+             git push
+             \`\`\`
+
+          6. **CIパスを確認後、PRをApprove**
+             \`\`\`bash
+             gh pr review $PR_NUMBER --approve --body \"✅ CI failures fixed and verified\"
+             \`\`\`
+
+          7. **PRをマージ**
+             \`\`\`bash
+             gh pr merge $PR_NUMBER --squash
+             \`\`\`
+
+          ---
+
+          ## 📋 最終レポート
+          修正完了後、以下の形式でレポートしてください：
+
+          \`\`\`markdown
+          ## 🤖 定期CI監視 修復レポート
+
+          ### 結果: ✅ 修正完了 / ❌ 修正失敗
+
+          ### 修正内容
+          | ファイル | 変更内容 |
+          |----------|----------|
+          | {ファイル名} | {変更の説明} |
+
+          ### 検証結果
+          | チェック | Before | After |
+          |----------|--------|-------|
+          | TypeScript | ❌ | ✅ |
+          | Lint | ❌ | ✅ |
+          | Build | ❌ | ✅ |
+
+          ### PRステータス
+          - [ ] 修正コミット完了
+          - [ ] CI パス確認
+          - [ ] PR Approve
+          - [ ] PR マージ完了
+          \`\`\`
+
+          ## ⚠️ 重要
+          - この修正はmainブランチに影響します
+          - 破壊的な変更は避けてください
+          - テストの期待値を安易に変更しないでください
+          "
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"
+          echo "Triggered Claude Code Action for PR #$PR_NUMBER"
+
+  # Job 4: 成功時の通知（失敗がない場合）
+  report-success:
+    name: Report Success
+    runs-on: ubuntu-latest
+    needs: run-ci-checks
+    if: needs.run-ci-checks.outputs.has_failures == 'false'
+
+    steps:
+      - name: Report all checks passed
+        env:
+          TYPECHECK_STATUS: ${{ needs.run-ci-checks.outputs.typecheck_status }}
+          LINT_STATUS: ${{ needs.run-ci-checks.outputs.lint_status }}
+          BUILD_STATUS: ${{ needs.run-ci-checks.outputs.build_status }}
+        run: |
+          echo "✅ All CI checks passed on main branch"
+          echo ""
+          echo "Results:"
+          echo "  TypeScript: $TYPECHECK_STATUS"
+          echo "  Lint: $LINT_STATUS"
+          echo "  Build: $BUILD_STATUS"
+          echo ""
+          echo "No auto-fix needed."

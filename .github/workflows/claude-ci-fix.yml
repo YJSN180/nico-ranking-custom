@@ -1,0 +1,353 @@
+name: Claude CI Auto-Fix
+
+# CI/CD失敗時にClaudeが自動的に問題を分析・修正・PRを更新するワークフロー
+#
+# トリガー:
+# 1. unified-ci.ymlが失敗したときにworkflow_run経由で自動実行
+# 2. PRコメントで@claude fixをメンション
+# 3. 手動実行（workflow_dispatch）
+#
+# 動作:
+# 1. 失敗したテスト/ビルドのログを分析
+# 2. 問題の根本原因を特定
+# 3. 修正を実装（テスト修正またはコード修正）
+# 4. 修正をコミット・プッシュ
+# 5. CIを再実行して確認
+# 6. 成功するまで最大3回繰り返す
+#
+# セキュリティ注: ユーザー入力はenv:経由で変数化し、run:内で直接使用しない
+
+on:
+  # PRコメントで@claude fixをメンション
+  issue_comment:
+    types: [created]
+
+  # 他のワークフローからのdispatch
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to fix'
+        required: true
+        type: string
+      failure_type:
+        description: 'Type of CI failure'
+        required: true
+        type: choice
+        options:
+          - typecheck
+          - lint
+          - build
+          - test
+          - e2e
+          - all
+      run_id:
+        description: 'Failed workflow run ID (for log analysis)'
+        required: false
+        type: string
+      attempt:
+        description: 'Current fix attempt number'
+        required: false
+        default: '1'
+        type: string
+
+  # workflow_runでunified-ciの失敗を検知
+  workflow_run:
+    workflows: ["Unified CI Pipeline"]
+    types: [completed]
+
+concurrency:
+  group: claude-ci-fix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  # Job 1: 失敗検知とコンテキスト収集
+  detect-and-collect:
+    name: Detect Failure & Collect Context
+    runs-on: ubuntu-latest
+    # workflow_runの場合は失敗時のみ、PRコメントの場合は@claude fix含む時のみ
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.pull_requests[0]) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude') && contains(github.event.comment.body, 'fix')) ||
+      (github.event_name == 'workflow_dispatch')
+
+    outputs:
+      pr_number: ${{ steps.context.outputs.pr_number }}
+      failure_type: ${{ steps.analyze.outputs.failure_type }}
+      failure_logs: ${{ steps.analyze.outputs.failure_logs }}
+      run_id: ${{ steps.context.outputs.run_id }}
+      should_fix: ${{ steps.analyze.outputs.should_fix }}
+      attempt: ${{ steps.context.outputs.attempt }}
+
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Collect context
+        id: context
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          WF_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          WF_RUN_ID: ${{ github.event.workflow_run.id }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
+          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
+          INPUT_ATTEMPT: ${{ github.event.inputs.attempt }}
+        run: |
+          if [ "$EVENT_NAME" == "workflow_run" ]; then
+            PR_NUMBER="$WF_RUN_PR_NUMBER"
+            RUN_ID="$WF_RUN_ID"
+            ATTEMPT="1"
+          elif [ "$EVENT_NAME" == "issue_comment" ]; then
+            PR_NUMBER="$ISSUE_NUMBER"
+            # 最新の失敗したワークフロー実行を取得
+            BRANCH_NAME=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName -q .headRefName)
+            RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch="$BRANCH_NAME" --status=failure --limit=1 --json databaseId -q '.[0].databaseId' || echo "")
+            ATTEMPT="1"
+          else
+            PR_NUMBER="$INPUT_PR_NUMBER"
+            RUN_ID="$INPUT_RUN_ID"
+            ATTEMPT="$INPUT_ATTEMPT"
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "attempt=${ATTEMPT:-1}" >> $GITHUB_OUTPUT
+
+          echo "Collected context:"
+          echo "  PR: #$PR_NUMBER"
+          echo "  Run ID: $RUN_ID"
+          echo "  Attempt: $ATTEMPT"
+
+      - name: Analyze failure
+        id: analyze
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ steps.context.outputs.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$RUN_ID" ]; then
+            echo "No failed run found, skipping..."
+            echo "should_fix=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Analyzing workflow run $RUN_ID..."
+
+          # ジョブの結果を取得
+          JOBS_JSON=$(gh run view "$RUN_ID" --repo "$REPO" --json jobs)
+
+          # 失敗したジョブを特定
+          FAILED_JOBS=$(echo "$JOBS_JSON" | jq -r '.jobs[] | select(.conclusion == "failure") | .name')
+
+          if [ -z "$FAILED_JOBS" ]; then
+            echo "No failed jobs found"
+            echo "should_fix=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Failed jobs:"
+          echo "$FAILED_JOBS"
+
+          # 失敗タイプを判定
+          FAILURE_TYPE="unknown"
+          if echo "$FAILED_JOBS" | grep -qi "quick.*check\|typecheck\|lint"; then
+            FAILURE_TYPE="typecheck_lint"
+          elif echo "$FAILED_JOBS" | grep -qi "build"; then
+            FAILURE_TYPE="build"
+          elif echo "$FAILED_JOBS" | grep -qi "coverage\|unit\|test"; then
+            FAILURE_TYPE="test"
+          elif echo "$FAILED_JOBS" | grep -qi "e2e\|playwright"; then
+            FAILURE_TYPE="e2e"
+          fi
+
+          echo "Detected failure type: $FAILURE_TYPE"
+          echo "failure_type=$FAILURE_TYPE" >> $GITHUB_OUTPUT
+
+          # 失敗ログを取得（最大8000文字）
+          LOGS=$(gh run view "$RUN_ID" --repo "$REPO" --log-failed 2>/dev/null | tail -c 8000 || echo "Failed to retrieve logs")
+
+          # 特殊文字をエスケープしてGitHub Outputに保存
+          {
+            echo "failure_logs<<EOF_LOGS"
+            echo "$LOGS"
+            echo "EOF_LOGS"
+          } >> $GITHUB_OUTPUT
+
+          echo "should_fix=true" >> $GITHUB_OUTPUT
+
+  # Job 2: Claudeによる自動修正
+  claude-fix:
+    name: Claude Auto-Fix (Attempt ${{ needs.detect-and-collect.outputs.attempt }})
+    runs-on: ubuntu-latest
+    needs: detect-and-collect
+    if: needs.detect-and-collect.outputs.should_fix == 'true'
+
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SECRETS_ADMIN_PAT }}
+
+      - name: Add @claude comment for auto-fix
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
+          PR_NUMBER: ${{ needs.detect-and-collect.outputs.pr_number }}
+          FAILURE_TYPE: ${{ needs.detect-and-collect.outputs.failure_type }}
+          FAILURE_LOGS: ${{ needs.detect-and-collect.outputs.failure_logs }}
+          ATTEMPT: ${{ needs.detect-and-collect.outputs.attempt }}
+          REPO: ${{ github.repository }}
+        run: |
+          # ログを3000文字に制限（環境変数経由なので安全）
+          TRUNCATED_LOGS="${FAILURE_LOGS:0:3000}"
+
+          # Claude Code Actionをトリガーするコメントを追加
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@claude
+
+          ## 🔧 CI/CD 自動修復依頼 (試行 ${ATTEMPT}/3)
+
+          CI/CDパイプラインが失敗しました。以下の情報を基に、問題を分析・修正してください。
+
+          ### 📋 失敗情報
+          - **失敗タイプ**: ${FAILURE_TYPE}
+          - **PR番号**: #${PR_NUMBER}
+          - **試行回数**: ${ATTEMPT}/3
+
+          ### 📜 エラーログ（抜粋）
+          \`\`\`
+          ${TRUNCATED_LOGS}
+          \`\`\`
+
+          ---
+
+          ## 🎯 実行タスク
+
+          ### Phase 1: 問題分析
+          1. **エラーログを詳細に分析**
+             - エラーメッセージの特定
+             - 失敗したファイル・行番号の特定
+             - 根本原因の推測
+
+          2. **Task（サブエージェント）を使用した深堀り調査**
+             - \`subagent_type: Explore\` でコードベースを調査
+             - 関連ファイルと依存関係を特定
+
+          ### Phase 2: 修正実装
+          3. **修正方針の決定**
+             - テストコードの修正が必要か
+             - プロダクションコードの修正が必要か
+             - 両方の修正が必要か
+
+          4. **修正の実装**
+             - **Edit/MultiEdit** ツールで修正を適用
+             - 型エラー: 型定義の修正、型アサーションの追加
+             - Lintエラー: コードスタイルの修正
+             - テストエラー: テストケースの修正、モックの更新
+             - ビルドエラー: インポート/エクスポートの修正
+
+          ### Phase 3: 検証
+          5. **ローカル検証**
+             \`\`\`bash
+             npm ci
+             npm run typecheck
+             npm run lint
+             npm run build
+             \`\`\`
+
+          6. **修正が成功した場合**
+             \`\`\`bash
+             git add -A
+             git commit -m \"fix: CI/CD failure - ${FAILURE_TYPE}
+
+             Auto-fix attempt ${ATTEMPT}/3 by Claude Code Action
+
+             🤖 Generated with Claude Code\"
+             git push
+             \`\`\`
+
+          ### Phase 4: 結果報告
+          7. **レポート投稿**
+             以下の形式でコメントしてください：
+
+             \`\`\`markdown
+             ## 🤖 Claude CI Auto-Fix レポート (試行 ${ATTEMPT}/3)
+
+             ### 結果
+             - [ ] ✅ 修正成功 / [ ] ❌ 修正失敗
+
+             ### 分析結果
+             | 項目 | 内容 |
+             |------|------|
+             | 根本原因 | {原因の説明} |
+             | 影響範囲 | {影響を受けたファイル} |
+
+             ### 修正内容
+             {修正したファイルと変更内容の説明}
+
+             ### 検証結果
+             | チェック | 結果 |
+             |----------|------|
+             | TypeScript | ✅/❌ |
+             | Lint | ✅/❌ |
+             | Build | ✅/❌ |
+
+             ### 次のステップ
+             - CIパイプラインを再実行して検証
+             - {追加の推奨事項}
+             \`\`\`
+
+          ---
+
+          ## ⚠️ 注意事項
+          - 最大3回まで修正を試行します（現在: ${ATTEMPT}/3）
+          - 3回失敗した場合は手動対応が必要です
+          - プロダクションコードの大規模な変更は避けてください
+          - テストの期待値変更は慎重に行ってください
+          "
+
+          echo "Claude fix comment added to PR #$PR_NUMBER"
+
+  # Job 3: リトライ上限到達時の通知
+  max-retries-notification:
+    name: Max Retries Notification
+    runs-on: ubuntu-latest
+    needs: detect-and-collect
+    if: needs.detect-and-collect.outputs.should_fix == 'true' && needs.detect-and-collect.outputs.attempt == '3'
+
+    permissions:
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Post max retries notification
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.detect-and-collect.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## ⚠️ CI Auto-Fix: 最大試行回数到達
+
+          自動修復を3回試行しましたが、CI/CDパイプラインの問題を解決できませんでした。
+
+          ### 推奨アクション
+          1. 手動でエラーログを確認してください
+          2. ローカル環境で問題を再現・デバッグしてください
+          3. 必要に応じてPRの変更を見直してください
+
+          ### 参考リンク
+          - [最新のCI実行結果](https://github.com/${REPO}/actions)
+          - [このPRの変更差分](https://github.com/${REPO}/pull/${PR_NUMBER}/files)
+
+          手動での対応をお願いします。🙏
+          "
