@@ -156,10 +156,19 @@ export default function ClientPage({
   const hasCleanedCacheRef = useRef(false)
   if (!hasCleanedCacheRef.current) {
     hasCleanedCacheRef.current = true
-    if (detectPageReload()) {
-      // リロード時はSSRの最新データを使用するためキャッシュをクリア
+
+    // リロード検出
+    const isReload = detectPageReload()
+
+    // 初回ロード時も含めて、SSRデータが存在する場合はキャッシュをクリア
+    // これにより、常にSSRから渡された最新データが優先される
+    if (isReload || (initialData.items && initialData.items.length > 0)) {
       rankingCache.clear()
-      serverLog.info('Page reload detected - cleared ranking cache before any useEffect runs')
+      serverLog.info('Cache cleared on page load', {
+        isReload,
+        hasSSRData: initialData.items?.length > 0,
+        ssrItemCount: initialData.items?.length || 0
+      })
     }
   }
   
