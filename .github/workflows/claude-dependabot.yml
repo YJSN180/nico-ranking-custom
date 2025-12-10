@@ -4,8 +4,10 @@ name: Claude Dependabot Trigger
 # claude.ymlワークフローをトリガーする
 #
 # 注意: Dependabotは権限が制限されているため、2段階で処理する
-# 1. このワークフロー: Dependabot PRに@claudeコメントを追加
+# 1. このワークフロー: Dependabot PRに@claudeコメントを追加 + Auto Merge有効化
 # 2. claude.yml: コメントをトリガーとしてClaude Code Actionを実行
+#
+# 参考: https://developers.cyberagent.co.jp/blog/archives/60598/
 
 on:
   pull_request:
@@ -23,43 +25,135 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      contents: write
 
     steps:
+      # Dependabotメタデータを取得（更新種別・パッケージ名など）
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Auto Mergeを事前に有効化（Approveされたら自動マージ）
+      - name: Enable auto-merge for patch/minor updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' || steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Enabling auto-merge for patch/minor update..."
+          gh pr merge "$PR_NUMBER" --repo "$REPO" --auto --squash || echo "Auto-merge already enabled or not available"
+
       - name: Add @claude comment to trigger review
         env:
           GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          PACKAGE_ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          PREVIOUS_VERSION: ${{ steps.metadata.outputs.previous-version }}
+          NEW_VERSION: ${{ steps.metadata.outputs.new-version }}
         run: |
           echo "Adding @claude comment to trigger Claude Code Action..."
 
           # Claude Code Actionをトリガーするコメントを追加
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@claude
 
-          This is a Dependabot pull request for dependency updates.
+          ## Dependabot PR 自動レビュー・修正・マージ依頼
 
-          Please perform the following tasks:
+          このPRはDependabotによる依存関係の更新です。以下の情報を基に、完全自動で処理してください。
 
-          1. **Review the changes**: Analyze the dependency updates in this PR.
-             - Check if the updated packages have any breaking changes
-             - Review the changelog/release notes if available
-             - Identify any potential security implications
+          ### 📦 更新情報
+          - **パッケージ**: ${DEPENDENCY_NAMES}
+          - **更新種別**: ${UPDATE_TYPE}
+          - **バージョン**: ${PREVIOUS_VERSION} → ${NEW_VERSION}
+          - **エコシステム**: ${PACKAGE_ECOSYSTEM}
 
-          2. **Run tests**: Execute the test suite to verify compatibility.
-             - Run \`npm run typecheck\` to check TypeScript types
-             - Run \`npm run lint\` to check code style
+          ---
 
-          3. **Fix issues if needed**: If there are any type errors or lint errors:
-             - Make necessary code adjustments to fix compatibility issues
-             - Update type definitions if needed
-             - Commit the fixes with a clear message
+          ## 🎯 実行タスク（順番に実行してください）
 
-          4. **Provide a summary**: Give a brief summary of:
-             - What packages were updated
-             - Whether all checks passed
-             - Any fixes that were applied
-             - Whether this PR is safe to merge
+          ### 1. 破壊的変更の検出
+          PR本文とchangelogを分析し、以下の禁止シグナルがないか確認：
+          - \`BREAKING CHANGE\`, \`breaking\`, \`removal\`, \`removed\`, \`deprecated\`
+          - \`major version\`, \`migration required\`, \`incompatible\`
 
-          If all checks pass and no issues are found, indicate that the PR is ready for merge."
+          **判定基準**: 上記シグナルが検出された場合は「要手動確認」として処理を中断
+
+          ### 2. テスト実行（Bashツールを使用）
+          \`\`\`bash
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm run build
+          \`\`\`
+
+          ### 3. エラー修正（必要な場合）
+          型エラーやlintエラーが発生した場合：
+          - **Edit/MultiEditツール**で必要なコード修正を実施
+          - 修正後、再度テストを実行して確認
+          - 最大3回まで修正を繰り返す
+
+          ### 4. 実使用箇所の影響分析
+          **Grep/Globツール**で更新パッケージの使用箇所を検索し、影響範囲を特定
+
+          ### 5. 最終判定とApprove
+          全てのチェックがパスした場合：
+          \`\`\`bash
+          gh pr review $PR_NUMBER --approve --body \"✅ Claude Code Action: 自動レビュー完了
+
+          ## レビュー結果
+          - 破壊的変更: なし
+          - テスト: 全てパス
+          - 影響分析: 問題なし
+
+          このPRは自動マージ可能です。\"
+          \`\`\`
+
+          ### 6. マージ実行（Auto Mergeが無効な場合）
+          Auto Mergeが設定されていない場合、または手動マージが必要な場合：
+          \`\`\`bash
+          gh pr merge $PR_NUMBER --squash --body \"🤖 Claude Code Action による自動マージ\"
+          \`\`\`
+
+          ---
+
+          ## ⚠️ 中断条件
+          以下の場合は処理を中断し、コメントで報告してください：
+          1. 破壊的変更の禁止シグナルを検出
+          2. 3回の修正試行後もテストが失敗
+          3. major version更新（${UPDATE_TYPE}が\`version-update:semver-major\`の場合）
+
+          ## 📋 レポートフォーマット
+          処理完了後、以下の形式でコメントしてください：
+
+          \`\`\`markdown
+          ## 🤖 Claude Code Action レビューレポート
+
+          ### 判定結果
+          - [ ] 自動マージ可能 / [ ] 要手動確認
+
+          ### 更新内容
+          - パッケージ: {パッケージ名}
+          - バージョン: {旧} → {新}
+
+          ### チェック結果
+          | 項目 | 結果 |
+          |------|------|
+          | 破壊的変更 | ✅ なし / ⚠️ 検出 |
+          | TypeScript | ✅ パス / ❌ 失敗 |
+          | Lint | ✅ パス / ❌ 失敗 |
+          | Build | ✅ パス / ❌ 失敗 |
+
+          ### 影響分析
+          {使用箇所と影響の簡潔な説明}
+
+          ### 修正内容（該当する場合）
+          {修正したファイルと内容}
+          \`\`\`
+          "
 
           echo "Comment added successfully!"

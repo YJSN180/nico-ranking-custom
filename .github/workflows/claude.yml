@@ -60,5 +60,9 @@ jobs:
           # タイムアウト設定
           timeout_minutes: "60"
 
-          # 許可するツール（デフォルト + 追加）
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,TodoRead,TodoWrite,WebFetch"
+          # 許可するツール
+          # - 基本: Bash, Read, Write, Edit, MultiEdit, Glob, Grep
+          # - タスク管理: TodoRead, TodoWrite
+          # - Web: WebFetch
+          # - サブエージェント: Task (複雑なタスクの分割・並列処理)
+          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,TodoRead,TodoWrite,WebFetch,Task"
