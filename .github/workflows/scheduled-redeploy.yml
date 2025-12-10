@@ -1,0 +1,67 @@
+name: Scheduled Redeploy
+
+# 定期的にVercelを再デプロイしてキャッシュの古いデータ問題を解決
+# Vercelのビルドキャッシュが原因でリロード時に古いランキングデータが表示される問題の回避策
+
+on:
+  schedule:
+    # 毎日 JST 6:00, 12:00, 18:00, 24:00 (UTC 21:00, 03:00, 09:00, 15:00)
+    - cron: '0 21,3,9,15 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual redeploy'
+        required: false
+        default: 'Manual trigger'
+
+concurrency:
+  group: scheduled-redeploy
+  cancel-in-progress: true
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SECRETS_ADMIN_PAT }}
+          fetch-depth: 0
+
+      - name: Update deploy timestamp
+        env:
+          DEPLOY_REASON: ${{ github.event.inputs.reason || 'Scheduled' }}
+        run: |
+          # タイムスタンプファイルを更新（これだけでVercelが再デプロイをトリガー）
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "Last scheduled redeploy: $TIMESTAMP" > .deploy-timestamp
+          echo "Reason: $DEPLOY_REASON" >> .deploy-timestamp
+
+      - name: Commit and push
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DEPLOY_REASON: ${{ github.event.inputs.reason || 'Scheduled cron job' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .deploy-timestamp
+
+          # 変更がある場合のみコミット
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            git commit -m "chore: scheduled redeploy at $TIMESTAMP
+
+Automated redeploy to refresh Vercel build cache and ensure fresh ranking data.
+
+Trigger: $EVENT_NAME
+Reason: $DEPLOY_REASON"
+
+            git push origin main
+            echo "Successfully pushed redeploy commit"
+          fi
