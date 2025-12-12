@@ -2,11 +2,11 @@ name: Claude Token Keepalive
 
 # OAuthトークンを定期的に使用して、リフレッシュトークンの無効化を防ぐ
 #
-# 更新: 2025-12-13 - ワークフロー再インデックスのためのトリガー追加
+# 更新: 2025-12-13 - Claude Code Action不使用に変更（workflow_dispatch非対応のため）
 #
 # 動作:
-# 1. 毎日実行でOAuthトークンを使用
-# 2. アクセストークンが期限切れの場合、自動リフレッシュ
+# 1. 毎日実行でOAuthトークンを検証
+# 2. アクセストークンが期限切れの場合、リフレッシュトークンで更新
 # 3. リフレッシュ後、GitHub Secretsを自動更新
 #
 # これにより、リフレッシュトークンが「使用されている」状態を維持し、
@@ -18,10 +18,10 @@ on:
     - cron: '0 21 * * *'
   workflow_dispatch:
     inputs:
-      test_mode:
-        description: 'Run in test mode (minimal prompt)'
+      force_refresh:
+        description: 'Force token refresh even if not expired'
         required: false
-        default: 'true'
+        default: 'false'
         type: boolean
 
 concurrency:
@@ -34,50 +34,171 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: read
       issues: write
-      id-token: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Claude Code Action (keepalive)
-        id: claude
-        uses: grll/claude-code-action@beta
-        continue-on-error: true
-        with:
-          use_oauth: true
-          claude_access_token: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
-          claude_refresh_token: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
-          claude_expires_at: ${{ secrets.CLAUDE_EXPIRES_AT }}
-          secrets_admin_pat: ${{ secrets.SECRETS_ADMIN_PAT }}
-          direct_prompt: |
-            This is a keepalive request to maintain OAuth token validity.
-            Please respond with exactly: "Token keepalive successful"
-          timeout_minutes: 2
-          allowed_tools: ""
-
-      - name: Check result
+      - name: Check token expiration and refresh if needed
+        id: token_check
         env:
-          CONCLUSION: ${{ steps.claude.outputs.conclusion }}
+          ACCESS_TOKEN: ${{ secrets.CLAUDE_ACCESS_TOKEN }}
+          REFRESH_TOKEN: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+          EXPIRES_AT: ${{ secrets.CLAUDE_EXPIRES_AT }}
+          FORCE_REFRESH: ${{ github.event.inputs.force_refresh || 'false' }}
+        run: |
+          echo "=== Token Keepalive Check ==="
+
+          # 現在時刻（ミリ秒）
+          NOW=$(date +%s)000
+
+          # 有効期限チェック
+          if [ -z "$EXPIRES_AT" ]; then
+            echo "⚠️ EXPIRES_AT not set"
+            echo "needs_refresh=true" >> $GITHUB_OUTPUT
+            echo "reason=expires_at_not_set" >> $GITHUB_OUTPUT
+          elif [ "$FORCE_REFRESH" == "true" ]; then
+            echo "🔄 Force refresh requested"
+            echo "needs_refresh=true" >> $GITHUB_OUTPUT
+            echo "reason=force_refresh" >> $GITHUB_OUTPUT
+          elif [ "$EXPIRES_AT" -lt "$NOW" ]; then
+            echo "⚠️ Token has expired"
+            echo "needs_refresh=true" >> $GITHUB_OUTPUT
+            echo "reason=expired" >> $GITHUB_OUTPUT
+          else
+            # 24時間以内に期限切れの場合も更新
+            BUFFER=$((24 * 60 * 60 * 1000))
+            THRESHOLD=$((NOW + BUFFER))
+            if [ "$EXPIRES_AT" -lt "$THRESHOLD" ]; then
+              echo "⚠️ Token expires within 24 hours, refreshing proactively"
+              echo "needs_refresh=true" >> $GITHUB_OUTPUT
+              echo "reason=expiring_soon" >> $GITHUB_OUTPUT
+            else
+              HOURS_LEFT=$(( (EXPIRES_AT - NOW) / 1000 / 60 / 60 ))
+              echo "✅ Token is valid for $HOURS_LEFT more hours"
+              echo "needs_refresh=false" >> $GITHUB_OUTPUT
+              echo "hours_left=$HOURS_LEFT" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Refresh OAuth token
+        id: refresh
+        if: steps.token_check.outputs.needs_refresh == 'true'
+        env:
+          REFRESH_TOKEN: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
+        run: |
+          echo "🔄 Refreshing OAuth token..."
+
+          if [ -z "$REFRESH_TOKEN" ]; then
+            echo "❌ REFRESH_TOKEN is not set"
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "error=refresh_token_not_set" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Anthropic OAuth token endpoint
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://console.anthropic.com/v1/oauth/token" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=refresh_token" \
+            -d "refresh_token=$REFRESH_TOKEN" \
+            -d "client_id=9d1c250a-e61b-44e0-9f2d-a55e191e3654")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Token refresh failed with HTTP $HTTP_CODE"
+            echo "Response: $BODY"
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "error=refresh_failed_$HTTP_CODE" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Parse response
+          NEW_ACCESS_TOKEN=$(echo "$BODY" | jq -r '.access_token // empty')
+          NEW_REFRESH_TOKEN=$(echo "$BODY" | jq -r '.refresh_token // empty')
+          EXPIRES_IN=$(echo "$BODY" | jq -r '.expires_in // empty')
+
+          if [ -z "$NEW_ACCESS_TOKEN" ]; then
+            echo "❌ No access_token in response"
+            echo "success=false" >> $GITHUB_OUTPUT
+            echo "error=no_access_token" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # 新しい有効期限を計算（ミリ秒）
+          NOW=$(date +%s)
+          NEW_EXPIRES_AT=$(( (NOW + ${EXPIRES_IN:-3600}) * 1000 ))
+
+          echo "✅ Token refreshed successfully"
+          echo "  Expires in: ${EXPIRES_IN:-3600} seconds"
+
+          # マスクしてからoutputに保存
+          echo "::add-mask::$NEW_ACCESS_TOKEN"
+          if [ -n "$NEW_REFRESH_TOKEN" ]; then
+            echo "::add-mask::$NEW_REFRESH_TOKEN"
+          fi
+
+          echo "success=true" >> $GITHUB_OUTPUT
+          echo "new_access_token=$NEW_ACCESS_TOKEN" >> $GITHUB_OUTPUT
+          echo "new_refresh_token=${NEW_REFRESH_TOKEN:-$REFRESH_TOKEN}" >> $GITHUB_OUTPUT
+          echo "new_expires_at=$NEW_EXPIRES_AT" >> $GITHUB_OUTPUT
+
+      - name: Update GitHub Secrets
+        if: steps.refresh.outputs.success == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
+          REPO: ${{ github.repository }}
+          NEW_ACCESS_TOKEN: ${{ steps.refresh.outputs.new_access_token }}
+          NEW_REFRESH_TOKEN: ${{ steps.refresh.outputs.new_refresh_token }}
+          NEW_EXPIRES_AT: ${{ steps.refresh.outputs.new_expires_at }}
+        run: |
+          echo "📝 Updating GitHub Secrets..."
+
+          # Update secrets using gh CLI
+          echo "$NEW_ACCESS_TOKEN" | gh secret set CLAUDE_ACCESS_TOKEN --repo "$REPO"
+          echo "$NEW_REFRESH_TOKEN" | gh secret set CLAUDE_REFRESH_TOKEN --repo "$REPO"
+          echo "$NEW_EXPIRES_AT" | gh secret set CLAUDE_EXPIRES_AT --repo "$REPO"
+
+          echo "✅ Secrets updated successfully"
+
+      - name: Report result
+        env:
+          NEEDS_REFRESH: ${{ steps.token_check.outputs.needs_refresh }}
+          REFRESH_SUCCESS: ${{ steps.refresh.outputs.success }}
+          REFRESH_ERROR: ${{ steps.refresh.outputs.error }}
+          HOURS_LEFT: ${{ steps.token_check.outputs.hours_left }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          if [ "$CONCLUSION" == "success" ]; then
-            echo "✅ Token keepalive successful"
-            echo "OAuth tokens are valid and have been refreshed if needed."
-          else
-            echo "❌ Token keepalive failed"
-            echo "OAuth tokens may be invalid. Creating an issue..."
+          echo "=== Keepalive Result ==="
 
-            # 既存のissueがあるか確認
+          if [ "$NEEDS_REFRESH" != "true" ]; then
+            echo "✅ Token is valid, no refresh needed"
+            echo "Hours remaining: $HOURS_LEFT"
+            exit 0
+          fi
+
+          if [ "$REFRESH_SUCCESS" == "true" ]; then
+            echo "✅ Token refreshed and secrets updated"
+
+            # 既存のoauth-token issueを閉じる
             EXISTING=$(gh issue list --repo "$REPO" --state open --label "oauth-token" --json number -q '.[0].number' 2>/dev/null || echo "")
+            if [ -n "$EXISTING" ]; then
+              gh issue close "$EXISTING" --repo "$REPO" --comment "✅ OAuth token has been refreshed automatically by keepalive workflow."
+              echo "Closed issue #$EXISTING"
+            fi
+            exit 0
+          fi
 
-            if [ -z "$EXISTING" ]; then
-              BODY="## OAuth Token Issue Detected
+          echo "❌ Token refresh failed: $REFRESH_ERROR"
 
-          The Claude OAuth token keepalive workflow failed, indicating the tokens may be invalid.
+          # Create issue for manual intervention
+          EXISTING=$(gh issue list --repo "$REPO" --state open --label "oauth-token" --json number -q '.[0].number' 2>/dev/null || echo "")
+
+          if [ -z "$EXISTING" ]; then
+            BODY="## OAuth Token Refresh Failed
+
+          The automatic token refresh failed with error: \`$REFRESH_ERROR\`
 
           ### Required Action
           1. Run locally: \`npx claude-code-login\`
@@ -86,15 +207,14 @@ jobs:
 
           🤖 Auto-generated by token keepalive workflow."
 
-              gh issue create \
-                --repo "$REPO" \
-                --title "🔑 Claude OAuth Token Needs Re-authentication" \
-                --label "oauth-token,urgent" \
-                --body "$BODY"
-              echo "Created issue for token re-authentication"
-            else
-              echo "Issue #$EXISTING already exists"
-            fi
-
-            exit 1
+            gh issue create \
+              --repo "$REPO" \
+              --title "🔑 Claude OAuth Token Refresh Failed" \
+              --label "oauth-token,urgent" \
+              --body "$BODY"
+            echo "Created issue for manual re-authentication"
+          else
+            echo "Issue #$EXISTING already exists"
           fi
+
+          exit 1
