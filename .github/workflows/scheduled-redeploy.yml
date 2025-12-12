@@ -6,6 +6,12 @@ name: Scheduled Redeploy
 # 更新: 2025-12-13 - ワークフロー再インデックスのためのトリガー追加
 
 on:
+  # 一時的にpushトリガーを追加してワークフロー動作確認（後で削除予定）
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/scheduled-redeploy.yml'
+      - '.deploy-timestamp'
   schedule:
     # 毎日 JST 6:00, 12:00, 18:00, 24:00 (UTC 21:00, 03:00, 09:00, 15:00)
     - cron: '0 21,3,9,15 * * *'
