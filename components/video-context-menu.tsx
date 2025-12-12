@@ -14,7 +14,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 })
   const [copySuccess, setCopySuccess] = useState(false)
   const [successMessage, setSuccessMessage] = useState('✓ コピーしました')
-  const longPressTimer = useRef<NodeJS.Timeout>()
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   
   // 動画URLを生成
