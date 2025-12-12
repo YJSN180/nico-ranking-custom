@@ -94,13 +94,11 @@ jobs:
             exit 0
           fi
 
-          # Anthropic OAuth token endpoint
+          # Anthropic OAuth token endpoint (JSON format, correct client_id from grll/claude-code-base-action)
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "https://console.anthropic.com/v1/oauth/token" \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=refresh_token" \
-            -d "refresh_token=$REFRESH_TOKEN" \
-            -d "client_id=9d1c250a-e61b-44e0-9f2d-a55e191e3654")
+            -H "Content-Type: application/json" \
+            -d "{\"grant_type\":\"refresh_token\",\"refresh_token\":\"$REFRESH_TOKEN\",\"client_id\":\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\"}")
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
