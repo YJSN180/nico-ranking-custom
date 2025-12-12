@@ -412,7 +412,90 @@ jobs:
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"
           echo "Triggered Claude Code Action for PR #$PR_NUMBER"
 
-  # Job 5: 成功時の通知
+  # Job 5: PRの自動マージ（Claudeの修正成功後）
+  auto-merge-pr:
+    name: Auto-Merge Fixed PR
+    runs-on: ubuntu-latest
+    needs: [create-fix-pr, trigger-claude-fix]
+    if: needs.create-fix-pr.outputs.pr_number != ''
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Wait for Claude to fix and CI to pass
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.create-fix-pr.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Waiting for Claude Code Action to complete and CI to pass..."
+          echo "PR: #$PR_NUMBER"
+
+          # Claude Code Actionの完了を待機（最大30分）
+          MAX_WAIT=1800
+          WAITED=0
+          INTERVAL=60
+
+          while [ $WAITED -lt $MAX_WAIT ]; do
+            # PRのCIステータスを確認
+            CI_STATUS=$(gh pr checks "$PR_NUMBER" --repo "$REPO" --json state,name --jq '[.[] | select(.name | test("Quick|Build|Claude"; "i"))] | if all(.state == "SUCCESS" or .state == "SKIPPED") then "success" elif any(.state == "FAILURE") then "failure" else "pending" end' 2>/dev/null || echo "pending")
+
+            echo "CI Status: $CI_STATUS (waited ${WAITED}s)"
+
+            if [ "$CI_STATUS" == "success" ]; then
+              echo "✅ All required checks passed!"
+              exit 0
+            elif [ "$CI_STATUS" == "failure" ]; then
+              echo "❌ CI checks failed, Claude may retry..."
+              # 失敗してもClaudeがリトライする可能性があるため、待機継続
+            fi
+
+            sleep $INTERVAL
+            WAITED=$((WAITED + INTERVAL))
+          done
+
+          echo "⚠️ Timeout waiting for CI checks"
+          exit 1
+
+      - name: Auto-merge PR
+        env:
+          GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}
+          PR_NUMBER: ${{ needs.create-fix-pr.outputs.pr_number }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Attempting to merge PR #$PR_NUMBER..."
+
+          # PRの状態を確認
+          PR_STATE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state -q '.state')
+
+          if [ "$PR_STATE" == "MERGED" ]; then
+            echo "✅ PR is already merged"
+            exit 0
+          elif [ "$PR_STATE" == "CLOSED" ]; then
+            echo "⚠️ PR was closed without merging"
+            exit 0
+          fi
+
+          # CIステータスを最終確認
+          CHECKS_PASSED=$(gh pr checks "$PR_NUMBER" --repo "$REPO" --json state --jq 'all(.state == "SUCCESS" or .state == "SKIPPED")' 2>/dev/null || echo "false")
+
+          if [ "$CHECKS_PASSED" != "true" ]; then
+            echo "⚠️ Not all checks have passed, skipping merge"
+            gh pr checks "$PR_NUMBER" --repo "$REPO"
+            exit 1
+          fi
+
+          # PRをマージ
+          if gh pr merge "$PR_NUMBER" --repo "$REPO" --squash --delete-branch; then
+            echo "✅ PR #$PR_NUMBER has been merged successfully!"
+          else
+            echo "❌ Failed to merge PR #$PR_NUMBER"
+            exit 1
+          fi
+
+  # Job 6: 成功時の通知（CI失敗なし）
   report-success:
     name: Report Success
     runs-on: ubuntu-latest
@@ -431,7 +514,7 @@ jobs:
           echo ""
           echo "No auto-fix needed."
 
-  # Job 6: タイムアウト時の通知
+  # Job 7: タイムアウト時の通知
   report-timeout:
     name: Report Timeout
     runs-on: ubuntu-latest
