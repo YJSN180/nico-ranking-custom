@@ -1,6 +1,9 @@
-name: Vercel Cache Refresh
+name: Scheduled Redeploy
 
 # Vercel CDNキャッシュを更新するためのワークフロー
+#
+# 統合: 旧 scheduled-redeploy.yml と vercel-cache-refresh.yml を統合
+#
 # 問題: SSRで生成されたHTMLがVercel CDNにキャッシュされ、
 # ページリロード時に古いデータ（PRマージ時点のデータ）が表示される
 # 解決: Vercel CLIを使用して定期的に再デプロイを実行
@@ -19,7 +22,7 @@ on:
 
 # 同時実行を防ぐ
 concurrency:
-  group: vercel-cache-refresh
+  group: scheduled-redeploy
   cancel-in-progress: false
 
 env:
