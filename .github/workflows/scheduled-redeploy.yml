@@ -63,12 +63,15 @@ jobs:
             echo "No changes to commit"
           else
             TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-            git commit -m "chore: scheduled redeploy at $TIMESTAMP
+            git commit -m "$(cat <<EOF
+          chore: scheduled redeploy at $TIMESTAMP
 
-Automated redeploy to refresh Vercel build cache and ensure fresh ranking data.
+          Automated redeploy to refresh Vercel build cache and ensure fresh ranking data.
 
-Trigger: $EVENT_NAME
-Reason: $DEPLOY_REASON"
+          Trigger: $EVENT_NAME
+          Reason: $DEPLOY_REASON
+          EOF
+          )"
 
             git push origin main
             echo "Successfully pushed redeploy commit"
