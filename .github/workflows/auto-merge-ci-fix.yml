@@ -1,0 +1,50 @@
+name: Auto-merge CI Fix PRs
+
+# CI修正PRを自動マージ（GitHub標準機能を使用）
+#
+# 動作:
+# 1. fix/ci-auto-fix-* ブランチからのPRを検知
+# 2. PRをApprove
+# 3. --auto フラグでCIパス後に自動マージ
+#
+# メリット:
+# - GitHub標準機能なので安定・無料
+# - Claude待機ループ不要（止まるリスクなし）
+# - CIが通るまでマージされない
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+jobs:
+  auto-merge:
+    name: Auto-merge CI Fix PR
+    runs-on: ubuntu-latest
+
+    # fix/ci-auto-fix-* ブランチからのPRのみ対象
+    if: startsWith(github.head_ref, 'fix/ci-auto-fix-')
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Approve and enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          echo "Processing CI fix PR #$PR_NUMBER"
+          echo "Branch: $HEAD_REF"
+
+          # PRをApprove
+          gh pr review "$PR_URL" --approve --body "Auto-approved: CI fix PR from automated workflow"
+
+          # auto-mergeを有効化（CIが通ったら自動マージ）
+          gh pr merge "$PR_URL" --squash --auto --delete-branch
+
+          echo "Auto-merge enabled for PR #$PR_NUMBER"
+          echo "PR will be merged automatically when all CI checks pass."
