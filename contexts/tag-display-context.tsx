@@ -21,23 +21,12 @@ export function TagDisplayProvider({ children }: TagDisplayProviderProps) {
   // preferencesがnullの場合も考慮してフォールバック
   const showTags = (preferences?.showTags !== undefined ? preferences.showTags : false) ?? false
   
-  // デバッグログ（本番環境では削除）
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[TagDisplayProvider] Initial showTags:', preferences.showTags, '→', showTags)
-  }
-
   const setShowTags = useCallback((show: boolean) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[TagDisplayProvider] setShowTags:', show)
-    }
     updatePreferences({ showTags: show })
   }, [updatePreferences])
 
   const toggleTags = useCallback(() => {
     const newValue = !showTags
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[TagDisplayProvider] toggleTags:', showTags, '→', newValue)
-    }
     updatePreferences({ showTags: newValue })
   }, [showTags, updatePreferences])
 

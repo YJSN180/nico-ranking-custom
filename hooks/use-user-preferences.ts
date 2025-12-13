@@ -33,16 +33,8 @@ export function useUserPreferences() {
     if (typeof window !== 'undefined') {
       // まずCookieから読み込みを試みる
       const cookiePrefs = getUserPreferencesCookieClient()
-      // デバッグログ（本番環境では削除）
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[UserPreferences] Cookie loaded:', cookiePrefs)
-      }
       if (cookiePrefs?.version === CURRENT_VERSION) {
-        const merged = { ...defaultPreferences, ...cookiePrefs }
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[UserPreferences] Merged preferences:', merged)
-        }
-        return merged
+        return { ...defaultPreferences, ...cookiePrefs }
       }
       
       // Cookieがない場合、localStorageから読み込む（PWA対応）
@@ -73,33 +65,18 @@ export function useUserPreferences() {
         updatedAt: new Date().toISOString(),
       }
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[UserPreferences] Updating:', updates)
-        console.log('[UserPreferences] New preferences:', newPrefs)
-      }
-      
       // Cookieに保存
       try {
         setUserPreferencesCookieClient(newPrefs)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[UserPreferences] Cookie saved successfully')
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[UserPreferences] Cookie save error:', error)
-        }
+      } catch {
+        // Cookie save error - silent fail
       }
-      
+
       // localStorageにも保存（PWA環境のフォールバック）
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[UserPreferences] localStorage saved successfully')
-        }
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-          console.error('[UserPreferences] localStorage save error:', error)
-        }
+      } catch {
+        // localStorage save error - silent fail
       }
       
       return newPrefs

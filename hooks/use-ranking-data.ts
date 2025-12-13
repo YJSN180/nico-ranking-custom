@@ -111,7 +111,7 @@ export function useRankingData({
         isCustomRanking = true
         const customId = config.tag.replace('custom:', '')
         
-        console.log('[DEBUG] Looking for custom ranking:', {
+        console.warn('[DEBUG] Looking for custom ranking:', {
           customId,
           hasNewlyCreated: newlyCreatedRankings.has(customId),
           newlyCreatedCount: newlyCreatedRankings.size,

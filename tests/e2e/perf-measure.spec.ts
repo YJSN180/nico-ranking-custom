@@ -24,24 +24,46 @@ async function setupApiMock(page) {
   })
 }
 
-test.skip('perf: landing + genre change timeline (CI skip)', async ({ page }) => {
+// このテストはAPIモックを使用しているが、Next.jsのSSRがサーバー側でAPIを
+// 呼び出すため、クライアント側のモックだけでは不十分。
+// CI環境ではSSRがAPIに接続できずタイムアウトするため、スキップする。
+// 本番環境でのパフォーマンス監視は e2e-monitoring.yml で別途実施。
+test.skip('perf: landing + genre change timeline (requires live API)', async ({ page }) => {
+  // APIモックを設定（ページ遷移前に設定する必要がある）
   await setupApiMock(page)
 
+  // ページ遷移とレスポンス待機を同時に開始
   const start = performance.now()
-  const resPromise = page.waitForResponse((r) => r.url().includes('/api/ranking'))
-  await page.goto('/')
-  const firstResponse = await resPromise
+  const [firstResponse] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/ranking'), { timeout: 30000 }),
+    page.goto('/')
+  ])
   const responseTime = performance.now() - start
 
-  // ジャンル切替（例: other）
+  // ジャンル切替（例: その他）
+  // CI環境のパフォーマンスを考慮して長めのタイムアウトを設定
   const t1 = performance.now()
-  await page.waitForSelector('button:has-text("その他")', { timeout: 10000 })
-  await page.click('button:has-text("その他")')
-  const res2 = await page.waitForResponse((r) => r.url().includes('/api/ranking'))
+  const otherButton = page.getByRole('button', { name: 'その他' })
+  await otherButton.waitFor({ state: 'visible', timeout: 15000 })
+
+  // クリックとレスポンス待機を同時に開始
+  const [res2] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/ranking'), { timeout: 30000 }),
+    otherButton.click()
+  ])
   const responseTime2 = performance.now() - t1
 
-  // FCP/Load の取得
+  // パフォーマンスメトリクスの取得
   const perf = await page.evaluate(() => {
+    const entries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[]
+    if (entries.length > 0) {
+      const nav = entries[0]
+      return {
+        domContentLoaded: Math.round(nav.domContentLoadedEventEnd - nav.startTime),
+        load: Math.round(nav.loadEventEnd - nav.startTime),
+      }
+    }
+    // フォールバック（古いAPI）
     const { timing } = performance as any
     return {
       domContentLoaded: timing.domContentLoadedEventEnd - timing.navigationStart,
@@ -58,6 +80,6 @@ test.skip('perf: landing + genre change timeline (CI skip)', async ({ page }) =>
     secondResponseStatus: res2.status(),
   }))
 
-  await expect(firstResponse.ok()).toBeTruthy()
-  await expect(res2.ok()).toBeTruthy()
+  expect(firstResponse.ok()).toBeTruthy()
+  expect(res2.ok()).toBeTruthy()
 })

@@ -42,7 +42,6 @@ export function useGenreOrderV2() {
           
           // 新しいジャンルが見つかった場合は追加
           if (missingItems.length > 0) {
-            console.log('新しいジャンルを検出:', missingItems.map(item => item.id))
             return [...parsed, ...missingItems]
           }
           

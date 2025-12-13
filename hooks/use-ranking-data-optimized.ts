@@ -129,7 +129,7 @@ export function useRankingDataOptimized({
           // 成功 - データ処理へ
         } else if (response.status === 429) {
           // 429エラー - URLを更新してからページリロード
-          console.log('Rate limited (429). Reloading page to reset state...')
+          console.warn('Rate limited (429). Reloading page to reset state...')
           setError('読み込み中...')
           
           // URLパラメータを構築
