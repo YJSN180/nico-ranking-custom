@@ -2,6 +2,9 @@ import bundleAnalyzer from '@next/bundle-analyzer'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Next.js 16ではTurbopackがデフォルトだが、既存のwebpack設定を使用するため無効化
+  // TODO: webpack設定をTurbopack互換に移行後、turbopack: trueに変更
+  turbopack: false,
   // 本番でのソースマップ無効化（セキュリティ・パフォーマンス向上）
   productionBrowserSourceMaps: false,
   images: {
