@@ -3,15 +3,18 @@
 import { useState, useEffect } from 'react'
 
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false)
+  const [matches, setMatches] = useState(() => {
+    // 初期値を設定（SSR対応）
+    if (typeof window !== 'undefined') {
+      return window.matchMedia(query).matches
+    }
+    return false
+  })
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     
     const media = window.matchMedia(query)
-    
-    // 初期値を設定
-    setMatches(media.matches)
 
     // リスナーの設定
     const listener = (event: MediaQueryListEvent) => {

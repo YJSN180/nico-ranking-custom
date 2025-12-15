@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useEffect } from 'react'
 
 /**
  * デバウンスされたコールバックを作成するカスタムフック
@@ -14,7 +14,9 @@ export function useDebouncedCallback<T extends (...args: any[]) => any>(
   const callbackRef = useRef(callback)
   
   // callbackが変更されても参照を保持
-  callbackRef.current = callback
+  useEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
   
   return useCallback(
     (...args: Parameters<T>) => {

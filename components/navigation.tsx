@@ -131,7 +131,13 @@ export function Navigation() {
   }, [isOpen])
 
   // メディアクエリによるモバイル判定（CSS-only対応のため、JavaScriptでの判定は最小限に）
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(() => {
+    // 初期値を設定（SSR対応のため、クライアントサイドのみで実行）
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(max-width: 768px)').matches
+    }
+    return false
+  })
   
   useEffect(() => {
     // テスト環境対応
@@ -141,7 +147,6 @@ export function Navigation() {
     
     // メディアクエリでモバイル判定
     const mediaQuery = window.matchMedia('(max-width: 768px)')
-    setShowMobileMenu(mediaQuery.matches)
     
     const handleMediaChange = (e: MediaQueryListEvent) => {
       setShowMobileMenu(e.matches)

@@ -197,7 +197,10 @@ export function PopoverNGSelector({
   // isOpenがfalseになったら計算状態をリセット
   useEffect(() => {
     if (!isOpen) {
-      setIsCalculating(true)
+      // 非同期で状態を更新
+      Promise.resolve().then(() => {
+        setIsCalculating(true)
+      })
     }
   }, [isOpen])
 

@@ -1,12 +1,20 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
+// Modify the Next.js configs to add our custom rules
+const modifiedConfigs = nextCoreWebVitals.map(config => {
+  if (config.name === "next" && config.rules) {
+    return {
+      ...config,
+      rules: {
+        ...config.rules,
+        // Custom rule overrides
+        "no-console": ["error", { allow: ["warn", "error"] }],
+        "react-hooks/exhaustive-deps": "warn",
+        "@next/next/no-img-element": "warn",
+      },
+    };
+  }
+  return config;
 });
 
 const eslintConfig = [
@@ -53,16 +61,8 @@ const eslintConfig = [
       "hooks/use-custom-rankings-indexeddb.ts",
     ],
   },
-  // Extend next/core-web-vitals
-  ...compat.extends("next/core-web-vitals"),
-  // Custom rules for source files
-  {
-    rules: {
-      "no-console": ["error", { allow: ["warn", "error"] }],
-      "react-hooks/exhaustive-deps": "warn",
-      "@next/next/no-img-element": "warn",
-    },
-  },
+  // Use the modified Next.js configs
+  ...modifiedConfigs,
 ];
 
 export default eslintConfig;

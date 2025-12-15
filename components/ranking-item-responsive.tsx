@@ -38,20 +38,19 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
   const dateDisplay = formatRegisteredDate(item.registeredAt)
   
   // PWA環境での訪問済み状態を管理
-  const [isVisited, setIsVisited] = useState(false)
-  
-  // 初回マウント時に訪問済みかチェック
-  useEffect(() => {
+  const [isVisited, setIsVisited] = useState(() => {
+    // 初期値として訪問済みかチェック
     try {
-      const visitedKey = 'visited-videos'
-      const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
-      if (visited.includes(item.id)) {
-        setIsVisited(true)
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const visitedKey = 'visited-videos'
+        const visited = JSON.parse(localStorage.getItem(visitedKey) || '[]')
+        return visited.includes(item.id)
       }
     } catch {
       // localStorage エラーは無視
     }
-  }, [item.id])
+    return false
+  })
 
   // ホバー状態をリセットする関数を外部に公開するために、data属性を使用
   const resetHoverState = (element: HTMLElement | null) => {

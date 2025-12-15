@@ -10,7 +10,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // クライアントサイドでのみ実行
   useEffect(() => {
-    setIsClient(true)
+    // 非同期で状態を更新
+    Promise.resolve().then(() => {
+      setIsClient(true)
+    })
   }, [])
 
   // 初期テーマを即座に適用（FOUC対策）
@@ -22,7 +25,10 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (!currentTheme) {
       document.documentElement.setAttribute('data-theme', 'light')
     }
-    setThemeReady(true)
+    // 非同期で状態を更新
+    Promise.resolve().then(() => {
+      setThemeReady(true)
+    })
   }, [isClient])
 
   // ユーザー設定のテーマを適用

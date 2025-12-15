@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { GenreItem, createDefaultGenreItems } from '@/types/genre-order'
 import { RankingGenre } from '@/types/ranking-config'
 
@@ -57,18 +57,15 @@ export function useGenreOrderV2() {
 
   // 一時的な編集状態
   const [tempItems, setTempItems] = useState<GenreItem[]>(savedItems)
-  const [hasChanges, setHasChanges] = useState(false)
 
   // 保存済み状態が変更されたら一時状態も更新
   useEffect(() => {
     setTempItems(savedItems)
-    setHasChanges(false)
   }, [savedItems])
 
-  // 変更検知
-  useEffect(() => {
-    const isChanged = JSON.stringify(tempItems) !== JSON.stringify(savedItems)
-    setHasChanges(isChanged)
+  // 変更検知（派生状態として計算）
+  const hasChanges = useMemo(() => {
+    return JSON.stringify(tempItems) !== JSON.stringify(savedItems)
   }, [tempItems, savedItems])
 
   /**
@@ -143,7 +140,7 @@ export function useGenreOrderV2() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(tempItems))
       setSavedItems(tempItems)
-      setHasChanges(false)
+      // hasChanges will automatically update via useMemo
       
       // ページリロードで変更を反映
       window.location.reload()
@@ -158,7 +155,7 @@ export function useGenreOrderV2() {
    */
   const cancelChanges = useCallback(() => {
     setTempItems(savedItems)
-    setHasChanges(false)
+    // hasChanges will automatically update via useMemo
   }, [savedItems])
 
   /**

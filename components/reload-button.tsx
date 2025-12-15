@@ -7,15 +7,14 @@ import styles from './reload-button.module.css'
 
 export function ReloadButton() {
   const [isReloading, setIsReloading] = useState(false)
-  const [isDebugMode, setIsDebugMode] = useState(false)
-  
-  useEffect(() => {
-    // URLパラメータでデバッグモードをチェック
+  const [isDebugMode, setIsDebugMode] = useState(() => {
+    // 初期値としてURLパラメータでデバッグモードをチェック
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
-      setIsDebugMode(params.get('debug-pwa') === 'true')
+      return params.get('debug-pwa') === 'true'
     }
-  }, [])
+    return false
+  })
 
   const handleReload = async () => {
     setIsReloading(true)

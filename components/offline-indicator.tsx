@@ -3,11 +3,15 @@
 import { useEffect, useState } from 'react'
 
 export function OfflineIndicator() {
-  const [isOffline, setIsOffline] = useState(false)
+  const [isOffline, setIsOffline] = useState(() => {
+    // Initialize with current offline status
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined') {
+      return !navigator.onLine
+    }
+    return false
+  })
   
   useEffect(() => {
-    // Check initial online status
-    setIsOffline(!navigator.onLine)
     
     // Handle online/offline events
     const handleOnline = () => setIsOffline(false)

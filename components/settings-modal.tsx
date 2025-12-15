@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
 import type { ExtendedUserNGList } from '../types/ng-list-extended'
 import { useUserPreferences, type ThemeType } from '../hooks/use-user-preferences'
@@ -53,27 +53,27 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // 一時的なNGリストの状態
   const [tempNGList, setTempNGList] = useState<ExtendedUserNGList>(ngList)
-  const [hasChanges, setHasChanges] = useState(false)
   const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   
   // ジャンル並び替えコンポーネントの参照
   const genreOrderRef = useRef<GenreOrderCustomizerRef | null>(null)
   
+  // 変更検知（派生状態として計算）
+  const hasChanges = useMemo(() => {
+    return JSON.stringify(tempNGList) !== JSON.stringify(ngList)
+  }, [tempNGList, ngList])
+  
   // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
   useEffect(() => {
     if (isOpen) {
-      setTempNGList(ngList)
-      setHasChanges(false)
-      setHasGenreOrderChanges(false)
+      // 非同期で状態を更新
+      Promise.resolve().then(() => {
+        setTempNGList(ngList)
+        setHasGenreOrderChanges(false)
+      })
     }
   }, [isOpen, ngList])
-  
-  // 変更検知
-  useEffect(() => {
-    const isChanged = JSON.stringify(tempNGList) !== JSON.stringify(ngList)
-    setHasChanges(isChanged)
-  }, [tempNGList, ngList])
 
   const { preferences, updatePreferences } = useUserPreferences()
 
@@ -404,7 +404,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     } as ExtendedUserNGList)
 
     setShowResetConfirm(false)
-    setHasChanges(true)
+    // hasChanges is now computed automatically from tempNGList vs ngList
   }
 
   const handleCancelReset = () => {
