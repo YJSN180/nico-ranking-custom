@@ -80,7 +80,7 @@ export function TagAutocompleteInput({
   }, [])
 
   // デバウンス処理をuseMemoとuseCallbackで実装
-  const debounceRef = useRef<NodeJS.Timeout>()
+  const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined)
   
   const updateSuggestions = useCallback(async (query: string) => {
     if (query.trim().length >= 2) {
