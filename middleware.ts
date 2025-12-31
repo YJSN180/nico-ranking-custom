@@ -16,8 +16,14 @@ const noStorePaths: string[] = []
   
   // SECURITY FIX: /api/admin/* は認証チェックを通す
   // 一般的な公開APIのみ認証をスキップ
+  // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
-    return NextResponse.next()
+    const response = NextResponse.next()
+    // 全APIルートでno-storeを強制（Cloudflare Worker側でキャッシュ管理するため）
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
+    return response
   }
   
   // 開発環境は認証チェックをスキップ

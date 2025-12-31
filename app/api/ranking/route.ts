@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 // Edge Runtimeで実行（より高速）
 export const runtime = 'edge'
 
-// キャッシュの設定
-export const revalidate = 1800 // 30分
+// キャッシュを無効化（古いデータ問題を防ぐため）
+// Cloudflare Worker側でキャッシュを管理するため、Vercel側はキャッシュしない
+export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
 // プレビュー環境ではプロキシとして動作し、本番環境ではCloudflare Workerにリダイレクトします。
 export async function GET(request: NextRequest) {

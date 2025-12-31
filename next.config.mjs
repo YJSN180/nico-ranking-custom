@@ -30,13 +30,14 @@ const nextConfig = {
   },
   async headers() {
     return [
-      // API ranking は短期CDNキャッシュ（15分）
+      // API ranking はキャッシュ禁止（Cloudflare Workerでキャッシュ管理するため、Vercel側はキャッシュしない）
+      // 重要: s-maxageを設定すると古いデータ問題が発生するため、no-storeを使用
       {
         source: '/api/ranking',
         headers: [
-          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=900, stale-while-revalidate=900' },
-          { key: 'CDN-Cache-Control', value: 'public, s-maxage=900' },
-          { key: 'Vercel-CDN-Cache-Control', value: 'public, s-maxage=900' },
+          { key: 'Cache-Control', value: 'no-store, must-revalidate' },
+          { key: 'CDN-Cache-Control', value: 'no-store' },
+          { key: 'Vercel-CDN-Cache-Control', value: 'no-store' },
         ]
       },
       {
@@ -120,14 +121,22 @@ const nextConfig = {
           },
         ]
       },
-      // Note: API route cache headers are now handled by middleware.ts
-      // This configuration is kept as a fallback（middlewareと同じ値に揃える）
+      // Note: API route cache headers - キャッシュはCloudflare Worker側で管理
+      // Vercel側では一律no-storeにして古いデータ問題を防ぐ
       {
         source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, s-maxage=900, stale-while-revalidate=900'
+            value: 'no-store, must-revalidate'
+          },
+          {
+            key: 'CDN-Cache-Control',
+            value: 'no-store'
+          },
+          {
+            key: 'Vercel-CDN-Cache-Control',
+            value: 'no-store'
           }
         ]
       },
