@@ -3,7 +3,7 @@ name: Claude CI Auto-Fix
 # CI/CD失敗時にClaudeが自動的に問題を分析・修正・PRを更新するワークフロー
 #
 # トリガー:
-# 1. unified-ci.ymlが失敗したときにworkflow_run経由で自動実行
+# 1. "Unified CI Pipeline"ワークフローが失敗したときにworkflow_run経由で自動実行
 # 2. PRコメントで@claude fixをメンション
 # 3. 手動実行（workflow_dispatch）
 #
@@ -11,11 +11,16 @@ name: Claude CI Auto-Fix
 # 1. 失敗したテスト/ビルドのログを分析
 # 2. 問題の根本原因を特定
 # 3. 修正を実装（テスト修正またはコード修正）
-# 4. 修正をコミット・プッシュ
-# 5. CIを再実行して確認
-# 6. 成功するまで最大10回繰り返す
+# 4. 修正をコミット・プッシュ（Claude Code Actionがcommit時にCIを再トリガー）
+# 5. 外部からのworkflow_dispatchで最大10回まで繰り返し可能
+#
+# Dependabot PR対応:
+# - Dependabot PRの場合は自動修正をスキップ
+# - 理由: PRブランチへのコミットでDependabotがリベース不可になるため
+# - 代わりにガイダンスコメントを投稿し、mainブランチでの修正を推奨
 #
 # セキュリティ注: ユーザー入力はenv:経由で変数化し、run:内で直接使用しない
+# 依存関係: jq (GitHub-hosted runnerにプリインストール済み)
 
 on:
   # PRコメントで@claude fixをメンション
@@ -55,16 +60,20 @@ on:
     workflows: ["Unified CI Pipeline"]
     types: [completed]
 
+# 同一PRへの並行実行を防止（ただし進行中の修正はキャンセルしない）
 concurrency:
   group: claude-ci-fix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
-  cancel-in-progress: false
+  cancel-in-progress: false  # 修正作業中のジョブをキャンセルしないため
 
 jobs:
   # Job 1: 失敗検知とコンテキスト収集
   detect-and-collect:
     name: Detect Failure & Collect Context
     runs-on: ubuntu-latest
-    # workflow_runの場合は失敗時のみ、PRコメントの場合は@claude fix含む時のみ
+    # 実行条件:
+    # - workflow_run: CI失敗時かつPRが関連付けられている場合
+    # - issue_comment: PR上で@claudeとfixを含むコメント
+    # - workflow_dispatch: 常に実行（手動トリガー）
     if: |
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.pull_requests[0]) ||
       (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude') && contains(github.event.comment.body, 'fix')) ||
@@ -77,6 +86,8 @@ jobs:
       run_id: ${{ steps.context.outputs.run_id }}
       should_fix: ${{ steps.analyze.outputs.should_fix }}
       attempt: ${{ steps.context.outputs.attempt }}
+      is_dependabot: ${{ steps.context.outputs.is_dependabot }}
+      pr_author: ${{ steps.context.outputs.pr_author }}
 
     permissions:
       actions: read
@@ -97,16 +108,28 @@ jobs:
           INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
           INPUT_ATTEMPT: ${{ github.event.inputs.attempt }}
         run: |
+          # イベントタイプに応じてPR番号とRun IDを取得
           if [ "$EVENT_NAME" == "workflow_run" ]; then
             PR_NUMBER="$WF_RUN_PR_NUMBER"
             RUN_ID="$WF_RUN_ID"
             ATTEMPT="1"
           elif [ "$EVENT_NAME" == "issue_comment" ]; then
             PR_NUMBER="$ISSUE_NUMBER"
-            # 最新の失敗したワークフロー実行を取得
-            BRANCH_NAME=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName -q .headRefName)
-            RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch="$BRANCH_NAME" --status=failure --limit=1 --json databaseId -q '.[0].databaseId' || echo "")
             ATTEMPT="1"
+
+            # ブランチ名を取得して最新の失敗したワークフロー実行を検索
+            if ! BRANCH_FOR_RUN=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName -q .headRefName 2>&1); then
+              echo "::warning::Failed to get branch name for PR #$PR_NUMBER: $BRANCH_FOR_RUN"
+              RUN_ID=""
+            else
+              if ! RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch="$BRANCH_FOR_RUN" --status=failure --limit=1 --json databaseId -q '.[0].databaseId' 2>&1); then
+                echo "::warning::Failed to list workflow runs for branch $BRANCH_FOR_RUN: $RUN_ID"
+                RUN_ID=""
+              elif [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+                echo "::notice::No failed runs found for branch $BRANCH_FOR_RUN"
+                RUN_ID=""
+              fi
+            fi
           else
             PR_NUMBER="$INPUT_PR_NUMBER"
             RUN_ID="$INPUT_RUN_ID"
@@ -117,10 +140,39 @@ jobs:
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
           echo "attempt=${ATTEMPT:-1}" >> $GITHUB_OUTPUT
 
+          # Dependabot PR検出（単一API呼び出しで効率化）
+          IS_DEPENDABOT="false"
+          PR_AUTHOR=""
+          PR_BRANCH=""
+
+          if [ -n "$PR_NUMBER" ]; then
+            # author.loginとheadRefNameを1回のAPI呼び出しで取得
+            if ! PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author,headRefName 2>&1); then
+              echo "::warning::Failed to retrieve PR info for #$PR_NUMBER: $PR_INFO"
+              echo "::warning::Dependabot detection will default to false"
+              # エラー時はデフォルト値を維持（IS_DEPENDABOT=false）
+            else
+              # jqでJSONをパース
+              PR_AUTHOR=$(echo "$PR_INFO" | jq -r '.author.login // empty')
+              PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // empty')
+
+              # dependabot[bot]が作者、またはブランチ名がdependabot/で始まる場合
+              if [ "$PR_AUTHOR" = "dependabot[bot]" ] || [[ "$PR_BRANCH" == dependabot/* ]]; then
+                IS_DEPENDABOT="true"
+              fi
+            fi
+          fi
+
+          echo "is_dependabot=$IS_DEPENDABOT" >> $GITHUB_OUTPUT
+          echo "pr_author=$PR_AUTHOR" >> $GITHUB_OUTPUT
+
           echo "Collected context:"
           echo "  PR: #$PR_NUMBER"
           echo "  Run ID: $RUN_ID"
           echo "  Attempt: $ATTEMPT"
+          echo "  Is Dependabot: $IS_DEPENDABOT"
+          echo "  PR Author: $PR_AUTHOR"
+          echo "  PR Branch: $PR_BRANCH"
 
       - name: Analyze failure
         id: analyze
@@ -130,21 +182,38 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           if [ -z "$RUN_ID" ]; then
-            echo "No failed run found, skipping..."
+            echo "::notice::No failed run ID provided, skipping..."
             echo "should_fix=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           echo "Analyzing workflow run $RUN_ID..."
 
-          # ジョブの結果を取得
-          JOBS_JSON=$(gh run view "$RUN_ID" --repo "$REPO" --json jobs)
+          # ジョブの結果を取得（エラーハンドリング付き）
+          if ! JOBS_JSON=$(gh run view "$RUN_ID" --repo "$REPO" --json jobs 2>&1); then
+            echo "::error::Failed to retrieve workflow run data for run ID $RUN_ID"
+            echo "::error::Response: $JOBS_JSON"
+            echo "should_fix=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-          # 失敗したジョブを特定
-          FAILED_JOBS=$(echo "$JOBS_JSON" | jq -r '.jobs[] | select(.conclusion == "failure") | .name')
+          # JSONの有効性を確認
+          if ! echo "$JOBS_JSON" | jq empty 2>/dev/null; then
+            echo "::error::Invalid JSON response from gh run view"
+            echo "::error::Response: $JOBS_JSON"
+            echo "should_fix=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
-          if [ -z "$FAILED_JOBS" ]; then
-            echo "No failed jobs found"
+          # 失敗したジョブを特定（jq -eで空結果を検出）
+          if ! FAILED_JOBS=$(echo "$JOBS_JSON" | jq -re '.jobs[] | select(.conclusion == "failure") | .name' 2>&1); then
+            JQ_EXIT=$?
+            if [ $JQ_EXIT -eq 4 ]; then
+              # jq exit code 4 = 有効なJSONだがマッチなし
+              echo "::notice::No failed jobs found in the run"
+            else
+              echo "::error::Failed to parse jobs JSON (exit code $JQ_EXIT): $FAILED_JOBS"
+            fi
             echo "should_fix=false" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -167,8 +236,18 @@ jobs:
           echo "Detected failure type: $FAILURE_TYPE"
           echo "failure_type=$FAILURE_TYPE" >> $GITHUB_OUTPUT
 
-          # 失敗ログを取得（最大8000文字）
-          LOGS=$(gh run view "$RUN_ID" --repo "$REPO" --log-failed 2>/dev/null | tail -c 8000 || echo "Failed to retrieve logs")
+          # 失敗ログを取得（エラー時は明確なメッセージを設定）
+          if ! LOGS=$(gh run view "$RUN_ID" --repo "$REPO" --log-failed 2>&1 | tail -c 8000); then
+            echo "::warning::Failed to retrieve logs for run $RUN_ID"
+            LOGS="[LOG_RETRIEVAL_ERROR]
+          Unable to fetch workflow run logs. Possible reasons:
+          - Logs have been purged (older than 90 days)
+          - API rate limiting
+          - Network issues
+
+          Please check the workflow run manually at:
+          https://github.com/$REPO/actions/runs/$RUN_ID"
+          fi
 
           # 特殊文字をエスケープしてGitHub Outputに保存
           {
@@ -179,12 +258,14 @@ jobs:
 
           echo "should_fix=true" >> $GITHUB_OUTPUT
 
-  # Job 2: Claudeによる自動修正
+  # Job 2: Claude Code Actionトリガー（PRコメントで@claudeを呼び出し）
+  # 注: Dependabot PR以外で実行。Claude自体はGitHub Appとして別途実行される
   claude-fix:
     name: Claude Auto-Fix (Attempt ${{ needs.detect-and-collect.outputs.attempt }})
     runs-on: ubuntu-latest
     needs: detect-and-collect
-    if: needs.detect-and-collect.outputs.should_fix == 'true'
+    # Dependabot PRの場合は自動修正をスキップ（ブランチへのプッシュでリベース不可になるため）
+    if: needs.detect-and-collect.outputs.should_fix == 'true' && needs.detect-and-collect.outputs.is_dependabot != 'true'
 
     permissions:
       contents: write
@@ -209,11 +290,12 @@ jobs:
           ATTEMPT: ${{ needs.detect-and-collect.outputs.attempt }}
           REPO: ${{ github.repository }}
         run: |
-          # ログを3000文字に制限（環境変数経由なので安全）
+          # ログを3000文字に制限（PRコメントサイズとClaudeコンテキスト最適化のため）
+          # セキュリティ: FAILURE_LOGSはenv:経由で渡されるため、シェルインジェクション安全
           TRUNCATED_LOGS="${FAILURE_LOGS:0:3000}"
 
-          # Claude Code Actionをトリガーするコメントを追加
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@claude
+          # Claude Code Actionをトリガーするコメントを追加（エラーハンドリング付き）
+          if ! gh pr comment "$PR_NUMBER" --repo "$REPO" --body "@claude
 
           ## 🔧 CI/CD 自動修復依頼 (試行 ${ATTEMPT}/10)
 
@@ -314,11 +396,105 @@ jobs:
           - 10回失敗した場合は手動対応が必要です
           - プロダクションコードの大規模な変更は避けてください
           - テストの期待値変更は慎重に行ってください
-          "
+          "; then
+            echo "::error::Failed to post Claude fix comment to PR #$PR_NUMBER"
+            echo "::error::The Claude Code Action will not be triggered"
+            exit 1
+          fi
 
-          echo "Claude fix comment added to PR #$PR_NUMBER"
+          echo "Successfully posted Claude fix comment to PR #$PR_NUMBER"
 
-  # Job 3: リトライ上限到達時の通知
+  # Job 3: Dependabot PR用の対応（自動修正ではなくガイダンスを提供）
+  dependabot-guidance:
+    name: Dependabot PR Guidance
+    runs-on: ubuntu-latest
+    needs: detect-and-collect
+    # Dependabot PRの場合のみ実行
+    if: needs.detect-and-collect.outputs.should_fix == 'true' && needs.detect-and-collect.outputs.is_dependabot == 'true'
+
+    permissions:
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Post guidance for Dependabot PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.detect-and-collect.outputs.pr_number }}
+          FAILURE_TYPE: ${{ needs.detect-and-collect.outputs.failure_type }}
+          FAILURE_LOGS: ${{ needs.detect-and-collect.outputs.failure_logs }}
+          REPO: ${{ github.repository }}
+        run: |
+          # ログを2000文字に制限
+          TRUNCATED_LOGS="${FAILURE_LOGS:0:2000}"
+
+          # ガイダンスコメントを投稿（エラーハンドリング付き）
+          if ! gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## 🤖 Dependabot PR: 自動修正スキップのお知らせ
+
+          このPRはDependabotによって作成されたため、**自動修正は行いません**。
+
+          ### ⚠️ 自動修正をスキップする理由
+
+          Dependabotが作成したPRブランチに直接コミットをプッシュすると、Dependabotが自動リベースを
+          行えなくなります。これにより、将来のセキュリティアップデートが困難になる可能性があります。
+
+          ### 📋 失敗情報
+          - **失敗タイプ**: ${FAILURE_TYPE}
+          - **PR番号**: #${PR_NUMBER}
+
+          ### 📜 エラーログ（抜粋）
+          \`\`\`
+          ${TRUNCATED_LOGS}
+          \`\`\`
+
+          ### ✅ 推奨される対応方法
+
+          #### オプション1: mainブランチで互換性修正を先に行う（推奨）
+          1. このPRを一旦クローズ
+          2. mainブランチで必要な互換性修正を実装
+             \`\`\`bash
+             git checkout main
+             git pull origin main
+             # 必要な修正を実装（設定ファイル更新、コード互換性対応など）
+             git add -A
+             git commit -m \"fix: prepare compatibility for dependency update\"
+             git push origin main
+             \`\`\`
+          3. Dependabotが新しいPRを自動作成するのを待つ
+             - または手動で \`@dependabot recreate\` コメントで再作成を依頼
+
+          #### オプション2: 手動でDependabotブランチをマージ後に修正
+          1. このPRをそのままマージ（テスト失敗を許容）
+          2. mainブランチで修正コミットを追加
+          3. **注意**: CIが一時的に壊れた状態になります
+
+          #### オプション3: 手動で新しいPRを作成
+          1. このPRをクローズ
+          2. Dependabotの変更を含む新しいブランチを手動で作成
+          3. 互換性修正を同じPRに含める
+          4. 新しいPRを作成
+
+          ### 💡 よくある互換性問題と解決策
+
+          | 問題 | 解決策 |
+          |------|--------|
+          | ESLint 9 Flat Config | \`eslint.config.mjs\` を作成 |
+          | Next.js Turbopack | \`turbopack: false\` を設定 |
+          | TypeScript 5.x | 型定義の更新 |
+          | React 19 | 非推奨APIの更新 |
+
+          ---
+
+          ご不明な点があれば、PRにコメントしてください。🙏
+          "; then
+            echo "::error::Failed to post guidance comment to PR #$PR_NUMBER"
+            echo "::error::The user will not receive the Dependabot guidance"
+            exit 1
+          fi
+
+          echo "Successfully posted guidance comment to Dependabot PR #$PR_NUMBER"
+
+  # Job 4: リトライ上限到達時の通知
   max-retries-notification:
     name: Max Retries Notification
     runs-on: ubuntu-latest
@@ -336,7 +512,8 @@ jobs:
           PR_NUMBER: ${{ needs.detect-and-collect.outputs.pr_number }}
           REPO: ${{ github.repository }}
         run: |
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## ⚠️ CI Auto-Fix: 最大試行回数到達
+          # 最大試行回数到達の通知を投稿（エラーハンドリング付き）
+          if ! gh pr comment "$PR_NUMBER" --repo "$REPO" --body "## ⚠️ CI Auto-Fix: 最大試行回数到達
 
           自動修復を10回試行しましたが、CI/CDパイプラインの問題を解決できませんでした。
 
@@ -350,4 +527,10 @@ jobs:
           - [このPRの変更差分](https://github.com/${REPO}/pull/${PR_NUMBER}/files)
 
           手動での対応をお願いします。🙏
-          "
+          "; then
+            echo "::error::Failed to post max retries notification to PR #$PR_NUMBER"
+            echo "::error::The user may not know that auto-fix has given up"
+            exit 1
+          fi
+
+          echo "Successfully posted max retries notification to PR #$PR_NUMBER"
