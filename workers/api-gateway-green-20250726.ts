@@ -89,17 +89,17 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
     
     if (!success) {
       const rateLimitErrorResponse = new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Too Many Requests',
           message: 'Rate limit exceeded. Please try again later.',
           retryAfter: 60
-        }), 
+        }),
         {
           status: 429,
           headers: {
             'Content-Type': 'application/json',
             'Retry-After': '60',
-            'X-RateLimit-Limit': '20',
+            'X-RateLimit-Limit': '600',
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': Math.floor(Date.now() / 1000 + 60).toString()
           }

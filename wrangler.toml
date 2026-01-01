@@ -25,8 +25,10 @@ bucket_name = "nico-ranking"
 name = "RATE_LIMITER"
 type = "ratelimit"
 namespace_id = "1001"
-# 120 requests per minute (1分間に120リクエスト - 大幅緩和)
-simple = { limit = 120, period = 60 }
+# 600 requests per minute (1分間に600リクエスト - さらに緩和)
+# ページ遷移時: ranking API + 100件のサムネイル = 約100リクエスト
+# 連続遷移を考慮して余裕を持たせる
+simple = { limit = 600, period = 60 }
 
 # 環境変数
 [vars]
@@ -78,8 +80,8 @@ bucket_name = "nico-ranking"
 name = "RATE_LIMITER"
 type = "ratelimit"
 namespace_id = "1001"
-# 120 requests per minute (1分間に120リクエスト - 大幅緩和)
-simple = { limit = 120, period = 60 }
+# 600 requests per minute (1分間に600リクエスト - さらに緩和)
+simple = { limit = 600, period = 60 }
 
 # 環境変数（プレビュー用）
 [env.preview.vars]
