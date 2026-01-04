@@ -17,7 +17,7 @@ export function useBFCacheRefresh(
   onBFCacheRestore: () => void,
   options: { maxAge?: number } = {}
 ) {
-  const { maxAge = 5 * 60 * 1000 } = options // デフォルト5分
+  const { maxAge = 3 * 60 * 1000 } = options // デフォルト3分（5分から短縮）
   const pageLoadTimeRef = useRef<number>(Date.now())
   const hasRefreshedRef = useRef<boolean>(false)
 
@@ -67,7 +67,7 @@ export function usePWAResumeRefresh(
   onResume: () => void,
   options: { maxAge?: number } = {}
 ) {
-  const { maxAge = 5 * 60 * 1000 } = options // デフォルト5分
+  const { maxAge = 3 * 60 * 1000 } = options // デフォルト3分（5分から短縮）
   const lastActiveTimeRef = useRef<number>(Date.now())
   const isRefreshingRef = useRef<boolean>(false)
 
