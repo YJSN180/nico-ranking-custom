@@ -3,12 +3,20 @@
 import { useEffect } from 'react'
 
 // 古い next-pwa / Workbox サービスワーカーと Cache Storage を強制的に掃除する
-// 既存ユーザー環境で stale データが残るのを防ぐため、1 セッション 1 回だけ実行する
+// localStorage にバージョン番号を保存し、バージョンが変わった時に再度クリーンアップを実行
+// これにより、新しい問題が発生した場合にバージョンを上げるだけで全ユーザーに再クリーンアップを適用可能
+
+const CLEANUP_VERSION = '2' // バージョンを上げると全ユーザーで再度クリーンアップが実行される
+const FLAG_KEY = 'nr-sw-clear-version'
+
 export function ServiceWorkerClearer() {
   useEffect(() => {
-    const flagKey = 'nr-sw-clear-done'
-    if (typeof window === 'undefined') return
-    if (sessionStorage.getItem(flagKey)) return
+    // 既にこのバージョンでクリーンアップ済みの場合はスキップ
+    try {
+      if (localStorage.getItem(FLAG_KEY) === CLEANUP_VERSION) return
+    } catch {
+      // localStorage アクセスが失敗した場合は続行（プライベートブラウジングなど）
+    }
 
     const unregister = async () => {
       try {
@@ -33,11 +41,17 @@ export function ServiceWorkerClearer() {
       }
     }
 
-    unregister().finally(clearCaches).finally(() => {
-      sessionStorage.setItem(flagKey, '1')
-    })
+    // 正しい Promise チェーン: unregister → clearCaches → フラグ設定
+    ;(async () => {
+      await unregister()
+      await clearCaches()
+      try {
+        localStorage.setItem(FLAG_KEY, CLEANUP_VERSION)
+      } catch {
+        // localStorage 書き込み失敗は無視
+      }
+    })()
   }, [])
 
   return null
 }
-

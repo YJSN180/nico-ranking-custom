@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { OfflineIndicator } from '@/components/offline-indicator'
+import { ServiceWorkerClearer } from '@/components/sw-cache-clearer'
 import './globals.css'
 
 const inter = Inter({ 
@@ -137,6 +138,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>
+        <ServiceWorkerClearer />
         <ThemeProvider>
           <MylistOperationsProvider>
             <ClientOnlyWebVitals />

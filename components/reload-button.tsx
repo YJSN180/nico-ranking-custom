@@ -19,8 +19,18 @@ export function ReloadButton() {
 
   const handleReload = async () => {
     setIsReloading(true)
-    
-    // Service Workerのキャッシュをクリア
+
+    // 1. 古いService Workerを解除（Workbox SWなど）
+    if ('serviceWorker' in navigator) {
+      try {
+        const registrations = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(registrations.map(reg => reg.unregister()))
+      } catch (error) {
+        console.error('Failed to unregister service workers:', error)
+      }
+    }
+
+    // 2. Service Workerのキャッシュをクリア
     if ('caches' in window) {
       try {
         const cacheNames = await caches.keys()
@@ -31,7 +41,14 @@ export function ReloadButton() {
         console.error('Failed to clear caches:', error)
       }
     }
-    
+
+    // 3. localStorageのSWクリアフラグをリセット（次回ロード時に再度クリア実行）
+    try {
+      localStorage.removeItem('nr-sw-clear-version')
+    } catch {
+      // localStorage access may fail in some contexts
+    }
+
     // 少し待ってからリロード（アニメーション表示のため）
     setTimeout(() => {
       window.location.reload()
