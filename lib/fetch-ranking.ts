@@ -47,8 +47,8 @@ async function fetchRankingViaGateway(period: RankingPeriod, genre: RankingGenre
     headers: {
       Accept: 'application/json'
     },
-    // SSR からの取得はキャッシュを尊重
-    next: { revalidate: 1800 }
+    // キャッシュ無効化: ISRキャッシュによる古いデータ問題を防ぐ
+    cache: 'no-store'
   })
   if (!response.ok) {
     throw new Error(`API gateway responded with ${response.status}`)

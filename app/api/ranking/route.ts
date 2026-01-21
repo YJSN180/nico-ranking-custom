@@ -52,8 +52,8 @@ export async function GET(request: NextRequest) {
       const response = await fetch(url.toString(), {
         headers,
         signal: controller.signal,
-        // キャッシュ制御
-        next: { revalidate: 1800 }
+        // キャッシュ無効化: ISRキャッシュによる古いデータ問題を防ぐ
+        cache: 'no-store'
       }).finally(() => {
         clearTimeout(timeoutId)
       })
