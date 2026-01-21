@@ -6,7 +6,7 @@ import { useEffect } from 'react'
 // localStorage にバージョン番号を保存し、バージョンが変わった時に再度クリーンアップを実行
 // これにより、新しい問題が発生した場合にバージョンを上げるだけで全ユーザーに再クリーンアップを適用可能
 
-const CLEANUP_VERSION = '2' // バージョンを上げると全ユーザーで再度クリーンアップが実行される
+const CLEANUP_VERSION = '3' // バージョンを上げると全ユーザーで再度クリーンアップが実行される (2026-01-21: ISRキャッシュ問題対応)
 const FLAG_KEY = 'nr-sw-clear-version'
 
 export function ServiceWorkerClearer() {
