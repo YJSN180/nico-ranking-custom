@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { 
-  exportExtendedNGListData, 
-  readExtendedNGListBackupFile, 
+import {
+  exportExtendedNGListData,
+  readExtendedNGListBackupFile,
   importExtendedNGListData,
   detectExtendedConflicts,
   type ExtendedNGListBackupData,
   type ExtendedConflictDetectionResult,
-  type ExtendedNGListImportResult
+  type ExtendedNGListImportResult,
 } from '../lib/storage/ng-backup-extended'
 import { downloadNGListBackup } from '../lib/storage/ng-backup'
 import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
@@ -19,7 +19,8 @@ export function NGBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [conflictDialogOpen, setConflictDialogOpen] = useState(false)
-  const [importResult, setImportResult] = useState<ExtendedNGListImportResult | null>(null)
+  const [importResult, setImportResult] =
+    useState<ExtendedNGListImportResult | null>(null)
   const [conflictData, setConflictData] = useState<{
     backup: ExtendedNGListBackupData
     conflicts: ExtendedConflictDetectionResult
@@ -54,9 +55,9 @@ export function NGBackup() {
       // ファイル内容を読み込んで形式を判定
       const content = await file.text()
       const rawData = JSON.parse(content)
-      
+
       let data: ExtendedNGListBackupData
-      
+
       // 統合バックアップファイルの判定と変換
       if (rawData.version && rawData.data && rawData.data.ngList) {
         // 統合バックアップから NGList データを抽出
@@ -67,10 +68,10 @@ export function NGBackup() {
       } else {
         throw new Error('NGリストデータが含まれていません')
       }
-      
+
       // 重複検出
       const conflicts = detectExtendedConflicts(ngList, data.ngList)
-      
+
       if (conflicts.hasConflicts) {
         // 重複がある場合は確認ダイアログを表示
         setConflictData({ backup: data, conflicts })
@@ -79,7 +80,7 @@ export function NGBackup() {
         // 重複がない場合は直接インポート
         const result = await importExtendedNGListData(data, 'merge')
         setImportResult(result)
-        
+
         // NGリストは即座に反映されるのでリロード不要
       }
     } catch (error) {
@@ -93,15 +94,17 @@ export function NGBackup() {
             videoTitlesPartial: 0,
             authorIds: 0,
             authorNamesExact: 0,
-            authorNamesPartial: 0
-          }
+            authorNamesPartial: 0,
+          },
         },
         skipped: {
           totalItems: 0,
-          reason: []
+          reason: [],
         },
-        errors: [error instanceof Error ? error.message : 'インポートに失敗しました'],
-        overwritten: false
+        errors: [
+          error instanceof Error ? error.message : 'インポートに失敗しました',
+        ],
+        overwritten: false,
       })
     } finally {
       setIsImporting(false)
@@ -111,16 +114,21 @@ export function NGBackup() {
   }
 
   // 重複処理選択時のインポート実行
-  const handleConflictResolution = async (resolution: 'overwrite' | 'merge') => {
+  const handleConflictResolution = async (
+    resolution: 'overwrite' | 'merge',
+  ) => {
     if (!conflictData) return
 
     setIsImporting(true)
     try {
-      const result = await importExtendedNGListData(conflictData.backup, resolution)
+      const result = await importExtendedNGListData(
+        conflictData.backup,
+        resolution,
+      )
       setImportResult(result)
       setConflictDialogOpen(false)
       setConflictData(null)
-      
+
       // NGリストは即座に反映されるのでリロード不要
     } catch (error) {
       setImportResult({
@@ -133,15 +141,19 @@ export function NGBackup() {
             videoTitlesPartial: 0,
             authorIds: 0,
             authorNamesExact: 0,
-            authorNamesPartial: 0
-          }
+            authorNamesPartial: 0,
+          },
         },
         skipped: {
           totalItems: 0,
-          reason: []
+          reason: [],
         },
-        errors: [error instanceof Error ? error.message : 'インポート処理に失敗しました'],
-        overwritten: false
+        errors: [
+          error instanceof Error
+            ? error.message
+            : 'インポート処理に失敗しました',
+        ],
+        overwritten: false,
       })
     } finally {
       setIsImporting(false)
@@ -158,14 +170,27 @@ export function NGBackup() {
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-ng-list-button"
         >
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3" />
+          <svg
+            className={styles.buttonIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3"
+            />
           </svg>
           エクスポート
         </button>
 
         {/* インポートボタン */}
-        <label className={`${styles.backupButton} ${styles.importButton}`} data-testid="import-ng-list-button">
+        <label
+          className={`${styles.backupButton} ${styles.importButton}`}
+          data-testid="import-ng-list-button"
+        >
           <input
             type="file"
             accept=".json"
@@ -174,8 +199,18 @@ export function NGBackup() {
             className={styles.fileInput}
             data-testid="import-file-input"
           />
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2-2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3" />
+          <svg
+            className={styles.buttonIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2-2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3"
+            />
           </svg>
           インポート
         </label>
@@ -183,9 +218,20 @@ export function NGBackup() {
 
       {/* エクスポート確認ダイアログ */}
       {exportConfirmOpen && (
-        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
-          <div 
-            className={styles.backupDialog} 
+        <div
+          className={styles.backupDialogOverlay}
+          onClick={() => setExportConfirmOpen(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setExportConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className={styles.backupDialog}
             onClick={(e) => e.stopPropagation()}
             data-testid="export-confirm-dialog"
           >
@@ -194,47 +240,75 @@ export function NGBackup() {
             <div className={styles.exportStats}>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>動画ID:</span>
-                <span className={styles.statValue}>{ngList.videoIds.length}件</span>
+                <span className={styles.statValue}>
+                  {ngList.videoIds.length}件
+                </span>
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>動画タイトル:</span>
                 <span className={styles.statValue}>
-                  {ngList.videoTitles.exact.length + ngList.videoTitles.partial.length}件
-                  <small>（完全:{ngList.videoTitles.exact.length} / 部分:{ngList.videoTitles.partial.length}）</small>
+                  {ngList.videoTitles.exact.length +
+                    ngList.videoTitles.partial.length}
+                  件
+                  <small>
+                    （完全:{ngList.videoTitles.exact.length} / 部分:
+                    {ngList.videoTitles.partial.length}）
+                  </small>
                 </span>
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>投稿者:</span>
                 <span className={styles.statValue}>
-                  {ngList.authorIds.length + ngList.authorNames.exact.length + ngList.authorNames.partial.length}件
-                  <small>（ID:{ngList.authorIds.length} / 名前:{ngList.authorNames.exact.length + ngList.authorNames.partial.length}）</small>
+                  {ngList.authorIds.length +
+                    ngList.authorNames.exact.length +
+                    ngList.authorNames.partial.length}
+                  件
+                  <small>
+                    （ID:{ngList.authorIds.length} / 名前:
+                    {ngList.authorNames.exact.length +
+                      ngList.authorNames.partial.length}
+                    ）
+                  </small>
                 </span>
               </div>
               {ngList.tags && (
                 <div className={styles.statItem}>
                   <span className={styles.statLabel}>タグ:</span>
                   <span className={styles.statValue}>
-                    {ngList.tags.locked.exact.length + ngList.tags.locked.partial.length + 
-                     ngList.tags.user.exact.length + ngList.tags.user.partial.length + 
-                     ngList.tags.both.exact.length + ngList.tags.both.partial.length}件
+                    {ngList.tags.locked.exact.length +
+                      ngList.tags.locked.partial.length +
+                      ngList.tags.user.exact.length +
+                      ngList.tags.user.partial.length +
+                      ngList.tags.both.exact.length +
+                      ngList.tags.both.partial.length}
+                    件
                     <small>
-                      （ロック:{ngList.tags.locked.exact.length + ngList.tags.locked.partial.length} / 
-                       ユーザー:{ngList.tags.user.exact.length + ngList.tags.user.partial.length} / 
-                       両方:{ngList.tags.both.exact.length + ngList.tags.both.partial.length}）
+                      （ロック:
+                      {ngList.tags.locked.exact.length +
+                        ngList.tags.locked.partial.length}{' '}
+                      / ユーザー:
+                      {ngList.tags.user.exact.length +
+                        ngList.tags.user.partial.length}{' '}
+                      / 両方:
+                      {ngList.tags.both.exact.length +
+                        ngList.tags.both.partial.length}
+                      ）
                     </small>
                   </span>
                 </div>
               )}
             </div>
-            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
+            <p className={styles.dialogNote}>
+              このファイルは他のデバイスへの移行やバックアップに使用できます。
+            </p>
             <div className={styles.dialogActions}>
-              <button 
+              <button
                 onClick={() => setExportConfirmOpen(false)}
                 className={`${styles.dialogButton} ${styles.cancelButton}`}
               >
                 キャンセル
               </button>
-              <button 
+              <button
                 onClick={handleExport}
                 disabled={isExporting}
                 className={`${styles.dialogButton} ${styles.confirmButton}`}
@@ -248,115 +322,158 @@ export function NGBackup() {
 
       {/* 重複解決ダイアログ */}
       {conflictDialogOpen && conflictData && (
-        <div className={styles.backupDialogOverlay} onClick={() => setConflictDialogOpen(false)}>
-          <div 
-            className={`${styles.backupDialog} ${styles.conflictDialog}`} 
+        <div
+          className={styles.backupDialogOverlay}
+          onClick={() => setConflictDialogOpen(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setConflictDialogOpen(false)
+            }
+          }}
+        >
+          <div
+            className={`${styles.backupDialog} ${styles.conflictDialog}`}
             onClick={(e) => e.stopPropagation()}
             data-testid="conflict-resolution-dialog"
           >
             <h3>⚠️ 重複するアイテムが見つかりました</h3>
-            
+
             <div className={styles.conflictSummary}>
               {conflictData.conflicts.conflicts.videoIds.length > 0 && (
                 <div className={styles.conflictItem}>
                   <span className={styles.conflictType}>動画ID:</span>
-                  <span className={styles.conflictCount}>{conflictData.conflicts.conflicts.videoIds.length}件の重複</span>
+                  <span className={styles.conflictCount}>
+                    {conflictData.conflicts.conflicts.videoIds.length}件の重複
+                  </span>
                 </div>
               )}
-              
-              {(conflictData.conflicts.conflicts.videoTitles.exact.length > 0 || 
-                conflictData.conflicts.conflicts.videoTitles.partial.length > 0 ||
+
+              {(conflictData.conflicts.conflicts.videoTitles.exact.length > 0 ||
+                conflictData.conflicts.conflicts.videoTitles.partial.length >
+                  0 ||
                 conflictData.conflicts.inclusions.videoTitles.length > 0) && (
                 <div className={styles.conflictItem}>
                   <span className={styles.conflictType}>動画タイトル:</span>
                   <span className={styles.conflictCount}>
-                    {conflictData.conflicts.conflicts.videoTitles.exact.length + conflictData.conflicts.conflicts.videoTitles.partial.length}件の重複
-                    {conflictData.conflicts.inclusions.videoTitles.length > 0 && 
-                      `, ${conflictData.conflicts.inclusions.videoTitles.length}件の包含関係`
-                    }
+                    {conflictData.conflicts.conflicts.videoTitles.exact.length +
+                      conflictData.conflicts.conflicts.videoTitles.partial
+                        .length}
+                    件の重複
+                    {conflictData.conflicts.inclusions.videoTitles.length > 0 &&
+                      `, ${conflictData.conflicts.inclusions.videoTitles.length}件の包含関係`}
                   </span>
                 </div>
               )}
-              
+
               {conflictData.conflicts.conflicts.authorIds.length > 0 && (
                 <div className={styles.conflictItem}>
                   <span className={styles.conflictType}>投稿者ID:</span>
-                  <span className={styles.conflictCount}>{conflictData.conflicts.conflicts.authorIds.length}件の重複</span>
+                  <span className={styles.conflictCount}>
+                    {conflictData.conflicts.conflicts.authorIds.length}件の重複
+                  </span>
                 </div>
               )}
-              
-              {(conflictData.conflicts.conflicts.authorNames.exact.length > 0 || 
-                conflictData.conflicts.conflicts.authorNames.partial.length > 0 ||
+
+              {(conflictData.conflicts.conflicts.authorNames.exact.length > 0 ||
+                conflictData.conflicts.conflicts.authorNames.partial.length >
+                  0 ||
                 conflictData.conflicts.inclusions.authorNames.length > 0) && (
                 <div className={styles.conflictItem}>
                   <span className={styles.conflictType}>投稿者名:</span>
                   <span className={styles.conflictCount}>
-                    {conflictData.conflicts.conflicts.authorNames.exact.length + conflictData.conflicts.conflicts.authorNames.partial.length}件の重複
-                    {conflictData.conflicts.inclusions.authorNames.length > 0 && 
-                      `, ${conflictData.conflicts.inclusions.authorNames.length}件の包含関係`
-                    }
+                    {conflictData.conflicts.conflicts.authorNames.exact.length +
+                      conflictData.conflicts.conflicts.authorNames.partial
+                        .length}
+                    件の重複
+                    {conflictData.conflicts.inclusions.authorNames.length > 0 &&
+                      `, ${conflictData.conflicts.inclusions.authorNames.length}件の包含関係`}
                   </span>
                 </div>
               )}
-              
-              {conflictData.conflicts.conflicts.tags && (
-                (conflictData.conflicts.conflicts.tags.locked.exact.length > 0 ||
-                 conflictData.conflicts.conflicts.tags.locked.partial.length > 0 ||
-                 conflictData.conflicts.conflicts.tags.user.exact.length > 0 ||
-                 conflictData.conflicts.conflicts.tags.user.partial.length > 0 ||
-                 conflictData.conflicts.conflicts.tags.both.exact.length > 0 ||
-                 conflictData.conflicts.conflicts.tags.both.partial.length > 0 ||
-                 (conflictData.conflicts.inclusions.tags && (
-                   conflictData.conflicts.inclusions.tags.locked.length > 0 ||
-                   conflictData.conflicts.inclusions.tags.user.length > 0 ||
-                   conflictData.conflicts.inclusions.tags.both.length > 0
-                 ))) && (
+
+              {conflictData.conflicts.conflicts.tags &&
+                (conflictData.conflicts.conflicts.tags.locked.exact.length >
+                  0 ||
+                  conflictData.conflicts.conflicts.tags.locked.partial.length >
+                    0 ||
+                  conflictData.conflicts.conflicts.tags.user.exact.length > 0 ||
+                  conflictData.conflicts.conflicts.tags.user.partial.length >
+                    0 ||
+                  conflictData.conflicts.conflicts.tags.both.exact.length > 0 ||
+                  conflictData.conflicts.conflicts.tags.both.partial.length >
+                    0 ||
+                  (conflictData.conflicts.inclusions.tags &&
+                    (conflictData.conflicts.inclusions.tags.locked.length > 0 ||
+                      conflictData.conflicts.inclusions.tags.user.length > 0 ||
+                      conflictData.conflicts.inclusions.tags.both.length >
+                        0))) && (
                   <div className={styles.conflictItem}>
                     <span className={styles.conflictType}>タグ:</span>
                     <span className={styles.conflictCount}>
-                      {conflictData.conflicts.conflicts.tags.locked.exact.length +
-                       conflictData.conflicts.conflicts.tags.locked.partial.length +
-                       conflictData.conflicts.conflicts.tags.user.exact.length +
-                       conflictData.conflicts.conflicts.tags.user.partial.length +
-                       conflictData.conflicts.conflicts.tags.both.exact.length +
-                       conflictData.conflicts.conflicts.tags.both.partial.length}件の重複
-                      {conflictData.conflicts.inclusions.tags && (
+                      {conflictData.conflicts.conflicts.tags.locked.exact
+                        .length +
+                        conflictData.conflicts.conflicts.tags.locked.partial
+                          .length +
+                        conflictData.conflicts.conflicts.tags.user.exact
+                          .length +
+                        conflictData.conflicts.conflicts.tags.user.partial
+                          .length +
+                        conflictData.conflicts.conflicts.tags.both.exact
+                          .length +
+                        conflictData.conflicts.conflicts.tags.both.partial
+                          .length}
+                      件の重複
+                      {conflictData.conflicts.inclusions.tags &&
                         conflictData.conflicts.inclusions.tags.locked.length +
-                        conflictData.conflicts.inclusions.tags.user.length +
-                        conflictData.conflicts.inclusions.tags.both.length
-                      ) > 0 && 
-                        `, ${conflictData.conflicts.inclusions.tags.locked.length +
-                             conflictData.conflicts.inclusions.tags.user.length +
-                             conflictData.conflicts.inclusions.tags.both.length}件の包含関係`
-                      }
+                          conflictData.conflicts.inclusions.tags.user.length +
+                          conflictData.conflicts.inclusions.tags.both.length >
+                          0 &&
+                        `, ${
+                          conflictData.conflicts.inclusions.tags.locked.length +
+                          conflictData.conflicts.inclusions.tags.user.length +
+                          conflictData.conflicts.inclusions.tags.both.length
+                        }件の包含関係`}
                     </span>
                   </div>
-                )
-              )}
+                )}
             </div>
 
             <div className={styles.resolutionOptions}>
               <p className={styles.resolutionTitle}>どのように処理しますか？</p>
-              
+
               <label className={styles.resolutionOption}>
                 <input type="radio" name="resolution" value="overwrite" />
                 <div className={styles.optionContent}>
                   <span className={styles.optionTitle}>完全に上書き</span>
-                  <span className={styles.optionDescription}>現在のNGリストをインポートデータで完全に置き換えます</span>
+                  <span className={styles.optionDescription}>
+                    現在のNGリストをインポートデータで完全に置き換えます
+                  </span>
                 </div>
               </label>
-              
+
               <label className={styles.resolutionOption}>
-                <input type="radio" name="resolution" value="merge" defaultChecked />
+                <input
+                  type="radio"
+                  name="resolution"
+                  value="merge"
+                  defaultChecked
+                />
                 <div className={styles.optionContent}>
-                  <span className={styles.optionTitle}>マージして結合（推奨）</span>
-                  <span className={styles.optionDescription}>重複を除いて両方のデータを結合します</span>
+                  <span className={styles.optionTitle}>
+                    マージして結合（推奨）
+                  </span>
+                  <span className={styles.optionDescription}>
+                    重複を除いて両方のデータを結合します
+                  </span>
                 </div>
               </label>
             </div>
 
             <div className={styles.dialogActions}>
-              <button 
+              <button
                 onClick={() => {
                   setConflictDialogOpen(false)
                   setConflictData(null)
@@ -365,11 +482,15 @@ export function NGBackup() {
               >
                 キャンセル
               </button>
-              <button 
+              <button
                 onClick={() => {
-                  const selected = document.querySelector('input[name="resolution"]:checked') as HTMLInputElement
+                  const selected = document.querySelector(
+                    'input[name="resolution"]:checked',
+                  ) as HTMLInputElement
                   if (selected) {
-                    handleConflictResolution(selected.value as 'overwrite' | 'merge')
+                    handleConflictResolution(
+                      selected.value as 'overwrite' | 'merge',
+                    )
                   }
                 }}
                 disabled={isImporting}
@@ -384,27 +505,57 @@ export function NGBackup() {
 
       {/* インポート結果メッセージ */}
       {importResult && (
-        <div 
+        <div
           className={`${styles.importResult} ${importResult.success ? styles.success : styles.error}`}
-          data-testid={importResult.success ? 'import-success-message' : 'import-error-message'}
+          data-testid={
+            importResult.success
+              ? 'import-success-message'
+              : 'import-error-message'
+          }
         >
           {importResult.success ? (
             <div>
               <strong>✅ インポート完了</strong>
               <div className={styles.resultDetails}>
-                <div>追加されたアイテム: {importResult.imported.totalItems}件</div>
+                <div>
+                  追加されたアイテム: {importResult.imported.totalItems}件
+                </div>
                 <div className={styles.categoryDetails}>
-                  <span>動画ID: {importResult.imported.categoryBreakdown.videoIds}件</span>
-                  <span>動画タイトル: {importResult.imported.categoryBreakdown.videoTitlesExact + importResult.imported.categoryBreakdown.videoTitlesPartial}件</span>
-                  <span>投稿者: {importResult.imported.categoryBreakdown.authorIds + importResult.imported.categoryBreakdown.authorNamesExact + importResult.imported.categoryBreakdown.authorNamesPartial}件</span>
-                  {importResult.imported.categoryBreakdown.tagsLockedExact !== undefined && (
+                  <span>
+                    動画ID: {importResult.imported.categoryBreakdown.videoIds}件
+                  </span>
+                  <span>
+                    動画タイトル:{' '}
+                    {importResult.imported.categoryBreakdown.videoTitlesExact +
+                      importResult.imported.categoryBreakdown
+                        .videoTitlesPartial}
+                    件
+                  </span>
+                  <span>
+                    投稿者:{' '}
+                    {importResult.imported.categoryBreakdown.authorIds +
+                      importResult.imported.categoryBreakdown.authorNamesExact +
+                      importResult.imported.categoryBreakdown
+                        .authorNamesPartial}
+                    件
+                  </span>
+                  {importResult.imported.categoryBreakdown.tagsLockedExact !==
+                    undefined && (
                     <span>
-                      タグ: {(importResult.imported.categoryBreakdown.tagsLockedExact || 0) +
-                             (importResult.imported.categoryBreakdown.tagsLockedPartial || 0) +
-                             (importResult.imported.categoryBreakdown.tagsUserExact || 0) +
-                             (importResult.imported.categoryBreakdown.tagsUserPartial || 0) +
-                             (importResult.imported.categoryBreakdown.tagsBothExact || 0) +
-                             (importResult.imported.categoryBreakdown.tagsBothPartial || 0)}件
+                      タグ:{' '}
+                      {(importResult.imported.categoryBreakdown
+                        .tagsLockedExact || 0) +
+                        (importResult.imported.categoryBreakdown
+                          .tagsLockedPartial || 0) +
+                        (importResult.imported.categoryBreakdown
+                          .tagsUserExact || 0) +
+                        (importResult.imported.categoryBreakdown
+                          .tagsUserPartial || 0) +
+                        (importResult.imported.categoryBreakdown
+                          .tagsBothExact || 0) +
+                        (importResult.imported.categoryBreakdown
+                          .tagsBothPartial || 0)}
+                      件
                     </span>
                   )}
                 </div>

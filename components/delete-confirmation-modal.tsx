@@ -18,7 +18,7 @@ export function DeleteConfirmationModal({
   onConfirm,
   title,
   message,
-  itemName
+  itemName,
 }: DeleteConfirmationModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -39,36 +39,44 @@ export function DeleteConfirmationModal({
   if (!isOpen) return null
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
+    <div
+      className={styles.overlay}
+      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClose()
+        }
+      }}
+    >
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
           <h2>{title}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={styles.closeButton} onClick={onClose}>
+            ×
+          </button>
         </div>
 
         <div className={styles.content}>
           <div className={styles.iconContainer}>
             <span className={styles.warningIcon}>⚠️</span>
           </div>
-          
+
           <p className={styles.message}>{message}</p>
-          
-          {itemName && (
-            <div className={styles.itemName}>
-              「{itemName}」
-            </div>
-          )}
-          
-          <p className={styles.warning}>
-            この操作は取り消せません。
-          </p>
+
+          {itemName && <div className={styles.itemName}>「{itemName}」</div>}
+
+          <p className={styles.warning}>この操作は取り消せません。</p>
         </div>
 
         <div className={styles.footer}>
-          <button
-            className={styles.cancelButton}
-            onClick={onClose}
-          >
+          <button className={styles.cancelButton} onClick={onClose}>
             キャンセル
           </button>
           <button

@@ -17,8 +17,13 @@ export function GenreOrderBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
-  const [pendingImportData, setPendingImportData] = useState<BackupData | null>(null)
+  const [importMessage, setImportMessage] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
+  const [pendingImportData, setPendingImportData] = useState<BackupData | null>(
+    null,
+  )
 
   const handleExport = async () => {
     setIsExporting(true)
@@ -26,10 +31,12 @@ export function GenreOrderBackup() {
       const data: BackupData = {
         version: 1,
         exportDate: new Date().toISOString(),
-        genreOrder: items
+        genreOrder: items,
       }
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -59,10 +66,10 @@ export function GenreOrderBackup() {
       try {
         const content = e.target?.result as string
         const rawData = JSON.parse(content)
-        
+
         let data: BackupData
         let genreOrderData: GenreItem[]
-        
+
         // 統合バックアップファイルの判定と変換
         if (rawData.version && rawData.data && rawData.data.genreOrder) {
           // 統合バックアップからジャンル並び替えデータを抽出
@@ -70,9 +77,13 @@ export function GenreOrderBackup() {
           data = {
             version: rawData.version,
             exportDate: rawData.exportDate,
-            genreOrder: genreOrderData
+            genreOrder: genreOrderData,
           }
-        } else if (rawData.version && rawData.genreOrder && Array.isArray(rawData.genreOrder)) {
+        } else if (
+          rawData.version &&
+          rawData.genreOrder &&
+          Array.isArray(rawData.genreOrder)
+        ) {
           // 個別ジャンル並び替えバックアップファイル
           data = rawData as BackupData
           genreOrderData = data.genreOrder
@@ -82,7 +93,7 @@ export function GenreOrderBackup() {
           data = {
             version: 1,
             exportDate: new Date().toISOString(),
-            genreOrder: genreOrderData
+            genreOrder: genreOrderData,
           }
         } else {
           throw new Error('ジャンル並び替えデータが含まれていません')
@@ -90,7 +101,11 @@ export function GenreOrderBackup() {
 
         // 各アイテムのバリデーション
         for (const item of genreOrderData) {
-          if (!item.id || typeof item.isVisible !== 'boolean' || typeof item.order !== 'number') {
+          if (
+            !item.id ||
+            typeof item.isVisible !== 'boolean' ||
+            typeof item.order !== 'number'
+          ) {
             throw new Error('無効なジャンルデータが含まれています')
           }
         }
@@ -100,17 +115,18 @@ export function GenreOrderBackup() {
         setImportConfirmOpen(true)
       } catch (error) {
         console.error('Failed to import genre order:', error)
-        setImportMessage({ 
-          type: 'error', 
-          text: error instanceof Error ? error.message : 'インポートに失敗しました' 
+        setImportMessage({
+          type: 'error',
+          text:
+            error instanceof Error ? error.message : 'インポートに失敗しました',
         })
       } finally {
         setIsImporting(false)
       }
     }
-    
+
     reader.readAsText(file)
-    
+
     // ファイル選択をリセット
     event.target.value = ''
   }
@@ -121,26 +137,33 @@ export function GenreOrderBackup() {
     setIsImporting(true)
     try {
       // LocalStorageに保存
-      localStorage.setItem('nicoRankingGenreOrder', JSON.stringify(pendingImportData.genreOrder))
-      
-      setImportMessage({ 
-        type: 'success', 
-        text: 'ジャンル並び替えデータをインポートしました。' 
+      localStorage.setItem(
+        'nicoRankingGenreOrder',
+        JSON.stringify(pendingImportData.genreOrder),
+      )
+
+      setImportMessage({
+        type: 'success',
+        text: 'ジャンル並び替えデータをインポートしました。',
       })
       setImportConfirmOpen(false)
       setPendingImportData(null)
-      
+
       // リロード確認
       setTimeout(() => {
-        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+        if (
+          confirm(
+            'インポートが完了しました。ページをリロードして変更を反映しますか？',
+          )
+        ) {
           window.location.reload()
         }
       }, 1500)
     } catch (error) {
       console.error('Failed to apply import:', error)
-      setImportMessage({ 
-        type: 'error', 
-        text: 'インポート処理に失敗しました' 
+      setImportMessage({
+        type: 'error',
+        text: 'インポート処理に失敗しました',
       })
     } finally {
       setIsImporting(false)
@@ -157,14 +180,27 @@ export function GenreOrderBackup() {
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-genre-order-button"
         >
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3" />
+          <svg
+            className={styles.buttonIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3"
+            />
           </svg>
           エクスポート
         </button>
-        
+
         {/* インポートボタン */}
-        <label className={`${styles.backupButton} ${styles.importButton}`} data-testid="import-genre-order-button">
+        <label
+          className={`${styles.backupButton} ${styles.importButton}`}
+          data-testid="import-genre-order-button"
+        >
           <input
             type="file"
             accept=".json"
@@ -173,8 +209,18 @@ export function GenreOrderBackup() {
             className={styles.fileInput}
             data-testid="import-file-input"
           />
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2-2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3" />
+          <svg
+            className={styles.buttonIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2-2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3"
+            />
           </svg>
           インポート
         </label>
@@ -182,9 +228,20 @@ export function GenreOrderBackup() {
 
       {/* エクスポート確認ダイアログ */}
       {exportConfirmOpen && (
-        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
-          <div 
-            className={styles.backupDialog} 
+        <div
+          className={styles.backupDialogOverlay}
+          onClick={() => setExportConfirmOpen(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setExportConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className={styles.backupDialog}
             onClick={(e) => e.stopPropagation()}
             data-testid="export-confirm-dialog"
           >
@@ -197,22 +254,28 @@ export function GenreOrderBackup() {
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>表示中:</span>
-                <span className={styles.statValue}>{items.filter(item => item.isVisible).length}件</span>
+                <span className={styles.statValue}>
+                  {items.filter((item) => item.isVisible).length}件
+                </span>
               </div>
               <div className={styles.statItem}>
                 <span className={styles.statLabel}>非表示:</span>
-                <span className={styles.statValue}>{items.filter(item => !item.isVisible).length}件</span>
+                <span className={styles.statValue}>
+                  {items.filter((item) => !item.isVisible).length}件
+                </span>
               </div>
             </div>
-            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
+            <p className={styles.dialogNote}>
+              このファイルは他のデバイスへの移行やバックアップに使用できます。
+            </p>
             <div className={styles.dialogActions}>
-              <button 
+              <button
                 onClick={() => setExportConfirmOpen(false)}
                 className={`${styles.dialogButton} ${styles.cancelButton}`}
               >
                 キャンセル
               </button>
-              <button 
+              <button
                 onClick={handleExport}
                 disabled={isExporting}
                 className={`${styles.dialogButton} ${styles.confirmButton}`}
@@ -226,9 +289,20 @@ export function GenreOrderBackup() {
 
       {/* インポート確認ダイアログ */}
       {importConfirmOpen && pendingImportData && (
-        <div className={styles.backupDialogOverlay} onClick={() => setImportConfirmOpen(false)}>
-          <div 
-            className={styles.backupDialog} 
+        <div
+          className={styles.backupDialogOverlay}
+          onClick={() => setImportConfirmOpen(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setImportConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className={styles.backupDialog}
             onClick={(e) => e.stopPropagation()}
             data-testid="import-confirm-dialog"
           >
@@ -236,9 +310,12 @@ export function GenreOrderBackup() {
             <p>
               選択されたバックアップファイルからジャンル並び替え設定を復元します。
             </p>
-            
+
             <div className={styles.importInfo}>
-              <div>バックアップ日時: {new Date(pendingImportData.exportDate).toLocaleString('ja-JP')}</div>
+              <div>
+                バックアップ日時:{' '}
+                {new Date(pendingImportData.exportDate).toLocaleString('ja-JP')}
+              </div>
               <div>ジャンル数: {pendingImportData.genreOrder.length}項目</div>
             </div>
 
@@ -251,7 +328,7 @@ export function GenreOrderBackup() {
             </p>
 
             <div className={styles.dialogActions}>
-              <button 
+              <button
                 onClick={() => {
                   setImportConfirmOpen(false)
                   setPendingImportData(null)
@@ -260,7 +337,7 @@ export function GenreOrderBackup() {
               >
                 キャンセル
               </button>
-              <button 
+              <button
                 onClick={confirmImport}
                 disabled={isImporting}
                 className={`${styles.dialogButton} ${styles.confirmButton}`}
@@ -274,9 +351,13 @@ export function GenreOrderBackup() {
 
       {/* インポート結果メッセージ */}
       {importMessage && (
-        <div 
+        <div
           className={`${styles.importResult} ${importMessage.type === 'success' ? styles.success : styles.error}`}
-          data-testid={importMessage.type === 'success' ? 'import-success-message' : 'import-error-message'}
+          data-testid={
+            importMessage.type === 'success'
+              ? 'import-success-message'
+              : 'import-error-message'
+          }
         >
           {importMessage.text}
         </div>

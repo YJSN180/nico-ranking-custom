@@ -3,13 +3,19 @@
 import { useState, useEffect, useRef } from 'react'
 import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
 import type { ExtendedUserNGList } from '../types/ng-list-extended'
-import { useUserPreferences, type ThemeType } from '../hooks/use-user-preferences'
+import {
+  useUserPreferences,
+  type ThemeType,
+} from '../hooks/use-user-preferences'
 import { NGBackup } from './ng-backup'
 import { GenreOrderBackup } from './genre-order-backup'
 import { CustomRankingBackup } from './custom-ranking-backup'
 import { MylistBackup } from './mylist-backup'
 import { UnifiedBackup } from './unified-backup'
-import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
+import {
+  GenreOrderCustomizer,
+  type GenreOrderCustomizerRef,
+} from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
 import styles from './settings-modal.module.css'
 
@@ -19,14 +25,24 @@ interface SettingsModalProps {
   onApply?: () => void
 }
 
-export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<'display' | 'nglist' | 'genre-order' | 'ng-backup'>('nglist')
+export function SettingsModal({
+  isOpen,
+  onClose,
+  onApply,
+}: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<
+    'display' | 'nglist' | 'genre-order' | 'ng-backup'
+  >('nglist')
   const [inputVideoId, setInputVideoId] = useState('')
   const [inputVideoTitle, setInputVideoTitle] = useState('')
-  const [videoTitleType, setVideoTitleType] = useState<'exact' | 'partial'>('partial')
+  const [videoTitleType, setVideoTitleType] = useState<'exact' | 'partial'>(
+    'partial',
+  )
   const [inputAuthorId, setInputAuthorId] = useState('')
   const [inputAuthorName, setInputAuthorName] = useState('')
-  const [authorNameType, setAuthorNameType] = useState<'exact' | 'partial'>('exact')
+  const [authorNameType, setAuthorNameType] = useState<'exact' | 'partial'>(
+    'exact',
+  )
 
   // 一括追加用のstate
   const [bulkVideoIds, setBulkVideoIds] = useState('')
@@ -45,21 +61,25 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   // タグ一括追加用
   const [bulkTags, setBulkTags] = useState('')
   const [showBulkTags, setShowBulkTags] = useState(false)
-  const [bulkTagType, setBulkTagType] = useState<'locked' | 'user' | 'both'>('both')
-  const [bulkTagMatchType, setBulkTagMatchType] = useState<'exact' | 'partial'>('partial')
+  const [bulkTagType, setBulkTagType] = useState<'locked' | 'user' | 'both'>(
+    'both',
+  )
+  const [bulkTagMatchType, setBulkTagMatchType] = useState<'exact' | 'partial'>(
+    'partial',
+  )
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
-  
+
   // 一時的なNGリストの状態
   const [tempNGList, setTempNGList] = useState<ExtendedUserNGList>(ngList)
   const [hasChanges, setHasChanges] = useState(false)
   const [hasGenreOrderChanges, setHasGenreOrderChanges] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  
+
   // ジャンル並び替えコンポーネントの参照
   const genreOrderRef = useRef<GenreOrderCustomizerRef | null>(null)
-  
+
   // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
   useEffect(() => {
     if (isOpen) {
@@ -68,7 +88,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       setHasGenreOrderChanges(false)
     }
   }, [isOpen, ngList])
-  
+
   // 変更検知
   useEffect(() => {
     const isChanged = JSON.stringify(tempNGList) !== JSON.stringify(ngList)
@@ -83,10 +103,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleAddVideoId = () => {
     const id = inputVideoId.trim()
     if (id && !tempNGList.videoIds.includes(id)) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         videoIds: [...prev.videoIds, id],
-        totalCount: prev.totalCount + 1
+        totalCount: prev.totalCount + 1,
       }))
       setInputVideoId('')
     }
@@ -95,18 +115,19 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleAddVideoTitle = () => {
     const title = inputVideoTitle.trim()
     if (title) {
-      const list = videoTitleType === 'exact' 
-        ? tempNGList.videoTitles.exact 
-        : tempNGList.videoTitles.partial
-      
+      const list =
+        videoTitleType === 'exact'
+          ? tempNGList.videoTitles.exact
+          : tempNGList.videoTitles.partial
+
       if (!list.includes(title)) {
-        setTempNGList(prev => ({
+        setTempNGList((prev) => ({
           ...prev,
           videoTitles: {
             ...prev.videoTitles,
-            [videoTitleType]: [...prev.videoTitles[videoTitleType], title]
+            [videoTitleType]: [...prev.videoTitles[videoTitleType], title],
           },
-          totalCount: prev.totalCount + 1
+          totalCount: prev.totalCount + 1,
         }))
         setInputVideoTitle('')
       }
@@ -116,10 +137,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleAddAuthorId = () => {
     const id = inputAuthorId.trim()
     if (id && !tempNGList.authorIds.includes(id)) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         authorIds: [...prev.authorIds, id],
-        totalCount: prev.totalCount + 1
+        totalCount: prev.totalCount + 1,
       }))
       setInputAuthorId('')
     }
@@ -128,60 +149,61 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   const handleAddAuthorName = () => {
     const name = inputAuthorName.trim()
     if (name) {
-      const list = authorNameType === 'exact' 
-        ? tempNGList.authorNames.exact 
-        : tempNGList.authorNames.partial
-      
+      const list =
+        authorNameType === 'exact'
+          ? tempNGList.authorNames.exact
+          : tempNGList.authorNames.partial
+
       if (!list.includes(name)) {
-        setTempNGList(prev => ({
+        setTempNGList((prev) => ({
           ...prev,
           authorNames: {
             ...prev.authorNames,
-            [authorNameType]: [...prev.authorNames[authorNameType], name]
+            [authorNameType]: [...prev.authorNames[authorNameType], name],
           },
-          totalCount: prev.totalCount + 1
+          totalCount: prev.totalCount + 1,
         }))
         setInputAuthorName('')
       }
     }
   }
-  
+
   // 削除メソッド
   const removeVideoId = (id: string) => {
-    setTempNGList(prev => ({
+    setTempNGList((prev) => ({
       ...prev,
-      videoIds: prev.videoIds.filter(v => v !== id),
-      totalCount: prev.totalCount - 1
+      videoIds: prev.videoIds.filter((v) => v !== id),
+      totalCount: prev.totalCount - 1,
     }))
   }
-  
+
   const removeVideoTitle = (title: string, type: 'exact' | 'partial') => {
-    setTempNGList(prev => ({
+    setTempNGList((prev) => ({
       ...prev,
       videoTitles: {
         ...prev.videoTitles,
-        [type]: prev.videoTitles[type].filter(t => t !== title)
+        [type]: prev.videoTitles[type].filter((t) => t !== title),
       },
-      totalCount: prev.totalCount - 1
+      totalCount: prev.totalCount - 1,
     }))
   }
-  
+
   const removeAuthorId = (id: string) => {
-    setTempNGList(prev => ({
+    setTempNGList((prev) => ({
       ...prev,
-      authorIds: prev.authorIds.filter(a => a !== id),
-      totalCount: prev.totalCount - 1
+      authorIds: prev.authorIds.filter((a) => a !== id),
+      totalCount: prev.totalCount - 1,
     }))
   }
-  
+
   const removeAuthorName = (name: string, type: 'exact' | 'partial') => {
-    setTempNGList(prev => ({
+    setTempNGList((prev) => ({
       ...prev,
       authorNames: {
         ...prev.authorNames,
-        [type]: prev.authorNames[type].filter(n => n !== name)
+        [type]: prev.authorNames[type].filter((n) => n !== name),
       },
-      totalCount: prev.totalCount - 1
+      totalCount: prev.totalCount - 1,
     }))
   }
 
@@ -192,15 +214,15 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const newIds = input
       .split(/[\r\n]+/)
-      .map(id => id.trim())
-      .filter(id => id !== '')
-      .filter(id => !tempNGList.videoIds.includes(id))
+      .map((id) => id.trim())
+      .filter((id) => id !== '')
+      .filter((id) => !tempNGList.videoIds.includes(id))
 
     if (newIds.length > 0) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         videoIds: [...prev.videoIds, ...newIds],
-        totalCount: prev.totalCount + newIds.length
+        totalCount: prev.totalCount + newIds.length,
       }))
       setBulkVideoIds('')
       setShowBulkVideoIds(false)
@@ -216,15 +238,15 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const newIds = input
       .split(/[\r\n]+/)
-      .map(id => id.trim())
-      .filter(id => id !== '')
-      .filter(id => !tempNGList.authorIds.includes(id))
+      .map((id) => id.trim())
+      .filter((id) => id !== '')
+      .filter((id) => !tempNGList.authorIds.includes(id))
 
     if (newIds.length > 0) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         authorIds: [...prev.authorIds, ...newIds],
-        totalCount: prev.totalCount + newIds.length
+        totalCount: prev.totalCount + newIds.length,
       }))
       setBulkAuthorIds('')
       setShowBulkAuthorIds(false)
@@ -244,18 +266,20 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const newTitles = input
       .split(/[\r\n]+/)
-      .map(title => title.trim())
-      .filter(title => title !== '')
-      .filter(title => !tempNGList.videoTitles[videoTitleType].includes(title))
+      .map((title) => title.trim())
+      .filter((title) => title !== '')
+      .filter(
+        (title) => !tempNGList.videoTitles[videoTitleType].includes(title),
+      )
 
     if (newTitles.length > 0) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         videoTitles: {
           ...prev.videoTitles,
-          [videoTitleType]: [...prev.videoTitles[videoTitleType], ...newTitles]
+          [videoTitleType]: [...prev.videoTitles[videoTitleType], ...newTitles],
         },
-        totalCount: prev.totalCount + newTitles.length
+        totalCount: prev.totalCount + newTitles.length,
       }))
       setBulkVideoTitles('')
       setShowBulkVideoTitles(false)
@@ -275,18 +299,18 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const newNames = input
       .split(/[\r\n]+/)
-      .map(name => name.trim())
-      .filter(name => name !== '')
-      .filter(name => !tempNGList.authorNames[authorNameType].includes(name))
+      .map((name) => name.trim())
+      .filter((name) => name !== '')
+      .filter((name) => !tempNGList.authorNames[authorNameType].includes(name))
 
     if (newNames.length > 0) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         authorNames: {
           ...prev.authorNames,
-          [authorNameType]: [...prev.authorNames[authorNameType], ...newNames]
+          [authorNameType]: [...prev.authorNames[authorNameType], ...newNames],
         },
-        totalCount: prev.totalCount + newNames.length
+        totalCount: prev.totalCount + newNames.length,
       }))
       setBulkAuthorNames('')
       setShowBulkAuthorNames(false)
@@ -306,40 +330,49 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const newTags = input
       .split(/[\r\n]+/)
-      .map(tag => tag.trim())
-      .filter(tag => tag !== '')
+      .map((tag) => tag.trim())
+      .filter((tag) => tag !== '')
 
     // タグが存在することを確認
     if (!tempNGList.tags) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         tags: {
           locked: { exact: [], partial: [] },
           user: { exact: [], partial: [] },
-          both: { exact: [], partial: [] }
-        }
+          both: { exact: [], partial: [] },
+        },
       }))
     }
 
-    const existingTags = tempNGList.tags?.[bulkTagType]?.[bulkTagMatchType] || []
-    const uniqueNewTags = newTags.filter(tag => !existingTags.includes(tag))
+    const existingTags =
+      tempNGList.tags?.[bulkTagType]?.[bulkTagMatchType] || []
+    const uniqueNewTags = newTags.filter((tag) => !existingTags.includes(tag))
 
     if (uniqueNewTags.length > 0) {
-      setTempNGList(prev => ({
+      setTempNGList((prev) => ({
         ...prev,
         tags: {
           ...prev.tags!,
           [bulkTagType]: {
             ...prev.tags![bulkTagType],
-            [bulkTagMatchType]: [...(prev.tags?.[bulkTagType]?.[bulkTagMatchType] || []), ...uniqueNewTags]
-          }
+            [bulkTagMatchType]: [
+              ...(prev.tags?.[bulkTagType]?.[bulkTagMatchType] || []),
+              ...uniqueNewTags,
+            ],
+          },
         },
-        totalCount: prev.totalCount + uniqueNewTags.length
+        totalCount: prev.totalCount + uniqueNewTags.length,
       }))
       setBulkTags('')
       setShowBulkTags(false)
 
-      const typeLabel = bulkTagType === 'locked' ? 'ロックタグ' : bulkTagType === 'user' ? 'ユーザータグ' : '両方'
+      const typeLabel =
+        bulkTagType === 'locked'
+          ? 'ロックタグ'
+          : bulkTagType === 'user'
+            ? 'ユーザータグ'
+            : '両方'
       const matchLabel = bulkTagMatchType === 'exact' ? '完全一致' : '部分一致'
       // alert(`${uniqueNewTags.length}件のタグ（${typeLabel}・${matchLabel}）を追加しました`)
     } else {
@@ -352,12 +385,12 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     if (activeTab === 'nglist') {
       // NGリストを保存（即座に反映される）
       saveNGListDirectly(tempNGList)
-      
+
       // onApplyコールバックがあれば呼び出す
       if (onApply) {
         onApply()
       }
-      
+
       // モーダルを閉じる
       onClose()
     } else if (activeTab === 'genre-order' && genreOrderRef.current) {
@@ -365,7 +398,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       genreOrderRef.current.applyChanges()
     }
   }
-  
+
   // 一括リセット処理
   const handleBulkReset = () => {
     setShowResetConfirm(true)
@@ -377,30 +410,30 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       videoIds: [],
       videoTitles: {
         exact: [],
-        partial: []
+        partial: [],
       },
       authorIds: [],
       authorNames: {
         exact: [],
-        partial: []
+        partial: [],
       },
       tags: {
         locked: {
           exact: [],
-          partial: []
+          partial: [],
         },
         user: {
           exact: [],
-          partial: []
+          partial: [],
         },
         both: {
           exact: [],
-          partial: []
-        }
+          partial: [],
+        },
       },
       version: 2,
       totalCount: 0,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
     } as ExtendedUserNGList)
 
     setShowResetConfirm(false)
@@ -417,10 +450,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     if (isDragging) {
       return
     }
-    
+
     if (hasChanges || hasGenreOrderChanges) {
       if (confirm('変更を破棄してもよろしいですか？')) {
-        setTempNGList(ngList)  // 元に戻す
+        setTempNGList(ngList) // 元に戻す
         if (hasGenreOrderChanges && genreOrderRef.current) {
           genreOrderRef.current.cancelChanges()
         }
@@ -430,7 +463,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
       onClose()
     }
   }
-  
+
   // オーバーレイクリック時の処理（ドラッグ中は閉じない）
   const handleOverlayClick = () => {
     if (!isDragging) {
@@ -439,11 +472,24 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   }
 
   return (
-    <div className={styles.overlay} onClick={handleOverlayClick}>
+    <div
+      className={styles.overlay}
+      onClick={handleOverlayClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          handleOverlayClick()
+        }
+      }}
+    >
       <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>設定</h2>
-          <button className={styles.closeButton} onClick={handleClose}>×</button>
+          <button className={styles.closeButton} onClick={handleClose}>
+            ×
+          </button>
         </div>
 
         <div className={styles.tabs}>
@@ -478,81 +524,120 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
             <div className={styles.displaySettings}>
               <section className={styles.section}>
                 <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-                  <legend style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
+                  <legend
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      marginBottom: '16px',
+                    }}
+                  >
                     🎨 テーマ設定
                   </legend>
                   <div>
-                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      value="light"
-                      checked={preferences.theme === 'light'}
-                      onChange={() => {
-                        updatePreferences({ theme: 'light' })
-                        // 即座にdata-theme属性を更新
-                        document.documentElement.setAttribute('data-theme', 'light')
+                    <label
+                      style={{
+                        display: 'block',
+                        marginBottom: '12px',
+                        cursor: 'pointer',
                       }}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '16px' }}>☀️ ライトモード</span>
-                    <span style={{ 
-                      display: 'block', 
-                      marginLeft: '24px', 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      marginTop: '4px'
-                    }}>
-                      明るい背景に黒文字の標準的なテーマ
-                    </span>
-                  </label>
-                  
-                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      value="dark"
-                      checked={preferences.theme === 'dark'}
-                      onChange={() => {
-                        updatePreferences({ theme: 'dark' })
-                        // 即座にdata-theme属性を更新
-                        document.documentElement.setAttribute('data-theme', 'dark')
+                    >
+                      <input
+                        type="radio"
+                        value="light"
+                        checked={preferences.theme === 'light'}
+                        onChange={() => {
+                          updatePreferences({ theme: 'light' })
+                          // 即座にdata-theme属性を更新
+                          document.documentElement.setAttribute(
+                            'data-theme',
+                            'light',
+                          )
+                        }}
+                        style={{ marginRight: '8px' }}
+                      />
+                      <span style={{ fontSize: '16px' }}>☀️ ライトモード</span>
+                      <span
+                        style={{
+                          display: 'block',
+                          marginLeft: '24px',
+                          fontSize: '14px',
+                          color: 'var(--text-secondary)',
+                          marginTop: '4px',
+                        }}
+                      >
+                        明るい背景に黒文字の標準的なテーマ
+                      </span>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'block',
+                        marginBottom: '12px',
+                        cursor: 'pointer',
                       }}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '16px' }}>🌙 ダークモード</span>
-                    <span style={{ 
-                      display: 'block', 
-                      marginLeft: '24px', 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      marginTop: '4px'
-                    }}>
-                      暗い背景に白文字で目に優しいテーマ
-                    </span>
-                  </label>
-                  
-                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      value="darkblue"
-                      checked={preferences.theme === 'darkblue'}
-                      onChange={() => {
-                        updatePreferences({ theme: 'darkblue' })
-                        // 即座にdata-theme属性を更新
-                        document.documentElement.setAttribute('data-theme', 'darkblue')
+                    >
+                      <input
+                        type="radio"
+                        value="dark"
+                        checked={preferences.theme === 'dark'}
+                        onChange={() => {
+                          updatePreferences({ theme: 'dark' })
+                          // 即座にdata-theme属性を更新
+                          document.documentElement.setAttribute(
+                            'data-theme',
+                            'dark',
+                          )
+                        }}
+                        style={{ marginRight: '8px' }}
+                      />
+                      <span style={{ fontSize: '16px' }}>🌙 ダークモード</span>
+                      <span
+                        style={{
+                          display: 'block',
+                          marginLeft: '24px',
+                          fontSize: '14px',
+                          color: 'var(--text-secondary)',
+                          marginTop: '4px',
+                        }}
+                      >
+                        暗い背景に白文字で目に優しいテーマ
+                      </span>
+                    </label>
+
+                    <label
+                      style={{
+                        display: 'block',
+                        marginBottom: '12px',
+                        cursor: 'pointer',
                       }}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '16px' }}>🌌 ダークブルー</span>
-                    <span style={{ 
-                      display: 'block', 
-                      marginLeft: '24px', 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      marginTop: '4px'
-                    }}>
-                      深い青を基調とした落ち着いたテーマ
-                    </span>
-                  </label>
+                    >
+                      <input
+                        type="radio"
+                        value="darkblue"
+                        checked={preferences.theme === 'darkblue'}
+                        onChange={() => {
+                          updatePreferences({ theme: 'darkblue' })
+                          // 即座にdata-theme属性を更新
+                          document.documentElement.setAttribute(
+                            'data-theme',
+                            'darkblue',
+                          )
+                        }}
+                        style={{ marginRight: '8px' }}
+                      />
+                      <span style={{ fontSize: '16px' }}>🌌 ダークブルー</span>
+                      <span
+                        style={{
+                          display: 'block',
+                          marginLeft: '24px',
+                          fontSize: '14px',
+                          color: 'var(--text-secondary)',
+                          marginTop: '4px',
+                        }}
+                      >
+                        深い青を基調とした落ち着いたテーマ
+                      </span>
+                    </label>
                   </div>
                 </fieldset>
               </section>
@@ -592,7 +677,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                       padding: '6px 12px',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '14px'
+                      fontSize: '14px',
                     }}
                   >
                     {showBulkVideoIds ? '▼' : '▶'} 複数IDを一括追加
@@ -618,7 +703,7 @@ sm11111111`}
                           color: 'var(--text-primary)',
                           fontSize: '14px',
                           fontFamily: 'inherit',
-                          resize: 'vertical'
+                          resize: 'vertical',
                         }}
                       />
                       <button
@@ -632,7 +717,7 @@ sm11111111`}
                           borderRadius: '4px',
                           cursor: 'pointer',
                           fontSize: '14px',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
                         }}
                       >
                         一括追加
@@ -651,7 +736,9 @@ sm11111111`}
                       type="radio"
                       value="exact"
                       checked={videoTitleType === 'exact'}
-                      onChange={(e) => setVideoTitleType(e.target.value as 'exact' | 'partial')}
+                      onChange={(e) =>
+                        setVideoTitleType(e.target.value as 'exact' | 'partial')
+                      }
                     />
                     完全一致
                   </label>
@@ -660,7 +747,9 @@ sm11111111`}
                       type="radio"
                       value="partial"
                       checked={videoTitleType === 'partial'}
-                      onChange={(e) => setVideoTitleType(e.target.value as 'exact' | 'partial')}
+                      onChange={(e) =>
+                        setVideoTitleType(e.target.value as 'exact' | 'partial')
+                      }
                     />
                     部分一致
                   </label>
@@ -669,13 +758,19 @@ sm11111111`}
                   {tempNGList.videoTitles.exact.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (完全)</span>
-                      <button onClick={() => removeVideoTitle(title, 'exact')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'exact')}>
+                        ×
+                      </button>
                     </div>
                   ))}
                   {tempNGList.videoTitles.partial.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (部分)</span>
-                      <button onClick={() => removeVideoTitle(title, 'partial')}>×</button>
+                      <button
+                        onClick={() => removeVideoTitle(title, 'partial')}
+                      >
+                        ×
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -684,7 +779,9 @@ sm11111111`}
                     type="text"
                     value={inputVideoTitle}
                     onChange={(e) => setInputVideoTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoTitle()}
+                    onKeyDown={(e) =>
+                      e.key === 'Enter' && handleAddVideoTitle()
+                    }
                     placeholder="タイトルを入力"
                   />
                   <button onClick={handleAddVideoTitle}>追加</button>
@@ -701,7 +798,7 @@ sm11111111`}
                       padding: '6px 12px',
                       borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '14px'
+                      fontSize: '14px',
                     }}
                   >
                     {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加
@@ -722,7 +819,7 @@ sm11111111`}
                           color: 'var(--text-primary)',
                           fontSize: '14px',
                           fontFamily: 'inherit',
-                          resize: 'vertical'
+                          resize: 'vertical',
                         }}
                       />
                       <button
@@ -736,7 +833,7 @@ sm11111111`}
                           borderRadius: '4px',
                           cursor: 'pointer',
                           fontSize: '14px',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
                         }}
                       >
                         一括追加
@@ -764,7 +861,9 @@ sm11111111`}
                       type="text"
                       value={inputAuthorId}
                       onChange={(e) => setInputAuthorId(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorId()}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' && handleAddAuthorId()
+                      }
                       placeholder="投稿者ID（数字）"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
@@ -781,7 +880,7 @@ sm11111111`}
                         padding: '6px 12px',
                         borderRadius: '4px',
                         cursor: 'pointer',
-                        fontSize: '14px'
+                        fontSize: '14px',
                       }}
                     >
                       {showBulkAuthorIds ? '▼' : '▶'} 複数IDを一括追加
@@ -808,7 +907,7 @@ ch2625894`}
                             color: 'var(--text-primary)',
                             fontSize: '14px',
                             fontFamily: 'inherit',
-                            resize: 'vertical'
+                            resize: 'vertical',
                           }}
                         />
                         <button
@@ -822,7 +921,7 @@ ch2625894`}
                             borderRadius: '4px',
                             cursor: 'pointer',
                             fontSize: '14px',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
                           }}
                         >
                           一括追加
@@ -840,7 +939,11 @@ ch2625894`}
                         type="radio"
                         value="exact"
                         checked={authorNameType === 'exact'}
-                        onChange={(e) => setAuthorNameType(e.target.value as 'exact' | 'partial')}
+                        onChange={(e) =>
+                          setAuthorNameType(
+                            e.target.value as 'exact' | 'partial',
+                          )
+                        }
                       />
                       完全一致
                     </label>
@@ -849,7 +952,11 @@ ch2625894`}
                         type="radio"
                         value="partial"
                         checked={authorNameType === 'partial'}
-                        onChange={(e) => setAuthorNameType(e.target.value as 'exact' | 'partial')}
+                        onChange={(e) =>
+                          setAuthorNameType(
+                            e.target.value as 'exact' | 'partial',
+                          )
+                        }
                       />
                       部分一致
                     </label>
@@ -858,13 +965,19 @@ ch2625894`}
                     {tempNGList.authorNames.exact.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (完全)</span>
-                        <button onClick={() => removeAuthorName(name, 'exact')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'exact')}>
+                          ×
+                        </button>
                       </div>
                     ))}
                     {tempNGList.authorNames.partial.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (部分)</span>
-                        <button onClick={() => removeAuthorName(name, 'partial')}>×</button>
+                        <button
+                          onClick={() => removeAuthorName(name, 'partial')}
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -873,7 +986,9 @@ ch2625894`}
                       type="text"
                       value={inputAuthorName}
                       onChange={(e) => setInputAuthorName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorName()}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' && handleAddAuthorName()
+                      }
                       placeholder="投稿者名"
                     />
                     <button onClick={handleAddAuthorName}>追加</button>
@@ -882,7 +997,9 @@ ch2625894`}
                   {/* 投稿者名一括追加セクション */}
                   <div style={{ marginTop: '12px' }}>
                     <button
-                      onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
+                      onClick={() =>
+                        setShowBulkAuthorNames(!showBulkAuthorNames)
+                      }
                       style={{
                         background: 'var(--primary-color)',
                         color: 'white',
@@ -890,7 +1007,7 @@ ch2625894`}
                         padding: '6px 12px',
                         borderRadius: '4px',
                         cursor: 'pointer',
-                        fontSize: '14px'
+                        fontSize: '14px',
                       }}
                     >
                       {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加
@@ -911,7 +1028,7 @@ ch2625894`}
                             color: 'var(--text-primary)',
                             fontSize: '14px',
                             fontFamily: 'inherit',
-                            resize: 'vertical'
+                            resize: 'vertical',
                           }}
                         />
                         <button
@@ -925,7 +1042,7 @@ ch2625894`}
                             borderRadius: '4px',
                             cursor: 'pointer',
                             fontSize: '14px',
-                            fontWeight: 'bold'
+                            fontWeight: 'bold',
                           }}
                         >
                           一括追加
@@ -941,9 +1058,9 @@ ch2625894`}
                 <NGTagsSection
                   tags={tempNGList.tags}
                   onUpdate={(tags) => {
-                    setTempNGList(prev => ({
+                    setTempNGList((prev) => ({
                       ...prev,
-                      tags
+                      tags,
                     }))
                   }}
                   // 一括追加機能のprops
@@ -960,12 +1077,25 @@ ch2625894`}
               )}
 
               {/* 一括リセットセクション */}
-              <section className={styles.section} style={{ marginTop: '24px', borderTop: '2px solid var(--border-color)', paddingTop: '24px' }}>
+              <section
+                className={styles.section}
+                style={{
+                  marginTop: '24px',
+                  borderTop: '2px solid var(--border-color)',
+                  paddingTop: '24px',
+                }}
+              >
                 <h3 style={{ color: 'var(--error-color)' }}>⚠️ 危険な操作</h3>
 
                 {!showResetConfirm ? (
                   <div>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '12px', fontSize: '14px' }}>
+                    <p
+                      style={{
+                        color: 'var(--text-secondary)',
+                        marginBottom: '12px',
+                        fontSize: '14px',
+                      }}
+                    >
                       すべてのNGリスト設定を一括で削除します。この操作は取り消せません。
                     </p>
                     <button
@@ -978,7 +1108,7 @@ ch2625894`}
                         borderRadius: '4px',
                         cursor: 'pointer',
                         fontWeight: 'bold',
-                        fontSize: '14px'
+                        fontSize: '14px',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.opacity = '0.9'
@@ -991,53 +1121,90 @@ ch2625894`}
                     </button>
                   </div>
                 ) : (
-                  <div style={{
-                    background: 'var(--background-secondary)',
-                    padding: '16px',
-                    borderRadius: '4px',
-                    border: '2px solid var(--error-color)'
-                  }}>
-                    <p style={{
-                      color: 'var(--error-color)',
-                      fontWeight: 'bold',
-                      marginBottom: '12px',
-                      fontSize: '16px'
-                    }}>
+                  <div
+                    style={{
+                      background: 'var(--background-secondary)',
+                      padding: '16px',
+                      borderRadius: '4px',
+                      border: '2px solid var(--error-color)',
+                    }}
+                  >
+                    <p
+                      style={{
+                        color: 'var(--error-color)',
+                        fontWeight: 'bold',
+                        marginBottom: '12px',
+                        fontSize: '16px',
+                      }}
+                    >
                       本当にすべてのNGリストを削除しますか？
                     </p>
-                    <p style={{
-                      color: 'var(--text-secondary)',
-                      marginBottom: '16px',
-                      fontSize: '14px'
-                    }}>
+                    <p
+                      style={{
+                        color: 'var(--text-secondary)',
+                        marginBottom: '16px',
+                        fontSize: '14px',
+                      }}
+                    >
                       この操作により、以下のすべての項目が削除されます：
                     </p>
-                    <ul style={{
-                      color: 'var(--text-secondary)',
-                      marginBottom: '16px',
-                      fontSize: '14px',
-                      paddingLeft: '20px'
-                    }}>
+                    <ul
+                      style={{
+                        color: 'var(--text-secondary)',
+                        marginBottom: '16px',
+                        fontSize: '14px',
+                        paddingLeft: '20px',
+                      }}
+                    >
                       <li>動画ID: {tempNGList.videoIds.length}件</li>
-                      <li>動画タイトル（完全一致）: {tempNGList.videoTitles.exact.length}件</li>
-                      <li>動画タイトル（部分一致）: {tempNGList.videoTitles.partial.length}件</li>
+                      <li>
+                        動画タイトル（完全一致）:{' '}
+                        {tempNGList.videoTitles.exact.length}件
+                      </li>
+                      <li>
+                        動画タイトル（部分一致）:{' '}
+                        {tempNGList.videoTitles.partial.length}件
+                      </li>
                       <li>投稿者ID: {tempNGList.authorIds.length}件</li>
-                      <li>投稿者名（完全一致）: {tempNGList.authorNames.exact.length}件</li>
-                      <li>投稿者名（部分一致）: {tempNGList.authorNames.partial.length}件</li>
+                      <li>
+                        投稿者名（完全一致）:{' '}
+                        {tempNGList.authorNames.exact.length}件
+                      </li>
+                      <li>
+                        投稿者名（部分一致）:{' '}
+                        {tempNGList.authorNames.partial.length}件
+                      </li>
                       {tempNGList.tags && (
                         <>
-                          <li>ロックタグ: {tempNGList.tags.locked.exact.length + tempNGList.tags.locked.partial.length}件</li>
-                          <li>ユーザータグ: {tempNGList.tags.user.exact.length + tempNGList.tags.user.partial.length}件</li>
-                          <li>両方タグ: {tempNGList.tags.both.exact.length + tempNGList.tags.both.partial.length}件</li>
+                          <li>
+                            ロックタグ:{' '}
+                            {tempNGList.tags.locked.exact.length +
+                              tempNGList.tags.locked.partial.length}
+                            件
+                          </li>
+                          <li>
+                            ユーザータグ:{' '}
+                            {tempNGList.tags.user.exact.length +
+                              tempNGList.tags.user.partial.length}
+                            件
+                          </li>
+                          <li>
+                            両方タグ:{' '}
+                            {tempNGList.tags.both.exact.length +
+                              tempNGList.tags.both.partial.length}
+                            件
+                          </li>
                         </>
                       )}
                     </ul>
-                    <div style={{
-                      marginTop: '16px',
-                      display: 'flex',
-                      gap: '12px',
-                      justifyContent: 'flex-end'
-                    }}>
+                    <div
+                      style={{
+                        marginTop: '16px',
+                        display: 'flex',
+                        gap: '12px',
+                        justifyContent: 'flex-end',
+                      }}
+                    >
                       <button
                         onClick={handleCancelReset}
                         style={{
@@ -1047,7 +1214,7 @@ ch2625894`}
                           border: '1px solid var(--border-color)',
                           borderRadius: '4px',
                           cursor: 'pointer',
-                          fontSize: '14px'
+                          fontSize: '14px',
                         }}
                       >
                         キャンセル
@@ -1062,7 +1229,7 @@ ch2625894`}
                           borderRadius: '4px',
                           cursor: 'pointer',
                           fontWeight: 'bold',
-                          fontSize: '14px'
+                          fontSize: '14px',
                         }}
                       >
                         削除する
@@ -1076,7 +1243,7 @@ ch2625894`}
             <div className={styles.genreOrderSettings}>
               <section className={styles.section}>
                 <h3>🎯 ジャンル並び替え</h3>
-                <GenreOrderCustomizer 
+                <GenreOrderCustomizer
                   ref={genreOrderRef}
                   onChangesUpdate={setHasGenreOrderChanges}
                   onDragStateChange={setIsDragging}
@@ -1087,39 +1254,69 @@ ch2625894`}
             <div className={styles.ngBackupSettings}>
               <section className={styles.section}>
                 <h3>📦 まとめて管理</h3>
-                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    marginBottom: '1.5rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
                   すべての設定データ（NGリスト、ジャンル並び替え、カスタムランキング、マイリスト）を一つのファイルにまとめてバックアップできます。
                 </p>
                 <UnifiedBackup />
               </section>
-              
+
               <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>💾 NGリストバックアップ</h3>
-                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    marginBottom: '1.5rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
                   現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <NGBackup />
               </section>
-              
+
               <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>🎯 ジャンル並び替えデータバックアップ</h3>
-                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    marginBottom: '1.5rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
                   ジャンルの表示順序と表示/非表示設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <GenreOrderBackup />
               </section>
-              
+
               <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>⭐ カスタムランキングデータバックアップ</h3>
-                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    marginBottom: '1.5rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
                   カスタムランキング設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <CustomRankingBackup />
               </section>
-              
+
               <section className={styles.section} style={{ marginTop: '1rem' }}>
                 <h3>📚 マイリストデータバックアップ</h3>
-                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                <p
+                  style={{
+                    marginBottom: '1.5rem',
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.5,
+                  }}
+                >
                   すべてのマイリストと動画データをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
                 <MylistBackup />
@@ -1133,14 +1330,21 @@ ch2625894`}
             {activeTab === 'nglist' && (
               <>
                 NGリスト: {tempNGList.totalCount}件
-                {hasChanges && <span style={{ color: 'var(--warning-color)', marginLeft: '8px' }}>(未保存)</span>}
+                {hasChanges && (
+                  <span
+                    style={{ color: 'var(--warning-color)', marginLeft: '8px' }}
+                  >
+                    (未保存)
+                  </span>
+                )}
               </>
             )}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
-              <button 
-                className={styles.applyButton} 
+            {((activeTab === 'nglist' && hasChanges) ||
+              (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
+              <button
+                className={styles.applyButton}
                 onClick={handleApply}
                 style={{
                   padding: '8px 16px',
@@ -1149,7 +1353,7 @@ ch2625894`}
                   border: 'none',
                   borderRadius: '4px',
                   cursor: 'pointer',
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
                 }}
               >
                 適用
