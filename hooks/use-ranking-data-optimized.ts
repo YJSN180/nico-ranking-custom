@@ -55,8 +55,10 @@ export function useRankingDataOptimized({
   useEffect(() => {
     if (!rankingData.length) return
     
-    // Create cache key
-    const cacheKey = `${ngListVersion}-${rankingData.length}`
+    // Create content-based cache key using item IDs for accurate change detection
+    const dataKey = rankingData.map(item => item.id).join(',')
+    const ngKey = JSON.stringify(ngList)
+    const cacheKey = `${ngKey}-${dataKey}`
     
     // Check cache first
     const cached = filterCache.get(cacheKey)
@@ -88,7 +90,7 @@ export function useRankingDataOptimized({
     }
     
     applyFilter()
-  }, [ngListVersion, rankingData.length]) // Depend on length to detect data changes
+  }, [rankingData, ngList, filterRankings])
   
   // Fetch ranking data
   const fetchRankingData = useCallback(async (config: RankingConfig) => {
