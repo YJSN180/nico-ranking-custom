@@ -71,8 +71,12 @@ async function testGetThumbInfo(videoId: string): Promise<APITestResult> {
   }
 }
 
-async function testV3Guest(videoId: string): Promise<APITestResult> {
+async function testV3Guest(videoId: string, useGooglebotUA: boolean = false): Promise<APITestResult> {
   const actionTrackId = `test_${Date.now()}_${Math.random().toString(36).slice(2)}`
+
+  const userAgent = useGooglebotUA
+    ? 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+    : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
 
   try {
     const response = await fetch(
@@ -81,7 +85,7 @@ async function testV3Guest(videoId: string): Promise<APITestResult> {
         headers: {
           'X-Frontend-Id': '6',
           'X-Frontend-Version': '0',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          'User-Agent': userAgent
         }
       }
     )
@@ -192,19 +196,21 @@ async function main() {
   // 統計
   const stats = {
     getthumbinfo: { success: 0, fail: 0, rateLimited: 0 },
-    v3_guest: { success: 0, fail: 0, forbidden: 0 }
+    v3_guest: { success: 0, fail: 0, forbidden: 0 },
+    v3_guest_googlebot: { success: 0, fail: 0, forbidden: 0 }
   }
 
   // 各動画についてテスト
   console.log('--- テスト結果 ---\n')
-  console.log('VideoID         | getthumbinfo        | v3_guest')
-  console.log('----------------|---------------------|--------------------')
+  console.log('VideoID         | getthumbinfo        | v3_guest            | v3_guest(Googlebot)')
+  console.log('----------------|---------------------|---------------------|--------------------')
 
   for (const videoId of testVideos) {
-    // 並列でテスト
-    const [gtiResult, v3Result] = await Promise.all([
+    // 並列でテスト（3種類）
+    const [gtiResult, v3Result, v3GooglebotResult] = await Promise.all([
       testGetThumbInfo(videoId),
-      testV3Guest(videoId)
+      testV3Guest(videoId, false),
+      testV3Guest(videoId, true)  // Googlebot UA
     ])
 
     // getthumbinfo統計
@@ -225,11 +231,21 @@ async function main() {
       stats.v3_guest.fail++
     }
 
+    // v3_guest (Googlebot) 統計
+    if (v3GooglebotResult.tagCount > 0) {
+      stats.v3_guest_googlebot.success++
+    } else if (v3GooglebotResult.status === 400 || v3GooglebotResult.status === 403) {
+      stats.v3_guest_googlebot.forbidden++
+    } else {
+      stats.v3_guest_googlebot.fail++
+    }
+
     // 結果表示
     const gtiStatus = gtiResult.error ? `❌ ${gtiResult.error}` : `✅ ${gtiResult.tagCount}tags`
     const v3Status = v3Result.error ? `❌ ${v3Result.error}` : `✅ ${v3Result.tagCount}tags`
+    const v3GbStatus = v3GooglebotResult.error ? `❌ ${v3GooglebotResult.error}` : `✅ ${v3GooglebotResult.tagCount}tags`
 
-    console.log(`${videoId.padEnd(15)} | ${gtiStatus.padEnd(19)} | ${v3Status}`)
+    console.log(`${videoId.padEnd(15)} | ${gtiStatus.padEnd(19)} | ${v3Status.padEnd(19)} | ${v3GbStatus}`)
 
     // レート制限回避のため少し待機
     await new Promise(r => setTimeout(r, 100))
@@ -241,21 +257,29 @@ async function main() {
   console.log(`  403: ${stats.getthumbinfo.rateLimited}`)
   console.log(`  その他失敗: ${stats.getthumbinfo.fail}`)
 
-  console.log('\nv3_guest API:')
+  console.log('\nv3_guest API (通常UA):')
   console.log(`  成功: ${stats.v3_guest.success}/${testVideos.length}`)
   console.log(`  FORBIDDEN: ${stats.v3_guest.forbidden}`)
   console.log(`  その他失敗: ${stats.v3_guest.fail}`)
+
+  console.log('\nv3_guest API (Googlebot UA):')
+  console.log(`  成功: ${stats.v3_guest_googlebot.success}/${testVideos.length}`)
+  console.log(`  FORBIDDEN: ${stats.v3_guest_googlebot.forbidden}`)
+  console.log(`  その他失敗: ${stats.v3_guest_googlebot.fail}`)
 
   // 推奨判定
   console.log('\n--- 推奨 ---')
   if (stats.getthumbinfo.rateLimited > stats.getthumbinfo.success) {
     console.log('⚠️ getthumbinfoはレート制限されています')
   }
-  if (stats.v3_guest.success > stats.getthumbinfo.success) {
-    console.log('✅ v3_guestの方が成功率が高いです')
+  if (stats.v3_guest_googlebot.success > stats.v3_guest.success) {
+    console.log('✅ v3_guest (Googlebot UA) の方が成功率が高いです')
   }
-  if (stats.v3_guest.forbidden > 0) {
-    console.log(`⚠️ v3_guestで${stats.v3_guest.forbidden}件がFORBIDDEN（HARMFUL_VIDEO等）`)
+  if (stats.v3_guest_googlebot.success > stats.getthumbinfo.success) {
+    console.log('✅ v3_guest (Googlebot UA) が最も成功率が高いです')
+  }
+  if (stats.v3_guest_googlebot.forbidden > 0) {
+    console.log(`⚠️ v3_guest (Googlebot UA) で${stats.v3_guest_googlebot.forbidden}件がFORBIDDEN`)
   }
 }
 
