@@ -780,9 +780,9 @@ if (process.argv[2] === '--group') {
       const result = await processGenre(genre, ngList);
       results.push(result);
       
-      // Add delay between genres
+      // Add delay between genres to avoid rate limiting on getthumbinfo API
       if (genre !== groupGenres[groupGenres.length - 1]) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
     
