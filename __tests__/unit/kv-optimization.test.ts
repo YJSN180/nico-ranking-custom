@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getGroupIdForGenre, extractGenreData, getCachedResponse } from '@/workers/kv-optimization-20250706'
+import { getGroupIdForGenre, extractGenreData, getCachedResponse } from '@/workers/kv-optimization'
 import type { RankingGenre } from '@/types/ranking-config'
 
 // Mock unified-compression module
@@ -9,45 +9,24 @@ vi.mock('@/lib/unified-compression', () => ({
 
 describe('KV Optimization', () => {
   describe('getGroupIdForGenre', () => {
-    it('should return group 1 for genres: all, game, anime, vocaloid', () => {
-      const group1Genres: RankingGenre[] = ['all', 'game', 'anime', 'vocaloid']
+    it('should return group 1 for genres: all, game, anime, vocaloid, voicesynthesis, entertainment, music, sing', () => {
+      const group1Genres: RankingGenre[] = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing']
       group1Genres.forEach(genre => {
         expect(getGroupIdForGenre(genre)).toBe(1)
       })
     })
 
-    it('should return group 2 for genres: voicesynthesis, entertainment, music, sing', () => {
-      const group2Genres: RankingGenre[] = ['voicesynthesis', 'entertainment', 'music', 'sing']
+    it('should return group 2 for genres: dance, play, commentary, cooking, travel, nature, vehicle, technology', () => {
+      const group2Genres: RankingGenre[] = ['dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology']
       group2Genres.forEach(genre => {
         expect(getGroupIdForGenre(genre)).toBe(2)
       })
     })
 
-    it('should return group 3 for genres: dance, play, commentary, cooking', () => {
-      const group3Genres: RankingGenre[] = ['dance', 'play', 'commentary', 'cooking']
+    it('should return group 3 for genres: society, mmd, vtuber, radio, sports, animal, other', () => {
+      const group3Genres: RankingGenre[] = ['society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other']
       group3Genres.forEach(genre => {
         expect(getGroupIdForGenre(genre)).toBe(3)
-      })
-    })
-
-    it('should return group 4 for genres: travel, nature, vehicle, technology', () => {
-      const group4Genres: RankingGenre[] = ['travel', 'nature', 'vehicle', 'technology']
-      group4Genres.forEach(genre => {
-        expect(getGroupIdForGenre(genre)).toBe(4)
-      })
-    })
-
-    it('should return group 5 for genres: society, mmd, vtuber, radio', () => {
-      const group5Genres: RankingGenre[] = ['society', 'mmd', 'vtuber', 'radio']
-      group5Genres.forEach(genre => {
-        expect(getGroupIdForGenre(genre)).toBe(5)
-      })
-    })
-
-    it('should return group 6 for genres: sports, animal, other', () => {
-      const group6Genres: RankingGenre[] = ['sports', 'animal', 'other']
-      group6Genres.forEach(genre => {
-        expect(getGroupIdForGenre(genre)).toBe(6)
       })
     })
 

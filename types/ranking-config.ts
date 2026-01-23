@@ -83,24 +83,20 @@ export const RANKING_GENRES: Array<{ value: RankingGenre; label: string }> = Obj
   label
 }))
 
-// Genre groups for 6-key KV splitting (getthumbinfo APIレート制限対策)
-// 各グループを小さくすることで、10分間隔で処理しても1200 req/時を超えない
+// Genre groups for 3-key KV splitting
 export const GENRE_GROUPS = {
-  1: ['all', 'game', 'anime', 'vocaloid'] as RankingGenre[],
-  2: ['voicesynthesis', 'entertainment', 'music', 'sing'] as RankingGenre[],
-  3: ['dance', 'play', 'commentary', 'cooking'] as RankingGenre[],
-  4: ['travel', 'nature', 'vehicle', 'technology'] as RankingGenre[],
-  5: ['society', 'mmd', 'vtuber', 'radio'] as RankingGenre[],
-  6: ['sports', 'animal', 'other', 'custom'] as RankingGenre[]
+  1: ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing'] as RankingGenre[],
+  2: ['dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology'] as RankingGenre[],
+  3: ['society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other', 'custom'] as RankingGenre[]
 } as const
 
 // Helper function to get group ID for a genre
-export function getGroupIdForGenre(genre: RankingGenre): 1 | 2 | 3 | 4 | 5 | 6 {
+export function getGroupIdForGenre(genre: RankingGenre): 1 | 2 | 3 {
   for (const [groupId, genres] of Object.entries(GENRE_GROUPS)) {
     if (genres.includes(genre)) {
-      return parseInt(groupId) as 1 | 2 | 3 | 4 | 5 | 6
+      return parseInt(groupId) as 1 | 2 | 3
     }
   }
-  // Default to group 6 if not found
-  return 6
+  // Default to group 3 if not found
+  return 3
 }

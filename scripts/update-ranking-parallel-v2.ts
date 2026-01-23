@@ -746,13 +746,13 @@ async function main() {
 if (process.argv[2] === '--kv-group') {
   const kvGroupId = parseInt(process.argv[3]);
 
-  if (!kvGroupId || kvGroupId < 1 || kvGroupId > 6) {
-    console.error('Invalid KV group ID. Usage: --kv-group <1|2|3|4|5|6>');
+  if (!kvGroupId || kvGroupId < 1 || kvGroupId > 3) {
+    console.error('Invalid KV group ID. Usage: --kv-group <1|2|3>');
     process.exit(1);
   }
 
-  // Use GENRE_GROUPS for KV-aligned operation (6グループ分散処理)
-  const groupGenres = GENRE_GROUPS[kvGroupId as 1 | 2 | 3 | 4 | 5 | 6].filter(g => g !== 'custom') as RankingGenre[];
+  // Use GENRE_GROUPS for KV-aligned operation
+  const groupGenres = GENRE_GROUPS[kvGroupId as 1 | 2 | 3].filter(g => g !== 'custom') as RankingGenre[];
   console.log(`Using KV Group ${kvGroupId} with ${groupGenres.length} genres: ${groupGenres.join(', ')}`);
 
   // Run only for this KV group and save partial results

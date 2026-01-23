@@ -1,25 +1,19 @@
 name: Update Nico Ranking Data (Parallel)
-# Last updated: 2026-01-24 - 6グループ分散処理でgetthumbinfo APIレート制限対策
+# Last updated: 2026-01-24 - KV-group based rotation for simplicity and consistency
 
 on:
   schedule:
-    # 6つのグループを10分間隔で順番に更新（レート制限対策）
-    # Group 1: 毎時05分 - all, game, anime, vocaloid (4ジャンル)
-    # Group 2: 毎時15分 - voicesynthesis, entertainment, music, sing (4ジャンル)
-    # Group 3: 毎時25分 - dance, play, commentary, cooking (4ジャンル)
-    # Group 4: 毎時35分 - travel, nature, vehicle, technology (4ジャンル)
-    # Group 5: 毎時45分 - society, mmd, vtuber, radio (4ジャンル)
-    # Group 6: 毎時55分 - sports, animal, other (3ジャンル)
-    - cron: '5 * * * *'   # Group 1
-    - cron: '15 * * * *'  # Group 2
-    - cron: '25 * * * *'  # Group 3
-    - cron: '35 * * * *'  # Group 4
-    - cron: '45 * * * *'  # Group 5
-    - cron: '55 * * * *'  # Group 6
+    # 3つのKVグループを30分間隔で順番に更新
+    # Set A (KV Group 1): 毎時10分 - all, game, anime, vocaloid, voicesynthesis, entertainment, music, sing
+    # Set B (KV Group 2): 毎時30分 - dance, play, commentary, cooking, travel, nature, vehicle, technology
+    # Set C (KV Group 3): 毎時50分 - society, mmd, vtuber, radio, sports, animal, other
+    - cron: '10 * * * *'  # Set A (KV Group 1)
+    - cron: '30 * * * *'  # Set B (KV Group 2)
+    - cron: '50 * * * *'  # Set C (KV Group 3)
   workflow_dispatch:
     inputs:
       kv_group:
-        description: 'KV Group to update (1-6, or ALL)'
+        description: 'KV Group to update (1, 2, 3, or ALL)'
         required: false
         default: 'ALL'
         type: choice
@@ -27,9 +21,6 @@ on:
           - '1'
           - '2'
           - '3'
-          - '4'
-          - '5'
-          - '6'
           - 'ALL'
 
 # 同時実行を防ぐ
@@ -48,20 +39,17 @@ jobs:
       - name: Calculate KV group
         id: calc
         run: |
-          # 6グループに分散（レート制限対策: 各グループ3-4ジャンル）
-          KV_GROUP_1_GENRES="all,game,anime,vocaloid"
-          KV_GROUP_2_GENRES="voicesynthesis,entertainment,music,sing"
-          KV_GROUP_3_GENRES="dance,play,commentary,cooking"
-          KV_GROUP_4_GENRES="travel,nature,vehicle,technology"
-          KV_GROUP_5_GENRES="society,mmd,vtuber,radio"
-          KV_GROUP_6_GENRES="sports,animal,other"
+          # KVグループとジャンルのマッピング（GENRE_GROUPSと同じ）
+          KV_GROUP_1_GENRES="all,game,anime,vocaloid,voicesynthesis,entertainment,music,sing"
+          KV_GROUP_2_GENRES="dance,play,commentary,cooking,travel,nature,vehicle,technology"
+          KV_GROUP_3_GENRES="society,mmd,vtuber,radio,sports,animal,other"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # 手動トリガーの場合はinputを使用
             KV_GROUP="${{ github.event.inputs.kv_group }}"
             if [[ "$KV_GROUP" == "ALL" ]]; then
               echo "kv_group=ALL" >> $GITHUB_OUTPUT
-              echo "genres=$KV_GROUP_1_GENRES,$KV_GROUP_2_GENRES,$KV_GROUP_3_GENRES,$KV_GROUP_4_GENRES,$KV_GROUP_5_GENRES,$KV_GROUP_6_GENRES" >> $GITHUB_OUTPUT
+              echo "genres=$KV_GROUP_1_GENRES,$KV_GROUP_2_GENRES,$KV_GROUP_3_GENRES" >> $GITHUB_OUTPUT
               echo "Manual trigger: Running ALL KV groups"
             else
               echo "kv_group=$KV_GROUP" >> $GITHUB_OUTPUT
@@ -69,42 +57,27 @@ jobs:
                 1) echo "genres=$KV_GROUP_1_GENRES" >> $GITHUB_OUTPUT ;;
                 2) echo "genres=$KV_GROUP_2_GENRES" >> $GITHUB_OUTPUT ;;
                 3) echo "genres=$KV_GROUP_3_GENRES" >> $GITHUB_OUTPUT ;;
-                4) echo "genres=$KV_GROUP_4_GENRES" >> $GITHUB_OUTPUT ;;
-                5) echo "genres=$KV_GROUP_5_GENRES" >> $GITHUB_OUTPUT ;;
-                6) echo "genres=$KV_GROUP_6_GENRES" >> $GITHUB_OUTPUT ;;
               esac
               echo "Manual trigger: Running KV Group $KV_GROUP"
             fi
           else
-            # スケジュールトリガーの場合は時刻から判定（10分間隔）
+            # スケジュールトリガーの場合は時刻から判定
             CURRENT_MINUTE=$(date -u '+%M')
             echo "Current UTC minute: $CURRENT_MINUTE"
 
-            # 05分台 → Group 1, 15分台 → Group 2, ... 55分台 → Group 6
-            if [[ "$CURRENT_MINUTE" -ge 0 && "$CURRENT_MINUTE" -le 9 ]]; then
+            # 10分台 → KV Group 1, 30分台 → KV Group 2, 50分台 → KV Group 3
+            if [[ "$CURRENT_MINUTE" -ge 5 && "$CURRENT_MINUTE" -le 15 ]]; then
               echo "kv_group=1" >> $GITHUB_OUTPUT
               echo "genres=$KV_GROUP_1_GENRES" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running KV Group 1 (4 genres: all,game,anime,vocaloid)"
-            elif [[ "$CURRENT_MINUTE" -ge 10 && "$CURRENT_MINUTE" -le 19 ]]; then
+              echo "Schedule trigger: Running KV Group 1 (8 genres)"
+            elif [[ "$CURRENT_MINUTE" -ge 25 && "$CURRENT_MINUTE" -le 35 ]]; then
               echo "kv_group=2" >> $GITHUB_OUTPUT
               echo "genres=$KV_GROUP_2_GENRES" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running KV Group 2 (4 genres: voicesynthesis,entertainment,music,sing)"
-            elif [[ "$CURRENT_MINUTE" -ge 20 && "$CURRENT_MINUTE" -le 29 ]]; then
+              echo "Schedule trigger: Running KV Group 2 (8 genres)"
+            else
               echo "kv_group=3" >> $GITHUB_OUTPUT
               echo "genres=$KV_GROUP_3_GENRES" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running KV Group 3 (4 genres: dance,play,commentary,cooking)"
-            elif [[ "$CURRENT_MINUTE" -ge 30 && "$CURRENT_MINUTE" -le 39 ]]; then
-              echo "kv_group=4" >> $GITHUB_OUTPUT
-              echo "genres=$KV_GROUP_4_GENRES" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running KV Group 4 (4 genres: travel,nature,vehicle,technology)"
-            elif [[ "$CURRENT_MINUTE" -ge 40 && "$CURRENT_MINUTE" -le 49 ]]; then
-              echo "kv_group=5" >> $GITHUB_OUTPUT
-              echo "genres=$KV_GROUP_5_GENRES" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running KV Group 5 (4 genres: society,mmd,vtuber,radio)"
-            else
-              echo "kv_group=6" >> $GITHUB_OUTPUT
-              echo "genres=$KV_GROUP_6_GENRES" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running KV Group 6 (3 genres: sports,animal,other)"
+              echo "Schedule trigger: Running KV Group 3 (7 genres)"
             fi
           fi
 
@@ -114,8 +87,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        kv_group: [1, 2, 3, 4, 5, 6]
-      max-parallel: 6
+        kv_group: [1, 2, 3]
+      max-parallel: 3
       fail-fast: false
 
     steps:

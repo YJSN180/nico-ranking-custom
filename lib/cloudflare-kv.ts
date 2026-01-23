@@ -52,14 +52,11 @@ export interface KVRankingData {
 // Single key for all ranking data (deprecated, kept for backward compatibility)
 const RANKING_DATA_KEY = 'RANKING_LATEST'
 
-// 6-key split keys (getthumbinfo APIレート制限対策で6グループに分散)
+// 3-key split keys
 const RANKING_GROUP_KEYS = {
   1: 'RANKING_GROUP_1',
   2: 'RANKING_GROUP_2',
-  3: 'RANKING_GROUP_3',
-  4: 'RANKING_GROUP_4',
-  5: 'RANKING_GROUP_5',
-  6: 'RANKING_GROUP_6'
+  3: 'RANKING_GROUP_3'
 } as const
 
 /**
@@ -305,7 +302,7 @@ export async function getGenreRanking(
 /**
  * Read specific group from KV (optimized for single genre requests)
  */
-async function getRankingGroupFromKV(groupId: 1 | 2 | 3 | 4 | 5 | 6): Promise<KVRankingData | null> {
+async function getRankingGroupFromKV(groupId: 1 | 2 | 3): Promise<KVRankingData | null> {
   const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
   const CF_NAMESPACE_ID = process.env.KV_RANKING_ID
   const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN

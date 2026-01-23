@@ -196,12 +196,12 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
   }
 }
 
-// Write data split by 6 groups (GENRE_GROUPS structure - getthumbinfo APIレート制限対策)
+// Write data split by 3 groups (GENRE_GROUPS structure)
 // This function MERGES new data with existing KV data for partial updates
 // It preserves genres that are not in the current update
 async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
   console.log('\n📦 Starting group-based KV write with merge support...');
-  console.log('Note: Writing to GENRE_GROUPS (6 groups) - merging with existing data for partial updates');
+  console.log('Note: Writing to GENRE_GROUPS (3 groups) - merging with existing data for partial updates');
 
   // Log which genres we have data for
   const availableGenres = Object.keys(rankingData.genres || {});
@@ -282,7 +282,7 @@ async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
     }
   }
 
-  console.log(`\n✅ Successfully wrote ${writtenCount}/6 groups to KV`);
+  console.log(`\n✅ Successfully wrote ${writtenCount}/3 groups to KV`);
   console.log('Written group sizes:', groupSizes);
 }
 
@@ -292,7 +292,7 @@ async function main() {
 
     // Detect mode: KV group mode (new) or legacy 8-group mode
     const kvGroupMode = process.env.KV_GROUP_MODE === 'true';
-    console.log(`Mode: ${kvGroupMode ? 'KV Group (6 groups, no merge needed)' : 'Legacy (8 groups, with merge)'}`);
+    console.log(`Mode: ${kvGroupMode ? 'KV Group (3 groups, no merge needed)' : 'Legacy (8 groups, with merge)'}`);
 
     // Read all partial results
     const tmpDir = './tmp';
@@ -461,10 +461,10 @@ async function main() {
     await fs.writeFile(backupPath, JSON.stringify(rankingData, null, 2));
     console.log(`\nSaved aggregated data to ${backupPath}`);
 
-    // Write to Cloudflare KV (6-key分割でWorkerのフォールバック用)
-    console.log('\nWriting to Cloudflare KV (6-group split)...');
-
-    // KVは6-key分割で書き込み（Workerのフォールバック機能用）
+    // Write to Cloudflare KV (3-key分割でWorkerのフォールバック用)
+    console.log('\nWriting to Cloudflare KV (3-group split)...');
+    
+    // KVは3-key分割で書き込み（Workerのフォールバック機能用）
     await writeToCloudflareKVGroups(rankingData);
     
     // Clean up temp files
