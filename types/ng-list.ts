@@ -15,8 +15,8 @@ export interface NGList {
   derivedVideoIds?: string[] // 互換性のため（オプショナル）
 }
 
-export interface NGFilterResult {
-  filteredItems: any[]
+export interface NGFilterResult<T = unknown> {
+  filteredItems: T[]
   newDerivedIds: string[]
   filteredCount?: number
 }

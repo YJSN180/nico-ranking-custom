@@ -27,6 +27,7 @@ import type { RankingConfig, RankingGenre, RankingPeriod } from '@/types/ranking
 import type { NGList } from '@/types/ng-list'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
+import type { TagCondition, CustomRanking } from '@/types/custom-ranking'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { useBFCacheRefresh, usePWAResumeRefresh } from '@/hooks/use-bfcache-refresh'
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
@@ -205,7 +206,7 @@ export default function ClientPage({
   const [newlyCreatedRankings, setNewlyCreatedRankings] = useState<Map<string, {
     id: string
     title: string
-    conditions: any[]
+    conditions: TagCondition[]
     baseGenre: RankingGenre
   }>>(new Map())
   
@@ -301,20 +302,20 @@ export default function ClientPage({
   const [customRankingDisplayData, setCustomRankingDisplayData] = useState<RankingItem[]>([])
   const [customRankingMetadata, setCustomRankingMetadata] = useState<{
     title: string
-    conditions: any[]
+    conditions: TagCondition[]
     baseGenre: RankingGenre
   } | null>(null)
-  
-  
+
+
   // 新しく作成したカスタムランキングがcustomRankings配列に反映されたらクリア
   useEffect(() => {
     if (newlyCreatedRankings.size > 0) {
       const updatedMap = new Map(newlyCreatedRankings)
       let hasChanges = false
-      
+
       // IndexedDBに保存されたランキングをMapから削除
-      for (const [id, ranking] of newlyCreatedRankings) {
-        if (customRankings.some((r: any) => r.id === id)) {
+      for (const [id] of newlyCreatedRankings) {
+        if (customRankings.some((r: CustomRanking) => r.id === id)) {
           updatedMap.delete(id)
           hasChanges = true
         }
@@ -513,7 +514,7 @@ export default function ClientPage({
       selectRanking(initialRanking)
       // カスタムランキングのbaseGenreに切り替える
       const rankings = JSON.parse(localStorage.getItem('custom-rankings') || '{}')
-      const selectedRanking = rankings.rankings?.find((r: any) => r.id === initialRanking)
+      const selectedRanking = rankings.rankings?.find((r: CustomRanking) => r.id === initialRanking)
       if (selectedRanking) {
         setConfig({ 
           ...config, 
@@ -711,22 +712,22 @@ export default function ClientPage({
         if (!Array.isArray(customRankings)) {
           console.error('[ERROR] Custom rankings is not an array:', typeof customRankings)
         } else {
-          const targetRanking = customRankings.find((r: any) => r && r.id === customId) || 
+          const targetRanking = customRankings.find((r: CustomRanking) => r && r.id === customId) ||
                                 newlyCreatedRankings.get(customId) || null
-          
+
           if (targetRanking && targetRanking.baseGenre && targetRanking.conditions?.length > 0) {
             // ランキングデータ検証
             if (!targetRanking.title || typeof targetRanking.title !== 'string') {
               console.warn('[WARN] Invalid ranking title:', targetRanking.title)
             }
-            
+
             if (!Array.isArray(targetRanking.conditions)) {
               console.error('[ERROR] Invalid ranking conditions:', typeof targetRanking.conditions)
             } else {
               // 条件検証
-              const validConditions = targetRanking.conditions.filter((condition: any) => 
-                condition && 
-                typeof condition.tag === 'string' && 
+              const validConditions = targetRanking.conditions.filter((condition: TagCondition) =>
+                condition &&
+                typeof condition.tag === 'string' &&
                 condition.tag.trim() !== '' &&
                 ['AND', 'OR', 'NOT'].includes(condition.operator)
               )
@@ -1064,9 +1065,9 @@ export default function ClientPage({
   
   // カスタムランキング作成時の即時フィルタリング（改修版 + エラーハンドリング強化）
   const handleCreateCustomRankingWithFilter = useCallback(async (
-    rankingId: string, 
-    baseGenre: RankingGenre, 
-    conditions: any[], 
+    rankingId: string,
+    baseGenre: RankingGenre,
+    conditions: TagCondition[],
     title: string
   ) => {
     try {

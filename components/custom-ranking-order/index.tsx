@@ -20,13 +20,20 @@ import {
 } from '@dnd-kit/sortable'
 import { SortableCustomRankingItem } from './sortable-custom-ranking-item'
 import styles from './custom-ranking-order.module.css'
+import type { CustomRanking } from '@/types/custom-ranking'
+
+// 表示順序を持つカスタムランキング型
+interface CustomRankingWithOrder extends CustomRanking {
+  order?: number
+  isVisible?: boolean
+}
 
 interface CustomRankingOrderProps {
-  rankings: any[]
+  rankings: CustomRankingWithOrder[]
   selectedId: string | null
   onSelect: (id: string) => void
-  onEdit: (ranking: any) => void
-  onDelete: (ranking: any) => void
+  onEdit: (ranking: CustomRankingWithOrder) => void
+  onDelete: (ranking: CustomRankingWithOrder) => void
   onMoveRanking: (fromId: string, toId: string) => void
   isReordering?: boolean
   onReorderModeChange?: (isReordering: boolean) => void

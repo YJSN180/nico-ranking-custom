@@ -6,6 +6,7 @@ import { rankingCache } from '@/lib/ranking-cache'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
+import type { TagCondition, CustomRanking } from '@/types/custom-ranking'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 import { useDeviceType, getDeviceBasedLimit } from './use-device-type'
 import { serverLog } from '@/lib/server-log'
@@ -14,11 +15,11 @@ interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
   ngList: NGList
   ngListVersion: string
-  customRankings?: any[]
+  customRankings?: CustomRanking[]
   newlyCreatedRankings?: Map<string, {
     id: string
     title: string
-    conditions: any[]
+    conditions: TagCondition[]
     baseGenre: RankingGenre
   }>
 }
@@ -145,12 +146,12 @@ export function useRankingData({
       // カスタムランキングの場合、ベースジャンルを特定
       let cacheGenre = config.genre
       let isCustomRanking = false
-      let customRankingConditions: any[] = []
-      
+      let customRankingConditions: TagCondition[] = []
+
       if (config.genre === 'custom' && config.tag?.startsWith('custom:')) {
         isCustomRanking = true
         const customId = config.tag.replace('custom:', '')
-        
+
         console.warn('[DEBUG] Looking for custom ranking:', {
           customId,
           hasNewlyCreated: newlyCreatedRankings.has(customId),
@@ -158,8 +159,8 @@ export function useRankingData({
           customRankingsCount: customRankings.length,
           timestamp: new Date().toISOString()
         })
-        
-        const targetRanking = customRankings.find((r: any) => r.id === customId) || 
+
+        const targetRanking = customRankings.find((r: CustomRanking) => r.id === customId) ||
                               newlyCreatedRankings.get(customId) || null
         
         if (targetRanking?.baseGenre) {
@@ -323,16 +324,17 @@ export function useRankingData({
           })
           throw new Error(`HTTP ${statusCode}: ${response.statusText || 'client-blocked'}`)
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         // ネットワークエラーなど
-        if (err.name === 'AbortError') {
+        const error = err as Error
+        if (error.name === 'AbortError') {
           return // キャンセルは無視
         }
         serverLog.error('Ranking API fetch failed', {
           url: apiUrl,
-          message: err?.message,
-          name: err?.name,
-          stack: err?.stack,
+          message: error?.message,
+          name: error?.name,
+          stack: error?.stack,
         })
         throw err
       }
@@ -409,12 +411,13 @@ export function useRankingData({
         setFullRankingData([])
         setRankingData([])
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // AbortErrorは無視（前のリクエストがキャンセルされた場合）
-      if (err.name === 'AbortError') {
+      const error = err as Error
+      if (error.name === 'AbortError') {
         return
       }
-      
+
       // シンプルなエラーメッセージ
       setError('読み込み中...')
       setFullRankingData([])

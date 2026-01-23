@@ -5,7 +5,7 @@ import { getServerNGList } from './ng-list-server'
 import { filterWithNGList } from './filter-with-ng-list'
 
 // Filter ranking items with NG list
-export async function filterRankingItemsServer(items: RankingItem[]): Promise<NGFilterResult> {
+export async function filterRankingItemsServer(items: RankingItem[]): Promise<NGFilterResult<RankingItem>> {
   const ngList = await getServerNGList()
   const result = filterWithNGList(items, ngList)
   
