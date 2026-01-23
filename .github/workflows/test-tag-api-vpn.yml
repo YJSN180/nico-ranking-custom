@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       test_count:
-        description: 'Number of videos to test (100, 500, 1000)'
+        description: 'Number of videos to test (1000, 2000, 4000)'
         required: false
-        default: '1000'
+        default: '4000'
 
 jobs:
   test-with-vpn:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -69,7 +69,8 @@ jobs:
         run: |
           npx tsx -e "
           const TARGET_COUNT = parseInt(process.env.TEST_COUNT || '1000', 10)
-          const GENRES = ['all', 'game', 'anime', 'vocaloid', 'entertainment', 'music', 'sing', 'dance', 'play', 'other']
+          // 23ジャンル全て（1ジャンル最大1000件 × 10ページ）
+          const GENRES = ['all', 'game', 'anime', 'vocaloid', 'voicesynthesis', 'entertainment', 'music', 'sing', 'dance', 'play', 'commentary', 'cooking', 'travel', 'nature', 'vehicle', 'technology', 'society', 'mmd', 'vtuber', 'radio', 'sports', 'animal', 'other']
 
           async function fetchRankingPage(genre, page) {
             const response = await fetch(
