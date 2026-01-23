@@ -288,8 +288,12 @@ async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
 
 async function main() {
   try {
-    console.log('Aggregating ranking results from all groups...');
-    
+    console.log('Aggregating ranking results...');
+
+    // Detect mode: KV group mode (new) or legacy 8-group mode
+    const kvGroupMode = process.env.KV_GROUP_MODE === 'true';
+    console.log(`Mode: ${kvGroupMode ? 'KV Group (3 groups, no merge needed)' : 'Legacy (8 groups, with merge)'}`);
+
     // Read all partial results
     const tmpDir = './tmp';
     let files: string[] = [];
@@ -299,22 +303,29 @@ async function main() {
       console.error('Failed to read tmp directory:', error);
       process.exit(1);
     }
-    
-    const groupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
+
+    // Support both file naming conventions
+    const kvGroupFiles = files.filter(f => f.startsWith('ranking-kv-group-') && f.endsWith('.json'));
+    const legacyGroupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
+    const groupFiles = kvGroupFiles.length > 0 ? kvGroupFiles : legacyGroupFiles;
+
+    console.log(`Found ${kvGroupFiles.length} KV group files, ${legacyGroupFiles.length} legacy group files`);
+    console.log(`Using: ${kvGroupFiles.length > 0 ? 'KV group files' : 'legacy group files'}`);
+
     // Look for NG derived files in both main tmp and subdirectories
     const ngDerivedFiles: string[] = [];
+    // Note: exec() is used here with hardcoded paths only, no user input - safe from injection
     const allNgFiles = await new Promise<string[]>(async (resolve) => {
-      // Dynamic import for Node.js environment only
       const { exec } = await import('child_process');
-      exec('find ./tmp -name "ng-derived-group-*.json" -type f 2>/dev/null || true', (error: any, stdout: string) => {
+      exec('find ./tmp -name "ng-derived-*.json" -type f 2>/dev/null || true', (error: any, stdout: string) => {
         if (error) {
           console.log('No ng-derived files found via find command');
           resolve([]);
           return;
         }
-        const found = stdout.trim().split('\n').filter(f => f && f.includes('ng-derived-group-'));
+        const found = stdout.trim().split('\n').filter(f => f && f.includes('ng-derived-'));
         console.log(`Found ng-derived files via find: ${found.join(', ')}`);
-        resolve(found); // Return full paths for direct use
+        resolve(found);
       });
     });
     ngDerivedFiles.push(...allNgFiles);

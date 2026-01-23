@@ -1,113 +1,109 @@
 name: Update Nico Ranking Data (Parallel)
-# Last updated: 2026-01-24 - Rotation-based update to avoid API rate limiting
+# Last updated: 2026-01-24 - KV-group based rotation for simplicity and consistency
 
 on:
   schedule:
-    # 3つのローテーションセットを30分間隔で実行
-    # Set A (Groups 1,2,3): 毎時10分 - all, game, anime, vocaloid, voicesynthesis, entertainment
-    # Set B (Groups 4,5): 毎時30分 - music, sing, dance, play, commentary, cooking
-    # Set C (Groups 6,7,8): 毎時50分 - travel, nature, vehicle, technology, society, mmd, vtuber, radio, sports, animal, other
-    - cron: '10 * * * *'  # Set A
-    - cron: '30 * * * *'  # Set B
-    - cron: '50 * * * *'  # Set C
+    # 3つのKVグループを30分間隔で順番に更新
+    # Set A (KV Group 1): 毎時10分 - all, game, anime, vocaloid, voicesynthesis, entertainment, music, sing
+    # Set B (KV Group 2): 毎時30分 - dance, play, commentary, cooking, travel, nature, vehicle, technology
+    # Set C (KV Group 3): 毎時50分 - society, mmd, vtuber, radio, sports, animal, other
+    - cron: '10 * * * *'  # Set A (KV Group 1)
+    - cron: '30 * * * *'  # Set B (KV Group 2)
+    - cron: '50 * * * *'  # Set C (KV Group 3)
   workflow_dispatch:
     inputs:
-      rotation_set:
-        description: 'Rotation set to run (A, B, C, or ALL for all groups)'
+      kv_group:
+        description: 'KV Group to update (1, 2, 3, or ALL)'
         required: false
         default: 'ALL'
         type: choice
         options:
-          - A
-          - B
-          - C
-          - ALL
+          - '1'
+          - '2'
+          - '3'
+          - 'ALL'
 
 # 同時実行を防ぐ
 concurrency:
   group: update-ranking
   cancel-in-progress: false
 
-env:
-  # ローテーションセットの定義
-  # Set A: Groups 1, 2, 3 (6 genres)
-  # Set B: Groups 4, 5 (6 genres)
-  # Set C: Groups 6, 7, 8 (11 genres)
-  ROTATION_SET_A: "1,2,3"
-  ROTATION_SET_B: "4,5"
-  ROTATION_SET_C: "6,7,8"
-
 jobs:
-  # Step 0: Determine which rotation set to run
-  determine-rotation:
+  # Step 0: Determine which KV group to run
+  determine-kv-group:
     runs-on: ubuntu-latest
     outputs:
-      rotation_set: ${{ steps.calc.outputs.rotation_set }}
-      target_groups: ${{ steps.calc.outputs.target_groups }}
+      kv_group: ${{ steps.calc.outputs.kv_group }}
+      genres: ${{ steps.calc.outputs.genres }}
     steps:
-      - name: Calculate rotation set
+      - name: Calculate KV group
         id: calc
         run: |
+          # KVグループとジャンルのマッピング（GENRE_GROUPSと同じ）
+          KV_GROUP_1_GENRES="all,game,anime,vocaloid,voicesynthesis,entertainment,music,sing"
+          KV_GROUP_2_GENRES="dance,play,commentary,cooking,travel,nature,vehicle,technology"
+          KV_GROUP_3_GENRES="society,mmd,vtuber,radio,sports,animal,other"
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # 手動トリガーの場合はinputを使用
-            ROTATION_SET="${{ github.event.inputs.rotation_set }}"
-            if [[ "$ROTATION_SET" == "ALL" ]]; then
-              echo "rotation_set=ALL" >> $GITHUB_OUTPUT
-              echo "target_groups=1,2,3,4,5,6,7,8" >> $GITHUB_OUTPUT
-              echo "Manual trigger: Running ALL groups"
+            KV_GROUP="${{ github.event.inputs.kv_group }}"
+            if [[ "$KV_GROUP" == "ALL" ]]; then
+              echo "kv_group=ALL" >> $GITHUB_OUTPUT
+              echo "genres=$KV_GROUP_1_GENRES,$KV_GROUP_2_GENRES,$KV_GROUP_3_GENRES" >> $GITHUB_OUTPUT
+              echo "Manual trigger: Running ALL KV groups"
             else
-              echo "rotation_set=$ROTATION_SET" >> $GITHUB_OUTPUT
-              case "$ROTATION_SET" in
-                A) echo "target_groups=1,2,3" >> $GITHUB_OUTPUT ;;
-                B) echo "target_groups=4,5" >> $GITHUB_OUTPUT ;;
-                C) echo "target_groups=6,7,8" >> $GITHUB_OUTPUT ;;
+              echo "kv_group=$KV_GROUP" >> $GITHUB_OUTPUT
+              case "$KV_GROUP" in
+                1) echo "genres=$KV_GROUP_1_GENRES" >> $GITHUB_OUTPUT ;;
+                2) echo "genres=$KV_GROUP_2_GENRES" >> $GITHUB_OUTPUT ;;
+                3) echo "genres=$KV_GROUP_3_GENRES" >> $GITHUB_OUTPUT ;;
               esac
-              echo "Manual trigger: Running Set $ROTATION_SET"
+              echo "Manual trigger: Running KV Group $KV_GROUP"
             fi
           else
             # スケジュールトリガーの場合は時刻から判定
             CURRENT_MINUTE=$(date -u '+%M')
             echo "Current UTC minute: $CURRENT_MINUTE"
 
-            # 10分台 → Set A, 30分台 → Set B, 50分台 → Set C
+            # 10分台 → KV Group 1, 30分台 → KV Group 2, 50分台 → KV Group 3
             if [[ "$CURRENT_MINUTE" -ge 5 && "$CURRENT_MINUTE" -le 15 ]]; then
-              echo "rotation_set=A" >> $GITHUB_OUTPUT
-              echo "target_groups=1,2,3" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running Set A (Groups 1,2,3)"
+              echo "kv_group=1" >> $GITHUB_OUTPUT
+              echo "genres=$KV_GROUP_1_GENRES" >> $GITHUB_OUTPUT
+              echo "Schedule trigger: Running KV Group 1 (8 genres)"
             elif [[ "$CURRENT_MINUTE" -ge 25 && "$CURRENT_MINUTE" -le 35 ]]; then
-              echo "rotation_set=B" >> $GITHUB_OUTPUT
-              echo "target_groups=4,5" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running Set B (Groups 4,5)"
+              echo "kv_group=2" >> $GITHUB_OUTPUT
+              echo "genres=$KV_GROUP_2_GENRES" >> $GITHUB_OUTPUT
+              echo "Schedule trigger: Running KV Group 2 (8 genres)"
             else
-              echo "rotation_set=C" >> $GITHUB_OUTPUT
-              echo "target_groups=6,7,8" >> $GITHUB_OUTPUT
-              echo "Schedule trigger: Running Set C (Groups 6,7,8)"
+              echo "kv_group=3" >> $GITHUB_OUTPUT
+              echo "genres=$KV_GROUP_3_GENRES" >> $GITHUB_OUTPUT
+              echo "Schedule trigger: Running KV Group 3 (7 genres)"
             fi
           fi
 
-  # Step 1: Fetch rankings for target groups
+  # Step 1: Fetch rankings for target KV group
   fetch-rankings:
-    needs: determine-rotation
+    needs: determine-kv-group
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        group: [1, 2, 3, 4, 5, 6, 7, 8]
-      max-parallel: 8  # ローテーションにより同時実行グループ数は最大3
+        kv_group: [1, 2, 3]
+      max-parallel: 3
       fail-fast: false
 
     steps:
-    - name: Check if this group should run
+    - name: Check if this KV group should run
       id: should_run
       run: |
-        TARGET_GROUPS="${{ needs.determine-rotation.outputs.target_groups }}"
-        CURRENT_GROUP="${{ matrix.group }}"
+        TARGET_KV_GROUP="${{ needs.determine-kv-group.outputs.kv_group }}"
+        CURRENT_KV_GROUP="${{ matrix.kv_group }}"
 
-        if [[ ",$TARGET_GROUPS," == *",$CURRENT_GROUP,"* ]]; then
+        if [[ "$TARGET_KV_GROUP" == "ALL" || "$TARGET_KV_GROUP" == "$CURRENT_KV_GROUP" ]]; then
           echo "should_run=true" >> $GITHUB_OUTPUT
-          echo "Group $CURRENT_GROUP is in target groups: $TARGET_GROUPS"
+          echo "KV Group $CURRENT_KV_GROUP will run (target: $TARGET_KV_GROUP)"
         else
           echo "should_run=false" >> $GITHUB_OUTPUT
-          echo "Skipping group $CURRENT_GROUP (not in target groups: $TARGET_GROUPS)"
+          echo "Skipping KV Group $CURRENT_KV_GROUP (target: $TARGET_KV_GROUP)"
         fi
 
     - name: Checkout repository
@@ -125,7 +121,7 @@ jobs:
       if: steps.should_run.outputs.should_run == 'true'
       run: npm ci
 
-    - name: Fetch rankings for group ${{ matrix.group }}
+    - name: Fetch rankings for KV Group ${{ matrix.kv_group }}
       if: steps.should_run.outputs.should_run == 'true'
       env:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -137,22 +133,23 @@ jobs:
         TAG_FETCH_GENRES: ''
         TAG_FETCH_FOR_TAG_RANKINGS: ${{ secrets.TAG_FETCH_FOR_TAG_RANKINGS || 'true' }}
       run: |
-        echo "Starting group ${{ matrix.group }} at $(date)"
-        echo "Rotation set: ${{ needs.determine-rotation.outputs.rotation_set }}"
+        echo "Starting KV Group ${{ matrix.kv_group }} at $(date)"
+        echo "Target KV Group: ${{ needs.determine-kv-group.outputs.kv_group }}"
 
         if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
           export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
           echo "Using fallback KV namespace ID"
         fi
 
-        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
+        # Use KV group mode (--kv-group) instead of custom groups
+        npx tsx scripts/update-ranking-parallel-v2.ts --kv-group ${{ matrix.kv_group }}
 
     - name: Upload partial results
       if: steps.should_run.outputs.should_run == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: ranking-data-group-${{ matrix.group }}
-        path: ./tmp/ranking-group-${{ matrix.group }}.json
+        name: ranking-data-kv-group-${{ matrix.kv_group }}
+        path: ./tmp/ranking-kv-group-${{ matrix.kv_group }}.json
         retention-days: 1
         if-no-files-found: error
 
@@ -160,19 +157,19 @@ jobs:
       if: steps.should_run.outputs.should_run == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: ng-derived-group-${{ matrix.group }}
-        path: ./tmp/ng-derived-group-${{ matrix.group }}.json
+        name: ng-derived-kv-group-${{ matrix.kv_group }}
+        path: ./tmp/ng-derived-kv-group-${{ matrix.kv_group }}.json
         retention-days: 1
         if-no-files-found: ignore
 
-    - name: Create placeholder for skipped group
+    - name: Create placeholder for skipped KV group
       if: steps.should_run.outputs.should_run == 'false'
       run: |
-        echo "Group ${{ matrix.group }} skipped in this rotation"
+        echo "KV Group ${{ matrix.kv_group }} skipped in this rotation"
 
   # Step 2: Aggregate results and write to KV
   aggregate-and-write:
-    needs: [determine-rotation, fetch-rankings]
+    needs: [determine-kv-group, fetch-rankings]
     runs-on: ubuntu-latest
     if: always()
 
@@ -196,26 +193,26 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         path: ./tmp
-        pattern: ranking-data-group-*
+        pattern: ranking-data-kv-group-*
       continue-on-error: true
 
     - name: Download NG derived artifacts (if exists)
       uses: actions/download-artifact@v4
       with:
         path: ./tmp
-        pattern: ng-derived-group-*
+        pattern: ng-derived-kv-group-*
       continue-on-error: true
 
     - name: List downloaded files
       run: |
-        echo "Rotation set: ${{ needs.determine-rotation.outputs.rotation_set }}"
-        echo "Target groups: ${{ needs.determine-rotation.outputs.target_groups }}"
+        echo "KV Group: ${{ needs.determine-kv-group.outputs.kv_group }}"
+        echo "Genres: ${{ needs.determine-kv-group.outputs.genres }}"
         echo ""
         echo "Downloaded artifacts:"
         ls -la ./tmp/ 2>/dev/null || echo "No tmp directory"
         echo ""
         echo "Ranking files:"
-        find ./tmp -name "ranking-group-*.json" 2>/dev/null | sort || echo "No ranking files found"
+        find ./tmp -name "ranking-kv-group-*.json" 2>/dev/null | sort || echo "No ranking files found"
 
     - name: Move files to correct location
       run: |
@@ -228,20 +225,18 @@ jobs:
         echo "Files after moving:"
         ls -la ./tmp/*.json 2>/dev/null || echo "No JSON files found"
 
-    - name: Aggregate and write to KV (partial update)
+    - name: Aggregate and write to KV
       env:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
-        ROTATION_SET: ${{ needs.determine-rotation.outputs.rotation_set }}
-        TARGET_GROUPS: ${{ needs.determine-rotation.outputs.target_groups }}
+        KV_GROUP_MODE: "true"
       run: |
-        echo "Aggregating results for rotation set: $ROTATION_SET"
-        echo "Target groups: $TARGET_GROUPS"
+        echo "Aggregating results for KV Group: ${{ needs.determine-kv-group.outputs.kv_group }}"
 
-        FOUND_FILES=$(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)
-        echo "Found $FOUND_FILES group files"
+        FOUND_FILES=$(ls ./tmp/ranking-kv-group-*.json 2>/dev/null | wc -l)
+        echo "Found $FOUND_FILES KV group files"
 
         if [ "$FOUND_FILES" -eq 0 ]; then
           echo "⚠️ No ranking files found, skipping aggregation"
@@ -285,5 +280,5 @@ jobs:
     - name: Report completion
       run: |
         echo "✅ Ranking update completed at $(date)"
-        echo "Rotation set: ${{ needs.determine-rotation.outputs.rotation_set }}"
-        echo "Target groups: ${{ needs.determine-rotation.outputs.target_groups }}"
+        echo "KV Group: ${{ needs.determine-kv-group.outputs.kv_group }}"
+        echo "Genres: ${{ needs.determine-kv-group.outputs.genres }}"
