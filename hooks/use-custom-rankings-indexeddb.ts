@@ -59,6 +59,7 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
         }
 
         if (!mounted) return
+        if (!managerRef.current) return
 
         // マイグレーションチェック
         const migrator = new CustomRankingMigrator(managerRef.current)

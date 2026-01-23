@@ -23,8 +23,8 @@ const Pagination = memo(function Pagination({
 
   const getVisiblePages = () => {
     const delta = 2 // 現在のページの前後に表示するページ数
-    const range = []
-    const rangeWithDots = []
+    const range: number[] = []
+    const rangeWithDots: (number | string)[] = []
 
     // 常に最初のページを含める
     range.push(1)

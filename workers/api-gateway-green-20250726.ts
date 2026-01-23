@@ -30,7 +30,13 @@
 
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
-import { handleWithCache } from './utils/cache-handler'
+import {
+  handleWithCache,
+  getCacheHeaders,
+  getCustomCacheHeaders,
+  setCacheHeaders,
+  type CacheType
+} from './utils/cache-handler'
 
 interface Env {
   R2_BUCKET: R2Bucket
@@ -338,7 +344,7 @@ export default {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=300' // 5分キャッシュ
+              ...getCustomCacheHeaders(300, 300) // 5分キャッシュ
             }
           })
           const origin = request.headers.get('Origin')
@@ -362,7 +368,7 @@ export default {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=60' // 1分キャッシュ
+              ...getCacheHeaders('ranking') // 1分キャッシュ
             }
           })
           const origin = request.headers.get('Origin')
@@ -403,7 +409,7 @@ export default {
             status: 500,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache'
+              ...getCacheHeaders('none')
             }
           })
           const origin = request.headers.get('Origin')
@@ -434,7 +440,7 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
+            ...getCustomCacheHeaders(1800, 1800) // 30分キャッシュ（タグデータは比較的安定）
           }
         })
         
@@ -455,7 +461,7 @@ export default {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
+            ...getCacheHeaders('none')
           }
         })
         const origin = request.headers.get('Origin')
@@ -508,7 +514,7 @@ export default {
               headers: {
                 'Content-Type': 'application/json',
                 // タグが見つからない場合も短時間キャッシュ（5分）して負荷軽減
-                'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=60',
+                ...getCustomCacheHeaders(300, 300, { staleWhileRevalidate: 60 }),
                 'X-Data-Source': 'r2-tag-not-found',
                 'X-Worker-Version': 'green-20250726-unified-cors',
                 'X-Cache-Note': 'Tag not found - cached for 5 minutes to reduce load'
@@ -528,7 +534,7 @@ export default {
               headers: {
                 'Content-Type': 'application/json',
                 // 404エラーも短時間キャッシュして負荷軽減
-                'Cache-Control': 'public, max-age=60, s-maxage=60',
+                ...getCacheHeaders('ranking'),
                 'X-Data-Source': 'r2-not-found',
                 'X-Worker-Version': 'green-20250726-unified-cors'
               }
@@ -550,21 +556,18 @@ export default {
             status: 304,
             headers: {
               'ETag': etag,
-              'Cache-Control': 'no-store',
-              'CDN-Cache-Control': 'no-store',
+              ...getCacheHeaders('none'),
               'CF-Cache-Status': 'REVALIDATED',
               'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
               'X-Worker-Version': 'green-20250726-unified-cors',
               'X-TTL-Source': 'dynamic-20250726'
             }
           })
-          
+
           const origin = request.headers.get('Origin')
           return applyCORSHeaders(notModifiedResponse, origin, {
             ...securityHeaders,
-            'Cache-Control': 'no-store',
-            'CDN-Cache-Control': 'no-store',
-            'Vercel-CDN-Cache-Control': 'no-store'
+            ...getCacheHeaders('none')
           })
         }
         
@@ -575,9 +578,7 @@ export default {
         const headers = new Headers()
         headers.set('Content-Type', 'application/json')
         // キャッシュ禁止（ブラウザ・CDNとも）
-        headers.set('Cache-Control', 'no-store')
-        headers.set('CDN-Cache-Control', 'no-store')
-        headers.set('Vercel-CDN-Cache-Control', 'no-store')
+        setCacheHeaders(headers, 'none')
         headers.set('ETag', etag)
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
@@ -656,11 +657,7 @@ export default {
             })
             
         const origin = request.headers.get('Origin')
-        return applyCORSHeaders(normalResponse, origin, {
-          'Cache-Control': 'no-store',
-          'CDN-Cache-Control': 'no-store',
-          'Vercel-CDN-Cache-Control': 'no-store'
-        })
+        return applyCORSHeaders(normalResponse, origin, getCacheHeaders('none'))
           } catch (error) {
             console.error('[Green Worker] Failed to parse or decode JSON:', error)
             const normalErrorResponse = new Response(workStream, {
@@ -683,7 +680,7 @@ export default {
           headers: {
             'Content-Type': 'application/json',
             // エラー時も短時間キャッシュ
-            'Cache-Control': 'public, max-age=30, s-maxage=30',
+            ...getCacheHeaders('ranking'),
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
@@ -837,7 +834,7 @@ export default {
           headers: {
             'Content-Type': 'application/json',
             // CDNレベルでのキャッシュのみ（個人差があるためKVキャッシュは使用しない）
-            'Cache-Control': 'public, max-age=3600, s-maxage=86400', // ブラウザ1時間、CDN24時間
+            ...getCustomCacheHeaders(3600, 86400), // ブラウザ1時間、CDN24時間
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
@@ -953,7 +950,7 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+            ...getCustomCacheHeaders(3600, 86400),
             'X-HD-Source': 'nicovideo.gay',
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
@@ -998,7 +995,7 @@ export default {
           
           const headers = new Headers()
           headers.set('Content-Type', contentType)
-          headers.set('Cache-Control', 'public, max-age=31536000, immutable')
+          setCacheHeaders(headers, 'static')
           headers.set('ETag', object.etag)
           headers.set('X-Data-Source', 'r2-static')
           headers.set('X-Worker-Version', 'green-20250726')

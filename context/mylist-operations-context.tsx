@@ -55,17 +55,17 @@ export function MylistOperationsProvider({ children }: MylistOperationsProviderP
           mylistManagerRef.current = new MylistManager(dbManagerRef.current)
         }
 
-        // Ensure default mylist exists
-        await mylistManagerRef.current.getOrCreateDefaultMylist()
-        
-        // Load all mylists
-        const allMylists = await mylistManagerRef.current.getAllMylists()
-        // 配列であることを確認
-        if (Array.isArray(allMylists)) {
-          setMylists(allMylists)
-        } else {
-          console.error('getAllMylists did not return an array:', allMylists)
-          setMylists([])
+        // Ensure default mylist exists and load mylists
+        if (mylistManagerRef.current) {
+          await mylistManagerRef.current.getOrCreateDefaultMylist()
+          const allMylists = await mylistManagerRef.current.getAllMylists()
+          // 配列であることを確認
+          if (Array.isArray(allMylists)) {
+            setMylists(allMylists)
+          } else {
+            console.error('getAllMylists did not return an array:', allMylists)
+            setMylists([])
+          }
         }
       } catch (error) {
         // eslint-disable-next-line no-console
