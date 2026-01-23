@@ -16,80 +16,126 @@ export interface TagDetail {
 /**
  * getthumbinfo APIを使用して固定タグを取得
  * @param videoId 動画ID
+ * @param maxRetries 最大リトライ回数（デフォルト: 2）
  * @returns 固定タグの配列、取得できない場合は空配列
  */
-export async function fetchFixedTagsFromGetThumbInfo(videoId: string): Promise<string[]> {
-  try {
-    const response = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`)
-    
-    if (!response.ok) {
+export async function fetchFixedTagsFromGetThumbInfo(
+  videoId: string,
+  maxRetries: number = 2
+): Promise<string[]> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`)
+
+      // レート制限時は待機してリトライ
+      if (response.status === 429) {
+        const waitTime = Math.pow(2, attempt) * 1000
+        // eslint-disable-next-line no-console
+        console.warn(`[Tag Fetch] Rate limited for ${videoId}, waiting ${waitTime}ms...`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+        continue
+      }
+
+      if (!response.ok) {
+        // eslint-disable-next-line no-console
+        console.warn(`[Tag Fetch] HTTP ${response.status} for ${videoId}`)
+        return []
+      }
+
+      const xml = await response.text()
+
+      // エラーレスポンスのチェック
+      if (xml.includes('status="fail"')) {
+        return []
+      }
+
+      // 成功レスポンスのチェック
+      if (!xml.includes('status="ok"')) {
+        return []
+      }
+
+      // ロックされたタグ（固定タグ）を抽出
+      const lockedTagMatches = xml.matchAll(/<tag[^>]*lock="1"[^>]*>([^<]+)<\/tag>/g)
+      const lockedTags = Array.from(lockedTagMatches, m => m[1])
+
+      return lockedTags
+    } catch (error) {
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        continue
+      }
+      // eslint-disable-next-line no-console
+      console.warn(`[Tag Fetch] Failed for ${videoId}:`, error instanceof Error ? error.message : 'Unknown error')
       return []
     }
-    
-    const xml = await response.text()
-    
-    // エラーレスポンスのチェック
-    if (xml.includes('status="fail"')) {
-      return []
-    }
-    
-    // 成功レスポンスのチェック
-    if (!xml.includes('status="ok"')) {
-      return []
-    }
-    
-    // ロックされたタグ（固定タグ）を抽出
-    const lockedTagMatches = xml.matchAll(/<tag[^>]*lock="1"[^>]*>([^<]+)<\/tag>/g)
-    const lockedTags = Array.from(lockedTagMatches, m => m[1])
-    
-    return lockedTags
-  } catch (error) {
-    // エラーは静かに処理（ログ出力なし）
-    return []
   }
+  return []
 }
 
 /**
  * getthumbinfo APIを使用してすべてのタグ（ロックタグ＋ユーザータグ）を取得
  * @param videoId 動画ID
+ * @param maxRetries 最大リトライ回数（デフォルト: 2）
  * @returns タグ詳細の配列、取得できない場合は空配列
  */
-export async function fetchAllTagsFromGetThumbInfo(videoId: string): Promise<TagDetail[]> {
-  try {
-    const response = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`)
-    
-    if (!response.ok) {
+export async function fetchAllTagsFromGetThumbInfo(
+  videoId: string,
+  maxRetries: number = 2
+): Promise<TagDetail[]> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(`https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`)
+
+      // レート制限時は待機してリトライ
+      if (response.status === 429) {
+        const waitTime = Math.pow(2, attempt) * 1000
+        // eslint-disable-next-line no-console
+        console.warn(`[Tag Fetch] Rate limited for ${videoId}, waiting ${waitTime}ms...`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+        continue
+      }
+
+      if (!response.ok) {
+        // eslint-disable-next-line no-console
+        console.warn(`[Tag Fetch] HTTP ${response.status} for ${videoId}`)
+        return []
+      }
+
+      const xml = await response.text()
+
+      // エラーレスポンスのチェック
+      if (xml.includes('status="fail"')) {
+        return []
+      }
+
+      // 成功レスポンスのチェック
+      if (!xml.includes('status="ok"')) {
+        return []
+      }
+
+      // すべてのタグを抽出（ロック状態も含む）
+      const allTagMatches = xml.matchAll(/<tag(\s+lock="1")?[^>]*>([^<]+)<\/tag>/g)
+      const tagDetails: TagDetail[] = []
+
+      for (const match of allTagMatches) {
+        tagDetails.push({
+          name: match[2],
+          isLocked: match[1] !== undefined
+        })
+      }
+
+      return tagDetails
+    } catch (error) {
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        continue
+      }
+      // eslint-disable-next-line no-console
+      console.warn(`[Tag Fetch] Failed for ${videoId}:`, error instanceof Error ? error.message : 'Unknown error')
       return []
     }
-    
-    const xml = await response.text()
-    
-    // エラーレスポンスのチェック
-    if (xml.includes('status="fail"')) {
-      return []
-    }
-    
-    // 成功レスポンスのチェック
-    if (!xml.includes('status="ok"')) {
-      return []
-    }
-    
-    // すべてのタグを抽出（ロック状態も含む）
-    const allTagMatches = xml.matchAll(/<tag(\s+lock="1")?[^>]*>([^<]+)<\/tag>/g)
-    const tagDetails: TagDetail[] = []
-    
-    for (const match of allTagMatches) {
-      tagDetails.push({
-        name: match[2],
-        isLocked: match[1] !== undefined
-      })
-    }
-    
-    return tagDetails
-  } catch (error) {
-    // エラーは静かに処理（ログ出力なし）
-    return []
   }
+  return []
 }
 
 /**
@@ -101,8 +147,8 @@ export async function fetchAllTagsFromGetThumbInfo(videoId: string): Promise<Tag
  */
 export async function enrichRankingItemsWithFixedTags(
   items: RankingItem[],
-  parallelCount: number = 50,
-  batchDelay: number = 50
+  parallelCount: number = 10,
+  batchDelay: number = 300
 ): Promise<RankingItem[]> {
   const totalItems = items.length
   const startTime = Date.now()
@@ -179,8 +225,8 @@ export async function enrichRankingItemsWithFixedTags(
  */
 export async function enrichRankingItemsWithTagDetails(
   items: RankingItem[],
-  parallelCount: number = 50,
-  batchDelay: number = 50
+  parallelCount: number = 10,
+  batchDelay: number = 300
 ): Promise<(RankingItem & { tagDetails?: TagDetail[] })[]> {
   const totalItems = items.length
   const startTime = Date.now()
