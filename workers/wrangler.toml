@@ -13,6 +13,7 @@ bucket_name = "nico-ranking"
 
 [vars]
 VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom.vercel.app"
+ENVIRONMENT = "production"
 
 # Rate Limiting binding (20 requests per minute)
 [[unsafe.bindings]]
