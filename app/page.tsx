@@ -71,7 +71,14 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     openGraph: {
       title,
       description,
-      url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      url: (() => {
+        const ogpParams = new URLSearchParams()
+        if (params.genre) ogpParams.set('genre', genre)
+        if (params.period) ogpParams.set('period', period)
+        if (tag) ogpParams.set('tag', tag)
+        const queryString = ogpParams.toString()
+        return `https://nico-rank.com${queryString ? `?${queryString}` : ''}`
+      })(),
       images: [{
         url: '/og-image.png',
         alt: title,
