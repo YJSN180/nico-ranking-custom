@@ -17,8 +17,13 @@ export function CustomRankingBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
-  const [pendingImportData, setPendingImportData] = useState<BackupData | null>(null)
+  const [importMessage, setImportMessage] = useState<{
+    type: 'success' | 'error'
+    text: string
+  } | null>(null)
+  const [pendingImportData, setPendingImportData] = useState<BackupData | null>(
+    null,
+  )
   const [conflictRankings, setConflictRankings] = useState<string[]>([])
 
   const handleExport = async () => {
@@ -27,10 +32,12 @@ export function CustomRankingBackup() {
       const data: BackupData = {
         version: 1,
         exportDate: new Date().toISOString(),
-        customRankings: rankings
+        customRankings: rankings,
       }
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: 'application/json',
+      })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -60,10 +67,10 @@ export function CustomRankingBackup() {
       try {
         const content = e.target?.result as string
         const rawData = JSON.parse(content)
-        
+
         let data: BackupData
         let customRankingsData: CustomRankingWithConditions[]
-        
+
         // 統合バックアップファイルの判定と変換
         if (rawData.version && rawData.data && rawData.data.customRankings) {
           // 統合バックアップからカスタムランキングデータを抽出
@@ -71,9 +78,13 @@ export function CustomRankingBackup() {
           data = {
             version: rawData.version,
             exportDate: rawData.exportDate,
-            customRankings: customRankingsData
+            customRankings: customRankingsData,
           }
-        } else if (rawData.version && rawData.customRankings && Array.isArray(rawData.customRankings)) {
+        } else if (
+          rawData.version &&
+          rawData.customRankings &&
+          Array.isArray(rawData.customRankings)
+        ) {
           // 個別カスタムランキングバックアップファイル
           data = rawData as BackupData
           customRankingsData = data.customRankings
@@ -86,7 +97,7 @@ export function CustomRankingBackup() {
           if (!ranking.id || !ranking.title || !ranking.baseGenre) {
             throw new Error('無効なカスタムランキングデータが含まれています')
           }
-          
+
           // 条件のバリデーション
           if (ranking.conditions && Array.isArray(ranking.conditions)) {
             for (const condition of ranking.conditions) {
@@ -98,10 +109,10 @@ export function CustomRankingBackup() {
         }
 
         // 重複タイトルをチェック
-        const existingTitles = rankings.map(r => r.title)
+        const existingTitles = rankings.map((r) => r.title)
         const conflicts = data.customRankings
-          .filter(r => existingTitles.includes(r.title))
-          .map(r => r.title)
+          .filter((r) => existingTitles.includes(r.title))
+          .map((r) => r.title)
 
         if (conflicts.length > 0) {
           setConflictRankings(conflicts)
@@ -112,17 +123,18 @@ export function CustomRankingBackup() {
         setImportConfirmOpen(true)
       } catch (error) {
         console.error('Failed to import custom rankings:', error)
-        setImportMessage({ 
-          type: 'error', 
-          text: error instanceof Error ? error.message : 'インポートに失敗しました' 
+        setImportMessage({
+          type: 'error',
+          text:
+            error instanceof Error ? error.message : 'インポートに失敗しました',
         })
       } finally {
         setIsImporting(false)
       }
     }
-    
+
     reader.readAsText(file)
-    
+
     // ファイル選択をリセット
     event.target.value = ''
   }
@@ -134,30 +146,31 @@ export function CustomRankingBackup() {
     try {
       // Direct import to IndexedDB
       const { DBManager } = await import('@/lib/storage/db-manager')
-      const { CustomRankingManager } = await import('@/lib/storage/custom-rankings')
-      
+      const { CustomRankingManager } =
+        await import('@/lib/storage/custom-rankings')
+
       const dbManager = new DBManager()
       await dbManager.init()
       const rankingManager = new CustomRankingManager(dbManager)
-      
+
       let importedCount = 0
       let updatedCount = 0
-      
+
       for (const ranking of pendingImportData.customRankings) {
         // Check if ranking with same title exists
-        const existing = rankings.find(r => r.title === ranking.title)
-        
+        const existing = rankings.find((r) => r.title === ranking.title)
+
         if (existing) {
           // Update existing ranking
           await rankingManager.updateRanking(existing.id, {
             title: ranking.title,
             baseGenre: ranking.baseGenre,
-            conditions: ranking.conditions.map(c => ({
+            conditions: ranking.conditions.map((c) => ({
               tag: c.tag,
               operator: c.operator,
               tagType: c.tagType,
-              orderIndex: c.orderIndex
-            }))
+              orderIndex: c.orderIndex,
+            })),
           })
           updatedCount++
         } else {
@@ -165,36 +178,40 @@ export function CustomRankingBackup() {
           await rankingManager.createRanking({
             title: ranking.title,
             baseGenre: ranking.baseGenre,
-            conditions: ranking.conditions.map(c => ({
+            conditions: ranking.conditions.map((c) => ({
               tag: c.tag,
               operator: c.operator,
               tagType: c.tagType,
-              orderIndex: c.orderIndex
-            }))
+              orderIndex: c.orderIndex,
+            })),
           })
           importedCount++
         }
       }
-      
-      setImportMessage({ 
-        type: 'success', 
-        text: `カスタムランキングデータをインポートしました。（${importedCount}件追加${updatedCount > 0 ? `、${updatedCount}件更新` : ''}）` 
+
+      setImportMessage({
+        type: 'success',
+        text: `カスタムランキングデータをインポートしました。（${importedCount}件追加${updatedCount > 0 ? `、${updatedCount}件更新` : ''}）`,
       })
       setImportConfirmOpen(false)
       setPendingImportData(null)
       setConflictRankings([])
-      
+
       // リロード確認
       setTimeout(() => {
-        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+        if (
+          confirm(
+            'インポートが完了しました。ページをリロードして変更を反映しますか？',
+          )
+        ) {
           window.location.reload()
         }
       }, 1500)
     } catch (error) {
       console.error('Failed to apply import:', error)
-      setImportMessage({ 
-        type: 'error', 
-        text: 'インポート処理に失敗しました' 
+      setImportMessage({
+        type: 'error',
+        text: 'インポート処理に失敗しました',
       })
     } finally {
       setIsImporting(false)
@@ -211,14 +228,27 @@ export function CustomRankingBackup() {
           className={`${styles.backupButton} ${styles.exportButton}`}
           data-testid="export-custom-ranking-button"
         >
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3" />
+          <svg
+            className={styles.buttonIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 002-2v-11a2 2 0 00-2-2h-3m-10 0H4a2 2 0 00-2 2v11a2 2 0 002 2h3"
+            />
           </svg>
           エクスポート
         </button>
-        
+
         {/* インポートボタン */}
-        <label className={`${styles.backupButton} ${styles.importButton}`} data-testid="import-custom-ranking-button">
+        <label
+          className={`${styles.backupButton} ${styles.importButton}`}
+          data-testid="import-custom-ranking-button"
+        >
           <input
             type="file"
             accept=".json"
@@ -227,8 +257,18 @@ export function CustomRankingBackup() {
             className={styles.fileInput}
             data-testid="import-file-input"
           />
-          <svg className={styles.buttonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2-2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3" />
+          <svg
+            className={styles.buttonIcon}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 4v6m0 0l-3-3m3 3l3-3m2 8h3a2 2 0 012 2v3a2 2 0 01-2-2h-3m-10 0H4a2 2 0 01-2-2v-3a2 2 0 012-2h3"
+            />
           </svg>
           インポート
         </label>
@@ -236,9 +276,20 @@ export function CustomRankingBackup() {
 
       {/* エクスポート確認ダイアログ */}
       {exportConfirmOpen && (
-        <div className={styles.backupDialogOverlay} onClick={() => setExportConfirmOpen(false)}>
-          <div 
-            className={styles.backupDialog} 
+        <div
+          className={styles.backupDialogOverlay}
+          onClick={() => setExportConfirmOpen(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setExportConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className={styles.backupDialog}
             onClick={(e) => e.stopPropagation()}
             data-testid="export-confirm-dialog"
           >
@@ -251,19 +302,21 @@ export function CustomRankingBackup() {
               </div>
               {rankings.length > 0 && (
                 <div className={styles.rankingList}>
-                  「{rankings.map(r => r.title).join('」「')}」
+                  「{rankings.map((r) => r.title).join('」「')}」
                 </div>
               )}
             </div>
-            <p className={styles.dialogNote}>このファイルは他のデバイスへの移行やバックアップに使用できます。</p>
+            <p className={styles.dialogNote}>
+              このファイルは他のデバイスへの移行やバックアップに使用できます。
+            </p>
             <div className={styles.dialogActions}>
-              <button 
+              <button
                 onClick={() => setExportConfirmOpen(false)}
                 className={`${styles.dialogButton} ${styles.cancelButton}`}
               >
                 キャンセル
               </button>
-              <button 
+              <button
                 onClick={handleExport}
                 disabled={isExporting}
                 className={`${styles.dialogButton} ${styles.confirmButton}`}
@@ -277,9 +330,20 @@ export function CustomRankingBackup() {
 
       {/* インポート確認ダイアログ */}
       {importConfirmOpen && pendingImportData && (
-        <div className={styles.backupDialogOverlay} onClick={() => setImportConfirmOpen(false)}>
-          <div 
-            className={styles.backupDialog} 
+        <div
+          className={styles.backupDialogOverlay}
+          onClick={() => setImportConfirmOpen(false)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setImportConfirmOpen(false)
+            }
+          }}
+        >
+          <div
+            className={styles.backupDialog}
             onClick={(e) => e.stopPropagation()}
             data-testid="import-confirm-dialog"
           >
@@ -287,17 +351,24 @@ export function CustomRankingBackup() {
             <p>
               選択されたバックアップファイルからカスタムランキング設定を復元します。
             </p>
-            
+
             <div className={styles.importInfo}>
-              <div>バックアップ日時: {new Date(pendingImportData.exportDate).toLocaleString('ja-JP')}</div>
-              <div>カスタムランキング数: {pendingImportData.customRankings.length}件</div>
+              <div>
+                バックアップ日時:{' '}
+                {new Date(pendingImportData.exportDate).toLocaleString('ja-JP')}
+              </div>
+              <div>
+                カスタムランキング数: {pendingImportData.customRankings.length}
+                件
+              </div>
             </div>
 
             {conflictRankings.length > 0 && (
               <div className={styles.warningInfo}>
-                ⚠️ 以下のタイトルは既に存在します。インポートすると設定が更新されます：
+                ⚠️
+                以下のタイトルは既に存在します。インポートすると設定が更新されます：
                 <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
-                  {conflictRankings.map(title => (
+                  {conflictRankings.map((title) => (
                     <li key={title}>{title}</li>
                   ))}
                 </ul>
@@ -306,11 +377,12 @@ export function CustomRankingBackup() {
 
             <p className={styles.dialogNote}>
               新しいカスタムランキングは追加され、同名のものは更新されます。
-              {conflictRankings.length === 0 && '既存のカスタムランキングはそのまま残ります。'}
+              {conflictRankings.length === 0 &&
+                '既存のカスタムランキングはそのまま残ります。'}
             </p>
 
             <div className={styles.dialogActions}>
-              <button 
+              <button
                 onClick={() => {
                   setImportConfirmOpen(false)
                   setPendingImportData(null)
@@ -320,7 +392,7 @@ export function CustomRankingBackup() {
               >
                 キャンセル
               </button>
-              <button 
+              <button
                 onClick={confirmImport}
                 disabled={isImporting}
                 className={`${styles.dialogButton} ${styles.confirmButton}`}
@@ -334,9 +406,13 @@ export function CustomRankingBackup() {
 
       {/* インポート結果メッセージ */}
       {importMessage && (
-        <div 
+        <div
           className={`${styles.importResult} ${importMessage.type === 'success' ? styles.success : styles.error}`}
-          data-testid={importMessage.type === 'success' ? 'import-success-message' : 'import-error-message'}
+          data-testid={
+            importMessage.type === 'success'
+              ? 'import-success-message'
+              : 'import-error-message'
+          }
         >
           {importMessage.text}
         </div>

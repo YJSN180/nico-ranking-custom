@@ -2,62 +2,77 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
-import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
+import type {
+  CustomRankingFormState,
+  ModalStep,
+  TagCondition,
+  TagOperator,
+} from '@/types/custom-ranking'
 import { TagIcon } from './tag-icon'
 import styles from './custom-ranking-modal.module.css'
 
 // 演算子の自然言語ラベル
 const OPERATOR_LABELS: Record<TagOperator, string> = {
-  'AND': 'すべて含む',
-  'OR': 'いずれかを含む',
-  'NOT': '除外する'
+  AND: 'すべて含む',
+  OR: 'いずれかを含む',
+  NOT: '除外する',
 }
 
 // タグタイプのラベル
 const TAG_TYPE_LABELS: Record<'lock' | 'user' | 'both', string> = {
-  'lock': 'ロックタグ',
-  'user': 'ユーザータグ',
-  'both': '全タグ'
+  lock: 'ロックタグ',
+  user: 'ユーザータグ',
+  both: '全タグ',
 }
 
 // 条件を自然言語で説明する関数
 function generateConditionDescription(conditions: TagCondition[]): string {
   if (conditions.length === 0) return ''
-  
+
   // グループ化
-  const allAndConditions = conditions.filter(c => c.operator === 'AND')
-  const allOrConditions = conditions.filter(c => c.operator === 'OR')
-  const allNotConditions = conditions.filter(c => c.operator === 'NOT')
-  
+  const allAndConditions = conditions.filter((c) => c.operator === 'AND')
+  const allOrConditions = conditions.filter((c) => c.operator === 'OR')
+  const allNotConditions = conditions.filter((c) => c.operator === 'NOT')
+
   let description = ''
-  
+
   // AND条件とOR条件の組み合わせパターンを判定
   if (allAndConditions.length > 0 && allOrConditions.length > 0) {
     // 両方ある場合: (AND条件) または (OR条件)
-    const andTags = allAndConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    const orTags = allOrConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    
+    const andTags = allAndConditions.map(
+      (c) => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`,
+    )
+    const orTags = allOrConditions.map(
+      (c) => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`,
+    )
+
     description = `${andTags.join('と')}をすべて含む動画、または、${orTags.join('もしくは')}のいずれかを含む動画`
   } else if (allAndConditions.length > 0) {
     // AND条件のみ
-    const andTags = allAndConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    const andTags = allAndConditions.map(
+      (c) => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`,
+    )
     description = `${andTags.join('と')}をすべて含む動画`
   } else if (allOrConditions.length > 0) {
     // OR条件のみ
-    const orTags = allOrConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    const orTags = allOrConditions.map(
+      (c) => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`,
+    )
     description = `${orTags.join('または')}のいずれかを含む動画`
   }
-  
+
   // NOT条件
   if (allNotConditions.length > 0) {
-    const notTags = allNotConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
+    const notTags = allNotConditions.map(
+      (c) => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`,
+    )
     if (description) {
       description += `（ただし、${notTags.join('と')}を含まない）`
     } else {
       description = `${notTags.join('と')}を含まない動画`
     }
   }
-  
+
   return description
 }
 
@@ -71,22 +86,22 @@ interface CustomRankingModalProps {
   currentPeriod?: string // 現在の期間設定
 }
 
-export function CustomRankingModal({ 
-  isOpen, 
-  onClose, 
-  onSave, 
+export function CustomRankingModal({
+  isOpen,
+  onClose,
+  onSave,
   existingTitles = [],
   editingRanking,
   onPrefetchData,
-  currentPeriod = '24h'
+  currentPeriod = '24h',
 }: CustomRankingModalProps) {
   const [currentStep, setCurrentStep] = useState<ModalStep>(1)
   const [formData, setFormData] = useState<CustomRankingFormState>({
     baseGenre: undefined,
     conditions: [],
-    title: ''
+    title: '',
   })
-  
+
   // タグ入力関連の状態
   const [tagInput, setTagInput] = useState('')
   const [tagOperator, setTagOperator] = useState<TagOperator>('AND')
@@ -95,7 +110,7 @@ export function CustomRankingModal({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
-  
+
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
 
@@ -116,39 +131,42 @@ export function CustomRankingModal({
   }
 
   // タグのオートコンプリート候補を取得
-  const fetchTagSuggestions = useCallback(async (query: string): Promise<string[]> => {
-    if (!query || query.trim().length < 2) {
-      return []
-    }
-
-    try {
-      setIsLoadingSuggestions(true)
-      const endpoint = getAutocompleteEndpoint()
-      const url = new URL(endpoint, window.location.origin)
-      url.searchParams.set('q', query.trim())
-      url.searchParams.set('limit', '10')
-
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        console.warn('Failed to fetch tag suggestions:', response.status)
+  const fetchTagSuggestions = useCallback(
+    async (query: string): Promise<string[]> => {
+      if (!query || query.trim().length < 2) {
         return []
       }
 
-      const data = await response.json()
-      return data.suggestions || []
-    } catch (error) {
-      console.error('Error fetching tag suggestions:', error)
-      return []
-    } finally {
-      setIsLoadingSuggestions(false)
-    }
-  }, [])
+      try {
+        setIsLoadingSuggestions(true)
+        const endpoint = getAutocompleteEndpoint()
+        const url = new URL(endpoint, window.location.origin)
+        url.searchParams.set('q', query.trim())
+        url.searchParams.set('limit', '10')
+
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (!response.ok) {
+          console.warn('Failed to fetch tag suggestions:', response.status)
+          return []
+        }
+
+        const data = await response.json()
+        return data.suggestions || []
+      } catch (error) {
+        console.error('Error fetching tag suggestions:', error)
+        return []
+      } finally {
+        setIsLoadingSuggestions(false)
+      }
+    },
+    [],
+  )
 
   // デバウンス処理付きオートコンプリート
   useEffect(() => {
@@ -177,14 +195,14 @@ export function CustomRankingModal({
         setFormData({
           baseGenre: editingRanking.baseGenre,
           conditions: editingRanking.conditions || [],
-          title: editingRanking.title
+          title: editingRanking.title,
         })
       } else {
         // 新規作成モードの場合はリセット
         setFormData({
           baseGenre: undefined,
           conditions: [],
-          title: ''
+          title: '',
         })
       }
       setTagInput('')
@@ -215,7 +233,7 @@ export function CustomRankingModal({
   // ベースジャンル選択（Step 1）
   const handleGenreSelect = (genre: RankingGenre) => {
     if (genre === 'custom') return // カスタムは選択不可
-    setFormData(prev => ({ ...prev, baseGenre: genre }))
+    setFormData((prev) => ({ ...prev, baseGenre: genre }))
   }
 
   // タグ追加（Step 2）
@@ -224,18 +242,20 @@ export function CustomRankingModal({
     if (!tag) return
 
     // 既存のタグと重複チェック
-    const exists = formData.conditions.some(c => c.tag.toLowerCase() === tag.toLowerCase())
+    const exists = formData.conditions.some(
+      (c) => c.tag.toLowerCase() === tag.toLowerCase(),
+    )
     if (exists) return
 
     const newCondition: TagCondition = {
       tag,
       operator: tagOperator,
-      tagType: tagType
+      tagType: tagType,
     }
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      conditions: [...prev.conditions, newCondition]
+      conditions: [...prev.conditions, newCondition],
     }))
 
     setTagInput('')
@@ -244,15 +264,15 @@ export function CustomRankingModal({
 
   // タグ削除
   const handleRemoveTag = (index: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      conditions: prev.conditions.filter((_, i) => i !== index)
+      conditions: prev.conditions.filter((_, i) => i !== index),
     }))
   }
 
   // タイトル変更（Step 3）
   const handleTitleChange = (title: string) => {
-    setFormData(prev => ({ ...prev, title }))
+    setFormData((prev) => ({ ...prev, title }))
   }
 
   // 次へ進む
@@ -261,18 +281,26 @@ export function CustomRankingModal({
     if (currentStep === 2 && formData.conditions.length === 0) return
     if (currentStep === 3) {
       // 保存処理
-      if (formData.title.trim() && !existingTitles.includes(formData.title.trim())) {
+      if (
+        formData.title.trim() &&
+        !existingTitles.includes(formData.title.trim())
+      ) {
         onSave(formData)
         onClose()
       }
       return
     }
-    
+
     // ステップ2で「次へ」を押した時、baseGenreのデータをプリフェッチ
     if (currentStep === 2 && formData.baseGenre && onPrefetchData) {
       try {
         // eslint-disable-next-line no-console
-        console.log('[DEBUG] Prefetching data for baseGenre:', formData.baseGenre, 'period:', currentPeriod)
+        console.log(
+          '[DEBUG] Prefetching data for baseGenre:',
+          formData.baseGenre,
+          'period:',
+          currentPeriod,
+        )
         await onPrefetchData(formData.baseGenre, currentPeriod)
         // eslint-disable-next-line no-console
         console.log('[DEBUG] Prefetch completed')
@@ -282,7 +310,7 @@ export function CustomRankingModal({
         // エラーが発生しても次のステップには進む
       }
     }
-    
+
     setCurrentStep((prev) => (prev + 1) as ModalStep)
   }
 
@@ -297,29 +325,63 @@ export function CustomRankingModal({
 
   // タイトルの重複チェック
   const isTitleDuplicated = existingTitles.includes(formData.title.trim())
-  const canProceed = currentStep === 1 ? !!formData.baseGenre 
-    : currentStep === 2 ? formData.conditions.length > 0
-    : formData.title.trim().length > 0 && !isTitleDuplicated
+  const canProceed =
+    currentStep === 1
+      ? !!formData.baseGenre
+      : currentStep === 2
+        ? formData.conditions.length > 0
+        : formData.title.trim().length > 0 && !isTitleDuplicated
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
+    <div
+      className={styles.overlay}
+      onClick={onClose}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClose()
+        }
+      }}
+    >
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <h2>
+            {editingRanking
+              ? 'カスタムランキング編集'
+              : 'カスタムランキング作成'}
+          </h2>
+          <button className={styles.closeButton} onClick={onClose}>
+            ×
+          </button>
         </div>
 
         {/* ステップインジケーター */}
         <div className={styles.stepIndicator}>
-          <div className={`${styles.step} ${currentStep >= 1 ? styles.active : ''}`}>
+          <div
+            className={`${styles.step} ${currentStep >= 1 ? styles.active : ''}`}
+          >
             <span className={styles.stepNumber}>1</span>
           </div>
-          <div className={`${styles.stepLine} ${currentStep >= 2 ? styles.active : ''}`} />
-          <div className={`${styles.step} ${currentStep >= 2 ? styles.active : ''}`}>
+          <div
+            className={`${styles.stepLine} ${currentStep >= 2 ? styles.active : ''}`}
+          />
+          <div
+            className={`${styles.step} ${currentStep >= 2 ? styles.active : ''}`}
+          >
             <span className={styles.stepNumber}>2</span>
           </div>
-          <div className={`${styles.stepLine} ${currentStep >= 3 ? styles.active : ''}`} />
-          <div className={`${styles.step} ${currentStep >= 3 ? styles.active : ''}`}>
+          <div
+            className={`${styles.stepLine} ${currentStep >= 3 ? styles.active : ''}`}
+          />
+          <div
+            className={`${styles.step} ${currentStep >= 3 ? styles.active : ''}`}
+          >
             <span className={styles.stepNumber}>3</span>
           </div>
         </div>
@@ -347,7 +409,9 @@ export function CustomRankingModal({
                         name="baseGenre"
                         value={value}
                         checked={formData.baseGenre === value}
-                        onChange={() => handleGenreSelect(value as RankingGenre)}
+                        onChange={() =>
+                          handleGenreSelect(value as RankingGenre)
+                        }
                       />
                       <span>{label}</span>
                     </label>
@@ -373,27 +437,40 @@ export function CustomRankingModal({
                     {generateConditionDescription(formData.conditions)}
                   </div>
                   <div className={styles.conditionsList}>
-                    {(['AND', 'OR', 'NOT'] as TagOperator[]).map(op => {
-                      const conditions = formData.conditions.filter(c => c.operator === op)
+                    {(['AND', 'OR', 'NOT'] as TagOperator[]).map((op) => {
+                      const conditions = formData.conditions.filter(
+                        (c) => c.operator === op,
+                      )
                       if (conditions.length === 0) return null
                       return (
                         <div key={op} className={styles.conditionGroup}>
-                          <span className={styles.operatorLabel}>{OPERATOR_LABELS[op]}:</span>
+                          <span className={styles.operatorLabel}>
+                            {OPERATOR_LABELS[op]}:
+                          </span>
                           <div className={styles.tags}>
                             {conditions.map((condition, index) => {
-                              const originalIndex = formData.conditions.indexOf(condition)
-                              const tagTypeLabel = condition.tagType === 'lock' ? 'ロック' 
-                                : condition.tagType === 'user' ? 'ユーザー' 
-                                : '両方'
+                              const originalIndex =
+                                formData.conditions.indexOf(condition)
+                              const tagTypeLabel =
+                                condition.tagType === 'lock'
+                                  ? 'ロック'
+                                  : condition.tagType === 'user'
+                                    ? 'ユーザー'
+                                    : '両方'
                               return (
-                                <span key={originalIndex} className={styles.tag}>
+                                <span
+                                  key={originalIndex}
+                                  className={styles.tag}
+                                >
                                   {condition.tag}
                                   <span className={styles.tagTypeIndicator}>
                                     ({tagTypeLabel})
                                   </span>
                                   <button
                                     className={styles.removeTag}
-                                    onClick={() => handleRemoveTag(originalIndex)}
+                                    onClick={() =>
+                                      handleRemoveTag(originalIndex)
+                                    }
                                   >
                                     ×
                                   </button>
@@ -425,7 +502,11 @@ export function CustomRankingModal({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < tagSuggestions.length) {
+                        if (
+                          showSuggestions &&
+                          selectedSuggestionIndex >= 0 &&
+                          selectedSuggestionIndex < tagSuggestions.length
+                        ) {
                           // 選択された候補を使用
                           setTagInput(tagSuggestions[selectedSuggestionIndex])
                           setShowSuggestions(false)
@@ -440,13 +521,13 @@ export function CustomRankingModal({
                         setSelectedSuggestionIndex(-1)
                       } else if (e.key === 'ArrowDown' && showSuggestions) {
                         e.preventDefault()
-                        setSelectedSuggestionIndex(prev => 
-                          prev < tagSuggestions.length - 1 ? prev + 1 : 0
+                        setSelectedSuggestionIndex((prev) =>
+                          prev < tagSuggestions.length - 1 ? prev + 1 : 0,
                         )
                       } else if (e.key === 'ArrowUp' && showSuggestions) {
                         e.preventDefault()
-                        setSelectedSuggestionIndex(prev => 
-                          prev > 0 ? prev - 1 : tagSuggestions.length - 1
+                        setSelectedSuggestionIndex((prev) =>
+                          prev > 0 ? prev - 1 : tagSuggestions.length - 1,
                         )
                       }
                     }}
@@ -456,15 +537,15 @@ export function CustomRankingModal({
                   {showSuggestions && (
                     <div className={styles.suggestions}>
                       {isLoadingSuggestions ? (
-                        <div className={styles.loadingMessage}>
-                          検索中...
-                        </div>
+                        <div className={styles.loadingMessage}>検索中...</div>
                       ) : tagSuggestions.length > 0 ? (
                         tagSuggestions.map((suggestion, index) => (
                           <button
                             key={suggestion}
                             className={`${styles.suggestionItem} ${
-                              index === selectedSuggestionIndex ? styles.suggestionItemSelected : ''
+                              index === selectedSuggestionIndex
+                                ? styles.suggestionItemSelected
+                                : ''
                             }`}
                             onClick={() => {
                               setTagInput(suggestion)
@@ -472,7 +553,9 @@ export function CustomRankingModal({
                               setSelectedSuggestionIndex(-1)
                               tagInputRef.current?.focus()
                             }}
-                            onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                            onMouseEnter={() =>
+                              setSelectedSuggestionIndex(index)
+                            }
                           >
                             {suggestion}
                           </button>
@@ -610,7 +693,10 @@ export function CustomRankingModal({
                 <div className={styles.preview}>
                   <p className={styles.previewLabel}>プレビュー:</p>
                   <div className={styles.previewContainer}>
-                    <button className={`${styles.previewButton} ${styles.tagButton}`} disabled>
+                    <button
+                      className={`${styles.previewButton} ${styles.tagButton}`}
+                      disabled
+                    >
                       {formData.title}
                     </button>
                   </div>
@@ -621,10 +707,7 @@ export function CustomRankingModal({
         </div>
 
         <div className={styles.footer}>
-          <button
-            className={styles.backButton}
-            onClick={handleBack}
-          >
+          <button className={styles.backButton} onClick={handleBack}>
             {currentStep === 1 ? 'キャンセル' : '戻る'}
           </button>
           <button
