@@ -138,6 +138,7 @@ test-ng-persistence.js
 *.log
 *.tmp
 *.bak
+*.backup
 tmp/
 UPDATE_*.md
 SECURITY_*.md
