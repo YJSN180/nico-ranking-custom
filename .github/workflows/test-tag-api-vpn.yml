@@ -1,0 +1,71 @@
+name: Test Tag API with VPN (Japan IP)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_count:
+        description: 'Number of videos to test'
+        required: false
+        default: '10'
+
+jobs:
+  test-with-vpn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # OpenVPN設定ファイルをデコード
+      - name: Prepare OpenVPN config
+        run: |
+          echo "$OVPN_CONFIG" | base64 -d > /tmp/nordvpn-japan.ovpn
+        env:
+          OVPN_CONFIG: ${{ secrets.NORDVPN_OVPN_CONFIG }}
+
+      # OpenVPN接続
+      - name: Connect to NordVPN Japan
+        uses: kota65535/github-openvpn-connect-action@v3
+        with:
+          config_file: /tmp/nordvpn-japan.ovpn
+          username: ${{ secrets.NORDVPN_USERNAME }}
+          password: ${{ secrets.NORDVPN_PASSWORD }}
+
+      # IP確認
+      - name: Check IP address
+        run: |
+          echo "=== Current IP Address ==="
+          IP_INFO=$(curl -s https://ipinfo.io/json)
+          echo "$IP_INFO" | jq .
+          COUNTRY=$(echo "$IP_INFO" | jq -r .country)
+          echo ""
+          if [ "$COUNTRY" = "JP" ]; then
+            echo "✅ Successfully connected to Japan IP"
+          else
+            echo "❌ Not connected to Japan IP (current: $COUNTRY)"
+            exit 1
+          fi
+
+      # v3_guest APIテスト
+      - name: Test v3_guest API with Japan IP
+        run: |
+          npx tsx scripts/test-tag-api-comparison.ts
+
+      # 結果サマリー
+      - name: Summary
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "VPN Connection: Japan IP" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the test output above for API comparison results." >> $GITHUB_STEP_SUMMARY
