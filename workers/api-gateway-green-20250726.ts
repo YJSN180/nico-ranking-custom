@@ -338,7 +338,7 @@ export default {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=300' // 5分キャッシュ
+              ...getCustomCacheHeaders(300, 300) // 5分キャッシュ
             }
           })
           const origin = request.headers.get('Origin')
@@ -362,7 +362,7 @@ export default {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=60' // 1分キャッシュ
+              ...getCacheHeaders('ranking') // 1分キャッシュ
             }
           })
           const origin = request.headers.get('Origin')
@@ -403,7 +403,7 @@ export default {
             status: 500,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache'
+              ...getCacheHeaders('none')
             }
           })
           const origin = request.headers.get('Origin')
@@ -434,7 +434,7 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
+            ...getCustomCacheHeaders(1800, 1800) // 30分キャッシュ（タグデータは比較的安定）
           }
         })
         
@@ -455,7 +455,7 @@ export default {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
+            ...getCacheHeaders('none')
           }
         })
         const origin = request.headers.get('Origin')
