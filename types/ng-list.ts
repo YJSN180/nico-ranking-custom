@@ -10,13 +10,13 @@ export interface NGList {
     exact: string[]       // 完全一致
     partial: string[]     // 部分一致
   }
-  
+
   // 自動追加されたNGリスト（派生NG）は別キーで管理
   derivedVideoIds?: string[] // 互換性のため（オプショナル）
 }
 
-export interface NGFilterResult {
-  filteredItems: any[]
+export interface NGFilterResult<T = unknown> {
+  filteredItems: T[]
   newDerivedIds: string[]
   filteredCount?: number
 }
