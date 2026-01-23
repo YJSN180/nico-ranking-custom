@@ -62,10 +62,101 @@ jobs:
             exit 1
           fi
 
-      # v3_guest APIテスト
-      - name: Test v3_guest API with Japan IP
+      # getthumbinfo 大規模テスト（100件）
+      - name: Test getthumbinfo API at scale (100 videos)
         run: |
-          npx tsx scripts/test-tag-api-comparison.ts
+          npx tsx -e "
+          async function fetchRankingVideoIds(count) {
+            const response = await fetch(
+              'https://www.nicovideo.jp/ranking/genre/all?term=24h',
+              {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                  'Accept': 'text/html',
+                  'Cookie': 'sensitive_material_status=accept'
+                }
+              }
+            )
+            const html = await response.text()
+            const metaMatch = html.match(/<meta name=\"server-response\" content=\"([^\"]+)\"/)
+            if (!metaMatch) throw new Error('server-response not found')
+            const decoded = metaMatch[1].replace(/&quot;/g, '\"').replace(/&amp;/g, '&')
+            const data = JSON.parse(decoded)
+            const items = data.data?.response?.\$getTeibanRanking?.data?.items || []
+            return items.slice(0, count).map(item => item.id)
+          }
+
+          async function testGetThumbInfo(videoId) {
+            try {
+              const response = await fetch('https://ext.nicovideo.jp/api/getthumbinfo/' + videoId)
+              if (response.status === 403) return { videoId, status: 403, tags: 0, rateLimited: true }
+              if (!response.ok) return { videoId, status: response.status, tags: 0 }
+              const xml = await response.text()
+              if (xml.includes('status=\"fail\"')) return { videoId, status: 200, tags: 0, error: 'fail' }
+              const tags = (xml.match(/<tag[^>]*>/g) || []).length
+              return { videoId, status: 200, tags }
+            } catch (e) {
+              return { videoId, status: 0, tags: 0, error: e.message }
+            }
+          }
+
+          async function main() {
+            console.log('=== getthumbinfo 大規模テスト (100件) ===')
+            console.log('動画ID取得中...')
+            const videoIds = await fetchRankingVideoIds(100)
+            console.log('取得: ' + videoIds.length + '件')
+
+            let success = 0, rateLimited = 0, failed = 0
+            const startTime = Date.now()
+
+            // 5並列、100ms間隔でテスト
+            const PARALLEL = 5
+            const DELAY = 100
+
+            for (let i = 0; i < videoIds.length; i += PARALLEL) {
+              const batch = videoIds.slice(i, i + PARALLEL)
+              const results = await Promise.all(batch.map(testGetThumbInfo))
+
+              for (const r of results) {
+                if (r.rateLimited) {
+                  rateLimited++
+                  console.log('❌ ' + r.videoId + ': 403 (RATE LIMITED)')
+                } else if (r.tags > 0) {
+                  success++
+                } else {
+                  failed++
+                  console.log('❌ ' + r.videoId + ': ' + (r.error || 'HTTP ' + r.status))
+                }
+              }
+
+              // 進捗表示（20%ごと）
+              const progress = Math.floor((i + PARALLEL) / videoIds.length * 100)
+              if (progress % 20 === 0 && i > 0) {
+                console.log('進捗: ' + progress + '% (' + (i + PARALLEL) + '/' + videoIds.length + ')')
+              }
+
+              if (i + PARALLEL < videoIds.length) {
+                await new Promise(r => setTimeout(r, DELAY))
+              }
+            }
+
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1)
+            console.log('')
+            console.log('=== 結果 ===')
+            console.log('成功: ' + success + '/' + videoIds.length + ' (' + Math.round(success/videoIds.length*100) + '%)')
+            console.log('403 (レート制限): ' + rateLimited)
+            console.log('その他失敗: ' + failed)
+            console.log('処理時間: ' + elapsed + '秒')
+
+            if (rateLimited > 0) {
+              console.log('')
+              console.log('⚠️ レート制限が発生しました')
+              process.exit(1)
+            }
+          }
+
+          main().catch(e => { console.error(e); process.exit(1) })
+          "
 
       # 結果サマリー
       - name: Summary
