@@ -1,5 +1,6 @@
 #!/usr/bin/env npx tsx
 import type { RankingGenre } from '../types/ranking-config'
+import { GENRE_GROUPS } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import { kv } from '../lib/simple-kv'
 import { enrichRankingItemsWithTagDetails } from '../lib/tag-fetcher-simple'
@@ -741,8 +742,82 @@ async function main() {
   }
 }
 
-// Check if this is being run for a specific group (for GitHub Actions matrix)
-if (process.argv[2] === '--group') {
+// Check if this is being run for a KV group (GENRE_GROUPS based - recommended)
+if (process.argv[2] === '--kv-group') {
+  const kvGroupId = parseInt(process.argv[3]);
+
+  if (!kvGroupId || kvGroupId < 1 || kvGroupId > 3) {
+    console.error('Invalid KV group ID. Usage: --kv-group <1|2|3>');
+    process.exit(1);
+  }
+
+  // Use GENRE_GROUPS for KV-aligned operation
+  const groupGenres = GENRE_GROUPS[kvGroupId as 1 | 2 | 3].filter(g => g !== 'custom') as RankingGenre[];
+  console.log(`Using KV Group ${kvGroupId} with ${groupGenres.length} genres: ${groupGenres.join(', ')}`);
+
+  // Run only for this KV group and save partial results
+  (async () => {
+    const startTime = Date.now();
+    const ngList = await getNGList();
+    const originalDerivedCount = ngList.derivedVideoIds.length;
+    console.log(`KV Group ${kvGroupId} NG list: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived`);
+
+    // Process each genre sequentially within group
+    const results = [];
+    for (const genre of groupGenres) {
+      const result = await processGenre(genre, ngList);
+      results.push(result);
+
+      // Add delay between genres to avoid rate limiting on getthumbinfo API
+      if (genre !== groupGenres[groupGenres.length - 1]) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+
+    // Save partial results
+    const tmpDir = './tmp';
+    await fs.mkdir(tmpDir, { recursive: true });
+    await fs.writeFile(
+      path.join(tmpDir, `ranking-kv-group-${kvGroupId}.json`),
+      JSON.stringify(results, null, 2)
+    );
+
+    // Check if new derived entries were found
+    const newDerivedCount = ngList.derivedVideoIds.length;
+    if (newDerivedCount > originalDerivedCount) {
+      const newlyAdded = newDerivedCount - originalDerivedCount;
+      console.log(`KV Group ${kvGroupId} found ${newlyAdded} new derived NG entries (${originalDerivedCount} → ${newDerivedCount})`);
+
+      // Save the new derived entries for aggregation
+      const derivedData = {
+        originalCount: originalDerivedCount,
+        newCount: newDerivedCount,
+        newEntries: ngList.derivedVideoIds.slice(originalDerivedCount),
+        allEntries: ngList.derivedVideoIds
+      };
+
+      await fs.writeFile(
+        path.join(tmpDir, `ng-derived-kv-group-${kvGroupId}.json`),
+        JSON.stringify(derivedData, null, 2)
+      );
+
+      console.log(`Saved ${newlyAdded} new derived entries to ng-derived-kv-group-${kvGroupId}.json`);
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`KV Group ${kvGroupId} completed in ${Math.round(duration / 1000)}s with ${results.length} genres`);
+
+    // Exit with error if we didn't get all expected genres
+    if (results.length !== groupGenres.length) {
+      console.error(`ERROR: Expected ${groupGenres.length} genres but only processed ${results.length}`);
+      process.exit(1);
+    }
+  })().catch(error => {
+    console.error(`KV Group ${kvGroupId} failed catastrophically:`, error);
+    process.exit(1);
+  });
+} else if (process.argv[2] === '--group') {
+  // Legacy: Check if this is being run for a specific group (8-group strategy)
   // Group mode for GitHub Actions matrix strategy
   const groupId = parseInt(process.argv[3]);
   const totalGroups = parseInt(process.argv[4] || '8');

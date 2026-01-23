@@ -1,8 +1,53 @@
 #!/usr/bin/env npx tsx
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { gunzip } from 'zlib'
+import { promisify } from 'util'
 import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
 import { compressForStorage } from '../lib/unified-compression.js'
+
+const gunzipAsync = promisify(gunzip)
+
+// Fetch existing KV group data and decompress it
+async function fetchExistingKVGroupData(groupId: string): Promise<any | null> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    return null;
+  }
+
+  const keyName = `RANKING_GROUP_${groupId}`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${CF_API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.log(`No existing data for ${keyName} (${response.status})`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Check if gzip compressed (magic bytes: 1f 8b)
+    if (buffer[0] === 0x1f && buffer[1] === 0x8b) {
+      const decompressed = await gunzipAsync(buffer);
+      return JSON.parse(decompressed.toString('utf-8'));
+    } else {
+      return JSON.parse(buffer.toString('utf-8'));
+    }
+  } catch (error) {
+    console.log(`Error fetching ${keyName}:`, error);
+    return null;
+  }
+}
 
 // Save derived NG entries to KV
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
@@ -151,14 +196,43 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
   }
 }
 
-// Write data split into 3 groups
+// Write data split by 3 groups (GENRE_GROUPS structure)
+// This function MERGES new data with existing KV data for partial updates
+// It preserves genres that are not in the current update
 async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
-  console.log('\n📦 Starting 3-key split write...');
-  
+  console.log('\n📦 Starting group-based KV write with merge support...');
+  console.log('Note: Writing to GENRE_GROUPS (3 groups) - merging with existing data for partial updates');
+
+  // Log which genres we have data for
+  const availableGenres = Object.keys(rankingData.genres || {});
+  console.log(`Available genres in this update: ${availableGenres.join(', ')} (${availableGenres.length} genres)`);
+
   // Calculate size of each group before writing
   const groupSizes: Record<string, number> = {};
-  
+  let writtenCount = 0;
+
   for (const [groupId, genreList] of Object.entries(GENRE_GROUPS)) {
+    // Check which genres in this group have new data
+    let hasNewData = false;
+    let genresWithNewData: string[] = [];
+    for (const genre of genreList) {
+      if (rankingData.genres[genre]) {
+        hasNewData = true;
+        genresWithNewData.push(genre);
+      }
+    }
+
+    // Skip if no new data for this group
+    if (!hasNewData) {
+      console.log(`⏭️  Group ${groupId} has no new data, skipping (existing KV data preserved)`);
+      continue;
+    }
+
+    // Fetch existing KV data to merge with
+    console.log(`🔄 Fetching existing data for Group ${groupId} to merge...`);
+    const existingData = await fetchExistingKVGroupData(groupId);
+
+    // Create merged group data
     const groupData = {
       genres: {} as any,
       metadata: {
@@ -167,36 +241,59 @@ async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
         genresInGroup: genreList
       }
     };
-    
-    // Extract only genres in this group
+
+    // Start with existing genres (if any)
+    let genresFromExisting: string[] = [];
+    if (existingData?.genres) {
+      for (const genre of genreList) {
+        if (existingData.genres[genre] && !rankingData.genres[genre]) {
+          // Keep existing data for genres not in current update
+          groupData.genres[genre] = existingData.genres[genre];
+          genresFromExisting.push(genre);
+        }
+      }
+    }
+
+    // Add/overwrite with new data
     for (const genre of genreList) {
       if (rankingData.genres[genre]) {
         groupData.genres[genre] = rankingData.genres[genre];
       }
     }
-    
+
+    const totalGenres = Object.keys(groupData.genres).length;
+    console.log(`Group ${groupId}: ${genresWithNewData.length} new genres (${genresWithNewData.join(', ')})`);
+    if (genresFromExisting.length > 0) {
+      console.log(`         + ${genresFromExisting.length} existing genres preserved (${genresFromExisting.join(', ')})`);
+    }
+
     // Calculate and log size
     const groupSize = JSON.stringify(groupData).length / 1024 / 1024;
     groupSizes[groupId] = groupSize;
-    console.log(`Group ${groupId}: ${groupSize.toFixed(2)} MB (${genreList.length} genres)`);
-    
+    console.log(`         = ${totalGenres}/${genreList.length} total genres, ${groupSize.toFixed(2)} MB`);
+
     // Write this group to KV
     try {
       await writeToCloudflareKV(groupData, `RANKING_GROUP_${groupId}`);
+      writtenCount++;
     } catch (error) {
       console.error(`Failed to write group ${groupId}:`, error);
       throw error;
     }
   }
-  
-  console.log('\n✅ Successfully wrote all 3 groups to KV');
-  console.log('Total sizes:', groupSizes);
+
+  console.log(`\n✅ Successfully wrote ${writtenCount}/3 groups to KV`);
+  console.log('Written group sizes:', groupSizes);
 }
 
 async function main() {
   try {
-    console.log('Aggregating ranking results from all groups...');
-    
+    console.log('Aggregating ranking results...');
+
+    // Detect mode: KV group mode (new) or legacy 8-group mode
+    const kvGroupMode = process.env.KV_GROUP_MODE === 'true';
+    console.log(`Mode: ${kvGroupMode ? 'KV Group (3 groups, no merge needed)' : 'Legacy (8 groups, with merge)'}`);
+
     // Read all partial results
     const tmpDir = './tmp';
     let files: string[] = [];
@@ -206,22 +303,29 @@ async function main() {
       console.error('Failed to read tmp directory:', error);
       process.exit(1);
     }
-    
-    const groupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
+
+    // Support both file naming conventions
+    const kvGroupFiles = files.filter(f => f.startsWith('ranking-kv-group-') && f.endsWith('.json'));
+    const legacyGroupFiles = files.filter(f => f.startsWith('ranking-group-') && f.endsWith('.json'));
+    const groupFiles = kvGroupFiles.length > 0 ? kvGroupFiles : legacyGroupFiles;
+
+    console.log(`Found ${kvGroupFiles.length} KV group files, ${legacyGroupFiles.length} legacy group files`);
+    console.log(`Using: ${kvGroupFiles.length > 0 ? 'KV group files' : 'legacy group files'}`);
+
     // Look for NG derived files in both main tmp and subdirectories
     const ngDerivedFiles: string[] = [];
+    // Note: exec() is used here with hardcoded paths only, no user input - safe from injection
     const allNgFiles = await new Promise<string[]>(async (resolve) => {
-      // Dynamic import for Node.js environment only
       const { exec } = await import('child_process');
-      exec('find ./tmp -name "ng-derived-group-*.json" -type f 2>/dev/null || true', (error: any, stdout: string) => {
+      exec('find ./tmp -name "ng-derived-*.json" -type f 2>/dev/null || true', (error: any, stdout: string) => {
         if (error) {
           console.log('No ng-derived files found via find command');
           resolve([]);
           return;
         }
-        const found = stdout.trim().split('\n').filter(f => f && f.includes('ng-derived-group-'));
+        const found = stdout.trim().split('\n').filter(f => f && f.includes('ng-derived-'));
         console.log(`Found ng-derived files via find: ${found.join(', ')}`);
-        resolve(found); // Return full paths for direct use
+        resolve(found);
       });
     });
     ngDerivedFiles.push(...allNgFiles);
