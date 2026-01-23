@@ -13,13 +13,27 @@ export async function getVideoStatsFromKV(
     return {}
   }
 
+  // Validate required environment variables
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
+  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
+
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    console.warn('[video-stats-kv] Missing Cloudflare credentials:', {
+      hasAccountId: Boolean(CF_ACCOUNT_ID),
+      hasNamespaceId: Boolean(CF_NAMESPACE_ID),
+      hasApiToken: Boolean(CF_API_TOKEN)
+    })
+    return {}
+  }
+
   try {
     // Fetch from Cloudflare KV
     const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces/${process.env.CLOUDFLARE_KV_NAMESPACE_ID}/values/VIDEO_STATS_LATEST`,
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/VIDEO_STATS_LATEST`,
       {
         headers: {
-          'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`
+          'Authorization': `Bearer ${CF_API_TOKEN}`
         }
       }
     )
