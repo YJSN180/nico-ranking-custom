@@ -122,18 +122,19 @@ export async function scrapeRankingPageNvApiOnly(
       // 人気タグ集計のため、上位50件のみタグを取得（パフォーマンス最適化）
       const videoIds = items.slice(0, 50).map(item => item.id!).filter(Boolean)
       const tagsMap = await fetchVideoTagsBatch(videoIds, 5) // 並列数を減らして安定性向上
-      
-      // タグ情報をマージ（人気タグ集計用）
-      const itemsWithTags = items.slice(0, 50).map(item => ({
-        ...item,
-        tags: tagsMap.get(item.id!) || []
-      }))
-      
+
+      // タグ情報を元のitems配列にマージ（カスタムランキングフィルタリング用）
+      items.slice(0, 50).forEach(item => {
+        if (item.id) {
+          item.tags = tagsMap.get(item.id) || []
+        }
+      })
+
       // 人気タグを集計
       const tagCounts = new Map<string, number>()
-      itemsWithTags.forEach(item => {
-        item.tags?.forEach(tag => {
-          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
+      items.slice(0, 50).forEach(item => {
+        item.tags?.forEach(tagName => {
+          tagCounts.set(tagName, (tagCounts.get(tagName) || 0) + 1)
         })
       })
       
