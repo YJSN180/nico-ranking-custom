@@ -101,9 +101,11 @@ jobs:
               for (let page = 1; page <= 10; page++) {
                 if (videoIds.size >= targetCount) break
 
-                console.log('取得中: ' + genre + ' page ' + page + ' (現在 ' + videoIds.size + '件)')
                 const ids = await fetchRankingPage(genre, page)
+                const beforeSize = videoIds.size
                 ids.forEach(id => videoIds.add(id))
+                const added = videoIds.size - beforeSize
+                console.log(genre + ' page ' + page + ': 取得=' + ids.length + ', 新規=' + added + ', 合計=' + videoIds.size)
 
                 if (ids.length < 100) break  // これ以上ページがない
                 await new Promise(r => setTimeout(r, 200))
