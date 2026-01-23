@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
     let items: any[] = []
     let isRealData = true
-    let fetchError = null
+    let fetchError: string | null = null
     
     // 実際のRSS取得を試みる
     try {

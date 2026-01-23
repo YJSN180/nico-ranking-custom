@@ -72,7 +72,7 @@ export async function GET(
     // og:image メタタグから1280x720サムネイルURL取得
     // 属性の順序が異なる場合も対応（content が先にくる場合）
     const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
-    let hdThumbnailUrl = null
+    let hdThumbnailUrl: string | null = null
     
     if (ogImageMatch) {
       hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]

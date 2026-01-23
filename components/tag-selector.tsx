@@ -21,7 +21,7 @@ interface TagSelectorProps {
 
 export function TagSelector({ config, onConfigChange, popularTags: propsTags = [], onCreateCustomRankingWithFilter, onPrefetchData, currentPeriod }: TagSelectorProps) {
   const [showCustomModal, setShowCustomModal] = useState(false)
-  const tagScrollRef = useRef<HTMLDivElement>(null)
+  const tagScrollRef = useRef<HTMLDivElement | null>(null)
   
   // カスタムランキング管理
   const { rankings, selectedId, selectedRanking, createRanking, updateRanking, deleteRanking, selectRanking, isLoading, updateRankingOrder, toggleVisibility } = useCustomRankings()
@@ -103,22 +103,27 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       // ローディング表示用（オプション）
       // eslint-disable-next-line no-console
       console.log('[DEBUG] Creating custom ranking...')
-      
+
+      const baseGenre: RankingGenre = data.baseGenre ?? 'all'
       const newRanking = await createRanking({
         title: data.title,
-        baseGenre: data.baseGenre,
+        baseGenre: baseGenre,
         conditions: data.conditions.map((condition, index) => ({
           ...condition,
           orderIndex: index
         }))
       })
-      
-      
-      // データの準備（フェッチとフィルタリング）
-      if (onCreateCustomRankingWithFilter && data.baseGenre) {
-        await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
+
+      // カスタムランキング作成失敗時はエラー
+      if (!newRanking) {
+        throw new Error('Failed to create custom ranking')
       }
-      
+
+      // データの準備（フェッチとフィルタリング）
+      if (onCreateCustomRankingWithFilter) {
+        await onCreateCustomRankingWithFilter(newRanking, baseGenre, data.conditions, data.title)
+      }
+
       // React Routerを使用して内部遷移（リロードを避ける）
       const newConfig = {
         ...config,

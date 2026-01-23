@@ -101,8 +101,10 @@ export function MylistsClient() {
         }
 
         // デフォルトマイリストを確保
-        await mylistManagerRef.current.getOrCreateDefaultMylist()
-        
+        if (mylistManagerRef.current) {
+          await mylistManagerRef.current.getOrCreateDefaultMylist()
+        }
+
         // 保存されたソート設定を読み込み
         if (mylistManagerRef.current) {
           const savedConfig = await mylistManagerRef.current.getMylistSortConfig()

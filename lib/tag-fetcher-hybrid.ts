@@ -153,6 +153,7 @@ export async function enrichRankingItemsWithTagDetailsHybrid(
   const forbiddenVideoIds: string[] = []
 
   // ===== Phase 1: v3_guest APIで一括取得 =====
+  // eslint-disable-next-line no-console
   console.log(`[Hybrid Tag Fetch] Phase 1: v3_guest API (${totalItems} items)`)
 
   for (let i = 0; i < items.length; i += v3GuestParallelCount) {
@@ -197,6 +198,7 @@ export async function enrichRankingItemsWithTagDetailsHybrid(
     const processed = Math.min(i + v3GuestParallelCount, totalItems)
     const progress = Math.floor((processed / totalItems) * 5) * 20
     if (progress > 0 && processed % Math.floor(totalItems / 5) < v3GuestParallelCount) {
+      // eslint-disable-next-line no-console
       console.log(
         `[Phase 1] ${progress}% complete (${processed}/${totalItems}), ` +
         `FORBIDDEN: ${forbiddenVideoIds.length}`
@@ -212,6 +214,7 @@ export async function enrichRankingItemsWithTagDetailsHybrid(
   const v3GuestTime = Date.now() - startTime
   const v3GuestSuccess = results.size
 
+  // eslint-disable-next-line no-console
   console.log(
     `[Phase 1] Completed: ${v3GuestSuccess}/${totalItems} items in ${(v3GuestTime / 1000).toFixed(1)}s, ` +
     `FORBIDDEN: ${forbiddenVideoIds.length}`
@@ -219,6 +222,7 @@ export async function enrichRankingItemsWithTagDetailsHybrid(
 
   // ===== Phase 2: FORBIDDEN動画のみgetthumbinfo APIで取得 =====
   if (forbiddenVideoIds.length > 0) {
+    // eslint-disable-next-line no-console
     console.log(`[Hybrid Tag Fetch] Phase 2: getthumbinfo API (${forbiddenVideoIds.length} FORBIDDEN items)`)
 
     const phase2Start = Date.now()
@@ -255,6 +259,7 @@ export async function enrichRankingItemsWithTagDetailsHybrid(
     }
 
     const phase2Time = Date.now() - phase2Start
+    // eslint-disable-next-line no-console
     console.log(
       `[Phase 2] Completed: ${phase2Success}/${forbiddenVideoIds.length} items in ${(phase2Time / 1000).toFixed(1)}s`
     )
@@ -280,6 +285,7 @@ export async function enrichRankingItemsWithTagDetailsHybrid(
   const totalTime = Date.now() - startTime
   const itemsWithTags = enrichedItems.filter(item => (item as any).tagDetails?.length > 0).length
 
+  // eslint-disable-next-line no-console
   console.log(
     `[Hybrid Tag Fetch] Final: ${itemsWithTags}/${totalItems} items with tags ` +
     `(${Math.round(itemsWithTags / totalItems * 100)}%) in ${(totalTime / 1000).toFixed(1)}s`

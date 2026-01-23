@@ -51,6 +51,17 @@ interface ClientPageProps {
   popularTags?: string[]
 }
 
+// PWA セッション復元用の型定義
+interface SavedNavigationState {
+  genre?: RankingGenre
+  period?: RankingPeriod
+  tag?: string
+  page?: number
+  scrollPosition?: number
+  popularTags?: string[]
+  savedAt?: number
+}
+
 // ページネーション設定
 const ITEMS_PER_PAGE = 100   // ページあたりの表示件数（DOM要素数削減のため）
 
@@ -427,7 +438,7 @@ export default function ClientPage({
   }, [])
   
   // localStorageから復元する設定を管理
-  const [shouldRestore, setShouldRestore] = useState(null)
+  const [shouldRestore, setShouldRestore] = useState<SavedNavigationState | null>(null)
   
   // クライアント側の初期化処理
   useEffect(() => {
