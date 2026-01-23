@@ -1,33 +1,36 @@
 import type { RankingGenre } from '../types/ranking-config'
 
-// Genre to group mapping
+// Genre to group mapping (6グループ分散 - getthumbinfo APIレート制限対策)
 const GENRE_TO_GROUP: Record<string, number> = {
   // Group 1
   'all': 1,
   'game': 1,
   'anime': 1,
   'vocaloid': 1,
-  'voicesynthesis': 1,
-  'entertainment': 1,
-  'music': 1,
-  'sing': 1,
   // Group 2
-  'dance': 2,
-  'play': 2,
-  'commentary': 2,
-  'cooking': 2,
-  'travel': 2,
-  'nature': 2,
-  'vehicle': 2,
-  'technology': 2,
+  'voicesynthesis': 2,
+  'entertainment': 2,
+  'music': 2,
+  'sing': 2,
   // Group 3
-  'society': 3,
-  'mmd': 3,
-  'vtuber': 3,
-  'radio': 3,
-  'sports': 3,
-  'animal': 3,
-  'other': 3
+  'dance': 3,
+  'play': 3,
+  'commentary': 3,
+  'cooking': 3,
+  // Group 4
+  'travel': 4,
+  'nature': 4,
+  'vehicle': 4,
+  'technology': 4,
+  // Group 5
+  'society': 5,
+  'mmd': 5,
+  'vtuber': 5,
+  'radio': 5,
+  // Group 6
+  'sports': 6,
+  'animal': 6,
+  'other': 6
 }
 
 /**
