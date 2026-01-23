@@ -1,8 +1,53 @@
 #!/usr/bin/env npx tsx
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { gunzip } from 'zlib'
+import { promisify } from 'util'
 import { GENRE_GROUPS, type RankingGenre } from '../types/ranking-config'
 import { compressForStorage } from '../lib/unified-compression.js'
+
+const gunzipAsync = promisify(gunzip)
+
+// Fetch existing KV group data and decompress it
+async function fetchExistingKVGroupData(groupId: string): Promise<any | null> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+    return null;
+  }
+
+  const keyName = `RANKING_GROUP_${groupId}`;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${CF_API_TOKEN}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.log(`No existing data for ${keyName} (${response.status})`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Check if gzip compressed (magic bytes: 1f 8b)
+    if (buffer[0] === 0x1f && buffer[1] === 0x8b) {
+      const decompressed = await gunzipAsync(buffer);
+      return JSON.parse(decompressed.toString('utf-8'));
+    } else {
+      return JSON.parse(buffer.toString('utf-8'));
+    }
+  } catch (error) {
+    console.log(`Error fetching ${keyName}:`, error);
+    return null;
+  }
+}
 
 // Save derived NG entries to KV
 async function saveDerivedNGEntriesToKV(newEntries: string[]): Promise<void> {
@@ -151,29 +196,43 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
   }
 }
 
-// Write data split by groups (supports partial updates via TARGET_GROUPS env var)
+// Write data split by 3 groups (GENRE_GROUPS structure)
+// This function MERGES new data with existing KV data for partial updates
+// It preserves genres that are not in the current update
 async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
-  console.log('\n📦 Starting group-based KV write...');
+  console.log('\n📦 Starting group-based KV write with merge support...');
+  console.log('Note: Writing to GENRE_GROUPS (3 groups) - merging with existing data for partial updates');
 
-  // Check if we're doing a partial update (rotation-based)
-  const targetGroupsEnv = process.env.TARGET_GROUPS;
-  const targetGroups = targetGroupsEnv
-    ? targetGroupsEnv.split(',').map(g => g.trim())
-    : Object.keys(GENRE_GROUPS); // Default: all groups
-
-  console.log(`Target groups for this update: ${targetGroups.join(', ')}`);
+  // Log which genres we have data for
+  const availableGenres = Object.keys(rankingData.genres || {});
+  console.log(`Available genres in this update: ${availableGenres.join(', ')} (${availableGenres.length} genres)`);
 
   // Calculate size of each group before writing
   const groupSizes: Record<string, number> = {};
   let writtenCount = 0;
 
   for (const [groupId, genreList] of Object.entries(GENRE_GROUPS)) {
-    // Skip groups not in target list (for partial updates)
-    if (!targetGroups.includes(groupId)) {
-      console.log(`⏭️  Skipping Group ${groupId} (not in target groups)`);
+    // Check which genres in this group have new data
+    let hasNewData = false;
+    let genresWithNewData: string[] = [];
+    for (const genre of genreList) {
+      if (rankingData.genres[genre]) {
+        hasNewData = true;
+        genresWithNewData.push(genre);
+      }
+    }
+
+    // Skip if no new data for this group
+    if (!hasNewData) {
+      console.log(`⏭️  Group ${groupId} has no new data, skipping (existing KV data preserved)`);
       continue;
     }
 
+    // Fetch existing KV data to merge with
+    console.log(`🔄 Fetching existing data for Group ${groupId} to merge...`);
+    const existingData = await fetchExistingKVGroupData(groupId);
+
+    // Create merged group data
     const groupData = {
       genres: {} as any,
       metadata: {
@@ -183,25 +242,35 @@ async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
       }
     };
 
-    // Extract only genres in this group
-    let hasData = false;
-    for (const genre of genreList) {
-      if (rankingData.genres[genre]) {
-        groupData.genres[genre] = rankingData.genres[genre];
-        hasData = true;
+    // Start with existing genres (if any)
+    let genresFromExisting: string[] = [];
+    if (existingData?.genres) {
+      for (const genre of genreList) {
+        if (existingData.genres[genre] && !rankingData.genres[genre]) {
+          // Keep existing data for genres not in current update
+          groupData.genres[genre] = existingData.genres[genre];
+          genresFromExisting.push(genre);
+        }
       }
     }
 
-    // Skip if no data for this group
-    if (!hasData) {
-      console.log(`⚠️  Group ${groupId} has no data, skipping KV write`);
-      continue;
+    // Add/overwrite with new data
+    for (const genre of genreList) {
+      if (rankingData.genres[genre]) {
+        groupData.genres[genre] = rankingData.genres[genre];
+      }
+    }
+
+    const totalGenres = Object.keys(groupData.genres).length;
+    console.log(`Group ${groupId}: ${genresWithNewData.length} new genres (${genresWithNewData.join(', ')})`);
+    if (genresFromExisting.length > 0) {
+      console.log(`         + ${genresFromExisting.length} existing genres preserved (${genresFromExisting.join(', ')})`);
     }
 
     // Calculate and log size
     const groupSize = JSON.stringify(groupData).length / 1024 / 1024;
     groupSizes[groupId] = groupSize;
-    console.log(`Group ${groupId}: ${groupSize.toFixed(2)} MB (${genreList.length} genres)`);
+    console.log(`         = ${totalGenres}/${genreList.length} total genres, ${groupSize.toFixed(2)} MB`);
 
     // Write this group to KV
     try {
@@ -213,7 +282,7 @@ async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
     }
   }
 
-  console.log(`\n✅ Successfully wrote ${writtenCount} groups to KV`);
+  console.log(`\n✅ Successfully wrote ${writtenCount}/3 groups to KV`);
   console.log('Written group sizes:', groupSizes);
 }
 
