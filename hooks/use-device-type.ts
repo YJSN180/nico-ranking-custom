@@ -30,18 +30,12 @@ export function useDeviceType(): DeviceType {
     if (typeof window === 'undefined') {
       return 'desktop' // SSR時のデフォルト
     }
-    const detected = getDeviceType(window.innerWidth)
-    // eslint-disable-next-line no-console
-    console.log('[DEBUG] Initial device detection - Width:', window.innerWidth, 'Type:', detected)
-    return detected
+    return getDeviceType(window.innerWidth)
   })
 
   useEffect(() => {
     function handleResize() {
-      const newDeviceType = getDeviceType(window.innerWidth)
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Resize device detection - Width:', window.innerWidth, 'Type:', newDeviceType)
-      setDeviceType(newDeviceType)
+      setDeviceType(getDeviceType(window.innerWidth))
     }
 
     // 初期値を設定

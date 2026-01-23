@@ -63,12 +63,12 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
         // マイグレーションチェック
         const migrator = new CustomRankingMigrator(managerRef.current)
         if (await migrator.needsMigration()) {
-          console.log('Starting custom ranking migration...')
+          console.debug('Starting custom ranking migration...')
           const result = await migrator.migrate()
           setMigrationStatus(result)
-          
+
           if (result.success) {
-            console.log(`Migration completed: ${result.migratedCount} rankings migrated`)
+            console.debug(`Migration completed: ${result.migratedCount} rankings migrated`)
             if (result.selectedId) {
               setSelectedId(result.selectedId)
             }
