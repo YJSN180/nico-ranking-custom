@@ -151,14 +151,29 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
   }
 }
 
-// Write data split into 3 groups
+// Write data split by groups (supports partial updates via TARGET_GROUPS env var)
 async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
-  console.log('\n📦 Starting 3-key split write...');
-  
+  console.log('\n📦 Starting group-based KV write...');
+
+  // Check if we're doing a partial update (rotation-based)
+  const targetGroupsEnv = process.env.TARGET_GROUPS;
+  const targetGroups = targetGroupsEnv
+    ? targetGroupsEnv.split(',').map(g => g.trim())
+    : Object.keys(GENRE_GROUPS); // Default: all groups
+
+  console.log(`Target groups for this update: ${targetGroups.join(', ')}`);
+
   // Calculate size of each group before writing
   const groupSizes: Record<string, number> = {};
-  
+  let writtenCount = 0;
+
   for (const [groupId, genreList] of Object.entries(GENRE_GROUPS)) {
+    // Skip groups not in target list (for partial updates)
+    if (!targetGroups.includes(groupId)) {
+      console.log(`⏭️  Skipping Group ${groupId} (not in target groups)`);
+      continue;
+    }
+
     const groupData = {
       genres: {} as any,
       metadata: {
@@ -167,30 +182,39 @@ async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
         genresInGroup: genreList
       }
     };
-    
+
     // Extract only genres in this group
+    let hasData = false;
     for (const genre of genreList) {
       if (rankingData.genres[genre]) {
         groupData.genres[genre] = rankingData.genres[genre];
+        hasData = true;
       }
     }
-    
+
+    // Skip if no data for this group
+    if (!hasData) {
+      console.log(`⚠️  Group ${groupId} has no data, skipping KV write`);
+      continue;
+    }
+
     // Calculate and log size
     const groupSize = JSON.stringify(groupData).length / 1024 / 1024;
     groupSizes[groupId] = groupSize;
     console.log(`Group ${groupId}: ${groupSize.toFixed(2)} MB (${genreList.length} genres)`);
-    
+
     // Write this group to KV
     try {
       await writeToCloudflareKV(groupData, `RANKING_GROUP_${groupId}`);
+      writtenCount++;
     } catch (error) {
       console.error(`Failed to write group ${groupId}:`, error);
       throw error;
     }
   }
-  
-  console.log('\n✅ Successfully wrote all 3 groups to KV');
-  console.log('Total sizes:', groupSizes);
+
+  console.log(`\n✅ Successfully wrote ${writtenCount} groups to KV`);
+  console.log('Written group sizes:', groupSizes);
 }
 
 async function main() {
