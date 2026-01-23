@@ -196,3 +196,104 @@ export async function handleWithCache(
     headers
   })
 }
+
+/**
+ * Cache-Control Header Utilities
+ * Workers間でキャッシュヘッダーを統一するためのユーティリティ
+ */
+
+/**
+ * キャッシュタイプ
+ * - ranking: ランキングデータ（短期間キャッシュ、stale-while-revalidate付き）
+ * - metadata: メタデータ（中期間キャッシュ）
+ * - static: 静的アセット（長期間キャッシュ、immutable）
+ * - image: 画像（長期間キャッシュ、immutable）
+ * - none: キャッシュなし
+ */
+export type CacheType = 'ranking' | 'metadata' | 'static' | 'image' | 'none'
+
+/**
+ * キャッシュタイプに応じたCache-Controlヘッダーを取得
+ */
+export function getCacheHeaders(type: CacheType): Record<string, string> {
+  switch (type) {
+    case 'ranking':
+      return {
+        'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+        'CDN-Cache-Control': 'public, max-age=60',
+        'Vercel-CDN-Cache-Control': 'public, max-age=60'
+      }
+    case 'metadata':
+      return {
+        'Cache-Control': 'public, max-age=3600',
+        'CDN-Cache-Control': 'public, max-age=3600',
+        'Vercel-CDN-Cache-Control': 'public, max-age=3600'
+      }
+    case 'static':
+      return {
+        'Cache-Control': 'public, max-age=86400, immutable',
+        'CDN-Cache-Control': 'public, max-age=86400',
+        'Vercel-CDN-Cache-Control': 'public, max-age=86400'
+      }
+    case 'image':
+      return {
+        'Cache-Control': 'public, max-age=2592000, immutable',
+        'CDN-Cache-Control': 'public, max-age=2592000',
+        'Vercel-CDN-Cache-Control': 'public, max-age=2592000'
+      }
+    case 'none':
+      return {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store'
+      }
+  }
+}
+
+/**
+ * Headersオブジェクトにキャッシュヘッダーを設定
+ */
+export function setCacheHeaders(headers: Headers, type: CacheType): void {
+  const cacheHeaders = getCacheHeaders(type)
+  for (const [key, value] of Object.entries(cacheHeaders)) {
+    headers.set(key, value)
+  }
+}
+
+/**
+ * カスタムTTLでキャッシュヘッダーを生成
+ */
+export function getCustomCacheHeaders(
+  browserMaxAge: number,
+  cdnMaxAge: number = browserMaxAge,
+  options: { immutable?: boolean; staleWhileRevalidate?: number } = {}
+): Record<string, string> {
+  let browserValue = `public, max-age=${browserMaxAge}`
+  if (options.immutable) {
+    browserValue += ', immutable'
+  }
+  if (options.staleWhileRevalidate) {
+    browserValue += `, stale-while-revalidate=${options.staleWhileRevalidate}`
+  }
+
+  return {
+    'Cache-Control': browserValue,
+    'CDN-Cache-Control': `public, max-age=${cdnMaxAge}`,
+    'Vercel-CDN-Cache-Control': `public, max-age=${cdnMaxAge}`
+  }
+}
+
+/**
+ * カスタムTTLでHeadersにキャッシュヘッダーを設定
+ */
+export function setCustomCacheHeaders(
+  headers: Headers,
+  browserMaxAge: number,
+  cdnMaxAge: number = browserMaxAge,
+  options: { immutable?: boolean; staleWhileRevalidate?: number } = {}
+): void {
+  const cacheHeaders = getCustomCacheHeaders(browserMaxAge, cdnMaxAge, options)
+  for (const [key, value] of Object.entries(cacheHeaders)) {
+    headers.set(key, value)
+  }
+}
