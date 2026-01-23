@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
 import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
 import { TagIcon } from './tag-icon'
+import { useFocusTrap } from '@/hooks/use-focus-trap'
 import styles from './custom-ranking-modal.module.css'
 
 // 演算子の自然言語ラベル
@@ -98,6 +99,9 @@ export function CustomRankingModal({
   
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
+
+  // フォーカストラップを有効化
+  useFocusTrap(isOpen, modalRef)
 
   // オートコンプリート用のAPIエンドポイント
   const getAutocompleteEndpoint = () => {
@@ -301,12 +305,22 @@ export function CustomRankingModal({
     : currentStep === 2 ? formData.conditions.length > 0
     : formData.title.trim().length > 0 && !isTitleDuplicated
 
+  // モーダルのタイトルID
+  const titleId = 'custom-ranking-modal-title'
+
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <h2 id={titleId}>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
+          <button className={styles.closeButton} onClick={onClose} aria-label="閉じる">×</button>
         </div>
 
         {/* ステップインジケーター */}

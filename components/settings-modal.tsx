@@ -11,6 +11,7 @@ import { MylistBackup } from './mylist-backup'
 import { UnifiedBackup } from './unified-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
+import { useFocusTrap } from '@/hooks/use-focus-trap'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -59,7 +60,27 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   
   // ジャンル並び替えコンポーネントの参照
   const genreOrderRef = useRef<GenreOrderCustomizerRef | null>(null)
-  
+
+  // モーダルのref
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  // フォーカストラップを有効化
+  useFocusTrap(isOpen, modalRef)
+
+  // ESCキーで閉じる
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isDragging) {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [isOpen, onClose, isDragging])
+
   // NGリストが変更されたら一時リストも更新（モーダルを開いた時）
   useEffect(() => {
     if (isOpen) {
@@ -438,12 +459,22 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
 
+  // モーダルのタイトルID
+  const titleId = 'settings-modal-title'
+
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>設定</h2>
-          <button className={styles.closeButton} onClick={handleClose}>×</button>
+          <h2 id={titleId}>設定</h2>
+          <button className={styles.closeButton} onClick={handleClose} aria-label="閉じる">×</button>
         </div>
 
         <div className={styles.tabs}>

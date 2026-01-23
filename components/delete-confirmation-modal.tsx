@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { useFocusTrap } from '@/hooks/use-focus-trap'
 import styles from './delete-confirmation-modal.module.css'
 
 interface DeleteConfirmationModalProps {
@@ -22,6 +23,9 @@ export function DeleteConfirmationModal({
 }: DeleteConfirmationModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
 
+  // フォーカストラップを有効化
+  useFocusTrap(isOpen, modalRef)
+
   // ESCキーで閉じる
   useEffect(() => {
     if (!isOpen) return
@@ -38,12 +42,22 @@ export function DeleteConfirmationModal({
 
   if (!isOpen) return null
 
+  // モーダルのタイトルID
+  const titleId = 'delete-confirmation-modal-title'
+
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>{title}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <h2 id={titleId}>{title}</h2>
+          <button className={styles.closeButton} onClick={onClose} aria-label="閉じる">×</button>
         </div>
 
         <div className={styles.content}>

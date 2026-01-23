@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useFocusTrap } from '@/hooks/use-focus-trap'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
 import Link from 'next/link'
@@ -26,6 +27,23 @@ export function MylistModal({
 }: MylistModalProps) {
   // mylistsが配列であることを確認
   const safeMylistArray = Array.isArray(mylists) ? mylists : []
+
+  const modalRef = useRef<HTMLDivElement>(null)
+
+  // フォーカストラップを有効化
+  useFocusTrap(true, modalRef)
+
+  // ESCキーで閉じる
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [onClose])
   const [showNewForm, setShowNewForm] = useState(false)
   const [newMylistName, setNewMylistName] = useState('')
   const [newMylistDescription, setNewMylistDescription] = useState('')
@@ -72,9 +90,11 @@ export function MylistModal({
         }}
         data-testid="modal-overlay" 
       />
-      <div 
-        className={styles.modal} 
-        role="dialog" 
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
         aria-labelledby="mylist-modal-title"
         onClick={handleModalClick}
         onTouchStart={(e) => {
