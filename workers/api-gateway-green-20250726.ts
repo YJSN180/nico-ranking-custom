@@ -39,6 +39,7 @@ interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
   RATE_LIMITER: any // Cloudflare Rate Limiting binding
+  ENVIRONMENT?: string // 'production' | 'staging' | 'development'
 }
 
 // タグ累積データの型定義
@@ -239,30 +240,81 @@ export default {
     }
     
     // /api/debug エンドポイント
+    // セキュリティ対策: 本番環境では無効化、開発環境でもセンシティブヘッダーをマスク
     if (url.pathname === '/api/debug') {
+      // 本番環境ではdebugエンドポイントを無効化
+      if (env.ENVIRONMENT === 'production') {
+        const forbiddenResponse = new Response(
+          JSON.stringify({
+            error: 'Debug endpoint is disabled in production',
+            message: 'This endpoint is only available in non-production environments',
+          }),
+          {
+            status: 403,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Worker-Version': 'green-20250726-unified-cors',
+            },
+          }
+        )
+
+        const origin = request.headers.get('Origin')
+        return applyCORSHeaders(forbiddenResponse, origin, securityHeaders)
+      }
+
       const { debugInfo, secondsUntilUpdate } = calculateDynamicTTL()
-      
+
+      // センシティブなヘッダーをマスク
+      const sensitiveHeaders = [
+        'authorization',
+        'cookie',
+        'set-cookie',
+        'x-worker-auth',
+        'x-api-key',
+        'x-auth-token',
+        'x-access-token',
+        'x-session-id',
+        'x-csrf-token',
+      ]
+
+      const maskedHeaders: Record<string, string> = {}
+      for (const [key, value] of request.headers.entries()) {
+        if (sensitiveHeaders.includes(key.toLowerCase())) {
+          maskedHeaders[key] = '[REDACTED]'
+        } else {
+          maskedHeaders[key] = value
+        }
+      }
+
       const debugOutput = {
         time: new Date().toISOString(),
-        headers: Object.fromEntries(request.headers.entries()),
+        headers: maskedHeaders,
         worker: 'api-gateway-green-20250726',
         version: 'green-20250726-dynamic-ttl',
-        features: ['dynamic-ttl', 'etag-support', 'html-decode', 'smart-router-compatible'],
+        features: [
+          'dynamic-ttl',
+          'etag-support',
+          'html-decode',
+          'smart-router-compatible',
+        ],
         dynamicTTL: {
           ...debugInfo,
           secondsUntilUpdate,
-          nextUpdateTime: new Date(Date.now() + secondsUntilUpdate * 1000).toISOString()
-        }
-      };
-      
+          nextUpdateTime: new Date(
+            Date.now() + secondsUntilUpdate * 1000
+          ).toISOString(),
+        },
+        environment: env.ENVIRONMENT || 'unknown',
+      }
+
       const debugResponse = new Response(JSON.stringify(debugOutput, null, 2), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'X-Worker-Version': 'green-20250726-unified-cors'
-        }
+          'X-Worker-Version': 'green-20250726-unified-cors',
+        },
       })
-      
+
       const origin = request.headers.get('Origin')
       return applyCORSHeaders(debugResponse, origin, securityHeaders)
     }
