@@ -4,7 +4,7 @@ import ClientPage from '../client-page'
 
 export default async function Test500Page() {
   const { items, popularTags } = await getOtherGenre500Items()
-  
+
   return (
     <div>
       <h1 style={{ textAlign: 'center', margin: '20px 0' }}>
@@ -14,11 +14,10 @@ export default async function Test500Page() {
         NGフィルタリング済み、「もっと見る」ボタンで100件ずつ表示
       </p>
       <SuspenseWrapper>
-        <ClientPage 
-          initialData={items} 
+        <ClientPage
+          initialData={{ items, popularTags }}
           initialGenre="other"
           initialPeriod="24h"
-          popularTags={popularTags}
         />
       </SuspenseWrapper>
     </div>
