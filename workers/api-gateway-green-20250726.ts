@@ -230,39 +230,47 @@ function isETagMatch(currentETag: string, ifNoneMatch: string | null): boolean {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // リクエスト追跡用のユニークIDを生成
+    const requestId = crypto.randomUUID()
     const url = new URL(request.url)
-    
+
+    console.log(`[${requestId}] Request started: ${request.method} ${url.pathname}`)
+
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
       const origin = request.headers.get('Origin')
-      return createOptionsResponse(origin)
+      const response = createOptionsResponse(origin)
+      response.headers.set('X-Request-ID', requestId)
+      return response
     }
-    
+
     // /api/debug エンドポイント
     if (url.pathname === '/api/debug') {
       const { debugInfo, secondsUntilUpdate } = calculateDynamicTTL()
-      
+
       const debugOutput = {
+        requestId,
         time: new Date().toISOString(),
         headers: Object.fromEntries(request.headers.entries()),
         worker: 'api-gateway-green-20250726',
         version: 'green-20250726-dynamic-ttl',
-        features: ['dynamic-ttl', 'etag-support', 'html-decode', 'smart-router-compatible'],
+        features: ['dynamic-ttl', 'etag-support', 'html-decode', 'smart-router-compatible', 'request-id-tracking'],
         dynamicTTL: {
           ...debugInfo,
           secondsUntilUpdate,
           nextUpdateTime: new Date(Date.now() + secondsUntilUpdate * 1000).toISOString()
         }
-      };
-      
+      }
+
       const debugResponse = new Response(JSON.stringify(debugOutput, null, 2), {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'X-Worker-Version': 'green-20250726-unified-cors'
+          'X-Worker-Version': 'green-20250726-unified-cors',
+          'X-Request-ID': requestId
         }
       })
-      
+
       const origin = request.headers.get('Origin')
       return applyCORSHeaders(debugResponse, origin, securityHeaders)
     }
@@ -279,14 +287,14 @@ export default {
           let metadataText: string
           
           if (contentEncoding === 'gzip') {
-            console.log('[Green Worker] Metadata is gzipped, decompressing...')
+            console.log(`[${requestId}] Metadata is gzipped, decompressing...`)
             try {
               const compressedData = await metadataObject.arrayBuffer()
               metadataText = await new Response(
                 new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
               ).text()
             } catch (decompressError) {
-              console.error('[Green Worker] Failed to decompress metadata:', decompressError)
+              console.error(`[${requestId}] Failed to decompress metadata:`, decompressError)
               metadataText = await metadataObject.text()
             }
           } else {
@@ -299,7 +307,8 @@ export default {
               'Content-Type': 'application/json',
               'Cache-Control': cacheControl,
               'ETag': metadataObject.httpEtag || `"${metadataObject.etag}"`,
-              'X-Worker-Version': 'green-20250726-unified-cors'
+              'X-Worker-Version': 'green-20250726-unified-cors',
+              'X-Request-ID': requestId
             }
           })
           
@@ -307,15 +316,16 @@ export default {
           return applyCORSHeaders(metadataResponse, origin, securityHeaders)
         }
       } catch (error) {
-        console.error('Metadata read error:', error)
+        console.error(`[${requestId}] Metadata read error:`, error)
       }
       const emptyResponse = new Response('{}', {
         status: 200,
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-Request-ID': requestId
         }
       })
-      
+
       const origin = request.headers.get('Origin')
       return applyCORSHeaders(emptyResponse, origin, securityHeaders)
     }
@@ -338,7 +348,8 @@ export default {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=300' // 5分キャッシュ
+              'Cache-Control': 'public, max-age=300',
+              'X-Request-ID': requestId
             }
           })
           const origin = request.headers.get('Origin')
@@ -362,7 +373,8 @@ export default {
             status: 200,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=60' // 1分キャッシュ
+              'Cache-Control': 'public, max-age=60',
+              'X-Request-ID': requestId
             }
           })
           const origin = request.headers.get('Origin')
@@ -377,7 +389,7 @@ export default {
           
           if (contentEncoding === 'gzip') {
             // gzipデータとして解凍
-            console.log('[Green Worker] Tag data is gzipped, decompressing...')
+            console.log(`[${requestId}] Tag data is gzipped, decompressing...`)
             const compressedData = await tagAccumulationObject.arrayBuffer()
             const decompressedData = await new Response(
               new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
@@ -385,12 +397,12 @@ export default {
             tagData = JSON.parse(decompressedData)
           } else {
             // 非圧縮データとして直接パース
-            console.log('[Green Worker] Loading uncompressed tag data...')
+            console.log(`[${requestId}] Loading uncompressed tag data...`)
             const textData = await tagAccumulationObject.text()
             tagData = JSON.parse(textData)
           }
         } catch (parseError) {
-          console.error('Failed to parse tag accumulation data:', parseError)
+          console.error(`[${requestId}] Failed to parse tag accumulation data:`, parseError)
           const errorResponse = new Response(JSON.stringify({
             query,
             suggestions: [],
@@ -403,7 +415,8 @@ export default {
             status: 500,
             headers: {
               'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache'
+              'Cache-Control': 'no-cache',
+              'X-Request-ID': requestId
             }
           })
           const origin = request.headers.get('Origin')
@@ -434,7 +447,8 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
+            'Cache-Control': 'public, max-age=1800',
+            'X-Request-ID': requestId
           }
         })
         
@@ -442,7 +456,7 @@ export default {
         return applyCORSHeaders(response, origin, securityHeaders)
 
       } catch (error) {
-        console.error('Tag autocomplete error:', error)
+        console.error(`[${requestId}] Tag autocomplete error:`, error)
         const errorResponse = new Response(JSON.stringify({
           query: url.searchParams.get('q') || '',
           suggestions: [],
@@ -455,7 +469,8 @@ export default {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
+            'Cache-Control': 'no-cache',
+            'X-Request-ID': requestId
           }
         })
         const origin = request.headers.get('Origin')
@@ -477,7 +492,7 @@ export default {
         const period = url.searchParams.get('period') || '24h'
         const tag = url.searchParams.get('tag') || ''
 
-        console.log(`[Worker v2.0 + Cache] Request processing - Genre: ${genre}, Period: ${period}, Tag: ${tag}`)
+        console.log(`[${requestId}] Request processing - Genre: ${genre}, Period: ${period}, Tag: ${tag}`)
 
         try {
         // R2からデータを取得
@@ -485,13 +500,13 @@ export default {
           ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
           : `rankings/${genre}/${period}/all.json`
         
-        console.log(`[Worker v2.0] Fetching from R2: ${r2Key}`)
+        console.log(`[${requestId}] Fetching from R2: ${r2Key}`)
         const r2Object = await env.R2_BUCKET.get(r2Key)
         
         if (!r2Object) {
           if (tag) {
             // タグ別データが存在しない場合は空の結果を返す
-            console.log(`[Worker v2.0] Tag data not found for ${r2Key}, returning empty result`)
+            console.log(`[${requestId}] Tag data not found for ${r2Key}, returning empty result`)
             const emptyResponse = {
               items: [],
               popularTags: [],
@@ -507,11 +522,11 @@ export default {
               status: 200,
               headers: {
                 'Content-Type': 'application/json',
-                // タグが見つからない場合も短時間キャッシュ（5分）して負荷軽減
                 'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=60',
                 'X-Data-Source': 'r2-tag-not-found',
                 'X-Worker-Version': 'green-20250726-unified-cors',
-                'X-Cache-Note': 'Tag not found - cached for 5 minutes to reduce load'
+                'X-Cache-Note': 'Tag not found - cached for 5 minutes to reduce load',
+                'X-Request-ID': requestId
               }
             })
             
@@ -519,7 +534,7 @@ export default {
             return applyCORSHeaders(emptyTagResponse, origin, securityHeaders)
           } else {
             // 通常のランキングデータが存在しない場合は404を返す
-            console.log(`[Worker v2.0] R2 miss for ${r2Key}, returning 404`)
+            console.log(`[${requestId}] R2 miss for ${r2Key}, returning 404`)
             const notFoundResponse = new Response(JSON.stringify({
               error: 'Ranking data not found',
               message: `No data available for ${genre}/${period}`
@@ -527,10 +542,10 @@ export default {
               status: 404,
               headers: {
                 'Content-Type': 'application/json',
-                // 404エラーも短時間キャッシュして負荷軽減
                 'Cache-Control': 'public, max-age=60, s-maxage=60',
                 'X-Data-Source': 'r2-not-found',
-                'X-Worker-Version': 'green-20250726-unified-cors'
+                'X-Worker-Version': 'green-20250726-unified-cors',
+                'X-Request-ID': requestId
               }
             })
             
@@ -555,7 +570,8 @@ export default {
               'CF-Cache-Status': 'REVALIDATED',
               'Server-Timing': `cfCache;desc="REVALIDATED", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`,
               'X-Worker-Version': 'green-20250726-unified-cors',
-              'X-TTL-Source': 'dynamic-20250726'
+              'X-TTL-Source': 'dynamic-20250726',
+              'X-Request-ID': requestId
             }
           })
           
@@ -585,7 +601,8 @@ export default {
         headers.set('X-Worker-Version', 'green-20250726')
         headers.set('X-TTL-Source', 'dynamic-20250726')
         headers.set('Server-Timing', `cfCache;desc="MISS", workerTTL;dur=${workerTTL}, nextUpdate;dur=${secondsUntilUpdate}`)
-        
+        headers.set('X-Request-ID', requestId)
+
         // セキュリティヘッダーを追加
         Object.entries(securityHeaders).forEach(([key, value]) => {
           headers.set(key, value)
@@ -599,7 +616,7 @@ export default {
         
         if (r2ContentEncoding === 'gzip') {
           // gzip圧縮されたデータの場合
-          console.log(`[Worker v2.0] Data is gzipped, decompressing and decoding`)
+          console.log(`[${requestId}] Data is gzipped, decompressing and decoding`)
           headers.set('X-Original-Encoding', 'gzip')
           
           try {
@@ -621,7 +638,7 @@ export default {
               const origin = request.headers.get('Origin')
               return applyCORSHeaders(gzipResponse, origin, {})
             } catch (parseError) {
-              console.error('[Green Worker] Failed to parse or decode JSON:', parseError)
+              console.error(`[${requestId}] Failed to parse or decode JSON:`, parseError)
               const gzipParseErrorResponse = new Response(decompressedData, {
                 status: 200,
                 headers
@@ -631,7 +648,7 @@ export default {
               return applyCORSHeaders(gzipParseErrorResponse, origin, {})
             }
           } catch (decompressError) {
-            console.error('[Green Worker] Failed to decompress gzipped data:', decompressError)
+            console.error(`[${requestId}] Failed to decompress gzipped data:`, decompressError)
             const gzipErrorResponse = new Response(workStream, {
               status: 200,
               headers,
@@ -643,7 +660,7 @@ export default {
           }
         } else {
           // 非圧縮データの場合
-          console.log(`[Worker v2.0] Data is not gzipped, decoding HTML entities`)
+          console.log(`[${requestId}] Data is not gzipped, decoding HTML entities`)
           
           try {
             const textData = await new Response(passthroughStream).text()
@@ -662,7 +679,7 @@ export default {
           'Vercel-CDN-Cache-Control': 'no-store'
         })
           } catch (error) {
-            console.error('[Green Worker] Failed to parse or decode JSON:', error)
+            console.error(`[${requestId}] Failed to parse or decode JSON:`, error)
             const normalErrorResponse = new Response(workStream, {
               status: 200,
               headers
@@ -674,7 +691,7 @@ export default {
         }
         
       } catch (error) {
-        console.error('[Green Worker] Error fetching from R2:', error)
+        console.error(`[${requestId}] Error fetching from R2:`, error)
         const errorResponse = new Response(JSON.stringify({
           error: 'Internal server error',
           message: 'Failed to fetch ranking data'
@@ -682,9 +699,9 @@ export default {
           status: 500,
           headers: {
             'Content-Type': 'application/json',
-            // エラー時も短時間キャッシュ
             'Cache-Control': 'public, max-age=30, s-maxage=30',
-            'X-Worker-Version': 'green-20250726-unified-cors'
+            'X-Worker-Version': 'green-20250726-unified-cors',
+            'X-Request-ID': requestId
           }
         })
 
@@ -703,7 +720,8 @@ export default {
           const invalidIdResponse = new Response(JSON.stringify({ error: 'Invalid video ID' }), {
             status: 400,
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'X-Request-ID': requestId
             }
           })
           
@@ -732,7 +750,8 @@ export default {
           const videoNotFoundResponse = new Response(JSON.stringify({ error: 'Video not found' }), {
             status: 404,
             headers: {
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'X-Request-ID': requestId
             }
           })
           
@@ -749,7 +768,7 @@ export default {
         const ogImageMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
         if (ogImageMatch) {
           thumbnailUrl = ogImageMatch[1]
-          console.log('Thumbnail found in og:image:', thumbnailUrl)
+          console.log(`[${requestId}] Thumbnail found in og:image:`, thumbnailUrl)
         }
         
         // og:imageで見つからない場合は、thumbnailメタタグを試す
@@ -757,7 +776,7 @@ export default {
           const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
           if (thumbnailMatch) {
             thumbnailUrl = thumbnailMatch[1]
-            console.log('Thumbnail found in thumbnail meta tag:', thumbnailUrl)
+            console.log(`[${requestId}] Thumbnail found in thumbnail meta tag:`, thumbnailUrl)
           }
         }
         
@@ -776,7 +795,7 @@ export default {
                     thumbnailUrl = jsonLd.thumbnailUrl
                   }
                   if (thumbnailUrl) {
-                    console.log('Thumbnail found in JSON-LD:', thumbnailUrl)
+                    console.log(`[${requestId}] Thumbnail found in JSON-LD:`, thumbnailUrl)
                     break
                   }
                 }
@@ -785,11 +804,11 @@ export default {
               }
             }
           } catch (e) {
-            console.error('Failed to process JSON-LD:', e)
+            console.error(`[${requestId}] Failed to process JSON-LD:`, e)
           }
         }
         
-        console.log('Final thumbnail URL:', thumbnailUrl)
+        console.log(`[${requestId}] Final thumbnail URL:`, thumbnailUrl)
         
         // サムネイルURLを大きいサイズに変換
         if (thumbnailUrl) {
@@ -797,7 +816,7 @@ export default {
           
           // originalサイズのURLの場合はそのまま使用
           if (thumbnailUrl.includes('.original') || thumbnailUrl.includes('/original/')) {
-            console.log('Already original size thumbnail:', thumbnailUrl)
+            console.log(`[${requestId}] Already original size thumbnail:`, thumbnailUrl)
           } else {
             // ニコニコ動画のサムネイルURL形式
             // 例: https://nicovideo.cdn.nimg.jp/thumbnails/12345678/12345678.12345678
@@ -823,7 +842,7 @@ export default {
             
             // クエリパラメータを再結合
             thumbnailUrl = urlQuery ? `${cleanUrl}?${urlQuery}` : cleanUrl
-            console.log('Converted to large thumbnail:', thumbnailUrl)
+            console.log(`[${requestId}] Converted to large thumbnail:`, thumbnailUrl)
           }
         }
         
@@ -836,9 +855,9 @@ export default {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            // CDNレベルでのキャッシュのみ（個人差があるためKVキャッシュは使用しない）
-            'Cache-Control': 'public, max-age=3600, s-maxage=86400', // ブラウザ1時間、CDN24時間
-            'X-Worker-Version': 'green-20250726-unified-cors'
+            'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+            'X-Worker-Version': 'green-20250726-unified-cors',
+            'X-Request-ID': requestId
           }
         })
         
@@ -846,11 +865,12 @@ export default {
         return applyCORSHeaders(thumbnailResponse, origin, securityHeaders)
         
       } catch (error) {
-        console.error('Error fetching thumbnail:', error)
+        console.error(`[${requestId}] Error fetching thumbnail:`, error)
         const thumbnailErrorResponse = new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-Request-ID': requestId
           }
         })
         
@@ -867,7 +887,8 @@ export default {
         const hdInvalidIdResponse = new Response(JSON.stringify({ error: 'Invalid video ID' }), {
           status: 400,
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-Request-ID': requestId
           }
         })
         
@@ -883,7 +904,7 @@ export default {
       
       try {
         // nicovideo.gay から高解像度サムネイル取得
-        console.log(`[HD Thumbnail] Fetching HD thumbnail for ${videoId}`)
+        console.log(`[${requestId}] Fetching HD thumbnail for ${videoId}`)
         const nicogayUrl = `https://www.nicovideo.gay/watch/${videoId}`
         
         const response = await fetch(nicogayUrl, {
@@ -908,11 +929,11 @@ export default {
         
         if (ogImageMatch) {
           hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]
-          console.log(`[HD Thumbnail] Found og:image: ${hdThumbnailUrl}`)
+          console.log(`[${requestId}] Found HD og:image: ${hdThumbnailUrl}`)
           
           // サムネイルURLの検証（1280x720であることを確認）
           if (hdThumbnailUrl.includes('1280x720') || hdThumbnailUrl.includes('.original')) {
-            console.log(`[HD Thumbnail] Confirmed HD size for ${videoId}`)
+            console.log(`[${requestId}] Confirmed HD size for ${videoId}`)
           } else {
             // フォールバック: .original サフィックスで最大サイズ取得を試行
             const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
@@ -921,7 +942,7 @@ export default {
               originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
             }
             hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-            console.log(`[HD Thumbnail] Fallback to original: ${hdThumbnailUrl}`)
+            console.log(`[${requestId}] HD Fallback to original: ${hdThumbnailUrl}`)
           }
         }
         
@@ -937,7 +958,7 @@ export default {
               originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
             }
             hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-            console.log(`[HD Thumbnail] Fallback thumbnail with original: ${hdThumbnailUrl}`)
+            console.log(`[${requestId}] HD Fallback thumbnail with original: ${hdThumbnailUrl}`)
           }
         }
         
@@ -955,7 +976,8 @@ export default {
             'Content-Type': 'application/json',
             'Cache-Control': 'public, max-age=3600, s-maxage=86400',
             'X-HD-Source': 'nicovideo.gay',
-            'X-Worker-Version': 'green-20250726-unified-cors'
+            'X-Worker-Version': 'green-20250726-unified-cors',
+            'X-Request-ID': requestId
           }
         })
         
@@ -963,7 +985,7 @@ export default {
         return applyCORSHeaders(hdThumbnailResponse, origin, securityHeaders)
         
       } catch (error) {
-        console.error(`[HD Thumbnail] Error for ${videoId}:`, error)
+        console.error(`[${requestId}] HD Thumbnail Error for ${videoId}:`, error)
         
         const hdErrorResponse = new Response(JSON.stringify({ 
           error: 'Failed to fetch HD thumbnail',
@@ -972,7 +994,8 @@ export default {
         }), {
           status: 500,
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-Request-ID': requestId
           }
         })
         
@@ -989,7 +1012,7 @@ export default {
     if (isStaticFile) {
       try {
         const r2Key = pathname.startsWith('/') ? `static${pathname}` : `static/${pathname}`
-        console.log(`[Static File 20250726] Trying to fetch from R2: ${r2Key}`)
+        console.log(`[${requestId}] Trying to fetch static from R2: ${r2Key}`)
         const object = await env.R2_BUCKET.get(r2Key)
         
         if (object) {
@@ -1013,10 +1036,10 @@ export default {
           })
         }
       } catch (error) {
-        console.error(`[Static File 20250726] Error fetching from R2:`, error)
+        console.error(`[${requestId}] Error fetching static from R2:`, error)
       }
       
-      console.log(`[Static File 20250726] Not found in R2, proxying to Vercel: ${pathname}`)
+      console.log(`[${requestId}] Static not found in R2, proxying to Vercel: ${pathname}`)
       return proxyToVercel(request, env)
     }
     
@@ -1077,7 +1100,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     // 30xリダイレクトの処理（無限ループ防止）
     if (response.status === 307 || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 308) {
       const location = response.headers.get('Location')
-      console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location}`)
+      console.warn(`[${requestId}] Redirect detected: ${response.status} to ${location}`)
       
       if (location) {
         const loc = new URL(location, url)
@@ -1133,7 +1156,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin')
     return applyCORSHeaders(normalProxyResponse, origin, {})
   } catch (error) {
-    console.error('Proxy error:', error)
+    console.error(`[${requestId}] Proxy error:`, error)
     const proxyErrorResponse = new Response('Gateway Error', { 
       status: 502,
       headers: {
