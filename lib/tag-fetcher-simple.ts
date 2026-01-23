@@ -241,11 +241,14 @@ export async function enrichRankingItemsWithTagDetails(
     
     const batchPromises = batch.map(async (item) => {
       const tagDetails = await fetchAllTagsFromGetThumbInfo(item.id)
-      
-      if (tagDetails.length > 0) {
-        itemsWithTags++
+
+      // API失敗時（空配列）は既存のタグを保持
+      if (tagDetails.length === 0) {
+        return item
       }
-      
+
+      itemsWithTags++
+
       return {
         ...item,
         tagDetails,
