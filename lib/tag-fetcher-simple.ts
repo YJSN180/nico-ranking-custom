@@ -195,16 +195,33 @@ export async function enrichRankingItemsWithTagDetails(
     
     const batchPromises = batch.map(async (item) => {
       const tagDetails = await fetchAllTagsFromGetThumbInfo(item.id)
-      
+
       if (tagDetails.length > 0) {
+        // getthumbinfoからタグ詳細を取得できた場合
         itemsWithTags++
+        return {
+          ...item,
+          tagDetails,
+          tags: tagDetails.map(t => t.name)
+        }
       }
-      
+
+      // getthumbinfoが失敗した場合（レート制限等）
+      // HTMLスクレイピングで取得した元のtagsを保持
+      // tagDetailsはデフォルトisLocked: falseで生成
+      if (item.tags && item.tags.length > 0) {
+        return {
+          ...item,
+          tagDetails: item.tags.map(name => ({ name, isLocked: false })),
+          tags: item.tags
+        }
+      }
+
+      // 元のtagsもない場合はそのまま返す
       return {
         ...item,
-        tagDetails,
-        // 後方互換性のため、既存のtagsフィールドも更新
-        tags: tagDetails.map(t => t.name)
+        tagDetails: undefined,
+        tags: []
       }
     })
     
