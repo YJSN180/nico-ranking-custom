@@ -208,11 +208,12 @@ export async function enrichRankingItemsWithTagDetails(
 
       // getthumbinfoが失敗した場合（レート制限等）
       // HTMLスクレイピングで取得した元のtagsを保持
-      // tagDetailsはデフォルトisLocked: falseで生成
+      // tagDetailsはundefinedのままにする（ロック状態不明）
+      // → フィルタリングロジックはtagDetailsがない場合の後方互換処理を使用
       if (item.tags && item.tags.length > 0) {
         return {
           ...item,
-          tagDetails: item.tags.map(name => ({ name, isLocked: false })),
+          tagDetails: undefined,
           tags: item.tags
         }
       }
