@@ -95,6 +95,10 @@ gh
 # claude
 .claude/
 
+# SDD (local only)
+.kiro/
+sdd/
+
 # IDEs and editors
 .cursor/
 .vscode/
