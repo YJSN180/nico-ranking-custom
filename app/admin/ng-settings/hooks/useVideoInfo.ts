@@ -6,6 +6,11 @@ interface VideoInfo {
   isDeleted?: boolean
 }
 
+interface VideoInfoError {
+  status?: number
+  message: string
+}
+
 interface VideoInfoApiItem {
   title?: string
   authorName?: string | null
@@ -27,6 +32,7 @@ export function useVideoInfo(
   const [videoInfo, setVideoInfo] = useState<Record<string, VideoInfo>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isEnsuring, setIsEnsuring] = useState(false)
+  const [error, setError] = useState<VideoInfoError | null>(null)
   const cacheRef = useRef(new Map<string, VideoInfo>())
   const abortControllerRef = useRef<AbortController | null>(null)
   const ensureAbortControllerRef = useRef<AbortController | null>(null)
@@ -51,6 +57,17 @@ export function useVideoInfo(
     })
 
     if (!response.ok) {
+      console.warn('[useVideoInfo] Failed to fetch video info', {
+        status: response.status,
+        statusText: response.statusText
+      })
+      setError({
+        status: response.status,
+        message:
+          response.status === 401
+            ? '動画情報の取得に失敗しました（認証が必要です）。ページを再読み込みしてください。'
+            : `動画情報の取得に失敗しました（HTTP ${response.status}）`
+      })
       throw new Error(`Failed to fetch video info: ${response.status}`)
     }
 
@@ -76,6 +93,7 @@ export function useVideoInfo(
     })
 
     updateCache(updates)
+    setError(null)
   }
 
   useEffect(() => {
@@ -114,7 +132,12 @@ export function useVideoInfo(
         await fetchVideoInfoBatch(idsToFetch, controller)
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          console.error('Failed to fetch video info:', error)
+          console.warn('[useVideoInfo] Failed to fetch video info', error)
+          if (!error?.status) {
+            setError({
+              message: '動画情報の取得に失敗しました（通信エラー）'
+            })
+          }
         }
       } finally {
         if (controller.signal.aborted !== true) {
@@ -165,7 +188,12 @@ export function useVideoInfo(
         }
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          console.error('Failed to ensure video info:', error)
+          console.warn('[useVideoInfo] Failed to ensure video info', error)
+          if (!error?.status) {
+            setError({
+              message: '動画情報の取得に失敗しました（通信エラー）'
+            })
+          }
         }
       } finally {
         if (controller.signal.aborted !== true) {
@@ -183,5 +211,5 @@ export function useVideoInfo(
     }
   }, [ensureIds])
 
-  return { videoInfo, isLoading: isLoading || isEnsuring }
+  return { videoInfo, isLoading: isLoading || isEnsuring, error }
 }

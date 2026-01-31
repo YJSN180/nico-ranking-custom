@@ -23,7 +23,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
   
   const itemsPerPage = 50
   const maxBulkDelete = DERIVED_NG_BULK_DELETE_LIMIT
-  const { videoInfo, isLoading } = useVideoInfo(
+  const { videoInfo, isLoading, error } = useVideoInfo(
     videoIds,
     currentPage,
     itemsPerPage,
@@ -293,6 +293,12 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
 
       {/* Loading state */}
       {isLoading && <div>読み込み中...</div>}
+
+      {error && (
+        <div style={{ margin: '10px 0', color: '#b00020' }}>
+          {error.message}
+        </div>
+      )}
 
       {filteredVideoIds.length === 0 && !isLoading && (
         <div style={{ margin: '20px 0', color: '#666' }}>該当する動画がありません</div>
