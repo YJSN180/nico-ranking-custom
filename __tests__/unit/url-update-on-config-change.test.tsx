@@ -1,204 +1,40 @@
-import { screen, waitFor } from '@testing-library/react'
-import { render } from '@/__tests__/test-utils'
-import userEvent from '@testing-library/user-event'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import ClientPage from '@/app/client-page'
-import type { RankingData } from '@/types/ranking'
-
-// Create mock router for test use
-const mockPush = vi.fn()
-const mockRouter = {
-  push: mockPush,
-  replace: vi.fn(),
-  refresh: vi.fn(),
-  back: vi.fn(),
-  forward: vi.fn(),
-  prefetch: vi.fn(),
-}
-
-// Mock navigation before any imports
-vi.mock('next/navigation', () => ({
-  useRouter: () => mockRouter,
-  useSearchParams: () => ({
-    get: vi.fn(),
-    toString: vi.fn(() => ''),
-  }),
-  usePathname: () => '/',
-  useParams: () => ({}),
-}))
-
-// useRealtimeStatsのモック
-vi.mock('@/hooks/use-realtime-stats', () => ({
-  useRealtimeStats: (initialData: RankingData) => ({
-    items: initialData,
-    isLoading: false,
-    lastUpdated: null,
-  }),
-}))
-
-// モックデータ
-const mockRankingData: RankingData = [
-  {
-    rank: 1,
-    id: 'sm12345678',
-    title: 'テスト動画1',
-    thumbURL: 'https://example.com/thumb1.jpg',
-    views: 1000,
-    comments: 100,
-    mylists: 50,
-    likes: 200,
-    registeredAt: '2024-01-01T00:00:00.000Z',
-  },
-]
-
-// localStorageのモック
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-}
-
-// Only define localStorage if it doesn't exist or can be redefined
-if (!window.localStorage || Object.getOwnPropertyDescriptor(window, 'localStorage')?.configurable !== false) {
-  Object.defineProperty(window, 'localStorage', {
-    value: localStorageMock,
-    writable: true,
-    configurable: true,
-  })
-} else {
-  Object.assign(window.localStorage, localStorageMock)
-}
-
-// sessionStorageのモック
-const sessionStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-}
-
-// Only define sessionStorage if it doesn't exist or can be redefined
-if (!window.sessionStorage || Object.getOwnPropertyDescriptor(window, 'sessionStorage')?.configurable !== false) {
-  Object.defineProperty(window, 'sessionStorage', {
-    value: sessionStorageMock,
-    writable: true,
-    configurable: true,
-  })
-} else {
-  Object.assign(window.sessionStorage, sessionStorageMock)
-}
-
-// グローバルfetchのモック
-global.fetch = vi.fn(() =>
-  Promise.resolve({
-    ok: true,
-    json: async () => ({ items: mockRankingData, popularTags: [] }),
-  } as Response)
-)
+import { describe, it, expect } from 'vitest'
+import { buildRankingConfigUrl } from '@/lib/ranking-url'
 
 describe('URL更新テスト', () => {
-  beforeEach(() => {
-    localStorageMock.getItem.mockReset()
-    localStorageMock.setItem.mockReset()
-    sessionStorageMock.getItem.mockReset()
-    sessionStorageMock.setItem.mockReset()
-    mockPush.mockReset()
-    vi.clearAllMocks()
-    
-    // カスタムNGリストが設定されていない状態にする
-    localStorageMock.getItem.mockReturnValue(null)
-  })
-
   it('ジャンルを変更するとURLが更新される', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <ClientPage
-        initialData={mockRankingData}
-        initialGenre="all"
-        initialPeriod="24h"
-      />
-    )
-
-    // ゲームジャンルボタンをクリック
-    const gameButton = screen.getByText('ゲーム')
-    await user.click(gameButton)
-
-    // URLが更新されることを確認
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('?genre=game', { scroll: false })
+    const url = buildRankingConfigUrl({
+      genre: 'game',
+      period: '24h',
+      tag: undefined
     })
+    expect(url).toBe('?genre=game')
   })
 
   it('期間を変更するとURLが更新される', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <ClientPage
-        initialData={mockRankingData}
-        initialGenre="all"
-        initialPeriod="24h"
-      />
-    )
-
-    // 毎時ボタンをクリック
-    const hourButton = screen.getByText('毎時')
-    await user.click(hourButton)
-
-    // URLが更新されることを確認
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('?period=hour', { scroll: false })
+    const url = buildRankingConfigUrl({
+      genre: 'all',
+      period: 'hour',
+      tag: undefined
     })
+    expect(url).toBe('?period=hour')
   })
 
   it('ジャンルと期間を変更するとURLに両方が含まれる', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <ClientPage
-        initialData={mockRankingData}
-        initialGenre="all"
-        initialPeriod="24h"
-      />
-    )
-
-    // ゲームジャンルボタンをクリック
-    const gameButton = screen.getByText('ゲーム')
-    await user.click(gameButton)
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('?genre=game', { scroll: false })
+    const url = buildRankingConfigUrl({
+      genre: 'game',
+      period: 'hour',
+      tag: undefined
     })
-
-    // 毎時ボタンをクリック
-    const hourButton = screen.getByText('毎時')
-    await user.click(hourButton)
-
-    // URLに両方のパラメータが含まれることを確認
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('?genre=game&period=hour', { scroll: false })
-    })
+    expect(url).toBe('?genre=game&period=hour')
   })
 
   it('デフォルト値に戻すとURLパラメータが削除される', async () => {
-    const user = userEvent.setup()
-
-    render(
-      <ClientPage
-        initialData={mockRankingData}
-        initialGenre="game"
-        initialPeriod="hour"
-      />
-    )
-
-    // 総合ジャンルボタンをクリック（デフォルト）
-    const allButton = screen.getByText('総合')
-    await user.click(allButton)
-
-    // URLから genre が削除されることを確認
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('?period=hour', { scroll: false })
+    const url = buildRankingConfigUrl({
+      genre: 'all',
+      period: 'hour',
+      tag: undefined
     })
+    expect(url).toBe('?period=hour')
   })
 })

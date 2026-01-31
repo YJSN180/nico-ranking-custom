@@ -1,11 +1,37 @@
-import { describe, test, expect, beforeEach } from 'vitest'
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act } from '@testing-library/react'
 import { renderHook } from '@/__tests__/test-utils'
 import { useUserNGList, type UserNGList } from '@/hooks/use-user-ng-list'
 
 describe('useUserNGList (Apply Button System)', () => {
+  const localStorageMock = {
+    store: {} as Record<string, string>,
+    getItem: vi.fn((key: string) => localStorageMock.store[key] ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      localStorageMock.store[key] = value
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete localStorageMock.store[key]
+    }),
+    clear: vi.fn(() => {
+      localStorageMock.store = {}
+    })
+  }
+  let originalLocalStorage: Storage
+
   beforeEach(() => {
+    originalLocalStorage = window.localStorage
+    localStorageMock.store = {}
+    localStorageMock.getItem.mockClear()
+    localStorageMock.setItem.mockClear()
+    localStorageMock.removeItem.mockClear()
+    localStorageMock.clear.mockClear()
+    vi.stubGlobal('localStorage', localStorageMock as unknown as Storage)
     localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.stubGlobal('localStorage', originalLocalStorage)
   })
 
   test('初期状態で空のNGリストを返す', () => {

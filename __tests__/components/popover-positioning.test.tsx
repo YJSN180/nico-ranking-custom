@@ -21,6 +21,7 @@ const mockVideo: RankingItem = {
 describe('Popover Positioning Tests', () => {
   let originalInnerHeight: number
   let originalInnerWidth: number
+  let resizeCallback: (() => void) | null = null
 
   beforeEach(() => {
     // 元の値を保存
@@ -28,11 +29,14 @@ describe('Popover Positioning Tests', () => {
     originalInnerWidth = window.innerWidth
 
     // ResizeObserverをモック
-    global.ResizeObserver = vi.fn().mockImplementation(() => ({
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-      disconnect: vi.fn()
-    }))
+    global.ResizeObserver = vi.fn().mockImplementation((callback: () => void) => {
+      resizeCallback = callback
+      return {
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn()
+      }
+    })
   })
 
   afterEach(() => {
@@ -49,8 +53,20 @@ describe('Popover Positioning Tests', () => {
     })
     
     // ResizeObserverのモックをクリア
+    resizeCallback = null
     vi.clearAllMocks()
   })
+
+  const setPopoverSize = (popover: HTMLElement, width = 300, height = 240) => {
+    popover.getBoundingClientRect = vi.fn().mockReturnValue({
+      top: 0,
+      left: 0,
+      bottom: height,
+      right: width,
+      width,
+      height
+    })
+  }
 
   it('画面下端のボタンではポップオーバーが上に表示される', async () => {
     // ビューポートサイズを設定
@@ -86,19 +102,18 @@ describe('Popover Positioning Tests', () => {
     await waitFor(() => {
       const popover = container.querySelector('.popover-ng-selector') as HTMLElement
       expect(popover).toBeInTheDocument()
-      
-      // インラインスタイルを確認
-      const transform = popover.style.transform
+      setPopoverSize(popover)
+      resizeCallback?.()
+    })
+
+    await waitFor(() => {
+      const popover = container.querySelector('.popover-ng-selector') as HTMLElement
       const top = popover.style.top
-      
-      console.log('Popover position:', { top, transform, style: popover.style.cssText })
-      
-      // transformがtranslateY(-100%)を含むことを確認（上に表示）
-      expect(transform).toContain('translateY(-100%)')
-      
-      // topがボタンの上端より小さいことを確認
+      const transformOrigin = popover.style.transformOrigin
+
       const topValue = parseFloat(top)
       expect(topValue).toBeLessThan(750)
+      expect(transformOrigin).toContain('bottom')
     })
   })
 
@@ -131,19 +146,18 @@ describe('Popover Positioning Tests', () => {
     await waitFor(() => {
       const popover = container.querySelector('.popover-ng-selector') as HTMLElement
       expect(popover).toBeInTheDocument()
-      
-      // インラインスタイルを確認
-      const transform = popover.style.transform
+      setPopoverSize(popover)
+      resizeCallback?.()
+    })
+
+    await waitFor(() => {
+      const popover = container.querySelector('.popover-ng-selector') as HTMLElement
       const top = popover.style.top
-      
-      console.log('Popover position:', { top, transform, style: popover.style.cssText })
-      
-      // transformがtranslateY(0)を含むことを確認（下に表示）
-      expect(transform).toContain('translateY(0)')
-      
-      // topがボタンの下端より大きいことを確認
+      const transformOrigin = popover.style.transformOrigin
+
       const topValue = parseFloat(top)
       expect(topValue).toBeGreaterThan(88)
+      expect(transformOrigin).toContain('top')
     })
   })
 
@@ -181,14 +195,18 @@ describe('Popover Positioning Tests', () => {
     await waitFor(() => {
       const popover = container.querySelector('.popover-ng-selector') as HTMLElement
       expect(popover).toBeInTheDocument()
-      
-      // インラインスタイルを確認
-      const transform = popover.style.transform
-      
-      console.log('Mobile popover position:', { transform, style: popover.style.cssText })
-      
-      // 上に表示されることを確認
-      expect(transform).toContain('translateY(-100%)')
+      setPopoverSize(popover)
+      resizeCallback?.()
+    })
+
+    await waitFor(() => {
+      const popover = container.querySelector('.popover-ng-selector') as HTMLElement
+      const top = popover.style.top
+      const transformOrigin = popover.style.transformOrigin
+
+      const topValue = parseFloat(top)
+      expect(topValue).toBeLessThan(600)
+      expect(transformOrigin).toContain('bottom')
     })
   })
 })

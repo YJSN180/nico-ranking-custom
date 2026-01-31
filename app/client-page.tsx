@@ -22,6 +22,7 @@ import { getPopularTagsClient } from '@/lib/popular-tags-client'
 import { migrateLocalStorageData } from '@/lib/migrate-local-storage'
 import { rankingCache } from '@/lib/ranking-cache'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
+import { buildRankingConfigUrl } from '@/lib/ranking-url'
 import type { RankingData, RankingItem } from '@/types/ranking'
 import type { RankingConfig, RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import type { NGList } from '@/types/ng-list'
@@ -690,12 +691,7 @@ export default function ClientPage({
     })
     
     // URLを更新
-    const params = new URLSearchParams()
-    if (newConfig.genre !== 'all') params.set('genre', newConfig.genre)
-    if (newConfig.period !== '24h') params.set('period', newConfig.period)
-    if (newConfig.tag) params.set('tag', newConfig.tag)
-    
-    const newUrl = params.toString() ? `?${params.toString()}` : '/'
+    const newUrl = buildRankingConfigUrl(newConfig)
     if (typeof window !== 'undefined') {
       window.history.replaceState(null, '', newUrl)
     } else {
