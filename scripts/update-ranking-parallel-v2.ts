@@ -1,11 +1,14 @@
 #!/usr/bin/env npx tsx
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
+import type { TagFetchRunStats } from '../lib/tag-fetcher-simple'
 import { kv } from '../lib/simple-kv'
-import { enrichRankingItemsWithTagDetails } from '../lib/tag-fetcher-simple'
+import { enrichRankingItemsWithTagDetails, getTagFetchRunStats, resetTagFetchRunStats, setTagFetchContext } from '../lib/tag-fetcher-simple'
+import { filterWithNGListCore } from '../lib/ng-filter-core'
 import { GENRE_ID_MAP as STATIC_GENRE_ID_MAP } from '../lib/genre-mapping'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 
 // All 23 genres to fetch
 const ALL_GENRES: RankingGenre[] = [
@@ -30,6 +33,82 @@ const CUSTOM_GROUPS: string[][] = [
   ['society', 'mmd', 'vtuber', 'radio'],       // Group 7 (old Group 5)
   ['sports', 'animal', 'other']                 // Group 8 (old Group 6)
 ];
+
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'nico-ranking'
+
+function shouldUploadTagFetchLogs(): boolean {
+  return process.env.TAG_FETCH_LOG_TO_R2 === 'true'
+}
+
+function createR2Client(): S3Client | null {
+  if (!process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY || !process.env.CLOUDFLARE_ACCOUNT_ID) {
+    return null
+  }
+  return new S3Client({
+    region: 'auto',
+    endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
+  })
+}
+
+async function uploadTagFetchStatsToR2(stats: TagFetchRunStats, meta: { groupId?: number; totalGroups?: number; genres?: RankingGenre[] }): Promise<void> {
+  if (!shouldUploadTagFetchLogs()) {
+    return
+  }
+
+  const client = createR2Client()
+  if (!client) {
+    console.warn('[Tag Fetch Logs] R2 credentials missing, skipping upload')
+    return
+  }
+
+  const runId = process.env.GITHUB_RUN_ID || 'local'
+  const runAttempt = process.env.GITHUB_RUN_ATTEMPT || '1'
+  const groupLabel = meta.groupId ? `group-${meta.groupId}` : (process.env.TAG_FETCH_LOG_GROUP || process.env.GITHUB_JOB || 'unknown')
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+  const datePrefix = new Date().toISOString().slice(0, 10)
+
+  const payload = {
+    run: {
+      id: runId,
+      attempt: runAttempt,
+      job: process.env.GITHUB_JOB || '',
+      sha: process.env.GITHUB_SHA || '',
+      ref: process.env.GITHUB_REF_NAME || '',
+      workflow: process.env.GITHUB_WORKFLOW || '',
+    },
+    group: {
+      id: meta.groupId ?? null,
+      total: meta.totalGroups ?? null,
+      genres: meta.genres ?? [],
+    },
+    stats,
+    generatedAt: new Date().toISOString(),
+  }
+
+  const key = `logs/tag-fetch/${datePrefix}/run-${runId}-attempt-${runAttempt}/${groupLabel}-${timestamp}.json`
+
+  try {
+    await client.send(new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: key,
+      Body: JSON.stringify(payload),
+      ContentType: 'application/json',
+      Metadata: {
+        runId,
+        runAttempt,
+        group: groupLabel,
+        sha: process.env.GITHUB_SHA || '',
+      },
+    }))
+    console.log(`[Tag Fetch Logs] Uploaded summary to R2: ${key}`)
+  } catch (error) {
+    console.warn('[Tag Fetch Logs] Failed to upload summary to R2:', error)
+  }
+}
 
 // NG list interface (matching frontend structure)
 interface NGList {
@@ -167,58 +246,6 @@ async function getNGList(): Promise<NGList> {
       derivedVideoIds: []
     };
   }
-}
-
-// Filter items with NG list and track new derived IDs
-function filterWithNGList(items: RankingItem[], ngList: NGList): { filteredItems: RankingItem[], newDerivedIds: string[] } {
-  const newDerivedIds: string[] = [];
-  
-  // High-speed lookups
-  const videoIdSet = new Set(ngList.videoIds);
-  const derivedVideoIdSet = new Set(ngList.derivedVideoIds);
-  const videoTitleExactSet = new Set(ngList.videoTitles.exact);
-  const authorIdSet = new Set(ngList.authorIds);
-  const authorNameExactSet = new Set(ngList.authorNames.exact);
-  
-  const filteredItems = items.filter(item => {
-    // Already in manual NG list
-    if (videoIdSet.has(item.id)) return false;
-    
-    // Already in derived NG list
-    if (derivedVideoIdSet.has(item.id)) return false;
-    
-    // Title checks
-    if (videoTitleExactSet.has(item.title)) {
-      newDerivedIds.push(item.id);
-      return false;
-    }
-    
-    if (ngList.videoTitles.partial.some(partial => item.title.includes(partial))) {
-      newDerivedIds.push(item.id);
-      return false;
-    }
-    
-    // Author ID check
-    if (item.authorId && authorIdSet.has(item.authorId)) {
-      newDerivedIds.push(item.id);
-      return false;
-    }
-    
-    // Author name checks
-    if (item.authorName && authorNameExactSet.has(item.authorName)) {
-      newDerivedIds.push(item.id);
-      return false;
-    }
-    
-    if (item.authorName && ngList.authorNames.partial.some(partial => item.authorName!.includes(partial))) {
-      newDerivedIds.push(item.id);
-      return false;
-    }
-    
-    return true;
-  });
-  
-  return { filteredItems, newDerivedIds };
 }
 
 // Fetch ranking page with retry logic
@@ -372,7 +399,7 @@ async function fetchWithNGFiltering(
         popularTags = pageTags;
       }
 
-      const { filteredItems, newDerivedIds } = filterWithNGList(items, ngList);
+      const { filteredItems, newDerivedIds } = filterWithNGListCore(items, ngList);
       allItems.push(...filteredItems);
       
       // Track new derived IDs for later update
@@ -524,7 +551,9 @@ async function processGenre(
     // Fetch tags for 24h data
     if (data24h.items.length > 0) {
       const itemsToFetch = data24h.items.slice(0, tagFetchMaxVideos);
+      setTagFetchContext(`${genre}/24h`);
       const itemsWithTags = await enrichRankingItemsWithTagDetails(itemsToFetch);
+      setTagFetchContext(null);
       // Merge tagged items with remaining untagged items to preserve full array
       data24h.items = [...itemsWithTags, ...data24h.items.slice(tagFetchMaxVideos)];
     }
@@ -532,7 +561,9 @@ async function processGenre(
     // Fetch tags for hour data
     if (dataHour.items.length > 0) {
       const itemsToFetch = dataHour.items.slice(0, tagFetchMaxVideos);
+      setTagFetchContext(`${genre}/hour`);
       const itemsWithTags = await enrichRankingItemsWithTagDetails(itemsToFetch);
+      setTagFetchContext(null);
       // Merge tagged items with remaining untagged items to preserve full array
       dataHour.items = [...itemsWithTags, ...dataHour.items.slice(tagFetchMaxVideos)];
     }
@@ -577,7 +608,9 @@ async function processGenre(
           console.log(`[${new Date().toISOString()}] Enriching tag "${tag}" with tag details (24h: ${tag24h.items.length}, hour: ${tagHour.items.length} items)`);
           
           if (tag24h.items.length > 0) {
+            setTagFetchContext(`${genre}/tag/${tag}/24h`);
             const itemsWithTags24h = await enrichRankingItemsWithTagDetails(tag24h.items);
+            setTagFetchContext(null);
             result.data['24h'].tags[tag] = itemsWithTags24h;
             console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" 24h with tag details`);
           } else {
@@ -585,7 +618,9 @@ async function processGenre(
           }
           
           if (tagHour.items.length > 0) {
+            setTagFetchContext(`${genre}/tag/${tag}/hour`);
             const itemsWithTagsHour = await enrichRankingItemsWithTagDetails(tagHour.items);
+            setTagFetchContext(null);
             result.data['hour'].tags[tag] = itemsWithTagsHour;
             console.log(`[${new Date().toISOString()}] Enriched tag "${tag}" hour with tag details`);
           } else {
@@ -622,6 +657,7 @@ async function processGenre(
 // Main function for parallel execution
 async function main() {
   const startTime = Date.now();
+  resetTagFetchRunStats();
   
   try {
     console.log('Starting improved parallel ranking update...');
@@ -735,6 +771,8 @@ async function main() {
     
     // Show time improvement
     console.log(`\n⚡ Improved parallel execution completed in approximately ${Math.round(duration / 60000)} minutes`);
+    const tagFetchStats = getTagFetchRunStats();
+    await uploadTagFetchStatsToR2(tagFetchStats, { genres: ALL_GENRES });
   } catch (error) {
     console.error('Update failed:', error);
     process.exit(1);
@@ -770,6 +808,7 @@ if (process.argv[2] === '--group') {
   // Run only for this group and save partial results
   (async () => {
     const startTime = Date.now();
+    resetTagFetchRunStats();
     const ngList = await getNGList();
     const originalDerivedCount = ngList.derivedVideoIds.length;
     console.log(`Group ${groupId} NG list: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived`);
@@ -818,6 +857,8 @@ if (process.argv[2] === '--group') {
     
     const duration = Date.now() - startTime;
     console.log(`Group ${groupId} completed in ${Math.round(duration / 1000)}s with ${results.length} genres`);
+    const tagFetchStats = getTagFetchRunStats();
+    await uploadTagFetchStatsToR2(tagFetchStats, { groupId, totalGroups, genres: groupGenres });
     
     // Exit with error if we didn't get all expected genres
     if (results.length !== groupGenres.length) {
