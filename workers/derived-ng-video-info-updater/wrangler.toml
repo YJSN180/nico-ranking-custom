@@ -1,0 +1,10 @@
+name = "derived-ng-video-info-updater"
+main = "src/index.js"
+compatibility_date = "2024-06-01"
+
+[[kv_namespaces]]
+binding = "NG_DATA"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[triggers]
+crons = ["*/30 * * * *"]
