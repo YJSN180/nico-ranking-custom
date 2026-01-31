@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { NGList } from '@/types/ng-list'
 import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
 import { DerivedNGList } from './components/DerivedNGList'
@@ -36,6 +36,8 @@ export default function NGSettingsPage() {
   // AbortController用のref
   const fetchAbortControllerRef = useRef<AbortController | null>(null)
   const saveAbortControllerRef = useRef<AbortController | null>(null)
+  const autoSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const suppressAutoSaveRef = useRef(false)
   
   // 入力フィールド用の状態
   const [newVideoId, setNewVideoId] = useState('')
@@ -58,9 +60,9 @@ export default function NGSettingsPage() {
         saveAbortControllerRef.current.abort()
       }
     }
-  }, [])
+  }, [fetchNGList])
 
-  const fetchNGList = async () => {
+  const fetchNGList = useCallback(async () => {
     // 前のリクエストをキャンセル
     if (fetchAbortControllerRef.current) {
       fetchAbortControllerRef.current.abort()
@@ -84,6 +86,7 @@ export default function NGSettingsPage() {
         const data = await response.json()
         // マイグレーション処理を適用
         const migrated = migrateLegacyNGList(data)
+        suppressAutoSaveRef.current = true
         setNgList(migrated)
       }
     } catch (error: any) {
@@ -99,10 +102,14 @@ export default function NGSettingsPage() {
         setLoading(false)
       }
     }
-  }
+  }, [])
 
   // NGリストを保存
-  const saveNGList = async () => {
+  const saveNGList = useCallback(async () => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+      autoSaveTimeoutRef.current = null
+    }
     // 前のリクエストをキャンセル
     if (saveAbortControllerRef.current) {
       saveAbortControllerRef.current.abort()
@@ -146,13 +153,32 @@ export default function NGSettingsPage() {
       }
       console.error('Error saving NG list:', error)
       alert('保存に失敗しました')
-    } finally {
+  } finally {
       // AbortErrorの場合は保存中状態を維持
       if (controller.signal.aborted !== true) {
         setSaving(false)
       }
     }
-  }
+  }, [ngList, fetchNGList])
+
+  useEffect(() => {
+    if (loading || saving) return
+    if (suppressAutoSaveRef.current) {
+      suppressAutoSaveRef.current = false
+      return
+    }
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      saveNGList()
+    }, 700)
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
+    }
+  }, [ngList, loading, saving, saveNGList])
 
   // アイテムを追加
   const addItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, value: string, matchType?: 'exact' | 'partial') => {

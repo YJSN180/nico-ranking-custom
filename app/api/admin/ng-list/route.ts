@@ -1,13 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getNGListManual, setNGListManual } from '@/lib/ng-list-server'
 
+export const dynamic = 'force-dynamic'
+
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, must-revalidate',
+  'CDN-Cache-Control': 'no-store',
+  'Vercel-CDN-Cache-Control': 'no-store'
+}
+
+const withNoStore = (response: NextResponse) => {
+  for (const [key, value] of Object.entries(NO_STORE_HEADERS)) {
+    response.headers.set(key, value)
+  }
+  return response
+}
+
 export async function GET(request: NextRequest) {
   // Basic authentication check
   const authHeader = request.headers.get('authorization')
   const cookie = request.cookies.get('admin-auth')
   
   if (!authHeader && !cookie?.value) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return withNoStore(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
   }
 
   try {
@@ -15,10 +30,10 @@ export async function GET(request: NextRequest) {
     const { getServerNGList } = await import('@/lib/ng-list-server')
     const ngList = await getServerNGList()
     
-    return NextResponse.json(ngList)
+    return withNoStore(NextResponse.json(ngList))
   } catch (error) {
     console.error('Failed to fetch NG list:', error)
-    return NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 })
+    return withNoStore(NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 }))
   }
 }
 
@@ -28,7 +43,7 @@ export async function POST(request: NextRequest) {
   const cookie = request.cookies.get('admin-auth')
   
   if (!authHeader && !cookie?.value) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return withNoStore(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
   }
 
   try {
@@ -36,14 +51,14 @@ export async function POST(request: NextRequest) {
     
     // Validate the structure
     if (!ngList.videoIds || !ngList.authorIds || !ngList.videoTitles || !ngList.authorNames) {
-      return NextResponse.json({ error: 'Invalid NG list format' }, { status: 400 })
+      return withNoStore(NextResponse.json({ error: 'Invalid NG list format' }, { status: 400 }))
     }
 
     // Save to Cloudflare KV
     await setNGListManual(ngList)
     
-    return NextResponse.json({ success: true })
+    return withNoStore(NextResponse.json({ success: true }))
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update NG list' }, { status: 500 })
+    return withNoStore(NextResponse.json({ error: 'Failed to update NG list' }, { status: 500 }))
   }
 }
