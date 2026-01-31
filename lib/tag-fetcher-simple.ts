@@ -563,7 +563,8 @@ export async function enrichRankingItemsWithTagDetails(
           }
         }
         if (useCache) {
-          addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', nicologResult.ok ? 'empty' : nicologResult.reason)
+          const reason = nicologResult.ok === false ? nicologResult.reason : 'empty'
+          addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', reason)
           dirtyShards.add(shardKey)
           cacheUpdated = true
         }
@@ -586,7 +587,8 @@ export async function enrichRankingItemsWithTagDetails(
           }
         }
         if (useCache) {
-          addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', thumbResult.ok ? 'empty' : thumbResult.reason)
+          const reason = thumbResult.ok === false ? thumbResult.reason : 'empty'
+          addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', reason)
           dirtyShards.add(shardKey)
           cacheUpdated = true
         }
