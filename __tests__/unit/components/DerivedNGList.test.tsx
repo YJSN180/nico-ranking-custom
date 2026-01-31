@@ -92,9 +92,9 @@ describe('DerivedNGList', () => {
 
       await waitFor(() => {
         expect(screen.getByText('テスト動画1')).toBeInTheDocument()
-        expect(screen.getByText('投稿者: テストユーザー1')).toBeInTheDocument()
+        expect(screen.getByText('テストユーザー1')).toBeInTheDocument()
         expect(screen.getByText('テスト動画2')).toBeInTheDocument()
-        expect(screen.getByText('投稿者: テストユーザー2')).toBeInTheDocument()
+        expect(screen.getByText('テストユーザー2')).toBeInTheDocument()
         // Use getAllByText for "削除された動画" as there might be multiple
         const deletedVideos = screen.getAllByText('削除された動画')
         expect(deletedVideos.length).toBeGreaterThan(0)
@@ -140,16 +140,31 @@ describe('DerivedNGList', () => {
     it('should delete video when confirmed', async () => {
       vi.spyOn(window, 'confirm').mockReturnValue(true)
       
-      // Mock both API calls (video info and delete)
-      vi.mocked(global.fetch)
-        .mockResolvedValueOnce({ // Video info response
+      vi.mocked(global.fetch).mockImplementation(async (input) => {
+        const url = String(input)
+        if (url === '/api/admin/video-info') {
+          return {
+            ok: true,
+            json: async () => ({ videos: {} })
+          } as Response
+        }
+        if (url === '/api/admin/ng-list/derived/sm12345') {
+          return {
+            ok: true,
+            json: async () => ({ success: true })
+          } as Response
+        }
+        if (url === '/api/admin/ng-list/derived') {
+          return {
+            ok: true,
+            json: async () => ({ videoIds: ['sm67890', 'sm11111'] })
+          } as Response
+        }
+        return {
           ok: true,
-          json: async () => ({ videos: {} })
-        } as Response)
-        .mockResolvedValueOnce({ // Delete response
-          ok: true,
-          json: async () => ({ success: true })
-        } as Response)
+          json: async () => ({})
+        } as Response
+      })
 
       const onUpdate = vi.fn()
       render(<DerivedNGList initialData={mockVideoIds} onUpdate={onUpdate} />)
@@ -168,6 +183,9 @@ describe('DerivedNGList', () => {
         // Should remove the video from the list (optimistic update)
         const remainingElements = screen.queryAllByText('sm12345')
         expect(remainingElements).toHaveLength(0)
+      })
+
+      await waitFor(() => {
         expect(onUpdate).toHaveBeenCalledWith(['sm67890', 'sm11111'])
       })
     })
@@ -230,6 +248,56 @@ describe('DerivedNGList', () => {
         // Check that other IDs are not visible
         expect(screen.queryByText('sm67890')).not.toBeInTheDocument()
         expect(screen.queryByText('sm11111')).not.toBeInTheDocument()
+      })
+    })
+
+    it('should reset to first page when search query changes', async () => {
+      const manyVideoIds = Array.from({ length: 60 }, (_, i) => `sm${i + 1}`)
+      render(<DerivedNGList initialData={manyVideoIds} />)
+
+      fireEvent.click(screen.getByRole('button', { name: /次へ/ }))
+      expect(screen.getByText('2 / 2')).toBeInTheDocument()
+
+      const searchInput = screen.getByPlaceholderText('動画ID・タイトルで検索')
+      fireEvent.change(searchInput, { target: { value: 'sm' } })
+
+      await waitFor(() => {
+        expect(screen.getByText('1 / 2')).toBeInTheDocument()
+      })
+    })
+
+    it('should filter videos by title across all pages', async () => {
+      const manyVideoIds = Array.from({ length: 60 }, (_, i) => `sm${i + 1}`)
+
+      vi.mocked(global.fetch).mockImplementation(async (_input, init) => {
+        const body = init?.body ? JSON.parse(init.body as string) : { videoIds: [] }
+        const videos = Object.fromEntries(
+          (body.videoIds || []).map((id: string) => [id, { title: `Title ${id}`, authorName: null }])
+        )
+        return {
+          ok: true,
+          json: async () => ({ videos })
+        } as Response
+      })
+
+      render(<DerivedNGList initialData={manyVideoIds} />)
+
+      const searchInput = screen.getByPlaceholderText('動画ID・タイトルで検索')
+      fireEvent.change(searchInput, { target: { value: 'Title sm60' } })
+
+      await waitFor(() => {
+        expect(screen.getAllByText('sm60').length).toBeGreaterThan(0)
+      })
+    })
+
+    it('should show empty state when no results match', async () => {
+      render(<DerivedNGList initialData={mockVideoIds} />)
+
+      const searchInput = screen.getByPlaceholderText('動画ID・タイトルで検索')
+      fireEvent.change(searchInput, { target: { value: 'no-match' } })
+
+      await waitFor(() => {
+        expect(screen.getByText('該当する動画がありません')).toBeInTheDocument()
       })
     })
   })

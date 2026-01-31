@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { DERIVED_NG_BULK_DELETE_LIMIT } from '@/lib/admin-ng-constants'
 import { useVideoInfo } from '../hooks/useVideoInfo'
 
 interface DerivedNGListProps {
@@ -14,13 +15,20 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
   
   // AbortController refs
   const deleteAbortControllerRef = useRef<AbortController | null>(null)
   const bulkDeleteAbortControllerRef = useRef<AbortController | null>(null)
   
   const itemsPerPage = 50
-  const { videoInfo, isLoading } = useVideoInfo(videoIds, currentPage, itemsPerPage)
+  const maxBulkDelete = DERIVED_NG_BULK_DELETE_LIMIT
+  const { videoInfo, isLoading } = useVideoInfo(
+    videoIds,
+    currentPage,
+    itemsPerPage,
+    searchQuery ? videoIds : []
+  )
   
   // 最新リストが渡されたときにUI状態を同期
   useEffect(() => {
@@ -57,6 +65,32 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
       }
     }
   }, [])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
+
+  const syncDerivedList = useCallback(async () => {
+    setIsSyncing(true)
+    try {
+      const response = await fetch('/api/admin/ng-list/derived', {
+        credentials: 'same-origin'
+      })
+      if (!response.ok) {
+        throw new Error('Failed to sync derived NG list')
+      }
+      const data = await response.json()
+      const nextList = Array.isArray(data.videoIds) ? data.videoIds : []
+      setVideoIds(nextList)
+      onUpdate?.(nextList)
+      setSelectedIds(new Set())
+      setCurrentPage(1)
+    } catch (error) {
+      alert('派生NGリストの再同期に失敗しました')
+    } finally {
+      setIsSyncing(false)
+    }
+  }, [onUpdate])
 
   // Filter videos based on search query
   const filteredVideoIds = useMemo(() => {
@@ -113,7 +147,6 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
         throw new Error('削除に失敗しました')
       }
 
-      onUpdate?.(newList)
     } catch (error: any) {
       // Ignore AbortError
       if (error.name !== 'AbortError') {
@@ -126,6 +159,10 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
       if (controller.signal.aborted !== true) {
         setIsDeleting(false)
       }
+    }
+
+    if (controller.signal.aborted !== true) {
+      await syncDerivedList()
     }
   }
 
@@ -153,19 +190,36 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
     setSelectedIds(new Set())
     
     try {
-      // Delete one by one using existing API
-      // TODO: Implement bulk delete API for better performance
-      await Promise.all(
-        idsToDelete.map(id =>
-          fetch(`/api/admin/ng-list/derived/${id}`, {
-            method: 'DELETE',
+      const failedIds: string[] = []
+      for (let i = 0; i < idsToDelete.length; i += maxBulkDelete) {
+        if (controller.signal.aborted) break
+        const chunk = idsToDelete.slice(i, i + maxBulkDelete)
+        try {
+          const response = await fetch('/api/admin/ng-list/derived/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            signal: controller.signal
+            signal: controller.signal,
+            body: JSON.stringify({ videoIds: chunk })
           })
-        )
-      )
 
-      onUpdate?.(newList)
+          if (!response.ok) {
+            failedIds.push(...chunk)
+            continue
+          }
+
+          const data = await response.json()
+          if (Array.isArray(data.failed) && data.failed.length > 0) {
+            failedIds.push(...data.failed)
+          }
+        } catch (error) {
+          failedIds.push(...chunk)
+        }
+      }
+
+      if (failedIds.length > 0) {
+        alert(`削除に失敗した動画が${failedIds.length}件あります。再同期します。`)
+      }
     } catch (error: any) {
       // Ignore AbortError
       if (error.name !== 'AbortError') {
@@ -178,6 +232,10 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
       if (controller.signal.aborted !== true) {
         setIsDeleting(false)
       }
+    }
+
+    if (controller.signal.aborted !== true) {
+      await syncDerivedList()
     }
   }
 
@@ -214,6 +272,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
           placeholder="動画ID・タイトルで検索"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          disabled={isDeleting || isSyncing}
           style={{ flex: 1, padding: '8px' }}
         />
       </div>
@@ -224,7 +283,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
           <span>選択中: {selectedIds.size}件</span>
           <button
             onClick={handleBulkDelete}
-            disabled={isDeleting}
+            disabled={isDeleting || isSyncing}
             style={{ marginLeft: '10px' }}
           >
             選択した項目を削除
@@ -234,6 +293,10 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
 
       {/* Loading state */}
       {isLoading && <div>読み込み中...</div>}
+
+      {filteredVideoIds.length === 0 && !isLoading && (
+        <div style={{ margin: '20px 0', color: '#666' }}>該当する動画がありません</div>
+      )}
 
       {/* Table */}
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -245,6 +308,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
                 aria-label="全選択"
                 checked={paginatedIds.length > 0 && paginatedIds.every(id => selectedIds.has(id))}
                 onChange={(e) => handleSelectAll(e.target.checked)}
+                disabled={isDeleting || isSyncing}
               />
             </th>
             <th style={{ padding: '10px', textAlign: 'left' }}>動画ID</th>
@@ -262,6 +326,7 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
                     type="checkbox"
                     checked={selectedIds.has(videoId)}
                     onChange={(e) => handleCheckboxChange(videoId, e.target.checked)}
+                    disabled={isDeleting || isSyncing}
                   />
                 </td>
                 <td style={{ padding: '10px' }}>
@@ -285,8 +350,8 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
                 <td style={{ padding: '10px', textAlign: 'center' }}>
                   <button
                     onClick={() => handleDelete(videoId)}
-                    disabled={isDeleting}
-                    style={{ cursor: isDeleting ? 'not-allowed' : 'pointer' }}
+                    disabled={isDeleting || isSyncing}
+                    style={{ cursor: isDeleting || isSyncing ? 'not-allowed' : 'pointer' }}
                   >
                     削除
                   </button>

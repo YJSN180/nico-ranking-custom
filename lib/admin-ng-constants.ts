@@ -1,0 +1,1 @@
+export const DERIVED_NG_BULK_DELETE_LIMIT = 50

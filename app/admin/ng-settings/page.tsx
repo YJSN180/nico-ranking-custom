@@ -7,13 +7,21 @@ import { DerivedNGList } from './components/DerivedNGList'
 
 // 常時ライトモード適用のためのラッパー
 function LightModeWrapper({ children }: { children: React.ReactNode }) {
+  const previousThemeRef = useRef<string | null>(null)
+
   useEffect(() => {
     // body要素に強制的にライトテーマを適用
+    previousThemeRef.current = document.body.getAttribute('data-theme')
     document.body.setAttribute('data-theme', 'light')
     
     return () => {
       // クリーンアップ時にテーマ属性を削除（元の設定に戻す）
-      document.body.removeAttribute('data-theme')
+      const previousTheme = previousThemeRef.current
+      if (previousTheme === null) {
+        document.body.removeAttribute('data-theme')
+      } else {
+        document.body.setAttribute('data-theme', previousTheme)
+      }
     }
   }, [])
   
@@ -149,10 +157,29 @@ export default function NGSettingsPage() {
   // アイテムを追加
   const addItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, value: string, matchType?: 'exact' | 'partial') => {
     if (!value.trim()) return
-    
+
+    const trimmedValue = value.trim()
+    const isDuplicate = (() => {
+      switch (type) {
+        case 'videoIds':
+          return ngList.videoIds.includes(trimmedValue)
+        case 'authorIds':
+          return ngList.authorIds.includes(trimmedValue)
+        case 'videoTitles':
+          return ngList.videoTitles.exact.includes(trimmedValue) || ngList.videoTitles.partial.includes(trimmedValue)
+        case 'authorNames':
+          return ngList.authorNames.exact.includes(trimmedValue) || ngList.authorNames.partial.includes(trimmedValue)
+        default:
+          return false
+      }
+    })()
+
+    if (isDuplicate) {
+      alert(`すでに登録済みです: ${trimmedValue}`)
+      return
+    }
+
     setNgList(prev => {
-      const trimmedValue = value.trim()
-      
       switch (type) {
         case 'videoIds':
         case 'authorIds':
