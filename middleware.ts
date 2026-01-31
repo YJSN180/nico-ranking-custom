@@ -10,6 +10,7 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
+  const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
   
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
@@ -37,11 +38,8 @@ const noStorePaths: string[] = []
   
   // Workersからの認証チェック
   if (cfWorkerKey && expectedKey && cfWorkerKey === expectedKey) {
-    // 管理者ページの場合は、Worker認証があってもBasic認証を要求
-    if (pathname.startsWith('/admin')) {
-      // Basic認証チェックに進む（NextResponse.next()しない）
-    } else {
-      // 認証OK（管理者ページ以外）
+    // 管理系パスはWorker認証があってもBasic認証を要求
+    if (!isAdminPath) {
       return NextResponse.next()
     }
   }
@@ -109,9 +107,8 @@ const noStorePaths: string[] = []
     // Rate limiting removed - rely on Cloudflare's DDoS protection
   }
   // /admin配下のすべてのパスで認証を要求
-  if (request.nextUrl.pathname.startsWith('/admin')) {
+  if (isAdminPath) {
     const authHeader = request.headers.get('authorization')
-    const adminAuthCookie = request.cookies.get('admin-auth')
     
     // 通常のページアクセスの場合
     // 認証ヘッダーがない場合
@@ -172,14 +169,6 @@ const noStorePaths: string[] = []
           'WWW-Authenticate': 'Basic realm="Admin Area"',
         },
       })
-    }
-  }
-  
-  // API admin routes - check cookie
-  if (request.nextUrl.pathname.startsWith('/api/admin')) {
-    const adminAuthCookie = request.cookies.get('admin-auth')
-    if (adminAuthCookie?.value !== 'authenticated') {
-      return new NextResponse('Unauthorized', { status: 401 })
     }
   }
   

@@ -8,8 +8,7 @@ import { cookies } from 'next/headers'
 export async function POST(request: Request) {
   try {
     // 環境変数からの認証
-    const { searchParams } = new URL(request.url)
-    const adminKey = searchParams.get('key')
+    const adminKey = request.headers.get('x-admin-key')
     
     // ADMIN_KEYが設定されていない場合はエラー
     if (!process.env.ADMIN_KEY) {
@@ -17,7 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
     }
     
-    if (adminKey !== process.env.ADMIN_KEY) {
+    if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

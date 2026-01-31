@@ -79,8 +79,11 @@ export default function AdminPage() {
     setUpdateResult(null)
 
     try {
-      const response = await fetch(`/api/admin/update?key=${adminKey}`, {
+      const response = await fetch('/api/admin/update', {
         method: 'POST',
+        headers: {
+          'X-Admin-Key': adminKey
+        },
         signal: controller.signal
       })
       const data = await response.json()

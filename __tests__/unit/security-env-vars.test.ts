@@ -42,8 +42,11 @@ describe('Security: Environment Variables', () => {
       }))
       
       const { POST } = await import('@/app/api/admin/update/route')
-      const request = new Request('http://localhost:3000/api/admin/update?key=test-admin-key-123', {
-        method: 'POST'
+      const request = new Request('http://localhost:3000/api/admin/update', {
+        method: 'POST',
+        headers: {
+          'x-admin-key': 'test-admin-key-123'
+        }
       })
 
       const response = await POST(request)
