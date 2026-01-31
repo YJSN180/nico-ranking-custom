@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { CACHED_GENRES } from '@/types/ranking-config'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
-import { collectRankingItems } from '@/lib/pipeline/collect-ranking-items'
+import { buildRankingData } from '@/lib/pipeline/run-update'
+import { createServerNgFilter } from '@/lib/pipeline/ng-filter'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
@@ -115,134 +115,64 @@ export async function POST(request: Request) {
       },
     }
 
-    for (const genre of genres) {
-      for (const period of periods) {
+    const serverNgFilter = createServerNgFilter()
+
+    const { genres: rankingGenres, hadErrors } = await buildRankingData({
+      genres,
+      periods,
+      targetCount: 500,
+      maxPages: 10,
+      pageDelayMs: 500,
+      dedupe: true,
+      stopOnEmptyPage: false,
+      onError: 'throw',
+      includeTagRankings: true,
+      tagTargetCount: 500,
+      tagMaxPages: 10,
+      tagPageDelayMs: 500,
+      tagDedupe: true,
+      tagStopOnEmptyPage: true,
+      tagOnError: 'break',
+      popularTagsStrategy: 'per-period',
+      fetchPage: (genre, period, tag, page) =>
+        scrapeRankingPage(genre, period, tag, 100, page),
+      normalizeItems: (items, context) =>
+        normalizeRankingItems(items, {
+          requireIdAndTitle: context.kind === 'main',
+        }),
+      filterItems: (items) => serverNgFilter(items),
+      onDerivedIds: async (newDerivedIds, context) => {
+        if (newDerivedIds.length === 0) return
+        const label =
+          context.kind === 'tag' && context.tag
+            ? `${context.genre}-${context.period}-tag-${context.tag}`
+            : `${context.genre}-${context.period}`
         try {
-          const targetCount = 500
-          const maxPages = 10
-
-          const { items, popularTags } = await collectRankingItems({
-            fetchPage: (page) =>
-              scrapeRankingPage(genre, period, undefined, 100, page),
-            normalizeItems: (items) =>
-              normalizeRankingItems(items, { requireIdAndTitle: true }),
-            filterItems: async (items) => {
-              const { filteredItems, newDerivedIds } =
-                await filterRankingItemsServer(items)
-              return { filteredItems, newDerivedIds }
-            },
-            onDerivedIds: async (newDerivedIds) => {
-              if (newDerivedIds.length === 0) return
-              try {
-                await addToServerDerivedNGList(newDerivedIds)
-                if (process.env.NODE_ENV === 'production') {
-                  // eslint-disable-next-line no-console
-                  console.log(
-                    `[NG] Added ${newDerivedIds.length} new derived NG IDs for ${genre}-${period}`,
-                  )
-                }
-              } catch (error) {
-                console.error(`[NG] Failed to add derived NG IDs:`, error)
-              }
-            },
-            targetCount,
-            maxPages,
-            pageDelayMs: 500,
-            dedupe: true,
-            stopOnEmptyPage: false,
-            onError: 'throw',
-          })
-
-          // Cloudflare KV用のデータ構造に追加
-          if (!kvData.genres[genre]) {
-            kvData.genres[genre] = {
-              '24h': { items: [], popularTags: [] },
-              hour: { items: [], popularTags: [] },
-            }
-          }
-          kvData.genres[genre][period] = {
-            items,
-            popularTags,
-            tags: {}, // タグ別ランキングは後で追加
-          }
-          kvData.metadata!.totalItems += items.length
-
-          // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
-          if (genre === 'all' && period === '24h') {
-            totalItems = items.length
-          }
-
-          // 全ジャンルの人気タグを事前キャッシュ（500件ずつ）
-          if (popularTags && popularTags.length > 0) {
-            // 全人気タグを処理（500件ずつキャッシュ）
-            for (const tag of popularTags) {
-              try {
-                // タグ別ランキングを取得（初期チェックをスキップして直接フェッチ開始）
-                // const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
-
-                // if (tagItems.length > 0) {
-                if (true) {
-                  // 初期チェックをスキップ
-                  const targetCount = 500
-                  const maxTagPages = 10
-
-                  const { items: tagRankingItems } = await collectRankingItems({
-                    fetchPage: (page) =>
-                      scrapeRankingPage(genre, period, tag, 100, page),
-                    normalizeItems: (items) => normalizeRankingItems(items),
-                    filterItems: async (items) => {
-                      const { filteredItems, newDerivedIds } =
-                        await filterRankingItemsServer(items)
-                      return { filteredItems, newDerivedIds }
-                    },
-                    onDerivedIds: async (newDerivedIds) => {
-                      if (newDerivedIds.length === 0) return
-                      try {
-                        await addToServerDerivedNGList(newDerivedIds)
-                        if (process.env.NODE_ENV === 'production') {
-                          // eslint-disable-next-line no-console
-                          console.log(
-                            `[NG] Added ${newDerivedIds.length} new derived NG IDs for ${genre}-${period}-tag-${tag}`,
-                          )
-                        }
-                      } catch (error) {
-                        console.error(
-                          `[NG] Failed to add derived NG IDs for tag ${tag}:`,
-                          error,
-                        )
-                      }
-                    },
-                    targetCount,
-                    maxPages: maxTagPages,
-                    pageDelayMs: 500,
-                    dedupe: true,
-                    stopOnEmptyPage: true,
-                    onError: 'break',
-                  })
-
-                  // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
-
-                  // Cloudflare KVデータにも追加
-                  if (kvData.genres[genre][period].tags) {
-                    kvData.genres[genre][period].tags[tag] = tagRankingItems
-                  }
-                }
-              } catch (tagError) {
-                // console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
-              }
-            }
+          await addToServerDerivedNGList(newDerivedIds)
+          if (process.env.NODE_ENV === 'production') {
+            // eslint-disable-next-line no-console
+            console.log(
+              `[NG] Added ${newDerivedIds.length} new derived NG IDs for ${label}`,
+            )
           }
         } catch (error) {
-          // console.error(`Failed to fetch ${genre} ${period} ranking:`, error)
-          allSuccess = false
-
-          // エラー時の処理
-          if (genre === 'all' && period === '24h') {
-            totalItems = 0
-          }
+          console.error(
+            `[NG] Failed to add derived NG IDs for ${label}:`,
+            error,
+          )
         }
-      }
-    }
+      },
+    })
+
+    kvData.genres = rankingGenres
+    kvData.metadata!.totalItems = Object.values(rankingGenres).reduce(
+      (sum, genreData) =>
+        sum + genreData['24h'].items.length + genreData.hour.items.length,
+      0,
+    )
+
+    allSuccess = !hadErrors
+    totalItems = rankingGenres.all?.['24h']?.items.length || 0
 
     // KV書き込み数をチェック
     try {
