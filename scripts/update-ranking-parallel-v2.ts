@@ -5,6 +5,8 @@ import type { TagFetchRunStats } from '../lib/tag-fetcher-simple'
 import { kv } from '../lib/simple-kv'
 import { enrichRankingItemsWithTagDetails, getTagFetchRunStats, resetTagFetchRunStats, setTagFetchContext } from '../lib/tag-fetcher-simple'
 import { filterWithNGListCore } from '../lib/ng-filter-core'
+import { collectRankingItems } from '../lib/pipeline/collect-ranking-items'
+import { fetchRankingPageWithRetry } from '../lib/pipeline/fetch-ranking'
 import { GENRE_ID_MAP as STATIC_GENRE_ID_MAP } from '../lib/genre-mapping'
 import * as fs from 'fs/promises'
 import * as path from 'path'
@@ -134,64 +136,6 @@ interface LegacyNGList {
   derivedVideoIds: string[]
 }
 
-// Helper to fetch with Googlebot UA
-async function fetchWithGooglebot(url: string): Promise<Response> {
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-      'Accept': 'text/html,application/xhtml+xml',
-      'Accept-Language': 'ja',
-      'Cookie': 'sensitive_material_status=accept'
-    }
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Fetch failed: ${response.status} ${response.statusText} for URL: ${url}`);
-  }
-  
-  return response;
-}
-
-// Extract server-response data from HTML
-function extractServerResponseData(html: string): any {
-  const metaMatch = html.match(/<meta name="server-response" content="([^"]+)"/);
-  if (!metaMatch || !metaMatch[1]) {
-    throw new Error('server-responseメタタグが見つかりません');
-  }
-  
-  const encodedData = metaMatch[1];
-  const decodedData = encodedData
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'");
-  
-  return JSON.parse(decodedData);
-}
-
-// Extract trend tags from server response
-function extractTrendTags(serverData: any): string[] {
-  try {
-    const trendTags = serverData.data?.response?.$getTeibanRankingFeaturedKeyAndTrendTags?.data?.trendTags;
-    
-    if (!Array.isArray(trendTags)) {
-      return [];
-    }
-    
-    return trendTags.filter((tag: any) => {
-      return typeof tag === 'string' && tag.trim().length > 0;
-    });
-  } catch (error) {
-    return [];
-  }
-}
-
-// Convert thumbnail URL from .M to .L for higher resolution
-function convertThumbnailUrl(url: string): string {
-  return url.replace(/\.M$/, '.L');
-}
-
 // Migrate legacy NG list to new structure
 function migrateLegacyNGList(data: any): NGList {
   // If already in new format, return as-is
@@ -248,136 +192,6 @@ async function getNGList(): Promise<NGList> {
   }
 }
 
-// Fetch ranking page with retry logic
-async function fetchRankingPageWithRetry(
-  genre: RankingGenre,
-  period: '24h' | 'hour',
-  tag?: string,
-  page: number = 1,
-  maxRetries: number = 3
-): Promise<{ items: RankingItem[], popularTags: string[] }> {
-  let genreId = GENRE_ID_MAP[genre];
-  let url = `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${period}`;
-  
-  if (tag) {
-    url += `&tag=${encodeURIComponent(tag)}`;
-  }
-  if (page > 1) {
-    url += `&page=${page}`;
-  }
-
-  let lastError: Error | null = null;
-  
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetchWithGooglebot(url);
-      const html = await response.text();
-      
-      // Auto-detect genre ID changes
-      const canonicalMatch = html.match(/<link rel="canonical" href="https:\/\/www\.nicovideo\.jp\/ranking\/genre\/([^?/"]+)/);
-      const actualGenreId = canonicalMatch ? canonicalMatch[1] : null;
-      
-      if (actualGenreId && actualGenreId !== genreId) {
-        // Check if this is not a fallback to general ranking
-        const titleMatch = html.match(/<title>([^<]+)<\/title>/);
-        const isGeneralFallback = titleMatch && titleMatch[1].includes('総合');
-        
-        if (!isGeneralFallback) {
-          // Genre ID has changed - auto-update
-          console.log(`⚠️ Genre ID change detected for ${genre}:`);
-          console.log(`   Old ID: ${genreId}`);
-          console.log(`   New ID: ${actualGenreId}`);
-          console.log(`   ✅ Auto-updating to use new ID...`);
-          
-          // Update the in-memory map
-          GENRE_ID_MAP[genre] = actualGenreId;
-          genreId = actualGenreId;
-          
-          // Retry with the new ID
-          url = `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${period}`;
-          if (tag) url += `&tag=${encodeURIComponent(tag)}`;
-          if (page > 1) url += `&page=${page}`;
-          
-          // Fetch again with the corrected ID
-          const correctedResponse = await fetchWithGooglebot(url);
-          const correctedHtml = await correctedResponse.text();
-          const correctedServerData = extractServerResponseData(correctedHtml);
-          const correctedRankingData = correctedServerData.data?.response?.$getTeibanRanking?.data;
-          
-          if (!correctedRankingData) {
-            throw new Error('ランキングデータが見つかりません（修正後）');
-          }
-          
-          const popularTags = extractTrendTags(correctedServerData);
-          const startRank = (page - 1) * 100 + 1;
-          const items: RankingItem[] = (correctedRankingData.items || []).map((item: any, index: number) => ({
-            rank: startRank + index,
-            id: item.id,
-            title: item.title,
-            thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
-            views: item.count?.view || 0,
-            comments: item.count?.comment || 0,
-            mylists: item.count?.mylist || 0,
-            likes: item.count?.like || 0,
-            tags: item.tags || [],
-            authorId: item.owner?.id || item.user?.id,
-            authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
-            authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
-            registeredAt: item.registeredAt || item.startTime || item.createTime,
-            duration: item.duration
-          }));
-          
-          return { items, popularTags };
-        }
-      }
-      
-      const serverData = extractServerResponseData(html);
-      const rankingData = serverData.data?.response?.$getTeibanRanking?.data;
-      
-      if (!rankingData) {
-        throw new Error('ランキングデータが見つかりません');
-      }
-
-      const popularTags = extractTrendTags(serverData);
-      const startRank = (page - 1) * 100 + 1;
-      const items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
-        rank: startRank + index,
-        id: item.id,
-        title: item.title,
-        thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
-        views: item.count?.view || 0,
-        comments: item.count?.comment || 0,
-        mylists: item.count?.mylist || 0,
-        likes: item.count?.like || 0,
-        tags: item.tags || [],
-        authorId: item.owner?.id || item.user?.id,
-        authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
-        authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
-        registeredAt: item.registeredAt || item.startTime || item.createTime,
-        duration: item.duration
-      }));
-
-      return { items, popularTags };
-      
-    } catch (error: any) {
-      lastError = error;
-      
-      // Don't retry on 404 errors (no more pages)
-      if (error.message && error.message.includes('404')) {
-        throw error;
-      }
-      
-      if (attempt < maxRetries - 1) {
-        const delay = Math.min(1000 * Math.pow(2, attempt), 5000); // Exponential backoff
-        console.log(`Retry ${attempt + 1}/${maxRetries} for ${genre}/${period}/page${page} after ${delay}ms`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-  }
-  
-  throw lastError || new Error('Unknown error');
-}
-
 // Fetch with NG filtering
 async function fetchWithNGFiltering(
   genre: RankingGenre,
@@ -386,53 +200,33 @@ async function fetchWithNGFiltering(
   tag?: string,
   targetItems: number = 1000
 ): Promise<{ items: RankingItem[], popularTags: string[] }> {
-  const allItems: RankingItem[] = [];
-  let popularTags: string[] = [];
-  let page = 1;
-  const maxPages = 10;
-  
-  while (allItems.length < targetItems && page <= maxPages) {
-    try {
-      const { items, popularTags: pageTags } = await fetchRankingPageWithRetry(genre, period, tag, page);
-      
-      if (page === 1 && pageTags.length > 0) {
-        popularTags = pageTags;
-      }
+  const maxPages = 10
 
-      const { filteredItems, newDerivedIds } = filterWithNGListCore(items, ngList);
-      allItems.push(...filteredItems);
-      
-      // Track new derived IDs for later update
+  return collectRankingItems({
+    fetchPage: (page) => fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP),
+    normalizeItems: (items) => items,
+    filterItems: async (items) => filterWithNGListCore(items, ngList),
+    onDerivedIds: (newDerivedIds, pageIndex) => {
       if (newDerivedIds.length > 0) {
-        // Add to ngList for subsequent filtering in same session
-        ngList.derivedVideoIds.push(...newDerivedIds);
-        console.log(`Found ${newDerivedIds.length} new derived IDs for ${genre}/${period} page ${page}`);
+        ngList.derivedVideoIds.push(...newDerivedIds)
+        console.log(`Found ${newDerivedIds.length} new derived IDs for ${genre}/${period} page ${pageIndex}`)
       }
-
-      if (items.length < 100) break;
-      page++;
-
-      if (page <= maxPages) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    } catch (error: any) {
-      // Check if it's a 404 error (no more pages available)
-      if (error.message && error.message.includes('404')) {
-        console.log(`Reached end of pages for ${genre}/${period} at page ${page} (404 - this is normal)`);
+    },
+    onFetchError: (error, pageIndex) => {
+      const message = error instanceof Error ? error.message : String(error)
+      if (message.includes('404')) {
+        console.log(`Reached end of pages for ${genre}/${period} at page ${pageIndex} (404 - this is normal)`)
       } else {
-        console.error(`Failed to fetch page ${page} for ${genre}/${period}:`, error);
+        console.error(`Failed to fetch page ${pageIndex} for ${genre}/${period}:`, error)
       }
-      // Break the loop regardless - we've gotten all available items
-      break;
-    }
-  }
-
-  const limitedItems = allItems.slice(0, targetItems).map((item, index) => ({
-    ...item,
-    rank: index + 1
-  }));
-
-  return { items: limitedItems, popularTags };
+    },
+    targetCount: targetItems,
+    maxPages,
+    pageDelayMs: 500,
+    dedupe: false,
+    stopWhenPageItemsLessThan: 100,
+    onError: 'break'
+  })
 }
 
 // Write to Cloudflare KV via REST API

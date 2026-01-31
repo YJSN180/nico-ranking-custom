@@ -1,13 +1,43 @@
 import { NextResponse } from 'next/server'
 import { scrapeRankingPage } from '@/lib/scraper'
-import { filterRankingDataServer, filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 import { addToServerDerivedNGList } from '@/lib/ng-list-server'
 import { CACHED_GENRES } from '@/types/ranking-config'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
+import { collectRankingItems } from '@/lib/pipeline/collect-ranking-items'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
 export const runtime = 'nodejs'
+
+function normalizeRankingItems(
+  items: Partial<RankingItem>[],
+  options?: { requireIdAndTitle?: boolean },
+): RankingItem[] {
+  const normalized = items.map(
+    (item): RankingItem => ({
+      rank: item.rank || 0,
+      id: item.id || '',
+      title: item.title || '',
+      thumbURL: item.thumbURL || '',
+      views: item.views || 0,
+      comments: item.comments,
+      mylists: item.mylists,
+      likes: item.likes,
+      tags: item.tags,
+      authorId: item.authorId,
+      authorName: item.authorName,
+      authorIcon: item.authorIcon,
+      registeredAt: item.registeredAt,
+    }),
+  )
+
+  if (options?.requireIdAndTitle) {
+    return normalized.filter((item) => item.id && item.title)
+  }
+
+  return normalized
+}
 
 // Vercel Cronは無効化（GitHub Actionsを使用）
 // export const crons = [
@@ -22,7 +52,10 @@ export async function POST(request: Request) {
   const cronSecret = process.env.CRON_SECRET
 
   if (!cronSecret) {
-    return NextResponse.json({ error: 'Cron secret not configured' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Cron secret not configured' },
+      { status: 500 },
+    )
   }
 
   if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
@@ -34,22 +67,30 @@ export async function POST(request: Request) {
 
   // キルスイッチのチェック
   try {
-    const killSwitchResponse = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/monitor/kv-kill-switch`, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-    
+    const killSwitchResponse = await fetch(
+      `${process.env.VERCEL_URL || 'http://localhost:3000'}/api/monitor/kv-kill-switch`,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      },
+    )
+
     if (killSwitchResponse.ok) {
       const killSwitchData = await killSwitchResponse.json()
       if (killSwitchData.active) {
-        console.error(`[KV Kill Switch] Writes suspended: ${killSwitchData.reason}`)
-        return NextResponse.json({
-          success: false,
-          error: 'KV_WRITES_SUSPENDED',
-          message: `KV writes are suspended: ${killSwitchData.reason}`,
-          suspendedAt: killSwitchData.activatedAt
-        }, { status: 503 })
+        console.error(
+          `[KV Kill Switch] Writes suspended: ${killSwitchData.reason}`,
+        )
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'KV_WRITES_SUSPENDED',
+            message: `KV writes are suspended: ${killSwitchData.reason}`,
+            suspendedAt: killSwitchData.activatedAt,
+          },
+          { status: 503 },
+        )
       }
     }
   } catch (error) {
@@ -63,211 +104,138 @@ export async function POST(request: Request) {
     const periods: ('24h' | 'hour')[] = ['24h', 'hour']
     let allSuccess = true
     let totalItems = 0
-    
+
     // Cloudflare KV用のデータ構造を初期化
     const kvData: KVRankingData = {
       genres: {},
       metadata: {
         version: 1,
         updatedAt: new Date().toISOString(),
-        totalItems: 0
-      }
+        totalItems: 0,
+      },
     }
-    
+
     for (const genre of genres) {
       for (const period of periods) {
         try {
-          // 500件（NGフィルタリング後）を確保するため、必要に応じて追加ページを取得
           const targetCount = 500
-          const allItems: RankingItem[] = []
-          const seenVideoIds = new Set<string>() // 重複チェック用
-          let popularTags: string[] = []
-          let page = 1
-          const maxPages = 10 // 500件確保のため上限を増やす
-          
-          while (allItems.length < targetCount && page <= maxPages) {
-            const { items: pageItems, popularTags: pageTags } = await scrapeRankingPage(genre, period, undefined, 100, page)
-            
-            // 最初のページから人気タグを取得
-            if (page === 1 && pageTags) {
-              popularTags = pageTags
-            }
-            
-            // Partial<RankingItem>をRankingItemに変換
-            const convertedItems: RankingItem[] = pageItems.map((item): RankingItem => ({
-              rank: item.rank || 0,
-              id: item.id || '',
-              title: item.title || '',
-              thumbURL: item.thumbURL || '',
-              views: item.views || 0,
-              comments: item.comments,
-              mylists: item.mylists,
-              likes: item.likes,
-              tags: item.tags,
-              authorId: item.authorId,
-              authorName: item.authorName,
-              authorIcon: item.authorIcon,
-              registeredAt: item.registeredAt,
-            })).filter((item: any) => item.id && item.title)
-            
-            // NGフィルタリングを適用
-            const filterResult = await filterRankingItemsServer(convertedItems)
-            const filteredItems = filterResult.filteredItems
-            
-            // 新しく見つかったNG動画IDを派生リストに追加
-            if (filterResult.newDerivedIds.length > 0) {
+          const maxPages = 10
+
+          const { items, popularTags } = await collectRankingItems({
+            fetchPage: (page) =>
+              scrapeRankingPage(genre, period, undefined, 100, page),
+            normalizeItems: (items) =>
+              normalizeRankingItems(items, { requireIdAndTitle: true }),
+            filterItems: async (items) => {
+              const { filteredItems, newDerivedIds } =
+                await filterRankingItemsServer(items)
+              return { filteredItems, newDerivedIds }
+            },
+            onDerivedIds: async (newDerivedIds) => {
+              if (newDerivedIds.length === 0) return
               try {
-                await addToServerDerivedNGList(filterResult.newDerivedIds)
+                await addToServerDerivedNGList(newDerivedIds)
                 if (process.env.NODE_ENV === 'production') {
                   // eslint-disable-next-line no-console
-                  console.log(`[NG] Added ${filterResult.newDerivedIds.length} new derived NG IDs for ${genre}-${period}`)
+                  console.log(
+                    `[NG] Added ${newDerivedIds.length} new derived NG IDs for ${genre}-${period}`,
+                  )
                 }
               } catch (error) {
                 console.error(`[NG] Failed to add derived NG IDs:`, error)
               }
-            }
-            
-            // 重複を除外しながら追加
-            for (const item of filteredItems) {
-              if (!seenVideoIds.has(item.id)) {
-                seenVideoIds.add(item.id)
-                allItems.push(item)
-              }
-            }
-            
-            page++
-            
-            // レート制限対策
-            if (page <= maxPages && allItems.length < targetCount) {
-              await new Promise(resolve => setTimeout(resolve, 500))
+            },
+            targetCount,
+            maxPages,
+            pageDelayMs: 500,
+            dedupe: true,
+            stopOnEmptyPage: false,
+            onError: 'throw',
+          })
+
+          // Cloudflare KV用のデータ構造に追加
+          if (!kvData.genres[genre]) {
+            kvData.genres[genre] = {
+              '24h': { items: [], popularTags: [] },
+              hour: { items: [], popularTags: [] },
             }
           }
-          
-          // 500件に切り詰め、ランク番号を振り直す
-          const items: RankingItem[] = allItems.slice(0, targetCount).map((item, index) => ({
-            ...item,
-            rank: index + 1
-          }))
-        
-        // Cloudflare KV用のデータ構造に追加
-        if (!kvData.genres[genre]) {
-          kvData.genres[genre] = {
-            '24h': { items: [], popularTags: [] },
-            'hour': { items: [], popularTags: [] }
+          kvData.genres[genre][period] = {
+            items,
+            popularTags,
+            tags: {}, // タグ別ランキングは後で追加
           }
-        }
-        kvData.genres[genre][period] = {
-          items,
-          popularTags,
-          tags: {} // タグ別ランキングは後で追加
-        }
-        kvData.metadata!.totalItems += items.length
-        
-        // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
-        if (genre === 'all' && period === '24h') {
-          totalItems = items.length
-        }
-        
-        // 全ジャンルの人気タグを事前キャッシュ（500件ずつ）
-        if (popularTags && popularTags.length > 0) {
-          
-          // 全人気タグを処理（500件ずつキャッシュ）
-          for (const tag of popularTags) {
-            try {
-              // タグ別ランキングを取得（初期チェックをスキップして直接フェッチ開始）
-              // const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
-              
-              // if (tagItems.length > 0) {
-              if (true) { // 初期チェックをスキップ
-                // NGフィルタリング後に500件確保
-                const targetCount = 500
-                const allTagItems: RankingItem[] = []
-                const seenVideoIds = new Set<string>() // 重複チェック用
-                let tagPage = 1
-                const maxTagPages = 10 // 500件確保のため上限を増やす
-                
-                while (allTagItems.length < targetCount && tagPage <= maxTagPages) {
-                  try {
-                    const { items: pageTagItems } = await scrapeRankingPage(genre, period, tag, 100, tagPage)
-                    
-                    // ページにアイテムがない場合は終了
-                    if (!pageTagItems || pageTagItems.length === 0) {
-                      break
-                    }
-                    
-                    const convertedTagItems: RankingItem[] = pageTagItems.map((item): RankingItem => ({
-                    rank: item.rank || 0,
-                    id: item.id || '',
-                    title: item.title || '',
-                    thumbURL: item.thumbURL || '',
-                    views: item.views || 0,
-                    comments: item.comments,
-                    mylists: item.mylists,
-                    likes: item.likes,
-                    tags: item.tags,
-                    authorId: item.authorId,
-                    authorName: item.authorName,
-                    authorIcon: item.authorIcon,
-                    registeredAt: item.registeredAt
-                  }))
-                  
-                  // NGフィルタリングを適用（タグ別ランキング）
-                  const tagFilterResult = await filterRankingItemsServer(convertedTagItems)
-                  const filteredTagItems = tagFilterResult.filteredItems
-                  
-                  // 新しく見つかったNG動画IDを派生リストに追加
-                  if (tagFilterResult.newDerivedIds.length > 0) {
-                    try {
-                      await addToServerDerivedNGList(tagFilterResult.newDerivedIds)
-                      if (process.env.NODE_ENV === 'production') {
-                        // eslint-disable-next-line no-console
-                        console.log(`[NG] Added ${tagFilterResult.newDerivedIds.length} new derived NG IDs for ${genre}-${period}-tag-${tag}`)
+          kvData.metadata!.totalItems += items.length
+
+          // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
+          if (genre === 'all' && period === '24h') {
+            totalItems = items.length
+          }
+
+          // 全ジャンルの人気タグを事前キャッシュ（500件ずつ）
+          if (popularTags && popularTags.length > 0) {
+            // 全人気タグを処理（500件ずつキャッシュ）
+            for (const tag of popularTags) {
+              try {
+                // タグ別ランキングを取得（初期チェックをスキップして直接フェッチ開始）
+                // const { items: tagItems } = await scrapeRankingPage(genre, period, tag, 100, 1)
+
+                // if (tagItems.length > 0) {
+                if (true) {
+                  // 初期チェックをスキップ
+                  const targetCount = 500
+                  const maxTagPages = 10
+
+                  const { items: tagRankingItems } = await collectRankingItems({
+                    fetchPage: (page) =>
+                      scrapeRankingPage(genre, period, tag, 100, page),
+                    normalizeItems: (items) => normalizeRankingItems(items),
+                    filterItems: async (items) => {
+                      const { filteredItems, newDerivedIds } =
+                        await filterRankingItemsServer(items)
+                      return { filteredItems, newDerivedIds }
+                    },
+                    onDerivedIds: async (newDerivedIds) => {
+                      if (newDerivedIds.length === 0) return
+                      try {
+                        await addToServerDerivedNGList(newDerivedIds)
+                        if (process.env.NODE_ENV === 'production') {
+                          // eslint-disable-next-line no-console
+                          console.log(
+                            `[NG] Added ${newDerivedIds.length} new derived NG IDs for ${genre}-${period}-tag-${tag}`,
+                          )
+                        }
+                      } catch (error) {
+                        console.error(
+                          `[NG] Failed to add derived NG IDs for tag ${tag}:`,
+                          error,
+                        )
                       }
-                    } catch (error) {
-                      console.error(`[NG] Failed to add derived NG IDs for tag ${tag}:`, error)
-                    }
-                  }
-                  
-                  // 重複を除外しながら追加
-                  for (const item of filteredTagItems) {
-                    if (!seenVideoIds.has(item.id)) {
-                      seenVideoIds.add(item.id)
-                      allTagItems.push(item)
-                    }
-                  }
-                  
-                    tagPage++
-                    
-                    // 500msの遅延
-                    await new Promise(resolve => setTimeout(resolve, 500))
-                  } catch (pageError) {
-                    // ページ取得エラーの場合はループを終了
-                    break
+                    },
+                    targetCount,
+                    maxPages: maxTagPages,
+                    pageDelayMs: 500,
+                    dedupe: true,
+                    stopOnEmptyPage: true,
+                    onError: 'break',
+                  })
+
+                  // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
+
+                  // Cloudflare KVデータにも追加
+                  if (kvData.genres[genre][period].tags) {
+                    kvData.genres[genre][period].tags[tag] = tagRankingItems
                   }
                 }
-                
-                // 500件に切り詰め、ランク番号を振り直す
-                const tagRankingItems = allTagItems.slice(0, targetCount).map((item, index) => ({
-                  ...item,
-                  rank: index + 1
-                }))
-                
-                // Vercel KVへの保存は削除（Cloudflare KVのみ使用）
-                
-                // Cloudflare KVデータにも追加
-                if (kvData.genres[genre][period].tags) {
-                  kvData.genres[genre][period].tags[tag] = tagRankingItems
-                }
+              } catch (tagError) {
+                // console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
               }
-            } catch (tagError) {
-              // console.error(`[Cron] Failed to cache tag ${genre}/${period}/${tag}:`, tagError)
             }
           }
-        }
         } catch (error) {
           // console.error(`Failed to fetch ${genre} ${period} ranking:`, error)
           allSuccess = false
-          
+
           // エラー時の処理
           if (genre === 'all' && period === '24h') {
             totalItems = 0
@@ -275,35 +243,43 @@ export async function POST(request: Request) {
         }
       }
     }
-    
+
     // KV書き込み数をチェック
     try {
-      const monitorResponse = await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/monitor/kv-writes`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${cronSecret}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
+      const monitorResponse = await fetch(
+        `${process.env.VERCEL_URL || 'http://localhost:3000'}/api/monitor/kv-writes`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${cronSecret}`,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+
       if (!monitorResponse.ok) {
         const monitorData = await monitorResponse.json()
         if (monitorData.error === 'WRITE_LIMIT_EXCEEDED') {
-          console.error(`[KV Monitor] Write limit exceeded: ${monitorData.count} writes today`)
-          return NextResponse.json({
-            success: false,
-            error: 'KV_WRITE_LIMIT_EXCEEDED',
-            message: `KV write limit exceeded: ${monitorData.count} writes today. Stopping to prevent quota exhaustion.`,
-            itemsCount: totalItems,
-            timestamp: new Date().toISOString()
-          }, { status: 429 })
+          console.error(
+            `[KV Monitor] Write limit exceeded: ${monitorData.count} writes today`,
+          )
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'KV_WRITE_LIMIT_EXCEEDED',
+              message: `KV write limit exceeded: ${monitorData.count} writes today. Stopping to prevent quota exhaustion.`,
+              itemsCount: totalItems,
+              timestamp: new Date().toISOString(),
+            },
+            { status: 429 },
+          )
         }
       }
     } catch (monitorError) {
       console.error('[KV Monitor] Failed to check write count:', monitorError)
       // モニタリングが失敗しても処理は続行（安全のため）
     }
-    
+
     // すべてのジャンルの更新が完了したら、Cloudflare KVに一括保存
     try {
       await setRankingToKV(kvData)
@@ -312,7 +288,7 @@ export async function POST(request: Request) {
       // Cloudflare KVへの書き込みに失敗しても、Vercel KVへの書き込みは成功しているので処理は続行
       // エラーは記録するが、全体としては成功とする
     }
-    
+
     // 更新情報はCloudflare KVのメタデータに含まれる
 
     return NextResponse.json({
@@ -321,12 +297,12 @@ export async function POST(request: Request) {
       timestamp: new Date().toISOString(),
       allSuccess,
       genresProcessed: genres.length,
-      isMock: !allSuccess && totalItems === 100 // モックデータを使用した場合
+      isMock: !allSuccess && totalItems === 100, // モックデータを使用した場合
     })
   } catch (error) {
     return NextResponse.json(
       { error: 'Failed to fetch ranking' },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
