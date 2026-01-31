@@ -60,8 +60,8 @@ export function OptimizedImage({
   
   // ニコニコ動画サムネイルは直接表示（Next.js最適化バイパス）
   if (isNicoThumbnail) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imgSrc}
         alt={hasError ? '視聴できません' : alt}

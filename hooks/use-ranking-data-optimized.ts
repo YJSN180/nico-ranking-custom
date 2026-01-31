@@ -88,6 +88,7 @@ export function useRankingDataOptimized({
     }
     
     applyFilter()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ngListVersion, rankingData.length]) // Depend on length to detect data changes
   
   // Fetch ranking data

@@ -514,7 +514,7 @@ export async function enrichRankingItemsWithTagDetails(
     cacheByShard = cacheResult.cacheByShard
     cacheShardKeys = cacheResult.shardKeys
     const totalCached = cacheShardKeys.reduce((count, shardKey) => count + Object.keys(cacheByShard[shardKey] || {}).length, 0)
-    console.log(`[Tag Cache] Loaded ${totalCached} cached entries across ${cacheShardKeys.length} shards`)
+    // console.log(`[Tag Cache] Loaded ${totalCached} cached entries across ${cacheShardKeys.length} shards`)
   }
 
   // バッチ処理
@@ -563,7 +563,8 @@ export async function enrichRankingItemsWithTagDetails(
           }
         }
         if (useCache) {
-          addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', nicologResult.ok ? 'empty' : nicologResult.reason)
+          const reason = nicologResult.ok === false ? nicologResult.reason : 'empty'
+          addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', reason)
           dirtyShards.add(shardKey)
           cacheUpdated = true
         }
@@ -586,7 +587,8 @@ export async function enrichRankingItemsWithTagDetails(
           }
         }
         if (useCache) {
-          addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', thumbResult.ok ? 'empty' : thumbResult.reason)
+          const reason = thumbResult.ok === false ? thumbResult.reason : 'empty'
+          addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', reason)
           dirtyShards.add(shardKey)
           cacheUpdated = true
         }
@@ -626,12 +628,12 @@ export async function enrichRankingItemsWithTagDetails(
       const elapsed = Date.now() - startTime
       const avgTime = elapsed / processedCount
       const remainingTime = Math.round((totalItems - processedCount) * avgTime / 1000)
-      console.log(
-        `[Tag Details Fetching] ${progress}% complete (${processedCount}/${totalItems}), ` +
-        `${itemsWithTags} items with tags, ` +
-        `cache: ${cacheHits} hits / nicolog: ${nicologFetches} / getthumbinfo: ${thumbFetches}, ` +
-        `ETA: ${remainingTime}s`
-      )
+      // console.log(
+      //   `[Tag Details Fetching] ${progress}% complete (${processedCount}/${totalItems}), ` +
+      //   `${itemsWithTags} items with tags, ` +
+      //   `cache: ${cacheHits} hits / nicolog: ${nicologFetches} / getthumbinfo: ${thumbFetches}, ` +
+      //   `ETA: ${remainingTime}s`
+      // )
     }
 
     // バッチ間の遅延（最後のバッチ以外）- APIフェッチがあった場合のみ
@@ -643,18 +645,18 @@ export async function enrichRankingItemsWithTagDetails(
   // キャッシュを保存
   if (useCache && cacheUpdated) {
     const shardsToSave = Array.from(dirtyShards)
-    console.log(`[Tag Cache] Saving ${shardsToSave.length} shards to KV...`)
+    // console.log(`[Tag Cache] Saving ${shardsToSave.length} shards to KV...`)
     await saveTagCacheShards(cacheByShard, shardsToSave)
   }
 
   // 最終統計
   const elapsed = Math.round((Date.now() - startTime) / 1000)
   const cacheRate = totalItems > 0 ? Math.round((cacheHits / totalItems) * 100) : 0
-  console.log(
-    `[Tag Details Fetching] Completed: ${totalItems} items in ${elapsed}s, ` +
-    `${itemsWithTags} items with tags (${Math.round(itemsWithTags / totalItems * 100)}%), ` +
-    `Cache: ${cacheHits} hits (${cacheRate}%), Nicolog: ${nicologFetches}, getthumbinfo: ${thumbFetches}`
-  )
+  // console.log(
+  //   `[Tag Details Fetching] Completed: ${totalItems} items in ${elapsed}s, ` +
+  //   `${itemsWithTags} items with tags (${Math.round(itemsWithTags / totalItems * 100)}%), ` +
+  //   `Cache: ${cacheHits} hits (${cacheRate}%), Nicolog: ${nicologFetches}, getthumbinfo: ${thumbFetches}`
+  // )
 
   return enrichedItems
 }
