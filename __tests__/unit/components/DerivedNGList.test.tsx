@@ -269,14 +269,30 @@ describe('DerivedNGList', () => {
     it('should filter videos by title across all pages', async () => {
       const manyVideoIds = Array.from({ length: 60 }, (_, i) => `sm${i + 1}`)
 
-      vi.mocked(global.fetch).mockImplementation(async (_input, init) => {
-        const body = init?.body ? JSON.parse(init.body as string) : { videoIds: [] }
-        const videos = Object.fromEntries(
-          (body.videoIds || []).map((id: string) => [id, { title: `Title ${id}`, authorName: null }])
-        )
+      vi.mocked(global.fetch).mockImplementation(async (input, init) => {
+        const url = String(input)
+        if (url === '/api/admin/ng-list/derived-info') {
+          const videos = Object.fromEntries(
+            manyVideoIds.map(id => [id, { title: `Title ${id}`, authorName: null }])
+          )
+          return {
+            ok: true,
+            json: async () => ({ videos })
+          } as Response
+        }
+        if (url === '/api/admin/video-info') {
+          const body = init?.body ? JSON.parse(init.body as string) : { videoIds: [] }
+          const videos = Object.fromEntries(
+            (body.videoIds || []).map((id: string) => [id, { title: `Title ${id}`, authorName: null }])
+          )
+          return {
+            ok: true,
+            json: async () => ({ videos })
+          } as Response
+        }
         return {
           ok: true,
-          json: async () => ({ videos })
+          json: async () => ({ videos: {} })
         } as Response
       })
 

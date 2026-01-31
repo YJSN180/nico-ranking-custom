@@ -1,0 +1,13 @@
+{
+  "name": "derived-ng-video-info-updater",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker to refresh derived NG video info cache",
+  "main": "src/index.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

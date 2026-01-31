@@ -21,7 +21,10 @@ interface VideoInfoApiResponse {
   videos: Record<string, VideoInfoApiItem | null>
 }
 
-const MAX_BATCH_SIZE = 50
+interface DerivedInfoResponse extends VideoInfoApiResponse {
+  updatedAt?: string | null
+  lastRefreshAt?: string | null
+}
 
 export function useVideoInfo(
   videoIds: string[],
@@ -36,6 +39,7 @@ export function useVideoInfo(
   const cacheRef = useRef(new Map<string, VideoInfo>())
   const abortControllerRef = useRef<AbortController | null>(null)
   const ensureAbortControllerRef = useRef<AbortController | null>(null)
+  const derivedCacheLoadedRef = useRef(false)
 
   const updateCache = (entries: Record<string, VideoInfo>) => {
     if (Object.keys(entries).length === 0) return
@@ -43,6 +47,15 @@ export function useVideoInfo(
       cacheRef.current.set(id, info)
     })
     setVideoInfo(prev => ({ ...prev, ...entries }))
+  }
+
+  const normalizeInfo = (info?: VideoInfoApiItem | null): VideoInfo => {
+    const isDeleted = info?.isDeleted ?? false
+    return {
+      title: info?.title || (isDeleted ? '削除された動画' : '情報未取得'),
+      authorName: info?.authorName ?? null,
+      isDeleted
+    }
   }
 
   const fetchVideoInfoBatch = async (ids: string[], controller: AbortController) => {
@@ -75,20 +88,12 @@ export function useVideoInfo(
     const updates: Record<string, VideoInfo> = {}
 
     Object.entries(data.videos || {}).forEach(([id, info]) => {
-      updates[id] = {
-        title: info?.title || '削除された動画',
-        authorName: info?.authorName ?? null,
-        isDeleted: info?.isDeleted || false
-      }
+      updates[id] = normalizeInfo(info)
     })
 
     ids.forEach(id => {
-      if (!data.videos || !data.videos[id]) {
-        updates[id] = {
-          title: '削除された動画',
-          authorName: null,
-          isDeleted: true
-        }
+      if (!data.videos || typeof data.videos[id] === 'undefined') {
+        updates[id] = normalizeInfo(null)
       }
     })
 
@@ -166,6 +171,37 @@ export function useVideoInfo(
     const controller = new AbortController()
     ensureAbortControllerRef.current = controller
 
+    const fetchDerivedInfoMap = async (controller: AbortController) => {
+      const response = await fetch('/api/admin/ng-list/derived-info', {
+        credentials: 'same-origin',
+        signal: controller.signal
+      })
+
+      if (!response.ok) {
+        console.warn('[useVideoInfo] Failed to fetch derived info cache', {
+          status: response.status,
+          statusText: response.statusText
+        })
+        setError({
+          status: response.status,
+          message:
+            response.status === 401
+              ? '動画情報の取得に失敗しました（認証が必要です）。ページを再読み込みしてください。'
+              : `動画情報の取得に失敗しました（HTTP ${response.status}）`
+        })
+        throw new Error(`Failed to fetch derived info: ${response.status}`)
+      }
+
+      const data = (await response.json()) as DerivedInfoResponse
+      const updates: Record<string, VideoInfo> = {}
+      Object.entries(data.videos || {}).forEach(([id, info]) => {
+        updates[id] = normalizeInfo(info)
+      })
+      updateCache(updates)
+      derivedCacheLoadedRef.current = true
+      setError(null)
+    }
+
     const ensureMissing = async () => {
       const uniqueIds = Array.from(
         new Set(
@@ -181,10 +217,17 @@ export function useVideoInfo(
       setIsEnsuring(true)
 
       try {
-        for (let i = 0; i < missingIds.length; i += MAX_BATCH_SIZE) {
-          if (controller.signal.aborted) break
-          const batch = missingIds.slice(i, i + MAX_BATCH_SIZE)
-          await fetchVideoInfoBatch(batch, controller)
+        if (!derivedCacheLoadedRef.current) {
+          await fetchDerivedInfoMap(controller)
+        }
+
+        const stillMissing = uniqueIds.filter(id => !cacheRef.current.has(id))
+        if (stillMissing.length > 0) {
+          const placeholders: Record<string, VideoInfo> = {}
+          stillMissing.forEach(id => {
+            placeholders[id] = normalizeInfo(null)
+          })
+          updateCache(placeholders)
         }
       } catch (error: any) {
         if (error.name !== 'AbortError') {
