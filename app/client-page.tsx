@@ -566,6 +566,7 @@ export default function ClientPage({
         tagsAbortController.abort()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
   // スクロール位置の保存・復元は上記のuseEffectで実装済み
@@ -837,6 +838,7 @@ export default function ClientPage({
     } catch (error) {
       // エラーはフック内で処理済み
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRankings, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking, setError, isShowingCustomRanking, customRankingDisplayData])
   // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係に含めました
   // カスタムランキング作成時の状態変更による不要な再実行は、条件分岐で制御しています

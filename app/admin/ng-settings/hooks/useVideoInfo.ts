@@ -41,22 +41,22 @@ export function useVideoInfo(
   const ensureAbortControllerRef = useRef<AbortController | null>(null)
   const derivedCacheLoadedRef = useRef(false)
 
-  const updateCache = (entries: Record<string, VideoInfo>) => {
+  const updateCache = useCallback((entries: Record<string, VideoInfo>) => {
     if (Object.keys(entries).length === 0) return
     Object.entries(entries).forEach(([id, info]) => {
       cacheRef.current.set(id, info)
     })
     setVideoInfo(prev => ({ ...prev, ...entries }))
-  }
+  }, [])
 
-  const normalizeInfo = (info?: VideoInfoApiItem | null): VideoInfo => {
+  const normalizeInfo = useCallback((info?: VideoInfoApiItem | null): VideoInfo => {
     const isDeleted = info?.isDeleted ?? false
     return {
       title: info?.title || (isDeleted ? '削除された動画' : '情報未取得'),
       authorName: info?.authorName ?? null,
       isDeleted
     }
-  }
+  }, [])
 
   const fetchVideoInfoBatch = useCallback(async (ids: string[], controller: AbortController) => {
     if (ids.length === 0) return
@@ -159,7 +159,7 @@ export function useVideoInfo(
         abortControllerRef.current.abort()
       }
     }
-  }, [videoIds, page, itemsPerPage, fetchVideoInfoBatch])
+  }, [videoIds, page, itemsPerPage, fetchVideoInfoBatch, updateCache])
 
   useEffect(() => {
     if (!ensureIds || ensureIds.length === 0) return
@@ -252,6 +252,7 @@ export function useVideoInfo(
         ensureAbortControllerRef.current.abort()
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ensureIds])
 
   return { videoInfo, isLoading: isLoading || isEnsuring, error }
