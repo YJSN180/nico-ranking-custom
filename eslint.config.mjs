@@ -21,6 +21,7 @@ const eslintConfig = [
       "playwright-report/**",
       ".wrangler/**",
       "dist/**",
+      ".kiro/**",
       // Test files
       "__tests__/**",
       "tests/**",
