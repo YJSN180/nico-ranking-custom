@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface VideoInfo {
   title: string
@@ -58,7 +58,7 @@ export function useVideoInfo(
     }
   }
 
-  const fetchVideoInfoBatch = async (ids: string[], controller: AbortController) => {
+  const fetchVideoInfoBatch = useCallback(async (ids: string[], controller: AbortController) => {
     if (ids.length === 0) return
 
     const response = await fetch('/api/admin/video-info', {
@@ -99,7 +99,7 @@ export function useVideoInfo(
 
     updateCache(updates)
     setError(null)
-  }
+  }, [normalizeInfo, updateCache])
 
   useEffect(() => {
     // Cancel previous request
@@ -159,7 +159,7 @@ export function useVideoInfo(
         abortControllerRef.current.abort()
       }
     }
-  }, [videoIds, page, itemsPerPage])
+  }, [videoIds, page, itemsPerPage, fetchVideoInfoBatch])
 
   useEffect(() => {
     if (!ensureIds || ensureIds.length === 0) return
