@@ -59,6 +59,12 @@ const DEFAULT_THUMB_MIN_INTERVAL_MS = parseInt(process.env.TAG_FETCH_GETTHUMB_MI
 const DEFAULT_NICOLOG_TIMEOUT_MS = parseInt(process.env.TAG_FETCH_NICOLOG_TIMEOUT_MS || '8000', 10)
 const DEFAULT_THUMB_TIMEOUT_MS = parseInt(process.env.TAG_FETCH_GETTHUMB_TIMEOUT_MS || '5000', 10)
 
+let currentTagFetchContext: string | null = null
+
+export function setTagFetchContext(label: string | null): void {
+  currentTagFetchContext = label
+}
+
 function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&quot;/g, '"')
