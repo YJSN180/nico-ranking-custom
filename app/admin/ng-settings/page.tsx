@@ -47,21 +47,6 @@ export default function NGSettingsPage() {
   const [newAuthorName, setNewAuthorName] = useState('')
   const [authorNameMatchType, setAuthorNameMatchType] = useState<'exact' | 'partial'>('exact')
 
-  // NGリストを取得
-  useEffect(() => {
-    fetchNGList()
-    
-    // クリーンアップ
-    return () => {
-      if (fetchAbortControllerRef.current) {
-        fetchAbortControllerRef.current.abort()
-      }
-      if (saveAbortControllerRef.current) {
-        saveAbortControllerRef.current.abort()
-      }
-    }
-  }, [fetchNGList])
-
   const fetchNGList = useCallback(async () => {
     // 前のリクエストをキャンセル
     if (fetchAbortControllerRef.current) {
@@ -103,6 +88,21 @@ export default function NGSettingsPage() {
       }
     }
   }, [])
+
+  // NGリストを取得
+  useEffect(() => {
+    fetchNGList()
+    
+    // クリーンアップ
+    return () => {
+      if (fetchAbortControllerRef.current) {
+        fetchAbortControllerRef.current.abort()
+      }
+      if (saveAbortControllerRef.current) {
+        saveAbortControllerRef.current.abort()
+      }
+    }
+  }, [fetchNGList])
 
   // NGリストを保存
   const saveNGList = useCallback(async () => {

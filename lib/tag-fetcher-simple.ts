@@ -45,6 +45,12 @@ export interface TagDetail {
   isLocked: boolean
 }
 
+type TagFetchResult = { ok: true; tags: TagDetail[] } | { ok: false; reason: string }
+
+const isTagFetchFailure = (result: TagFetchResult): result is { ok: false; reason: string } => {
+  return !result.ok
+}
+
 // モジュールレベルのキャッシュ（メモリ内）
 const memoryCacheByShard: TagCacheByShard = {}
 const memoryCacheLoadedAt: Record<string, number> = {}
@@ -228,7 +234,7 @@ async function saveTagCacheShards(cacheByShard: TagCacheByShard, shardKeys: stri
 /**
  * Nicologからタグを取得（HTML解析）
  */
-async function fetchTagsFromNicolog(videoId: string): Promise<{ ok: true, tags: TagDetail[] } | { ok: false, reason: string }> {
+async function fetchTagsFromNicolog(videoId: string): Promise<TagFetchResult> {
   try {
     const response = await fetchWithTimeout(`https://www.nicolog.jp/watch/${videoId}`, {
       headers: {
@@ -364,7 +370,7 @@ export async function fetchAllTagsFromGetThumbInfo(videoId: string): Promise<Tag
   }
 }
 
-async function fetchAllTagsFromGetThumbInfoWithStatus(videoId: string): Promise<{ ok: true, tags: TagDetail[] } | { ok: false, reason: string }> {
+async function fetchAllTagsFromGetThumbInfoWithStatus(videoId: string): Promise<TagFetchResult> {
   try {
     const response = await fetchWithTimeout(
       `https://ext.nicovideo.jp/api/getthumbinfo/${videoId}`,
@@ -569,7 +575,11 @@ export async function enrichRankingItemsWithTagDetails(
           }
         }
         if (useCache) {
-          addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', nicologResult.ok ? 'empty' : nicologResult.reason)
+          let failureReason = 'empty'
+          if (isTagFetchFailure(nicologResult)) {
+            failureReason = nicologResult.reason
+          }
+          addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', failureReason)
           dirtyShards.add(shardKey)
           cacheUpdated = true
         }
@@ -592,7 +602,11 @@ export async function enrichRankingItemsWithTagDetails(
           }
         }
         if (useCache) {
-          addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', thumbResult.ok ? 'empty' : thumbResult.reason)
+          let failureReason = 'empty'
+          if (isTagFetchFailure(thumbResult)) {
+            failureReason = thumbResult.reason
+          }
+          addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', failureReason)
           dirtyShards.add(shardKey)
           cacheUpdated = true
         }

@@ -12,13 +12,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json()
+    const body = (await request.json()) as { videoIds?: unknown[] } | null
     const rawIds = Array.isArray(body?.videoIds) ? body.videoIds : []
     const videoIds = Array.from(
       new Set(
         rawIds
           .map((id: unknown) => (typeof id === 'string' ? id.trim() : ''))
-          .filter(Boolean)
+          .filter((id): id is string => Boolean(id))
       )
     )
 
@@ -52,7 +52,10 @@ export async function POST(request: NextRequest) {
 
     let derivedList: string[] = []
     if (getResponse.ok) {
-      derivedList = await getResponse.json()
+      const parsed = await getResponse.json()
+      if (Array.isArray(parsed)) {
+        derivedList = parsed.filter((id): id is string => typeof id === 'string')
+      }
     } else if (getResponse.status !== 404) {
       throw new Error(`Failed to fetch derived list: ${getResponse.statusText}`)
     }
