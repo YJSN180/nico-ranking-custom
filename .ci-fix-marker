@@ -1,3 +1,4 @@
-CI Auto-Fix initiated at 2025-12-12T01:42:14Z
-Failure type: security
-Failed jobs: Security & Quality
+CI Auto-Fix initiated at 2026-02-01T01:41:40Z
+Failure type: typecheck_lint
+Failed jobs: Quick Checks
+Merge E2E Reports
