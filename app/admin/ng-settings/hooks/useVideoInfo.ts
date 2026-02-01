@@ -58,49 +58,6 @@ export function useVideoInfo(
     }
   }
 
-  const fetchVideoInfoBatch = async (ids: string[], controller: AbortController) => {
-    if (ids.length === 0) return
-
-    const response = await fetch('/api/admin/video-info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      signal: controller.signal,
-      body: JSON.stringify({ videoIds: ids })
-    })
-
-    if (!response.ok) {
-      console.warn('[useVideoInfo] Failed to fetch video info', {
-        status: response.status,
-        statusText: response.statusText
-      })
-      setError({
-        status: response.status,
-        message:
-          response.status === 401
-            ? '動画情報の取得に失敗しました（認証が必要です）。ページを再読み込みしてください。'
-            : `動画情報の取得に失敗しました（HTTP ${response.status}）`
-      })
-      throw new Error(`Failed to fetch video info: ${response.status}`)
-    }
-
-    const data = (await response.json()) as VideoInfoApiResponse
-    const updates: Record<string, VideoInfo> = {}
-
-    Object.entries(data.videos || {}).forEach(([id, info]) => {
-      updates[id] = normalizeInfo(info)
-    })
-
-    ids.forEach(id => {
-      if (!data.videos || typeof data.videos[id] === 'undefined') {
-        updates[id] = normalizeInfo(null)
-      }
-    })
-
-    updateCache(updates)
-    setError(null)
-  }
-
   useEffect(() => {
     // Cancel previous request
     if (abortControllerRef.current) {
@@ -110,6 +67,49 @@ export function useVideoInfo(
     // Create new AbortController
     const controller = new AbortController()
     abortControllerRef.current = controller
+    
+    const fetchVideoInfoBatch = async (ids: string[], controller: AbortController) => {
+      if (ids.length === 0) return
+
+      const response = await fetch('/api/admin/video-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        signal: controller.signal,
+        body: JSON.stringify({ videoIds: ids })
+      })
+
+      if (!response.ok) {
+        console.warn('[useVideoInfo] Failed to fetch video info', {
+          status: response.status,
+          statusText: response.statusText
+        })
+        setError({
+          status: response.status,
+          message:
+            response.status === 401
+              ? '動画情報の取得に失敗しました（認証が必要です）。ページを再読み込みしてください。'
+              : `動画情報の取得に失敗しました（HTTP ${response.status}）`
+        })
+        throw new Error(`Failed to fetch video info: ${response.status}`)
+      }
+
+      const data = (await response.json()) as VideoInfoApiResponse
+      const updates: Record<string, VideoInfo> = {}
+
+      Object.entries(data.videos || {}).forEach(([id, info]) => {
+        updates[id] = normalizeInfo(info)
+      })
+
+      ids.forEach(id => {
+        if (!data.videos || typeof data.videos[id] === 'undefined') {
+          updates[id] = normalizeInfo(null)
+        }
+      })
+
+      updateCache(updates)
+      setError(null)
+    }
     
     const fetchVideoInfo = async () => {
       // Get video IDs for current page
@@ -159,7 +159,7 @@ export function useVideoInfo(
         abortControllerRef.current.abort()
       }
     }
-  }, [videoIds, page, itemsPerPage])
+  }, [videoIds, page, itemsPerPage, updateCache, normalizeInfo])
 
   useEffect(() => {
     if (!ensureIds || ensureIds.length === 0) return
