@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface VideoInfo {
   title: string
@@ -41,34 +41,25 @@ export function useVideoInfo(
   const ensureAbortControllerRef = useRef<AbortController | null>(null)
   const derivedCacheLoadedRef = useRef(false)
 
-  const updateCache = (entries: Record<string, VideoInfo>) => {
+  const updateCache = useCallback((entries: Record<string, VideoInfo>) => {
     if (Object.keys(entries).length === 0) return
     Object.entries(entries).forEach(([id, info]) => {
       cacheRef.current.set(id, info)
     })
     setVideoInfo(prev => ({ ...prev, ...entries }))
-  }
+  }, [])
 
-  const normalizeInfo = (info?: VideoInfoApiItem | null): VideoInfo => {
+  const normalizeInfo = useCallback((info?: VideoInfoApiItem | null): VideoInfo => {
     const isDeleted = info?.isDeleted ?? false
     return {
       title: info?.title || (isDeleted ? '削除された動画' : '情報未取得'),
       authorName: info?.authorName ?? null,
       isDeleted
     }
-  }
+  }, [])
 
-  useEffect(() => {
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    
-    // Create new AbortController
-    const controller = new AbortController()
-    abortControllerRef.current = controller
-    
-    const fetchVideoInfoBatch = async (ids: string[], controller: AbortController) => {
+  const fetchVideoInfoBatch = useCallback(
+    async (ids: string[], controller: AbortController) => {
       if (ids.length === 0) return
 
       const response = await fetch('/api/admin/video-info', {
@@ -109,7 +100,19 @@ export function useVideoInfo(
 
       updateCache(updates)
       setError(null)
+    },
+    [normalizeInfo, updateCache]
+  )
+
+  useEffect(() => {
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
     }
+    
+    // Create new AbortController
+    const controller = new AbortController()
+    abortControllerRef.current = controller
     
     const fetchVideoInfo = async () => {
       // Get video IDs for current page
@@ -159,7 +162,7 @@ export function useVideoInfo(
         abortControllerRef.current.abort()
       }
     }
-  }, [videoIds, page, itemsPerPage, updateCache, normalizeInfo])
+  }, [videoIds, page, itemsPerPage, updateCache, normalizeInfo, fetchVideoInfoBatch])
 
   useEffect(() => {
     if (!ensureIds || ensureIds.length === 0) return
@@ -252,7 +255,7 @@ export function useVideoInfo(
         ensureAbortControllerRef.current.abort()
       }
     }
-  }, [ensureIds])
+  }, [ensureIds, normalizeInfo, updateCache])
 
   return { videoInfo, isLoading: isLoading || isEnsuring, error }
 }
