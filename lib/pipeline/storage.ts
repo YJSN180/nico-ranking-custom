@@ -1,5 +1,5 @@
-import type { KVRankingData } from '@/lib/cloudflare-kv'
-import { setRankingToKV } from '@/lib/cloudflare-kv'
+import type { KVRankingData } from '../cloudflare-kv'
+import { setRankingToKV } from '../cloudflare-kv'
 
 export async function writeRankingToCloudflareKVApi(
   data: KVRankingData,

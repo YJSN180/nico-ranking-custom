@@ -1,7 +1,7 @@
-import type { RankingGenre } from '@/types/ranking-config'
-import type { RankingItem } from '@/types/ranking'
-import type { KVRankingData } from '@/lib/cloudflare-kv'
-import { collectRankingItems } from '@/lib/pipeline/collect-ranking-items'
+import type { RankingGenre } from '../../types/ranking-config'
+import type { RankingItem } from '../../types/ranking'
+import type { KVRankingData } from '../cloudflare-kv'
+import { collectRankingItems } from './collect-ranking-items'
 
 export type RankingPeriod = '24h' | 'hour'
 export type RankingKind = 'main' | 'tag'

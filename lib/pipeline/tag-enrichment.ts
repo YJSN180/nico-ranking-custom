@@ -1,8 +1,8 @@
-import type { RankingItem } from '@/types/ranking'
+import type { RankingItem } from '../../types/ranking'
 import {
   enrichRankingItemsWithTagDetails,
   setTagFetchContext,
-} from '@/lib/tag-fetcher-simple'
+} from '../tag-fetcher-simple'
 
 export type TagEnrichmentKind = 'main' | 'tag'
 export type TagEnrichmentPeriod = '24h' | 'hour'

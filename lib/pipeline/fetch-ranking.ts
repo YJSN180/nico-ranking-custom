@@ -1,5 +1,5 @@
-import type { RankingGenre } from '@/types/ranking-config'
-import type { RankingItem } from '@/types/ranking'
+import type { RankingGenre } from '../../types/ranking-config'
+import type { RankingItem } from '../../types/ranking'
 
 const GOOGLEBOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
 
@@ -87,10 +87,10 @@ export async function fetchRankingPageWithRetry(
         const isGeneralFallback = titleMatch && titleMatch[1].includes('総合')
 
         if (!isGeneralFallback) {
-          console.log(`⚠️ Genre ID change detected for ${genre}:`)
-          console.log(`   Old ID: ${genreId}`)
-          console.log(`   New ID: ${actualGenreId}`)
-          console.log('   ✅ Auto-updating to use new ID...')
+          console.warn(`⚠️ Genre ID change detected for ${genre}:`)
+          console.warn(`   Old ID: ${genreId}`)
+          console.warn(`   New ID: ${actualGenreId}`)
+          console.warn('   ✅ Auto-updating to use new ID...')
 
           if (genreIdMap) {
             genreIdMap[genre] = actualGenreId
@@ -169,7 +169,7 @@ export async function fetchRankingPageWithRetry(
 
       if (attempt < maxRetries - 1) {
         const delay = Math.min(1000 * Math.pow(2, attempt), 5000)
-        console.log(`Retry ${attempt + 1}/${maxRetries} for ${genre}/${period}/page${page} after ${delay}ms`)
+        console.warn(`Retry ${attempt + 1}/${maxRetries} for ${genre}/${period}/page${page} after ${delay}ms`)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
     }

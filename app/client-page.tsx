@@ -554,10 +554,11 @@ export default function ClientPage({
   
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
+    // Capture ref values before cleanup
+    const abortController = abortControllerRef.current
+    const tagsAbortController = tagsAbortControllerRef.current
+    
     return () => {
-      const abortController = abortControllerRef.current
-      const tagsAbortController = tagsAbortControllerRef.current
-      
       if (abortController) {
         abortController.abort()
       }
@@ -565,7 +566,6 @@ export default function ClientPage({
         tagsAbortController.abort()
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   
   // スクロール位置の保存・復元は上記のuseEffectで実装済み
