@@ -1,4 +1,4 @@
-import type { RankingItem } from '@/types/ranking'
+import type { RankingItem } from '../../types/ranking'
 
 export interface FetchPageResult<T> {
   items: T[]
@@ -24,8 +24,6 @@ export interface CollectRankingResult {
   items: RankingItem[]
   popularTags: string[]
 }
-
-const defaultNormalize = (items: RankingItem[]) => items
 
 export async function collectRankingItems<T>(options: CollectRankingOptions<T>): Promise<CollectRankingResult> {
   const {
@@ -71,7 +69,8 @@ export async function collectRankingItems<T>(options: CollectRankingOptions<T>):
       break
     }
 
-    const normalized = (normalizeItems || defaultNormalize)(pageItems)
+    const normalize = normalizeItems || ((items: T[]) => items as unknown as RankingItem[])
+    const normalized = normalize(pageItems)
     const { filteredItems, newDerivedIds } = await filterItems(normalized)
 
     if (newDerivedIds.length > 0 && onDerivedIds) {

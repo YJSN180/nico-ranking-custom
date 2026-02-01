@@ -1,7 +1,7 @@
-import type { RankingItem } from '@/types/ranking'
-import type { NGList } from '@/types/ng-list'
-import { filterWithNGListCore } from '@/lib/ng-filter-core'
-import { filterRankingItemsServer } from '@/lib/ng-filter-server'
+import type { RankingItem } from '../../types/ranking'
+import type { NGList } from '../../types/ng-list'
+import { filterWithNGListCore } from '../ng-filter-core'
+import { filterRankingItemsServer } from '../ng-filter-server'
 
 export type NGFilterResult = {
   filteredItems: RankingItem[]
