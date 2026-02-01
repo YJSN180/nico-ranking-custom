@@ -45,6 +45,56 @@ export interface TagDetail {
   isLocked: boolean
 }
 
+/**
+ * タグ取得の統計情報
+ */
+export interface TagFetchRunStats {
+  startedAt: string
+  completedAt: string
+  totalItems: number
+  itemsWithTags: number
+  cacheHits: number
+  cacheRate: number
+  nicologFetches: number
+  nicologSuccesses: number
+  nicologFailures: Record<string, number>
+  thumbFetches: number
+  thumbSuccesses: number
+  thumbFailures: Record<string, number>
+}
+
+// モジュールレベルの統計情報
+let runStats: TagFetchRunStats = createEmptyStats()
+
+function createEmptyStats(): TagFetchRunStats {
+  return {
+    startedAt: new Date().toISOString(),
+    completedAt: '',
+    totalItems: 0,
+    itemsWithTags: 0,
+    cacheHits: 0,
+    cacheRate: 0,
+    nicologFetches: 0,
+    nicologSuccesses: 0,
+    nicologFailures: {},
+    thumbFetches: 0,
+    thumbSuccesses: 0,
+    thumbFailures: {},
+  }
+}
+
+export function getTagFetchRunStats(): TagFetchRunStats {
+  return {
+    ...runStats,
+    completedAt: new Date().toISOString(),
+    cacheRate: runStats.totalItems > 0 ? runStats.cacheHits / runStats.totalItems : 0,
+  }
+}
+
+export function resetTagFetchRunStats(): void {
+  runStats = createEmptyStats()
+}
+
 type TagFetchResult = { ok: true; tags: TagDetail[] } | { ok: false; reason: string }
 
 const isTagFetchFailure = (result: TagFetchResult): result is { ok: false; reason: string } => {
