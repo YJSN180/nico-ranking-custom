@@ -554,10 +554,11 @@ export default function ClientPage({
   
   // コンポーネントのアンマウント時にリクエストをキャンセル
   useEffect(() => {
+    // Capture current values to avoid the ref value change warning
+    const abortController = abortControllerRef.current
+    const tagsAbortController = tagsAbortControllerRef.current
+    
     return () => {
-      const abortController = abortControllerRef.current
-      const tagsAbortController = tagsAbortControllerRef.current
-      
       if (abortController) {
         abortController.abort()
       }
@@ -837,11 +838,10 @@ export default function ClientPage({
     } catch (error) {
       // エラーはフック内で処理済み
     }
-  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRankings, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking, setError])
-  // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係から除外
-  // 理由: カスタムランキング作成時の状態変更が handleConfigChange を不要に再実行させ、
-  // fetchRankingData が空データで上書きしてしまう問題を防ぐため
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, router, updatePreferences, isInitialLoad, initialGenre, initialPeriod, initialTag, fetchRankingData, customRankings, newlyCreatedRankings, customRankingsLoading, setPendingCustomConfig, isCreatingCustomRanking, setError, isShowingCustomRanking, customRankingDisplayData])
+  // 注意: isShowingCustomRanking と customRankingDisplayData を依存関係に含めました
+  // カスタムランキング作成時の状態変更による不要な再実行は、条件分岐で制御しています
   
   // デバウンスされた設定変更ハンドラー（500ms遅延）
   const handleConfigChangeDebounced = useDebouncedCallback(handleConfigChangeCore, 500)
