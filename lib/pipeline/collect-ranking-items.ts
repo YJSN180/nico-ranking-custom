@@ -25,7 +25,7 @@ export interface CollectRankingResult {
   popularTags: string[]
 }
 
-const defaultNormalize = (items: RankingItem[]) => items
+const defaultNormalize = <T>(items: T[]): RankingItem[] => items as RankingItem[]
 
 export async function collectRankingItems<T>(options: CollectRankingOptions<T>): Promise<CollectRankingResult> {
   const {

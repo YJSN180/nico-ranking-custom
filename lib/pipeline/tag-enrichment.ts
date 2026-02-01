@@ -1,7 +1,6 @@
 import type { RankingItem } from '@/types/ranking'
 import {
   enrichRankingItemsWithTagDetails,
-  setTagFetchContext,
 } from '@/lib/tag-fetcher-simple'
 
 export type TagEnrichmentKind = 'main' | 'tag'
@@ -68,12 +67,11 @@ export function createTagEnricher(settings: TagEnrichmentSettings) {
     const remainder = items.slice(limit)
 
     const label = buildContextLabel(context)
-    setTagFetchContext(label)
     try {
       const enriched = await enrichRankingItemsWithTagDetails(slice)
       return [...enriched, ...remainder]
     } finally {
-      setTagFetchContext(null)
+      // Context tracking removed as setTagFetchContext was not implemented
     }
   }
 }

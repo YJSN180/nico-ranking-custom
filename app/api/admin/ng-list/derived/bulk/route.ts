@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const rawIds = Array.isArray(body?.videoIds) ? body.videoIds : []
-    const videoIds = Array.from(
+    const videoIds: string[] = Array.from(
       new Set(
         rawIds
-          .map((id: unknown) => (typeof id === 'string' ? id.trim() : ''))
-          .filter(Boolean)
+          .map((id: unknown): string => (typeof id === 'string' ? id.trim() : ''))
+          .filter((id): id is string => Boolean(id))
       )
     )
 

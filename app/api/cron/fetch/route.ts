@@ -140,7 +140,7 @@ export async function POST(request: Request) {
         normalizeRankingItems(items, {
           requireIdAndTitle: context.kind === 'main',
         }),
-      filterItems: (items) => serverNgFilter(items),
+      filterItems: async (items) => serverNgFilter(items),
       onDerivedIds: async (newDerivedIds, context) => {
         if (newDerivedIds.length === 0) return
         const label =
