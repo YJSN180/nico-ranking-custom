@@ -68,6 +68,9 @@
   "engines": {
     "node": ">=20.0.0"
   },
+  "overrides": {
+    "rollup": "^4.60.2"
+  },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250620.0",
     "@eslint/eslintrc": "^3.2.0",
