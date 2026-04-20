@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { DERIVED_NG_VIDEO_INFO_MAP_KEY } from '@/lib/admin-ng-constants'
+import { captureWebException } from '@/lib/sentry/capture'
 
 export const runtime = 'nodejs'
 
@@ -149,6 +150,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ videos: videoMap })
   } catch (error) {
     console.error('Error fetching video info:', error)
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'admin-video-info',
+        endpoint_family: '/api/admin/video-info',
+      },
+    })
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

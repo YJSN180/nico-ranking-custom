@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { NGList } from '@/types/ng-list'
 import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
 import { DerivedNGList } from './components/DerivedNGList'
+import { captureWebException } from '@/lib/sentry/capture'
 
 // 常時ライトモード適用のためのラッパー
 function LightModeWrapper({ children }: { children: React.ReactNode }) {
@@ -63,6 +64,19 @@ export default function NGSettingsPage() {
         signal: controller.signal
       })
       if (!response.ok) {
+        captureWebException(new Error(`NG list load failed: ${response.status}`), {
+          tags: {
+            runtime: 'browser',
+            surface: 'admin-ng-settings',
+            endpoint_family: '/api/admin/ng-list',
+            action: 'load',
+          },
+          contexts: {
+            request: {
+              status: response.status,
+            },
+          },
+        })
         console.error('Failed to fetch NG list:', response.status, response.statusText)
         if (response.status === 401) {
           alert('認証エラー: ページをリロードして再度ログインしてください')
@@ -79,6 +93,14 @@ export default function NGSettingsPage() {
       if (error.name === 'AbortError') {
         return
       }
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'admin-ng-settings',
+          endpoint_family: '/api/admin/ng-list',
+          action: 'load',
+        },
+      })
       console.error('Error fetching NG list:', error)
       alert('NGリストの取得に失敗しました')
     } finally {
@@ -135,6 +157,25 @@ export default function NGSettingsPage() {
         })
       })
       if (!response.ok) {
+        captureWebException(new Error(`NG list save failed: ${response.status}`), {
+          tags: {
+            runtime: 'browser',
+            surface: 'admin-ng-settings',
+            endpoint_family: '/api/admin/ng-list',
+            action: 'save',
+          },
+          contexts: {
+            ng_list: {
+              videoIdCount: ngList.videoIds.length,
+              authorIdCount: ngList.authorIds.length,
+              videoTitleCount: ngList.videoTitles.exact.length + ngList.videoTitles.partial.length,
+              authorNameCount: ngList.authorNames.exact.length + ngList.authorNames.partial.length,
+            },
+            request: {
+              status: response.status,
+            },
+          },
+        })
         console.error('Failed to save NG list:', response.status, response.statusText)
         if (response.status === 401) {
           alert('認証エラー: ページをリロードして再度ログインしてください')
@@ -151,6 +192,22 @@ export default function NGSettingsPage() {
       if (error.name === 'AbortError') {
         return
       }
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'admin-ng-settings',
+          endpoint_family: '/api/admin/ng-list',
+          action: 'save',
+        },
+        contexts: {
+          ng_list: {
+            videoIdCount: ngList.videoIds.length,
+            authorIdCount: ngList.authorIds.length,
+            videoTitleCount: ngList.videoTitles.exact.length + ngList.videoTitles.partial.length,
+            authorNameCount: ngList.authorNames.exact.length + ngList.authorNames.partial.length,
+          },
+        },
+      })
       console.error('Error saving NG list:', error)
       alert('保存に失敗しました')
   } finally {

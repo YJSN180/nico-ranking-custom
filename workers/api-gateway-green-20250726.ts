@@ -31,6 +31,7 @@
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
+import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
   R2_BUCKET: R2Bucket
@@ -39,6 +40,11 @@ interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
   RATE_LIMITER: any // Cloudflare Rate Limiting binding
+  SENTRY_WORKER_DSN?: string
+  ENVIRONMENT?: string
+  CF_VERSION_METADATA?: {
+    id?: string
+  }
 }
 
 // タグ累積データの型定義
@@ -115,6 +121,15 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
     return { success: true }
   } catch (error) {
     console.error('Rate limit check failed:', error)
+    captureWorkerException(error, {
+      tags: {
+        runtime: 'cloudflare-worker',
+        surface: 'api-gateway-green',
+        endpoint_family: endpoint === 'general' ? sanitizeUrlForSentry(request.url) || 'worker' : endpoint,
+        upstream_kind: 'rate-limit',
+        worker_version: 'green-20250726',
+      },
+    })
     // レート制限エラーの場合はリクエストを通す（フェイルオープン）
     return { success: true }
   }
@@ -228,7 +243,7 @@ function isETagMatch(currentETag: string, ifNoneMatch: string | null): boolean {
   return etags.some(etag => normalizeETag(etag) === normalizedCurrent)
 }
 
-export default {
+const handler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     
@@ -287,6 +302,15 @@ export default {
               ).text()
             } catch (decompressError) {
               console.error('[Green Worker] Failed to decompress metadata:', decompressError)
+              captureWorkerException(decompressError, {
+                tags: {
+                  runtime: 'cloudflare-worker',
+                  surface: 'api-gateway-green',
+                  endpoint_family: '/api/metadata',
+                  upstream_kind: 'r2-gzip',
+                  worker_version: 'green-20250726',
+                },
+              })
               metadataText = await metadataObject.text()
             }
           } else {
@@ -308,6 +332,15 @@ export default {
         }
       } catch (error) {
         console.error('Metadata read error:', error)
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'api-gateway-green',
+            endpoint_family: '/api/metadata',
+            upstream_kind: 'r2-read',
+            worker_version: 'green-20250726',
+          },
+        })
       }
       const emptyResponse = new Response('{}', {
         status: 200,
@@ -391,6 +424,15 @@ export default {
           }
         } catch (parseError) {
           console.error('Failed to parse tag accumulation data:', parseError)
+          captureWorkerException(parseError, {
+            tags: {
+              runtime: 'cloudflare-worker',
+              surface: 'api-gateway-green',
+              endpoint_family: '/api/tags/autocomplete',
+              upstream_kind: 'r2-parse',
+              worker_version: 'green-20250726',
+            },
+          })
           const errorResponse = new Response(JSON.stringify({
             query,
             suggestions: [],
@@ -443,6 +485,15 @@ export default {
 
       } catch (error) {
         console.error('Tag autocomplete error:', error)
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'api-gateway-green',
+            endpoint_family: '/api/tags/autocomplete',
+            upstream_kind: 'r2-read',
+            worker_version: 'green-20250726',
+          },
+        })
         const errorResponse = new Response(JSON.stringify({
           query: url.searchParams.get('q') || '',
           suggestions: [],
@@ -622,6 +673,15 @@ export default {
               return applyCORSHeaders(gzipResponse, origin, {})
             } catch (parseError) {
               console.error('[Green Worker] Failed to parse or decode JSON:', parseError)
+              captureWorkerException(parseError, {
+                tags: {
+                  runtime: 'cloudflare-worker',
+                  surface: 'api-gateway-green',
+                  endpoint_family: '/api/ranking',
+                  upstream_kind: 'r2-parse',
+                  worker_version: 'green-20250726',
+                },
+              })
               const gzipParseErrorResponse = new Response(decompressedData, {
                 status: 200,
                 headers
@@ -632,6 +692,15 @@ export default {
             }
           } catch (decompressError) {
             console.error('[Green Worker] Failed to decompress gzipped data:', decompressError)
+            captureWorkerException(decompressError, {
+              tags: {
+                runtime: 'cloudflare-worker',
+                surface: 'api-gateway-green',
+                endpoint_family: '/api/ranking',
+                upstream_kind: 'r2-gzip',
+                worker_version: 'green-20250726',
+              },
+            })
             const gzipErrorResponse = new Response(workStream, {
               status: 200,
               headers,
@@ -663,6 +732,15 @@ export default {
         })
           } catch (error) {
             console.error('[Green Worker] Failed to parse or decode JSON:', error)
+            captureWorkerException(error, {
+              tags: {
+                runtime: 'cloudflare-worker',
+                surface: 'api-gateway-green',
+                endpoint_family: '/api/ranking',
+                upstream_kind: 'r2-parse',
+                worker_version: 'green-20250726',
+              },
+            })
             const normalErrorResponse = new Response(workStream, {
               status: 200,
               headers
@@ -675,6 +753,22 @@ export default {
         
       } catch (error) {
         console.error('[Green Worker] Error fetching from R2:', error)
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'api-gateway-green',
+            endpoint_family: '/api/ranking',
+            upstream_kind: 'r2-read',
+            worker_version: 'green-20250726',
+          },
+          contexts: {
+            ranking: {
+              genre: url.searchParams.get('genre') || 'all',
+              period: url.searchParams.get('period') || '24h',
+              hasTag: Boolean(url.searchParams.get('tag')),
+            },
+          },
+        })
         const errorResponse = new Response(JSON.stringify({
           error: 'Internal server error',
           message: 'Failed to fetch ranking data'
@@ -786,6 +880,15 @@ export default {
             }
           } catch (e) {
             console.error('Failed to process JSON-LD:', e)
+            captureWorkerException(e, {
+              tags: {
+                runtime: 'cloudflare-worker',
+                surface: 'api-gateway-green',
+                endpoint_family: '/api/thumbnail/:videoId',
+                upstream_kind: 'upstream-parse',
+                worker_version: 'green-20250726',
+              },
+            })
           }
         }
         
@@ -847,6 +950,15 @@ export default {
         
       } catch (error) {
         console.error('Error fetching thumbnail:', error)
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'api-gateway-green',
+            endpoint_family: '/api/thumbnail/:videoId',
+            upstream_kind: 'thumbnail-fetch',
+            worker_version: 'green-20250726',
+          },
+        })
         const thumbnailErrorResponse = new Response(JSON.stringify({ error: 'Internal server error' }), {
           status: 500,
           headers: {
@@ -964,6 +1076,15 @@ export default {
         
       } catch (error) {
         console.error(`[HD Thumbnail] Error for ${videoId}:`, error)
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'api-gateway-green',
+            endpoint_family: '/api/hd-thumbnail/:videoId',
+            upstream_kind: 'thumbnail-fetch',
+            worker_version: 'green-20250726',
+          },
+        })
         
         const hdErrorResponse = new Response(JSON.stringify({ 
           error: 'Failed to fetch HD thumbnail',
@@ -1014,6 +1135,15 @@ export default {
         }
       } catch (error) {
         console.error(`[Static File 20250726] Error fetching from R2:`, error)
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'api-gateway-green',
+            endpoint_family: 'static-file',
+            upstream_kind: 'r2-read',
+            worker_version: 'green-20250726',
+          },
+        })
       }
       
       console.log(`[Static File 20250726] Not found in R2, proxying to Vercel: ${pathname}`)
@@ -1024,6 +1154,8 @@ export default {
     return proxyToVercel(request, env)
   }
 }
+
+export default Sentry.withSentry((env: Env) => createWorkerSentryOptions(env), handler)
 
 // Content-Type推測用のヘルパー関数
 function getContentType(extension: string): string {
@@ -1134,6 +1266,15 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     return applyCORSHeaders(normalProxyResponse, origin, {})
   } catch (error) {
     console.error('Proxy error:', error)
+    captureWorkerException(error, {
+      tags: {
+        runtime: 'cloudflare-worker',
+        surface: 'api-gateway-green',
+        endpoint_family: sanitizeUrlForSentry(request.url) || url.pathname,
+        upstream_kind: 'vercel',
+        worker_version: 'green-20250726',
+      },
+    })
     const proxyErrorResponse = new Response('Gateway Error', { 
       status: 502,
       headers: {

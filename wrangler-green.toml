@@ -1,7 +1,9 @@
 name = "nico-ranking-api-gateway-green"
+account_id = "5984977746a3dfcd71415bed5c324eb1"
 main = "workers/api-gateway-green-20250726.ts"
 compatibility_date = "2025-06-24"
 compatibility_flags = ["nodejs_compat"]
+upload_source_maps = true
 
 # KV namespace bindings (for video stats)
 [[kv_namespaces]]

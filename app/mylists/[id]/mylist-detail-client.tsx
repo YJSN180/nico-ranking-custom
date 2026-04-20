@@ -9,6 +9,7 @@ import { MylistManager } from '@/lib/storage/mylists'
 import { BackLink } from '@/components/back-link'
 import { MylistVideoItem } from '@/components/mylist-video-item'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'
+import { captureWebException } from '@/lib/sentry/capture'
 import styles from './mylist-detail.module.css'
 import '@/components/mylist-video-item.css'
 
@@ -48,6 +49,14 @@ export function MylistDetailClient() {
       setFilteredVideos(videosData)
       
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'mylist-detail',
+          endpoint_family: '/mylists/:id',
+          action: 'load',
+        },
+      })
       // eslint-disable-next-line no-console
       console.error('Failed to load mylist data:', error)
     }
@@ -72,6 +81,14 @@ export function MylistDetailClient() {
 
         await loadMylistData()
       } catch (error) {
+        captureWebException(error, {
+          tags: {
+            runtime: 'browser',
+            surface: 'mylist-detail',
+            endpoint_family: '/mylists/:id',
+            action: 'init',
+          },
+        })
         // eslint-disable-next-line no-console
         console.error('Failed to initialize mylist detail:', error)
       } finally {
@@ -143,6 +160,14 @@ export function MylistDetailClient() {
       await mylistManagerRef.current.removeVideoFromMylist(mylistId, videoId)
       await loadMylistData()
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'mylist-detail',
+          endpoint_family: '/mylists/:id',
+          action: 'remove-video',
+        },
+      })
       // eslint-disable-next-line no-console
       console.error('Failed to remove video:', error)
     }
@@ -156,6 +181,14 @@ export function MylistDetailClient() {
       await loadMylistData()
       setEditingVideo(null)
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'mylist-detail',
+          endpoint_family: '/mylists/:id',
+          action: 'update-memo',
+        },
+      })
       // eslint-disable-next-line no-console
       console.error('Failed to update memo:', error)
     }
@@ -169,6 +202,14 @@ export function MylistDetailClient() {
       await loadMylistData()
       setShowSettings(false)
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'mylist-detail',
+          endpoint_family: '/mylists/:id',
+          action: 'update-mylist',
+        },
+      })
       // eslint-disable-next-line no-console
       console.error('Failed to update mylist:', error)
     }
@@ -185,6 +226,14 @@ export function MylistDetailClient() {
       await mylistManagerRef.current.deleteMylist(mylistId)
       router.push('/mylists')
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'mylist-detail',
+          endpoint_family: '/mylists/:id',
+          action: 'delete-mylist',
+        },
+      })
       // eslint-disable-next-line no-console
       console.error('Failed to delete mylist:', error)
     }

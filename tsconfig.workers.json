@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["esnext", "webworker", "webworker.iterable"],
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "types": ["@cloudflare/workers-types", "node"]
+  },
+  "include": [
+    "workers/smart-router-20250706.ts",
+    "workers/api-gateway-green-20250726.ts",
+    "workers/utils/**/*.ts",
+    "workers/types.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "workers/**/*.test.ts",
+    "workers/**/*.backup.ts"
+  ]
+}

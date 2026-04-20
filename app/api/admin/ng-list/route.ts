@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getNGListManual, setNGListManual } from '@/lib/ng-list-server'
+import { captureWebException } from '@/lib/sentry/capture'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,14 @@ export async function GET(request: NextRequest) {
     return withNoStore(NextResponse.json(ngList))
   } catch (error) {
     console.error('Failed to fetch NG list:', error)
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'admin-ng-list',
+        endpoint_family: '/api/admin/ng-list',
+        action: 'get',
+      },
+    })
     return withNoStore(NextResponse.json({ error: 'Failed to fetch NG list' }, { status: 500 }))
   }
 }
@@ -59,6 +68,19 @@ export async function POST(request: NextRequest) {
     
     return withNoStore(NextResponse.json({ success: true }))
   } catch (error) {
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'admin-ng-list',
+        endpoint_family: '/api/admin/ng-list',
+        action: 'post',
+      },
+      contexts: {
+        ng_list: {
+          note: 'update-failed',
+        },
+      },
+    })
     return withNoStore(NextResponse.json({ error: 'Failed to update NG list' }, { status: 500 }))
   }
 }

@@ -5,6 +5,7 @@ import { CACHED_GENRES } from '@/types/ranking-config'
 import { setRankingToKV, type KVRankingData } from '@/lib/cloudflare-kv'
 import { buildRankingData } from '@/lib/pipeline/run-update'
 import { createServerNgFilter } from '@/lib/pipeline/ng-filter'
+import { captureWebException } from '@/lib/sentry/capture'
 // import { mockRankingData } from '@/lib/mock-data' // モックデータは使用しない
 import type { RankingData, RankingItem } from '@/types/ranking'
 
@@ -95,6 +96,14 @@ export async function POST(request: Request) {
     }
   } catch (error) {
     console.error('[KV Kill Switch] Failed to check kill switch status:', error)
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'cron-fetch',
+        endpoint_family: '/api/cron/fetch',
+        upstream_kind: 'kill-switch',
+      },
+    })
     // キルスイッチチェックが失敗しても処理は続行
   }
 
@@ -207,6 +216,14 @@ export async function POST(request: Request) {
       }
     } catch (monitorError) {
       console.error('[KV Monitor] Failed to check write count:', monitorError)
+      captureWebException(monitorError, {
+        tags: {
+          runtime: 'next-node',
+          surface: 'cron-fetch',
+          endpoint_family: '/api/cron/fetch',
+          upstream_kind: 'kv-monitor',
+        },
+      })
       // モニタリングが失敗しても処理は続行（安全のため）
     }
 
@@ -215,6 +232,14 @@ export async function POST(request: Request) {
       await setRankingToKV(kvData)
       // Cloudflare KV書き込み成功（ログは出力しない - ESLintエラー回避）
     } catch (cfError) {
+      captureWebException(cfError, {
+        tags: {
+          runtime: 'next-node',
+          surface: 'cron-fetch',
+          endpoint_family: '/api/cron/fetch',
+          upstream_kind: 'cloudflare-kv',
+        },
+      })
       // Cloudflare KVへの書き込みに失敗しても、Vercel KVへの書き込みは成功しているので処理は続行
       // エラーは記録するが、全体としては成功とする
     }
@@ -230,6 +255,13 @@ export async function POST(request: Request) {
       isMock: !allSuccess && totalItems === 100, // モックデータを使用した場合
     })
   } catch (error) {
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'cron-fetch',
+        endpoint_family: '/api/cron/fetch',
+      },
+    })
     return NextResponse.json(
       { error: 'Failed to fetch ranking' },
       { status: 500 },

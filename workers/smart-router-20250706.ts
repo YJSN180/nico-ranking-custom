@@ -8,6 +8,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
+import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
   MAINTENANCE_FLAGS: KVNamespace
@@ -15,6 +16,11 @@ interface Env {
   WORKER_GREEN: Fetcher
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY: string
+  SENTRY_WORKER_DSN?: string
+  ENVIRONMENT?: string
+  CF_VERSION_METADATA?: {
+    id?: string
+  }
 }
 
 // セキュリティヘッダー定義
@@ -53,8 +59,9 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   return response
 }
 
-export default {
+const handler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    void ctx
     const url = new URL(request.url)
     
     // OPTIONS リクエストの処理
@@ -150,6 +157,15 @@ export default {
       
     } catch (error) {
       console.error('Smart Router Error:', error)
+      captureWorkerException(error, {
+        tags: {
+          runtime: 'cloudflare-worker',
+          surface: 'smart-router',
+          endpoint_family: sanitizeUrlForSentry(request.url) || url.pathname,
+          upstream_kind: 'router',
+          worker_version: 'smart-router-20250706-bfcache-fix',
+        },
+      })
       
       // フォールバック: Blue Workerを使用
       try {
@@ -163,6 +179,15 @@ export default {
         })
       } catch (fallbackError) {
         console.error('Fallback Error:', fallbackError)
+        captureWorkerException(fallbackError, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'smart-router',
+            endpoint_family: sanitizeUrlForSentry(request.url) || url.pathname,
+            upstream_kind: 'blue-fallback',
+            worker_version: 'smart-router-20250706-bfcache-fix',
+          },
+        })
 
         // 最終フォールバック: エラーレスポンス
         const origin = request.headers.get('Origin')
@@ -179,3 +204,5 @@ export default {
     }
   }
 }
+
+export default Sentry.withSentry((env: Env) => createWorkerSentryOptions(env), handler)
