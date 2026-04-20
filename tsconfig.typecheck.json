@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "next-env.d.ts",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "types/**/*.ts",
+    "instrumentation.ts",
+    "instrumentation-client.ts",
+    "sentry.server.config.ts",
+    "sentry.edge.config.ts"
+  ]
+}

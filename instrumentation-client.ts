@@ -7,7 +7,6 @@ import {
   normalizeTransactionName,
   scrubBreadcrumb,
   scrubEvent,
-  scrubTransaction,
 } from '@/lib/sentry/shared'
 
 const environment = getSentryEnvironment()
@@ -35,7 +34,7 @@ Sentry.init({
   ],
   tracesSampler: () => (isProductionSentryEnvironment(environment) ? 0.05 : 1),
   beforeSend: (event) => scrubEvent(event),
-  beforeSendTransaction: (event) => scrubTransaction(event),
+  beforeSendTransaction: (event) => scrubEvent(event),
   beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
 })
 

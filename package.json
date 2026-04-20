@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "typecheck:ci": "tsc --noEmit -p tsconfig.test.json",
     "deploy:worker": "wrangler deploy",
     "build:worker": "npm run typecheck:workers && node --check workers/video-stats-updater/src/index.js",

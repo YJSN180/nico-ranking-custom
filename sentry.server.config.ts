@@ -5,7 +5,6 @@ import {
   normalizeTransactionName,
   scrubBreadcrumb,
   scrubEvent,
-  scrubTransaction,
 } from '@/lib/sentry/shared'
 
 const environment = getSentryEnvironment()
@@ -28,6 +27,6 @@ Sentry.init({
     return transactionName?.includes('/api/') ? 0.1 : 0
   },
   beforeSend: (event) => scrubEvent(event),
-  beforeSendTransaction: (event) => scrubTransaction(event),
+  beforeSendTransaction: (event) => scrubEvent(event),
   beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
 })

@@ -189,10 +189,6 @@ export function scrubEvent<T extends Record<string, any>>(event: T): T {
   return nextEvent as T
 }
 
-export function scrubTransaction<T extends Record<string, any>>(event: T): T {
-  return scrubEvent(event)
-}
-
 export function buildSafeTags(tags: Record<string, PrimitiveTag>) {
   return Object.fromEntries(
     Object.entries(tags)
