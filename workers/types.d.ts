@@ -5,3 +5,5 @@ declare global {
     default: Cache
   }
 }
+
+export {}

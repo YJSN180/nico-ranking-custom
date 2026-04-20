@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { captureWebException } from '@/lib/sentry/capture'
 
 // Edge Runtimeで実行（より高速）
 export const runtime = 'edge'
@@ -103,6 +104,25 @@ export async function GET(request: NextRequest) {
       console.error('[API/ranking] Proxy error:', error)
       console.error('[API/ranking] Target URL:', 'https://nico-rank.com/api/ranking')
       console.error('[API/ranking] Preview host:', host)
+
+      captureWebException(error, {
+        tags: {
+          runtime: 'next-edge',
+          surface: 'preview-ranking-proxy',
+          endpoint_family: '/api/ranking',
+          has_tag: searchParams.has('tag'),
+          is_preview: isPreview,
+          upstream_kind: 'cloudflare-worker',
+        },
+        contexts: {
+          proxy_request: {
+            host,
+            hasTag: searchParams.has('tag'),
+            genre: searchParams.get('genre') || 'all',
+            period: searchParams.get('period') || '24h',
+          },
+        },
+      })
       
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       const isTimeout = errorMessage.includes('abort') || errorMessage.includes('timeout')

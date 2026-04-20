@@ -4,7 +4,7 @@ import {
   processSnapshotResponse,
   batchArray 
 } from './utils.js';
-import { compressData } from './compression.js';
+import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js';
 
 // Constants
 const STATS_KEY = 'VIDEO_STATS_LATEST';
@@ -67,6 +67,15 @@ async function fetchRankingMetadata(r2Bucket) {
     };
   } catch (error) {
     console.error('Error fetching metadata:', error);
+    captureWorkerException(error, {
+      tags: {
+        runtime: 'cloudflare-worker',
+        surface: 'video-stats-updater',
+        endpoint_family: 'scheduled',
+        upstream_kind: 'r2-metadata',
+        worker_version: 'video-stats-updater',
+      },
+    });
     return DEFAULT_METADATA;
   }
 }
@@ -113,6 +122,15 @@ async function discoverAvailableData(r2Bucket) {
     };
   } catch (error) {
     console.error('Error discovering data:', error);
+    captureWorkerException(error, {
+      tags: {
+        runtime: 'cloudflare-worker',
+        surface: 'video-stats-updater',
+        endpoint_family: 'scheduled',
+        upstream_kind: 'r2-list',
+        worker_version: 'video-stats-updater',
+      },
+    });
     return {
       genres: DEFAULT_METADATA.genres,
       periods: DEFAULT_METADATA.periods,
@@ -238,6 +256,21 @@ async function fetchVideoStats(videoIds, apiKey) {
       return batchStats;
     } catch (error) {
       console.error(`Failed to fetch batch ${index + 1}:`, error);
+      captureWorkerException(error, {
+        tags: {
+          runtime: 'cloudflare-worker',
+          surface: 'video-stats-updater',
+          endpoint_family: 'scheduled',
+          upstream_kind: 'snapshot-api',
+          worker_version: 'video-stats-updater',
+        },
+        contexts: {
+          batch: {
+            batchIndex: index + 1,
+            batchSize: batch.length,
+          },
+        },
+      });
       return {};
     }
   });
@@ -313,6 +346,15 @@ async function processVideoStatsUpdate(env) {
     } catch (error) {
       console.error('Failed to update video stats:', error);
       console.error('Stack trace:', error.stack);
+      captureWorkerException(error, {
+        tags: {
+          runtime: 'cloudflare-worker',
+          surface: 'video-stats-updater',
+          endpoint_family: 'scheduled',
+          upstream_kind: 'stats-update',
+          worker_version: 'video-stats-updater',
+        },
+      });
       
       // Write error state to KV
       const errorData = {
@@ -329,6 +371,15 @@ async function processVideoStatsUpdate(env) {
         await env.STATS_KV.put(STATS_KEY, JSON.stringify(errorData));
       } catch (kvError) {
         console.error('Failed to write error state to KV:', kvError);
+        captureWorkerException(kvError, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'video-stats-updater',
+            endpoint_family: 'scheduled',
+            upstream_kind: 'kv-write',
+            worker_version: 'video-stats-updater',
+          },
+        });
       }
       
       // Re-throw with appropriate error message
@@ -345,12 +396,26 @@ async function processVideoStatsUpdate(env) {
 /**
  * Main Worker export
  */
-export default {
-  async scheduled(controller, env, ctx) {
-    await processVideoStatsUpdate(env);
+const handler = {
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(
+      Sentry.withMonitor(
+        'video-stats-updater',
+        () => processVideoStatsUpdate(env),
+        {
+          schedule: {
+            type: 'crontab',
+            value: '*/5 * * * *',
+          },
+          timezone: 'Asia/Tokyo',
+          checkinMargin: 2,
+          maxRuntime: 10,
+        },
+      ),
+    );
   },
   
-  async fetch(request, env, ctx) {
+  async fetch(request, env, _ctx) {
     const url = new URL(request.url);
     
     // Manual trigger endpoint with auth
@@ -365,6 +430,15 @@ export default {
         const result = await processVideoStatsUpdate(env);
         return Response.json(result);
       } catch (error) {
+        captureWorkerException(error, {
+          tags: {
+            runtime: 'cloudflare-worker',
+            surface: 'video-stats-updater',
+            endpoint_family: '/trigger',
+            upstream_kind: 'manual-trigger',
+            worker_version: 'video-stats-updater',
+          },
+        });
         return Response.json({ error: error.message }, { status: 500 });
       }
     }
@@ -377,3 +451,5 @@ export default {
     return new Response('Not Found', { status: 404 });
   },
 };
+
+export default Sentry.withSentry((env) => createWorkerSentryOptions(env), handler);

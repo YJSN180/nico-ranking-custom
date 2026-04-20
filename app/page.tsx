@@ -13,6 +13,7 @@ import type { RankingGenre, RankingPeriod } from '@/types/ranking-config'
 import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
+import { captureWebException } from '@/lib/sentry/capture'
 // 動的レンダリング強制: CDNキャッシュが古いデータを返す問題を防ぐ
 // キャッシュは Cloudflare Workers 側で管理し、Vercel側は常に最新データを取得
 export const dynamic = 'force-dynamic'
@@ -182,6 +183,27 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
     return primaryResult
   } catch (error) {
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'ssr-ranking',
+        endpoint_family: '/api/ranking',
+        genre,
+        period,
+        has_tag: Boolean(tag),
+        is_preview: process.env.VERCEL_ENV === 'preview',
+        upstream_kind: 'next-api',
+        cache_source: 'no-store',
+      },
+      contexts: {
+        ranking_request: {
+          genre,
+          period,
+          hasTag: Boolean(tag),
+        },
+      },
+    })
+
     if (process.env.NODE_ENV !== 'production') {
       console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
     }
@@ -288,6 +310,26 @@ export default async function Home({ searchParams }: PageProps) {
     if (error?.digest === 'NEXT_REDIRECT' || error?.message?.includes('NEXT_REDIRECT')) {
       throw error
     }
+
+    captureWebException(error, {
+      tags: {
+        runtime: 'next-node',
+        surface: 'home-render',
+        endpoint_family: '/',
+        genre,
+        period,
+        has_tag: Boolean(tag),
+        is_preview: process.env.VERCEL_ENV === 'preview',
+      },
+      contexts: {
+        page_request: {
+          genre,
+          period,
+          hasTag: Boolean(tag),
+          page,
+        },
+      },
+    })
     
     // その他のエラーの場合はエラーページを表示
     // eslint-disable-next-line no-console

@@ -37,6 +37,7 @@ import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
 import { ScrollToTopButton } from '@/components/scroll-to-top-button'
+import { captureWebException } from '@/lib/sentry/capture'
 // PWA登録（キャッシュなしのパススルーSW）
 import { PWARegister } from '@/components/pwa-register'
 import './client-page.css'
@@ -766,6 +767,16 @@ export default function ClientPage({
           }
         }
       } catch (error) {
+        captureWebException(error, {
+          tags: {
+            runtime: 'browser',
+            surface: 'custom-ranking-selection',
+            endpoint_family: 'client-state',
+            genre: newConfig.genre,
+            period: newConfig.period,
+            has_tag: Boolean(newConfig.tag),
+          },
+        })
         console.error('[ERROR] Failed to process existing custom ranking selection:', error)
         // フォールバック: エラー時は専用状態をリセット
         setIsShowingCustomRanking(false)
@@ -1053,6 +1064,15 @@ export default function ClientPage({
       const tempConfig = { genre: baseGenre, period: period as RankingPeriod, tag: undefined }
       await fetchRankingData(tempConfig)
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'custom-ranking-prefetch',
+          endpoint_family: 'client-state',
+          genre: baseGenre,
+          period,
+        },
+      })
       console.error('[ERROR] Failed to prefetch data:', error)
       throw error // エラーを上位に伝播
     }
@@ -1145,6 +1165,20 @@ export default function ClientPage({
         // Cannot apply immediate filtering
       }
     } catch (error) {
+      captureWebException(error, {
+        tags: {
+          runtime: 'browser',
+          surface: 'custom-ranking-filter',
+          endpoint_family: 'client-state',
+          genre: baseGenre,
+          period: config.period,
+        },
+        contexts: {
+          custom_ranking: {
+            conditionCount: Array.isArray(conditions) ? conditions.length : 0,
+          },
+        },
+      })
       console.error('[ERROR] Failed to apply custom ranking filter:', error)
       // フォールバック: エラー時は専用状態をリセット
       setIsShowingCustomRanking(false)

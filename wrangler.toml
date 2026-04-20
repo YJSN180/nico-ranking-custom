@@ -3,6 +3,7 @@ account_id = "5984977746a3dfcd71415bed5c324eb1"
 main = "workers/smart-router-20250706.ts"
 compatibility_date = "2025-06-24"
 compatibility_flags = ["nodejs_compat"]
+upload_source_maps = true
 
 # KV namespace bindings (for video stats)
 [[kv_namespaces]]
@@ -34,6 +35,7 @@ simple = { limit = 600, period = 60 }
 [vars]
 VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
 WORKER_AUTH_KEY = "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
+ENVIRONMENT = "production"
 
 # Custom domain
 [[routes]]

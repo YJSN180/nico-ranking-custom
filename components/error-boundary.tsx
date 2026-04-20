@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { captureWebException } from '@/lib/sentry/capture'
 
 interface ErrorBoundaryProps {
   children: React.ReactNode
@@ -24,6 +25,19 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    captureWebException(error, {
+      tags: {
+        runtime: 'browser',
+        surface: 'error-boundary',
+        endpoint_family: 'client-render',
+      },
+      contexts: {
+        react: {
+          componentStack: errorInfo.componentStack,
+        },
+      },
+    })
+
     // Log the error to console in development
     if (process.env.NODE_ENV === 'development') {
       console.error('ErrorBoundary caught an error:', error, errorInfo)

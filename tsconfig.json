@@ -24,6 +24,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["next-env.d.ts", "app/**/*.ts", "app/**/*.tsx", "components/**/*.ts", "components/**/*.tsx", "lib/**/*.ts", "types/**/*.ts", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts", "app/**/*.ts", "app/**/*.tsx", "components/**/*.ts", "components/**/*.tsx", "lib/**/*.ts", "types/**/*.ts", ".next/types/**/*.ts", "instrumentation.ts", "instrumentation-client.ts", "sentry.server.config.ts", "sentry.edge.config.ts"],
   "exclude": ["node_modules", "__tests__/**", "scripts/**", "workers/**", "**/*.test.ts", "**/*.test.tsx", "vitest.config.ts", "vitest.config.ci.ts", "playwright.config.ts"]
 }
