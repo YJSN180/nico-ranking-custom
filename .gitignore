@@ -15,6 +15,7 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
@@ -142,6 +143,10 @@ test-ng-persistence.js
 *.log
 *.tmp
 *.bak
+*.backup
+debug-*.png
+debug-*.html
+debug-*.js
 tmp/
 UPDATE_*.md
 SECURITY_*.md
@@ -169,3 +174,7 @@ SuperClaude/
 
 # Workers環境変数（上記で包含済み）
 docs/internal-notes/
+workers/video-stats-updater/src/*-backup.js
+workers/video-stats-updater/src/*-fixed.js
+workers/video-stats-updater/test-debug.js
+workers/video-stats-updater/wrangler-debug.toml
