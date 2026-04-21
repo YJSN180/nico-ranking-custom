@@ -183,7 +183,7 @@ describe('CustomRankingBackup Component', () => {
       
       await waitFor(() => {
         expect(screen.getByTestId('import-error-message')).toBeInTheDocument()
-        expect(screen.getByText('無効なバックアップファイル形式です')).toBeInTheDocument()
+        expect(screen.getByTestId('import-error-message')).toHaveTextContent('カスタムランキングデータが含まれていません')
       })
     })
 

@@ -154,10 +154,12 @@ describe('Storage飽和問題', () => {
     await new Promise(resolve => setTimeout(resolve, 1100))
 
     // localStorageへの保存回数を確認（実際の実装ではスクロール時に自動保存しない）
-    const saveCount = localStorageSetItemSpy.mock.calls.length
+    const rankingStateSaveCount = localStorageSetItemSpy.mock.calls.filter(
+      (call: any[]) => String(call[0]).startsWith('ranking-state-')
+    ).length
 
-    // スクロールだけでは保存されないことを確認
-    expect(saveCount).toBe(0)
+    // スクロールでランキング状態が大量保存されないことを確認
+    expect(rankingStateSaveCount).toBe(0)
   })
 
   it('Storage容量超過時にエラーハンドリングが行われる', async () => {

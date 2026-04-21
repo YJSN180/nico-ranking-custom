@@ -14,8 +14,8 @@ vi.mock('@/hooks/use-user-preferences', () => ({
   })
 }))
 
-vi.mock('@/hooks/use-user-ng-list', () => ({
-  useUserNGList: () => ({
+vi.mock('@/hooks/use-user-ng-list-extended', () => ({
+  useUserNGListExtended: () => ({
     ngList: {
       videoIds: [],
       videoTitles: {
@@ -27,14 +27,16 @@ vi.mock('@/hooks/use-user-ng-list', () => ({
         exact: [],
         partial: []
       },
-      version: 1,
+      tags: {
+        locked: { exact: [], partial: [] },
+        user: { exact: [], partial: [] },
+        both: { exact: [], partial: [] }
+      },
+      version: 2,
       totalCount: 0,
       updatedAt: new Date().toISOString()
     },
-    addToNGList: vi.fn(),
-    removeFromNGList: vi.fn(),
-    filterItems: (items: any[]) => items,
-    isLoading: false
+    saveNGListDirectly: vi.fn()
   })
 }))
 
@@ -63,7 +65,8 @@ vi.mock('@/lib/request-throttle', () => ({
 vi.mock('@/lib/ranking-cache', () => ({
   rankingCache: {
     get: vi.fn().mockReturnValue(null),
-    set: vi.fn()
+    set: vi.fn(),
+    clear: vi.fn()
   }
 }))
 
@@ -109,7 +112,6 @@ describe('ジャンル別ランキング500件表示', () => {
     render(
       <ClientPage 
         initialData={{ items: mockData }}
-        allRankingData={mockData}
         initialGenre="game"
         initialPeriod="24h"
         popularTags={['アクション', 'RPG', 'シミュレーション']}
@@ -139,7 +141,6 @@ describe('ジャンル別ランキング500件表示', () => {
     render(
       <ClientPage 
         initialData={{ items: mockData }}
-        allRankingData={mockData}
         initialGenre="entertainment"
         initialPeriod="hour"
         popularTags={['音楽', 'ダンス', 'お笑い']}

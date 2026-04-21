@@ -58,15 +58,28 @@ export function useUserNGListExtended() {
     const handleNGListUpdated = (e: Event) => {
       const event = e as CustomEvent<{ ngList: ExtendedUserNGList }>
       if (event.detail && event.detail.ngList) {
-        // ローカルストレージから再読み込みして最新状態を確実に取得
-        const updatedList = loadInitialNGList()
-        setNGList(updatedList)
+        setNGList(event.detail.ngList)
+      }
+    }
+
+    const handleStorageUpdated = (event: StorageEvent) => {
+      if (event.key !== STORAGE_KEY || !event.newValue) return
+
+      try {
+        const parsed = JSON.parse(event.newValue)
+        if (parsed.version === CURRENT_VERSION) {
+          setNGList(parsed)
+        }
+      } catch {
+        // ストレージエラーは無視
       }
     }
     
     window.addEventListener('ngListUpdated', handleNGListUpdated)
+    window.addEventListener('storage', handleStorageUpdated)
     return () => {
       window.removeEventListener('ngListUpdated', handleNGListUpdated)
+      window.removeEventListener('storage', handleStorageUpdated)
     }
   }, [])
 

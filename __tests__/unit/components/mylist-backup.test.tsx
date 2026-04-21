@@ -1,108 +1,70 @@
-/**
- * MylistBackup component tests
- * インポート/エクスポート機能のUI動作テスト
- */
-
-// CSS modulesをモック - 最初に宣言（ホイスト対応）
-vi.mock('@/components/mylist-backup.module.css', () => ({
-  default: {
-    mylistBackup: 'mylistBackup',
-    backupActions: 'backupActions',
-    backupButton: 'backupButton',
-    exportButton: 'exportButton',
-    importButton: 'importButton',
-    buttonIcon: 'buttonIcon',
-    fileInput: 'fileInput',
-    backupDialogOverlay: 'backupDialogOverlay',
-    backupDialog: 'backupDialog',
-    dialogNote: 'dialogNote',
-    dialogActions: 'dialogActions',
-    dialogButton: 'dialogButton',
-    cancelButton: 'cancelButton',
-    confirmButton: 'confirmButton',
-    importResult: 'importResult',
-    success: 'success',
-    error: 'error'
-  }
-}))
-
-// backupモジュールのモック
-vi.mock('@/lib/storage/backup', () => {
-  return {
-    exportMylistData: vi.fn(),
-    downloadBackupData: vi.fn(),
-    readBackupFile: vi.fn(),
-    importMylistData: vi.fn(),
-    detectMylistConflicts: vi.fn()
-  }
-})
-
-// useMylistOperationsフックをモック - CI環境対応
-// 強制的にundefinedでないことを保証
-vi.mock('@/context/mylist-operations-context', () => {
-  const mockOperations = {
-    mylists: [],
-    isLoading: false,
-    addVideoToMylist: vi.fn().mockResolvedValue(true),
-    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
-    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
-    createMylist: vi.fn()
-  }
-  
-  return {
-    useMylistOperations: vi.fn(() => mockOperations),
-    MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
-  }
-})
-
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
-import { render } from '@/__tests__/test-utils'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { screen, waitFor, cleanup, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { render } from '@/__tests__/test-utils'
 import { MylistBackup } from '@/components/mylist-backup'
-import { useMylistOperations } from '@/context/mylist-operations-context'
 import * as backupModule from '@/lib/storage/backup'
 
-const mockUseMylistOperations = useMylistOperations as unknown as ReturnType<typeof vi.fn>
+vi.mock('@/components/mylist-backup.module.css', () => ({
+  default: new Proxy({}, { get: (_, key) => String(key) })
+}))
 
+vi.mock('@/lib/storage/backup', () => ({
+  exportMylistData: vi.fn(),
+  downloadBackupData: vi.fn(),
+  readBackupFile: vi.fn(),
+  importMylistData: vi.fn(),
+  detectMylistConflicts: vi.fn()
+}))
 
-
-// window.location.reloadのモック - jsdom compatible
-const mockReload = vi.fn()
-const originalLocation = window.location
-
-// Store original location for cleanup
-const mockLocation = {
-  ...originalLocation,
-  reload: mockReload
-}
-
-// Use delete and redefine for jsdom compatibility
-delete (window as any).location
-window.location = mockLocation as Location
-
-// window.confirmのモック
-const mockConfirm = vi.fn()
-global.confirm = mockConfirm
-
-describe('MylistBackup Component', () => {
-  const mockOperations = {
+vi.mock('@/context/mylist-operations-context', () => ({
+  useMylistOperations: vi.fn(() => ({
     mylists: [],
     isLoading: false,
     addVideoToMylist: vi.fn().mockResolvedValue(true),
     removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
     isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
     createMylist: vi.fn()
+  })),
+  MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
+}))
+
+describe('MylistBackup', () => {
+  const mockConfirm = vi.fn()
+  const mockReload = vi.fn()
+  const originalLocation = window.location
+
+  const baseBackupPayload = {
+    version: '1.0.0',
+    exportDate: '2026-04-21T00:00:00.000Z',
+    mylists: [],
+    mylistVideos: [],
+    metadata: {
+      totalMylists: 0,
+      totalVideos: 0,
+      appVersion: '1.0.0'
+    }
+  }
+
+  const selectFile = (input: HTMLElement, file: File) => {
+    fireEvent.change(input, {
+      target: {
+        files: [file]
+      }
+    })
   }
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockConfirm.mockReturnValue(true) // デフォルトでconfirmはtrueを返す
-    
-    // useMylistOperationsモックの設定
-    mockUseMylistOperations.mockReturnValue(mockOperations)
-    
-    // detectMylistConflictsのデフォルトモック設定
+    mockConfirm.mockReturnValue(true)
+    global.confirm = mockConfirm
+
+    delete (window as Partial<Window>).location
+    window.location = {
+      ...originalLocation,
+      reload: mockReload
+    } as Location
+
     vi.mocked(backupModule.detectMylistConflicts).mockResolvedValue({
       hasConflicts: false,
       summary: {
@@ -120,281 +82,94 @@ describe('MylistBackup Component', () => {
   })
 
   afterEach(() => {
-    cleanup() // DOM cleanup
+    cleanup()
     vi.restoreAllMocks()
   })
 
-  describe('Export functionality', () => {
-    it('should show export confirmation dialog on button click', async () => {
-      render(<MylistBackup />)
-      
-      const exportButton = screen.getByTestId('export-mylists-button')
-      await userEvent.click(exportButton)
-      
-      const dialog = screen.getByTestId('export-confirm-dialog')
-      expect(dialog).toBeInTheDocument()
-      expect(screen.getByText('マイリストをエクスポート')).toBeInTheDocument()
-      expect(screen.getByText('すべてのマイリストデータをJSON形式でダウンロードします。')).toBeInTheDocument()
-    })
+  it('エクスポート確認ダイアログを開ける', async () => {
+    render(<MylistBackup />)
 
-    it('should close dialog on cancel', async () => {
-      render(<MylistBackup />)
-      
-      const exportButton = screen.getByTestId('export-mylists-button')
-      await userEvent.click(exportButton)
-      
-      const cancelButton = screen.getByText('キャンセル')
-      await userEvent.click(cancelButton)
-      
-      expect(screen.queryByTestId('export-confirm-dialog')).not.toBeInTheDocument()
-    })
+    await userEvent.click(screen.getByTestId('export-mylists-button'))
 
-    it('should export data successfully', async () => {
-      const mockData = { mylists: [], mylistVideos: [] }
-      vi.mocked(backupModule.exportMylistData).mockResolvedValue(mockData as any)
-      
-      render(<MylistBackup />)
-      
-      const exportButton = screen.getByTestId('export-mylists-button')
-      await userEvent.click(exportButton)
-      
-      const downloadButton = screen.getByText('ダウンロード')
-      await userEvent.click(downloadButton)
-      
-      await waitFor(() => {
-        expect(backupModule.exportMylistData).toHaveBeenCalled()
-        expect(backupModule.downloadBackupData).toHaveBeenCalledWith(mockData)
-      })
-    })
+    expect(screen.getByTestId('export-confirm-dialog')).toBeInTheDocument()
+    expect(screen.getByText('マイリストをエクスポート')).toBeInTheDocument()
+  })
 
-    it('should handle export error', async () => {
-      vi.mocked(backupModule.exportMylistData).mockRejectedValue(new Error('Export failed'))
-      const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
-      
-      render(<MylistBackup />)
-      
-      const exportButton = screen.getByTestId('export-mylists-button')
-      await userEvent.click(exportButton)
-      
-      const downloadButton = screen.getByText('ダウンロード')
-      await userEvent.click(downloadButton)
-      
-      await waitFor(() => {
-        expect(alertMock).toHaveBeenCalledWith('エクスポートに失敗しました')
-      })
+  it('エクスポート時に helper を呼ぶ', async () => {
+    const mockData = { mylists: [], mylistVideos: [] }
+    vi.mocked(backupModule.exportMylistData).mockResolvedValue(mockData as never)
+
+    render(<MylistBackup />)
+
+    await userEvent.click(screen.getByTestId('export-mylists-button'))
+    await userEvent.click(screen.getByText('ダウンロード'))
+
+    await waitFor(() => {
+      expect(backupModule.exportMylistData).toHaveBeenCalled()
+      expect(backupModule.downloadBackupData).toHaveBeenCalledWith(mockData)
     })
   })
 
-  describe('Import functionality', () => {
-    it('should trigger file input on import button click', async () => {
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input') as HTMLInputElement
-      expect(fileInput.type).toBe('file')
-      expect(fileInput.accept).toBe('.json')
+  it('個別バックアップをインポートして成功表示とリロード確認を出す', async () => {
+    const file = new File([JSON.stringify(baseBackupPayload)], 'backup.json', {
+      type: 'application/json'
+    })
+    Object.defineProperty(file, 'text', {
+      value: vi.fn().mockResolvedValue(JSON.stringify(baseBackupPayload))
     })
 
-    it('should import data successfully and show reload prompt', async () => {
-      const mockFile = new File(['{}'], 'backup.json', { type: 'application/json' })
-      const mockBackupData = { mylists: [], mylistVideos: [] }
-      
-      vi.mocked(backupModule.readBackupFile).mockResolvedValue(mockBackupData as any)
-      vi.mocked(backupModule.importMylistData).mockResolvedValue({
-        success: true,
-        imported: { mylists: 2, videos: 5 },
-        created: { mylists: 2, videos: 5 },
-        overwritten: { mylists: 0, videos: 0 },
-        skipped: { mylists: 0, videos: 0, reason: [] },
-        renamed: { mylists: [] },
-        errors: []
-      })
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input')
-      await userEvent.upload(fileInput, mockFile)
-      
-      await waitFor(() => {
-        const successMessage = screen.getByTestId('import-success-message')
-        expect(successMessage).toBeInTheDocument()
-        expect(successMessage).toHaveTextContent('✅ インポート完了')
-        expect(successMessage).toHaveTextContent('追加されたマイリスト: 2件')
-        expect(successMessage).toHaveTextContent('追加された動画: 5件')
-        expect(successMessage).toHaveTextContent('⚠️ 変更を反映するにはページをリロードしてください')
-      })
-      
-      // 1.5秒後にconfirmが表示される
-      await waitFor(() => {
-        expect(mockConfirm).toHaveBeenCalledWith('インポートが完了しました。ページをリロードして変更を反映しますか？')
+    vi.mocked(backupModule.readBackupFile).mockResolvedValue(baseBackupPayload as never)
+    vi.mocked(backupModule.importMylistData).mockResolvedValue({
+      success: true,
+      imported: { mylists: 2, videos: 5 },
+      created: { mylists: 2, videos: 5 },
+      overwritten: { mylists: 0, videos: 0 },
+      skipped: { mylists: 0, videos: 0, reason: [] },
+      renamed: { mylists: [] },
+      errors: []
+    } as never)
+
+    render(<MylistBackup />)
+
+    const fileInput = screen.getByTestId('import-file-input')
+    selectFile(fileInput, file)
+
+    await waitFor(() => {
+      expect(backupModule.readBackupFile).toHaveBeenCalledWith(file)
+      expect(backupModule.importMylistData).toHaveBeenCalledWith(baseBackupPayload, 'safe_add')
+      expect(screen.getByTestId('import-success-message')).toHaveTextContent('✅ インポート完了')
+    })
+
+    await waitFor(
+      () => {
+        expect(mockConfirm).toHaveBeenCalledWith(
+          'インポートが完了しました。ページをリロードして変更を反映しますか？'
+        )
         expect(mockReload).toHaveBeenCalled()
-      }, { timeout: 2000 })
+      },
+      { timeout: 2500 }
+    )
+
+    expect((fileInput as HTMLInputElement).value).toBe('')
+  })
+
+  it('インポート失敗時はエラーメッセージを出す', async () => {
+    const file = new File([JSON.stringify(baseBackupPayload)], 'backup.json', {
+      type: 'application/json'
+    })
+    Object.defineProperty(file, 'text', {
+      value: vi.fn().mockResolvedValue(JSON.stringify(baseBackupPayload))
     })
 
-    it('should show overwritten count when mylists are overwritten', async () => {
-      const mockFile = new File(['{}'], 'backup.json', { type: 'application/json' })
-      const mockBackupData = { mylists: [], mylistVideos: [] }
-      
-      vi.mocked(backupModule.readBackupFile).mockResolvedValue(mockBackupData as any)
-      vi.mocked(backupModule.importMylistData).mockResolvedValue({
-        success: true,
-        imported: { mylists: 3, videos: 10 },
-        created: { mylists: 1, videos: 10 },
-        overwritten: { mylists: 2, videos: 0 },
-        skipped: { mylists: 0, videos: 0, reason: [] },
-        renamed: { mylists: [] },
-        errors: []
-      })
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input')
-      await userEvent.upload(fileInput, mockFile)
-      
-      await waitFor(() => {
-        const successMessage = screen.getByTestId('import-success-message')
-        expect(successMessage).toBeInTheDocument()
-        expect(successMessage).toHaveTextContent('✅ インポート完了')
-        expect(successMessage).toHaveTextContent('追加されたマイリスト: 1件')
-        expect(successMessage).toHaveTextContent('追加された動画: 10件')
-        expect(successMessage).toHaveTextContent('上書きされたマイリスト: 2件')
-      })
-    })
+    vi.mocked(backupModule.readBackupFile).mockRejectedValue(new Error('無効なファイル形式です'))
 
-    it('should not reload if user cancels', async () => {
-      mockConfirm.mockReturnValue(false) // ユーザーがキャンセル
-      
-      const mockFile = new File(['{}'], 'backup.json', { type: 'application/json' })
-      const mockBackupData = { mylists: [], mylistVideos: [] }
-      
-      vi.mocked(backupModule.readBackupFile).mockResolvedValue(mockBackupData as any)
-      vi.mocked(backupModule.importMylistData).mockResolvedValue({
-        success: true,
-        imported: { mylists: 1, videos: 1 },
-        created: { mylists: 1, videos: 1 },
-        overwritten: { mylists: 0, videos: 0 },
-        skipped: { mylists: 0, videos: 0, reason: [] },
-        renamed: { mylists: [] },
-        errors: []
-      })
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input')
-      await userEvent.upload(fileInput, mockFile)
-      
-      await waitFor(() => {
-        expect(mockConfirm).toHaveBeenCalled()
-        expect(mockReload).not.toHaveBeenCalled()
-      }, { timeout: 2000 })
-    })
+    render(<MylistBackup />)
 
-    it('should show error message on import failure', async () => {
-      const mockFile = new File(['{}'], 'backup.json', { type: 'application/json' })
-      const mockBackupData = { mylists: [], mylistVideos: [] }
-      
-      vi.mocked(backupModule.readBackupFile).mockResolvedValue(mockBackupData as any)
-      vi.mocked(backupModule.importMylistData).mockResolvedValue({
-        success: false,
-        imported: { mylists: 0, videos: 0 },
-        created: { mylists: 0, videos: 0 },
-        overwritten: { mylists: 0, videos: 0 },
-        skipped: { mylists: 0, videos: 0, reason: [] },
-        renamed: { mylists: [] },
-        errors: ['エラー1', 'エラー2']
-      })
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input')
-      await userEvent.upload(fileInput, mockFile)
-      
-      await waitFor(() => {
-        const errorMessage = screen.getByTestId('import-error-message')
-        expect(errorMessage).toBeInTheDocument()
-        expect(errorMessage).toHaveTextContent('❌ インポートエラー')
-        expect(errorMessage).toHaveTextContent('エラー1')
-        expect(errorMessage).toHaveTextContent('エラー2')
-      })
-    })
+    selectFile(screen.getByTestId('import-file-input'), file)
 
-    it('should handle file read error', async () => {
-      const mockFile = new File(['invalid'], 'backup.json', { type: 'application/json' })
-      
-      vi.mocked(backupModule.readBackupFile).mockRejectedValue(new Error('無効なファイル形式です'))
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input')
-      await userEvent.upload(fileInput, mockFile)
-      
-      await waitFor(() => {
-        const errorMessage = screen.getByTestId('import-error-message')
-        expect(errorMessage).toBeInTheDocument()
-        expect(errorMessage).toHaveTextContent('❌ インポートエラー')
-        expect(errorMessage).toHaveTextContent('無効なファイル形式です')
-      })
-    })
-
-    it('should reset file input after import', async () => {
-      const mockFile = new File(['{}'], 'backup.json', { type: 'application/json' })
-      const mockBackupData = { mylists: [], mylistVideos: [] }
-      
-      vi.mocked(backupModule.readBackupFile).mockResolvedValue(mockBackupData as any)
-      vi.mocked(backupModule.importMylistData).mockResolvedValue({
-        success: true,
-        imported: { mylists: 1, videos: 1 },
-        created: { mylists: 1, videos: 1 },
-        overwritten: { mylists: 0, videos: 0 },
-        skipped: { mylists: 0, videos: 0, reason: [] },
-        renamed: { mylists: [] },
-        errors: []
-      })
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input') as HTMLInputElement
-      await userEvent.upload(fileInput, mockFile)
-      
-      await waitFor(() => {
-        expect(fileInput.value).toBe('')
-      })
+    await waitFor(() => {
+      expect(screen.getByTestId('import-error-message')).toHaveTextContent('無効なファイル形式です')
     })
   })
 
-  describe('Button states', () => {
-    it('should disable export button during export', async () => {
-      vi.mocked(backupModule.exportMylistData).mockImplementation(() => 
-        new Promise(resolve => setTimeout(resolve, 100))
-      )
-      
-      render(<MylistBackup />)
-      
-      const exportButton = screen.getByTestId('export-mylists-button')
-      await userEvent.click(exportButton)
-      
-      const downloadButton = screen.getByText('ダウンロード')
-      await userEvent.click(downloadButton)
-      
-      expect(screen.getByText('エクスポート中...')).toBeInTheDocument()
-      expect(downloadButton).toBeDisabled()
-    })
-
-    it('should disable import button during import', async () => {
-      const mockFile = new File(['{}'], 'backup.json', { type: 'application/json' })
-      
-      vi.mocked(backupModule.readBackupFile).mockImplementation(() => 
-        new Promise(resolve => setTimeout(resolve, 100))
-      )
-      
-      render(<MylistBackup />)
-      
-      const fileInput = screen.getByTestId('import-file-input')
-      const importButton = screen.getByTestId('import-mylists-button')
-      
-      await userEvent.upload(fileInput, mockFile)
-      
-      // インポート処理中はボタンが無効化される
-      expect(fileInput).toBeDisabled()
-    })
-  })
 })

@@ -67,6 +67,7 @@ describe('useUserPreferences', () => {
       lastPeriod: '24h',
       lastTag: undefined,
       theme: 'light',
+      showTags: false,
       version: 1,
       updatedAt: expect.any(String),
     })

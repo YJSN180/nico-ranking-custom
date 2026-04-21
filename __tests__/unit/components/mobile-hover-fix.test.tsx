@@ -1,7 +1,28 @@
 import { render, fireEvent } from '@testing-library/react'
 import { beforeEach, describe, test, expect, vi } from 'vitest'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
+import { TagDisplayProvider } from '@/contexts/tag-display-context'
 import type { RankingItem } from '@/types/ranking'
+
+vi.mock('@/hooks/use-user-ng-list-extended', () => ({
+  useUserNGListExtended: () => ({
+    ngList: {
+      videoIds: [],
+      videoTitles: { exact: [], partial: [] },
+      authorIds: [],
+      authorNames: { exact: [], partial: [] },
+      tags: {
+        locked: { exact: [], partial: [] },
+        user: { exact: [], partial: [] },
+        both: { exact: [], partial: [] },
+      },
+      version: 2,
+      totalCount: 0,
+      updatedAt: new Date().toISOString(),
+    },
+    saveNGListDirectly: vi.fn(),
+  }),
+}))
 
 // タッチデバイスをモック
 const mockTouchDevice = () => {
@@ -36,10 +57,17 @@ describe('RankingItemResponsive - モバイルホバー修正', () => {
     authorIcon: 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/0/0.jpg',
   }
 
+  const renderItem = () =>
+    render(
+      <TagDisplayProvider>
+        <RankingItemResponsive item={mockItem} />
+      </TagDisplayProvider>
+    )
+
   describe('モバイルホバー状態の修正動作', () => {
     test('タッチ終了時のイベントハンドリング', () => {
       vi.useFakeTimers()
-      const { container } = render(<RankingItemResponsive item={mockItem} />)
+      const { container } = renderItem()
       const rankingItem = container.querySelector('.ranking-item-responsive')!
       
       // タッチ終了イベントが処理されることを確認
@@ -58,7 +86,7 @@ describe('RankingItemResponsive - モバイルホバー修正', () => {
 
   test('マイリストボタンのクリックが親要素に伝播しない', () => {
     const windowOpen = vi.spyOn(window, 'open').mockImplementation(() => null)
-    const { container } = render(<RankingItemResponsive item={mockItem} />)
+    const { container } = renderItem()
     
     // モバイル用マイリストボタンを探す
     const mylistButton = container.querySelector('.ranking-item-responsive__mylist-button button')
