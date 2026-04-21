@@ -6,11 +6,12 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 echo "🚀 Green Worker 20250705 デプロイ開始..."
 
 # 設定確認
-CONFIG_FILE="wrangler-green-20250705.toml"
+CONFIG_FILE="$REPO_ROOT/wrangler-green-20250705.toml"
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "❌ エラー: $CONFIG_FILE が見つかりません"
     exit 1

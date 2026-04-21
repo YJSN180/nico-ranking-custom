@@ -20,4 +20,11 @@ if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
 fi
 
 cd "$REPO_ROOT"
-exec npx wrangler "$@"
+WRANGLER_BIN="$REPO_ROOT/node_modules/.bin/wrangler"
+
+if [ ! -x "$WRANGLER_BIN" ]; then
+  echo "Error: local Wrangler binary not found. Run npm install first." >&2
+  exit 1
+fi
+
+exec "$WRANGLER_BIN" "$@"

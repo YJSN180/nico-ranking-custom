@@ -84,7 +84,7 @@ while true; do
   # KV State
   echo "KV Configuration:"
   ACTIVE_WORKER=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" 2>/dev/null || echo "not set")
-  echo -e "  Active Worker: $(get_version_color $ACTIVE_WORKER)"
+  echo -e "  Active Worker: $(get_version_color "$ACTIVE_WORKER")"
   
   TRAFFIC_SPLIT=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" 2>/dev/null || echo "none")
   if [ "$TRAFFIC_SPLIT" != "none" ] && [ ! -z "$TRAFFIC_SPLIT" ]; then

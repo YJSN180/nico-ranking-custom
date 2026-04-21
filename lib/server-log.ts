@@ -20,6 +20,14 @@ function shouldSendLogToServer(level: LogLevel, message: string, isDevelopment: 
 
   const now = Date.now()
   const key = `${level}:${message}`
+  const staleThreshold = now - WARN_ERROR_DEDUPE_WINDOW_MS
+
+  for (const [existingKey, timestamp] of recentProductionLogs.entries()) {
+    if (timestamp < staleThreshold) {
+      recentProductionLogs.delete(existingKey)
+    }
+  }
+
   const lastSentAt = recentProductionLogs.get(key)
 
   if (lastSentAt && now - lastSentAt < WARN_ERROR_DEDUPE_WINDOW_MS) {

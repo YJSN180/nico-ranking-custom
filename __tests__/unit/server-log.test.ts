@@ -5,13 +5,10 @@ describe('serverLog', () => {
   })
 
   function mockProductionWindow() {
-    Object.defineProperty(globalThis, 'window', {
-      configurable: true,
-      value: {
-        location: {
-          hostname: 'nico-rank.com',
-          origin: 'https://nico-rank.com',
-        },
+    vi.stubGlobal('window', {
+      location: {
+        hostname: 'nico-rank.com',
+        origin: 'https://nico-rank.com',
       },
     })
   }

@@ -143,6 +143,10 @@ export function CustomRankingModal({
         signal: controller.signal,
       })
 
+      if (requestId !== latestRequestIdRef.current) {
+        return []
+      }
+
       if (response.status === 429) {
         const retryAfterValue = response.headers.get('retry-after')
         const retryAfterSeconds = retryAfterValue ? Number(retryAfterValue) : undefined
@@ -162,9 +166,6 @@ export function CustomRankingModal({
       }
 
       const data = await response.json()
-      if (requestId !== latestRequestIdRef.current) {
-        return []
-      }
       return data.suggestions || []
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
@@ -184,6 +185,9 @@ export function CustomRankingModal({
 
   // デバウンス処理付きオートコンプリート
   useEffect(() => {
+    latestRequestIdRef.current += 1
+    suggestionsAbortControllerRef.current?.abort()
+
     const timeoutId = setTimeout(async () => {
       if (tagInput.trim().length >= 2) {
         const requestId = ++latestRequestIdRef.current

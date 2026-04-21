@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { captureBrowserRateLimit } from '@/lib/sentry/capture'
 
 interface TagAutocompleteInputProps {
@@ -72,6 +72,10 @@ export function TagAutocompleteInput({
         signal: controller.signal,
       })
 
+      if (requestId !== latestRequestIdRef.current) {
+        return []
+      }
+
       if (response.status === 429) {
         const retryAfterValue = response.headers.get('retry-after')
         const retryAfterSeconds = retryAfterValue ? Number(retryAfterValue) : undefined
@@ -91,9 +95,6 @@ export function TagAutocompleteInput({
       }
 
       const data = await response.json()
-      if (requestId !== latestRequestIdRef.current) {
-        return []
-      }
       return data.suggestions || []
     } catch (error) {
       if ((error as Error).name === 'AbortError') {
@@ -136,6 +137,8 @@ export function TagAutocompleteInput({
 
   const handleInputChange = useCallback((newValue: string) => {
     onChange(newValue)
+    latestRequestIdRef.current += 1
+    suggestionsAbortControllerRef.current?.abort()
     
     // デバウンス処理
     if (debounceRef.current) {
@@ -204,6 +207,8 @@ export function TagAutocompleteInput({
     }
     suggestionsAbortControllerRef.current?.abort()
   }, [])
+
+  useEffect(() => cleanupDebounce, [cleanupDebounce])
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative', ...style }}>
