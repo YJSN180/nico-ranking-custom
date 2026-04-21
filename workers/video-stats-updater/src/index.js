@@ -4,7 +4,12 @@ import {
   processSnapshotResponse,
   batchArray 
 } from './utils.js';
-import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js';
+import {
+  Sentry,
+  captureWorkerException,
+  captureWorkerLog,
+  createWorkerSentryOptions,
+} from '../../sentry.js';
 
 // Constants
 const STATS_KEY = 'VIDEO_STATS_LATEST';
@@ -18,6 +23,28 @@ const DEFAULT_METADATA = {
   version: 1,
   updatedAt: new Date().toISOString()
 };
+
+function isGzipBytes(bytes) {
+  return bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
+async function decompressGzipBytes(bytes) {
+  return new Response(
+    new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'))
+  ).text();
+}
+
+async function parseR2Json(r2Object) {
+  const bytes = new Uint8Array(await r2Object.arrayBuffer());
+  const contentEncoding = r2Object.httpMetadata?.contentEncoding;
+  const shouldDecompress = contentEncoding === 'gzip' || isGzipBytes(bytes);
+
+  const text = shouldDecompress
+    ? await decompressGzipBytes(bytes)
+    : new TextDecoder().decode(bytes);
+
+  return JSON.parse(text);
+}
 
 /**
  * Fetch ranking metadata from R2
@@ -33,8 +60,7 @@ async function fetchRankingMetadata(r2Bucket) {
       return DEFAULT_METADATA;
     }
     
-    const metadataText = await metadataObject.text();
-    const metadata = JSON.parse(metadataText);
+    const metadata = await parseR2Json(metadataObject);
     
     // Extract genres and periods from tagsByGenrePeriod or use directly
     let genres = metadata.genres || [];
@@ -67,6 +93,15 @@ async function fetchRankingMetadata(r2Bucket) {
     };
   } catch (error) {
     console.error('Error fetching metadata:', error);
+    captureWorkerLog('error', 'video_stats_updater.r2_metadata_failed', {
+      attributes: {
+        runtime: 'cloudflare-worker',
+        surface: 'video-stats-updater',
+        endpoint_family: 'scheduled',
+        upstream_kind: 'r2-metadata',
+        worker_version: 'video-stats-updater',
+      },
+    });
     captureWorkerException(error, {
       tags: {
         runtime: 'cloudflare-worker',
@@ -176,8 +211,7 @@ async function fetchRankingData(r2Bucket, metadata) {
             const dataObject = await r2Bucket.get(r2Key);
             
             if (dataObject) {
-              const dataText = await dataObject.text();
-              const data = JSON.parse(dataText);
+              const data = await parseR2Json(dataObject);
               
               if (!rankingData.genres[genre][period]) {
                 rankingData.genres[genre][period] = {};
@@ -195,6 +229,28 @@ async function fetchRankingData(r2Bucket, metadata) {
             }
           } catch (error) {
             console.warn(`Failed to fetch data for ${genre}/${period}:`, error.message);
+            captureWorkerLog('warn', 'video_stats_updater.r2_ranking_load_failed', {
+              attributes: {
+                runtime: 'cloudflare-worker',
+                surface: 'video-stats-updater',
+                endpoint_family: 'scheduled',
+                upstream_kind: 'r2-ranking',
+                worker_version: 'video-stats-updater',
+                genre,
+                period,
+              },
+            });
+            captureWorkerException(error, {
+              tags: {
+                runtime: 'cloudflare-worker',
+                surface: 'video-stats-updater',
+                endpoint_family: 'scheduled',
+                upstream_kind: 'r2-ranking',
+                worker_version: 'video-stats-updater',
+                genre,
+                period,
+              },
+            });
           }
         })()
       );
@@ -309,6 +365,15 @@ async function processVideoStatsUpdate(env) {
       if (videoIds.length === 0) {
         // No videos found, create empty stats
         console.warn('No videos found in ranking data');
+        captureWorkerLog('warn', 'video_stats_updater.no_videos_found', {
+          attributes: {
+            runtime: 'cloudflare-worker',
+            surface: 'video-stats-updater',
+            endpoint_family: 'scheduled',
+            upstream_kind: 'ranking-data',
+            worker_version: 'video-stats-updater',
+          },
+        });
         statsData = {
           stats: {},
           metadata: {
@@ -346,6 +411,15 @@ async function processVideoStatsUpdate(env) {
     } catch (error) {
       console.error('Failed to update video stats:', error);
       console.error('Stack trace:', error.stack);
+      captureWorkerLog('error', 'video_stats_updater.stats_update_failed', {
+        attributes: {
+          runtime: 'cloudflare-worker',
+          surface: 'video-stats-updater',
+          endpoint_family: 'scheduled',
+          upstream_kind: 'stats-update',
+          worker_version: 'video-stats-updater',
+        },
+      });
       captureWorkerException(error, {
         tags: {
           runtime: 'cloudflare-worker',

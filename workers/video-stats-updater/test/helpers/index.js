@@ -40,13 +40,49 @@ export function setupMockBindings(env) {
 
 // Helper to create R2 object from JSON
 function createMockR2Object(data) {
+  const normalizedData = normalizeMockR2Data(data);
+  const bodyBytes = normalizedData.body;
+  return {
+    httpMetadata: normalizedData.httpMetadata,
+    text: async () => new TextDecoder().decode(bodyBytes),
+    json: async () => JSON.parse(new TextDecoder().decode(bodyBytes)),
+    arrayBuffer: async () =>
+      bodyBytes.buffer.slice(bodyBytes.byteOffset, bodyBytes.byteOffset + bodyBytes.byteLength),
+    blob: async () => new Blob([bodyBytes], { type: normalizedData.contentType }),
+  };
+}
+
+function normalizeMockR2Data(data) {
+  if (data?.__mockR2Object) {
+    return {
+      body: toUint8Array(data.body),
+      httpMetadata: data.httpMetadata,
+      contentType: data.contentType || 'application/json',
+    };
+  }
+
   const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
   return {
-    text: async () => jsonString,
-    json: async () => JSON.parse(jsonString),
-    arrayBuffer: async () => new TextEncoder().encode(jsonString).buffer,
-    blob: async () => new Blob([jsonString], { type: 'application/json' }),
+    body: new TextEncoder().encode(jsonString),
+    httpMetadata: undefined,
+    contentType: 'application/json',
   };
+}
+
+function toUint8Array(value) {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value);
+  }
+
+  if (typeof value === 'string') {
+    return new TextEncoder().encode(value);
+  }
+
+  return new TextEncoder().encode(JSON.stringify(value));
 }
 
 // Setup mock for Snapshot API
@@ -55,7 +91,7 @@ export function setupSnapshotAPIMock(mockResponses = {}) {
     const urlString = typeof url === 'string' ? url : url.toString();
     
     // Mock Snapshot API responses
-    if (urlString.includes('api.search.nicovideo.jp/api/v2/snapshot/video/contents/search')) {
+    if (urlString.includes('snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search')) {
       const urlParams = new URL(urlString).searchParams;
       const jsonFilterParam = urlParams.get('jsonFilter');
       
@@ -89,7 +125,7 @@ export function setupSnapshotAPIMock(mockResponses = {}) {
 
 // Wait for all promises to resolve
 export async function flushPromises() {
-  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setTimeout(resolve, 0));
 }
 
 // Extract unique video IDs from ranking data

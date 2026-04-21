@@ -6,6 +6,23 @@ const DYNAMIC_PATH_PATTERNS = [
   [/\/trigger\/[^/]+/g, '/trigger/:id'],
 ]
 
+const DROPPED_LOG_LEVELS = new Set(['trace', 'debug', 'info'])
+const SAFE_LOG_STRING_KEYS = new Set([
+  'runtime',
+  'surface',
+  'endpoint_family',
+  'upstream_kind',
+  'worker_version',
+  'genre',
+  'period',
+  'operation',
+  'result',
+  'content_encoding',
+  'url',
+])
+const SENSITIVE_LOG_KEY_PATTERN =
+  /authorization|cookie|token|secret|password|headers?|body|response|request|memo|title|tag|query|search|text/i
+
 function sanitizeUrlForSentry(input) {
   if (!input) return undefined
 
@@ -106,6 +123,56 @@ function buildSafeTags(tags = {}) {
   )
 }
 
+function buildSafeLogAttributes(attributes = {}) {
+  return Object.fromEntries(
+    Object.entries(attributes).flatMap(([key, value]) => {
+      if (value === undefined || value === null || value === '') {
+        return []
+      }
+
+      if (SENSITIVE_LOG_KEY_PATTERN.test(key)) {
+        return []
+      }
+
+      if (typeof value === 'string') {
+        if (key === 'url') {
+          const sanitizedUrl = sanitizeUrlForSentry(value)
+          return sanitizedUrl ? [[key, sanitizedUrl]] : []
+        }
+
+        if (!SAFE_LOG_STRING_KEYS.has(key)) {
+          return []
+        }
+      }
+
+      if (
+        typeof value !== 'string' &&
+        typeof value !== 'number' &&
+        typeof value !== 'boolean'
+      ) {
+        return []
+      }
+
+      return [[key, value]]
+    }),
+  )
+}
+
+function scrubLog(log) {
+  if (!log) {
+    return log
+  }
+
+  if (DROPPED_LOG_LEVELS.has(log.level)) {
+    return null
+  }
+
+  return {
+    ...log,
+    attributes: buildSafeLogAttributes(log.attributes),
+  }
+}
+
 function getWorkerEnvironment(env) {
   return env.ENVIRONMENT || 'production'
 }
@@ -143,10 +210,12 @@ export function createWorkerSentryOptions(env, overrides = {}) {
     environment,
     release: env.CF_VERSION_METADATA?.id,
     sendDefaultPii: false,
+    enableLogs: Boolean(dsn),
     tracesSampler: (samplingContext) => workerTracesSampler(environment, samplingContext),
     beforeSend: (event) => scrubEvent(event),
     beforeSendTransaction: (event) => scrubEvent(event),
     beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
+    beforeSendLog: (log) => scrubLog(log),
     ...overrides,
   }
 }
@@ -167,4 +236,32 @@ export function captureWorkerException(error, options = {}) {
   })
 }
 
-export { Sentry, normalizeTransactionName, sanitizeUrlForSentry }
+export function captureWorkerLog(level, message, options = {}) {
+  const capture = Sentry.logger?.[level]
+
+  if (typeof capture !== 'function') {
+    return
+  }
+
+  const attributes = buildSafeLogAttributes(options.attributes || {})
+
+  Sentry.withScope((scope) => {
+    for (const [key, value] of Object.entries(buildSafeTags(options.tags || {}))) {
+      scope.setTag(key, value)
+    }
+
+    for (const [key, value] of Object.entries(options.contexts || {})) {
+      scope.setContext(key, value)
+    }
+
+    capture(message, attributes, { scope })
+  })
+}
+
+export {
+  Sentry,
+  buildSafeLogAttributes,
+  normalizeTransactionName,
+  sanitizeUrlForSentry,
+  scrubLog,
+}
