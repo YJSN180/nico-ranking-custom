@@ -107,10 +107,10 @@ export function MylistsClient() {
         if (mylistManagerRef.current) {
           const savedConfig = await mylistManagerRef.current.getMylistSortConfig()
           setSortOrder(savedConfig.order)
+          await loadMylists(savedConfig.order)
+        } else {
+          await loadMylists()
         }
-        
-        // マイリスト一覧を取得
-        await loadMylists()
         
         // ストレージ情報を取得（動的インポート）
         const storageInfo = await getStorageInfo()
@@ -368,4 +368,3 @@ export function MylistsClient() {
     </div>
   )
 }
-

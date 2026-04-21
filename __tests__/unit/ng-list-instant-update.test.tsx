@@ -237,7 +237,12 @@ describe('NGリスト即時反映テスト', () => {
         exact: [],
         partial: [],
       },
-      version: 1,
+      tags: {
+        locked: { exact: [], partial: [] },
+        user: { exact: [], partial: [] },
+        both: { exact: [], partial: [] },
+      },
+      version: 2,
       totalCount: 1,
       updatedAt: new Date().toISOString(),
     }

@@ -46,6 +46,7 @@ export function useUserPreferences() {
           if (parsed.version === CURRENT_VERSION) {
             // Cookieにも同期を試みる
             setUserPreferencesCookieClient(parsed)
+            localStorage.removeItem(STORAGE_KEY)
             return parsed
           }
         }
@@ -133,6 +134,7 @@ export function getStoredPreferences(): Partial<UserPreferences> | null {
       if (parsed.version === CURRENT_VERSION) {
         // Cookieに同期を試みる
         setUserPreferencesCookieClient(parsed)
+        localStorage.removeItem(STORAGE_KEY)
         return parsed
       }
     }

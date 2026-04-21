@@ -18,7 +18,7 @@ describe('DBManager', () => {
       await expect(dbManager.init()).resolves.not.toThrow()
     })
 
-    it('データベースのバージョンが5である', async () => {
+    it('データベースのバージョンが6である', async () => {
       // Arrange
       const dbManager = new DBManager()
       
@@ -26,7 +26,7 @@ describe('DBManager', () => {
       await dbManager.init()
       
       // Assert
-      expect(dbManager.getVersion()).toBe(5)
+      expect(dbManager.getVersion()).toBe(6)
     })
 
     it('必要なオブジェクトストアが作成される', async () => {
