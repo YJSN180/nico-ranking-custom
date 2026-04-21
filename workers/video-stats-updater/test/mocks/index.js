@@ -107,6 +107,30 @@ export function createMockR2Object(data) {
   };
 }
 
+async function gzipBytes(value) {
+  const compressedStream = new Blob([value])
+    .stream()
+    .pipeThrough(new CompressionStream('gzip'));
+
+  return new Uint8Array(await new Response(compressedStream).arrayBuffer());
+}
+
+export async function createStoredMockR2Object(data, options = {}) {
+  const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
+  const body = options.gzip
+    ? await gzipBytes(jsonString)
+    : new TextEncoder().encode(jsonString);
+
+  return {
+    __mockR2Object: true,
+    body,
+    httpMetadata: options.contentEncoding
+      ? { contentEncoding: options.contentEncoding }
+      : options.httpMetadata,
+    contentType: 'application/json',
+  };
+}
+
 // Helper to create mock fetch response
 export function createMockResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
