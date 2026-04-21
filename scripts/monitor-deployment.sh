@@ -6,6 +6,8 @@ BLUE_URL="https://nico-ranking-api-gateway-blue.workers.dev"
 GREEN_URL="https://nico-ranking-api-gateway-green.workers.dev"
 PROD_URL="https://nico-rank.com"
 MAINTENANCE_FLAGS_BINDING="MAINTENANCE_FLAGS"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
 
 # ANSI color codes
 RED='\033[0;31m'
@@ -81,17 +83,17 @@ while true; do
   
   # KV State
   echo "KV Configuration:"
-  ACTIVE_WORKER=$(wrangler kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" 2>/dev/null || echo "not set")
-  echo -e "  Active Worker: $(get_version_color $ACTIVE_WORKER)"
+  ACTIVE_WORKER=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" 2>/dev/null || echo "not set")
+  echo -e "  Active Worker: $(get_version_color "$ACTIVE_WORKER")"
   
-  TRAFFIC_SPLIT=$(wrangler kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" 2>/dev/null || echo "none")
+  TRAFFIC_SPLIT=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" 2>/dev/null || echo "none")
   if [ "$TRAFFIC_SPLIT" != "none" ] && [ ! -z "$TRAFFIC_SPLIT" ]; then
     echo -e "  Traffic Split: ${YELLOW}$TRAFFIC_SPLIT${NC}"
   else
     echo "  Traffic Split: none (100% to active worker)"
   fi
   
-  MAINTENANCE_MODE=$(wrangler kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" 2>/dev/null || echo "false")
+  MAINTENANCE_MODE=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" 2>/dev/null || echo "false")
   if [ "$MAINTENANCE_MODE" = "true" ]; then
     echo -e "  Maintenance Mode: ${RED}ENABLED${NC}"
   else

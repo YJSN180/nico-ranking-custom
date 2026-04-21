@@ -9,6 +9,7 @@ import type { NGList } from '@/types/ng-list'
 import { applyCustomFilters } from '@/lib/custom-ranking-filter'
 import { useDeviceType, getDeviceBasedLimit } from './use-device-type'
 import { serverLog } from '@/lib/server-log'
+import { captureBrowserRateLimit } from '@/lib/sentry/capture'
 
 interface UseRankingDataProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
@@ -300,12 +301,23 @@ export function useRankingData({
         if (response.ok) {
           // 成功 - データ処理へ進む
         } else if (response.status === 429) {
-          // 429エラー検出 - リロードせずユーザーに待機を促す
-          serverLog.warn('Rate limited (429) - skipping auto reload', {
-            genre: config.genre,
-            period: config.period,
-            tag: config.tag
+          // 429エラー検出 - Cloudflare edge で落ちる可能性があるため browser で観測する
+          const hasTag = Boolean(config.tag && !config.tag.startsWith('custom:'))
+          const retryAfterValue = response.headers.get('retry-after')
+          const retryAfterSeconds = retryAfterValue ? Number(retryAfterValue) : undefined
+
+          captureBrowserRateLimit({
+            surface: 'ranking-fetch',
+            endpointFamily: '/api/ranking',
+            fingerprint: ['browser-ranking-fetch-429'],
+            retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+            tags: {
+              genre: config.genre,
+              period: config.period,
+              has_tag: hasTag,
+            },
           })
+
           setError('リクエストが集中しています。しばらく待ってから再度お試しください。')
           setLoading(false)
           return
