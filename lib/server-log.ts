@@ -6,6 +6,30 @@ import { requestThrottle } from './request-throttle'
 
 type LogLevel = 'info' | 'warn' | 'error'
 
+const WARN_ERROR_DEDUPE_WINDOW_MS = 15_000
+const recentProductionLogs = new Map<string, number>()
+
+function shouldSendLogToServer(level: LogLevel, message: string, isDevelopment: boolean) {
+  if (isDevelopment) {
+    return true
+  }
+
+  if (level === 'info') {
+    return false
+  }
+
+  const now = Date.now()
+  const key = `${level}:${message}`
+  const lastSentAt = recentProductionLogs.get(key)
+
+  if (lastSentAt && now - lastSentAt < WARN_ERROR_DEDUPE_WINDOW_MS) {
+    return false
+  }
+
+  recentProductionLogs.set(key, now)
+  return true
+}
+
 async function sendLogToServer(level: LogLevel, message: string, data?: any) {
   // 開発環境判定（クライアントサイド用）
   const isDevelopment = typeof window !== 'undefined' && 
@@ -23,6 +47,10 @@ async function sendLogToServer(level: LogLevel, message: string, data?: any) {
       // eslint-disable-next-line no-console
       console.log(`[DEBUG] ${message}`, data)
     }
+  }
+
+  if (!shouldSendLogToServer(level, message, isDevelopment)) {
+    return
   }
 
   try {

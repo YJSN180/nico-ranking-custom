@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
 import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
 import { TagIcon } from './tag-icon'
+import { captureBrowserRateLimit } from '@/lib/sentry/capture'
 import styles from './custom-ranking-modal.module.css'
 
 // 演算子の自然言語ラベル
@@ -98,6 +99,8 @@ export function CustomRankingModal({
   
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
+  const suggestionsAbortControllerRef = useRef<AbortController | null>(null)
+  const latestRequestIdRef = useRef(0)
 
   // オートコンプリート用のAPIエンドポイント
   const getAutocompleteEndpoint = () => {
@@ -116,10 +119,14 @@ export function CustomRankingModal({
   }
 
   // タグのオートコンプリート候補を取得
-  const fetchTagSuggestions = useCallback(async (query: string): Promise<string[]> => {
+  const fetchTagSuggestions = useCallback(async (query: string, requestId: number): Promise<string[]> => {
     if (!query || query.trim().length < 2) {
       return []
     }
+
+    suggestionsAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    suggestionsAbortControllerRef.current = controller
 
     try {
       setIsLoadingSuggestions(true)
@@ -133,7 +140,21 @@ export function CustomRankingModal({
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       })
+
+      if (response.status === 429) {
+        const retryAfterValue = response.headers.get('retry-after')
+        const retryAfterSeconds = retryAfterValue ? Number(retryAfterValue) : undefined
+
+        captureBrowserRateLimit({
+          surface: 'tag-autocomplete',
+          endpointFamily: '/api/tags/autocomplete',
+          fingerprint: ['browser-tag-autocomplete-429'],
+          retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+        })
+        return []
+      }
 
       if (!response.ok) {
         console.warn('Failed to fetch tag suggestions:', response.status)
@@ -141,12 +162,23 @@ export function CustomRankingModal({
       }
 
       const data = await response.json()
+      if (requestId !== latestRequestIdRef.current) {
+        return []
+      }
       return data.suggestions || []
     } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        return []
+      }
       console.error('Error fetching tag suggestions:', error)
       return []
     } finally {
-      setIsLoadingSuggestions(false)
+      if (suggestionsAbortControllerRef.current === controller) {
+        suggestionsAbortControllerRef.current = null
+      }
+      if (requestId === latestRequestIdRef.current) {
+        setIsLoadingSuggestions(false)
+      }
     }
   }, [])
 
@@ -154,18 +186,28 @@ export function CustomRankingModal({
   useEffect(() => {
     const timeoutId = setTimeout(async () => {
       if (tagInput.trim().length >= 2) {
-        const suggestions = await fetchTagSuggestions(tagInput)
+        const requestId = ++latestRequestIdRef.current
+        const suggestions = await fetchTagSuggestions(tagInput, requestId)
+        if (requestId !== latestRequestIdRef.current) {
+          return
+        }
         setTagSuggestions(suggestions)
         setShowSuggestions(suggestions.length > 0)
         setSelectedSuggestionIndex(-1) // 候補リストが更新されたら選択をリセット
       } else {
+        latestRequestIdRef.current += 1
+        suggestionsAbortControllerRef.current?.abort()
         setTagSuggestions([])
         setShowSuggestions(false)
         setSelectedSuggestionIndex(-1)
+        setIsLoadingSuggestions(false)
       }
     }, 300) // 300msデバウンス
 
-    return () => clearTimeout(timeoutId)
+    return () => {
+      clearTimeout(timeoutId)
+      suggestionsAbortControllerRef.current?.abort()
+    }
   }, [tagInput, fetchTagSuggestions])
 
   // モーダルが開いた時にリセットまたは初期化

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useCallback, useMemo } from 'react'
+import { useState, useRef, useCallback } from 'react'
+import { captureBrowserRateLimit } from '@/lib/sentry/capture'
 
 interface TagAutocompleteInputProps {
   value: string
@@ -28,6 +29,8 @@ export function TagAutocompleteInput({
   
   const inputRef = useRef<HTMLInputElement>(null)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const suggestionsAbortControllerRef = useRef<AbortController | null>(null)
+  const latestRequestIdRef = useRef(0)
 
   // オートコンプリート用のAPIエンドポイント
   const getAutocompleteEndpoint = () => {
@@ -45,10 +48,14 @@ export function TagAutocompleteInput({
   }
 
   // タグのオートコンプリート候補を取得
-  const fetchTagSuggestions = useCallback(async (query: string): Promise<string[]> => {
+  const fetchTagSuggestions = useCallback(async (query: string, requestId: number): Promise<string[]> => {
     if (!query || query.trim().length < 2) {
       return []
     }
+
+    suggestionsAbortControllerRef.current?.abort()
+    const controller = new AbortController()
+    suggestionsAbortControllerRef.current = controller
 
     try {
       setIsLoadingSuggestions(true)
@@ -62,7 +69,21 @@ export function TagAutocompleteInput({
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       })
+
+      if (response.status === 429) {
+        const retryAfterValue = response.headers.get('retry-after')
+        const retryAfterSeconds = retryAfterValue ? Number(retryAfterValue) : undefined
+
+        captureBrowserRateLimit({
+          surface: 'tag-autocomplete',
+          endpointFamily: '/api/tags/autocomplete',
+          fingerprint: ['browser-tag-autocomplete-429'],
+          retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
+        })
+        return []
+      }
 
       if (!response.ok) {
         console.warn('Failed to fetch tag suggestions:', response.status)
@@ -70,12 +91,23 @@ export function TagAutocompleteInput({
       }
 
       const data = await response.json()
+      if (requestId !== latestRequestIdRef.current) {
+        return []
+      }
       return data.suggestions || []
     } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        return []
+      }
       console.error('Error fetching tag suggestions:', error)
       return []
     } finally {
-      setIsLoadingSuggestions(false)
+      if (suggestionsAbortControllerRef.current === controller) {
+        suggestionsAbortControllerRef.current = null
+      }
+      if (requestId === latestRequestIdRef.current) {
+        setIsLoadingSuggestions(false)
+      }
     }
   }, [])
 
@@ -84,14 +116,21 @@ export function TagAutocompleteInput({
   
   const updateSuggestions = useCallback(async (query: string) => {
     if (query.trim().length >= 2) {
-      const suggestions = await fetchTagSuggestions(query)
+      const requestId = ++latestRequestIdRef.current
+      const suggestions = await fetchTagSuggestions(query, requestId)
+      if (requestId !== latestRequestIdRef.current) {
+        return
+      }
       setTagSuggestions(suggestions)
       setShowSuggestions(suggestions.length > 0)
       setSelectedSuggestionIndex(-1)
     } else {
+      latestRequestIdRef.current += 1
+      suggestionsAbortControllerRef.current?.abort()
       setTagSuggestions([])
       setShowSuggestions(false)
       setSelectedSuggestionIndex(-1)
+      setIsLoadingSuggestions(false)
     }
   }, [fetchTagSuggestions])
 
@@ -163,6 +202,7 @@ export function TagAutocompleteInput({
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
     }
+    suggestionsAbortControllerRef.current?.abort()
   }, [])
 
   return (
