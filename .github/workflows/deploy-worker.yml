@@ -45,10 +45,10 @@ jobs:
             exit 1
           fi
 
-          printf '%s' "$WORKER_AUTH_KEY" | wrangler secret put WORKER_AUTH_KEY -c ${{ inputs.wrangler_config }}
+          printf '%s' "$WORKER_AUTH_KEY" | npx wrangler secret put WORKER_AUTH_KEY -c ${{ inputs.wrangler_config }}
 
           if [ -n "$SENTRY_WORKER_DSN" ]; then
-            printf '%s' "$SENTRY_WORKER_DSN" | wrangler secret put SENTRY_WORKER_DSN -c ${{ inputs.wrangler_config }}
+            printf '%s' "$SENTRY_WORKER_DSN" | npx wrangler secret put SENTRY_WORKER_DSN -c ${{ inputs.wrangler_config }}
           fi
       
       - name: Deploy Worker
@@ -60,11 +60,11 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_WORKERS }}
         run: |
           if [ "${{ inputs.wrangler_config }}" != "wrangler.toml" ]; then
-            wrangler deploy ${{ inputs.worker_file }} \
+            npx wrangler deploy ${{ inputs.worker_file }} \
               --name ${{ inputs.worker_name }} \
               -c ${{ inputs.wrangler_config }}
           else
-            wrangler deploy ${{ inputs.worker_file }} \
+            npx wrangler deploy ${{ inputs.worker_file }} \
               --name ${{ inputs.worker_name }}
           fi
       
@@ -74,7 +74,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           echo "Worker deployed: ${{ inputs.worker_name }}"
-          wrangler tail ${{ inputs.worker_name }} --format=pretty &
+          npx wrangler tail ${{ inputs.worker_name }} --format=pretty &
           TAIL_PID=$!
           sleep 10
           kill $TAIL_PID || true
