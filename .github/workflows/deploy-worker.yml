@@ -33,24 +33,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Sync Cloudflare Worker secrets
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
-          SENTRY_WORKER_DSN: ${{ secrets.SENTRY_WORKER_DSN }}
-        run: |
-          if [ -z "$WORKER_AUTH_KEY" ]; then
-            echo "WORKER_AUTH_KEY secret is not configured"
-            exit 1
-          fi
-
-          printf '%s' "$WORKER_AUTH_KEY" | npx wrangler secret put WORKER_AUTH_KEY -c ${{ inputs.wrangler_config }}
-
-          if [ -n "$SENTRY_WORKER_DSN" ]; then
-            printf '%s' "$SENTRY_WORKER_DSN" | npx wrangler secret put SENTRY_WORKER_DSN -c ${{ inputs.wrangler_config }}
-          fi
-      
       - name: Deploy Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -66,6 +48,26 @@ jobs:
           else
             npx wrangler deploy ${{ inputs.worker_file }} \
               --name ${{ inputs.worker_name }}
+          fi
+
+      - name: Sync Cloudflare Worker secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+          SENTRY_WORKER_DSN: ${{ secrets.SENTRY_WORKER_DSN }}
+        run: |
+          if [ -z "$WORKER_AUTH_KEY" ]; then
+            echo "WORKER_AUTH_KEY secret is not configured"
+            exit 1
+          fi
+
+          # Migrate away from legacy plain-text vars before reattaching the same
+          # binding name as a secret. `secret put` deploys immediately.
+          printf '%s' "$WORKER_AUTH_KEY" | npx wrangler secret put WORKER_AUTH_KEY -c ${{ inputs.wrangler_config }}
+
+          if [ -n "$SENTRY_WORKER_DSN" ]; then
+            printf '%s' "$SENTRY_WORKER_DSN" | npx wrangler secret put SENTRY_WORKER_DSN -c ${{ inputs.wrangler_config }}
           fi
       
       - name: Verify deployment
