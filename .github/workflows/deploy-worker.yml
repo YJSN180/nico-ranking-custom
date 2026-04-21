@@ -41,14 +41,9 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_WORKERS }}
         run: |
-          if [ "${{ inputs.wrangler_config }}" != "wrangler.toml" ]; then
-            npx wrangler deploy ${{ inputs.worker_file }} \
-              --name ${{ inputs.worker_name }} \
-              -c ${{ inputs.wrangler_config }}
-          else
-            npx wrangler deploy ${{ inputs.worker_file }} \
-              --name ${{ inputs.worker_name }}
-          fi
+          npx wrangler deploy ${{ inputs.worker_file }} \
+            --name ${{ inputs.worker_name }} \
+            -c ${{ inputs.wrangler_config }}
 
       - name: Sync Cloudflare Worker secrets
         env:
