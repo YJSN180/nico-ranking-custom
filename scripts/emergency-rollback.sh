@@ -3,6 +3,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
+
 echo "=== EMERGENCY ROLLBACK INITIATED ==="
 echo "Time: $(date)"
 echo ""
@@ -14,8 +17,8 @@ BLUE_URL="https://nico-ranking-api-gateway-blue.workers.dev"
 
 # Immediate rollback
 echo "⚠️  ROLLING BACK TO BLUE WORKER..."
-wrangler kv:key put --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" "blue"
-wrangler kv:key delete --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" 2>/dev/null || true
+"$WRANGLER" kv:key put --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" "blue"
+"$WRANGLER" kv:key delete --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" 2>/dev/null || true
 
 echo "✅ Rollback command executed"
 echo ""

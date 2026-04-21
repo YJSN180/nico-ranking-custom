@@ -3,6 +3,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
+
 # Configuration
 MAINTENANCE_FLAGS_BINDING="MAINTENANCE_FLAGS"
 PROD_URL="https://nico-rank.com"
@@ -11,8 +14,8 @@ PROD_URL="https://nico-rank.com"
 show_status() {
   echo "=== Current Maintenance Status ==="
   
-  local mode=$(wrangler kv key get --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" --remote --preview false 2>/dev/null || echo "false")
-  local allowed_ips=$(wrangler kv key get --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" --remote --preview false 2>/dev/null || echo "none")
+  local mode=$("$WRANGLER" kv key get --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" --remote --preview false 2>/dev/null || echo "false")
+  local allowed_ips=$("$WRANGLER" kv key get --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" --remote --preview false 2>/dev/null || echo "none")
   
   if [ "$mode" = "true" ]; then
     echo "Mode: 🔴 ENABLED"
@@ -27,7 +30,7 @@ show_status() {
 # Function to enable maintenance mode
 enable_maintenance() {
   echo "Enabling maintenance mode..."
-  wrangler kv key put --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" "true" --remote --preview false
+  "$WRANGLER" kv key put --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" "true" --remote --preview false
   echo "✅ Maintenance mode ENABLED"
   echo ""
   echo "⚠️  WARNING: Production is now in maintenance mode!"
@@ -37,7 +40,7 @@ enable_maintenance() {
 # Function to disable maintenance mode
 disable_maintenance() {
   echo "Disabling maintenance mode..."
-  wrangler kv key put --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" "false" --remote --preview false
+  "$WRANGLER" kv key put --binding=$MAINTENANCE_FLAGS_BINDING "maintenance_mode" "false" --remote --preview false
   echo "✅ Maintenance mode DISABLED"
   echo ""
   echo "✅ Production is now accessible to all users."
@@ -48,7 +51,7 @@ add_allowed_ip() {
   local ip=$1
   
   # Get current allowed IPs
-  local current_ips=$(wrangler kv key get --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" --remote --preview false 2>/dev/null || echo "")
+  local current_ips=$("$WRANGLER" kv key get --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" --remote --preview false 2>/dev/null || echo "")
   
   # Add new IP if not already present
   if [[ "$current_ips" == *"$ip"* ]]; then
@@ -60,7 +63,7 @@ add_allowed_ip() {
       new_ips="$current_ips,$ip"
     fi
     
-    wrangler kv key put --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" "$new_ips" --remote --preview false
+    "$WRANGLER" kv key put --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" "$new_ips" --remote --preview false
     echo "✅ Added IP $ip to allowed list"
   fi
 }
@@ -70,7 +73,7 @@ remove_allowed_ip() {
   local ip=$1
   
   # Get current allowed IPs
-  local current_ips=$(wrangler kv key get --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" --remote --preview false 2>/dev/null || echo "")
+  local current_ips=$("$WRANGLER" kv key get --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" --remote --preview false 2>/dev/null || echo "")
   
   # Remove IP
   new_ips=$(echo "$current_ips" | sed "s/$ip,//g" | sed "s/,$ip//g" | sed "s/^$ip$//g")
@@ -79,7 +82,7 @@ remove_allowed_ip() {
     new_ips="none"
   fi
   
-  wrangler kv key put --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" "$new_ips" --remote --preview false
+  "$WRANGLER" kv key put --binding=$MAINTENANCE_FLAGS_BINDING "allowed_ips" "$new_ips" --remote --preview false
   echo "✅ Removed IP $ip from allowed list"
 }
 

@@ -4,21 +4,23 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
+
 echo "=== Cloudflare Workers Manual Deployment ==="
 echo ""
 
-# Check if wrangler is installed
-if ! command -v wrangler &> /dev/null; then
-    echo "Error: wrangler CLI is not installed"
-    echo "Run: npm install -g wrangler"
+# Check if wrangler wrapper is available
+if [ ! -x "$WRANGLER" ]; then
+    echo "Error: Wrangler wrapper is not available: $WRANGLER"
     exit 1
 fi
 
 # Check authentication
 echo "Checking Cloudflare authentication..."
-if ! wrangler whoami &> /dev/null; then
+if ! "$WRANGLER" whoami &> /dev/null; then
     echo "Error: Not authenticated with Cloudflare"
-    echo "Run: wrangler login"
+    echo "Set CLOUDFLARE_API_TOKEN in .dev.vars or export it before running this script"
     exit 1
 fi
 
@@ -34,10 +36,10 @@ deploy_worker() {
     echo "Deploying $name..."
     if [[ -f "$config" ]]; then
         echo "Using config: $config"
-        wrangler deploy "$file" --name "$name" -c "$config"
+        "$WRANGLER" deploy "$file" --name "$name" -c "$config"
     else
         echo "Using default config"
-        wrangler deploy "$file" --name "$name"
+        "$WRANGLER" deploy "$file" --name "$name"
     fi
     echo "✅ $name deployed successfully"
     echo ""

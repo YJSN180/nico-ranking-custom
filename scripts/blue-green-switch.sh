@@ -3,6 +3,9 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
+
 echo "=== Blue to Green Migration Script ==="
 echo "Starting at: $(date)"
 echo ""
@@ -50,9 +53,9 @@ echo ""
 
 # Current state
 echo "=== Current State ==="
-CURRENT_ACTIVE=$(wrangler kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" || echo "blue")
+CURRENT_ACTIVE=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" || echo "blue")
 echo "Active Worker: $CURRENT_ACTIVE"
-CURRENT_TRAFFIC=$(wrangler kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" || echo "none")
+CURRENT_TRAFFIC=$("$WRANGLER" kv:key get --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" || echo "none")
 echo "Traffic Split: $CURRENT_TRAFFIC"
 echo ""
 
@@ -81,14 +84,14 @@ for stage in "${STAGES[@]}"; do
   if [ $stage -eq 100 ]; then
     # Final stage - full cutover
     echo "Switching to 100% Green..."
-    wrangler kv:key put --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" "green"
-    wrangler kv:key delete --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split"
+    "$WRANGLER" kv:key put --binding=$MAINTENANCE_FLAGS_BINDING "active_worker" "green"
+    "$WRANGLER" kv:key delete --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split"
     echo "✅ Full cutover completed!"
   else
     # Partial traffic split
     REMAINING=$((100 - stage))
     echo "Setting traffic split: Blue=$REMAINING%, Green=$stage%"
-    wrangler kv:key put --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" \
+    "$WRANGLER" kv:key put --binding=$MAINTENANCE_FLAGS_BINDING "traffic_split" \
       "{\"blue\": $REMAINING, \"green\": $stage}"
   fi
   
