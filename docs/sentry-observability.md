@@ -24,6 +24,7 @@
 - Workers environment:
   - `env.ENVIRONMENT ?? 'production'`
 - release は必須にしていません。Debug IDs ベースで sourcemap を解決します。
+- Worker runtime secrets (`WORKER_AUTH_KEY`, `SENTRY_WORKER_DSN`) は tracked `wrangler*.toml` に置かず、Cloudflare Secrets に設定します。
 
 ## Privacy Policy
 - `sendDefaultPii: false`

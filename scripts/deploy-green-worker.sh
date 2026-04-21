@@ -29,7 +29,6 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     read -p "今すぐ設定しますか? (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "現在のキー: c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
         wrangler secret put WORKER_AUTH_KEY -c "$CONFIG_FILE"
     else
         echo "❌ セキュリティ設定が未完了のため、デプロイを中止します"

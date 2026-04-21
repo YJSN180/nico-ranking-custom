@@ -3,8 +3,8 @@
 interface Env {
 	RANKING_DATA: KVNamespace;
 	MAINTENANCE_FLAGS: KVNamespace;
-	VERCEL_DEPLOYMENT_URL: "https://nico-ranking-custom-yjsns-projects.vercel.app";
-	WORKER_AUTH_KEY: "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493";
+	VERCEL_DEPLOYMENT_URL: string;
+	WORKER_AUTH_KEY: string;
 	R2_BUCKET: R2Bucket;
 	WORKER_BLUE: Fetcher;
 	WORKER_GREEN: Fetcher;

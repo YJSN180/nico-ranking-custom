@@ -32,8 +32,8 @@ simple = { limit = 120, period = 60 }
 # 環境変数
 [vars]
 VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
-WORKER_AUTH_KEY = "c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
 ENVIRONMENT = "green"
+# WORKER_AUTH_KEY and SENTRY_WORKER_DSN are set via Cloudflare Secrets
 
 # TypeScript設定
 [build]
