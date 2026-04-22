@@ -212,9 +212,10 @@ describe('MylistDetailClient 改善項目のTDDテスト', () => {
       // ソートオプションが正しく存在することを確認
       expect(screen.getByText('追加日（新しい順）')).toBeInTheDocument()
       expect(screen.getByText('追加日（古い順）')).toBeInTheDocument()
+      expect(screen.getByText('投稿日（新しい順）')).toBeInTheDocument()
+      expect(screen.getByText('投稿日（古い順）')).toBeInTheDocument()
       expect(screen.getByText('タイトル（昇順）')).toBeInTheDocument()
       expect(screen.getByText('タイトル（降順）')).toBeInTheDocument()
-      expect(screen.getByText('再生数（多い順）')).toBeInTheDocument()
     })
 
     test('ソートセレクトボックスが無効化されていないこと', async () => {

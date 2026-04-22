@@ -18,6 +18,7 @@ export default defineWorkersConfig({
       workers: {
         miniflare: {
           compatibilityDate: '2024-01-01',
+          compatibilityFlags: ['nodejs_compat'],
           kvNamespaces: ['STATS_KV'],
           r2Buckets: ['R2_BUCKET'],
           bindings: {

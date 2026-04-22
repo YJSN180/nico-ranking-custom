@@ -22,6 +22,7 @@ bucket_name = "nico-ranking"
 # Worker auth key for manual triggers is managed as a Cloudflare secret
 [vars]
 ENVIRONMENT = "production"
+# WORKER_AUTH_KEY and SENTRY_WORKER_DSN are set via Cloudflare Secrets
 
 # Environment-specific settings
 [env.production]

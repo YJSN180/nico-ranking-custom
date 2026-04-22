@@ -23,10 +23,10 @@ describe('API Ranking Route Redirect', () => {
 
   it('/api/rankingへのリクエストをCloudflare Workerにリダイレクトする', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking?genre=all&period=24h',
+      url: 'https://www.nico-rank.com/api/ranking?genre=all&period=24h',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'www.nico-rank.com'
           return null
         })
       }
@@ -47,10 +47,10 @@ describe('API Ranking Route Redirect', () => {
 
   it('クエリパラメータを保持してリダイレクトする', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking?genre=game&period=hour&tag=実況プレイ動画',
+      url: 'https://www.nico-rank.com/api/ranking?genre=game&period=hour&tag=実況プレイ動画',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'www.nico-rank.com'
           return null
         })
       }
@@ -68,10 +68,10 @@ describe('API Ranking Route Redirect', () => {
     delete process.env.NEXT_PUBLIC_API_GATEWAY_URL
 
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking',
+      url: 'https://www.nico-rank.com/api/ranking',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'www.nico-rank.com'
           return null
         })
       }
@@ -87,10 +87,10 @@ describe('API Ranking Route Redirect', () => {
 
   it('パラメータなしのリクエストもリダイレクトする', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking',
+      url: 'https://www.nico-rank.com/api/ranking',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'www.nico-rank.com'
           return null
         })
       }
@@ -106,10 +106,10 @@ describe('API Ranking Route Redirect', () => {
 
   it('301 Moved Permanentlyステータスを返す', async () => {
     const mockRequest = {
-      url: 'http://localhost:3000/api/ranking?genre=all',
+      url: 'https://www.nico-rank.com/api/ranking?genre=all',
       headers: {
         get: vi.fn((name) => {
-          if (name === 'host') return 'localhost:3000'
+          if (name === 'host') return 'www.nico-rank.com'
           return null
         })
       }

@@ -2,6 +2,7 @@ import { renderHook, act } from '@testing-library/react'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import { vi } from 'vitest'
 import type { RankingGenre } from '@/types/ranking-config'
+import { DEFAULT_GENRE_ORDER } from '@/types/genre-order'
 
 // Mock localStorage
 const localStorageMock = (() => {
@@ -40,13 +41,13 @@ describe('useGenreOrderV2', () => {
   it('returns default state when no saved data exists', () => {
     const { result } = renderHook(() => useGenreOrderV2())
     
-    expect(result.current.items).toHaveLength(23) // All genres
+    expect(result.current.items).toHaveLength(DEFAULT_GENRE_ORDER.length)
     expect(result.current.items[0]).toEqual({
       id: 'all',
       isVisible: true,
       order: 0
     })
-    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.visibleGenres).toHaveLength(DEFAULT_GENRE_ORDER.length)
     expect(result.current.hiddenGenres).toHaveLength(0)
     expect(result.current.hasChanges).toBe(false)
   })
@@ -60,9 +61,11 @@ describe('useGenreOrderV2', () => {
     
     const { result } = renderHook(() => useGenreOrderV2())
     
-    expect(result.current.items).toEqual(savedData)
-    expect(result.current.visibleGenres).toEqual(['game'])
-    expect(result.current.hiddenGenres).toEqual(['all'])
+    expect(result.current.items.slice(0, savedData.length)).toEqual(savedData)
+    expect(result.current.items).toHaveLength(DEFAULT_GENRE_ORDER.length)
+    expect(result.current.visibleGenres).toContain('game')
+    expect(result.current.visibleGenres).not.toContain('all')
+    expect(result.current.hiddenGenres).toContain('all')
   })
 
   it('moves items correctly with insert behavior', () => {
@@ -124,7 +127,7 @@ describe('useGenreOrderV2', () => {
     // Check default state is restored
     expect(result.current.items[0].id).toBe('all')
     expect(result.current.items[0].isVisible).toBe(true)
-    expect(result.current.visibleGenres.length).toBe(23)
+    expect(result.current.visibleGenres.length).toBe(DEFAULT_GENRE_ORDER.length)
     expect(result.current.hasChanges).toBe(true) // Has changes because it's different from saved state
   })
 
@@ -207,7 +210,7 @@ describe('useGenreOrderV2', () => {
     const { result } = renderHook(() => useGenreOrderV2())
     
     // Initially all genres are visible
-    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.visibleGenres).toHaveLength(DEFAULT_GENRE_ORDER.length)
     expect(result.current.hiddenGenres).toHaveLength(0)
     
     // Hide all genres
@@ -217,7 +220,7 @@ describe('useGenreOrderV2', () => {
     
     // Check all genres are hidden
     expect(result.current.visibleGenres).toHaveLength(0)
-    expect(result.current.hiddenGenres).toHaveLength(23)
+    expect(result.current.hiddenGenres).toHaveLength(DEFAULT_GENRE_ORDER.length)
     expect(result.current.hasChanges).toBe(true)
     
     // Check all items have isVisible = false
@@ -242,7 +245,7 @@ describe('useGenreOrderV2', () => {
     })
     
     // Check all genres are visible again
-    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.visibleGenres).toHaveLength(DEFAULT_GENRE_ORDER.length)
     expect(result.current.hiddenGenres).toHaveLength(0)
   })
   
@@ -261,7 +264,7 @@ describe('useGenreOrderV2', () => {
     
     // Check localStorage was updated with all genres hidden
     const saved = JSON.parse(localStorageMock.getItem('nicoRankingGenreOrder') || '[]')
-    expect(saved).toHaveLength(23)
+    expect(saved).toHaveLength(DEFAULT_GENRE_ORDER.length)
     saved.forEach((item: any) => {
       expect(item.isVisible).toBe(false)
     })
@@ -277,7 +280,7 @@ describe('useGenreOrderV2', () => {
       result.current.toggleVisibility('anime')
     })
     
-    expect(result.current.visibleGenres).toHaveLength(20)
+    expect(result.current.visibleGenres).toHaveLength(DEFAULT_GENRE_ORDER.length - 3)
     expect(result.current.hiddenGenres).toHaveLength(3)
     expect(result.current.hasChanges).toBe(true)
     
@@ -287,7 +290,7 @@ describe('useGenreOrderV2', () => {
     })
     
     // Check all genres are visible
-    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.visibleGenres).toHaveLength(DEFAULT_GENRE_ORDER.length)
     expect(result.current.hiddenGenres).toHaveLength(0)
     // hasChanges should be false now because we're back to default state
     expect(result.current.hasChanges).toBe(false)
@@ -311,7 +314,7 @@ describe('useGenreOrderV2', () => {
     act(() => {
       result.current.showAll()
     })
-    expect(result.current.visibleGenres).toHaveLength(23)
+    expect(result.current.visibleGenres).toHaveLength(DEFAULT_GENRE_ORDER.length)
     
     // Hide all again
     act(() => {

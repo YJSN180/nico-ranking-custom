@@ -2,8 +2,29 @@ import { screen } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { beforeEach, describe, test, expect, vi } from 'vitest'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
+import { TagDisplayProvider } from '@/contexts/tag-display-context'
 import type { RankingItem } from '@/types/ranking'
 import '@/components/ranking-item-responsive.css'
+
+vi.mock('@/hooks/use-user-ng-list-extended', () => ({
+  useUserNGListExtended: () => ({
+    ngList: {
+      videoIds: [],
+      videoTitles: { exact: [], partial: [] },
+      authorIds: [],
+      authorNames: { exact: [], partial: [] },
+      tags: {
+        locked: { exact: [], partial: [] },
+        user: { exact: [], partial: [] },
+        both: { exact: [], partial: [] },
+      },
+      version: 2,
+      totalCount: 0,
+      updatedAt: new Date().toISOString(),
+    },
+    saveNGListDirectly: vi.fn(),
+  }),
+}))
 
 // モバイル環境をシミュレート
 beforeEach(() => {
@@ -47,8 +68,15 @@ describe('RankingItemResponsive - モバイルレイアウト', () => {
     authorIcon: 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/0/0.jpg',
   }
 
+  const renderItem = () =>
+    render(
+      <TagDisplayProvider>
+        <RankingItemResponsive item={mockItem} />
+      </TagDisplayProvider>
+    )
+
   test('モバイル版でマイリストボタンがタイトル行の右端に配置される', () => {
-    const { container } = render(<RankingItemResponsive item={mockItem} />)
+    const { container } = renderItem()
     
     // コンテンツコンテナを取得
     const content = container.querySelector('.ranking-item-responsive__content')
@@ -72,7 +100,7 @@ describe('RankingItemResponsive - モバイルレイアウト', () => {
   })
 
   test('モバイル版で統計情報が横スクロールせずに全て表示される', () => {
-    const { container } = render(<RankingItemResponsive item={mockItem} />)
+    const { container } = renderItem()
     
     // 統計情報コンテナを取得
     const stats = screen.getByTestId('video-stats')
@@ -93,7 +121,7 @@ describe('RankingItemResponsive - モバイルレイアウト', () => {
   })
 
   test('モバイル版でマイリストボタンがタイトル行と同じ高さに配置される', () => {
-    const { container } = render(<RankingItemResponsive item={mockItem} />)
+    const { container } = renderItem()
     
     // 新しいレイアウトを実装する必要があることを示すテスト
     // 現在の実装：
@@ -115,7 +143,7 @@ describe('RankingItemResponsive - モバイルレイアウト', () => {
   })
 
   test('モバイル版でレイアウトが正しく構成されている', () => {
-    const { container } = render(<RankingItemResponsive item={mockItem} />)
+    const { container } = renderItem()
     
     // 主要な要素が存在することを確認
     const thumbnail = container.querySelector('.ranking-item-responsive__thumbnail')

@@ -8,6 +8,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
+import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -68,6 +69,17 @@ const handler: ExportedHandler<Env> = {
     if (request.method === 'OPTIONS') {
       const origin = request.headers.get('Origin')
       return createOptionsResponse(origin)
+    }
+
+    if (url.pathname === '/api/debug' && !hasWorkerDebugAccess(request, env.WORKER_AUTH_KEY)) {
+      const origin = request.headers.get('Origin')
+      const notFoundResponse = new Response('Not Found', {
+        status: 404,
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      })
+      return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
     }
 
     try {

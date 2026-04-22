@@ -1,9 +1,32 @@
-import React from 'react'
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '../test-utils'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MylistsClient } from '@/app/mylists/mylists-client'
-import type { Mylist, MylistSortOrder } from '@/lib/storage/types'
+import type { Mylist } from '@/lib/storage/types'
+
+const {
+  mockMylistManager,
+  mockDBManager,
+  initializeStorageMock,
+  getStorageInfoMock
+} = vi.hoisted(() => ({
+  mockMylistManager: {
+    getAllMylists: vi.fn(),
+    getMylistSortConfig: vi.fn(),
+    saveMylistSortConfig: vi.fn(),
+    updateMultipleMylistOrders: vi.fn(),
+    getOrCreateDefaultMylist: vi.fn(),
+    createMylist: vi.fn(),
+    updateMylist: vi.fn(),
+    deleteMylist: vi.fn()
+  },
+  mockDBManager: {
+    init: vi.fn(),
+    getDB: vi.fn()
+  },
+  initializeStorageMock: vi.fn(),
+  getStorageInfoMock: vi.fn()
+}))
 
 // Next.js のルーターをモック
 vi.mock('next/navigation', () => ({
@@ -22,61 +45,14 @@ vi.mock('next/navigation', () => ({
 
 // Dynamic import のモック
 vi.mock('next/dynamic', () => ({
-  default: (fn: any) => {
-    const Component = fn().then((mod: any) => mod.default || mod)
-    return (props: any) => {
-      const [LoadedComponent, setLoadedComponent] = React.useState(null)
-      
-      React.useEffect(() => {
-        Component.then(setLoadedComponent)
-      }, [])
-      
-      if (!LoadedComponent) return null
-      return React.createElement(LoadedComponent, props)
-    }
-  }
+  default: () => () => null
 }))
 
-// Storage operations のモック - vi.mockはホイストされるため、内部で変数を使わない
+// Storage operations のモック
 vi.mock('../../app/mylists/utils/storage-operations', () => ({
-  initializeStorage: vi.fn().mockResolvedValue({
-    dbManager: {
-      init: vi.fn(),
-      getDB: vi.fn()
-    },
-    mylistManager: {
-      getAllMylists: vi.fn(),
-      getMylistSortConfig: vi.fn(),
-      saveMylistSortConfig: vi.fn(),
-      updateMultipleMylistOrders: vi.fn(),
-      getOrCreateDefaultMylist: vi.fn(),
-      createMylist: vi.fn(),
-      updateMylist: vi.fn(),
-      deleteMylist: vi.fn()
-    }
-  }),
-  getStorageInfo: vi.fn().mockResolvedValue({
-    used: 1024 * 1024,
-    quota: 100 * 1024 * 1024
-  })
+  initializeStorage: initializeStorageMock,
+  getStorageInfo: getStorageInfoMock
 }))
-
-// モックオブジェクトへの参照を保持（テスト内で使用）
-const mockMylistManager = {
-  getAllMylists: vi.fn(),
-  getMylistSortConfig: vi.fn(),
-  saveMylistSortConfig: vi.fn(),
-  updateMultipleMylistOrders: vi.fn(),
-  getOrCreateDefaultMylist: vi.fn(),
-  createMylist: vi.fn(),
-  updateMylist: vi.fn(),
-  deleteMylist: vi.fn()
-}
-
-const mockDBManager = {
-  init: vi.fn(),
-  getDB: vi.fn()
-}
 
 describe('マイリスト並び替えUI', () => {
   const mockMylists: Mylist[] = [
@@ -108,8 +84,7 @@ describe('マイリスト並び替えUI', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    
-    // デフォルトのモック動作を設定
+
     mockMylistManager.getAllMylists.mockResolvedValue(mockMylists)
     mockMylistManager.getMylistSortConfig.mockResolvedValue({
       order: 'updatedAt-desc',
@@ -117,44 +92,49 @@ describe('マイリスト並び替えUI', () => {
     })
     mockMylistManager.saveMylistSortConfig.mockResolvedValue(undefined)
     mockMylistManager.getOrCreateDefaultMylist.mockResolvedValue(mockMylists[0])
-    
-    // テスト環境フラグを設定
-    // @ts-ignore
-    global.window = { __TEST_ENV__: true }
+    initializeStorageMock.mockResolvedValue({
+      dbManager: mockDBManager,
+      mylistManager: mockMylistManager
+    })
+    getStorageInfoMock.mockResolvedValue({
+      used: 1024 * 1024,
+      quota: 100 * 1024 * 1024
+    })
+    delete (window as Partial<typeof window> & { __TEST_ENV__?: boolean }).__TEST_ENV__
   })
 
   it('初期状態で並び替えセレクタが表示される', async () => {
     render(<MylistsClient />)
     
     await waitFor(() => {
-      expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
+      expect(screen.getByRole('combobox')).toHaveValue('updatedAt-desc')
     })
     
-    const sortSelect = screen.getByDisplayValue('更新日（新しい順）')
+    const sortSelect = screen.getByRole('combobox')
     expect(sortSelect).toBeInTheDocument()
+    expect(sortSelect).toHaveDisplayValue('更新日（新しい順）')
   })
 
   it('並び替えオプションがすべて存在する', async () => {
     render(<MylistsClient />)
     
     await waitFor(() => {
-      const sortSelect = screen.getByLabelText('並び替え:')
+      const sortSelect = screen.getByRole('combobox')
       expect(sortSelect).toBeInTheDocument()
     })
     
-    const sortSelect = screen.getByLabelText('並び替え:') as HTMLSelectElement
+    const sortSelect = screen.getByRole('combobox') as HTMLSelectElement
     const options = Array.from(sortSelect.options).map(option => option.text)
     
     expect(options).toEqual([
-      '更新日（新しい順）',
-      '更新日（古い順）',
       '作成日（新しい順）',
       '作成日（古い順）',
+      '更新日（新しい順）',
+      '更新日（古い順）',
       '名前（昇順）',
       '名前（降順）',
       '動画数（多い順）',
-      '動画数（少ない順）',
-      'カスタム順'
+      '動画数（少ない順）'
     ])
   })
 
@@ -163,10 +143,10 @@ describe('マイリスト並び替えUI', () => {
     render(<MylistsClient />)
     
     await waitFor(() => {
-      expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
+      expect(screen.getByRole('combobox')).toHaveValue('updatedAt-desc')
     })
     
-    const sortSelect = screen.getByLabelText('並び替え:')
+    const sortSelect = screen.getByRole('combobox')
     
     // 名前（昇順）に変更
     await user.selectOptions(sortSelect, 'name-asc')
@@ -178,24 +158,6 @@ describe('マイリスト並び替えUI', () => {
     })
     
     expect(mockMylistManager.getAllMylists).toHaveBeenCalledWith('name-asc')
-  })
-
-  it('カスタム順を選択するとドラッグヒントが表示される', async () => {
-    const user = userEvent.setup()
-    render(<MylistsClient />)
-    
-    await waitFor(() => {
-      expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
-    })
-    
-    const sortSelect = screen.getByLabelText('並び替え:')
-    
-    // カスタム順に変更
-    await user.selectOptions(sortSelect, 'custom')
-    
-    await waitFor(() => {
-      expect(screen.getByText(/ドラッグ&ドロップでマイリストの順序を変更できます/)).toBeInTheDocument()
-    })
   })
 
   it('保存された設定が初期化時に復元される', async () => {
@@ -212,6 +174,7 @@ describe('マイリスト並び替えUI', () => {
     })
     
     await waitFor(() => {
+      expect(screen.getByRole('combobox')).toHaveValue('name-asc')
       expect(mockMylistManager.getAllMylists).toHaveBeenCalledWith('name-asc')
     })
   })
@@ -228,10 +191,10 @@ describe('マイリスト並び替えUI', () => {
       render(<MylistsClient />)
       
       await waitFor(() => {
-        expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
+        expect(screen.getByRole('combobox')).toHaveValue('updatedAt-desc')
       })
       
-      const sortSelect = screen.getByLabelText('並び替え:')
+      const sortSelect = screen.getByRole('combobox')
       
       // 並び替えを変更（エラーが発生）
       await user.selectOptions(sortSelect, 'name-asc')
@@ -255,7 +218,7 @@ describe('マイリスト並び替えUI', () => {
       render(<MylistsClient />)
       
       await waitFor(() => {
-        expect(screen.getByLabelText('並び替え:')).toBeInTheDocument()
+        expect(screen.getByRole('combobox')).toBeInTheDocument()
       })
       
       // エラーがログに記録される

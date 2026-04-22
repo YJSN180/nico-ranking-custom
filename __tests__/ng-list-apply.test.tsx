@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SettingsModal } from '@/components/settings-modal'
-import { useUserNGList } from '@/hooks/use-user-ng-list'
+import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 
 // Mock the hooks
-vi.mock('@/hooks/use-user-ng-list')
+vi.mock('@/hooks/use-user-ng-list-extended')
 vi.mock('@/hooks/use-user-preferences', () => ({
   useUserPreferences: () => ({
-    preferences: { theme: 'light' },
+    preferences: { theme: 'light', showTags: false },
     updatePreferences: vi.fn()
   })
 }))
@@ -28,7 +28,7 @@ describe('NG List Apply Functionality', () => {
     })
     
     // Setup mock implementation
-    vi.mocked(useUserNGList).mockReturnValue({
+    vi.mocked(useUserNGListExtended).mockReturnValue({
       ngList: {
         videoIds: [],
         videoTitles: {
@@ -40,11 +40,15 @@ describe('NG List Apply Functionality', () => {
           exact: [],
           partial: []
         },
-        version: 1,
+        tags: {
+          locked: { exact: [], partial: [] },
+          user: { exact: [], partial: [] },
+          both: { exact: [], partial: [] }
+        },
+        version: 2,
         totalCount: 0,
         updatedAt: new Date().toISOString()
       },
-      filterItems: vi.fn(),
       saveNGListDirectly: mockSaveNGListDirectly
     })
   })
@@ -92,7 +96,12 @@ describe('NG List Apply Functionality', () => {
       videoTitles: { exact: [], partial: [] },
       authorIds: [],
       authorNames: { exact: [], partial: [] },
-      version: 1,
+      tags: {
+        locked: { exact: [], partial: [] },
+        user: { exact: [], partial: [] },
+        both: { exact: [], partial: [] }
+      },
+      version: 2,
       totalCount: 1,
       updatedAt: new Date().toISOString()
     }

@@ -4,10 +4,14 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+WRANGLER="$SCRIPT_DIR/wrangler-with-token.sh"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 echo "🚀 Green Worker 20250705 デプロイ開始..."
 
 # 設定確認
-CONFIG_FILE="wrangler-green-20250705.toml"
+CONFIG_FILE="$REPO_ROOT/wrangler-green-20250705.toml"
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "❌ エラー: $CONFIG_FILE が見つかりません"
     exit 1
@@ -29,8 +33,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     read -p "今すぐ設定しますか? (y/N): " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo "現在のキー: c8d0aeead3a77d1a88438d5275398fda20efd5db8f98186c524d478362ffa493"
-        wrangler secret put WORKER_AUTH_KEY -c "$CONFIG_FILE"
+        "$WRANGLER" secret put WORKER_AUTH_KEY -c "$CONFIG_FILE"
     else
         echo "❌ セキュリティ設定が未完了のため、デプロイを中止します"
         exit 1
@@ -40,7 +43,7 @@ fi
 # デプロイ実行
 echo ""
 echo "🚀 Green Workerをデプロイ中..."
-wrangler deploy -c "$CONFIG_FILE"
+"$WRANGLER" deploy -c "$CONFIG_FILE"
 
 if [ $? -eq 0 ]; then
     echo ""

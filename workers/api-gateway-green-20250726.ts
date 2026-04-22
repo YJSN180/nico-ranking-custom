@@ -31,6 +31,7 @@
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
+import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
@@ -256,11 +257,21 @@ const handler: ExportedHandler<Env> = {
     
     // /api/debug エンドポイント
     if (url.pathname === '/api/debug') {
+      if (!hasWorkerDebugAccess(request, env.WORKER_AUTH_KEY)) {
+        const origin = request.headers.get('Origin')
+        const notFoundResponse = new Response('Not Found', {
+          status: 404,
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+        })
+        return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
+      }
+
       const { debugInfo, secondsUntilUpdate } = calculateDynamicTTL()
       
       const debugOutput = {
         time: new Date().toISOString(),
-        headers: Object.fromEntries(request.headers.entries()),
         worker: 'api-gateway-green-20250726',
         version: 'green-20250726-dynamic-ttl',
         features: ['dynamic-ttl', 'etag-support', 'html-decode', 'smart-router-compatible'],
@@ -274,6 +285,7 @@ const handler: ExportedHandler<Env> = {
       const debugResponse = new Response(JSON.stringify(debugOutput, null, 2), {
         status: 200,
         headers: {
+          'Cache-Control': 'no-store',
           'Content-Type': 'application/json',
           'X-Worker-Version': 'green-20250726-unified-cors'
         }

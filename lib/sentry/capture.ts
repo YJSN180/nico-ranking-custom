@@ -36,3 +36,41 @@ export function captureWebException(error: unknown, options: CaptureOptions = {}
     Sentry.captureException(normalizedError)
   })
 }
+
+const RATE_LIMIT_CAPTURE_WINDOW_MS = 60_000
+const lastRateLimitCaptureAt = new Map<string, number>()
+
+type BrowserRateLimitOptions = {
+  endpointFamily: string
+  fingerprint: string[]
+  retryAfterSeconds?: number
+  surface: string
+  tags?: Record<string, string | number | boolean | null | undefined>
+}
+
+export function captureBrowserRateLimit(options: BrowserRateLimitOptions) {
+  const key = `${options.surface}:${options.endpointFamily}`
+  const now = Date.now()
+  const lastCapturedAt = lastRateLimitCaptureAt.get(key) || 0
+
+  if (now - lastCapturedAt < RATE_LIMIT_CAPTURE_WINDOW_MS) {
+    return
+  }
+
+  lastRateLimitCaptureAt.set(key, now)
+
+  captureWebException(new Error(`${options.surface} rate limited (429)`), {
+    level: 'warning',
+    fingerprint: options.fingerprint,
+    tags: {
+      runtime: 'browser',
+      surface: options.surface,
+      endpoint_family: options.endpointFamily,
+      status_code: 429,
+      ...(options.tags || {}),
+    },
+    extras: {
+      retry_after_seconds: options.retryAfterSeconds,
+    },
+  })
+}
