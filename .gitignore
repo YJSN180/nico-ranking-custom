@@ -130,6 +130,12 @@ scripts/*
 !scripts/manual-deploy-workers.sh
 !scripts/switch-to-blue.js
 !scripts/switch-to-green.js
+!scripts/upload-tag-accumulation.ts
+!scripts/check-kv-stats.js
+!scripts/check-r2-data.ts
+!scripts/test-worker-stats-fetch.ts
+!scripts/verify-r2-contract.ts
+!scripts/check-data-pipeline-health.ts
 !scripts/emergency-rollback.js
 !scripts/blue-green-switch.sh
 !scripts/emergency-rollback.sh

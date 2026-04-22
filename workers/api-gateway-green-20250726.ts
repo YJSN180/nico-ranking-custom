@@ -31,6 +31,7 @@
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
+import { readR2Json } from './utils/r2-json.js'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -288,34 +289,7 @@ const handler: ExportedHandler<Env> = {
         const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json')
         if (metadataObject) {
           const { cacheControl } = calculateDynamicTTL()
-          
-          // gzip圧縮チェック
-          const contentEncoding = metadataObject.httpMetadata?.contentEncoding
-          let metadataText: string
-          
-          if (contentEncoding === 'gzip') {
-            console.log('[Green Worker] Metadata is gzipped, decompressing...')
-            try {
-              const compressedData = await metadataObject.arrayBuffer()
-              metadataText = await new Response(
-                new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
-              ).text()
-            } catch (decompressError) {
-              console.error('[Green Worker] Failed to decompress metadata:', decompressError)
-              captureWorkerException(decompressError, {
-                tags: {
-                  runtime: 'cloudflare-worker',
-                  surface: 'api-gateway-green',
-                  endpoint_family: '/api/metadata',
-                  upstream_kind: 'r2-gzip',
-                  worker_version: 'green-20250726',
-                },
-              })
-              metadataText = await metadataObject.text()
-            }
-          } else {
-            metadataText = await metadataObject.text()
-          }
+          const { text: metadataText } = await readR2Json(metadataObject)
           
           const metadataResponse = new Response(metadataText, {
             status: 200,
@@ -405,23 +379,8 @@ const handler: ExportedHandler<Env> = {
         // タグ累積データを解析
         let tagData: TagAccumulationData
         try {
-          // R2 ObjectのhttpMetadataからContent-Encodingを確認
-          const contentEncoding = tagAccumulationObject.httpMetadata?.contentEncoding
-          
-          if (contentEncoding === 'gzip') {
-            // gzipデータとして解凍
-            console.log('[Green Worker] Tag data is gzipped, decompressing...')
-            const compressedData = await tagAccumulationObject.arrayBuffer()
-            const decompressedData = await new Response(
-              new Blob([compressedData]).stream().pipeThrough(new DecompressionStream('gzip'))
-            ).text()
-            tagData = JSON.parse(decompressedData)
-          } else {
-            // 非圧縮データとして直接パース
-            console.log('[Green Worker] Loading uncompressed tag data...')
-            const textData = await tagAccumulationObject.text()
-            tagData = JSON.parse(textData)
-          }
+          const { data } = await readR2Json(tagAccumulationObject)
+          tagData = data as TagAccumulationData
         } catch (parseError) {
           console.error('Failed to parse tag accumulation data:', parseError)
           captureWorkerException(parseError, {

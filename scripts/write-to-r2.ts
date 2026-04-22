@@ -163,7 +163,7 @@ async function writeToR2() {
     }
   }
   
-  const uploadPromises: Promise<any>[] = []
+  const contentUploadPromises: Promise<any>[] = []
   let uploadCount = 0
   const tagMetadataByGenrePeriod: Record<string, TagMetadata> = {}
   
@@ -227,7 +227,7 @@ async function writeToR2() {
       const allKey = `rankings/${genre}/${period}/all.json`
       const allBody = JSON.stringify(allDataToStore)
       
-      uploadPromises.push(
+      contentUploadPromises.push(
         uploadIfChanged(allKey, allBody, 'application/json', 'public, max-age=1800', true) // gzip圧縮を有効化
           .then(uploaded => {
             if (uploaded) uploadCount++
@@ -261,7 +261,7 @@ async function writeToR2() {
           const tagBody = JSON.stringify(tagDataToStore)
           
           console.log(`  📝 Preparing to upload tag: ${tagKey}`)
-          uploadPromises.push(
+          contentUploadPromises.push(
             uploadIfChanged(tagKey, tagBody, 'application/json', 'public, max-age=1800', true) // gzip圧縮を有効化
               .then(uploaded => {
                 if (uploaded) {
@@ -283,26 +283,6 @@ async function writeToR2() {
     }
   }
   
-  // メタデータファイルをアップロード
-  console.log('\n📋 Uploading metadata file...')
-  const metadataKey = 'rankings/metadata.json'
-  const metadataBody = JSON.stringify({
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    tagsByGenrePeriod: tagMetadataByGenrePeriod
-  })
-  
-  uploadPromises.push(
-    uploadIfChanged(metadataKey, metadataBody, 'application/json', 'public, max-age=300', true) // gzip圧縮を有効化
-      .then(uploaded => {
-        if (uploaded) uploadCount++
-      })
-      .catch(error => {
-        console.error(`❌ Failed to upload ${metadataKey}:`, error)
-        // メタデータのアップロード失敗は警告のみ（必須ではない）
-      })
-  )
-
   // タグ累積データをアップロード（オートコンプリート用）
   console.log('\n🏷️  Uploading tag accumulation data...')
   const tagAccumulationPath = resolve(__dirname, '../tmp/tag-accumulation.json')
@@ -310,7 +290,7 @@ async function writeToR2() {
     const tagAccumulationData = readFileSync(tagAccumulationPath, 'utf-8')
     const tagAccumulationKey = 'tag-accumulation.json'
     
-    uploadPromises.push(
+    contentUploadPromises.push(
       uploadIfChanged(tagAccumulationKey, tagAccumulationData, 'application/json', 'public, max-age=86400', true) // 24時間キャッシュ、gzip圧縮
         .then(uploaded => {
           if (uploaded) {
@@ -329,10 +309,31 @@ async function writeToR2() {
     console.log('⚠️  Tag accumulation data not found, skipping...')
   }
   
-  // すべてのアップロードを待つ
-  await Promise.all(uploadPromises)
+  // ランキング本体とタグ本体のアップロードを先に完了させる
+  await Promise.all(contentUploadPromises)
+
+  // メタデータファイルは最後にアップロードして契約を閉じる
+  console.log('\n📋 Uploading metadata file...')
+  const metadataKey = 'rankings/metadata.json'
+  const metadataBody = JSON.stringify({
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    tagsByGenrePeriod: tagMetadataByGenrePeriod
+  })
+
+  const metadataUploaded = await uploadIfChanged(
+    metadataKey,
+    metadataBody,
+    'application/json',
+    'public, max-age=300',
+    true,
+  )
+
+  if (metadataUploaded) {
+    uploadCount++
+  }
   
-  const totalFiles = uploadPromises.length
+  const totalFiles = contentUploadPromises.length + 1
   const skippedFiles = totalFiles - uploadCount
   
   console.log(`\n✨ Upload summary:`)

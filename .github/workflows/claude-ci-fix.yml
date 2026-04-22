@@ -66,6 +66,31 @@ concurrency:
   cancel-in-progress: false  # 修正作業中のジョブをキャンセルしないため
 
 jobs:
+  external-comment-guidance:
+    name: External Claude Fix Guidance
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@claude') &&
+      contains(github.event.comment.body, 'fix') &&
+      github.event.comment.author_association != 'OWNER' &&
+      github.event.comment.author_association != 'MEMBER' &&
+      github.event.comment.author_association != 'COLLABORATOR'
+
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Post guidance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "このリポジトリでは、外部ユーザーの \`@claude fix\` コメントでは privileged auto-fix を起動しません。メンテナー経由で依頼してください。"
+
   # Job 1: 失敗検知とコンテキスト収集
   detect-and-collect:
     name: Detect Failure & Collect Context
@@ -76,7 +101,11 @@ jobs:
     # - workflow_dispatch: 常に実行（手動トリガー）
     if: |
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.pull_requests[0]) ||
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude') && contains(github.event.comment.body, 'fix')) ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@claude') &&
+        contains(github.event.comment.body, 'fix') &&
+        (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')) ||
       (github.event_name == 'workflow_dispatch')
 
     outputs:
@@ -275,12 +304,6 @@ jobs:
       actions: read
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.SECRETS_ADMIN_PAT }}
-
       - name: Add @claude comment for auto-fix
         env:
           GH_TOKEN: ${{ secrets.SECRETS_ADMIN_PAT }}

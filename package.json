@@ -12,6 +12,7 @@
     "typecheck:ci": "tsc --noEmit -p tsconfig.test.json",
     "deploy:worker": "wrangler deploy",
     "build:worker": "npm run typecheck:workers && node --check workers/video-stats-updater/src/index.js",
+    "test:worker:video-stats": "npm --prefix workers/video-stats-updater run test:ci",
     "deploy:worker:r2": "wrangler deploy -c wrangler-r2.toml",
     "update-ranking": "tsx scripts/update-ranking-parallel-v2.ts",
     "aggregate-ranking": "tsx scripts/aggregate-ranking-results-direct.ts",

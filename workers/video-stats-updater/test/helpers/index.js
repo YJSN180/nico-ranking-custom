@@ -1,4 +1,5 @@
 // Test helper functions
+import { gzipSync } from 'zlib';
 
 export function setupMockBindings(env) {
   // Mock R2 bucket
@@ -6,7 +7,15 @@ export function setupMockBindings(env) {
   env.R2_BUCKET = {
     get: vi.fn(async (key) => {
       const data = r2Storage.get(key);
-      return data ? createMockR2Object(data) : null;
+      if (!data) {
+        return null;
+      }
+
+      if (data?.__mockR2Object) {
+        return data;
+      }
+
+      return createMockR2Object(data);
     }),
     put: vi.fn(async (key, value) => {
       r2Storage.set(key, value);
@@ -39,12 +48,18 @@ export function setupMockBindings(env) {
 }
 
 // Helper to create R2 object from JSON
-function createMockR2Object(data) {
+export function createMockR2Object(data, options = {}) {
   const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
+  const buffer = options.gzip
+    ? gzipSync(Buffer.from(jsonString, 'utf-8'))
+    : Buffer.from(jsonString, 'utf-8');
+
   return {
+    __mockR2Object: true,
+    httpMetadata: options.contentEncoding ? { contentEncoding: options.contentEncoding } : undefined,
     text: async () => jsonString,
     json: async () => JSON.parse(jsonString),
-    arrayBuffer: async () => new TextEncoder().encode(jsonString).buffer,
+    arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
     blob: async () => new Blob([jsonString], { type: 'application/json' }),
   };
 }
@@ -55,7 +70,7 @@ export function setupSnapshotAPIMock(mockResponses = {}) {
     const urlString = typeof url === 'string' ? url : url.toString();
     
     // Mock Snapshot API responses
-    if (urlString.includes('api.search.nicovideo.jp/api/v2/snapshot/video/contents/search')) {
+    if (urlString.includes('snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search')) {
       const urlParams = new URL(urlString).searchParams;
       const jsonFilterParam = urlParams.get('jsonFilter');
       
