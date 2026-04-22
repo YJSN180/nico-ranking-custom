@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "test": "vitest",
+    "test:ci": "vitest run --config vitest.unit.config.mjs test/index.test.js test/utils.test.js --reporter=verbose",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "dev": "wrangler dev",

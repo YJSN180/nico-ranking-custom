@@ -1,4 +1,5 @@
 // Test helper functions
+import { gzipSync } from 'zlib';
 
 export function setupMockBindings(env) {
   // Mock R2 bucket
@@ -6,7 +7,15 @@ export function setupMockBindings(env) {
   env.R2_BUCKET = {
     get: vi.fn(async (key) => {
       const data = r2Storage.get(key);
-      return data ? createMockR2Object(data) : null;
+      if (!data) {
+        return null;
+      }
+
+      if (data?.__mockR2Object) {
+        return data;
+      }
+
+      return createMockR2Object(data);
     }),
     put: vi.fn(async (key, value) => {
       r2Storage.set(key, value);
@@ -39,50 +48,20 @@ export function setupMockBindings(env) {
 }
 
 // Helper to create R2 object from JSON
-function createMockR2Object(data) {
-  const normalizedData = normalizeMockR2Data(data);
-  const bodyBytes = normalizedData.body;
-  return {
-    httpMetadata: normalizedData.httpMetadata,
-    text: async () => new TextDecoder().decode(bodyBytes),
-    json: async () => JSON.parse(new TextDecoder().decode(bodyBytes)),
-    arrayBuffer: async () =>
-      bodyBytes.buffer.slice(bodyBytes.byteOffset, bodyBytes.byteOffset + bodyBytes.byteLength),
-    blob: async () => new Blob([bodyBytes], { type: normalizedData.contentType }),
-  };
-}
-
-function normalizeMockR2Data(data) {
-  if (data?.__mockR2Object) {
-    return {
-      body: toUint8Array(data.body),
-      httpMetadata: data.httpMetadata,
-      contentType: data.contentType || 'application/json',
-    };
-  }
-
+export function createMockR2Object(data, options = {}) {
   const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
+  const buffer = options.gzip
+    ? gzipSync(Buffer.from(jsonString, 'utf-8'))
+    : Buffer.from(jsonString, 'utf-8');
+
   return {
-    body: new TextEncoder().encode(jsonString),
-    httpMetadata: undefined,
-    contentType: 'application/json',
+    __mockR2Object: true,
+    httpMetadata: options.contentEncoding ? { contentEncoding: options.contentEncoding } : undefined,
+    text: async () => jsonString,
+    json: async () => JSON.parse(jsonString),
+    arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+    blob: async () => new Blob([jsonString], { type: 'application/json' }),
   };
-}
-
-function toUint8Array(value) {
-  if (value instanceof Uint8Array) {
-    return value;
-  }
-
-  if (value instanceof ArrayBuffer) {
-    return new Uint8Array(value);
-  }
-
-  if (typeof value === 'string') {
-    return new TextEncoder().encode(value);
-  }
-
-  return new TextEncoder().encode(JSON.stringify(value));
 }
 
 // Setup mock for Snapshot API
@@ -125,7 +104,7 @@ export function setupSnapshotAPIMock(mockResponses = {}) {
 
 // Wait for all promises to resolve
 export async function flushPromises() {
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise(resolve => setImmediate(resolve));
 }
 
 // Extract unique video IDs from ranking data

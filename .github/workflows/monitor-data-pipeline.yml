@@ -1,0 +1,92 @@
+name: Monitor Data Pipeline Health
+
+on:
+  schedule:
+    - cron: '5 */3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: monitor-data-pipeline
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve previous baseline and prior conclusion
+        id: history
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ./tmp/monitor
+          RUNS_JSON=$(gh run list --workflow monitor-data-pipeline.yml --limit 10 --json databaseId,conclusion)
+
+          PREVIOUS_SUCCESS_RUN_ID=$(echo "$RUNS_JSON" | jq -r --argjson current "$GITHUB_RUN_ID" '[.[] | select(.databaseId != $current and .conclusion == "success")][0].databaseId // empty')
+          PREVIOUS_CONCLUSION=$(echo "$RUNS_JSON" | jq -r --argjson current "$GITHUB_RUN_ID" '[.[] | select(.databaseId != $current)][0].conclusion // empty')
+
+          echo "previous_success_run_id=$PREVIOUS_SUCCESS_RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "previous_conclusion=$PREVIOUS_CONCLUSION" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$PREVIOUS_SUCCESS_RUN_ID" ]; then
+            gh run download "$PREVIOUS_SUCCESS_RUN_ID" --name data-pipeline-baseline --dir ./tmp/monitor || true
+          fi
+
+      - name: Check data pipeline health
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          VIDEO_STATS_BASELINE_FILE: ./tmp/monitor/data-pipeline-baseline.json
+          VIDEO_STATS_OUTPUT_FILE: ./tmp/monitor/current-baseline.json
+          VIDEO_STATS_MAX_AGE_MINUTES: '15'
+        run: |
+          npx tsx scripts/check-data-pipeline-health.ts
+
+      - name: Upload current baseline artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: data-pipeline-baseline
+          path: ./tmp/monitor/current-baseline.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Create or update consecutive failure issue
+        if: failure() && steps.history.outputs.previous_conclusion == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create data-pipeline-health --repo "$REPO" --color B60205 --description "Automated data pipeline health alerts" --force
+
+          ISSUE_NUMBER=$(gh issue list --repo "$REPO" --state open --label data-pipeline-health --json number -q '.[0].number')
+          BODY="Consecutive data pipeline health failures detected.\n\n- Workflow run: $RUN_URL\n- Checked at: $(date -u '+%Y-%m-%dT%H:%M:%SZ')\n- Signals: VIDEO_STATS_LATEST freshness / totalVideos drift"
+
+          if [ -n "$ISSUE_NUMBER" ]; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "$BODY"
+          else
+            gh issue create \
+              --repo "$REPO" \
+              --title "Data pipeline health monitor is failing consecutively" \
+              --label data-pipeline-health \
+              --body "$BODY"
+          fi

@@ -224,6 +224,29 @@ jobs:
       run: |
         echo "📤 Uploading to R2..."
         npx tsx scripts/write-to-r2.ts
+
+    - name: Verify post-publish contract
+      if: success()
+      env:
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+      run: |
+        mkdir -p ./tmp/post-publish
+        VERIFY_OUTPUT_PATH=./tmp/post-publish/verify-r2-contract.json \
+          npx tsx scripts/verify-r2-contract.ts
+
+    - name: Upload post-publish verification artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: post-publish-verification
+        path: ./tmp/post-publish/verify-r2-contract.json
+        retention-days: 7
+        if-no-files-found: ignore
     
     - name: Report completion
       run: |

@@ -12,6 +12,7 @@
     "typecheck:ci": "tsc --noEmit -p tsconfig.test.json",
     "deploy:worker": "./scripts/wrangler-with-token.sh deploy",
     "build:worker": "npm run typecheck:workers && node --check workers/video-stats-updater/src/index.js",
+    "test:worker:video-stats": "npm --prefix workers/video-stats-updater run test:ci",
     "deploy:worker:r2": "./scripts/wrangler-with-token.sh deploy -c wrangler-r2.toml",
     "cf:whoami": "./scripts/wrangler-with-token.sh whoami",
     "tail:worker:green": "./scripts/wrangler-with-token.sh tail -c workers/wrangler-green.toml --format pretty",

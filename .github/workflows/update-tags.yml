@@ -1,10 +1,11 @@
-name: Update Tag Accumulation Data
+name: Update Tag Accumulation Data (Manual Backfill)
 
 on:
-  schedule:
-    # 毎日午前3時（JST）= UTC 18:00
-    - cron: '0 18 * * *'
-  workflow_dispatch: # 手動実行も可能
+  workflow_dispatch:
+
+concurrency:
+  group: update-tags-manual
+  cancel-in-progress: false
 
 jobs:
   update-tags:
@@ -29,36 +30,27 @@ jobs:
         node scripts/fetch-tags-from-api.cjs
       timeout-minutes: 10
     
-    - name: Install wrangler
-      run: npm install -g wrangler@latest
-    
     - name: Upload to R2
       env:
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       run: |
-        echo "📤 R2へアップロード開始"
-        # R2への効率的な1キー書き込み
-        wrangler r2 object put nico-ranking/tag-accumulation.json --file data/tag-accumulation.json
-        
-        # gzip版も作成してアップロード（オプション）
-        gzip -c data/tag-accumulation.json > data/tag-accumulation.json.gz
-        wrangler r2 object put nico-ranking/tag-accumulation.json.gz --file data/tag-accumulation.json.gz
-        
-        echo "✅ アップロード完了"
-    
+        echo "📤 canonical key を gzip 契約で更新"
+        npm run upload-tag-accumulation
+
     - name: Verify upload
       env:
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
       run: |
-        # ファイルサイズを確認
-        wrangler r2 object get nico-ranking/tag-accumulation.json --pipe | wc -c
+        npx tsx scripts/check-r2-data.ts
     
     - name: Create summary
       if: always()
       run: |
-        echo "## タグ累積データ更新結果" >> $GITHUB_STEP_SUMMARY
+        echo "## タグ累積データ手動バックフィル結果" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         if [ -f data/tag-accumulation.json ]; then
           TAG_COUNT=$(jq '.tags | length' data/tag-accumulation.json)

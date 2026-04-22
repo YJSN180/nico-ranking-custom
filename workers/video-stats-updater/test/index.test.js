@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { setupMockBindings, setupSnapshotAPIMock, flushPromises } from './helpers';
+import { createMockR2Object, setupMockBindings, setupSnapshotAPIMock } from './helpers';
 import { 
   mockRankingMetadata, 
   mockRankingData,
   mockRankingDataHour, 
-  mockEmptyRankingData,
-  createStoredMockR2Object,
+  mockVideoStats,
+  mockEmptyRankingData 
 } from './mocks';
 
 import worker from '../src/index.js';
@@ -13,20 +13,15 @@ import worker from '../src/index.js';
 describe('Video Stats Updater Worker', () => {
   let env;
   let ctx;
-
-  async function getScheduledJobPromise() {
-    await flushPromises();
-    return ctx.waitUntil.mock.calls[0]?.[0];
-  }
+  const controller = {
+    cron: '*/5 * * * *',
+    scheduledTime: Date.now(),
+  };
 
   async function runScheduled() {
-    await worker.scheduled(
-      { cron: '*/5 * * * *', scheduledTime: Date.parse('2026-04-21T04:00:00Z') },
-      env,
-      ctx,
-    );
-    const jobPromise = await getScheduledJobPromise();
-    await jobPromise;
+    await worker.scheduled(controller, env, ctx);
+    const pendingTasks = ctx.waitUntil.mock.calls.map(([promise]) => promise);
+    await Promise.all(pendingTasks);
   }
 
   beforeEach(() => {
@@ -142,101 +137,85 @@ describe('Video Stats Updater Worker', () => {
       });
     });
 
-    it('should handle empty ranking data', async () => {
-      // Setup R2 with empty data
+    it('should parse gzipped metadata and ranking data', async () => {
+      env.R2_BUCKET._storage.set(
+        'rankings/metadata.json',
+        createMockR2Object(mockRankingMetadata, { gzip: true, contentEncoding: 'gzip' })
+      );
+      env.R2_BUCKET._storage.set(
+        'rankings/all/24h/all.json',
+        createMockR2Object(mockRankingData, { gzip: true, contentEncoding: 'gzip' })
+      );
+      env.R2_BUCKET._storage.set(
+        'rankings/all/hour/all.json',
+        createMockR2Object(mockRankingDataHour, { gzip: true, contentEncoding: 'gzip' })
+      );
+
+      setupSnapshotAPIMock({
+        'sm1,sm2,sm3': {
+          data: [
+            { contentId: 'sm1', viewCounter: 1000, commentCounter: 50, mylistCounter: 20, likeCounter: 100, tags: 'test video' },
+            { contentId: 'sm2', viewCounter: 2000, commentCounter: 100, mylistCounter: 40, likeCounter: 200, tags: 'test popular' },
+            { contentId: 'sm3', viewCounter: 500, commentCounter: 25, mylistCounter: 10, likeCounter: 50, tags: 'test new' },
+          ],
+        },
+      });
+
+      await runScheduled();
+
+      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
+      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
+      expect(writtenData.metadata.totalVideos).toBe(3);
+    });
+
+    it('should parse gzipped data by magic number even without content-encoding', async () => {
+      env.R2_BUCKET._storage.set(
+        'rankings/metadata.json',
+        createMockR2Object(mockRankingMetadata, { gzip: true })
+      );
+      env.R2_BUCKET._storage.set(
+        'rankings/all/24h/all.json',
+        createMockR2Object(mockRankingData, { gzip: true })
+      );
+      env.R2_BUCKET._storage.set(
+        'rankings/all/hour/all.json',
+        createMockR2Object(mockRankingDataHour, { gzip: true })
+      );
+
+      setupSnapshotAPIMock({
+        'sm1,sm2,sm3': {
+          data: [
+            { contentId: 'sm1', viewCounter: 1000, commentCounter: 50, mylistCounter: 20, likeCounter: 100, tags: 'test video' },
+            { contentId: 'sm2', viewCounter: 2000, commentCounter: 100, mylistCounter: 40, likeCounter: 200, tags: 'test popular' },
+            { contentId: 'sm3', viewCounter: 500, commentCounter: 25, mylistCounter: 10, likeCounter: 50, tags: 'test new' },
+          ],
+        },
+      });
+
+      await runScheduled();
+
+      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
+      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
+      expect(writtenData.metadata.totalVideos).toBe(3);
+    });
+
+    it('should fail closed when discoverable ranking files contain no videos', async () => {
       env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
       env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockEmptyRankingData);
       env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockEmptyRankingData);
 
-      await runScheduled();
-
-      // Should still write to KV with empty stats
-      expect(env.STATS_KV.put).toHaveBeenCalledWith(
-        'VIDEO_STATS_LATEST',
-        expect.any(String)
-      );
-
-      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
-      expect(writtenData).toMatchObject({
-        stats: {},
-        metadata: {
-          version: 1,
-          updatedAt: expect.any(String),
-          totalVideos: 0,
-        },
-      });
-    });
-
-    it('should read gzipped metadata from R2', async () => {
-      env.R2_BUCKET._storage.set(
-        'rankings/metadata.json',
-        await createStoredMockR2Object(mockRankingMetadata, {
-          gzip: true,
-          contentEncoding: 'gzip',
-        }),
-      );
-      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockRankingData);
-      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockRankingDataHour);
-
-      setupSnapshotAPIMock({
-        'sm1,sm2,sm3': {
-          data: [
-            { contentId: 'sm1', viewCounter: 1, commentCounter: 2, mylistCounter: 3, likeCounter: 4, tags: 'a b' },
-            { contentId: 'sm2', viewCounter: 5, commentCounter: 6, mylistCounter: 7, likeCounter: 8, tags: 'c d' },
-            { contentId: 'sm3', viewCounter: 9, commentCounter: 10, mylistCounter: 11, likeCounter: 12, tags: 'e f' },
-          ],
-        },
-      });
-
-      await runScheduled();
-
-      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
-      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
-      expect(writtenData.metadata.totalVideos).toBe(3);
-    });
-
-    it('should read gzipped ranking data even without contentEncoding metadata', async () => {
-      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
-      env.R2_BUCKET._storage.set(
-        'rankings/all/24h/all.json',
-        await createStoredMockR2Object(mockRankingData, { gzip: true }),
-      );
-      env.R2_BUCKET._storage.set(
-        'rankings/all/hour/all.json',
-        await createStoredMockR2Object(mockRankingDataHour, { gzip: true }),
-      );
-
-      setupSnapshotAPIMock({
-        'sm1,sm2,sm3': {
-          data: [
-            { contentId: 'sm1', viewCounter: 1, commentCounter: 2, mylistCounter: 3, likeCounter: 4, tags: 'a b' },
-            { contentId: 'sm2', viewCounter: 5, commentCounter: 6, mylistCounter: 7, likeCounter: 8, tags: 'c d' },
-            { contentId: 'sm3', viewCounter: 9, commentCounter: 10, mylistCounter: 11, likeCounter: 12, tags: 'e f' },
-          ],
-        },
-      });
-
-      await runScheduled();
-
-      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
-      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
-      expect(writtenData.metadata.totalVideos).toBe(3);
+      await expect(runScheduled()).rejects.toThrow('Discovered 2 ranking paths but loaded 0 items');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
     it('should handle R2 errors gracefully', async () => {
       // Make R2 get throw an error
       env.R2_BUCKET.get = vi.fn().mockRejectedValue(new Error('R2 error'));
 
-      await runScheduled();
-
-      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
-      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
-      expect(writtenData).toMatchObject({
-        stats: {},
-        metadata: {
-          totalVideos: 0,
-        },
-      });
+      await expect(runScheduled()).rejects.toThrow('Failed to fetch ranking metadata');
+      
+      // Should not write to KV on error
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
     it('should handle Snapshot API errors gracefully', async () => {
@@ -248,25 +227,49 @@ describe('Video Stats Updater Worker', () => {
       // Make fetch throw an error
       global.fetch = vi.fn().mockRejectedValue(new Error('API error'));
 
-      await runScheduled();
+      await expect(runScheduled()).rejects.toThrow('Failed to fetch video stats');
+      
+      // Should not write to KV on error
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
 
-      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
-      const writtenData = JSON.parse(env.STATS_KV.put.mock.calls[0][1]);
-      expect(writtenData).toMatchObject({
-        stats: {},
-        metadata: {
-          totalVideos: 0,
+    it('should keep last-known-good KV data when parsing ranking data fails', async () => {
+      const lastKnownGood = {
+        stats: {
+          sm999: {
+            viewCounter: 1,
+            commentCounter: 2,
+            mylistCounter: 3,
+            likeCounter: 4,
+            tags: ['stable'],
+          },
         },
-      });
+        metadata: {
+          version: 1,
+          updatedAt: '2026-04-22T00:00:00.000Z',
+          totalVideos: 1,
+        },
+      };
+
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', JSON.stringify(lastKnownGood));
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', '{not-json');
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockRankingDataHour);
+
+      await expect(runScheduled()).rejects.toThrow('Failed to parse rankings/all/24h/all.json');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'))).toEqual(lastKnownGood);
     });
 
     it('should batch API requests for large number of videos', async () => {
+      // Create mock data with many videos
       const manyVideos24h = {
         items: Array.from({ length: 150 }, (_, i) => ({
           id: `sm${i + 1}`,
           title: `Video ${i + 1}`,
         })),
         popularTags: [],
+        tags: {},
         metadata: {
           version: 1,
           updatedAt: '2024-06-22T12:00:00Z',
@@ -274,9 +277,11 @@ describe('Video Stats Updater Worker', () => {
           period: '24h',
         },
       };
+
       const manyVideosHour = {
         items: [],
         popularTags: [],
+        tags: {},
         metadata: {
           version: 1,
           updatedAt: '2024-06-22T12:00:00Z',
@@ -292,8 +297,18 @@ describe('Video Stats Updater Worker', () => {
       // Mock API responses for batches
       global.fetch = vi.fn(async (url) => {
         const urlString = url.toString();
-        if (urlString.includes('api.search.nicovideo.jp')) {
-          return new Response(JSON.stringify({ data: [] }), {
+        if (urlString.includes('snapshot.search.nicovideo.jp')) {
+          const ids = JSON.parse(new URL(urlString).searchParams.get('jsonFilter')).filters.map(filter => filter.value);
+          const data = ids.map((id) => ({
+            contentId: id,
+            viewCounter: 100,
+            commentCounter: 10,
+            mylistCounter: 5,
+            likeCounter: 20,
+            tags: 'batched test',
+          }));
+
+          return new Response(JSON.stringify({ data }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });

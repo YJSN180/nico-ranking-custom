@@ -25,12 +25,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  external-mention-guidance:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request &&
+      contains(github.event.comment.body, '@claude') &&
+      github.event.comment.author_association != 'OWNER' &&
+      github.event.comment.author_association != 'MEMBER' &&
+      github.event.comment.author_association != 'COLLABORATOR'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Reply with guidance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "このリポジトリでは、外部ユーザーからの \`@claude\` メンションでは privileged automation を起動しません。メンテナー経由で依頼してください。"
+
   claude-code-action:
     # PRに対するコメントで @claude が含まれている場合のみ実行
     if: |
-      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude'))
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@claude') &&
+        (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')) ||
+      (github.event_name == 'pull_request_review_comment' &&
+        contains(github.event.comment.body, '@claude') &&
+        (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')) ||
+      (github.event_name == 'pull_request_review' &&
+        contains(github.event.review.body, '@claude') &&
+        (github.event.review.author_association == 'OWNER' || github.event.review.author_association == 'MEMBER' || github.event.review.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,7 +74,7 @@ jobs:
           fetch-depth: 0
 
       - name: Run Claude Code Action
-        uses: grll/claude-code-action@beta
+        uses: grll/claude-code-action@eaa832e2642dfd5ecf723e5d99fc72c8f291c9bc
         with:
           # OAuth認証（Claude Max subscription）
           use_oauth: true
