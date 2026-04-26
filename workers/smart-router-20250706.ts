@@ -39,7 +39,55 @@ const securityHeaders = {
 
 // CORSヘッダーは ./utils/cors-config.ts で統一管理
 
-async function proxyToVercel(request: Request, env: Env): Promise<Response> {
+export function buildProxyRequestInit(
+  request: Request,
+  headers: Headers,
+  redirect: RequestRedirect,
+  replayableBody?: ArrayBuffer | null,
+): RequestInit {
+  const method = request.method.toUpperCase()
+
+  if (method === 'GET' || method === 'HEAD') {
+    return {
+      method: request.method,
+      headers,
+      redirect,
+    }
+  }
+
+  return {
+    method: request.method,
+    headers,
+    body: replayableBody ?? undefined,
+    redirect,
+  }
+}
+
+export async function readReplayableBody(request: Request): Promise<ArrayBuffer | null> {
+  const method = request.method.toUpperCase()
+
+  if (method === 'GET' || method === 'HEAD') {
+    return null
+  }
+
+  return request.clone().arrayBuffer()
+}
+
+function buildReplayableRequest(
+  sourceUrl: string,
+  request: Request,
+  body: ArrayBuffer | null,
+  redirect: RequestRedirect,
+): Request {
+  const headers = new Headers(request.headers)
+  return new Request(sourceUrl, buildProxyRequestInit(request, headers, redirect, body))
+}
+
+async function proxyToVercel(
+  request: Request,
+  env: Env,
+  replayableBody: ArrayBuffer | null,
+): Promise<Response> {
   const url = new URL(request.url)
   const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-2ezx48med-yjsns-projects.vercel.app'
   const target = new URL(url.pathname + url.search, targetBase)
@@ -49,12 +97,10 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
 
-  const proxiedRequest = new Request(target.toString(), {
-    method: request.method,
-    headers,
-    body: request.body,
-    redirect: 'follow'
-  })
+  const proxiedRequest = new Request(
+    target.toString(),
+    buildProxyRequestInit(request, headers, 'follow', replayableBody),
+  )
 
   const response = await fetch(proxiedRequest)
   return response
@@ -64,6 +110,7 @@ const handler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     void ctx
     const url = new URL(request.url)
+    const replayableBody = await readReplayableBody(request)
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
@@ -92,7 +139,7 @@ const handler: ExportedHandler<Env> = {
       // HTMLや静的リソースは直接Vercelへプロキシ（APIのみブルー/グリーンを経由）
       const isApiRequest = url.pathname.startsWith('/api/')
       if (!isApiRequest) {
-        const proxied = await proxyToVercel(request, env)
+        const proxied = await proxyToVercel(request, env, replayableBody)
         const origin = request.headers.get('Origin')
 
         // HTMLページ（ルートまたは拡張子なしのパス）はブラウザキャッシュを無効化
@@ -129,7 +176,9 @@ const handler: ExportedHandler<Env> = {
       }
       
       // リクエストを対象Workerに転送
-      const response = await targetWorker.fetch(request)
+      const response = await targetWorker.fetch(
+        buildReplayableRequest(request.url, request, replayableBody, 'follow'),
+      )
       
       // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）
       const forceNoStore =
@@ -181,7 +230,9 @@ const handler: ExportedHandler<Env> = {
       
       // フォールバック: Blue Workerを使用
       try {
-        const fallbackResponse = await env.WORKER_BLUE.fetch(request)
+        const fallbackResponse = await env.WORKER_BLUE.fetch(
+          buildReplayableRequest(request.url, request, replayableBody, 'follow'),
+        )
         const origin = request.headers.get('Origin')
         return applyCORSHeaders(fallbackResponse, origin, {
           ...securityHeaders,
