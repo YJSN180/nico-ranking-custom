@@ -24,7 +24,7 @@ export async function writeRankingToCloudflareKVApi(
       Authorization: `Bearer ${CF_API_TOKEN}`,
       'Content-Type': 'application/octet-stream',
     },
-    body: compressed,
+    body: Buffer.from(compressed),
   })
 
   if (!response.ok) {
