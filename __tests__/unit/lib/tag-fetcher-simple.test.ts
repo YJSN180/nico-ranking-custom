@@ -13,12 +13,15 @@ async function loadModule() {
   vi.stubEnv('TAG_FETCH_GETTHUMB_TIMEOUT_MS', '1000')
   const mod = await import('@/lib/tag-fetcher-simple')
   const { kv } = await import('@/lib/simple-kv')
-  return { mod, kv }
+  const store = await import('@/lib/tag-cache-store')
+  store.resetTagCacheDelta()
+  return { mod, kv, store }
 }
 
 afterEach(() => {
   global.fetch = originalFetch
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('tag-fetcher-simple (Nicolog -> getthumbinfo)', () => {
@@ -162,6 +165,122 @@ describe('tag-fetcher-simple (Nicolog -> getthumbinfo)', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(setSpy).not.toHaveBeenCalled()
     expect(result.tags).toEqual(['Cached'])
+  })
+
+  it('records R2 aggregate delta without writing tag cache shards to KV', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    const html = `
+      <html><body>
+        <td class="tdtag">
+          <li class="lock">R2Tag</li>
+        </td>
+      </body></html>
+    `
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://www.nicolog.jp/watch/')) {
+        return new Response(html, { status: 200 })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    global.fetch = fetchMock as any
+
+    const { mod, kv, store } = await loadModule()
+    const { enrichRankingItemsWithTagDetails } = mod
+
+    vi.spyOn(kv, 'get').mockResolvedValue({})
+    const setSpy = vi.spyOn(kv, 'set').mockResolvedValue()
+
+    const items: RankingItem[] = [
+      { rank: 1, id: 'sm-r2-success', title: 't', thumbURL: '', views: 1 }
+    ]
+
+    const [result] = await enrichRankingItemsWithTagDetails(items, 1, 0, true)
+    const delta = store.getTagCacheDelta()
+    const deltaEntries = Object.values(delta).flatMap(shard => Object.values(shard))
+
+    expect(result.tags).toEqual(['R2Tag'])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(deltaEntries).toEqual([
+      expect.objectContaining({
+        tags: [{ name: 'R2Tag', isLocked: true }],
+        source: 'nicolog'
+      })
+    ])
+  })
+
+  it('falls back to KV reads when R2 aggregate shard is missing', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    const fetchMock = vi.fn(async () => {
+      throw new Error('network should not be called')
+    })
+    global.fetch = fetchMock as any
+
+    const { mod, kv, store } = await loadModule()
+    const { enrichRankingItemsWithTagDetails } = mod
+
+    const cached = {
+      'sm-r2-kv-fallback': {
+        tags: [
+          { name: 'Fallback', isLocked: false }
+        ],
+        fetchedAt: new Date().toISOString(),
+        source: 'getthumbinfo'
+      }
+    }
+
+    const getSpy = vi.spyOn(kv, 'get').mockResolvedValue(cached)
+    const setSpy = vi.spyOn(kv, 'set').mockResolvedValue()
+
+    const items: RankingItem[] = [
+      { rank: 1, id: 'sm-r2-kv-fallback', title: 't', thumbURL: '', views: 1 }
+    ]
+
+    const [result] = await enrichRankingItemsWithTagDetails(items, 1, 0, true)
+
+    expect(result.tags).toEqual(['Fallback'])
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(getSpy).toHaveBeenCalled()
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(store.hasTagCacheDelta()).toBe(false)
+  })
+
+  it('records failure entries in R2 aggregate delta', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://www.nicolog.jp/watch/')) {
+        return new Response('err', { status: 500 })
+      }
+      if (url.startsWith('https://ext.nicovideo.jp/api/getthumbinfo/')) {
+        return new Response('err', { status: 500 })
+      }
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    global.fetch = fetchMock as any
+
+    const { mod, kv, store } = await loadModule()
+    const { enrichRankingItemsWithTagDetails } = mod
+
+    vi.spyOn(kv, 'get').mockResolvedValue({})
+    const setSpy = vi.spyOn(kv, 'set').mockResolvedValue()
+
+    const items: RankingItem[] = [
+      { rank: 1, id: 'sm-r2-failure', title: 't', thumbURL: '', views: 1 }
+    ]
+
+    await enrichRankingItemsWithTagDetails(items, 1, 0, true)
+    const delta = store.getTagCacheDelta()
+    const deltaEntries = Object.values(delta).flatMap(shard => Object.values(shard))
+
+    expect(setSpy).not.toHaveBeenCalled()
+    expect(deltaEntries).toHaveLength(1)
+    expect(deltaEntries[0]).toEqual(
+      expect.objectContaining({
+        tags: [],
+        source: 'getthumbinfo',
+        fail: expect.objectContaining({ source: 'getthumbinfo' })
+      })
+    )
   })
 
   it('falls back to stale cache (LKG) when both sources fail', async () => {

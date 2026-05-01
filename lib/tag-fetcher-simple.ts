@@ -4,46 +4,21 @@
  * KVベースのタグキャッシュでAPI呼び出しを最小化
  */
 
-import type { RankingItem } from '../types/ranking'
+import type { RankingItem, TagDetail } from '../types/ranking'
 import { kv } from './simple-kv'
+import {
+  TAG_CACHE_TTL_SECONDS,
+  type TagCacheByShard,
+  type TagCacheEntry,
+  type TagCacheShard,
+  type TagSource,
+  getShardKeyForVideoId,
+  getTagCacheBackend,
+  readTagCacheShard,
+  recordTagCacheDelta,
+} from './tag-cache-store'
 
-// キャッシュキー（シャード化）
-const TAG_CACHE_KEY_PREFIX = 'TAG_CACHE_'
-const TAG_CACHE_SHARDS = 100
-// キャッシュの有効期限（7日間 = 604800秒）
-const TAG_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
-
-type TagSource = 'nicolog' | 'getthumbinfo'
-
-interface TagCacheFailure {
-  source: TagSource
-  at: string
-  reason?: string
-}
-
-/**
- * タグキャッシュのエントリ
- */
-interface TagCacheEntry {
-  tags: TagDetail[]
-  fetchedAt: string
-  source?: TagSource
-  fail?: TagCacheFailure
-}
-
-/**
- * タグキャッシュの全体構造
- */
-type TagCacheShard = Record<string, TagCacheEntry>
-type TagCacheByShard = Record<string, TagCacheShard>
-
-/**
- * タグの詳細情報
- */
-export interface TagDetail {
-  name: string
-  isLocked: boolean
-}
+export type { TagDetail } from '../types/ranking'
 
 /**
  * タグ取得の統計情報
@@ -130,18 +105,8 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&#39;/g, "'")
 }
 
-function hashVideoId(videoId: string): number {
-  let hash = 0
-  for (let i = 0; i < videoId.length; i += 1) {
-    hash = ((hash << 5) - hash) + videoId.charCodeAt(i)
-    hash |= 0
-  }
-  return Math.abs(hash)
-}
-
 function getShardKey(videoId: string): string {
-  const shard = hashVideoId(videoId) % TAG_CACHE_SHARDS
-  return `${TAG_CACHE_KEY_PREFIX}${shard}`
+  return getShardKeyForVideoId(videoId)
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
@@ -251,7 +216,7 @@ async function loadTagCacheForItems(items: RankingItem[]): Promise<{ cacheByShar
     }
 
     try {
-      const shard = await kv.get<TagCacheShard>(shardKey)
+      const shard = await readTagCacheShard(shardKey)
       memoryCacheByShard[shardKey] = shard || {}
       memoryCacheLoadedAt[shardKey] = now
       cacheByShard[shardKey] = memoryCacheByShard[shardKey]
@@ -270,6 +235,11 @@ async function loadTagCacheForItems(items: RankingItem[]): Promise<{ cacheByShar
  * タグキャッシュをKVに保存する（シャード単位）
  */
 async function saveTagCacheShards(cacheByShard: TagCacheByShard, shardKeys: string[]): Promise<void> {
+  if (getTagCacheBackend() === 'r2-aggregate') {
+    console.warn(`[Tag Cache] Recorded ${shardKeys.length} dirty shards for aggregate R2 merge`)
+    return
+  }
+
   for (const shardKey of shardKeys) {
     try {
       await kv.set(shardKey, cacheByShard[shardKey] || {}, { ex: TAG_CACHE_TTL_SECONDS })
@@ -616,6 +586,7 @@ export async function enrichRankingItemsWithTagDetails(
           if (useCache) {
             addToCache(cacheByShard, shardKey, item.id, nicologResult.tags, 'nicolog')
             dirtyShards.add(shardKey)
+            recordTagCacheDelta(shardKey, item.id, cacheByShard[shardKey][item.id])
             cacheUpdated = true
           }
           return {
@@ -631,6 +602,7 @@ export async function enrichRankingItemsWithTagDetails(
           }
           addFailureToCache(cacheByShard, shardKey, item.id, 'nicolog', failureReason)
           dirtyShards.add(shardKey)
+          recordTagCacheDelta(shardKey, item.id, cacheByShard[shardKey][item.id])
           cacheUpdated = true
         }
       }
@@ -643,6 +615,7 @@ export async function enrichRankingItemsWithTagDetails(
           if (useCache) {
             addToCache(cacheByShard, shardKey, item.id, thumbResult.tags, 'getthumbinfo')
             dirtyShards.add(shardKey)
+            recordTagCacheDelta(shardKey, item.id, cacheByShard[shardKey][item.id])
             cacheUpdated = true
           }
           return {
@@ -658,6 +631,7 @@ export async function enrichRankingItemsWithTagDetails(
           }
           addFailureToCache(cacheByShard, shardKey, item.id, 'getthumbinfo', failureReason)
           dirtyShards.add(shardKey)
+          recordTagCacheDelta(shardKey, item.id, cacheByShard[shardKey][item.id])
           cacheUpdated = true
         }
       }

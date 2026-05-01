@@ -7,6 +7,10 @@ import {
   getTagFetchRunStats,
   resetTagFetchRunStats,
 } from '../lib/tag-fetcher-simple'
+import {
+  resetTagCacheDelta,
+  writeTagCacheDeltaArtifact,
+} from '../lib/tag-cache-store'
 import { createCoreNgFilter } from '../lib/pipeline/ng-filter'
 import { buildGenreRanking } from '../lib/pipeline/run-update'
 import {
@@ -542,6 +546,7 @@ if (process.argv[2] === '--group') {
   ;(async () => {
     const startTime = Date.now()
     resetTagFetchRunStats()
+    resetTagCacheDelta()
     const ngList = await getNGList()
     const originalDerivedCount = ngList.derivedVideoIds.length
     console.log(
@@ -599,6 +604,19 @@ if (process.argv[2] === '--group') {
       `Group ${groupId} completed in ${Math.round(duration / 1000)}s with ${results.length} genres`,
     )
     const tagFetchStats = getTagFetchRunStats()
+    const deltaWritten = await writeTagCacheDeltaArtifact(
+      path.join(tmpDir, `tag-cache-delta-group-${groupId}.json`),
+      {
+        groupId,
+        totalGroups,
+      },
+    )
+    if (deltaWritten) {
+      console.log(`Saved tag cache delta to tag-cache-delta-group-${groupId}.json`)
+    } else {
+      console.log('No tag cache delta generated for this group')
+    }
+
     await uploadTagFetchStatsToR2(tagFetchStats, {
       groupId,
       totalGroups,

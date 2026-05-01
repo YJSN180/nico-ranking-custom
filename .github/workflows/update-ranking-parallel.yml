@@ -47,6 +47,9 @@ jobs:
         CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
         CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_BUCKET_NAME: nico-ranking
         # Add KV Namespace ID fallback
         CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
         # Tag fetching configuration
@@ -54,6 +57,8 @@ jobs:
         TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '1000' }}
         TAG_FETCH_GENRES: ''
         TAG_FETCH_FOR_TAG_RANKINGS: ${{ secrets.TAG_FETCH_FOR_TAG_RANKINGS || 'true' }}
+        TAG_CACHE_BACKEND: r2-aggregate
+        TAG_CACHE_R2_PREFIX: tag-cache/v1
         TAG_FETCH_NICOLOG_CONCURRENCY: ${{ secrets.TAG_FETCH_NICOLOG_CONCURRENCY || '2' }}
         TAG_FETCH_NICOLOG_MIN_INTERVAL_MS: ${{ secrets.TAG_FETCH_NICOLOG_MIN_INTERVAL_MS || '500' }}
         TAG_FETCH_GETTHUMB_CONCURRENCY: ${{ secrets.TAG_FETCH_GETTHUMB_CONCURRENCY || '10' }}
@@ -103,6 +108,14 @@ jobs:
         retention-days: 1
         if-no-files-found: ignore
 
+    - name: Upload tag cache delta (if exists)
+      uses: actions/upload-artifact@v4
+      with:
+        name: tag-cache-delta-group-${{ matrix.group }}
+        path: ./tmp/tag-cache-delta-group-${{ matrix.group }}.json
+        retention-days: 1
+        if-no-files-found: ignore
+
   # Step 2: Aggregate results and write to KV
   aggregate-and-write:
     needs: fetch-rankings
@@ -138,6 +151,13 @@ jobs:
         path: ./tmp
         pattern: ng-derived-group-*
       continue-on-error: true
+
+    - name: Download tag cache delta artifacts (if exists)
+      uses: actions/download-artifact@v4
+      with:
+        path: ./tmp
+        pattern: tag-cache-delta-group-*
+      continue-on-error: true
     
     - name: List downloaded files
       run: |
@@ -149,6 +169,8 @@ jobs:
         find ./tmp -name "ranking-group-*.json" | sort
         echo "NG derived files:"
         find ./tmp -name "ng-derived-group-*.json" | sort
+        echo "Tag cache delta files:"
+        find ./tmp -name "tag-cache-delta-group-*.json" | sort
     
     - name: Move files to correct location
       run: |
@@ -172,6 +194,8 @@ jobs:
         echo "Total NG derived files found: $(ls ./tmp/ng-derived-group-*.json 2>/dev/null | wc -l)"
         echo "NG derived files after moving:"
         ls -la ./tmp/ng-derived-group-*.json 2>/dev/null || echo "No NG derived files found after moving"
+        echo "Tag cache delta files after moving:"
+        ls -la ./tmp/tag-cache-delta-group-*.json 2>/dev/null || echo "No tag cache delta files found after moving"
     
     - name: Aggregate and write to KV
       env:
@@ -224,6 +248,20 @@ jobs:
       run: |
         echo "📤 Uploading to R2..."
         npx tsx scripts/write-to-r2.ts
+
+    - name: Merge tag cache deltas to R2
+      if: success()
+      env:
+        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        R2_BUCKET_NAME: nico-ranking
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        TAG_CACHE_R2_PREFIX: tag-cache/v1
+      run: |
+        echo "Merging tag cache deltas to R2..."
+        npx tsx scripts/merge-tag-cache-deltas-to-r2.ts ./tmp
 
     - name: Verify post-publish contract
       if: success()
