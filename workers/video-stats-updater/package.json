@@ -32,6 +32,9 @@
   },
   "dependencies": {},
   "overrides": {
-    "wrangler": "3.99.0"
+    "wrangler": "3.99.0",
+    "@cloudflare/vitest-pool-workers": {
+      "wrangler": "3.99.0"
+    }
   }
 }
