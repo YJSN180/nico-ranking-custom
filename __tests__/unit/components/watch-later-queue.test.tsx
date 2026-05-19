@@ -46,7 +46,7 @@ describe('WatchLaterQueue', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'あとで見る 1件' }))
     expect(
-      screen.getByRole('dialog', { name: 'あとで見る' }),
+      screen.getByRole('complementary', { name: 'あとで見る' }),
     ).toBeInTheDocument()
     expect(screen.getByText('テスト動画')).toBeInTheDocument()
   })

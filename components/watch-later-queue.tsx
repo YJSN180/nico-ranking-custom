@@ -8,6 +8,8 @@ import { useWatchLaterQueueActions } from '@/hooks/use-watch-later-queue-actions
 import type { WatchLaterItem } from '@/lib/watch-later'
 import './watch-later-queue.css'
 
+const WATCH_LATER_PANEL_ID = 'watch-later-queue-panel'
+
 function WatchLaterItemRow({
   item,
   onOpen,
@@ -79,6 +81,19 @@ export function WatchLaterQueue() {
     setMounted(true)
   }, [])
 
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
+
   const layer = isOpen ? (
     <div className="watch-later-queue__layer" role="presentation">
       <button
@@ -88,9 +103,8 @@ export function WatchLaterQueue() {
         onClick={() => setIsOpen(false)}
       />
       <aside
+        id={WATCH_LATER_PANEL_ID}
         className="watch-later-queue__panel"
-        role="dialog"
-        aria-modal="true"
         aria-label="あとで見る"
         aria-live="polite"
       >
@@ -163,6 +177,7 @@ export function WatchLaterQueue() {
         className="watch-later-queue__button"
         aria-label={`あとで見る ${count}件`}
         aria-expanded={isOpen}
+        aria-controls={WATCH_LATER_PANEL_ID}
         onClick={() => setIsOpen(true)}
       >
         <span className="watch-later-queue__button-text watch-later-queue__button-text--desktop">
