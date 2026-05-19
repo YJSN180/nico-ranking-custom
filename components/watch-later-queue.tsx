@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { OptimizedImage } from './optimized-image'
 import { useWatchLater } from '@/hooks/use-watch-later'
-import { navigateToVideo } from '@/lib/pwa-utils'
+import { useWatchLaterQueueActions } from '@/hooks/use-watch-later-queue-actions'
 import type { WatchLaterItem } from '@/lib/watch-later'
 import './watch-later-queue.css'
 
@@ -59,43 +59,25 @@ function WatchLaterItemRow({
 
 export function WatchLaterQueue() {
   const { items, count, removeItem, clearItems, markOpened } = useWatchLater()
+  const {
+    message,
+    openItem,
+    openAndRemove,
+    openFirst,
+    copyAllUrls,
+    clearItems: clearQueuedItems,
+  } = useWatchLaterQueueActions({
+    items,
+    removeItem,
+    clearItems,
+    markOpened,
+  })
   const [isOpen, setIsOpen] = useState(false)
-  const [message, setMessage] = useState('')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
-
-  const openItem = (item: WatchLaterItem) => {
-    markOpened(item.id)
-    navigateToVideo(item.url)
-  }
-
-  const openAndRemove = (item: WatchLaterItem) => {
-    removeItem(item.id)
-    navigateToVideo(item.url)
-  }
-
-  const openFirst = () => {
-    const first = items[0]
-    if (!first) return
-    openItem(first)
-  }
-
-  const copyAllUrls = async () => {
-    if (items.length === 0) return
-    try {
-      await navigator.clipboard.writeText(
-        items.map((item) => item.url).join('\n'),
-      )
-      setMessage('URLをコピーしました')
-      window.setTimeout(() => setMessage(''), 1800)
-    } catch {
-      setMessage('コピーに失敗しました')
-      window.setTimeout(() => setMessage(''), 1800)
-    }
-  }
 
   const layer = isOpen ? (
     <div className="watch-later-queue__layer" role="presentation">
@@ -164,7 +146,7 @@ export function WatchLaterQueue() {
           </button>
           <button
             type="button"
-            onClick={clearItems}
+            onClick={clearQueuedItems}
             disabled={items.length === 0}
           >
             すべて削除
