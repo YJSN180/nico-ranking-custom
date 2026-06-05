@@ -80,18 +80,12 @@ export default defineConfig({
     ],
     testTimeout: process.env.CI ? 120000 : 10000,  // CI環境では2分に増加
     pool: 'forks',  // CI環境でのより安定した実行のためforksに統一
-    poolOptions: {
-      forks: {
-        // シャード環境に対応したメモリ使用量制限
-        maxForks: process.env.CI && process.env.VITEST_SHARD ? 1 : (process.env.CI ? 2 : 4),
-        minForks: 1,
-        // シャード環境では singleFork を有効化して安定性向上
-        singleFork: process.env.CI && process.env.VITEST_SHARD ? true : false,
-        // メモリリークを防ぐためワーカーを定期的にリサイクル
-        isolate: true,
-        execArgv: process.env.CI ? ['--expose-gc', '--max-old-space-size=8192'] : []
-      }
-    },
+    // Vitest 4 migration: poolOptions are now top-level options
+    maxForks: process.env.CI && process.env.VITEST_SHARD ? 1 : (process.env.CI ? 2 : 4),
+    minForks: 1,
+    singleFork: process.env.CI && process.env.VITEST_SHARD ? true : false,
+    isolate: true,
+    execArgv: process.env.CI ? ['--expose-gc', '--max-old-space-size=8192'] : [],
     // CI環境での追加設定 (シャード対応版)
     ...(process.env.CI ? {
       isolate: true,  // 各テストファイルを分離
