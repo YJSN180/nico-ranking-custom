@@ -93,7 +93,7 @@ jobs:
         npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
     
     - name: Upload partial results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: ranking-data-group-${{ matrix.group }}
         path: ./tmp/ranking-group-${{ matrix.group }}.json
@@ -101,7 +101,7 @@ jobs:
         if-no-files-found: error
     
     - name: Upload NG derived results (if exists)
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: ng-derived-group-${{ matrix.group }}
         path: ./tmp/ng-derived-group-${{ matrix.group }}.json
