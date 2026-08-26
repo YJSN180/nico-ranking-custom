@@ -117,27 +117,9 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   }, [storageBackend, rankings, selectedId])
 
 
-  // エラー状態の場合は空の結果を返す
-  if (storageBackend === 'error') {
-    return {
-      rankings: [],
-      selectedId: undefined,
-      selectedRanking: undefined,
-      createRanking: async () => null,
-      updateRanking: async () => false,
-      deleteRanking: async () => false,
-      selectRanking: async () => false,
-      toggleVisibility: async () => false,
-      updateRankingOrder: async () => false,
-      isUniqueTitle: async () => false,
-      searchRankings: async () => [],
-      isLoading: false,
-      storageBackend,
-      migrationStatus
-    }
-  }
-
   // IndexedDB 操作関数
+  // 注意: Rules of Hooks のため、error 状態でもフックは無条件に定義する
+  // （error 時は managerRef.current が null のため各操作は安全に no-op になる）
   const createRanking = useCallback(async (data: CreateCustomRankingData): Promise<string | null> => {
     if (!managerRef.current) return null
 
