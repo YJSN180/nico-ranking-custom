@@ -10,6 +10,7 @@ import {
   type SnapshotSearchResponse,
 } from '@/lib/search/snapshot-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
+import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 
 export const revalidate = 0
 
@@ -64,15 +65,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const mapped = payload.data.map((video, index) =>
     mapSnapshotVideoToRankingItem(video, index, offset)
   )
-  const { items, excludedCount } = applyExclusionRules(mapped)
+  // サイト側の粗悪コンテンツ除外ルール
+  const { items: exclusionFiltered, excludedCount } = applyExclusionRules(mapped)
+  // 管理者NGリスト（ランキングと同じKV上のリスト）を適用
+  const { filteredItems, filteredCount } = await filterRankingItemsServer(exclusionFiltered)
 
   return NextResponse.json(
     {
-      items,
+      items: filteredItems,
       totalCount: payload.meta.totalCount ?? 0,
       page: conditions.page,
       pageSize: SEARCH_PAGE_SIZE,
-      excludedCount,
+      excludedCount: excludedCount + filteredCount,
     },
     {
       headers: {

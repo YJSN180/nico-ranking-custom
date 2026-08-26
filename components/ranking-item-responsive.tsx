@@ -4,6 +4,7 @@ import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
 import { QuickNGButton } from './quick-ng-button'
+import { ItemActionMenu } from './item-action-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
@@ -366,14 +367,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 </span>
               </div>
             </div>
-            {/* モバイル用マイリストボタン・NGボタン（CSSで表示制御） */}
-            <div className="ranking-item-responsive__mylist-button">
-              <MylistButton video={item} />
-              <QuickNGButton 
-                video={item} 
-                disabled={disabled}
-                onNGAdded={handleNGAdded}
-              />
+            {/* モバイル用3点ドットメニュー（CSSで表示制御） */}
+            <div className="ranking-item-responsive__menu">
+              <ItemActionMenu video={item} disabled={disabled} onNGAdded={handleNGAdded} />
             </div>
           </div>
           

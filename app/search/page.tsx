@@ -5,9 +5,9 @@ import { FooterLazy } from '@/components/footer-lazy'
 import { SearchClient } from './search-client'
 
 export const metadata: Metadata = {
-  title: '詳細検索 | ニコラン(Re:turn)',
+  title: '動画検索 | ニコラン(Re:turn)',
   description:
-    'ニコニコ動画の動画を再生数・コメント数・いいね数・マイリスト数・投稿日時・再生時間・ジャンルなどの条件で詳細検索。',
+    'ニコニコ動画の動画を再生数・コメント数・いいね数・マイリスト数・投稿日時・再生時間・ジャンルなどの条件で検索。',
 }
 
 export default function SearchPage() {

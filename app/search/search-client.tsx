@@ -310,11 +310,8 @@ export function SearchClient() {
 
   return (
     <TagDisplayProvider>
-    <div>
-      <h1 className="search-page__title">詳細検索</h1>
-      <p className="search-page__note">
-        検索データは1日1回（毎朝5時頃）更新されます。最新の投稿は反映されるまで時間がかかります。
-      </p>
+    <div className="search-page">
+      <h1 className="search-page__title">動画検索</h1>
 
       <form className="search-form" onSubmit={handleSubmit}>
         <div className="search-form__row">

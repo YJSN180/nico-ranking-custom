@@ -8,9 +8,11 @@ import './mylist-button.css'
 
 interface MylistButtonProps {
   video: RankingItem
+  /** 3点メニュー内の行として表示する（モバイル用） */
+  asMenuItem?: boolean
 }
 
-export function MylistButton({ video }: MylistButtonProps) {
+export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
   // クライアントサイド判定（useStateの初期値で処理）
   const [isClient] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -123,8 +125,21 @@ export function MylistButton({ video }: MylistButtonProps) {
 
   // SSR時またはクライアント側の初期化前はプレースホルダーを表示
   if (!isClient || isLoading) {
+    if (asMenuItem) {
+      return (
+        <button
+          type="button"
+          data-testid="mylist-button-placeholder"
+          className="item-action-menu__item"
+          disabled
+        >
+          <span aria-hidden="true">＋</span>
+          マイリストに追加
+        </button>
+      )
+    }
     return (
-      <div 
+      <div
         data-testid="mylist-button-placeholder"
         className="mylist-button-placeholder"
         title="読み込み中..."
@@ -147,14 +162,23 @@ export function MylistButton({ video }: MylistButtonProps) {
           e.stopPropagation()
         }}
         disabled={isProcessing}
-        className={`mylist-button ${
-          isInMylist 
-            ? 'mylist-button--active' 
-            : 'mylist-button--normal'
-        } ${isProcessing ? 'mylist-button--processing' : ''}`}
+        className={
+          asMenuItem
+            ? 'item-action-menu__item'
+            : `mylist-button ${
+                isInMylist ? 'mylist-button--active' : 'mylist-button--normal'
+              } ${isProcessing ? 'mylist-button--processing' : ''}`
+        }
         title={isInMylist ? "マイリストから削除" : "マイリストに追加"}
       >
-        <span className="mylist-button__icon">{isInMylist ? '✓' : '+'}</span>
+        {asMenuItem ? (
+          <>
+            <span aria-hidden="true">{isInMylist ? '✓' : '＋'}</span>
+            {isInMylist ? 'マイリスト登録済み' : 'マイリストに追加'}
+          </>
+        ) : (
+          <span className="mylist-button__icon">{isInMylist ? '✓' : '+'}</span>
+        )}
       </button>
 
       {/* マイリスト選択モーダル */}

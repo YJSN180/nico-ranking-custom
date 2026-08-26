@@ -1,15 +1,15 @@
-/* 詳細検索ページ - フラット（仕切り線）デザイン */
+/* 動画検索ページ - フラット（仕切り線）デザイン */
+
+/* ランキングページとバランスを揃えるため、コンテンツ幅を絞って中央寄せ */
+.search-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
 
 .search-page__title {
   font-size: 20px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 4px;
-}
-
-.search-page__note {
-  font-size: 12px;
-  color: var(--text-muted, var(--text-secondary));
   margin: 0 0 12px;
 }
 
