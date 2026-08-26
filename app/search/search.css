@@ -84,6 +84,107 @@
   min-width: 0;
 }
 
+/* 保存した検索・適用中条件のチップ */
+.search-form__saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.search-form__saved-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.search-form__saved-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.search-form__saved-load {
+  padding: 5px 4px 5px 12px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-form__saved-delete {
+  padding: 5px 10px 5px 4px;
+  background: none;
+  border: none;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.search-form__saved-load:hover,
+.search-form__saved-delete:hover {
+  color: var(--primary-color, #0066cc);
+}
+
+.search-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.search-form__details-badge {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary-color, #0066cc);
+  border-radius: 10px;
+}
+
+.search-results__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 0 2px;
+}
+
+.search-results__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+}
+
+.search-results__chip button {
+  padding: 0 2px;
+  background: none;
+  border: none;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.search-results__chip button:hover {
+  color: var(--error-color, #c53030);
+}
+
 .search-form__targets {
   display: flex;
   gap: 12px;

@@ -4,9 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { VideoContextMenu } from '@/components/video-context-menu'
+import { TagAutocompleteInput } from '@/components/tag-autocomplete-input'
 import { TagDisplayProvider } from '@/contexts/tag-display-context'
 import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
+import {
+  addSavedSearch,
+  loadSavedSearches,
+  persistSavedSearches,
+  removeSavedSearch,
+  type SavedSearch,
+} from '@/lib/search/saved-searches'
 import {
   SEARCH_GENRES,
   SEARCH_PAGE_SIZE,
@@ -88,6 +96,71 @@ const RANGE_FIELDS: Array<{
   { name: 'いいね！数', min: 'likesMin', max: 'likesMax' },
   { name: 'マイリスト数', min: 'mylistsMin', max: 'mylistsMax' },
 ]
+
+// 文字列フィールドだけを指す型（チップの一括クリア用）
+type StringFieldKey =
+  | 'viewsMin' | 'viewsMax'
+  | 'commentsMin' | 'commentsMax'
+  | 'likesMin' | 'likesMax'
+  | 'mylistsMin' | 'mylistsMax'
+  | 'durationMin' | 'durationMax'
+
+interface ActiveChip {
+  key: string
+  label: string
+  clear: (form: FormState) => FormState
+}
+
+/** 実行済み検索条件から「適用中の条件チップ」を生成 */
+function buildActiveChips(form: FormState): ActiveChip[] {
+  const chips: ActiveChip[] = []
+  if (form.q.trim()) {
+    chips.push({
+      key: 'q',
+      label: `${form.targets === 'tag' ? 'タグ' : 'キーワード'}: ${form.q.trim()}`,
+      clear: (f) => ({ ...f, q: '' }),
+    })
+  }
+  form.tagConditions.forEach((condition, index) => {
+    if (!condition.tag.trim()) return
+    chips.push({
+      key: `tag-${index}`,
+      label: `タグ(${TAG_OPERATOR_LABELS[condition.operator]}): ${condition.tag.trim()}`,
+      clear: (f) => ({ ...f, tagConditions: f.tagConditions.filter((_, i) => i !== index) }),
+    })
+  })
+  form.genres.forEach((genre) => {
+    chips.push({
+      key: `genre-${genre}`,
+      label: `ジャンル: ${genre}`,
+      clear: (f) => ({ ...f, genres: f.genres.filter((g) => g !== genre) }),
+    })
+  })
+  const rangeChip = (name: string, minKey: StringFieldKey, maxKey: StringFieldKey, unit = '') => {
+    const min = form[minKey]
+    const max = form[maxKey]
+    if (!min && !max) return
+    const fmt = (v: string) => (v ? `${Number(v).toLocaleString()}${unit}` : '')
+    chips.push({
+      key: minKey,
+      label: `${name}: ${fmt(min)}〜${fmt(max)}`,
+      clear: (f) => ({ ...f, [minKey]: '', [maxKey]: '' }),
+    })
+  }
+  rangeChip('再生数', 'viewsMin', 'viewsMax')
+  rangeChip('コメント数', 'commentsMin', 'commentsMax')
+  rangeChip('いいね！数', 'likesMin', 'likesMax')
+  rangeChip('マイリスト数', 'mylistsMin', 'mylistsMax')
+  rangeChip('再生時間', 'durationMin', 'durationMax', '分')
+  if (form.dateFrom || form.dateTo) {
+    chips.push({
+      key: 'date',
+      label: `投稿日時: ${form.dateFrom || ''}〜${form.dateTo || ''}`,
+      clear: (f) => ({ ...f, dateFrom: '', dateTo: '' }),
+    })
+  }
+  return chips
+}
 
 function toJstIso(date: string, endOfDay: boolean): string {
   return `${date}T${endOfDay ? '23:59:59' : '00:00:00'}+09:00`
@@ -188,8 +261,23 @@ export function SearchClient() {
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [lastForm, setLastForm] = useState<FormState | null>(null)
+  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const hasSearchedRef = useRef(false)
+
+  // 保存済み検索と詳細条件の開閉状態を復元
+  useEffect(() => {
+    setSavedSearches(loadSavedSearches())
+    try {
+      if (localStorage.getItem('search-details-open') === '1') {
+        setDetailsOpen(true)
+      }
+    } catch {
+      // localStorage エラーは無視
+    }
+  }, [])
 
   const updateField = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -204,6 +292,7 @@ export function SearchClient() {
       setIsLoading(true)
       setError(null)
       hasSearchedRef.current = true
+      setLastForm(searchForm)
 
       const params = buildQueryParams(searchForm, searchPage)
       const queryString = params.toString()
@@ -331,6 +420,65 @@ export function SearchClient() {
     setForm((prev) => ({ ...prev, dateFrom: formatDateInput(from), dateTo: formatDateInput(now) }))
   }, [])
 
+  // フォームを更新して即再検索（チップ解除・ソート/ジャンル変更用）
+  const applyAndSearch = useCallback(
+    (next: FormState) => {
+      setForm(next)
+      void runSearch(next, 1)
+    },
+    [runSearch]
+  )
+
+  // 検索条件の保存・復元・削除
+  const handleSaveCurrent = useCallback(() => {
+    const query = buildQueryParams(form, 1).toString()
+    if (!query) {
+      alert('保存する条件がありません。キーワードや詳細条件を指定してください。')
+      return
+    }
+    const defaultName =
+      form.q.trim() || form.tagConditions.find((c) => c.tag.trim())?.tag || '無題の検索'
+    const name = window.prompt('この検索条件の名前を入力してください', defaultName)
+    if (!name?.trim()) return
+    const next = addSavedSearch(savedSearches, name, query)
+    setSavedSearches(next)
+    persistSavedSearches(next)
+  }, [form, savedSearches])
+
+  const handleLoadSaved = useCallback(
+    (saved: SavedSearch) => {
+      const parsed = parseFormFromUrl(new URLSearchParams(saved.query))
+      setForm(parsed.form)
+      void runSearch(parsed.form, parsed.page)
+    },
+    [runSearch]
+  )
+
+  const handleDeleteSaved = useCallback(
+    (saved: SavedSearch) => {
+      if (!window.confirm(`保存した検索「${saved.name}」を削除しますか？`)) return
+      const next = removeSavedSearch(savedSearches, saved.id)
+      setSavedSearches(next)
+      persistSavedSearches(next)
+    },
+    [savedSearches]
+  )
+
+  // 詳細条件で指定中の件数（summary のバッジ表示用）
+  const advancedCount = useMemo(() => {
+    let count = 0
+    if (form.dateFrom || form.dateTo) count++
+    for (const field of RANGE_FIELDS) {
+      if (form[field.min] || form[field.max]) count++
+    }
+    if (form.durationMin || form.durationMax) count++
+    count += form.tagConditions.filter((c) => c.tag.trim()).length
+    count += form.genres.length
+    return count
+  }, [form])
+
+  const activeChips = useMemo(() => (lastForm ? buildActiveChips(lastForm) : []), [lastForm])
+
   return (
     <TagDisplayProvider>
     <div className="search-page">
@@ -376,7 +524,14 @@ export function SearchClient() {
           <select
             className="search-form__sort"
             value={form.sort}
-            onChange={(e) => updateField('sort', e.target.value)}
+            onChange={(e) => {
+              const next = { ...form, sort: e.target.value }
+              if (hasSearchedRef.current) {
+                applyAndSearch(next)
+              } else {
+                setForm(next)
+              }
+            }}
             aria-label="並び順"
             style={{ marginLeft: 'auto' }}
           >
@@ -388,8 +543,51 @@ export function SearchClient() {
           </select>
         </div>
 
-        <details className="search-form__details">
-          <summary>詳細条件</summary>
+        {savedSearches.length > 0 && (
+          <div className="search-form__saved">
+            <span className="search-form__saved-label">保存した検索:</span>
+            {savedSearches.map((saved) => (
+              <span key={saved.id} className="search-form__saved-chip">
+                <button
+                  type="button"
+                  className="search-form__saved-load"
+                  onClick={() => handleLoadSaved(saved)}
+                  title={`「${saved.name}」の条件で検索`}
+                >
+                  {saved.name}
+                </button>
+                <button
+                  type="button"
+                  className="search-form__saved-delete"
+                  aria-label={`保存した検索「${saved.name}」を削除`}
+                  onClick={() => handleDeleteSaved(saved)}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
+        <details
+          className="search-form__details"
+          open={detailsOpen}
+          onToggle={(e) => {
+            const open = (e.currentTarget as HTMLDetailsElement).open
+            setDetailsOpen(open)
+            try {
+              localStorage.setItem('search-details-open', open ? '1' : '0')
+            } catch {
+              // localStorage エラーは無視
+            }
+          }}
+        >
+          <summary>
+            詳細条件
+            {advancedCount > 0 && (
+              <span className="search-form__details-badge">{advancedCount}件指定中</span>
+            )}
+          </summary>
 
           <div className="search-form__section">
             <span className="search-form__section-label">投稿日時</span>
@@ -502,20 +700,16 @@ export function SearchClient() {
                     </option>
                   ))}
                 </select>
-                <input
-                  type="text"
+                <TagAutocompleteInput
                   className="search-form__number search-form__tag-input"
                   value={condition.tag}
-                  onChange={(e) =>
+                  onChange={(value) =>
                     updateField(
                       'tagConditions',
-                      form.tagConditions.map((c, i) =>
-                        i === index ? { ...c, tag: e.target.value } : c
-                      )
+                      form.tagConditions.map((c, i) => (i === index ? { ...c, tag: value } : c))
                     )
                   }
-                  placeholder="タグ名"
-                  aria-label={`タグ条件${index + 1}のタグ名`}
+                  placeholder="タグ名（入力で候補表示）"
                 />
                 <button
                   type="button"
@@ -560,12 +754,19 @@ export function SearchClient() {
                     <input
                       type="checkbox"
                       checked={active}
-                      onChange={() =>
-                        updateField(
-                          'genres',
-                          active ? form.genres.filter((g) => g !== genre) : [...form.genres, genre]
-                        )
-                      }
+                      onChange={() => {
+                        const next = {
+                          ...form,
+                          genres: active
+                            ? form.genres.filter((g) => g !== genre)
+                            : [...form.genres, genre],
+                        }
+                        if (hasSearchedRef.current) {
+                          applyAndSearch(next)
+                        } else {
+                          setForm(next)
+                        }
+                      }}
                     />
                     {genre}
                   </label>
@@ -574,7 +775,42 @@ export function SearchClient() {
             </div>
           </div>
         </details>
+
+        <div className="search-form__actions">
+          <button type="button" className="search-form__preset" onClick={handleSaveCurrent}>
+            ☆ この条件を保存
+          </button>
+        </div>
       </form>
+
+      {activeChips.length > 0 && lastForm && (
+        <div className="search-results__chips" aria-label="適用中の検索条件">
+          <span className="search-form__saved-label">適用中:</span>
+          {activeChips.map((chip) => (
+            <span key={chip.key} className="search-results__chip">
+              {chip.label}
+              <button
+                type="button"
+                aria-label={`条件「${chip.label}」を解除`}
+                onClick={() => applyAndSearch(chip.clear(lastForm))}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+          {activeChips.length > 1 && (
+            <button
+              type="button"
+              className="search-form__preset"
+              onClick={() =>
+                applyAndSearch({ ...EMPTY_FORM, sort: lastForm.sort, targets: lastForm.targets })
+              }
+            >
+              すべて解除
+            </button>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="search-results__status" role="alert">
