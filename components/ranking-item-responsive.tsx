@@ -18,13 +18,15 @@ interface RankingItemProps {
   item: RankingItem
   disabled?: boolean
   onQuickNGAdd?: (video: RankingItem, type: NGType, value: string | string[]) => void
+  /** 検索結果など順位が意味を持たない場面で順位表示を隠す */
+  hideRank?: boolean
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
-const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd }: RankingItemProps) {
+const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd, hideRank = false }: RankingItemProps) {
   const { showTags } = useTagDisplay()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const rankColors: Record<number, string> = {
@@ -136,7 +138,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
       >
       <div className="ranking-item-responsive__content">
         {/* デスクトップ用順位（モバイルでは非表示） */}
-        <div 
+        {!hideRank && (
+        <div
           className="ranking-item-responsive__rank ranking-item-responsive__rank--desktop"
           style={{
             background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
@@ -154,12 +157,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         >
           {item.rank}
         </div>
-        
+        )}
+
         {/* サムネイル */}
         {item.thumbURL && (
           <div className="ranking-item-responsive__thumbnail">
-            {/* モバイル用順位オーバーレイ（既存） */}
-            <div 
+            {/* モバイル用順位オーバーレイ（サムネイル左上） */}
+            {!hideRank && (
+            <div
               className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
               style={{
                 background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
@@ -172,6 +177,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             >
               {item.rank}
             </div>
+            )}
             {/* サムネイル画像のwrapper */}
             <div className="ranking-item-responsive__thumbnail-wrapper" style={{ position: 'relative' }}>
             <a

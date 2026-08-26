@@ -18,7 +18,8 @@ import {
   ExternalLinkIcon,
   ThemeIcon,
   GuideIcon,
-  MylistIcon
+  MylistIcon,
+  SearchIcon
 } from './icons'
 
 type NavItem = {
@@ -33,6 +34,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   // メインセクション
   { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
+  { href: '/search', label: '詳細検索', icon: <SearchIcon />, section: 'main' },
   { href: '/mylists', label: 'マイリスト', icon: <MylistIcon />, section: 'main' },
   { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
   
