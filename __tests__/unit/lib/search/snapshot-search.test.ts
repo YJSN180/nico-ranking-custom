@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildSnapshotSearchUrl,
+  buildTagJsonFilter,
   mapSnapshotVideoToRankingItem,
   parseSearchConditions,
   SEARCH_PAGE_SIZE,
@@ -76,6 +77,77 @@ describe('buildSnapshotSearchUrl', () => {
     const conditions = parseSearchConditions(new URLSearchParams('q=test&page=3'))
     const url = new URL(buildSnapshotSearchUrl(conditions))
     expect(url.searchParams.get('_offset')).toBe(String(2 * SEARCH_PAGE_SIZE))
+  })
+})
+
+describe('タグ論理条件（AND/OR/NOT）', () => {
+  it('URLパラメータ tagAnd/tagOr/tagNot をパースする', () => {
+    const params = new URLSearchParams()
+    params.append('tagAnd', 'ゲーム')
+    params.append('tagOr', 'VOICEROID実況プレイ')
+    params.append('tagNot', 'スパム')
+    const conditions = parseSearchConditions(params)
+    expect(conditions.tagConditions).toEqual([
+      { tag: 'ゲーム', operator: 'AND' },
+      { tag: 'VOICEROID実況プレイ', operator: 'OR' },
+      { tag: 'スパム', operator: 'NOT' },
+    ])
+  })
+
+  it('条件なしなら jsonFilter を生成しない', () => {
+    expect(buildTagJsonFilter([])).toBeNull()
+    const url = new URL(buildSnapshotSearchUrl(parseSearchConditions(new URLSearchParams('q=test'))))
+    expect(url.searchParams.get('jsonFilter')).toBeNull()
+  })
+
+  it('AND条件のみは and ノードになる', () => {
+    expect(
+      buildTagJsonFilter([
+        { tag: 'A', operator: 'AND' },
+        { tag: 'B', operator: 'AND' },
+      ])
+    ).toEqual({
+      type: 'and',
+      filters: [
+        { type: 'equal', field: 'tagsExact', value: 'A' },
+        { type: 'equal', field: 'tagsExact', value: 'B' },
+      ],
+    })
+  })
+
+  it('カスタムランキングと同じ意味論: (AND群) OR (OR群)、NOTは常に除外', () => {
+    expect(
+      buildTagJsonFilter([
+        { tag: 'A', operator: 'AND' },
+        { tag: 'B', operator: 'OR' },
+        { tag: 'C', operator: 'NOT' },
+      ])
+    ).toEqual({
+      type: 'and',
+      filters: [
+        {
+          type: 'or',
+          filters: [
+            { type: 'equal', field: 'tagsExact', value: 'A' },
+            { type: 'equal', field: 'tagsExact', value: 'B' },
+          ],
+        },
+        { type: 'not', filter: { type: 'equal', field: 'tagsExact', value: 'C' } },
+      ],
+    })
+  })
+
+  it('キーワード検索とタグ条件を同時にURLへ載せる', () => {
+    const params = new URLSearchParams('q=初音ミク')
+    params.append('tagAnd', '千本桜')
+    const url = new URL(buildSnapshotSearchUrl(parseSearchConditions(params)))
+    expect(url.searchParams.get('q')).toBe('初音ミク')
+    expect(url.searchParams.get('targets')).toBe('title,description,tags')
+    expect(JSON.parse(url.searchParams.get('jsonFilter') ?? '{}')).toEqual({
+      type: 'equal',
+      field: 'tagsExact',
+      value: '千本桜',
+    })
   })
 })
 

@@ -60,6 +60,30 @@
   cursor: not-allowed;
 }
 
+.search-form__hint {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.search-form__hint code {
+  background: var(--surface-secondary);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.search-form__tag-condition {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.search-form__tag-input {
+  flex: 1;
+  min-width: 0;
+}
+
 .search-form__targets {
   display: flex;
   gap: 12px;

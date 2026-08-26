@@ -237,7 +237,7 @@ export function Navigation() {
                               }}
                               className={`${styles.navLinkMobile} ${pathname === item.href ? styles.active : ''}`}
                             >
-                              <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                              <span style={{ width: '20px', height: '20px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
                               <span>{item.label}</span>
                             </Link>
                           )}
@@ -312,7 +312,7 @@ export function Navigation() {
                               background: 'var(--bg-secondary)',
                             }}
                           >
-                            <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                            <span style={{ width: '20px', height: '20px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
                             <span style={{ flex: 1 }}>{item.label}</span>
                             <ExternalLinkIcon size={16} />
                           </a>

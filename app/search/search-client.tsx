@@ -11,6 +11,8 @@ import {
   SEARCH_GENRES,
   SEARCH_PAGE_SIZE,
   SEARCH_SORT_OPTIONS,
+  type SearchTagCondition,
+  type SearchTagOperator,
 } from '@/lib/search/snapshot-search'
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
@@ -45,6 +47,15 @@ interface FormState {
   /** YYYY-MM-DD */
   dateFrom: string
   dateTo: string
+  /** タグの論理条件（カスタムランキングと同じ AND/OR/NOT 体系） */
+  tagConditions: SearchTagCondition[]
+}
+
+// カスタムランキング（custom-ranking-modal）と同じ演算子ラベル
+const TAG_OPERATOR_LABELS: Record<SearchTagOperator, string> = {
+  AND: 'すべて含む',
+  OR: 'いずれかを含む',
+  NOT: '除外する',
 }
 
 const EMPTY_FORM: FormState = {
@@ -64,6 +75,7 @@ const EMPTY_FORM: FormState = {
   durationMax: '',
   dateFrom: '',
   dateTo: '',
+  tagConditions: [],
 }
 
 const RANGE_FIELDS: Array<{
@@ -115,6 +127,12 @@ function buildQueryParams(form: FormState, page: number): URLSearchParams {
   }
   if (form.dateFrom) params.set('dateFrom', toJstIso(form.dateFrom, false))
   if (form.dateTo) params.set('dateTo', toJstIso(form.dateTo, true))
+  for (const condition of form.tagConditions) {
+    const tag = condition.tag.trim()
+    if (!tag) continue
+    const key = condition.operator === 'AND' ? 'tagAnd' : condition.operator === 'OR' ? 'tagOr' : 'tagNot'
+    params.append(key, tag)
+  }
   if (page > 1) params.set('page', String(page))
   return params
 }
@@ -148,6 +166,11 @@ function parseFormFromUrl(params: URLSearchParams): { form: FormState; page: num
       durationMax: secToMin(params.get('durationMax')),
       dateFrom: isoToDate(params.get('dateFrom')),
       dateTo: isoToDate(params.get('dateTo')),
+      tagConditions: [
+        ...params.getAll('tagAnd').map((tag): SearchTagCondition => ({ tag, operator: 'AND' })),
+        ...params.getAll('tagOr').map((tag): SearchTagCondition => ({ tag, operator: 'OR' })),
+        ...params.getAll('tagNot').map((tag): SearchTagCondition => ({ tag, operator: 'NOT' })),
+      ],
     },
     page: Math.max(1, Number(params.get('page')) || 1),
   }
@@ -220,7 +243,7 @@ export function SearchClient() {
   useEffect(() => {
     if (hasSearchedRef.current) return
     const params = new URLSearchParams(searchParams.toString())
-    const hasCondition = ['q', 'genre', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax', 'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax'].some(
+    const hasCondition = ['q', 'genre', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax', 'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot'].some(
       (key) => params.has(key)
     )
     if (hasCondition) {
@@ -327,6 +350,9 @@ export function SearchClient() {
             {isLoading ? '検索中…' : '検索'}
           </button>
         </div>
+        <p className="search-form__hint">
+          スペース区切り = すべて含む ／ <code>A OR B</code> = いずれか ／ <code>-語</code> = 除外
+        </p>
 
         <div className="search-form__row search-form__targets" role="radiogroup" aria-label="検索対象">
           <label>
@@ -449,6 +475,79 @@ export function SearchClient() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="search-form__section">
+            <span className="search-form__section-label">
+              タグ条件（キーワードと同時に指定可・完全一致）
+            </span>
+            {form.tagConditions.map((condition, index) => (
+              <div key={index} className="search-form__tag-condition">
+                <select
+                  className="search-form__sort"
+                  value={condition.operator}
+                  onChange={(e) =>
+                    updateField(
+                      'tagConditions',
+                      form.tagConditions.map((c, i) =>
+                        i === index ? { ...c, operator: e.target.value as SearchTagOperator } : c
+                      )
+                    )
+                  }
+                  aria-label={`タグ条件${index + 1}の演算子`}
+                >
+                  {(Object.keys(TAG_OPERATOR_LABELS) as SearchTagOperator[]).map((op) => (
+                    <option key={op} value={op}>
+                      {TAG_OPERATOR_LABELS[op]}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  className="search-form__number search-form__tag-input"
+                  value={condition.tag}
+                  onChange={(e) =>
+                    updateField(
+                      'tagConditions',
+                      form.tagConditions.map((c, i) =>
+                        i === index ? { ...c, tag: e.target.value } : c
+                      )
+                    )
+                  }
+                  placeholder="タグ名"
+                  aria-label={`タグ条件${index + 1}のタグ名`}
+                />
+                <button
+                  type="button"
+                  className="search-form__preset"
+                  onClick={() =>
+                    updateField(
+                      'tagConditions',
+                      form.tagConditions.filter((_, i) => i !== index)
+                    )
+                  }
+                  aria-label={`タグ条件${index + 1}を削除`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {form.tagConditions.length < 10 && (
+              <div className="search-form__presets">
+                <button
+                  type="button"
+                  className="search-form__preset"
+                  onClick={() =>
+                    updateField('tagConditions', [
+                      ...form.tagConditions,
+                      { tag: '', operator: 'AND' },
+                    ])
+                  }
+                >
+                  ＋ タグ条件を追加
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="search-form__section">

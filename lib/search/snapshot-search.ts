@@ -53,6 +53,21 @@ export const SEARCH_SORT_OPTIONS = [
 const VALID_SORT_VALUES = new Set<string>(SEARCH_SORT_OPTIONS.map((o) => o.value))
 const VALID_GENRES = new Set<string>(SEARCH_GENRES)
 
+// カスタムランキングと同じ演算子体系（types/custom-ranking.ts の TagOperator と同一）
+export type SearchTagOperator = 'AND' | 'OR' | 'NOT'
+
+export interface SearchTagCondition {
+  tag: string
+  operator: SearchTagOperator
+}
+
+// スナップショットAPI jsonFilter のノード型
+type JsonFilterNode =
+  | { type: 'equal'; field: string; value: string }
+  | { type: 'and'; filters: JsonFilterNode[] }
+  | { type: 'or'; filters: JsonFilterNode[] }
+  | { type: 'not'; filter: JsonFilterNode }
+
 export interface SearchConditions {
   q: string
   /** keyword: タイトル・説明文・タグを対象 / tag: タグ完全一致 */
@@ -73,6 +88,8 @@ export interface SearchConditions {
   /** 投稿日時（ISO 8601） */
   dateFrom?: string
   dateTo?: string
+  /** タグの論理条件（AND/OR/NOT、タグ完全一致）。キーワード検索と併用可能 */
+  tagConditions: SearchTagCondition[]
   page: number
 }
 
@@ -116,6 +133,22 @@ function parseDate(value: string | null): string | undefined {
   return d.toISOString()
 }
 
+const MAX_TAG_CONDITIONS = 10
+
+function parseTagConditions(params: URLSearchParams): SearchTagCondition[] {
+  const conditions: SearchTagCondition[] = []
+  const collect = (key: string, operator: SearchTagOperator) => {
+    for (const raw of params.getAll(key)) {
+      const tag = raw.trim().slice(0, 100)
+      if (tag) conditions.push({ tag, operator })
+    }
+  }
+  collect('tagAnd', 'AND')
+  collect('tagOr', 'OR')
+  collect('tagNot', 'NOT')
+  return conditions.slice(0, MAX_TAG_CONDITIONS)
+}
+
 /** URLSearchParams から検索条件を安全にパース（不正値は無視） */
 export function parseSearchConditions(params: URLSearchParams): SearchConditions {
   const sort = params.get('sort') ?? '-viewCounter'
@@ -139,8 +172,41 @@ export function parseSearchConditions(params: URLSearchParams): SearchConditions
     durationMax: parsePositiveInt(params.get('durationMax')),
     dateFrom: parseDate(params.get('dateFrom')),
     dateTo: parseDate(params.get('dateTo')),
+    tagConditions: parseTagConditions(params),
     page: Math.max(1, Math.min(page, Math.floor(SEARCH_MAX_OFFSET / SEARCH_PAGE_SIZE))),
   }
+}
+
+/**
+ * タグ論理条件を jsonFilter に変換
+ * カスタムランキング（lib/custom-ranking-filter.ts）と同じ意味論:
+ * (ANDグループをすべて満たす) OR (ORグループのいずれかを満たす)、NOTは常に除外
+ */
+export function buildTagJsonFilter(conditions: SearchTagCondition[]): JsonFilterNode | null {
+  const equal = (tag: string): JsonFilterNode => ({ type: 'equal', field: 'tagsExact', value: tag })
+  const ands = conditions.filter((c) => c.operator === 'AND').map((c) => equal(c.tag))
+  const ors = conditions.filter((c) => c.operator === 'OR').map((c) => equal(c.tag))
+  const nots = conditions.filter((c) => c.operator === 'NOT').map((c) => equal(c.tag))
+
+  const positiveParts: JsonFilterNode[] = []
+  if (ands.length > 0) positiveParts.push(ands.length === 1 ? ands[0]! : { type: 'and', filters: ands })
+  if (ors.length > 0) positiveParts.push(ors.length === 1 ? ors[0]! : { type: 'or', filters: ors })
+
+  const parts: JsonFilterNode[] = []
+  if (positiveParts.length === 1) {
+    parts.push(positiveParts[0]!)
+  } else if (positiveParts.length === 2) {
+    parts.push({ type: 'or', filters: positiveParts })
+  }
+  if (nots.length > 0) {
+    parts.push({
+      type: 'not',
+      filter: nots.length === 1 ? nots[0]! : { type: 'or', filters: nots },
+    })
+  }
+
+  if (parts.length === 0) return null
+  return parts.length === 1 ? parts[0]! : { type: 'and', filters: parts }
 }
 
 function appendRangeFilter(
@@ -194,6 +260,10 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions): string {
   appendRangeFilter(params, 'lengthSeconds', conditions.durationMin, conditions.durationMax)
   if (conditions.dateFrom) params.set('filters[startTime][gte]', conditions.dateFrom)
   if (conditions.dateTo) params.set('filters[startTime][lte]', conditions.dateTo)
+
+  // タグ論理条件は jsonFilter で指定（filters と併用可能なことは実測確認済み）
+  const tagFilter = buildTagJsonFilter(conditions.tagConditions)
+  if (tagFilter) params.set('jsonFilter', JSON.stringify(tagFilter))
 
   return `${SNAPSHOT_API_URL}?${params.toString()}`
 }
