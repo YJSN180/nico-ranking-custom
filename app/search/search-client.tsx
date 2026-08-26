@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { VideoContextMenu } from '@/components/video-context-menu'
+import { TagDisplayProvider } from '@/contexts/tag-display-context'
 import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
 import {
@@ -307,6 +308,7 @@ export function SearchClient() {
   }, [])
 
   return (
+    <TagDisplayProvider>
     <div>
       <h1 className="search-page__title">詳細検索</h1>
       <p className="search-page__note">
@@ -545,5 +547,6 @@ export function SearchClient() {
         </div>
       )}
     </div>
+    </TagDisplayProvider>
   )
 }
