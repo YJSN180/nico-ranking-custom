@@ -4,7 +4,6 @@ import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
 import { QuickNGButton } from './quick-ng-button'
-import { CrownIcon } from './crown-icon'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
@@ -53,13 +52,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     }
   }, [item.id])
 
-  // ホバー状態をリセットする関数を外部に公開するために、data属性を使用
-  const resetHoverState = (element: HTMLElement | null) => {
-    if (element) {
-      element.style.backgroundColor = 'var(--surface-color)';
-    }
-  }
-  
   // 動画クリック時に動画ページを開く
   const handleVideoClick = () => {
     if (disabled) return
@@ -104,13 +96,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
       data-video-id={item.id}
       className="ranking-item-responsive"
       style={{
-        // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
-        background: 'var(--surface-color)',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)',
-        border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
-        marginBottom: '8px',
+        // フラットリストデザイン: カード装飾なし、仕切り線のみ
+        background: 'transparent',
+        borderBottom: '1px solid var(--border-color)',
         cursor: disabled ? 'not-allowed' : 'pointer',
         transition: 'background-color 0.2s',
         position: 'relative',
@@ -132,7 +120,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         onMouseLeave={(e) => {
           // disabled状態またはタッチデバイスではホバー効果を適用しない
           if (disabled || 'ontouchstart' in window) return;
-          e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+          e.currentTarget.style.backgroundColor = 'transparent';
         }}
         onTouchEnd={(e) => {
           // disabled状態では何もしない
@@ -141,7 +129,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           const element = e.currentTarget;
           setTimeout(() => {
             if (element) {
-              element.style.backgroundColor = 'var(--surface-color)';
+              element.style.backgroundColor = 'transparent';
             }
           }, 100);
         }}
@@ -244,27 +232,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 {formatDuration(item.duration)}
               </div>
             )}
-            </div>
-            
-            {/* 新しいモバイル順位表示（サムネイル下部） */}
-            <div 
-              className="ranking-item-responsive__rank--mobile-bottom"
-              style={{
-                background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-                color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
-                '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-                '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
-              } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
-            >
-              <CrownIcon 
-                size={32}
-                rank={item.rank <= 3 ? (item.rank as 1 | 2 | 3) : undefined}
-                color={item.rank <= 3 ? 'currentColor' : undefined}
-                className="ranking-item-responsive__crown-icon"
-              />
-              <span style={{ fontWeight: '700', userSelect: 'none' }}>
-                {item.rank}
-              </span>
             </div>
           </div>
         )}

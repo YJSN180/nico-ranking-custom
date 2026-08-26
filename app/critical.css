@@ -37,12 +37,13 @@ body {
   word-break: break-word;
 }
 
-/* ランキングアイテム基本 */
+/* ランキングアイテム基本（フラットリスト: 仕切り線のみ） */
 [data-testid="ranking-item"] {
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  margin-bottom: 12px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 0;
+  margin-bottom: 0;
   /* padding はコンポーネント側で制御 */
 }
 

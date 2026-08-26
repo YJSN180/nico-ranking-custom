@@ -4,7 +4,7 @@
 
 /* 最適化: 共通値をCSS変数で定義（重複削減） */
 :root {
-  --mobile-thumbnail-width: 140px;
+  --mobile-thumbnail-width: 128px;
   --mobile-rank-size: 18px;
   --mobile-title-size: 14px;
   --mobile-gap: 8px;
@@ -14,7 +14,7 @@
 /* タッチデバイスでホバー効果を無効化 */
 @media (hover: none) and (pointer: coarse) {
   .ranking-item-responsive:hover {
-    background-color: var(--surface-color) !important;
+    background-color: transparent !important;
   }
 }
 
@@ -28,14 +28,14 @@
 .ranking-item-responsive__content {
   display: grid;
   gap: 12px;
-  padding: 4px;
-  
+  padding: 10px 4px;
+
   /* デスクトップレイアウト: rank + thumbnail + details + mylist-button を横並び */
   grid-template-columns: auto auto 1fr auto;
   grid-template-areas: "rank thumbnail details mylist-button";
   align-items: start;
   min-height: 80px;
-  
+
   /* 軽量最適化のみ - GPU負荷軽減 */
 }
 
@@ -54,23 +54,6 @@
 /* デスクトップでのみモバイル順位を非表示 */
 .ranking-item-responsive__rank--mobile {
   display: none;
-}
-
-/* 新しいモバイル順位表示（デスクトップでは非表示） */
-.ranking-item-responsive__rank--mobile-bottom {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-top: 16px;  /* 12pt = 16px */
-  border-radius: 6px;
-  font-size: 28px;  /* モバイル: 28px */
-  font-weight: 700;
-  text-align: center;
-  user-select: none;
-  background: var(--mobile-rank-bg);
-  color: var(--mobile-rank-color);
 }
 
 /* サムネイル */
@@ -218,34 +201,35 @@
     grid-template-columns: var(--mobile-thumbnail-width) 1fr;
     grid-template-areas: "thumbnail details";
     gap: var(--mobile-gap);
-    padding: 2px;
-    min-height: 75px;
+    padding: 8px 0;
+    min-height: 0;
   }
-  
+
   /* デスクトップ順位を非表示 */
   .ranking-item-responsive__rank--desktop {
     display: none !important;
   }
-  
-  /* 既存のモバイル順位オーバーレイを無効化 */
+
+  /* モバイル順位: サムネイル左上のオーバーレイバッジ */
   .ranking-item-responsive__rank--mobile {
-    display: none !important;
-  }
-  
-  /* 新しいモバイル順位表示（サムネイル下）を有効化 */
-  .ranking-item-responsive__rank--mobile-bottom {
     display: flex !important;
-    font-size: 16px;
-    padding: 4px 8px;
-    margin-top: 8px;
-    gap: 4px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 20px;
+    padding: 0 5px;
+    font-size: 12px;
+    line-height: 1;
+    border-radius: 4px 0 4px 0;
+    background: var(--mobile-rank-bg);
+    color: var(--mobile-rank-color);
+    opacity: 0.92;
   }
 
-  .ranking-item-responsive__crown-icon {
-    width: 20px !important;
-    height: 20px !important;
-  }
-  
   .ranking-item-responsive__thumbnail {
     grid-area: thumbnail;
     width: var(--mobile-thumbnail-width);
@@ -350,25 +334,19 @@
   .ranking-item-responsive__content {
     grid-template-columns: 100px 1fr;
     grid-template-areas: "thumbnail details";
-    padding: 2px;
+    padding: 8px 0;
     gap: 6px;
-    min-height: 70px;
+    min-height: 0;
   }
-  
-  /* 超モバイルでも新しいモバイル順位表示を使用 */
-  .ranking-item-responsive__rank--mobile-bottom {
-    font-size: 14px !important;
-    padding: 3px 6px !important;
-    gap: 4px !important;
-    margin-top: 6px !important;
+
+  /* 超モバイルでの順位オーバーレイ調整 */
+  .ranking-item-responsive__rank--mobile {
+    min-width: 20px;
+    height: 18px;
+    font-size: 11px;
+    padding: 0 4px;
   }
-  
-  /* 超モバイルでの王冠アイコンサイズ調整 */
-  .ranking-item-responsive__crown-icon {
-    width: 18px !important;
-    height: 18px !important;
-  }
-  
+
   .ranking-item-responsive__thumbnail {
     width: 100px;
     margin-top: 0;

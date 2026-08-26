@@ -12,13 +12,8 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
           data-testid="ranking-skeleton-item"
           className="ranking-item-responsive"
           style={{
-            containerType: 'inline-size',
-            background: 'var(--surface-color)',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            boxShadow: 'var(--shadow-md)',
-            border: '1px solid var(--border-color)',
-            marginBottom: '8px',
+            background: 'transparent',
+            borderBottom: '1px solid var(--border-color)',
             position: 'relative'
           }}
         >

@@ -4,8 +4,8 @@
 .mylist-video-item__content {
   display: grid;
   gap: 12px;
-  padding: 4px;
-  
+  padding: 10px 4px;
+
   /* デスクトップレイアウト: thumbnail + details を横並び、actionsは下部 */
   grid-template-columns: auto 1fr;
   grid-template-areas: 
@@ -216,23 +216,23 @@
   .mylist-video-item__content {
     /* モバイルレイアウト: サムネイル + 詳細、アクションは下部 */
     grid-template-columns: 120px 1fr;
-    grid-template-areas: 
+    grid-template-areas:
       "thumbnail details"
       "actions actions";
     gap: 8px;
-    padding: 2px;
-    min-height: 75px;
+    padding: 8px 0;
+    min-height: 0;
   }
-  
+
   /* 順位関連のスタイルは削除 */
-  
+
   .mylist-video-item__thumbnail {
     grid-area: thumbnail;
     width: 120px;
     position: relative;
     margin-top: 0;
   }
-  
+
   .mylist-video-item__details {
     grid-area: details;
     gap: 4px;
@@ -296,10 +296,10 @@
   
   .mylist-video-item__content {
     grid-template-columns: 100px 1fr;
-    grid-template-areas: 
+    grid-template-areas:
       "thumbnail details"
       "actions actions";
-    padding: 2px;
+    padding: 8px 0;
     gap: 6px;
     min-height: auto;
   }
@@ -354,12 +354,12 @@
     
     .mylist-video-item__content {
       grid-template-columns: 120px 1fr;
-      grid-template-areas: 
+      grid-template-areas:
         "thumbnail details"
         "actions actions";
       gap: 8px;
-      padding: 2px;
-      min-height: 75px;
+      padding: 8px 0;
+      min-height: 0;
     }
     
     /* 順位関連のスタイルは削除 */

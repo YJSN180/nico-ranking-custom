@@ -62,12 +62,9 @@ const MylistVideoItem = memo(function MylistVideoItem({
         style={{
           // Container Queries用のcontainment設定
           containerType: 'inline-size',
-          background: 'var(--surface-color)',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          boxShadow: 'var(--shadow-md)',
-          border: '1px solid var(--border-color)',
-          marginBottom: '8px',
+          // フラットリストデザイン: カード装飾なし、仕切り線のみ
+          background: 'transparent',
+          borderBottom: '1px solid var(--border-color)',
           cursor: 'pointer',
           transition: 'background-color 0.2s',
           position: 'relative'
@@ -85,7 +82,7 @@ const MylistVideoItem = memo(function MylistVideoItem({
           e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'var(--surface-color)';
+          e.currentTarget.style.backgroundColor = 'transparent';
         }}
       >
       <div className="mylist-video-item__content">
