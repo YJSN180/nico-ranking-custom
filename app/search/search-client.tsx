@@ -15,6 +15,7 @@ import {
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
+import '@/components/ranking-item-responsive.css'
 import './search.css'
 
 interface SearchApiResponse {
