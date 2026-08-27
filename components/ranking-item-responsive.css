@@ -4,10 +4,11 @@
 
 /* 最適化: 共通値をCSS変数で定義（重複削減） */
 :root {
-  --mobile-thumbnail-width: 128px;
+  /* 案A: サムネ拡大 + 情報圧縮で行の高さをサムネに一致させる */
+  --mobile-thumbnail-width: 148px;
   --mobile-rank-size: 18px;
-  --mobile-title-size: 15px;
-  --mobile-gap: 10px;
+  --mobile-title-size: 14.5px;
+  --mobile-gap: 8px;
   --mobile-duration-size: 11px;
 }
 
@@ -159,6 +160,9 @@
 
 .ranking-item-responsive__stat {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 /* マイリストボタン・NGボタンエリア */
@@ -203,6 +207,8 @@
     gap: var(--mobile-gap);
     padding: 8px 0;
     min-height: 0;
+    /* サムネの高さに情報列を揃える（案A: 行の高さ = サムネの高さ） */
+    align-items: stretch;
   }
 
   /* デスクトップ順位を非表示 */
@@ -239,8 +245,10 @@
   
   .ranking-item-responsive__details {
     grid-area: details;
-    gap: 4px;
+    gap: 3px;
     overflow: hidden;
+    /* サムネ高さに合わせて情報を均等配置 */
+    justify-content: space-between;
   }
   
   /* モバイルでタイトル行を追加（タイトル + 3点メニュー） */
@@ -263,13 +271,13 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    line-height: 1.35;
+    line-height: 1.32;
     flex: 1;
     min-width: 0;
   }
 
   .ranking-item-responsive__author {
-    font-size: 12px;
+    font-size: 11.5px;
     gap: 4px;
     margin-bottom: 0;
   }
@@ -284,14 +292,25 @@
   }
 
   .ranking-item-responsive__date {
-    font-size: 12px;
+    font-size: 11.5px;
   }
 
+  /* 統計は1行固定（折り返すと行の高さが崩れるため） */
   .ranking-item-responsive__stats {
-    font-size: 12px;
-    gap: 10px;
-    flex-wrap: wrap;
-    overflow-x: visible;
+    font-size: 11px;
+    gap: 5px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .ranking-item-responsive__stat {
+    gap: 2px;
+  }
+
+  /* 統計アイコン（絵文字）を一回り小さくして横幅の安全マージンを確保 */
+  .ranking-item-responsive__stat > span[aria-hidden='true'] {
+    font-size: 10px;
   }
 
   /* モバイルでのマイリストエリア調整 */
@@ -308,22 +327,22 @@
   }
 }
 
-/* Media Query: 420px以下で超モバイルレイアウト (Container Query → Media Query最適化) */
-@media (max-width: 420px) {
-  /* 超モバイルでの再生時間フォントサイズ調整 */
+/* Media Query: 360px以下の小型端末レイアウト（375px以上は基本モバイルレイアウトを使用） */
+@media (max-width: 360px) {
+  /* 小型端末での再生時間フォントサイズ調整 */
   .ranking-item-responsive__duration {
     font-size: 10px;
   }
-  
+
   .ranking-item-responsive__content {
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 128px 1fr;
     grid-template-areas: "thumbnail details";
     padding: 8px 0;
     gap: 6px;
     min-height: 0;
   }
 
-  /* 超モバイルでの順位オーバーレイ調整 */
+  /* 小型端末での順位オーバーレイ調整 */
   .ranking-item-responsive__rank--mobile {
     min-width: 20px;
     height: 18px;
@@ -332,15 +351,15 @@
   }
 
   .ranking-item-responsive__thumbnail {
-    width: 100px;
+    width: 128px;
     margin-top: 0;
     position: relative;
   }
-  
+
   .ranking-item-responsive__title {
-    font-size: 12.5px;
+    font-size: 13px;
   }
-  
+
   .ranking-item-responsive__author {
     font-size: 11px;
   }

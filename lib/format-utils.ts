@@ -25,6 +25,14 @@ export function formatNumber(num: number): string {
 
 // モバイル用の数値フォーマット
 export function formatNumberMobile(num: number): string {
+  // 統計行を1行に収めるため、大きい数値ほど桁を圧縮する
+  // （10万以上は小数省略: 33.3万 → 33万、1億以上は億表記）
+  if (num >= 100000000) {
+    return `${Math.floor(num / 10000000) / 10}億`
+  }
+  if (num >= 100000) {
+    return `${Math.round(num / 10000)}万`
+  }
   if (num >= 10000) {
     return `${Math.floor(num / 1000) / 10}万`
   }

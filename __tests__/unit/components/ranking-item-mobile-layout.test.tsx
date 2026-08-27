@@ -111,10 +111,14 @@ describe('RankingItemResponsive - モバイルレイアウト', () => {
     expect(statsClass).toContain('ranking-item-responsive__stats')
     
     // 全ての統計情報が表示されていることを確認
-    expect(screen.getByText(/▶️ 5.6万/)).toBeInTheDocument()
-    expect(screen.getByText(/💬 2,200/)).toBeInTheDocument() // formatNumberMobileは2200をそのまま表示
-    expect(screen.getByText(/❤️ 2,199/)).toBeInTheDocument()
-    expect(screen.getByText(/📁 2,199/)).toBeInTheDocument()
+    // アイコンは aria-hidden の別要素に分離されているため、値のテキストのみを検証する
+    expect(screen.getByText('▶️')).toBeInTheDocument()
+    expect(screen.getByText('5.6万')).toBeInTheDocument()
+    expect(screen.getByText('💬')).toBeInTheDocument()
+    expect(screen.getByText('2,200')).toBeInTheDocument() // formatNumberMobileは2200をそのまま表示
+    expect(screen.getByText('❤️')).toBeInTheDocument()
+    expect(screen.getAllByText('2,199')).toHaveLength(2) // likes と mylists が同値
+    expect(screen.getByText('📁')).toBeInTheDocument()
     
     // TODO: 横スクロールを削除する実装が必要
     // 現在のCSSでは overflow-x: auto が設定されている

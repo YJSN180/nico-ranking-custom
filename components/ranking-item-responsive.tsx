@@ -379,16 +379,20 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             data-testid="video-stats"
           >
             <span className="ranking-item-responsive__stat">
-              ▶️ {formatNumberMobile(item.views)}
+              <span aria-hidden="true">▶️</span>
+              {formatNumberMobile(item.views)}
             </span>
             <span className="ranking-item-responsive__stat">
-              💬 {formatNumberMobile(item.comments || 0)}
+              <span aria-hidden="true">💬</span>
+              {formatNumberMobile(item.comments || 0)}
             </span>
             <span className="ranking-item-responsive__stat">
-              ❤️ {formatNumberMobile(item.likes || 0)}
+              <span aria-hidden="true">❤️</span>
+              {formatNumberMobile(item.likes || 0)}
             </span>
             <span className="ranking-item-responsive__stat">
-              📁 {formatNumberMobile(item.mylists || 0)}
+              <span aria-hidden="true">📁</span>
+              {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
           
