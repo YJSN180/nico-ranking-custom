@@ -411,6 +411,6 @@
 
 @media (max-width: 360px) {
   .search-results .ranking-item-responsive__content {
-    grid-template-columns: 128px 1fr;
+    grid-template-columns: 116px 1fr;
   }
 }

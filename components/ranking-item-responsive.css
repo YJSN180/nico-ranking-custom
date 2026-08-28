@@ -4,8 +4,8 @@
 
 /* 最適化: 共通値をCSS変数で定義（重複削減） */
 :root {
-  /* 案A: サムネ拡大 + 情報圧縮で行の高さをサムネに一致させる */
-  --mobile-thumbnail-width: 148px;
+  /* モバイルのサムネは画面幅の約1/3（公式アプリと同等の比率） */
+  --mobile-thumbnail-width: 124px;
   --mobile-rank-size: 18px;
   --mobile-title-size: 14.5px;
   --mobile-gap: 8px;
@@ -124,6 +124,15 @@
   gap: 6px;
   font-size: 14px;
   color: var(--text-secondary);
+  /* 日付がはみ出さないよう、行全体と投稿者リンク側を縮小可能にする */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ranking-item-responsive__author > a {
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .ranking-item-responsive__author-name {
@@ -131,6 +140,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .ranking-item-responsive__author-name:hover {
@@ -287,8 +298,9 @@
     display: none;
   }
 
+  /* モバイルでは固定上限を外し、日付が収まる分だけ名前を縮める */
   .ranking-item-responsive__author-name {
-    max-width: 130px;
+    max-width: none;
   }
 
   .ranking-item-responsive__date {
@@ -335,7 +347,7 @@
   }
 
   .ranking-item-responsive__content {
-    grid-template-columns: 128px 1fr;
+    grid-template-columns: 116px 1fr;
     grid-template-areas: "thumbnail details";
     padding: 8px 0;
     gap: 6px;
@@ -351,7 +363,7 @@
   }
 
   .ranking-item-responsive__thumbnail {
-    width: 128px;
+    width: 116px;
     margin-top: 0;
     position: relative;
   }
