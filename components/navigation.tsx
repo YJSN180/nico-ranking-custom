@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
@@ -61,6 +61,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
   const [isTouching, setIsTouching] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -68,9 +69,19 @@ export function Navigation() {
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   
+  // 退場アニメーション付きでメニューを閉じる
+  const closeMenu = useCallback(() => {
+    if (!isOpen || isClosing) return
+    setIsClosing(true)
+    setTimeout(() => {
+      setIsOpen(false)
+      setIsClosing(false)
+    }, 180)
+  }, [isOpen, isClosing])
+
   // 設定モーダルを開く関数
   const openSettings = () => {
-    setIsOpen(false)
+    closeMenu()
     // 設定モーダルを開くイベントを発火
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('openSettings'))
@@ -88,13 +99,13 @@ export function Navigation() {
         buttonRef.current &&
         !buttonRef.current.contains(event.target as Node)
       ) {
-        setIsOpen(false)
+        closeMenu()
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
+  }, [isOpen, closeMenu])
 
   // Escapeキーで閉じる
   useEffect(() => {
@@ -102,14 +113,14 @@ export function Navigation() {
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsOpen(false)
+        closeMenu()
         buttonRef.current?.focus()
       }
     }
 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [isOpen])
+  }, [isOpen, closeMenu])
 
   // サイドドロワー表示時のボディスクロール制御
   useEffect(() => {
@@ -173,20 +184,20 @@ export function Navigation() {
         </button>
 
         {/* モバイルメニュー（サイドドロワー） */}
-        {isOpen && (
+        {(isOpen || isClosing) && (
           <>
             {/* 背景オーバーレイ */}
             <div
-              onClick={() => setIsOpen(false)}
+              onClick={() => closeMenu()}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
-                  setIsOpen(false)
+                  closeMenu()
                 }
               }}
               aria-label="メニューを閉じる（背景をタップ）"
-              className={styles.overlay}
+              className={`${styles.overlay}${isClosing ? ` ${styles.overlayClosing}` : ''}`}
             />
 
             {/* サイドメニュー */}
@@ -195,7 +206,7 @@ export function Navigation() {
               id="navigation-menu"
               role="navigation"
               aria-label="メインナビゲーション"
-              className={styles.drawer}
+              className={`${styles.drawer}${isClosing ? ` ${styles.drawerClosing}` : ''}`}
             >
               <div className={styles.drawerContent}>
                 <div className={styles.drawerHeader}>
@@ -203,7 +214,7 @@ export function Navigation() {
                     メニュー
                   </h2>
                   <button
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => closeMenu()}
                     aria-label="メニューを閉じる"
                     className={styles.closeButton}
                   >
@@ -229,7 +240,7 @@ export function Navigation() {
                           ) : (
                             <Link
                               href={item.href}
-                              onClick={() => setIsOpen(false)}
+                              onClick={() => closeMenu()}
                               onMouseEnter={() => {
                                 if (item.href === '/mylists') {
                                   router.prefetch('/mylists')
@@ -298,7 +309,7 @@ export function Navigation() {
                             href={item.href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => setIsOpen(false)}
+                            onClick={() => closeMenu()}
                             className="nav-link-mobile"
                             style={{
                               display: 'flex',
@@ -324,7 +335,7 @@ export function Navigation() {
                                     href={subItem.href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    onClick={() => setIsOpen(false)}
+                                    onClick={() => closeMenu()}
                                     className="nav-link-mobile"
                                     style={{
                                       display: 'flex',
@@ -362,7 +373,7 @@ export function Navigation() {
                         <li key={item.href}>
                           <Link
                             href={item.href}
-                            onClick={() => setIsOpen(false)}
+                            onClick={() => closeMenu()}
                             className="nav-link-mobile"
                             style={{
                               display: 'flex',
@@ -409,13 +420,13 @@ export function Navigation() {
       </button>
 
       {/* ドロップダウンメニュー */}
-      {isOpen && (
+      {(isOpen || isClosing) && (
         <nav
           ref={menuRef}
           id="navigation-dropdown"
           role="navigation"
           aria-label="メインナビゲーション"
-          className={styles.dropdown}
+          className={`${styles.dropdown}${isClosing ? ` ${styles.dropdownClosing}` : ''}`}
         >
           <div className={styles.menuContent}>
             {/* メインセクション */}
@@ -435,7 +446,7 @@ export function Navigation() {
                     ) : (
                       <Link
                         href={item.href}
-                        onClick={() => setIsOpen(false)}
+                        onClick={() => closeMenu()}
                         onMouseEnter={() => {
                           if (item.href === '/mylists') {
                             router.prefetch('/mylists')
@@ -461,7 +472,7 @@ export function Navigation() {
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={() => setIsOpen(false)}
+                      onClick={() => closeMenu()}
                       className="nav-link-desktop"
                       style={{
                         display: 'flex',
@@ -487,7 +498,7 @@ export function Navigation() {
                               href={subItem.href}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={() => setIsOpen(false)}
+                              onClick={() => closeMenu()}
                               className="nav-link-desktop"
                               style={{
                                 display: 'flex',
@@ -524,7 +535,7 @@ export function Navigation() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      onClick={() => setIsOpen(false)}
+                      onClick={() => closeMenu()}
                       className="nav-link-desktop"
                       style={{
                         display: 'flex',

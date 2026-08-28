@@ -344,3 +344,22 @@ button,
     padding-right: 12px !important;
   }
 }
+
+/* ===== モーショントークン（UX改善計画 フェーズ2） ===== */
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* reduced-motion 環境ではすべてのアニメーション・トランジションを実質無効化 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

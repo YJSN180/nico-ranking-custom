@@ -343,3 +343,36 @@
   display: flex;
   gap: 8px;
 }
+/* 退場アニメーション（UX改善計画 フェーズ2） */
+.overlayClosing {
+  animation: fadeOut 0.18s ease-in forwards;
+}
+
+.drawerClosing {
+  animation: slideOut 0.18s ease-in forwards;
+}
+
+.dropdownClosing {
+  animation: dropOut 0.18s ease-in forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes dropOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}

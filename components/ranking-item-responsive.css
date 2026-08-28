@@ -12,10 +12,15 @@
   --mobile-duration-size: 11px;
 }
 
-/* タッチデバイスでホバー効果を無効化 */
+/* タッチデバイスでホバー効果を無効化し、タップ時のフィードバックを付ける */
 @media (hover: none) and (pointer: coarse) {
   .ranking-item-responsive:hover {
     background-color: transparent !important;
+  }
+
+  .ranking-item-responsive:active {
+    background-color: var(--surface-hover) !important;
+    transition: background-color var(--motion-fast, 150ms) var(--ease-out, ease-out);
   }
 }
 
