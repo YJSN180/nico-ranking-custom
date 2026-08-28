@@ -252,11 +252,13 @@
     width: var(--mobile-thumbnail-width);
     position: relative;
     margin-top: 0;
+    /* テキスト側との高さ差を上下に分散して余白を目立たなくする */
+    align-self: center;
   }
-  
+
   .ranking-item-responsive__details {
     grid-area: details;
-    gap: 3px;
+    gap: 2px;
     overflow: hidden;
     /* サムネ高さに合わせて情報を均等配置 */
     justify-content: space-between;
@@ -282,15 +284,18 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    line-height: 1.32;
+    line-height: 1.25;
     flex: 1;
     min-width: 0;
+    /* タイトルが1行でも常に2行分の高さを確保し、投稿者行・統計行の位置を全行で揃える */
+    min-height: 2.5em;
   }
 
   .ranking-item-responsive__author {
     font-size: 11.5px;
     gap: 4px;
     margin-bottom: 0;
+    line-height: 1.3;
   }
 
   /* アプリ風レイアウト: モバイルでは投稿者アイコンを非表示 */
@@ -314,6 +319,7 @@
     flex-wrap: nowrap;
     overflow: hidden;
     white-space: nowrap;
+    line-height: 1.3;
   }
 
   .ranking-item-responsive__stat {
