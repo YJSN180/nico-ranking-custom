@@ -60,8 +60,8 @@ export function OptimizedImage({
   
   // ニコニコ動画サムネイルは直接表示（Next.js最適化バイパス）
   if (isNicoThumbnail) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imgSrc}
         alt={hasError ? '視聴できません' : alt}
@@ -69,6 +69,14 @@ export function OptimizedImage({
         height={height}
         style={style}
         loading={loading}
+        decoding="async"
+        // LCP改善: 上位表示のサムネイルは優先取得（fetchpriority は
+        // React 18 の型定義に無いため属性として直接設定する）
+        ref={(el) => {
+          if (el) {
+            el.setAttribute('fetchpriority', priority ? 'high' : 'auto')
+          }
+        }}
         className={className}
         onClick={onClick}
         onError={handleError}

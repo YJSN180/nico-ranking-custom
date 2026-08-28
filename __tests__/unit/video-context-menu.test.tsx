@@ -117,9 +117,9 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     })
   })
 
-  it('APIエラーの場合、エラーアラートが表示される', async () => {
+  it('APIエラーの場合、エラートーストが発火される', async () => {
     const videoWithoutThumb = { ...mockVideo, thumbURL: undefined }
-    
+
     // API エラーのモック
     vi.mocked(global.fetch)
       .mockReset()
@@ -127,8 +127,12 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
       ok: false,
     } as Response)
 
-    // alert のモック
-    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    // トーストイベントの監視
+    const toastEvents: Array<{ message: string; type: string }> = []
+    const handleToast = (event: Event) => {
+      toastEvents.push((event as CustomEvent).detail)
+    }
+    window.addEventListener('app:toast', handleToast)
 
     render(
       <VideoContextMenu video={videoWithoutThumb}>
@@ -139,7 +143,7 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     // メニューを開く
     const content = screen.getByText('テストコンテンツ')
     fireEvent.touchStart(content, { touches: [{ clientX: 100, clientY: 100 }] })
-    
+
     await waitFor(() => {
       expect(screen.getByText('サムネイル保存')).toBeInTheDocument()
     })
@@ -149,11 +153,14 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     fireEvent.click(saveButton)
 
     await waitFor(() => {
-      // エラーアラートが表示されることを確認
-      expect(alertMock).toHaveBeenCalledWith('サムネイルの取得に失敗しました')
+      // エラートーストが発火されることを確認
+      expect(toastEvents).toContainEqual({
+        message: 'サムネイルの取得に失敗しました',
+        type: 'error',
+      })
     })
 
-    alertMock.mockRestore()
+    window.removeEventListener('app:toast', handleToast)
   })
   
   it('プロキシAPIが利用できない場合は新しいタブで画像を開く', async () => {

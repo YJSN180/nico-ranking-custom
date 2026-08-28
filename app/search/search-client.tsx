@@ -8,6 +8,7 @@ import { TagAutocompleteInput } from '@/components/tag-autocomplete-input'
 import { TagDisplayProvider } from '@/contexts/tag-display-context'
 import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
+import { showToast } from '@/lib/toast'
 import {
   addSavedSearch,
   loadSavedSearches,
@@ -409,6 +410,9 @@ export function SearchClient() {
       if (wasAdded) {
         updated.totalCount = ngList.totalCount + 1
         saveNGListDirectly(updated)
+        showToast(`NGリストに追加しました: ${trimmedValue}`)
+      } else {
+        showToast(`すでにNGリストに登録済みです: ${trimmedValue}`, 'info')
       }
     },
     [ngList, saveNGListDirectly]
@@ -433,7 +437,7 @@ export function SearchClient() {
   const handleSaveCurrent = useCallback(() => {
     const query = buildQueryParams(form, 1).toString()
     if (!query) {
-      alert('保存する条件がありません。キーワードや詳細条件を指定してください。')
+      showToast('保存する条件がありません。キーワードや詳細条件を指定してください。', 'error')
       return
     }
     const defaultName =
@@ -443,6 +447,7 @@ export function SearchClient() {
     const next = addSavedSearch(savedSearches, name, query)
     setSavedSearches(next)
     persistSavedSearches(next)
+    showToast(`検索条件「${name.trim()}」を保存しました`)
   }, [form, savedSearches])
 
   const handleLoadSaved = useCallback(
@@ -460,6 +465,7 @@ export function SearchClient() {
       const next = removeSavedSearch(savedSearches, saved.id)
       setSavedSearches(next)
       persistSavedSearches(next)
+      showToast(`保存した検索「${saved.name}」を削除しました`, 'info')
     },
     [savedSearches]
   )

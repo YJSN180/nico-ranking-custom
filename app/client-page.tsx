@@ -33,7 +33,7 @@ import { useBFCacheRefresh, usePWAResumeRefresh } from '@/hooks/use-bfcache-refr
 import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
 import { serverLog } from '@/lib/server-log'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
-import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
+import { showToast } from '@/lib/toast'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
 import { ScrollToTopButton } from '@/components/scroll-to-top-button'
@@ -185,7 +185,6 @@ export default function ClientPage({
   
   // PWAリロード機能
   const { isPulling, pullDistance } = usePullToRefresh()
-  useKeyboardShortcuts()
 
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
@@ -1024,30 +1023,10 @@ export default function ClientPage({
     if (wasAdded) {
       // NGリストを保存
       saveNGListDirectly(updatedNGList)
-      
-      // ユーザーフィードバック（簡易版）
-      const message = `🚫 NGリストに追加しました: ${displayValue}`
-      
-      // 一時的な通知を表示（シンプルなアラート）
-      // TODO: より良いトースト通知システムを実装予定
-      if (window.confirm(`${message}\n\nOKをクリックして続行してください。`)) {
-        // ユーザーが確認した場合の処理（特に何もしない）
-      }
-      
-      // デバッグ情報（開発時のみ）
-      if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
-        console.log('QuickNG: Added to NG list', {
-          type,
-          value: trimmedValue,
-          video: { id: video.id, title: video.title, author: video.authorName },
-          totalCount: updatedNGList.totalCount
-        })
-      }
+      showToast(`NGリストに追加しました: ${displayValue}`)
     } else {
       // すでに追加済みの場合
-      const existingMessage = `⚠️ すでにNGリストに登録済みです: ${displayValue}`
-      alert(existingMessage)
+      showToast(`すでにNGリストに登録済みです: ${displayValue}`, 'info')
     }
   }, [ngList, saveNGListDirectly])
 

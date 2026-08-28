@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useMylistOperations } from '@/context/mylist-operations-context'
 import { MylistModal } from './mylist-modal'
+import { showToast } from '@/lib/toast'
 import type { RankingItem } from '@/types/ranking'
 import './mylist-button.css'
 
@@ -52,16 +53,7 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
-    
-    // デバッグログ
-    // eslint-disable-next-line no-console
-    console.log('[MylistButton] clicked', { 
-      isInMylist, 
-      mylists: mylists?.length || 0, 
-      mylistIds: Array.isArray(mylistIds) ? mylistIds : [],
-      isLoading 
-    })
-    
+
     // 常にモーダルを表示（登録済みでも未登録でも）
     setShowModal(true)
   }
@@ -106,21 +98,18 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
       if (success) {
         setIsInMylist(true)
         setMylistIds([...mylistIds, mylistId])
+        showToast('マイリストに追加しました')
         // モーダルは開いたままにする（削除）
+      } else {
+        showToast('マイリストへの追加に失敗しました', 'error')
       }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to add to mylist:', error)
+      showToast('マイリストへの追加に失敗しました', 'error')
     } finally {
       setIsProcessing(false)
     }
-  }
-
-  // テスト環境でのデバッグログ
-  // @ts-ignore
-  if (typeof window !== 'undefined' && window.__TEST_ENV__) {
-    // eslint-disable-next-line no-console
-    console.log('[MylistButton] Debug:', { isClient, isLoading, mylists: mylists.length })
   }
 
   // SSR時またはクライアント側の初期化前はプレースホルダーを表示

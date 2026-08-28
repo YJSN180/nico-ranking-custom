@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { MylistOperationsProvider } from '@/context/mylist-operations-context'
 import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { OfflineIndicator } from '@/components/offline-indicator'
+import { ToastViewport } from '@/components/toast-viewport'
 import { ServiceWorkerClearer } from '@/components/sw-cache-clearer'
 import './globals.css'
 
@@ -143,6 +144,7 @@ export default function RootLayout({
           <MylistOperationsProvider>
             <ClientOnlyWebVitals />
             <OfflineIndicator />
+            <ToastViewport />
             {children}
             {process.env.NODE_ENV !== 'test' && <Analytics />}
             {process.env.NODE_ENV !== 'test' && <SpeedInsights />}

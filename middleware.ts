@@ -11,6 +11,11 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
+
+  // デバッグ用ルートは本番では公開しない
+  if (pathname.startsWith('/test-') && process.env.NODE_ENV === 'production') {
+    return new NextResponse(null, { status: 404 })
+  }
   
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
