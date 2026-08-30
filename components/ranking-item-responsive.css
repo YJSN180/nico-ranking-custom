@@ -417,6 +417,27 @@
   }
 }
 
+/* フェーズ2.5-3: 画面外の行の描画をスキップしてモバイルの初回描画・スクロールを軽くする。
+   content-visibility の contain(layout/paint) は、行内から開くUI
+   （⋮ドロップダウン・タグ長押しメニュー）を行の箱に閉じ込めてしまうため、
+   :has() で「開いている行」だけ containment を解除する。
+   :has 非対応ブラウザでは全体を有効化しない（@supports ゲート）。
+   デスクトップはNGポップオーバー(fixed)が行内にあるため適用しない */
+@media (max-width: 640px) {
+  @supports selector(:has(a)) {
+    .ranking-item-responsive {
+      content-visibility: auto;
+      /* 概算の行高（サムネ70px + 上下padding 16px + 下線1px）。auto で実測値に自己補正される */
+      contain-intrinsic-size: auto 87px;
+    }
+
+    .ranking-item-responsive:has(.item-action-menu__dropdown),
+    .ranking-item-responsive:has(.tag-context-menu) {
+      content-visibility: visible;
+    }
+  }
+}
+
 /* Media Query: 360px以下の小型端末レイアウト（375px以上は基本モバイルレイアウトを使用） */
 @media (max-width: 360px) {
   /* 小型端末での再生時間フォントサイズ調整 */

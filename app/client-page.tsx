@@ -45,6 +45,9 @@ import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
+  /** SSR側で把握している総件数。initialData.items がこれより少ない場合、
+      1ページ目のみの埋め込み（フェーズ2.5-1）なので残りを /api/ranking/full で補完する */
+  initialTotalCount?: number
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -143,6 +146,7 @@ const detectPageReload = (): boolean => {
 
 export default function ClientPage({
   initialData,
+  initialTotalCount,
   initialGenre = 'all',
   initialPeriod = '24h',
   initialTag,
@@ -250,6 +254,46 @@ export default function ClientPage({
   useEffect(() => {
     configRef.current = config
   }, [config])
+
+  // フェーズ2.5-1: SSRはランキングの1ページ目のみHTMLに埋め込むため、
+  // マウント後に残り全件をバックグラウンドで補完する（完了後は従来どおり
+  // クライアント側slice でページ切替が即時になる）
+  const [isFullDataPending, setIsFullDataPending] = useState(
+    () => (initialTotalCount ?? 0) > (initialData.items?.length || 0)
+  )
+  useEffect(() => {
+    if (!isFullDataPending) return
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({ genre: initialGenre, period: initialPeriod })
+    if (initialTag) params.set('tag', initialTag)
+
+    fetch(`/api/ranking/full?${params.toString()}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then((data: { items?: RankingItem[] }) => {
+        if (controller.signal.aborted) return
+        // 補完中にジャンル等が変わっていたら破棄（変更時は通常フェッチが全件を取得する）
+        const current = configRef.current
+        const unchanged =
+          current.genre === initialGenre &&
+          current.period === initialPeriod &&
+          current.tag === initialTag
+        if (unchanged && Array.isArray(data.items) && data.items.length > 0) {
+          setFullRankingData([...data.items].sort((a, b) => a.rank - b.rank))
+        }
+        setIsFullDataPending(false)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setIsFullDataPending(false)
+      })
+
+    return () => controller.abort()
+    // 初回マウント時に一度だけ実行する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // BFCache/PWA復元時のデータリフレッシュ用コールバック
   const handleBFCacheRefresh = useCallback(() => {
@@ -1302,22 +1346,30 @@ export default function ClientPage({
     
     // 総ページ数を計算
     const calculatedTotalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
-    
+
+    // 全件補完（フェーズ2.5-1）の完了前は、SSRが把握している総件数から
+    // ページ数を推定してページネーションを先に正しく表示する
+    // （時間範囲フィルタ適用中は実データ基準を優先する）
+    const pendingTotalPages =
+      isFullDataPending && !isShowingCustomRanking && initialTotalCount && totalCount === totalBeforeTime
+        ? Math.ceil(initialTotalCount / ITEMS_PER_PAGE)
+        : 0
+
     // 現在のページのアイテムを抽出
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
     const pageItems = timeFilteredItems.slice(startIndex, endIndex)
-    
+
     // ページ内のアイテムをそのまま返す（rankは既にfilterWithNGListで再計算済み）
     const result = pageItems
-    
+
     return {
       displayItems: result,
-      totalPages: calculatedTotalPages,
+      totalPages: Math.max(calculatedTotalPages, pendingTotalPages),
       totalItemsCount: totalCount,
       totalBeforeTimeFilter: totalBeforeTime
     }
-  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange])
+  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange, isFullDataPending, initialTotalCount])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -1326,6 +1378,11 @@ export default function ClientPage({
   const finalDisplayItems = displayItems
   const isUpdating = false
   const lastUpdated = null
+
+  // 全件補完の完了前に2ページ目以降が要求された場合はローディング表示にする
+  // （補完データ到着後に該当ページが slice されて表示される）
+  const waitingForFullData =
+    isFullDataPending && !isShowingCustomRanking && currentPage > 1 && displayItems.length === 0
   
   // レンダリング
   try {
@@ -1358,7 +1415,7 @@ export default function ClientPage({
         </div>
       </div>
       
-      {(loading || (error === '読み込み中...')) && (
+      {(loading || waitingForFullData || (error === '読み込み中...')) && (
         <div className="loading-container">
           <div style={{ 
             fontSize: '16px', 
@@ -1402,7 +1459,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
+      {!loading && !waitingForFullData && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
