@@ -22,6 +22,7 @@
   overflow: hidden;
   box-shadow: var(--shadow-md);
   margin-bottom: 8px;
+  padding: 16px;
   transition: background-color 0.2s;
 }
 
@@ -40,12 +41,22 @@
   overflow: visible;
   box-shadow: none;
   margin-bottom: 0;
+  padding: 0;
 }
 
-/* PC幅のフラット行はカードのpaddingより広めに取る（モバイルは640px MQ側で制御） */
+/* PC幅のフラット行（検索ページ）: paddingを広めに取り、タイトルは2行折返し */
 @media (min-width: 641px) {
   .ranking-item-responsive--flat .ranking-item-responsive__content {
     padding: 10px 4px;
+  }
+
+  .ranking-item-responsive--flat .ranking-item-responsive__title {
+    -webkit-line-clamp: 2;
+    margin-bottom: 0;
+  }
+
+  .ranking-item-responsive--flat .ranking-item-responsive__details {
+    overflow: visible;
   }
 }
 
@@ -110,8 +121,9 @@
 }
 
 /* コンテンツエリア */
-/* 注意: overflow: hidden を付けないこと（3点メニューのドロップダウンが行の外に
-   展開できなくなる）。テキストの省略は各子要素側で処理している */
+/* 注意: モバイル(≤640px)とflatでは overflow: visible を維持すること
+   （3点メニューのドロップダウンが行の外に展開できなくなるため）。
+   デスクトップのカード表示のみ main と同じ overflow: hidden */
 .ranking-item-responsive__details {
   grid-area: details;
   display: flex;
@@ -119,6 +131,7 @@
   gap: 6px;
   min-width: 0; /* text-overflow: ellipsis のため */
   justify-content: flex-start;
+  overflow: hidden;
 }
 
 /* タイトル行（デスクトップでは通常のレイアウト） */
@@ -133,7 +146,7 @@
   min-width: 0;
 }
 
-/* タイトル */
+/* タイトル（デスクトップは main と同じ1行省略。モバイル・検索flatは2行折返し） */
 .ranking-item-responsive__title {
   color: var(--link-color);
   text-decoration: none;
@@ -141,9 +154,10 @@
   font-weight: 600;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-bottom: 6px;
   word-break: break-word;
 }
 
@@ -260,6 +274,7 @@
     overflow: visible;
     box-shadow: none;
     margin-bottom: 0;
+    padding: 0;
   }
 
   /* モバイルでの再生時間フォントサイズ調整 */
@@ -317,6 +332,8 @@
     gap: 2px;
     /* サムネ高さに合わせて情報を均等配置 */
     justify-content: space-between;
+    /* 3点メニューのドロップダウンが行の外に展開できるようにする */
+    overflow: visible;
   }
   
   /* モバイルでタイトル行を追加（タイトル + 3点メニュー） */
