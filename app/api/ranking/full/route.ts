@@ -18,18 +18,20 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({ genre, period })
   if (tag) params.set('tag', tag)
 
-  const gatewayBase = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
-  const upstreamUrl = new URL('/api/ranking', gatewayBase)
+  // SSR(page.tsx)と同じく同一オリジンの /api/ranking を経由する。
+  // preview では既存プロキシ（許可済みUA）、本番では301追従でゲートウェイに届く。
+  // ゲートウェイ直フェッチは Cloudflare 側の保護で 403 になる（実測）
+  const upstreamUrl = new URL('/api/ranking', request.nextUrl.origin)
   params.forEach((value, key) => upstreamUrl.searchParams.set(key, value))
 
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000)
     const response = await fetch(upstreamUrl.toString(), {
+      // ヘッダーはSSR(page.tsx)のフェッチと同一にする（実績のある組み合わせ）
       headers: {
         Accept: 'application/json',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'User-Agent': 'nico-ranking-hydrate/1.0'
+        'Accept-Encoding': 'gzip, deflate, br'
       },
       cache: 'no-store',
       signal: controller.signal
