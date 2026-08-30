@@ -12,8 +12,7 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
           data-testid="ranking-skeleton-item"
           className="ranking-item-responsive"
           style={{
-            background: 'transparent',
-            borderBottom: '1px solid var(--border-color)',
+            // 背景・枠線はCSS側で制御（PC=カード / モバイル=仕切り線のみ）
             position: 'relative'
           }}
         >

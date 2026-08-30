@@ -1,10 +1,44 @@
 /* マイリスト動画アイテム - ランキングリストと統一されたデザイン */
 /* Container Queriesによるレスポンシブ対応 */
 
+/* 行のベース: PCは従来のカードデザイン、モバイル(≤640px)は仕切り線のみのフラット
+   （row自身がcontainerのため、rootの切り替えはviewport Media Queryで行う） */
+.mylist-video-item {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 8px;
+  transition: background-color 0.2s;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .mylist-video-item:hover {
+    background-color: var(--surface-hover);
+  }
+}
+
+@media (max-width: 640px) {
+  .mylist-video-item {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+    margin-bottom: 0;
+  }
+
+  .mylist-video-item:hover {
+    background-color: transparent;
+  }
+}
+
 .mylist-video-item__content {
   display: grid;
   gap: 12px;
-  padding: 10px 4px;
+  padding: 4px;
 
   /* デスクトップレイアウト: thumbnail + details を横並び、actionsは下部 */
   grid-template-columns: auto 1fr;

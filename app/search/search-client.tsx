@@ -847,7 +847,7 @@ export function SearchClient() {
               {filteredItems.map((item) => (
                 <li key={item.id} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   <VideoContextMenu video={item}>
-                    <RankingItemResponsive item={item} hideRank onQuickNGAdd={handleQuickNGAdd} />
+                    <RankingItemResponsive item={item} hideRank flat onQuickNGAdd={handleQuickNGAdd} />
                   </VideoContextMenu>
                 </li>
               ))}

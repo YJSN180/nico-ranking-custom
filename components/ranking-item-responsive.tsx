@@ -21,13 +21,15 @@ interface RankingItemProps {
   onQuickNGAdd?: (video: RankingItem, type: NGType, value: string | string[]) => void
   /** 検索結果など順位が意味を持たない場面で順位表示を隠す */
   hideRank?: boolean
+  /** 検索ページなど、PC幅でも仕切り線のみのフラットリストで表示する（PC版ランキングはカードデザインを維持） */
+  flat?: boolean
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
-const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd, hideRank = false }: RankingItemProps) {
+const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd, hideRank = false, flat = false }: RankingItemProps) {
   const { showTags } = useTagDisplay()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const rankColors: Record<number, string> = {
@@ -97,15 +99,19 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     <div 
       data-testid="ranking-item"
       data-video-id={item.id}
-      className="ranking-item-responsive"
+      className={[
+        'ranking-item-responsive',
+        flat ? 'ranking-item-responsive--flat' : '',
+        !flat && !hideRank && item.rank <= 3 ? 'ranking-item-responsive--top3' : ''
+      ].filter(Boolean).join(' ')}
       style={{
-        // フラットリストデザイン: カード装飾なし、仕切り線のみ
-        background: 'transparent',
-        borderBottom: '1px solid var(--border-color)',
+        // 背景・枠線はCSS側で制御（PC=カード / モバイル・flat=仕切り線のみ）
         cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'background-color 0.2s',
         position: 'relative',
-        opacity: disabled ? 0.6 : 1
+        opacity: disabled ? 0.6 : 1,
+        ...(!flat && !hideRank && item.rank <= 3
+          ? ({ '--rank-accent': rankColors[item.rank] } as React.CSSProperties)
+          : {})
       }}
       onClick={(e) => {
         // disabled状態では何もしない
@@ -114,27 +120,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           const target = e.target as HTMLElement;
           if (target.closest('a') || target.closest('button')) return;
           handleVideoClick();
-        }}
-        onMouseEnter={(e) => {
-          // disabled状態またはタッチデバイスではホバー効果を適用しない
-          if (disabled || 'ontouchstart' in window) return;
-          e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
-        }}
-        onMouseLeave={(e) => {
-          // disabled状態またはタッチデバイスではホバー効果を適用しない
-          if (disabled || 'ontouchstart' in window) return;
-          e.currentTarget.style.backgroundColor = 'transparent';
-        }}
-        onTouchEnd={(e) => {
-          // disabled状態では何もしない
-          if (disabled) return;
-          // タッチ終了時に背景色をリセット
-          const element = e.currentTarget;
-          setTimeout(() => {
-            if (element) {
-              element.style.backgroundColor = 'transparent';
-            }
-          }, 100);
         }}
       >
       <div className="ranking-item-responsive__content">

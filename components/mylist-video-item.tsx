@@ -62,11 +62,8 @@ const MylistVideoItem = memo(function MylistVideoItem({
         style={{
           // Container Queries用のcontainment設定
           containerType: 'inline-size',
-          // フラットリストデザイン: カード装飾なし、仕切り線のみ
-          background: 'transparent',
-          borderBottom: '1px solid var(--border-color)',
+          // 背景・枠線はCSS側で制御（PC=カード / モバイル=仕切り線のみ）
           cursor: 'pointer',
-          transition: 'background-color 0.2s',
           position: 'relative'
         }}
         onClick={(e) => {
@@ -77,12 +74,6 @@ const MylistVideoItem = memo(function MylistVideoItem({
           // PWA環境に応じたナビゲーション
           const url = `https://www.nicovideo.jp/watch/${video.id}`;
           navigateToVideo(url);
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent';
         }}
       >
       <div className="mylist-video-item__content">
