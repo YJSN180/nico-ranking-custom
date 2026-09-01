@@ -63,6 +63,25 @@
   background-color: var(--surface-hover);
 }
 
+/* タブ列が見切れる場合に「横スクロールできる」ことを示すグラデーション */
+.tabsWrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .tabsWrapper::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 1px; /* border-bottom は隠さない */
+    width: 28px;
+    background: linear-gradient(to left, var(--surface-color), transparent);
+    pointer-events: none;
+  }
+}
+
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--border-color);
@@ -104,7 +123,9 @@
 }
 
 .content {
-  height: 100%; /* 利用可能な高さをすべて使用 */
+  /* flexで残りの高さを使う（ヘッダー/フッター高さのハードコードをやめる） */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px;
 }
@@ -256,16 +277,52 @@
   color: var(--text-secondary);
 }
 
-.footer .closeButton {
+/* 適用ボタン（変更があるときだけ表示される、この画面の実操作）。
+   閉じる操作は右上×に一本化しており、フッターにdismissボタンは置かない */
+.applyButton {
+  padding: 8px 24px;
   background: var(--primary-color);
   color: var(--button-text-active);
-  padding: 8px 24px;
+  border: none;
   border-radius: 6px;
   font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.footer .closeButton:hover {
+.applyButton:hover {
   background: var(--primary-color-hover);
+}
+
+/* 一括追加のトグル/実行はセカンダリ（プライマリの重みは単発「追加」と「適用」に残す） */
+.bulkToggle {
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--primary-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.bulkToggle:hover {
+  background: var(--surface-hover);
+}
+
+.bulkButton {
+  margin-top: 8px;
+  padding: 8px 16px;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bulkButton:hover {
+  background: var(--surface-hover);
 }
 
 /* アニメーション */
@@ -293,19 +350,19 @@
 @media (max-width: 640px) {
   .modal {
     width: 100%;
-    height: 90vh; /* フルスクリーンではなく90vhに */
+    /* iOS Safariの動的ツールバーで vh が実表示領域より大きくなり、
+       上端（タイトル）が画面外に切れるため dvh を使う（非対応環境は vh にフォールバック） */
+    height: 90vh;
+    height: 90dvh;
     max-width: none;
-    max-height: none;
+    max-height: 100dvh;
     border-radius: 16px 16px 0 0; /* 上部のみ角丸 */
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
+    padding-bottom: env(safe-area-inset-bottom);
     animation: slideUpMobile 0.3s ease-out;
-  }
-  
-  .content {
-    height: calc(100% - 140px); /* ヘッダーとフッターの高さを考慮 */
   }
 }
 

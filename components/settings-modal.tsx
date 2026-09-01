@@ -77,6 +77,49 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
   const { preferences, updatePreferences } = useUserPreferences()
 
+  // a11y: モーダル表示中の Escape・フォーカストラップ・背景スクロールロック（フェーズ4-6）
+  // handleClose はこの下（early return の後）で定義されるため ref 経由で参照する
+  const modalRef = useRef<HTMLDivElement>(null)
+  const handleCloseRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    if (!isOpen) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    modalRef.current?.focus()
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.stopPropagation()
+        handleCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusables = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables) return
+      const visible = Array.from(focusables).filter((el) => el.offsetParent !== null)
+      const first = visible[0]
+      const last = visible[visible.length - 1]
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = previousOverflow
+      previouslyFocused?.focus?.()
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
   // 一時リストへの操作メソッド
@@ -438,14 +481,26 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
 
+  // Escape ハンドラ（early return より上の effect）から最新の handleClose を呼べるようにする
+  handleCloseRef.current = handleClose
+
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>設定</h2>
-          <button className={styles.closeButton} onClick={handleClose}>×</button>
+          <h2 id="settings-modal-title">設定</h2>
+          <button className={styles.closeButton} onClick={handleClose} aria-label="設定を閉じる">×</button>
         </div>
 
+        <div className={styles.tabsWrapper}>
         <div className={styles.tabs}>
           <button
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
@@ -471,6 +526,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
           >
             <span style={{ whiteSpace: 'nowrap' }}>💾&nbsp;バックアップ</span>
           </button>
+        </div>
         </div>
 
         <div className={styles.content}>
@@ -585,15 +641,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <div style={{ marginTop: '12px' }}>
                   <button
                     onClick={() => setShowBulkVideoIds(!showBulkVideoIds)}
-                    style={{
-                      background: 'var(--primary-color)',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
+                    className={styles.bulkToggle}
                   >
                     {showBulkVideoIds ? '▼' : '▶'} 複数IDを一括追加
                   </button>
@@ -623,17 +671,7 @@ sm11111111`}
                       />
                       <button
                         onClick={handleBulkAddVideoIds}
-                        style={{
-                          marginTop: '8px',
-                          padding: '8px 16px',
-                          background: 'var(--primary-color)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: 'bold'
-                        }}
+                        className={styles.bulkButton}
                       >
                         一括追加
                       </button>
@@ -694,15 +732,7 @@ sm11111111`}
                 <div style={{ marginTop: '12px' }}>
                   <button
                     onClick={() => setShowBulkVideoTitles(!showBulkVideoTitles)}
-                    style={{
-                      background: 'var(--primary-color)',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
+                    className={styles.bulkToggle}
                   >
                     {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加
                   </button>
@@ -727,17 +757,7 @@ sm11111111`}
                       />
                       <button
                         onClick={handleBulkAddVideoTitles}
-                        style={{
-                          marginTop: '8px',
-                          padding: '8px 16px',
-                          background: 'var(--primary-color)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: 'bold'
-                        }}
+                        className={styles.bulkButton}
                       >
                         一括追加
                       </button>
@@ -774,15 +794,7 @@ sm11111111`}
                   <div style={{ marginTop: '12px' }}>
                     <button
                       onClick={() => setShowBulkAuthorIds(!showBulkAuthorIds)}
-                      style={{
-                        background: 'var(--primary-color)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
+                      className={styles.bulkToggle}
                     >
                       {showBulkAuthorIds ? '▼' : '▶'} 複数IDを一括追加
                     </button>
@@ -813,17 +825,7 @@ ch2625894`}
                         />
                         <button
                           onClick={handleBulkAddAuthorIds}
-                          style={{
-                            marginTop: '8px',
-                            padding: '8px 16px',
-                            background: 'var(--primary-color)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: 'bold'
-                          }}
+                          className={styles.bulkButton}
                         >
                           一括追加
                         </button>
@@ -883,15 +885,7 @@ ch2625894`}
                   <div style={{ marginTop: '12px' }}>
                     <button
                       onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
-                      style={{
-                        background: 'var(--primary-color)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
+                      className={styles.bulkToggle}
                     >
                       {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加
                     </button>
@@ -916,17 +910,7 @@ ch2625894`}
                         />
                         <button
                           onClick={handleBulkAddAuthorNames}
-                          style={{
-                            marginTop: '8px',
-                            padding: '8px 16px',
-                            background: 'var(--primary-color)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: 'bold'
-                          }}
+                          className={styles.bulkButton}
                         >
                           一括追加
                         </button>
@@ -1137,28 +1121,13 @@ ch2625894`}
               </>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
-              <button 
-                className={styles.applyButton} 
-                onClick={handleApply}
-                style={{
-                  padding: '8px 16px',
-                  background: 'var(--primary-color)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
-                適用
-              </button>
-            )}
-            <button className={styles.closeButton} onClick={handleClose}>
-              閉じる
+          {/* 閉じる操作は右上の×に一本化（HIG: 単一の明確なdismiss。
+              プライマリの視覚的重みは実操作（適用/追加）にだけ使う） */}
+          {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
+            <button className={styles.applyButton} onClick={handleApply}>
+              適用
             </button>
-          </div>
+          )}
         </div>
       </div>
     </div>
