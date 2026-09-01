@@ -140,6 +140,7 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>
+        <a href="#main-content" className="skip-link">本文へスキップ</a>
         <ServiceWorkerClearer />
         <ThemeProvider>
           <MylistOperationsProvider>

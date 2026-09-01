@@ -352,6 +352,33 @@ button,
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* ===== フォーカス可視化（UX改善計画 フェーズ4-7） =====
+   キーボード操作時のみ表示されるフォーカスリング。
+   個別コンポーネントで :focus { outline: none } + border-color 代替を
+   持つものは既存の意図を尊重してそのまま（この規則より詳細度が高い） */
+:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* スキップリンク: キーボードフォーカス時のみ表示 */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  border-radius: 6px;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 /* ===== ボトムナビゲーション（UX改善計画 フェーズ3-1） =====
    モバイル(≤640px)でボトムナビが表示されている間、
    コンテンツ最下部やフローティングボタンが隠れないように

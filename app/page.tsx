@@ -278,7 +278,7 @@ export default async function Home({ searchParams }: PageProps) {
     const embeddedItems = rankingData.slice(0, EMBED_ITEMS_COUNT)
 
     return (
-      <main style={{ 
+      <main id="main-content" style={{ 
         padding: '0',
         // CLS対策: フッターマージンを考慮したminHeight
         minHeight: 'calc(100vh - 80px)',
