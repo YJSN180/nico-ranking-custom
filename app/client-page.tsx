@@ -30,7 +30,8 @@ import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { useBFCacheRefresh, usePWAResumeRefresh } from '@/hooks/use-bfcache-refresh'
-import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
+import { TagDisplayProvider } from '@/contexts/tag-display-context'
+import { TagToggleButton } from '@/components/tag-toggle-button'
 import { serverLog } from '@/lib/server-log'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
 import { showToast } from '@/lib/toast'
@@ -83,44 +84,7 @@ export function shouldSkipInitialFetch(
   )
 }
 
-// タグ表示トグルボタンコンポーネント
-function TagToggleButton() {
-  const { showTags, toggleTags } = useTagDisplay()
-  
-  return (
-    <button
-      data-testid="tag-toggle-button"
-      onClick={toggleTags}
-      style={{
-        padding: '6px 12px',
-        fontSize: '12px',
-        backgroundColor: showTags ? 'var(--primary-color)' : 'var(--surface-secondary)',
-        color: showTags ? 'white' : 'var(--text-primary)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        fontWeight: '500',
-        whiteSpace: 'nowrap',
-        display: 'inline-flex',
-        alignItems: 'center',
-        height: '31px'
-      }}
-      onMouseEnter={(e) => {
-        if (!showTags) {
-          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!showTags) {
-          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
-        }
-      }}
-    >
-      🏷️ タグ{showTags ? '非表示' : '表示'}
-    </button>
-  )
-}
+// タグ表示トグルボタンは components/tag-toggle-button.tsx に共通化（フェーズ4-2）
 
 // リロード検出用のユーティリティ（コンポーネント外で定義）
 const detectPageReload = (): boolean => {

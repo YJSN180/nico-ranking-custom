@@ -36,7 +36,6 @@
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  outline: none;
 }
 
 .search-form__keyword:focus {
@@ -273,7 +272,6 @@
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  outline: none;
 }
 
 .search-form__date {
@@ -283,7 +281,6 @@
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  outline: none;
 }
 
 .search-form__presets {
@@ -344,7 +341,6 @@
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  outline: none;
 }
 
 /* 検索結果 */

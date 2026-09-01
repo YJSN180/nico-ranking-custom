@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
+import InitialRankingSkeleton from '@/components/initial-ranking-skeleton'
+import Pagination from '@/components/pagination'
+import { TagToggleButton } from '@/components/tag-toggle-button'
 import { VideoContextMenu } from '@/components/video-context-menu'
 import { TagAutocompleteInput } from '@/components/tag-autocomplete-input'
 import { TagDisplayProvider } from '@/contexts/tag-display-context'
@@ -825,7 +828,9 @@ export function SearchClient() {
       )}
 
       {!error && isLoading && items === null && (
-        <div className="search-results__status">検索中…</div>
+        <div className="search-results" aria-label="検索中">
+          <InitialRankingSkeleton itemCount={8} hideRank flat />
+        </div>
       )}
 
       {!error && filteredItems && (
@@ -835,9 +840,7 @@ export function SearchClient() {
               検索結果 {totalCount.toLocaleString()} 件
               {ngHiddenCount > 0 && `（NG設定により ${ngHiddenCount} 件非表示）`}
             </span>
-            <span>
-              {page} / {totalPages} ページ
-            </span>
+            <TagToggleButton />
           </div>
 
           {filteredItems.length === 0 ? (
@@ -854,29 +857,14 @@ export function SearchClient() {
             </ul>
           )}
 
-          {totalPages > 1 && (
-            <div className="search-results__pagination">
-              <button
-                type="button"
-                className="search-results__page-button"
-                disabled={page <= 1 || isLoading}
-                onClick={() => handlePageChange(page - 1)}
-              >
-                ← 前
-              </button>
-              <span>
-                {page} / {totalPages}
-              </span>
-              <button
-                type="button"
-                className="search-results__page-button"
-                disabled={page >= totalPages || isLoading}
-                onClick={() => handlePageChange(page + 1)}
-              >
-                次 →
-              </button>
-            </div>
-          )}
+          {/* ランキングと共通のページネーション（フェーズ4-3） */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={Math.min(totalCount, 100000)}
+            itemsPerPage={SEARCH_PAGE_SIZE}
+            onPageChange={handlePageChange}
+          />
         </div>
       )}
 

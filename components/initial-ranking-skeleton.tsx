@@ -2,23 +2,32 @@
 
 import { memo } from 'react'
 
+interface InitialRankingSkeletonProps {
+  itemCount?: number
+  /** 検索結果など順位を表示しない一覧のスケルトン（実アイテムの hideRank と対応） */
+  hideRank?: boolean
+  /** PC幅でも仕切り線のみのフラット表示（実アイテムの flat と対応） */
+  flat?: boolean
+}
+
 // スケルトンスクリーン: 実際のランキングアイテムのレイアウトにマッチ
-const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount = 5 }: { itemCount?: number }) {
+const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount = 5, hideRank = false, flat = false }: InitialRankingSkeletonProps) {
   return (
     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {Array.from({ length: itemCount }, (_, index) => (
-        <li 
+        <li
           key={index}
           data-testid="ranking-skeleton-item"
-          className="ranking-item-responsive"
+          className={`ranking-item-responsive${flat ? ' ranking-item-responsive--flat' : ''}`}
           style={{
-            // 背景・枠線はCSS側で制御（PC=カード / モバイル=仕切り線のみ）
+            // 背景・枠線はCSS側で制御（PC=カード / モバイル・flat=仕切り線のみ）
             position: 'relative'
           }}
         >
           <div className="ranking-item-responsive__content">
             {/* デスクトップ用順位スケルトン */}
-            <div 
+            {!hideRank && (
+            <div
               className="ranking-item-responsive__rank ranking-item-responsive__rank--desktop skeleton-pulse"
               style={{
                 background: 'var(--surface-secondary)',
@@ -30,16 +39,19 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
                 height: '44px'
               }}
             />
-            
+            )}
+
             {/* サムネイルスケルトン */}
             <div className="ranking-item-responsive__thumbnail">
               {/* モバイル用順位オーバーレイスケルトン */}
-              <div 
+              {!hideRank && (
+              <div
                 className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile skeleton-pulse"
                 style={{
                   background: 'var(--surface-secondary)'
                 }}
               />
+              )}
               <div
                 className="skeleton-pulse"
                 style={{ 
