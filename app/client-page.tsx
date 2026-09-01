@@ -39,8 +39,7 @@ import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
 import { ScrollToTopButton } from '@/components/scroll-to-top-button'
 import { captureWebException } from '@/lib/sentry/capture'
-// PWA登録（キャッシュなしのパススルーSW）
-import { PWARegister } from '@/components/pwa-register'
+// SW登録は layout の ServiceWorkerManager に統合（フェーズ5-1）
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
@@ -1352,7 +1351,6 @@ export default function ClientPage({
   try {
     return (
       <TagDisplayProvider>
-        <PWARegister />
         <PullToRefreshIndicator isPulling={isPulling} pullDistance={pullDistance} />
         <div className="selectors-container">
         <RankingSelector 

@@ -25,6 +25,7 @@ import {
 import { exportMylistData, importMylistData, detectMylistConflicts } from '@/lib/storage/backup'
 import { CustomRankingManager } from '@/lib/storage/custom-rankings'
 import styles from './genre-order-backup.module.css'
+import { showToast } from '@/lib/toast'
 
 // 統合バックアップデータ構造
 interface UnifiedBackupData {
@@ -61,7 +62,7 @@ export function UnifiedBackup() {
       const data: UnifiedBackupData = {
         version: 1,
         exportDate: new Date().toISOString(),
-        appVersion: '1.0.0', // TODO: 実際のアプリバージョンを取得
+        appVersion: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
         data: {}
       }
       
@@ -137,7 +138,7 @@ export function UnifiedBackup() {
       // eslint-disable-next-line no-console
       console.error('Failed to export unified backup:', error)
       const errorMessage = error instanceof Error ? error.message : '不明なエラー'
-      alert(`統合バックアップのエクスポートに失敗しました: ${errorMessage}`)
+      showToast(`統合バックアップのエクスポートに失敗しました: ${errorMessage}`, 'error')
       
       // 詳細なエラー情報をコンソールに出力
       if (error instanceof Error) {
@@ -177,7 +178,7 @@ export function UnifiedBackup() {
           data = {
             version: 1,
             exportDate: new Date().toISOString(),
-            appVersion: '1.0.0',
+            appVersion: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
             data: {}
           }
           
@@ -352,11 +353,11 @@ export function UnifiedBackup() {
       
       // リロード確認
       if (results.length > 0) {
+        // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+        showToast('インポートしました。反映のため再読み込みします…', 'success')
         setTimeout(() => {
-          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-            window.location.reload()
-          }
-        }, 1500)
+          window.location.reload()
+        }, 1800)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -486,7 +487,7 @@ export function UnifiedBackup() {
             </div>
 
             <p className={styles.dialogNote}>
-              インポート後、変更を反映するにはページのリロードが必要です。
+              インポート後、反映のため自動的に再読み込みされます。
             </p>
 
             <div className={styles.dialogActions}>

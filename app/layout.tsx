@@ -9,7 +9,7 @@ import { ClientOnlyWebVitals } from '@/components/client-only-web-vitals'
 import { OfflineIndicator } from '@/components/offline-indicator'
 import { ToastViewport } from '@/components/toast-viewport'
 import { BottomNav } from '@/components/bottom-nav'
-import { ServiceWorkerClearer } from '@/components/sw-cache-clearer'
+import { ServiceWorkerManager } from '@/components/sw-manager'
 import './globals.css'
 
 const inter = Inter({ 
@@ -141,7 +141,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className} suppressHydrationWarning>
         <a href="#main-content" className="skip-link">本文へスキップ</a>
-        <ServiceWorkerClearer />
+        <ServiceWorkerManager />
         <ThemeProvider>
           <MylistOperationsProvider>
             <ClientOnlyWebVitals />
