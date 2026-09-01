@@ -352,6 +352,22 @@ button,
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* ===== ボトムナビゲーション（UX改善計画 フェーズ3-1） =====
+   モバイル(≤640px)でボトムナビが表示されている間、
+   コンテンツ最下部やフローティングボタンが隠れないように
+   オフセットを確保する。--bottom-nav-offset は ScrollToTopButton 等の
+   固定配置要素が参照する */
+:root {
+  --bottom-nav-offset: 0px;
+}
+
+@media (max-width: 640px) {
+  body:has(.bottom-nav) {
+    --bottom-nav-offset: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: var(--bottom-nav-offset);
+  }
+}
+
 /* reduced-motion 環境ではすべてのアニメーション・トランジションを実質無効化 */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -2,7 +2,6 @@
 
 import { useEffect, useCallback } from 'react'
 import { useSearchParams, usePathname } from 'next/navigation'
-import { isPWA } from '@/lib/pwa-utils'
 
 interface NavigationState {
   pathname: string
@@ -15,7 +14,9 @@ const STORAGE_KEY = 'navigation-state'
 const STATE_EXPIRY = 30 * 60 * 1000 // 30分
 
 /**
- * PWA環境でのナビゲーション状態を保存・復元するフック
+ * ナビゲーション状態（スクロール位置等）を保存・復元するフック。
+ * 元はPWA限定だったが、通常ブラウザの「戻る」でも
+ * 検索→動画→戻る の体験を改善するため全環境に適用（フェーズ3-3）
  */
 export function useNavigationState() {
   const pathname = usePathname()
@@ -25,8 +26,7 @@ export function useNavigationState() {
    * 現在の状態を保存
    */
   const saveState = useCallback(() => {
-    // PWAでない場合は保存しない
-    if (!isPWA() || !searchParams) return
+    if (!searchParams) return
     
     const state: NavigationState = {
       pathname,
@@ -46,8 +46,7 @@ export function useNavigationState() {
    * 保存された状態を復元
    */
   const restoreState = useCallback(() => {
-    // PWAでない場合は復元しない
-    if (!isPWA() || !searchParams) return
+    if (!searchParams) return
     
     try {
       const savedState = sessionStorage.getItem(STORAGE_KEY)
@@ -86,8 +85,6 @@ export function useNavigationState() {
   
   // ページ遷移前に状態を保存
   useEffect(() => {
-    if (!isPWA()) return
-    
     // beforeunloadイベントで状態を保存
     const handleBeforeUnload = () => {
       saveState()
@@ -121,8 +118,6 @@ export function useNavigationState() {
   
   // スクロール位置の定期保存
   useEffect(() => {
-    if (!isPWA()) return
-    
     let scrollTimeout: NodeJS.Timeout
     
     const handleScroll = () => {

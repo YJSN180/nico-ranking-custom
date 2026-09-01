@@ -68,6 +68,9 @@ export function Navigation() {
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+  // モバイル/デスクトップ両方を常時レンダリングするため、参照は分ける
+  const mobileMenuRef = useRef<HTMLElement>(null)
+  const mobileButtonRef = useRef<HTMLButtonElement>(null)
   
   // 退場アニメーション付きでメニューを閉じる
   const closeMenu = useCallback(() => {
@@ -93,12 +96,11 @@ export function Navigation() {
     if (!isOpen) return
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node
+      const isInside = [menuRef, buttonRef, mobileMenuRef, mobileButtonRef].some(
+        (ref) => ref.current?.contains(target)
+      )
+      if (!isInside) {
         closeMenu()
       }
     }
@@ -114,7 +116,11 @@ export function Navigation() {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         closeMenu()
-        buttonRef.current?.focus()
+        // 表示中の方のトリガーへフォーカスを戻す（offsetParent が null なら非表示）
+        const visibleButton = mobileButtonRef.current?.offsetParent
+          ? mobileButtonRef.current
+          : buttonRef.current
+        visibleButton?.focus()
       }
     }
 
@@ -143,33 +149,14 @@ export function Navigation() {
     }
   }, [isOpen])
 
-  // メディアクエリによるモバイル判定（CSS-only対応のため、JavaScriptでの判定は最小限に）
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
-  
-  useEffect(() => {
-    // テスト環境対応
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      return
-    }
-    
-    // メディアクエリでモバイル判定
-    const mediaQuery = window.matchMedia('(max-width: 768px)')
-    setShowMobileMenu(mediaQuery.matches)
-    
-    const handleMediaChange = (e: MediaQueryListEvent) => {
-      setShowMobileMenu(e.matches)
-    }
-    
-    mediaQuery.addEventListener('change', handleMediaChange)
-    return () => mediaQuery.removeEventListener('change', handleMediaChange)
-  }, [])
-
-  if (showMobileMenu) {
-    return (
-      <>
+  // SSR時にデスクトップ版→マウント後にモバイル版へ差し替わるちらつきを避けるため、
+  // JSでの判定はやめて両方をレンダリングし、CSSメディアクエリ（768px）で表示を切り替える
+  return (
+    <>
+      <div className={styles.mobileOnly}>
         {/* ハンバーガーメニューボタン */}
         <button
-          ref={buttonRef}
+          ref={mobileButtonRef}
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
           aria-expanded={isOpen}
@@ -202,7 +189,7 @@ export function Navigation() {
 
             {/* サイドメニュー */}
             <nav
-              ref={menuRef}
+              ref={mobileMenuRef}
               id="navigation-menu"
               role="navigation"
               aria-label="メインナビゲーション"
@@ -399,13 +386,10 @@ export function Navigation() {
             </nav>
           </>
         )}
-      </>
-    )
-  }
+      </div>
 
-  // デスクトップ版（ドロップダウンメニュー）
-  return (
-    <div className={styles.desktopContainer}>
+      {/* デスクトップ版（ドロップダウンメニュー） */}
+      <div className={styles.desktopContainer}>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
@@ -561,6 +545,7 @@ export function Navigation() {
         </nav>
       )}
 
-    </div>
+      </div>
+    </>
   )
 }

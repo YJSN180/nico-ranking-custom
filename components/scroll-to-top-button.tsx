@@ -45,7 +45,8 @@ export function ScrollToTopButton() {
       style={{
         position: 'fixed',
         right: 'clamp(12px, 2vw, 32px)',
-        bottom: 'clamp(12px, 2vw, 32px)',
+        // モバイルではボトムナビの高さ分だけ持ち上げる（--bottom-nav-offset は globals.css で定義）
+        bottom: 'calc(clamp(12px, 2vw, 32px) + var(--bottom-nav-offset, 0px))',
         zIndex: 1000,
         border: 'none',
         borderRadius: '999px',

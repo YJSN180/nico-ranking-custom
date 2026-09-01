@@ -9,6 +9,18 @@
   z-index: 20;
 }
 
+/* SSRちらつき対策: モバイル/デスクトップ両方をレンダリングし、
+   CSSメディアクエリ（768px）だけで表示を切り替える（JS判定なし） */
+.mobileOnly {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobileOnly {
+    display: contents;
+  }
+}
+
 /* メニューボタン共通スタイル */
 .menuButton {
   background: rgba(255, 255, 255, 0.25);
@@ -49,8 +61,8 @@
 /* モバイル対応 */
 @media (max-width: 768px) {
   .desktopContainer {
-    /* モバイルではコンテナは使わない */
-    display: contents;
+    /* モバイルではデスクトップ版ナビ全体を非表示（mobileOnly 側が表示される） */
+    display: none;
   }
 
   .menuButton {
