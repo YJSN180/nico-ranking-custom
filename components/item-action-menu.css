@@ -97,6 +97,16 @@
   white-space: nowrap;
 }
 
+/* 先頭アイコンは固定幅の列にする（＋と🚫等で文字幅が違っても
+   ラベルの左端が全項目で揃うように） */
+.item-action-menu__item > span[aria-hidden='true'] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
 .item-action-menu__item:hover,
 .item-action-menu__item:active {
   background: var(--surface-hover);
