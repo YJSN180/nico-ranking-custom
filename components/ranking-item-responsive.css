@@ -55,8 +55,15 @@
     margin-bottom: 0;
   }
 
+  /* 本文（タイトル〜統計）がサムネイル(94px)より低いと統計の下だけ空くため、
+     行の高さいっぱいに伸ばしてタイトルを上端・統計を下端に揃える（本家と同じ見え方） */
+  .ranking-item-responsive--flat .ranking-item-responsive__content {
+    align-items: stretch;
+  }
+
   .ranking-item-responsive--flat .ranking-item-responsive__details {
     overflow: visible;
+    justify-content: space-between;
   }
 }
 
