@@ -6,7 +6,13 @@ import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { CustomRanking, CustomRankingFormState } from '@/types/custom-ranking'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import { useCustomRankingsOrder } from '@/hooks/use-custom-rankings-order'
-import { CustomRankingModal } from './custom-ranking-modal'
+import dynamic from 'next/dynamic'
+
+// カスタムランキング作成モーダルは開くまで不要なので初期バンドルから外す
+const CustomRankingModal = dynamic(
+  () => import('./custom-ranking-modal').then((mod) => ({ default: mod.CustomRankingModal })),
+  { ssr: false, loading: () => null }
+)
 import { DeleteConfirmationModal } from './delete-confirmation-modal'
 import { CustomRankingOrder } from './custom-ranking-order'
 import styles from './selectors.module.css'
@@ -435,16 +441,18 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           </div>
         )}
         
-        {/* カスタムランキング作成・編集モーダル */}
-        <CustomRankingModal
-          isOpen={showCustomModal}
-          onClose={handleModalClose}
-          onSave={handleUpdateRanking}
-          existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
-          editingRanking={editingRanking}
-          onPrefetchData={onPrefetchData}
-          currentPeriod={currentPeriod}
-        />
+        {/* カスタムランキング作成・編集モーダル（開いた時だけマウント） */}
+        {showCustomModal && (
+          <CustomRankingModal
+            isOpen={showCustomModal}
+            onClose={handleModalClose}
+            onSave={handleUpdateRanking}
+            existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
+            editingRanking={editingRanking}
+            onPrefetchData={onPrefetchData}
+            currentPeriod={currentPeriod}
+          />
+        )}
         
         {/* 削除確認モーダル */}
         <DeleteConfirmationModal

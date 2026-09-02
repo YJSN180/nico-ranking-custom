@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useMylistOperations } from '@/context/mylist-operations-context'
-import { MylistModal } from './mylist-modal'
+import dynamic from 'next/dynamic'
+
+// マイリスト選択モーダルは開くまで不要なので初期バンドルから外す（行ごとに描画されるボタンの共通チャンク）
+const MylistModal = dynamic(() => import('./mylist-modal').then((mod) => ({ default: mod.MylistModal })), {
+  ssr: false,
+  loading: () => null,
+})
 import { showToast } from '@/lib/toast'
 import type { RankingItem } from '@/types/ranking'
 import './mylist-button.css'
