@@ -124,8 +124,10 @@ const nextConfig = {
       },
       // Note: API route cache headers - キャッシュはCloudflare Worker側で管理
       // Vercel側では一律no-storeにして古いデータ問題を防ぐ
+      // 例外: /api/search 系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、
+      // CDN キャッシュで上流（ニコニコ）への増幅を抑える（middleware.ts と同じ除外）
       {
-        source: '/api/:path*',
+        source: '/api/:path((?!search).*)',
         headers: [
           {
             key: 'Cache-Control',
