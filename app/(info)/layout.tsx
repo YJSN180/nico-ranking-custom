@@ -1,4 +1,5 @@
 import { HeaderWithSettings } from '@/components/header-with-settings'
+import { FooterLazy } from '@/components/footer-lazy'
 
 export default function InfoLayout({
   children,
@@ -8,7 +9,7 @@ export default function InfoLayout({
   return (
     <>
       <HeaderWithSettings />
-      <main style={{ 
+      <main id="main-content" style={{
         backgroundColor: 'var(--background-color)',
         color: 'var(--text-primary)',
         minHeight: 'calc(100vh - 70px)',
@@ -17,6 +18,7 @@ export default function InfoLayout({
       }}>
         {children}
       </main>
+      <FooterLazy />
     </>
   )
 }

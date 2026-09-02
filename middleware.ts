@@ -11,6 +11,11 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
+
+  // デバッグ用ルートは本番では公開しない
+  if (pathname.startsWith('/test-') && process.env.NODE_ENV === 'production') {
+    return new NextResponse(null, { status: 404 })
+  }
   
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
@@ -19,6 +24,11 @@ const noStorePaths: string[] = []
   // 一般的な公開APIのみ認証をスキップ
   // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
+    // 検索系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、CDN キャッシュで
+    // 上流（ニコニコ）への増幅を抑える。ランキング系の no-store 方針はそのまま
+    if (pathname.startsWith('/api/search')) {
+      return NextResponse.next()
+    }
     const response = NextResponse.next()
     // 全APIルートでno-storeを強制（Cloudflare Worker側でキャッシュ管理するため）
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
@@ -187,8 +197,8 @@ const noStorePaths: string[] = []
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
-      '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+      '</fonts/nicomoji-plus-v2-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
+      '</fonts/comic-sans-ms-bold-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',

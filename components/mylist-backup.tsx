@@ -12,6 +12,7 @@ import {
   type MylistImportResult
 } from '@/lib/storage/backup'
 import styles from './mylist-backup.module.css'
+import { showToast } from '@/lib/toast'
 
 export function MylistBackup() {
   const [isExporting, setIsExporting] = useState(false)
@@ -33,7 +34,7 @@ export function MylistBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Export failed:', error)
-      alert('エクスポートに失敗しました')
+      showToast('エクスポートに失敗しました', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -88,11 +89,11 @@ export function MylistBackup() {
         setImportResult(result)
         
         if (result.success) {
+          // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+          showToast('インポートしました。反映のため再読み込みします…', 'success')
           setTimeout(() => {
-            if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-              window.location.reload()
-            }
-          }, 1500)
+            window.location.reload()
+          }, 1800)
         }
       }
     } catch (error) {
@@ -139,11 +140,11 @@ export function MylistBackup() {
       setConflictData(null)
       
       if (result.success) {
+        // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+        showToast('インポートしました。反映のため再読み込みします…', 'success')
         setTimeout(() => {
-          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-            window.location.reload()
-          }
-        }, 1500)
+          window.location.reload()
+        }, 1800)
       }
     } catch (error) {
       setImportResult({
@@ -424,9 +425,6 @@ export function MylistBackup() {
                     </div>
                   </div>
                 )}
-              </div>
-              <div className={styles.reloadPrompt}>
-                ⚠️ 変更を反映するにはページをリロードしてください
               </div>
             </div>
           ) : (

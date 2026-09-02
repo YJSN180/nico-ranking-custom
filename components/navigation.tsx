@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
@@ -18,7 +18,8 @@ import {
   ExternalLinkIcon,
   ThemeIcon,
   GuideIcon,
-  MylistIcon
+  MylistIcon,
+  SearchIcon
 } from './icons'
 
 type NavItem = {
@@ -33,6 +34,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   // メインセクション
   { href: '/', label: 'ホーム', icon: <HomeIcon />, section: 'main' },
+  { href: '/search', label: '動画検索', icon: <SearchIcon />, section: 'main' },
   { href: '/mylists', label: 'マイリスト', icon: <MylistIcon />, section: 'main' },
   { href: '#settings', label: 'ランキング設定', icon: <SettingsIcon />, section: 'main' },
   
@@ -59,16 +61,30 @@ const NAV_ITEMS: NavItem[] = [
 
 export function Navigation() {
   const [isOpen, setIsOpen] = useState(false)
+  const [isClosing, setIsClosing] = useState(false)
   const [isTouching, setIsTouching] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const { preferences, updatePreferences } = useUserPreferences()
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
+  // モバイル/デスクトップ両方を常時レンダリングするため、参照は分ける
+  const mobileMenuRef = useRef<HTMLElement>(null)
+  const mobileButtonRef = useRef<HTMLButtonElement>(null)
   
+  // 退場アニメーション付きでメニューを閉じる
+  const closeMenu = useCallback(() => {
+    if (!isOpen || isClosing) return
+    setIsClosing(true)
+    setTimeout(() => {
+      setIsOpen(false)
+      setIsClosing(false)
+    }, 180)
+  }, [isOpen, isClosing])
+
   // 設定モーダルを開く関数
   const openSettings = () => {
-    setIsOpen(false)
+    closeMenu()
     // 設定モーダルを開くイベントを発火
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('openSettings'))
@@ -80,19 +96,18 @@ export function Navigation() {
     if (!isOpen) return
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(event.target as Node) &&
-        buttonRef.current &&
-        !buttonRef.current.contains(event.target as Node)
-      ) {
-        setIsOpen(false)
+      const target = event.target as Node
+      const isInside = [menuRef, buttonRef, mobileMenuRef, mobileButtonRef].some(
+        (ref) => ref.current?.contains(target)
+      )
+      if (!isInside) {
+        closeMenu()
       }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [isOpen])
+  }, [isOpen, closeMenu])
 
   // Escapeキーで閉じる
   useEffect(() => {
@@ -100,14 +115,18 @@ export function Navigation() {
 
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsOpen(false)
-        buttonRef.current?.focus()
+        closeMenu()
+        // 表示中の方のトリガーへフォーカスを戻す（offsetParent が null なら非表示）
+        const visibleButton = mobileButtonRef.current?.offsetParent
+          ? mobileButtonRef.current
+          : buttonRef.current
+        visibleButton?.focus()
       }
     }
 
     document.addEventListener('keydown', handleEscape)
     return () => document.removeEventListener('keydown', handleEscape)
-  }, [isOpen])
+  }, [isOpen, closeMenu])
 
   // サイドドロワー表示時のボディスクロール制御
   useEffect(() => {
@@ -130,33 +149,14 @@ export function Navigation() {
     }
   }, [isOpen])
 
-  // メディアクエリによるモバイル判定（CSS-only対応のため、JavaScriptでの判定は最小限に）
-  const [showMobileMenu, setShowMobileMenu] = useState(false)
-  
-  useEffect(() => {
-    // テスト環境対応
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      return
-    }
-    
-    // メディアクエリでモバイル判定
-    const mediaQuery = window.matchMedia('(max-width: 768px)')
-    setShowMobileMenu(mediaQuery.matches)
-    
-    const handleMediaChange = (e: MediaQueryListEvent) => {
-      setShowMobileMenu(e.matches)
-    }
-    
-    mediaQuery.addEventListener('change', handleMediaChange)
-    return () => mediaQuery.removeEventListener('change', handleMediaChange)
-  }, [])
-
-  if (showMobileMenu) {
-    return (
-      <>
+  // SSR時にデスクトップ版→マウント後にモバイル版へ差し替わるちらつきを避けるため、
+  // JSでの判定はやめて両方をレンダリングし、CSSメディアクエリ（768px）で表示を切り替える
+  return (
+    <>
+      <div className={styles.mobileOnly}>
         {/* ハンバーガーメニューボタン */}
         <button
-          ref={buttonRef}
+          ref={mobileButtonRef}
           onClick={() => setIsOpen(!isOpen)}
           aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
           aria-expanded={isOpen}
@@ -171,29 +171,29 @@ export function Navigation() {
         </button>
 
         {/* モバイルメニュー（サイドドロワー） */}
-        {isOpen && (
+        {(isOpen || isClosing) && (
           <>
             {/* 背景オーバーレイ */}
             <div
-              onClick={() => setIsOpen(false)}
+              onClick={() => closeMenu()}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
-                  setIsOpen(false)
+                  closeMenu()
                 }
               }}
               aria-label="メニューを閉じる（背景をタップ）"
-              className={styles.overlay}
+              className={`${styles.overlay}${isClosing ? ` ${styles.overlayClosing}` : ''}`}
             />
 
             {/* サイドメニュー */}
             <nav
-              ref={menuRef}
+              ref={mobileMenuRef}
               id="navigation-menu"
               role="navigation"
               aria-label="メインナビゲーション"
-              className={styles.drawer}
+              className={`${styles.drawer}${isClosing ? ` ${styles.drawerClosing}` : ''}`}
             >
               <div className={styles.drawerContent}>
                 <div className={styles.drawerHeader}>
@@ -201,7 +201,7 @@ export function Navigation() {
                     メニュー
                   </h2>
                   <button
-                    onClick={() => setIsOpen(false)}
+                    onClick={() => closeMenu()}
                     aria-label="メニューを閉じる"
                     className={styles.closeButton}
                   >
@@ -227,7 +227,7 @@ export function Navigation() {
                           ) : (
                             <Link
                               href={item.href}
-                              onClick={() => setIsOpen(false)}
+                              onClick={() => closeMenu()}
                               onMouseEnter={() => {
                                 if (item.href === '/mylists') {
                                   router.prefetch('/mylists')
@@ -235,7 +235,7 @@ export function Navigation() {
                               }}
                               className={`${styles.navLinkMobile} ${pathname === item.href ? styles.active : ''}`}
                             >
-                              <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                              <span style={{ width: '20px', height: '20px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
                               <span>{item.label}</span>
                             </Link>
                           )}
@@ -296,7 +296,7 @@ export function Navigation() {
                             href={item.href}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={() => setIsOpen(false)}
+                            onClick={() => closeMenu()}
                             className="nav-link-mobile"
                             style={{
                               display: 'flex',
@@ -310,7 +310,7 @@ export function Navigation() {
                               background: 'var(--bg-secondary)',
                             }}
                           >
-                            <span style={{ width: '20px', height: '20px', flexShrink: 0 }}>{item.icon}</span>
+                            <span style={{ width: '20px', height: '20px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
                             <span style={{ flex: 1 }}>{item.label}</span>
                             <ExternalLinkIcon size={16} />
                           </a>
@@ -322,7 +322,7 @@ export function Navigation() {
                                     href={subItem.href}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    onClick={() => setIsOpen(false)}
+                                    onClick={() => closeMenu()}
                                     className="nav-link-mobile"
                                     style={{
                                       display: 'flex',
@@ -360,7 +360,7 @@ export function Navigation() {
                         <li key={item.href}>
                           <Link
                             href={item.href}
-                            onClick={() => setIsOpen(false)}
+                            onClick={() => closeMenu()}
                             className="nav-link-mobile"
                             style={{
                               display: 'flex',
@@ -386,13 +386,10 @@ export function Navigation() {
             </nav>
           </>
         )}
-      </>
-    )
-  }
+      </div>
 
-  // デスクトップ版（ドロップダウンメニュー）
-  return (
-    <div className={styles.desktopContainer}>
+      {/* デスクトップ版（ドロップダウンメニュー） */}
+      <div className={styles.desktopContainer}>
       <button
         ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
@@ -407,13 +404,13 @@ export function Navigation() {
       </button>
 
       {/* ドロップダウンメニュー */}
-      {isOpen && (
+      {(isOpen || isClosing) && (
         <nav
           ref={menuRef}
           id="navigation-dropdown"
           role="navigation"
           aria-label="メインナビゲーション"
-          className={styles.dropdown}
+          className={`${styles.dropdown}${isClosing ? ` ${styles.dropdownClosing}` : ''}`}
         >
           <div className={styles.menuContent}>
             {/* メインセクション */}
@@ -433,7 +430,7 @@ export function Navigation() {
                     ) : (
                       <Link
                         href={item.href}
-                        onClick={() => setIsOpen(false)}
+                        onClick={() => closeMenu()}
                         onMouseEnter={() => {
                           if (item.href === '/mylists') {
                             router.prefetch('/mylists')
@@ -459,7 +456,7 @@ export function Navigation() {
                       href={item.href}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={() => setIsOpen(false)}
+                      onClick={() => closeMenu()}
                       className="nav-link-desktop"
                       style={{
                         display: 'flex',
@@ -485,7 +482,7 @@ export function Navigation() {
                               href={subItem.href}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={() => setIsOpen(false)}
+                              onClick={() => closeMenu()}
                               className="nav-link-desktop"
                               style={{
                                 display: 'flex',
@@ -522,7 +519,7 @@ export function Navigation() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      onClick={() => setIsOpen(false)}
+                      onClick={() => closeMenu()}
                       className="nav-link-desktop"
                       style={{
                         display: 'flex',
@@ -548,6 +545,7 @@ export function Navigation() {
         </nav>
       )}
 
-    </div>
+      </div>
+    </>
   )
 }

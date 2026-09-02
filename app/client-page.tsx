@@ -30,21 +30,24 @@ import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
 import { useNavigationState } from '@/hooks/use-navigation-state'
 import { useBFCacheRefresh, usePWAResumeRefresh } from '@/hooks/use-bfcache-refresh'
-import { TagDisplayProvider, useTagDisplay } from '@/contexts/tag-display-context'
+import { TagDisplayProvider } from '@/contexts/tag-display-context'
+import { TagToggleButton } from '@/components/tag-toggle-button'
 import { serverLog } from '@/lib/server-log'
 import { usePullToRefresh } from '@/hooks/use-pull-to-refresh'
-import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
+import { showToast } from '@/lib/toast'
 import { PullToRefreshIndicator } from '@/components/pull-to-refresh-indicator'
 import { TimeRangeFilter, filterByTimeRange, type TimeRangeValue } from '@/components/time-range-filter'
 import { ScrollToTopButton } from '@/components/scroll-to-top-button'
 import { captureWebException } from '@/lib/sentry/capture'
-// PWA登録（キャッシュなしのパススルーSW）
-import { PWARegister } from '@/components/pwa-register'
+// SW登録は layout の ServiceWorkerManager に統合（フェーズ5-1）
 import './client-page.css'
 import '@/components/ranking-item-responsive.css'
 
 interface ClientPageProps {
   initialData: { items: RankingItem[], popularTags?: string[] }
+  /** SSR側で把握している総件数。initialData.items がこれより少ない場合、
+      1ページ目のみの埋め込み（フェーズ2.5-1）なので残りを /api/ranking/full で補完する */
+  initialTotalCount?: number
   initialGenre?: string
   initialPeriod?: string
   initialTag?: string
@@ -80,44 +83,7 @@ export function shouldSkipInitialFetch(
   )
 }
 
-// タグ表示トグルボタンコンポーネント
-function TagToggleButton() {
-  const { showTags, toggleTags } = useTagDisplay()
-  
-  return (
-    <button
-      data-testid="tag-toggle-button"
-      onClick={toggleTags}
-      style={{
-        padding: '6px 12px',
-        fontSize: '12px',
-        backgroundColor: showTags ? 'var(--primary-color)' : 'var(--surface-secondary)',
-        color: showTags ? 'white' : 'var(--text-primary)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        transition: 'all 0.2s',
-        fontWeight: '500',
-        whiteSpace: 'nowrap',
-        display: 'inline-flex',
-        alignItems: 'center',
-        height: '31px'
-      }}
-      onMouseEnter={(e) => {
-        if (!showTags) {
-          e.currentTarget.style.backgroundColor = 'var(--surface-hover)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!showTags) {
-          e.currentTarget.style.backgroundColor = 'var(--surface-secondary)'
-        }
-      }}
-    >
-      🏷️ タグ{showTags ? '非表示' : '表示'}
-    </button>
-  )
-}
+// タグ表示トグルボタンは components/tag-toggle-button.tsx に共通化（フェーズ4-2）
 
 // リロード検出用のユーティリティ（コンポーネント外で定義）
 const detectPageReload = (): boolean => {
@@ -143,6 +109,7 @@ const detectPageReload = (): boolean => {
 
 export default function ClientPage({
   initialData,
+  initialTotalCount,
   initialGenre = 'all',
   initialPeriod = '24h',
   initialTag,
@@ -185,7 +152,6 @@ export default function ClientPage({
   
   // PWAリロード機能
   const { isPulling, pullDistance } = usePullToRefresh()
-  useKeyboardShortcuts()
 
   // 選択中のジャンルが非表示になった場合、最初の表示可能なジャンルに切り替える
   useEffect(() => {
@@ -251,6 +217,71 @@ export default function ClientPage({
   useEffect(() => {
     configRef.current = config
   }, [config])
+
+  // フェーズ2.5-1: SSRはランキングの1ページ目のみHTMLに埋め込むため、
+  // マウント後に残り全件をバックグラウンドで補完する（完了後は従来どおり
+  // クライアント側slice でページ切替が即時になる）
+  const [isFullDataPending, setIsFullDataPending] = useState(
+    () => (initialTotalCount ?? 0) > (initialData.items?.length || 0)
+  )
+  useEffect(() => {
+    if (!isFullDataPending) return
+
+    const controller = new AbortController()
+    const params = new URLSearchParams({ genre: initialGenre, period: initialPeriod })
+    if (initialTag) params.set('tag', initialTag)
+
+    // 全件 JSON（本番で約200KB）は LCP に不要なので、load 後のアイドル時に開始して
+    // 初期描画（CSS/フォント/サムネイル）と帯域・メインスレッドを競合させない
+    const startFetch = () =>
+      fetch(`/api/ranking/full?${params.toString()}`, { signal: controller.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then((data: { items?: RankingItem[] }) => {
+        if (controller.signal.aborted) return
+        // 補完中にジャンル等が変わっていたら破棄（変更時は通常フェッチが全件を取得する）
+        const current = configRef.current
+        const unchanged =
+          current.genre === initialGenre &&
+          current.period === initialPeriod &&
+          current.tag === initialTag
+        if (unchanged && Array.isArray(data.items) && data.items.length > 0) {
+          setFullRankingData([...data.items].sort((a, b) => a.rank - b.rank))
+        }
+        setIsFullDataPending(false)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setIsFullDataPending(false)
+      })
+
+    let idleHandle: number | undefined
+    const scheduleIdle = () => {
+      if (controller.signal.aborted) return
+      if (typeof window.requestIdleCallback === 'function') {
+        idleHandle = window.requestIdleCallback(() => void startFetch(), { timeout: 2000 })
+      } else {
+        idleHandle = window.setTimeout(() => void startFetch(), 300)
+      }
+    }
+    if (document.readyState === 'complete') {
+      scheduleIdle()
+    } else {
+      window.addEventListener('load', scheduleIdle, { once: true })
+    }
+
+    return () => {
+      controller.abort()
+      window.removeEventListener('load', scheduleIdle)
+      if (idleHandle !== undefined) {
+        if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleHandle)
+        window.clearTimeout(idleHandle)
+      }
+    }
+    // 初回マウント時に一度だけ実行する
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // BFCache/PWA復元時のデータリフレッシュ用コールバック
   const handleBFCacheRefresh = useCallback(() => {
@@ -1024,30 +1055,10 @@ export default function ClientPage({
     if (wasAdded) {
       // NGリストを保存
       saveNGListDirectly(updatedNGList)
-      
-      // ユーザーフィードバック（簡易版）
-      const message = `🚫 NGリストに追加しました: ${displayValue}`
-      
-      // 一時的な通知を表示（シンプルなアラート）
-      // TODO: より良いトースト通知システムを実装予定
-      if (window.confirm(`${message}\n\nOKをクリックして続行してください。`)) {
-        // ユーザーが確認した場合の処理（特に何もしない）
-      }
-      
-      // デバッグ情報（開発時のみ）
-      if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
-        console.log('QuickNG: Added to NG list', {
-          type,
-          value: trimmedValue,
-          video: { id: video.id, title: video.title, author: video.authorName },
-          totalCount: updatedNGList.totalCount
-        })
-      }
+      showToast(`NGリストに追加しました: ${displayValue}`)
     } else {
       // すでに追加済みの場合
-      const existingMessage = `⚠️ すでにNGリストに登録済みです: ${displayValue}`
-      alert(existingMessage)
+      showToast(`すでにNGリストに登録済みです: ${displayValue}`, 'info')
     }
   }, [ngList, saveNGListDirectly])
 
@@ -1323,22 +1334,30 @@ export default function ClientPage({
     
     // 総ページ数を計算
     const calculatedTotalPages = Math.ceil(totalCount / ITEMS_PER_PAGE)
-    
+
+    // 全件補完（フェーズ2.5-1）の完了前は、SSRが把握している総件数から
+    // ページ数を推定してページネーションを先に正しく表示する
+    // （時間範囲フィルタ適用中は実データ基準を優先する）
+    const pendingTotalPages =
+      isFullDataPending && !isShowingCustomRanking && initialTotalCount && totalCount === totalBeforeTime
+        ? Math.ceil(initialTotalCount / ITEMS_PER_PAGE)
+        : 0
+
     // 現在のページのアイテムを抽出
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
     const endIndex = startIndex + ITEMS_PER_PAGE
     const pageItems = timeFilteredItems.slice(startIndex, endIndex)
-    
+
     // ページ内のアイテムをそのまま返す（rankは既にfilterWithNGListで再計算済み）
     const result = pageItems
-    
+
     return {
       displayItems: result,
-      totalPages: calculatedTotalPages,
+      totalPages: Math.max(calculatedTotalPages, pendingTotalPages),
       totalItemsCount: totalCount,
       totalBeforeTimeFilter: totalBeforeTime
     }
-  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange])
+  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange, isFullDataPending, initialTotalCount])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -1347,12 +1366,16 @@ export default function ClientPage({
   const finalDisplayItems = displayItems
   const isUpdating = false
   const lastUpdated = null
+
+  // 全件補完の完了前に2ページ目以降が要求された場合はローディング表示にする
+  // （補完データ到着後に該当ページが slice されて表示される）
+  const waitingForFullData =
+    isFullDataPending && !isShowingCustomRanking && currentPage > 1 && displayItems.length === 0
   
   // レンダリング
   try {
     return (
       <TagDisplayProvider>
-        <PWARegister />
         <PullToRefreshIndicator isPulling={isPulling} pullDistance={pullDistance} />
         <div className="selectors-container">
         <RankingSelector 
@@ -1379,7 +1402,7 @@ export default function ClientPage({
         </div>
       </div>
       
-      {(loading || (error === '読み込み中...')) && (
+      {(loading || waitingForFullData || (error === '読み込み中...')) && (
         <div className="loading-container">
           <div style={{ 
             fontSize: '16px', 
@@ -1423,7 +1446,7 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
+      {!loading && !waitingForFullData && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 

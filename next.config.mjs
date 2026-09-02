@@ -124,8 +124,10 @@ const nextConfig = {
       },
       // Note: API route cache headers - キャッシュはCloudflare Worker側で管理
       // Vercel側では一律no-storeにして古いデータ問題を防ぐ
+      // 例外: /api/search 系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、
+      // CDN キャッシュで上流（ニコニコ）への増幅を抑える（middleware.ts と同じ除外）
       {
-        source: '/api/:path*',
+        source: '/api/:path((?!search).*)',
         headers: [
           {
             key: 'Cache-Control',
@@ -157,8 +159,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
-    // CSS chunking設定: CSSがscriptタグで読み込まれる問題を修正
-    cssChunking: 'strict', // CSS順序を厳密に制御し、適切にlinkタグで読み込み
+    // CSS chunking: 'strict' は import 順を厳密に保つ代わりに CSS が 10 本前後の小ファイルに
+    // 分かれ、すべてレンダリングブロッキングになる（実測: 8〜11 本）。既定(true)は依存関係の
+    // ない CSS を結合して本数を減らす（順序依存がある import 同士の順序は維持される）
+    cssChunking: true,
     // メモリ使用量を削減
     workerThreads: false,
     cpus: 1,
@@ -200,81 +204,9 @@ const nextConfig = {
         'wrangler': 'commonjs wrangler',
       }
       
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        minSize: 10000, // より小さなチャンクを許可
-        maxSize: 50000, // より積極的な分割（50KB）
-        minRemainingSize: 0,
-        minChunks: 1,
-        maxAsyncRequests: 50, // 並列リクエスト数を増加
-        maxInitialRequests: 50,
-        automaticNameDelimiter: '-',
-        cacheGroups: {
-          default: false,
-          vendors: false,
-          // React関連の基本フレームワーク
-          framework: {
-            name: 'framework',
-            test: /[\\/]node_modules[\\/](react|react-dom|scheduler|prop-types|use-sync-external-store)[\\/]/,
-            priority: 50,
-            chunks: 'all',
-            enforce: true,
-            reuseExistingChunk: true
-          },
-          // Next.js関連
-          nextjs: {
-            name: 'nextjs',
-            test: /[\\/]node_modules[\\/](next|@next)[\\/]/,
-            priority: 45,
-            chunks: 'all',
-            enforce: true
-          },
-          // ポリフィル（初期ロードで必要）
-          polyfills: {
-            name: 'polyfills',
-            test: /[\\/]node_modules[\\/](core-js|regenerator-runtime|@babel\/runtime)[\\/]/,
-            priority: 40,
-            chunks: 'initial',
-            enforce: true
-          },
-          // 共通ライブラリ
-          commons: {
-            name: 'commons',
-            chunks: 'all',
-            minChunks: 2,
-            priority: 10,
-            reuseExistingChunk: true,
-            maxSize: 30000 // 30KB以下に分割
-          },
-          // ベンダーライブラリ（遅延ロード可能）
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name(module) {
-              if (!module.context) return 'vendor'
-              
-              const match = module.context.match(/[\\/]node_modules[\\/](.*?)([\\/]|$)/)
-              if (!match) return 'vendor'
-              
-              const packageName = match[1]
-              // 重要なパッケージは個別チャンクに
-              const importantPackages = ['lodash', 'date-fns', 'axios', 'swr']
-              if (importantPackages.some(pkg => packageName.includes(pkg))) {
-                return `vendor-${packageName.replace('@', '')}`
-              }
-              
-              // その他は vendor-misc にまとめる
-              return 'vendor-misc'
-            },
-            chunks: 'async', // 非同期チャンクのみ
-            priority: 20,
-            maxSize: 30000 // 30KB以下に分割
-          },
-          // 注意: CSSファイルはsplitChunksで処理してはいけません
-          // Next.jsには既に最適化されたCSS処理機能があります
-          // CSSをsplitChunksに含めると<script>タグで読み込まれてしまいます
-        }
-      }
-      
+      // 注意: 以前はここで splitChunks を maxSize 30〜50KB に細分化していたが、
+      // 初期ロードが 150〜380 本の <script> に分裂し（実測: 本番 387 本）、モバイルの
+      // リクエスト過多で LCP を悪化させていたため撤去。Next.js 既定の分割に任せる
       // 使用していないexportsを削除（本番ビルドのみ）
       if (process.env.NODE_ENV === 'production') {
         config.optimization.usedExports = true
@@ -333,6 +265,14 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === 'true',
 })
 
+// クライアントで使っていない Sentry 機能（Session Replay / デバッグ文）をバンドルから落とす
+const sentryBundleSizeOptimizations = {
+  excludeDebugStatements: true,
+  excludeReplayIframe: true,
+  excludeReplayShadowDom: true,
+  excludeReplayWorker: true,
+}
+
 const sentryBuildOptions = process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT_WEB
   ? {
       authToken: process.env.SENTRY_AUTH_TOKEN,
@@ -344,11 +284,13 @@ const sentryBuildOptions = process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_O
         deleteSourcemapsAfterUpload: true,
       },
       disableLogger: true,
+      bundleSizeOptimizations: sentryBundleSizeOptimizations,
     }
   : {
       telemetry: false,
       silent: true,
       disableLogger: true,
+      bundleSizeOptimizations: sentryBundleSizeOptimizations,
     }
 
 export default withSentryConfig(withBundleAnalyzer(nextConfig), sentryBuildOptions)

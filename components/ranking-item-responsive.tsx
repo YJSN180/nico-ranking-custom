@@ -4,7 +4,7 @@ import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
 import { MylistButton } from './mylist-button'
 import { QuickNGButton } from './quick-ng-button'
-import { CrownIcon } from './crown-icon'
+import { ItemActionMenu } from './item-action-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
 import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
@@ -19,13 +19,17 @@ interface RankingItemProps {
   item: RankingItem
   disabled?: boolean
   onQuickNGAdd?: (video: RankingItem, type: NGType, value: string | string[]) => void
+  /** 検索結果など順位が意味を持たない場面で順位表示を隠す */
+  hideRank?: boolean
+  /** 検索ページなど、PC幅でも仕切り線のみのフラットリストで表示する（PC版ランキングはカードデザインを維持） */
+  flat?: boolean
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
 // HTML構造修正: VideoContextMenuは親コンポーネントで配置
-const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd }: RankingItemProps) {
+const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd, hideRank = false, flat = false }: RankingItemProps) {
   const { showTags } = useTagDisplay()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
   const rankColors: Record<number, string> = {
@@ -53,13 +57,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     }
   }, [item.id])
 
-  // ホバー状態をリセットする関数を外部に公開するために、data属性を使用
-  const resetHoverState = (element: HTMLElement | null) => {
-    if (element) {
-      element.style.backgroundColor = 'var(--surface-color)';
-    }
-  }
-  
   // 動画クリック時に動画ページを開く
   const handleVideoClick = () => {
     if (disabled) return
@@ -102,19 +99,19 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
     <div 
       data-testid="ranking-item"
       data-video-id={item.id}
-      className="ranking-item-responsive"
+      className={[
+        'ranking-item-responsive',
+        flat ? 'ranking-item-responsive--flat' : '',
+        !flat && !hideRank && item.rank <= 3 ? 'ranking-item-responsive--top3' : ''
+      ].filter(Boolean).join(' ')}
       style={{
-        // Media Query最適化: containerTypeを削除（Container Query → Media Query移行完了）
-        background: 'var(--surface-color)',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-md)',
-        border: item.rank <= 3 ? `2px solid ${rankColors[item.rank]}` : '1px solid var(--border-color)',
-        marginBottom: '8px',
+        // 背景・枠線はCSS側で制御（PC=カード / モバイル・flat=仕切り線のみ）
         cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'background-color 0.2s',
         position: 'relative',
-        opacity: disabled ? 0.6 : 1
+        opacity: disabled ? 0.6 : 1,
+        ...(!flat && !hideRank && item.rank <= 3
+          ? ({ '--rank-accent': rankColors[item.rank] } as React.CSSProperties)
+          : {})
       }}
       onClick={(e) => {
         // disabled状態では何もしない
@@ -124,31 +121,11 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
           if (target.closest('a') || target.closest('button')) return;
           handleVideoClick();
         }}
-        onMouseEnter={(e) => {
-          // disabled状態またはタッチデバイスではホバー効果を適用しない
-          if (disabled || 'ontouchstart' in window) return;
-          e.currentTarget.style.backgroundColor = 'var(--surface-hover)';
-        }}
-        onMouseLeave={(e) => {
-          // disabled状態またはタッチデバイスではホバー効果を適用しない
-          if (disabled || 'ontouchstart' in window) return;
-          e.currentTarget.style.backgroundColor = 'var(--surface-color)';
-        }}
-        onTouchEnd={(e) => {
-          // disabled状態では何もしない
-          if (disabled) return;
-          // タッチ終了時に背景色をリセット
-          const element = e.currentTarget;
-          setTimeout(() => {
-            if (element) {
-              element.style.backgroundColor = 'var(--surface-color)';
-            }
-          }, 100);
-        }}
       >
       <div className="ranking-item-responsive__content">
         {/* デスクトップ用順位（モバイルでは非表示） */}
-        <div 
+        {!hideRank && (
+        <div
           className="ranking-item-responsive__rank ranking-item-responsive__rank--desktop"
           style={{
             background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
@@ -166,12 +143,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         >
           {item.rank}
         </div>
-        
+        )}
+
         {/* サムネイル */}
         {item.thumbURL && (
           <div className="ranking-item-responsive__thumbnail">
-            {/* モバイル用順位オーバーレイ（既存） */}
-            <div 
+            {/* モバイル用順位オーバーレイ（サムネイル左上） */}
+            {!hideRank && (
+            <div
               className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile"
               style={{
                 background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
@@ -184,6 +163,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             >
               {item.rank}
             </div>
+            )}
             {/* サムネイル画像のwrapper */}
             <div className="ranking-item-responsive__thumbnail-wrapper" style={{ position: 'relative' }}>
             <a
@@ -244,27 +224,6 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 {formatDuration(item.duration)}
               </div>
             )}
-            </div>
-            
-            {/* 新しいモバイル順位表示（サムネイル下部） */}
-            <div 
-              className="ranking-item-responsive__rank--mobile-bottom"
-              style={{
-                background: item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-                color: item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)',
-                '--mobile-rank-bg': item.rank <= 3 ? rankColors[item.rank] : 'var(--surface-secondary)',
-                '--mobile-rank-color': item.rank <= 3 ? 'var(--button-text-active)' : 'var(--text-primary)'
-              } as React.CSSProperties & { '--mobile-rank-bg': string; '--mobile-rank-color': string }}
-            >
-              <CrownIcon 
-                size={32}
-                rank={item.rank <= 3 ? (item.rank as 1 | 2 | 3) : undefined}
-                color={item.rank <= 3 ? 'currentColor' : undefined}
-                className="ranking-item-responsive__crown-icon"
-              />
-              <span style={{ fontWeight: '700', userSelect: 'none' }}>
-                {item.rank}
-              </span>
             </div>
           </div>
         )}
@@ -393,14 +352,9 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 </span>
               </div>
             </div>
-            {/* モバイル用マイリストボタン・NGボタン（CSSで表示制御） */}
-            <div className="ranking-item-responsive__mylist-button">
-              <MylistButton video={item} />
-              <QuickNGButton 
-                video={item} 
-                disabled={disabled}
-                onNGAdded={handleNGAdded}
-              />
+            {/* モバイル用3点ドットメニュー（CSSで表示制御） */}
+            <div className="ranking-item-responsive__menu">
+              <ItemActionMenu video={item} disabled={disabled} onNGAdded={handleNGAdded} />
             </div>
           </div>
           
@@ -410,16 +364,20 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             data-testid="video-stats"
           >
             <span className="ranking-item-responsive__stat">
-              ▶️ {formatNumberMobile(item.views)}
+              <span aria-hidden="true">▶️</span>
+              {formatNumberMobile(item.views)}
             </span>
             <span className="ranking-item-responsive__stat">
-              💬 {formatNumberMobile(item.comments || 0)}
+              <span aria-hidden="true">💬</span>
+              {formatNumberMobile(item.comments || 0)}
             </span>
             <span className="ranking-item-responsive__stat">
-              ❤️ {formatNumberMobile(item.likes || 0)}
+              <span aria-hidden="true">❤️</span>
+              {formatNumberMobile(item.likes || 0)}
             </span>
             <span className="ranking-item-responsive__stat">
-              📁 {formatNumberMobile(item.mylists || 0)}
+              <span aria-hidden="true">📁</span>
+              {formatNumberMobile(item.mylists || 0)}
             </span>
           </div>
           

@@ -9,6 +9,18 @@
   z-index: 20;
 }
 
+/* SSRちらつき対策: モバイル/デスクトップ両方をレンダリングし、
+   CSSメディアクエリ（768px）だけで表示を切り替える（JS判定なし） */
+.mobileOnly {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobileOnly {
+    display: contents;
+  }
+}
+
 /* メニューボタン共通スタイル */
 .menuButton {
   background: rgba(255, 255, 255, 0.25);
@@ -49,8 +61,8 @@
 /* モバイル対応 */
 @media (max-width: 768px) {
   .desktopContainer {
-    /* モバイルではコンテナは使わない */
-    display: contents;
+    /* モバイルではデスクトップ版ナビ全体を非表示（mobileOnly 側が表示される） */
+    display: none;
   }
 
   .menuButton {
@@ -251,6 +263,9 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .iconWrapper.desktop {
@@ -339,4 +354,37 @@
 .themeSectionButtons {
   display: flex;
   gap: 8px;
+}
+/* 退場アニメーション（UX改善計画 フェーズ2） */
+.overlayClosing {
+  animation: fadeOut 0.18s ease-in forwards;
+}
+
+.drawerClosing {
+  animation: slideOut 0.18s ease-in forwards;
+}
+
+.dropdownClosing {
+  animation: dropOut 0.18s ease-in forwards;
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); }
+  to { transform: translateX(-100%); }
+}
+
+@keyframes dropOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
 }

@@ -317,11 +317,7 @@ export function CustomRankingModal({
     // ステップ2で「次へ」を押した時、baseGenreのデータをプリフェッチ
     if (currentStep === 2 && formData.baseGenre && onPrefetchData) {
       try {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Prefetching data for baseGenre:', formData.baseGenre, 'period:', currentPeriod)
         await onPrefetchData(formData.baseGenre, currentPeriod)
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Prefetch completed')
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('[DEBUG] Prefetch failed:', error)

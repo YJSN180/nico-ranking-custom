@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import type { CustomRankingWithConditions } from '@/lib/storage/types'
 import styles from './genre-order-backup.module.css'
+import { showToast } from '@/lib/toast'
 
 interface BackupData {
   version: number
@@ -42,7 +43,7 @@ export function CustomRankingBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Failed to export custom rankings:', error)
-      alert('カスタムランキングデータのエクスポートに失敗しました')
+      showToast('カスタムランキングデータのエクスポートに失敗しました', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -185,11 +186,11 @@ export function CustomRankingBackup() {
       setConflictRankings([])
       
       // リロード確認
+      // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+      showToast('インポートしました。反映のため再読み込みします…', 'success')
       setTimeout(() => {
-        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-          window.location.reload()
-        }
-      }, 1500)
+        window.location.reload()
+      }, 1800)
     } catch (error) {
       console.error('Failed to apply import:', error)
       setImportMessage({ 

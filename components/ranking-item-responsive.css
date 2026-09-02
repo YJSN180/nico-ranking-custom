@@ -4,17 +4,78 @@
 
 /* 最適化: 共通値をCSS変数で定義（重複削減） */
 :root {
-  --mobile-thumbnail-width: 140px;
+  /* モバイルのサムネは画面幅の約1/3（公式アプリと同等の比率） */
+  --mobile-thumbnail-width: 124px;
   --mobile-rank-size: 18px;
-  --mobile-title-size: 14px;
+  --mobile-title-size: 14.5px;
   --mobile-gap: 8px;
   --mobile-duration-size: 11px;
 }
 
-/* タッチデバイスでホバー効果を無効化 */
+/* 行のベース: デスクトップは従来のカードデザインを維持する（ユーザー指示）。
+   仕切り線のみのフラットリストはモバイル(≤640px)と --flat 修飾（検索ページ）だけに適用する */
+.ranking-item-responsive {
+  --row-bg: var(--surface-color);
+  background: var(--row-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 8px;
+  padding: 16px;
+  transition: background-color 0.2s;
+}
+
+/* 1〜3位はランクカラーの枠線（--rank-accent は tsx 側でインライン設定） */
+.ranking-item-responsive.ranking-item-responsive--top3 {
+  border: 2px solid var(--rank-accent);
+}
+
+/* 検索ページなど: PC幅でもフラットリスト */
+.ranking-item-responsive.ranking-item-responsive--flat {
+  --row-bg: transparent;
+  background: var(--row-bg);
+  border: 0;
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
+  margin-bottom: 0;
+  padding: 0;
+}
+
+/* PC幅のフラット行（検索ページ）: paddingを広めに取り、タイトルは2行折返し */
+@media (min-width: 641px) {
+  .ranking-item-responsive--flat .ranking-item-responsive__content {
+    padding: 10px 4px;
+  }
+
+  .ranking-item-responsive--flat .ranking-item-responsive__title {
+    -webkit-line-clamp: 2;
+    margin-bottom: 0;
+  }
+
+  /* 本文（タイトル〜統計）がサムネイル(94px)より低いと統計の下だけ空くため、
+     行の高さいっぱいに伸ばしてタイトルを上端・統計を下端に揃える（本家と同じ見え方） */
+  .ranking-item-responsive--flat .ranking-item-responsive__content {
+    align-items: stretch;
+  }
+
+  .ranking-item-responsive--flat .ranking-item-responsive__details {
+    overflow: visible;
+    justify-content: space-between;
+  }
+}
+
+/* タッチデバイスでホバー効果を無効化し、タップ時のフィードバックを付ける */
 @media (hover: none) and (pointer: coarse) {
   .ranking-item-responsive:hover {
-    background-color: var(--surface-color) !important;
+    background-color: var(--row-bg) !important;
+  }
+
+  .ranking-item-responsive:active {
+    background-color: var(--surface-hover) !important;
+    transition: background-color var(--motion-fast, 150ms) var(--ease-out, ease-out);
   }
 }
 
@@ -29,13 +90,13 @@
   display: grid;
   gap: 12px;
   padding: 4px;
-  
+
   /* デスクトップレイアウト: rank + thumbnail + details + mylist-button を横並び */
   grid-template-columns: auto auto 1fr auto;
   grid-template-areas: "rank thumbnail details mylist-button";
   align-items: start;
   min-height: 80px;
-  
+
   /* 軽量最適化のみ - GPU負荷軽減 */
 }
 
@@ -56,23 +117,6 @@
   display: none;
 }
 
-/* 新しいモバイル順位表示（デスクトップでは非表示） */
-.ranking-item-responsive__rank--mobile-bottom {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-top: 16px;  /* 12pt = 16px */
-  border-radius: 6px;
-  font-size: 28px;  /* モバイル: 28px */
-  font-weight: 700;
-  text-align: center;
-  user-select: none;
-  background: var(--mobile-rank-bg);
-  color: var(--mobile-rank-color);
-}
-
 /* サムネイル */
 .ranking-item-responsive__thumbnail {
   grid-area: thumbnail;
@@ -84,6 +128,9 @@
 }
 
 /* コンテンツエリア */
+/* 注意: モバイル(≤640px)とflatでは overflow: visible を維持すること
+   （3点メニューのドロップダウンが行の外に展開できなくなるため）。
+   デスクトップのカード表示のみ main と同じ overflow: hidden */
 .ranking-item-responsive__details {
   grid-area: details;
   display: flex;
@@ -106,7 +153,7 @@
   min-width: 0;
 }
 
-/* タイトル */
+/* タイトル（デスクトップは main と同じ1行省略。モバイル・検索flatは2行折返し） */
 .ranking-item-responsive__title {
   color: var(--link-color);
   text-decoration: none;
@@ -114,14 +161,15 @@
   font-weight: 600;
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-bottom: 6px;
   word-break: break-word;
 }
 
-/* モバイル用マイリストボタン（デスクトップでは非表示） */
-.ranking-item-responsive__mylist-button {
+/* モバイル用3点ドットメニュー（デスクトップでは非表示） */
+.ranking-item-responsive__menu {
   display: none;
 }
 
@@ -140,6 +188,15 @@
   gap: 6px;
   font-size: 14px;
   color: var(--text-secondary);
+  /* 日付がはみ出さないよう、行全体と投稿者リンク側を縮小可能にする */
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ranking-item-responsive__author > a {
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
 }
 
 .ranking-item-responsive__author-name {
@@ -147,6 +204,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 200px;
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .ranking-item-responsive__author-name:hover {
@@ -176,6 +235,9 @@
 
 .ranking-item-responsive__stat {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 /* マイリストボタン・NGボタンエリア */
@@ -208,6 +270,20 @@
 
 /* Media Query: 640px以下でモバイルレイアウト (Container Query → Media Query最適化) */
 @media (max-width: 640px) {
+  /* モバイルは順位1〜3位含め、仕切り線のみのフラットリスト */
+  .ranking-item-responsive,
+  .ranking-item-responsive.ranking-item-responsive--top3 {
+    --row-bg: transparent;
+    background: var(--row-bg);
+    border: 0;
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+    margin-bottom: 0;
+    padding: 0;
+  }
+
   /* モバイルでの再生時間フォントサイズ調整 */
   .ranking-item-responsive__duration {
     font-size: var(--mobile-duration-size);
@@ -218,60 +294,68 @@
     grid-template-columns: var(--mobile-thumbnail-width) 1fr;
     grid-template-areas: "thumbnail details";
     gap: var(--mobile-gap);
-    padding: 2px;
-    min-height: 75px;
+    padding: 8px 0;
+    min-height: 0;
+    /* サムネの高さに情報列を揃える（案A: 行の高さ = サムネの高さ） */
+    align-items: stretch;
   }
-  
+
   /* デスクトップ順位を非表示 */
   .ranking-item-responsive__rank--desktop {
     display: none !important;
   }
-  
-  /* 既存のモバイル順位オーバーレイを無効化 */
+
+  /* モバイル順位: サムネイル左上のオーバーレイバッジ */
   .ranking-item-responsive__rank--mobile {
-    display: none !important;
-  }
-  
-  /* 新しいモバイル順位表示（サムネイル下）を有効化 */
-  .ranking-item-responsive__rank--mobile-bottom {
     display: flex !important;
-    font-size: 16px;
-    padding: 4px 8px;
-    margin-top: 8px;
-    gap: 4px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 20px;
+    padding: 0 5px;
+    font-size: 12px;
+    line-height: 1;
+    border-radius: 4px 0 4px 0;
+    background: var(--mobile-rank-bg);
+    color: var(--mobile-rank-color);
+    opacity: 0.92;
   }
 
-  .ranking-item-responsive__crown-icon {
-    width: 20px !important;
-    height: 20px !important;
-  }
-  
   .ranking-item-responsive__thumbnail {
     grid-area: thumbnail;
     width: var(--mobile-thumbnail-width);
     position: relative;
     margin-top: 0;
+    /* テキスト側との高さ差を上下に分散して余白を目立たなくする */
+    align-self: center;
   }
-  
+
   .ranking-item-responsive__details {
     grid-area: details;
-    gap: 4px;
-    overflow: hidden;
+    gap: 2px;
+    /* サムネ高さに合わせて情報を均等配置 */
+    justify-content: space-between;
+    /* 3点メニューのドロップダウンが行の外に展開できるようにする */
+    overflow: visible;
   }
   
-  /* モバイルでタイトル行を追加 */
+  /* モバイルでタイトル行を追加（タイトル + 3点メニュー） */
   .ranking-item-responsive__title-row {
     display: flex;
-    gap: var(--mobile-gap);
+    gap: 4px;
     align-items: flex-start;
     margin-bottom: 2px;
   }
 
   .ranking-item-responsive__title-stack {
     flex: 1;
-    gap: 4px;
+    gap: 5px;
   }
-  
+
   .ranking-item-responsive__title {
     font-size: var(--mobile-title-size);
     margin-bottom: 0;
@@ -279,106 +363,121 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    line-height: 1.3;
+    line-height: 1.25;
     flex: 1;
     min-width: 0;
+    /* タイトルが1行でも常に2行分の高さを確保し、投稿者行・統計行の位置を全行で揃える */
+    min-height: 2.5em;
   }
-  
+
   .ranking-item-responsive__author {
-    font-size: 12px;
+    font-size: 11.5px;
     gap: 4px;
-    margin-bottom: 2px;
+    margin-bottom: 0;
+    line-height: 1.3;
   }
-  
-  
+
+  /* アプリ風レイアウト: モバイルでは投稿者アイコンを非表示 */
+  .ranking-item-responsive__author img {
+    display: none;
+  }
+
+  /* モバイルでは固定上限を外し、日付が収まる分だけ名前を縮める */
   .ranking-item-responsive__author-name {
-    max-width: 130px;
+    max-width: none;
   }
-  
+
+  .ranking-item-responsive__date {
+    font-size: 11.5px;
+  }
+
+  /* 統計は1行固定（折り返すと行の高さが崩れるため） */
   .ranking-item-responsive__stats {
-    font-size: 12px;
-    gap: 6px;
-    flex-wrap: wrap;
-    overflow-x: visible;
+    font-size: 11px;
+    gap: 5px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    white-space: nowrap;
+    line-height: 1.3;
   }
-  
+
+  .ranking-item-responsive__stat {
+    gap: 2px;
+  }
+
+  /* 統計アイコン（絵文字）を一回り小さくして横幅の安全マージンを確保 */
+  .ranking-item-responsive__stat > span[aria-hidden='true'] {
+    font-size: 10px;
+  }
+
   /* モバイルでのマイリストエリア調整 */
   .ranking-item-responsive__mylist-area {
-    /* グリッドから外れてタイトル行内に配置されるため、特別な調整は不要 */
-    display: none; /* 元のグリッドエリアは非表示 */
+    display: none; /* デスクトップ用エリアは非表示 */
   }
-  
-  /* モバイルでタイトル行内のマイリストボタンを表示 */
-  .ranking-item-responsive__mylist-button {
+
+  /* モバイルで3点ドットメニューを表示（右上） */
+  .ranking-item-responsive__menu {
     display: flex;
-    flex-direction: column; /* ボタンを縦並びに */
-    gap: 4px; /* ボタン間のスペース */
+    align-items: flex-start;
     flex-shrink: 0;
-    /* タッチターゲットを拡大 */
-    position: relative;
-    /* 見た目よりも大きなタッチ領域を作成 */
-    padding: 5px;
-    margin: -5px;
-  }
-  
-  /* モバイルでボタンのサイズ調整 */
-  .ranking-item-responsive__mylist-button > button {
-    width: 32px !important;
-    height: 32px !important;
-    font-size: 16px !important; /* アイコンサイズ調整 */
-  }
-  
-  .ranking-item-responsive__mylist-button .quick-ng-button {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 16px !important;
-    padding: 0 !important;
-  }
-  
-  .ranking-item-responsive__mylist-button .quick-ng-button__icon {
-    font-size: 14px !important; /* 禁止アイコンのサイズ調整 */
+    margin: -6px -4px 0 0;
   }
 }
 
-/* Media Query: 420px以下で超モバイルレイアウト (Container Query → Media Query最適化) */
-@media (max-width: 420px) {
-  /* 超モバイルでの再生時間フォントサイズ調整 */
+/* フェーズ2.5-3: 画面外の行の描画をスキップしてモバイルの初回描画・スクロールを軽くする。
+   content-visibility の contain(layout/paint) は、行内から開くUI
+   （⋮ドロップダウン・タグ長押しメニュー）を行の箱に閉じ込めてしまうため、
+   :has() で「開いている行」だけ containment を解除する。
+   :has 非対応ブラウザでは全体を有効化しない（@supports ゲート）。
+   デスクトップはNGポップオーバー(fixed)が行内にあるため適用しない */
+@media (max-width: 640px) {
+  @supports selector(:has(a)) {
+    .ranking-item-responsive {
+      content-visibility: auto;
+      /* 概算の行高（サムネ70px + 上下padding 16px + 下線1px）。auto で実測値に自己補正される */
+      contain-intrinsic-size: auto 87px;
+    }
+
+    .ranking-item-responsive:has(.item-action-menu__dropdown),
+    .ranking-item-responsive:has(.tag-context-menu) {
+      content-visibility: visible;
+    }
+  }
+}
+
+/* Media Query: 360px以下の小型端末レイアウト（375px以上は基本モバイルレイアウトを使用） */
+@media (max-width: 360px) {
+  /* 小型端末での再生時間フォントサイズ調整 */
   .ranking-item-responsive__duration {
     font-size: 10px;
   }
-  
+
   .ranking-item-responsive__content {
-    grid-template-columns: 100px 1fr;
+    grid-template-columns: 116px 1fr;
     grid-template-areas: "thumbnail details";
-    padding: 2px;
+    padding: 8px 0;
     gap: 6px;
-    min-height: 70px;
+    min-height: 0;
   }
-  
-  /* 超モバイルでも新しいモバイル順位表示を使用 */
-  .ranking-item-responsive__rank--mobile-bottom {
-    font-size: 14px !important;
-    padding: 3px 6px !important;
-    gap: 4px !important;
-    margin-top: 6px !important;
+
+  /* 小型端末での順位オーバーレイ調整 */
+  .ranking-item-responsive__rank--mobile {
+    min-width: 20px;
+    height: 18px;
+    font-size: 11px;
+    padding: 0 4px;
   }
-  
-  /* 超モバイルでの王冠アイコンサイズ調整 */
-  .ranking-item-responsive__crown-icon {
-    width: 18px !important;
-    height: 18px !important;
-  }
-  
+
   .ranking-item-responsive__thumbnail {
-    width: 100px;
+    width: 116px;
     margin-top: 0;
     position: relative;
   }
-  
+
   .ranking-item-responsive__title {
-    font-size: 12.5px;
+    font-size: 13px;
   }
-  
+
   .ranking-item-responsive__author {
     font-size: 11px;
   }

@@ -24,6 +24,9 @@ export const revalidate = 0
 // Prefetch hints
 export const preferredRegion = 'auto'
 
+// SSRでHTMLに埋め込むランキング件数（=1ページ分。client-page の ITEMS_PER_PAGE と揃える）
+const EMBED_ITEMS_COUNT = 100
+
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
 // 動的レンダリングに切り替えてキャッシュヘッダーで対応
@@ -268,11 +271,14 @@ export default async function Home({ searchParams }: PageProps) {
       return <EmptyRankingPage tag={tag} />
     }
 
-    // クライアントサイドページネーション: 全件データをクライアントに送信
-    // NGリスト即座反映とパフォーマンス向上のため
+    // フェーズ2.5-1: HTMLに埋め込むのは1ページ目のみ。
+    // 全件（約1000件・生917KB）の埋め込みは初回ダウンロード/パース/
+    // ハイドレーションをモバイルで重くするため、残りはクライアントが
+    // マウント後に /api/ranking/full で補完する（initialTotalCount が合図）
+    const embeddedItems = rankingData.slice(0, EMBED_ITEMS_COUNT)
 
     return (
-      <main style={{ 
+      <main id="main-content" style={{ 
         padding: '0',
         // CLS対策: フッターマージンを考慮したminHeight
         minHeight: 'calc(100vh - 80px)',
@@ -291,8 +297,9 @@ export default async function Home({ searchParams }: PageProps) {
             minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
           }}>
           <SuspenseWrapper>
-            <ClientPage 
-              initialData={{ items: rankingData, popularTags }} 
+            <ClientPage
+              initialData={{ items: embeddedItems, popularTags }}
+              initialTotalCount={rankingData.length}
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}
