@@ -271,6 +271,8 @@ export function SearchClient() {
   // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数（次ページ要求のヒント）
   const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
   const realtimeCountRef = useRef(0)
+  // リアルタイム区間のタグ補完（S4）: 応答表示後に非同期で取得し、古い検索の結果は捨てる
+  const tagsRequestIdRef = useRef(0)
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -294,6 +296,33 @@ export function SearchClient() {
 
   const updateField = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  // リアルタイム区間（nvapi 由来）の動画はタグを持たないため、表示後に v3_guest 経由で
+  // tags / tagDetails を後付けする。これでタグ系のユーザーNG・タグ表示が区間にも効く。
+  const enrichRealtimeTags = useCallback(async (data: SearchApiResponse) => {
+    if (data.source !== 'merged' || !data.realtimeCount) return
+    const targets = data.items.filter((it) => it.tags === undefined && it.tagDetails === undefined).map((it) => it.id)
+    if (targets.length === 0) return
+    const requestId = ++tagsRequestIdRef.current
+    try {
+      const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(targets.slice(0, 30).join(','))}`)
+      if (!res.ok) return
+      const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>> }
+      if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
+      const details = body.tagDetails
+      setItems((prev) =>
+        prev
+          ? prev.map((it) =>
+              details[it.id]
+                ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
+                : it
+            )
+          : prev
+      )
+    } catch {
+      // 補完は任意機能なので失敗しても検索結果はそのまま
+    }
   }, [])
 
   const runSearch = useCallback(
@@ -336,6 +365,7 @@ export function SearchClient() {
         setPage(data.page)
         realtimeCountRef.current = data.realtimeCount ?? 0
         setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
+        void enrichRealtimeTags(data)
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
         setError('検索中にエラーが発生しました。ネットワークをご確認ください。')
@@ -346,7 +376,7 @@ export function SearchClient() {
         }
       }
     },
-    [router]
+    [router, enrichRealtimeTags]
   )
 
   // URLに条件付きで直接アクセスした場合は自動検索
