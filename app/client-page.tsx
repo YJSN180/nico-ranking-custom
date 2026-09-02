@@ -231,7 +231,10 @@ export default function ClientPage({
     const params = new URLSearchParams({ genre: initialGenre, period: initialPeriod })
     if (initialTag) params.set('tag', initialTag)
 
-    fetch(`/api/ranking/full?${params.toString()}`, { signal: controller.signal })
+    // 全件 JSON（本番で約200KB）は LCP に不要なので、load 後のアイドル時に開始して
+    // 初期描画（CSS/フォント/サムネイル）と帯域・メインスレッドを競合させない
+    const startFetch = () =>
+      fetch(`/api/ranking/full?${params.toString()}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -253,7 +256,29 @@ export default function ClientPage({
         if (!controller.signal.aborted) setIsFullDataPending(false)
       })
 
-    return () => controller.abort()
+    let idleHandle: number | undefined
+    const scheduleIdle = () => {
+      if (controller.signal.aborted) return
+      if (typeof window.requestIdleCallback === 'function') {
+        idleHandle = window.requestIdleCallback(() => void startFetch(), { timeout: 2000 })
+      } else {
+        idleHandle = window.setTimeout(() => void startFetch(), 300)
+      }
+    }
+    if (document.readyState === 'complete') {
+      scheduleIdle()
+    } else {
+      window.addEventListener('load', scheduleIdle, { once: true })
+    }
+
+    return () => {
+      controller.abort()
+      window.removeEventListener('load', scheduleIdle)
+      if (idleHandle !== undefined) {
+        if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleHandle)
+        window.clearTimeout(idleHandle)
+      }
+    }
     // 初回マウント時に一度だけ実行する
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

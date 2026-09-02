@@ -125,6 +125,13 @@ describe('SSR埋め込み1ページ + 全件バックグラウンド補完', () 
   }
 
   beforeEach(() => {
+    // 全件補完は load 後の requestIdleCallback で開始される。jsdom には無いので即時実行のスタブを入れ、
+    // 実時間待ち（放置した ClientPage のタイマー暴走を招く）を避ける
+    ;(window as unknown as { requestIdleCallback: unknown }).requestIdleCallback = (cb: () => void) => {
+      cb()
+      return 1
+    }
+    ;(window as unknown as { cancelIdleCallback: unknown }).cancelIdleCallback = () => undefined
     vi.clearAllMocks()
     // 前のテストの history.replaceState(?page=N) やスクロール保存が漏れないようにリセット
     window.history.replaceState({}, '', '/')
