@@ -152,6 +152,45 @@ async function writeToCloudflareKV(data: any, keyName: string = 'RANKING_LATEST'
 }
 
 // Write data split into 3 groups
+// 人気タグだけを集めた小さなキー。/api/popular-tags がランキング本体（数百KB〜）を
+// 丸読みせずに済むようにする（非圧縮 JSON、simple-kv の kv.get で読む）
+const POPULAR_TAGS_ALL_SOURCE_GENRES = ['game', 'anime', 'entertainment', 'technology', 'voicesynthesis', 'other'];
+
+function buildPopularTagsLatest(rankingData: any): any {
+  const genres: Record<string, { '24h': string[]; hour: string[] }> = {};
+  for (const [genre, data] of Object.entries<any>(rankingData.genres || {})) {
+    genres[genre] = {
+      '24h': Array.isArray(data?.['24h']?.popularTags) ? data['24h'].popularTags : [],
+      hour: Array.isArray(data?.hour?.popularTags) ? data.hour.popularTags : [],
+    };
+  }
+  // 「総合」は lib/popular-tags.ts と同じスコアリング（順位が高いほど高スコア、上位15件）
+  const aggregate = (period: '24h' | 'hour'): string[] => {
+    const score = new Map<string, number>();
+    for (const g of POPULAR_TAGS_ALL_SOURCE_GENRES) {
+      const tags = genres[g]?.[period] || [];
+      tags.forEach((tag: string, index: number) => score.set(tag, (score.get(tag) || 0) + (tags.length - index)));
+    }
+    return Array.from(score.entries()).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([tag]) => tag);
+  };
+  return { updatedAt: new Date().toISOString(), genres, all: { '24h': aggregate('24h'), hour: aggregate('hour') } };
+}
+
+async function writeSmallJsonToKV(keyName: string, data: any): Promise<void> {
+  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID;
+  const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+  if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) throw new Error('Cloudflare KV credentials not configured');
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/values/${keyName}`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${CF_API_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(`Failed to write ${keyName}: ${res.status} ${await res.text()}`);
+  console.log(`✅ Wrote ${keyName} (${(JSON.stringify(data).length / 1024).toFixed(1)} KB)`);
+}
+
 async function writeToCloudflareKVGroups(rankingData: any): Promise<void> {
   console.log('\n📦 Starting 3-key split write...');
   
@@ -362,6 +401,13 @@ async function main() {
     
     // KVは3-key分割で書き込み（Workerのフォールバック機能用）
     await writeToCloudflareKVGroups(rankingData);
+
+    // 人気タグの小キー（失敗してもランキング更新自体は成功扱い: API 側はフォールバックする）
+    try {
+      await writeSmallJsonToKV('POPULAR_TAGS_LATEST', buildPopularTagsLatest(rankingData));
+    } catch (error) {
+      console.error('⚠️ Failed to write POPULAR_TAGS_LATEST (API falls back to ranking blobs):', error);
+    }
     
     // Clean up temp files
     console.log('\nCleaning up temporary files...');
