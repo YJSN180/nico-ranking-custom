@@ -27,6 +27,8 @@ import {
   type SearchTagOperator,
 } from '@/lib/search/snapshot-search'
 import { REALTIME_TAGS_MAX_VIDEOS } from '@/lib/search/realtime-tags'
+import { OWNER_INFO_MAX_CHANNEL_VIDEOS, OWNER_INFO_MAX_USERS } from '@/lib/search/owner-info'
+import type { OwnerInfo } from '@/lib/search/owner-info'
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
@@ -274,6 +276,7 @@ export function SearchClient() {
   const realtimeCountRef = useRef(0)
   // リアルタイム区間のタグ補完（S4）: 応答表示後に非同期で取得し、古い検索の結果は捨てる
   const tagsRequestIdRef = useRef(0)
+  const ownersRequestIdRef = useRef(0)
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -331,6 +334,63 @@ export function SearchClient() {
     }
   }, [])
 
+  // Snapshot API には投稿者名・アイコンが無い（userId / channelId のみ）ため、表示後に
+  // /api/search/owners で後付けし、ランキング画面と同じ投稿者表示にする。
+  // ユーザーは ID ごと、チャンネルは代表動画 1 件ごとに問い合わせる。
+  const enrichOwners = useCallback(async (data: SearchApiResponse, signal?: AbortSignal) => {
+    const requestId = ++ownersRequestIdRef.current
+    const userIds = new Set<string>()
+    const channelVideos = new Map<string, string>()
+    for (const it of data.items) {
+      if (it.authorName || !it.authorId) continue
+      if (it.authorId.startsWith('channel/')) {
+        const channelId = it.authorId.slice('channel/'.length)
+        if (!channelVideos.has(channelId)) channelVideos.set(channelId, it.id)
+      } else if (/^\d+$/.test(it.authorId)) {
+        userIds.add(it.authorId)
+      }
+    }
+    if (userIds.size === 0 && channelVideos.size === 0) return
+
+    const applyOwners = (users: Record<string, OwnerInfo>, channels: Record<string, OwnerInfo>): void => {
+      setItems((prev) =>
+        prev
+          ? prev.map((it) => {
+              if (it.authorName || !it.authorId) return it
+              const info = it.authorId.startsWith('channel/')
+                ? channels[it.authorId.slice('channel/'.length)]
+                : users[it.authorId]
+              return info ? { ...it, authorName: info.name, authorIcon: info.icon ?? it.authorIcon } : it
+            })
+          : prev
+      )
+    }
+
+    const requests: string[] = []
+    const userList = Array.from(userIds)
+    for (let i = 0; i < userList.length; i += OWNER_INFO_MAX_USERS) {
+      requests.push(`users=${encodeURIComponent(userList.slice(i, i + OWNER_INFO_MAX_USERS).join(','))}`)
+    }
+    const videoList = Array.from(channelVideos.values())
+    for (let i = 0; i < videoList.length; i += OWNER_INFO_MAX_CHANNEL_VIDEOS) {
+      requests.push(`videos=${encodeURIComponent(videoList.slice(i, i + OWNER_INFO_MAX_CHANNEL_VIDEOS).join(','))}`)
+    }
+
+    await Promise.all(
+      requests.map(async (query) => {
+        try {
+          const res = await fetch(`/api/search/owners?${query}`, { signal })
+          if (!res.ok) return
+          const body = (await res.json()) as { users?: Record<string, OwnerInfo>; channels?: Record<string, OwnerInfo> }
+          if (requestId !== ownersRequestIdRef.current) return
+          applyOwners(body.users ?? {}, body.channels ?? {})
+        } catch {
+          // 補完は任意機能なので失敗（abort 含む）しても検索結果はそのまま（ID 表示のまま）
+        }
+      })
+    )
+  }, [])
+
   const runSearch = useCallback(
     async (searchForm: FormState, searchPage: number) => {
       abortRef.current?.abort()
@@ -372,6 +432,7 @@ export function SearchClient() {
         realtimeCountRef.current = data.realtimeCount ?? 0
         setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
         void enrichRealtimeTags(data, controller.signal)
+        void enrichOwners(data, controller.signal)
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
         setError('検索中にエラーが発生しました。ネットワークをご確認ください。')
@@ -382,7 +443,7 @@ export function SearchClient() {
         }
       }
     },
-    [router, enrichRealtimeTags]
+    [router, enrichRealtimeTags, enrichOwners]
   )
 
   // URLに条件付きで直接アクセスした場合は自動検索

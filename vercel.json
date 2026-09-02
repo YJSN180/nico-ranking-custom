@@ -11,6 +11,9 @@
     },
     "app/api/search/realtime-tags/route.ts": {
       "maxDuration": 15
+    },
+    "app/api/search/owners/route.ts": {
+      "maxDuration": 15
     }
   },
   "github": {
