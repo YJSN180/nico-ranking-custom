@@ -26,6 +26,7 @@ import {
   type SearchTagCondition,
   type SearchTagOperator,
 } from '@/lib/search/snapshot-search'
+import { REALTIME_TAGS_MAX_VIDEOS } from '@/lib/search/realtime-tags'
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
 import type { NGType } from '@/components/quick-ng-button'
@@ -300,28 +301,33 @@ export function SearchClient() {
 
   // リアルタイム区間（nvapi 由来）の動画はタグを持たないため、表示後に v3_guest 経由で
   // tags / tagDetails を後付けする。これでタグ系のユーザーNG・タグ表示が区間にも効く。
-  const enrichRealtimeTags = useCallback(async (data: SearchApiResponse) => {
+  const enrichRealtimeTags = useCallback(async (data: SearchApiResponse, signal?: AbortSignal) => {
+    // 早期 return より前に採番し、新しい検索が来たら（結果がマージでなくても）古い補完を無効化する
+    const requestId = ++tagsRequestIdRef.current
     if (data.source !== 'merged' || !data.realtimeCount) return
     const targets = data.items.filter((it) => it.tags === undefined && it.tagDetails === undefined).map((it) => it.id)
     if (targets.length === 0) return
-    const requestId = ++tagsRequestIdRef.current
     try {
-      const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(targets.slice(0, 30).join(','))}`)
-      if (!res.ok) return
-      const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>> }
-      if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
-      const details = body.tagDetails
-      setItems((prev) =>
-        prev
-          ? prev.map((it) =>
-              details[it.id]
-                ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
-                : it
-            )
-          : prev
-      )
+      // サーバー側の1リクエスト上限に合わせて分割し、順に取得（区間は通常数件〜数十件）
+      for (let i = 0; i < targets.length; i += REALTIME_TAGS_MAX_VIDEOS) {
+        const chunk = targets.slice(i, i + REALTIME_TAGS_MAX_VIDEOS)
+        const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(chunk.join(','))}`, { signal })
+        if (!res.ok) return
+        const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>> }
+        if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
+        const details = body.tagDetails
+        setItems((prev) =>
+          prev
+            ? prev.map((it) =>
+                details[it.id]
+                  ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
+                  : it
+              )
+            : prev
+        )
+      }
     } catch {
-      // 補完は任意機能なので失敗しても検索結果はそのまま
+      // 補完は任意機能なので失敗（abort 含む）しても検索結果はそのまま
     }
   }, [])
 
@@ -365,7 +371,7 @@ export function SearchClient() {
         setPage(data.page)
         realtimeCountRef.current = data.realtimeCount ?? 0
         setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
-        void enrichRealtimeTags(data)
+        void enrichRealtimeTags(data, controller.signal)
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
         setError('検索中にエラーが発生しました。ネットワークをご確認ください。')

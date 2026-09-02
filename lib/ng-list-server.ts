@@ -47,6 +47,7 @@ export async function saveServerManualNGList(ngList: Omit<NGList, 'derivedVideoI
   invalidateServerNGListCache()
   try {
     await kv.set('ng-list-manual', ngList)
+    invalidateServerNGListCache()
   } catch (error) {
     // Failed to save NG list to KV
     throw error
@@ -62,6 +63,7 @@ export async function addToServerDerivedNGList(videoIds: string[]): Promise<void
     const current = await kv.get<string[]>('ng-list-derived') || []
     const newSet = new Set([...current, ...videoIds])
     await kv.set('ng-list-derived', Array.from(newSet))
+    invalidateServerNGListCache()
   } catch (error) {
     // Failed to update derived NG list
     throw error
@@ -113,6 +115,7 @@ export async function clearServerDerivedNGList(): Promise<void> {
   invalidateServerNGListCache()
   try {
     await kv.set('ng-list-derived', [])
+    invalidateServerNGListCache()
   } catch (error) {
     console.error('Failed to clear derived NG list:', error)
     throw error

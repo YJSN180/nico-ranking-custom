@@ -44,6 +44,19 @@ export const NVAPI_GENRE_KEYS: Record<string, string> = {
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000
 
+/** 環境変数による即時ロールバック（'false' で Snapshot 単独）。/api/search と /api/search/realtime で共有 */
+export function isRealtimeEnabled(): boolean {
+  return process.env.SEARCH_REALTIME_ENABLED !== 'false'
+}
+
+/** 全体予算（overall）と1リクエストのタイムアウトを合成する */
+function combineSignals(overall: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  const perRequest = AbortSignal.timeout(timeoutMs)
+  if (!overall) return perRequest
+  const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any
+  return typeof anyFn === 'function' ? anyFn([overall, perRequest]) : overall
+}
+
 /**
  * 境界 T = 直近の 05:00 JST（現在が5時前なら前日5時）。
  * サーバーのタイムゾーンに依存しないよう UTC ミリ秒から JST を計算する。
@@ -152,7 +165,10 @@ export function applyRealtimeRangeFilters(items: RankingItem[], c: SearchConditi
       inRange(it.comments ?? 0, c.commentsMin, c.commentsMax) &&
       inRange(it.likes ?? 0, c.likesMin, c.likesMax) &&
       inRange(it.mylists ?? 0, c.mylistsMin, c.mylistsMax) &&
-      (it.duration === undefined || inRange(it.duration, c.durationMin, c.durationMax))
+      // Snapshot と同様、再生時間フィルタ指定時は duration 不明の動画を除外する
+      (c.durationMin === undefined && c.durationMax === undefined
+        ? true
+        : it.duration !== undefined && inRange(it.duration, c.durationMin, c.durationMax))
   )
 }
 
@@ -172,7 +188,9 @@ export async function fetchRealtimeSegment(
   conditions: SearchConditions,
   boundary: string,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 8000
+  timeoutMs = 4000,
+  /** 区間全体の時間予算。超えたら残りページを諦めて throw（呼び出し側で Snapshot 単独に縮退） */
+  overallSignal?: AbortSignal
 ): Promise<RealtimeSegment> {
   const collected: RankingItem[] = []
   let upstreamTotal = 0
@@ -181,7 +199,7 @@ export async function fetchRealtimeSegment(
     const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
       headers: NVAPI_HEADERS,
       cache: 'no-store',
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: combineSignals(overallSignal, timeoutMs),
     })
     if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
     const payload = (await res.json()) as NvapiSearchResponse

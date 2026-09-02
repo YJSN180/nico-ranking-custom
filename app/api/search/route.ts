@@ -21,14 +21,15 @@ import {
   type RealtimeSegment,
 } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
+import { isRealtimeEnabled } from '@/lib/search/realtime-search'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 import type { RankingItem } from '@/types/ranking'
 
 export const revalidate = 0
 
 const FETCH_TIMEOUT_MS = 10000
-// 環境変数で即時ロールバック可能（'false' で Snapshot 単独に戻る）
-const REALTIME_ENABLED = process.env.SEARCH_REALTIME_ENABLED !== 'false'
+/** リアルタイム区間取得の全体予算。超過時は Snapshot 単独に縮退する（プラットフォーム504より先に必ず効かせる） */
+const REALTIME_BUDGET_MS = 4000
 
 type SnapshotPage = { items: RankingItem[]; totalCount: number }
 type SnapshotFailure = { error: string; status: number; detail?: string }
@@ -36,11 +37,12 @@ type SnapshotFailure = { error: string; status: number; detail?: string }
 async function fetchSnapshotPage(
   conditions: SearchConditions,
   offset: number,
-  limit: number
+  limit: number,
+  startTimeBefore?: string
 ): Promise<SnapshotPage | SnapshotFailure> {
   let response: Response
   try {
-    response = await fetch(buildSnapshotSearchUrl(conditions, { offset, limit }), {
+    response = await fetch(buildSnapshotSearchUrl(conditions, { offset, limit, startTimeBefore }), {
       headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
       cache: 'no-store',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -75,7 +77,7 @@ const isFailure = (r: SnapshotPage | SnapshotFailure): r is SnapshotFailure => '
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const conditions = parseSearchConditions(request.nextUrl.searchParams)
   const boundary = getRealtimeBoundary()
-  const mergeable = REALTIME_ENABLED && isRealtimeMergeable(conditions, boundary)
+  const mergeable = isRealtimeEnabled() && isRealtimeMergeable(conditions, boundary)
 
   // ---- Snapshot 単独（従来どおり） ----
   if (!mergeable) {
@@ -98,14 +100,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const rtCountHint = Math.max(0, parseInt(request.nextUrl.searchParams.get('rtCount') ?? '0', 10) || 0)
   const provisional = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, rtCountHint)
 
+  // Snapshot 側は境界より前だけ（filters[startTime][lt]=T）を取り、nvapi 側（minRegisteredAt=T）と
+  // 構成的に排他にする。これで dedup に頼らず offset 計算が厳密になり、ページ間の重複が起きない
   const [realtimeResult, snapshotResult] = await Promise.all([
-    fetchRealtimeSegment(conditions, boundary).then(
+    fetchRealtimeSegment(conditions, boundary, fetch, 4000, AbortSignal.timeout(REALTIME_BUDGET_MS)).then(
       (segment): { segment: RealtimeSegment; error?: undefined } => ({ segment }),
       (error: unknown): { segment?: undefined; error: string } => ({
         error: error instanceof Error ? error.message : 'realtime_error',
       })
     ),
-    fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE),
+    fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, boundary),
   ])
 
   if (isFailure(snapshotResult)) {
@@ -139,7 +143,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     (plan.snapshotOffset >= provisional.snapshotOffset &&
       plan.snapshotOffset + plan.snapshotLimit <= provisional.snapshotOffset + SEARCH_PAGE_SIZE)
   if (!covers) {
-    const refetched = await fetchSnapshotPage(conditions, plan.snapshotOffset, SEARCH_PAGE_SIZE)
+    const refetched = await fetchSnapshotPage(conditions, plan.snapshotOffset, SEARCH_PAGE_SIZE, boundary)
     if (isFailure(refetched)) {
       return NextResponse.json({ error: refetched.error, detail: refetched.detail }, { status: refetched.status })
     }

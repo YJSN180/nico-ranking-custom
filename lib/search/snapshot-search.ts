@@ -223,6 +223,9 @@ function appendRangeFilter(
 export interface SnapshotWindow {
   offset?: number
   limit?: number
+  /** リアルタイム区間とのマージ時: この時刻（境界T）より前の投稿だけを対象にし、
+      nvapi 側（minRegisteredAt=T、境界を含む）と構成的に排他にする */
+  startTimeBefore?: string
 }
 
 /**
@@ -268,7 +271,16 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions, window: Sna
   appendRangeFilter(params, 'mylistCounter', conditions.mylistsMin, conditions.mylistsMax)
   appendRangeFilter(params, 'lengthSeconds', conditions.durationMin, conditions.durationMax)
   if (conditions.dateFrom) params.set('filters[startTime][gte]', conditions.dateFrom)
-  if (conditions.dateTo) params.set('filters[startTime][lte]', conditions.dateTo)
+  if (window.startTimeBefore) {
+    // 境界より前（排他）。dateTo が境界より前ならそちらが上限（この場合はマージ対象外だが安全側）
+    if (conditions.dateTo && new Date(conditions.dateTo).getTime() < new Date(window.startTimeBefore).getTime()) {
+      params.set('filters[startTime][lte]', conditions.dateTo)
+    } else {
+      params.set('filters[startTime][lt]', window.startTimeBefore)
+    }
+  } else if (conditions.dateTo) {
+    params.set('filters[startTime][lte]', conditions.dateTo)
+  }
 
   // タグ論理条件は jsonFilter で指定（filters と併用可能なことは実測確認済み）
   const tagFilter = buildTagJsonFilter(conditions.tagConditions)

@@ -3,13 +3,17 @@
 // プレビューで実測するための内部ルート。S3 以降もデバッグ用に残す。
 import { NextRequest, NextResponse } from 'next/server'
 import { parseSearchConditions } from '@/lib/search/snapshot-search'
-import { fetchRealtimeSegment, getRealtimeBoundary, isRealtimeMergeable } from '@/lib/search/realtime-search'
+import { fetchRealtimeSegment, getRealtimeBoundary, isRealtimeEnabled, isRealtimeMergeable } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 
 export const revalidate = 0
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // 本番では公開しない（プレビュー/ローカル専用のデバッグルート）。kill switch も /api/search と共有
+  if (process.env.VERCEL_ENV === 'production' || !isRealtimeEnabled()) {
+    return new NextResponse(null, { status: 404 })
+  }
   const conditions = parseSearchConditions(request.nextUrl.searchParams)
   const boundary = getRealtimeBoundary()
   const mergeable = isRealtimeMergeable(conditions, boundary)
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   const started = Date.now()
   try {
-    const segment = await fetchRealtimeSegment(conditions, boundary)
+    const segment = await fetchRealtimeSegment(conditions, boundary, fetch, 4000, AbortSignal.timeout(4000))
     const { items: exclusionFiltered, excludedCount } = applyExclusionRules(segment.items)
     const { filteredItems, filteredCount } = await filterRankingItemsServer(exclusionFiltered)
     return NextResponse.json(
@@ -35,7 +39,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
   } catch (error) {
     return NextResponse.json(
-      { boundary, mergeable, error: error instanceof Error ? error.message : 'realtime_error', elapsedMs: Date.now() - started },
+      { boundary, mergeable, error: 'realtime_error', elapsedMs: Date.now() - started },
       { status: 502 }
     )
   }

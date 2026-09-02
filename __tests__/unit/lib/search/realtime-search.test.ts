@@ -183,3 +183,11 @@ describe('planMergedPage / assembleMergedPage', () => {
     expect(page.map((i) => [i.id, i.rank])).toEqual([['x', 3], ['y', 4]])
   })
 })
+
+describe('applyRealtimeRangeFilters: duration 不明の扱い', () => {
+  it('再生時間フィルタ指定時は duration 不明を除外し、未指定なら残す', () => {
+    const unknown = mapNvapiVideoToRankingItem({ id: 'u', title: 'u', registeredAt: '', count: { view: 1 } }, 1)
+    expect(applyRealtimeRangeFilters([unknown], base({ durationMax: 60 }))).toEqual([])
+    expect(applyRealtimeRangeFilters([unknown], base()).map((i) => i.id)).toEqual(['u'])
+  })
+})

@@ -8,6 +8,12 @@
     },
     "app/api/cron/fetch/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/search/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/search/realtime-tags/route.ts": {
+      "maxDuration": 15
     }
   },
   "github": {

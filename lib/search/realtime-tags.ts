@@ -6,7 +6,8 @@
 // 検索応答のクリティカルパスには載せず、クライアントが結果表示後に非同期で呼ぶ。
 import type { TagDetail } from '@/types/ranking'
 
-export const REALTIME_TAGS_MAX_VIDEOS = 30
+/** 1リクエストあたりの上限。未認証で叩ける増幅器になるため小さく保つ（クライアントは分割して呼ぶ） */
+export const REALTIME_TAGS_MAX_VIDEOS = 10
 const DEFAULT_CONCURRENCY = 8
 const DEFAULT_PER_REQUEST_TIMEOUT_MS = 2500
 

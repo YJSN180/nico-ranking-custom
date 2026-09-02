@@ -214,3 +214,20 @@ describe('applyExclusionRules', () => {
     expect(result.excludedCount).toBe(2)
   })
 })
+
+describe('buildSnapshotSearchUrl: マージ用の窓', () => {
+  it('startTimeBefore で境界より前（lt）に限定し、offset/limit を上書きする', () => {
+    const conditions = parseSearchConditions(new URLSearchParams({ q: 'x', sort: '-startTime' }))
+    const url = new URL(buildSnapshotSearchUrl(conditions, { offset: 38, limit: 12, startTimeBefore: '2026-09-02T05:00:00+09:00' }))
+    expect(url.searchParams.get('filters[startTime][lt]')).toBe('2026-09-02T05:00:00+09:00')
+    expect(url.searchParams.get('filters[startTime][lte]')).toBeNull()
+    expect(url.searchParams.get('_offset')).toBe('38')
+    expect(url.searchParams.get('_limit')).toBe('12')
+  })
+  it('dateTo が境界より前なら dateTo（lte）を優先する', () => {
+    const conditions = parseSearchConditions(new URLSearchParams({ q: 'x', dateTo: '2026-09-01T00:00:00+09:00' }))
+    const url = new URL(buildSnapshotSearchUrl(conditions, { startTimeBefore: '2026-09-02T05:00:00+09:00' }))
+    expect(url.searchParams.get('filters[startTime][lt]')).toBeNull()
+    expect(url.searchParams.get('filters[startTime][lte]')).toBeTruthy()
+  })
+})

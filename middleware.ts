@@ -24,6 +24,11 @@ const noStorePaths: string[] = []
   // 一般的な公開APIのみ認証をスキップ
   // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
+    // 検索系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、CDN キャッシュで
+    // 上流（ニコニコ）への増幅を抑える。ランキング系の no-store 方針はそのまま
+    if (pathname.startsWith('/api/search')) {
+      return NextResponse.next()
+    }
     const response = NextResponse.next()
     // 全APIルートでno-storeを強制（Cloudflare Worker側でキャッシュ管理するため）
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
