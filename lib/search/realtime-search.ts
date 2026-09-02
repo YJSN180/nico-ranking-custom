@@ -195,3 +195,51 @@ export async function fetchRealtimeSegment(
   const filtered = applyRealtimeRangeFilters(collected, conditions).map((it, i) => ({ ...it, rank: i + 1 }))
   return { items: filtered, upstreamTotal, truncated }
 }
+
+// ===== マージ（S3） =====
+
+export interface MergedPagePlan {
+  /** リアルタイム配列から取り出す [from, to) */
+  realtimeFrom: number
+  realtimeTo: number
+  /** Snapshot から取る offset と件数（0なら不要） */
+  snapshotOffset: number
+  snapshotLimit: number
+  /** このページの先頭のグローバル index（rank 付与用） */
+  globalStart: number
+}
+
+/**
+ * ページ p を「リアルタイム区間（先頭 R 件）＋ Snapshot」のどこから埋めるかを決める。
+ * グローバルな並びは [realtime(新しい順)] ++ [snapshot(新しい順)]。
+ */
+export function planMergedPage(page: number, pageSize: number, realtimeCount: number): MergedPagePlan {
+  const globalStart = (page - 1) * pageSize
+  const globalEnd = globalStart + pageSize
+  const realtimeFrom = Math.min(globalStart, realtimeCount)
+  const realtimeTo = Math.min(globalEnd, realtimeCount)
+  const snapshotLimit = pageSize - (realtimeTo - realtimeFrom)
+  return {
+    realtimeFrom,
+    realtimeTo,
+    snapshotOffset: Math.max(0, globalStart - realtimeCount),
+    snapshotLimit,
+    globalStart,
+  }
+}
+
+/**
+ * ページを組み立てる。Snapshot 側にリアルタイム区間と同じ動画があれば
+ * （インデックス確定時刻のズレ）Snapshot 側を落として重複を防ぐ。
+ * snapshotItems は plan.snapshotOffset から始まる配列を渡す。
+ */
+export function assembleMergedPage(
+  realtimeItems: RankingItem[],
+  snapshotItems: RankingItem[],
+  plan: MergedPagePlan
+): RankingItem[] {
+  const realtimeIds = new Set(realtimeItems.map((it) => it.id))
+  const head = realtimeItems.slice(plan.realtimeFrom, plan.realtimeTo)
+  const tail = snapshotItems.filter((it) => !realtimeIds.has(it.id)).slice(0, plan.snapshotLimit)
+  return [...head, ...tail].map((it, i) => ({ ...it, rank: plan.globalStart + i + 1 }))
+}

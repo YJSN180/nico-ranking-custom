@@ -7,6 +7,8 @@ import {
   applyRealtimeRangeFilters,
   fetchRealtimeSegment,
   REALTIME_MAX_PAGES,
+  planMergedPage,
+  assembleMergedPage,
 } from '@/lib/search/realtime-search'
 import type { SearchConditions } from '@/lib/search/snapshot-search'
 
@@ -147,5 +149,37 @@ describe('fetchRealtimeSegment', () => {
   it('上流エラーは throw する（呼び出し側で Snapshot 単独に縮退）', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 403 } as unknown as Response)
     await expect(fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)).rejects.toThrow('nvapi_http_403')
+  })
+})
+
+describe('planMergedPage / assembleMergedPage', () => {
+  const mk = (id: string) => mapNvapiVideoToRankingItem({ id, title: id, registeredAt: '', count: {} }, 0)
+
+  it('ページ1: リアルタイム R 件が先頭、残りを Snapshot offset 0 から', () => {
+    const plan = planMergedPage(1, 50, 12)
+    expect(plan).toEqual({ realtimeFrom: 0, realtimeTo: 12, snapshotOffset: 0, snapshotLimit: 38, globalStart: 0 })
+  })
+  it('境界を跨ぐページ: リアルタイムの残りと Snapshot 先頭を詰める', () => {
+    const plan = planMergedPage(2, 50, 70)
+    expect(plan).toEqual({ realtimeFrom: 50, realtimeTo: 70, snapshotOffset: 0, snapshotLimit: 30, globalStart: 50 })
+  })
+  it('リアルタイムを過ぎたページ: Snapshot のみ、offset は R 分ずれる', () => {
+    const plan = planMergedPage(3, 50, 12)
+    expect(plan).toEqual({ realtimeFrom: 12, realtimeTo: 12, snapshotOffset: 88, snapshotLimit: 50, globalStart: 100 })
+  })
+  it('ページ全体がリアルタイムなら Snapshot は不要', () => {
+    expect(planMergedPage(1, 50, 200).snapshotLimit).toBe(0)
+  })
+  it('組み立て: 重複は Snapshot 側を落とし、rank をグローバルに振る', () => {
+    const rt = [mk('a'), mk('b')]
+    const snap = [mk('b'), mk('c'), mk('d')]
+    const page = assembleMergedPage(rt, snap, planMergedPage(1, 3, 2))
+    expect(page.map((i) => [i.id, i.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]])
+  })
+  it('組み立て: 2ページ目は globalStart から rank を振る', () => {
+    const rt = [mk('a')]
+    const snap = [mk('x'), mk('y')]
+    const page = assembleMergedPage(rt, snap, planMergedPage(2, 2, 1))
+    expect(page.map((i) => [i.id, i.rank])).toEqual([['x', 3], ['y', 4]])
   })
 })

@@ -220,7 +220,16 @@ function appendRangeFilter(
 }
 
 /** スナップショットAPIへのリクエストURLを構築 */
-export function buildSnapshotSearchUrl(conditions: SearchConditions): string {
+export interface SnapshotWindow {
+  offset?: number
+  limit?: number
+}
+
+/**
+ * @param window リアルタイム区間とのマージ時（S3）に、ページ番号から導いた
+ *   既定の offset/limit を上書きする
+ */
+export function buildSnapshotSearchUrl(conditions: SearchConditions, window: SnapshotWindow = {}): string {
   const params = new URLSearchParams()
   params.set('q', conditions.q)
   params.set(
@@ -246,8 +255,8 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions): string {
     ].join(',')
   )
   params.set('_sort', conditions.sort)
-  params.set('_offset', String((conditions.page - 1) * SEARCH_PAGE_SIZE))
-  params.set('_limit', String(SEARCH_PAGE_SIZE))
+  params.set('_offset', String(window.offset ?? (conditions.page - 1) * SEARCH_PAGE_SIZE))
+  params.set('_limit', String(Math.max(1, window.limit ?? SEARCH_PAGE_SIZE)))
   params.set('_context', 'nico-rank.com')
 
   conditions.genres.forEach((genre, index) => {

@@ -38,6 +38,12 @@ interface SearchApiResponse {
   page: number
   pageSize: number
   excludedCount: number
+  /** merged: 直近5:00以降のリアルタイム区間を先頭に連結 / snapshot: 毎朝5時時点のみ */
+  source?: 'merged' | 'snapshot'
+  boundary?: string
+  realtimeCount?: number
+  realtimeTruncated?: boolean
+  realtimeError?: string
 }
 
 interface FormState {
@@ -262,6 +268,9 @@ export function SearchClient() {
   const [form, setForm] = useState<FormState>(initial.form)
   const [page, setPage] = useState(initial.page)
   const [items, setItems] = useState<RankingItem[] | null>(null)
+  // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数（次ページ要求のヒント）
+  const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
+  const realtimeCountRef = useRef(0)
   const [totalCount, setTotalCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -302,8 +311,14 @@ export function SearchClient() {
       const queryString = params.toString()
       router.replace(queryString ? `/search?${queryString}` : '/search', { scroll: false })
 
+      // 2ページ目以降はリアルタイム件数のヒントを渡し、サーバーが Snapshot を並列取得できるようにする
+      const apiParams = new URLSearchParams(params)
+      if (searchPage > 1 && realtimeCountRef.current > 0) {
+        apiParams.set('rtCount', String(realtimeCountRef.current))
+      }
+
       try {
-        const res = await fetch(`/api/search?${params.toString()}`, { signal: controller.signal })
+        const res = await fetch(`/api/search?${apiParams.toString()}`, { signal: controller.signal })
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
           const messages: Record<string, string> = {
@@ -319,6 +334,8 @@ export function SearchClient() {
         setItems(data.items)
         setTotalCount(data.totalCount)
         setPage(data.page)
+        realtimeCountRef.current = data.realtimeCount ?? 0
+        setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
         setError('検索中にエラーが発生しました。ネットワークをご確認ください。')
@@ -839,12 +856,29 @@ export function SearchClient() {
             <span>
               検索結果 {totalCount.toLocaleString()} 件
               {ngHiddenCount > 0 && `（NG設定により ${ngHiddenCount} 件非表示）`}
+              <span
+                className={`search-results__source search-results__source--${resultMeta?.source ?? 'snapshot'}`}
+                title={
+                  resultMeta?.source === 'merged'
+                    ? `直近5:00以降の新着 ${resultMeta.realtimeCount} 件をリアルタイムに取得し、先頭に表示しています`
+                    : '検索インデックスは毎朝5時に更新されます。それ以降の新着動画は含まれません'
+                }
+              >
+                {resultMeta?.source === 'merged' ? 'リアルタイム込み' : '毎朝5時時点'}
+              </span>
             </span>
             <TagToggleButton />
           </div>
 
           {filteredItems.length === 0 ? (
-            <div className="search-results__status">条件に一致する動画が見つかりませんでした。</div>
+            <div className="search-results__status">
+              条件に一致する動画が見つかりませんでした。
+              {resultMeta?.source !== 'merged' && (
+                <div className="search-results__hint">
+                  ※ 検索対象は毎朝5時時点のデータです。それ以降の新着動画は「投稿日時が新しい順」でタグのAND条件のみの検索にするとリアルタイムに含まれます。
+                </div>
+              )}
+            </div>
           ) : (
             <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
               {filteredItems.map((item) => (
