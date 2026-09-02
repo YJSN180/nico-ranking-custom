@@ -6,9 +6,6 @@
     "app/api/admin/update/route.ts": {
       "maxDuration": 60
     },
-    "app/api/cron/fetch/route.ts": {
-      "maxDuration": 60
-    },
     "app/api/search/route.ts": {
       "maxDuration": 15
     },
