@@ -197,8 +197,8 @@ const noStorePaths: string[] = []
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
-      '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+      '</fonts/nicomoji-plus-v2-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
+      '</fonts/comic-sans-ms-bold-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
@@ -12,12 +12,25 @@ import { BottomNav } from '@/components/bottom-nav'
 import { ServiceWorkerManager } from '@/components/sw-manager'
 import './globals.css'
 
-const inter = Inter({ 
-  subsets: ['latin'],
+// Inter（可変・latin サブセットのみ）をセルフホスト。next/font/google 版は latin-ext /
+// cyrillic / greek / vietnamese / emoji 用の @font-face も出力し、動画タイトル中の稀な
+// 1 文字（結合記号など）で 80KB 超の追加サブセットを VeryHigh 優先で取得していた。
+// unicode-range を latin に限定し、それ以外の文字はこれまで通りシステムフォントで描画する
+const inter = localFont({
+  src: './fonts/inter-latin-variable.woff2',
+  weight: '100 900',
+  style: 'normal',
   display: 'swap',
   preload: true,
-  adjustFontFallback: true, // フォールバックフォントの最適化
-  variable: '--font-inter'  // CSS変数として使用
+  adjustFontFallback: 'Arial', // フォールバックフォントの最適化
+  variable: '--font-inter', // CSS変数として使用
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
 })
 
 export const metadata: Metadata = {
@@ -111,14 +124,15 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://secure-dcdn.cdn.nimg.jp" />
         <link rel="preconnect" href="https://nicovideo.cdn.nimg.jp" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://tn.smilevideo.jp" crossOrigin="anonymous" />
-        {/* フォントのプリロード - WOFF2を最優先で読み込む */}
-        <link rel="preload" href="/fonts/nicomoji-plus-v2.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
-        <link rel="preload" href="/fonts/comic-sans-ms-bold.woff2" as="font" type="font/woff2" crossOrigin="anonymous" fetchPriority="high" />
+        {/* ロゴ用フォントのプリロード。ロゴ文字（ニコラン / (Re:turn)）だけにサブセット化済み（計 約2KB。
+            元は 1.1MB + 60KB を毎回 high 優先で先読みしており、LCP と競合していた） */}
+        <link rel="preload" href="/fonts/nicomoji-plus-v2-logo.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/comic-sans-ms-bold-logo.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* クリティカルCSSをインライン化 */}
         <style dangerouslySetInnerHTML={{ __html: `
           /* クリティカルフォント定義 - WOFF2優先フォールバック戦略 */
-          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2.woff2') format('woff2'),url('/fonts/nicomoji-plus-v2.ttf') format('truetype');font-weight:normal;font-style:normal;font-display:fallback;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
-          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold.woff2') format('woff2'),url('/fonts/comic-sans-ms-bold.ttf') format('truetype');font-weight:bold;font-style:normal;font-display:fallback;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
+          @font-face{font-family:'Nicomoji Plus v2';src:url('/fonts/nicomoji-plus-v2-logo.woff2') format('woff2');font-weight:normal;font-style:normal;font-display:swap;size-adjust:85%;ascent-override:85%;descent-override:15%;line-gap-override:0%}
+          @font-face{font-family:'Comic Sans MS Bold';src:url('/fonts/comic-sans-ms-bold-logo.woff2') format('woff2');font-weight:bold;font-style:normal;font-display:swap;size-adjust:98%;ascent-override:90%;descent-override:23%;line-gap-override:0%}
           /* クリティカルCSS - LCPに必要な最小限のスタイル */
           body{margin:0;padding:0;color:#333;background-color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
           /* テーマのデフォルトスタイル - ちらつき防止 */
