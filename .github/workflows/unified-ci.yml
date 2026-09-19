@@ -70,7 +70,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          # The locked Wrangler version requires Node.js 22 or newer.
+          node-version: '22'
           cache: 'npm'
 
       - name: Install root dependencies
