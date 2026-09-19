@@ -9,7 +9,14 @@ async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
   const base = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
   const url = new URL('/api/ranking', base)
   url.search = new URLSearchParams({ genre, period }).toString()
-  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(10_000) })
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'nico-ranking-web/1.0',
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
+  })
   if (!response.ok) throw new Error('Ranking gateway unavailable')
   const data = await response.json() as { popularTags?: unknown }
   if (!Array.isArray(data.popularTags) || data.popularTags.some((tag: unknown) => typeof tag !== 'string')) {

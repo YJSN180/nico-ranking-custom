@@ -92,6 +92,15 @@ describe('active generation readers', () => {
     expect(new URL(String(fetch.mock.calls[0][0])).pathname).toBe(
       '/api/ranking',
     )
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'nico-ranking-web/1.0',
+        },
+      }),
+    )
     expect(scrapeRankingPage).not.toHaveBeenCalled()
   })
 })
