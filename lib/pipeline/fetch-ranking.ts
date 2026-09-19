@@ -5,6 +5,7 @@ const GOOGLEBOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google
 
 export async function fetchWithGooglebot(url: string): Promise<Response> {
   const response = await fetch(url, {
+    signal: AbortSignal.timeout(20_000),
     headers: {
       'User-Agent': GOOGLEBOT_UA,
       Accept: 'text/html,application/xhtml+xml',

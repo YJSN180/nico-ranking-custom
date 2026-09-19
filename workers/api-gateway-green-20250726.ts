@@ -33,6 +33,7 @@ import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
 import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
+import { currentGeneration, rankingKey } from './utils/ranking-generation.js'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -298,7 +299,8 @@ const handler: ExportedHandler<Env> = {
     // /api/metadata パスの処理
     if (url.pathname === '/api/metadata' && env.R2_BUCKET) {
       try {
-        const metadataObject = await env.R2_BUCKET.get('rankings/metadata.json')
+        const manifest = await currentGeneration(env.R2_BUCKET)
+        const metadataObject = await env.R2_BUCKET.get(rankingKey(manifest, 'rankings/metadata.json'))
         if (metadataObject) {
           const { cacheControl } = calculateDynamicTTL()
           const { text: metadataText } = await readR2Json(metadataObject)
@@ -309,6 +311,7 @@ const handler: ExportedHandler<Env> = {
               'Content-Type': 'application/json',
               'Cache-Control': cacheControl,
               'ETag': metadataObject.httpEtag || `"${metadataObject.etag}"`,
+              'X-Ranking-Generation': manifest?.generation || 'legacy',
               'X-Worker-Version': 'green-20250726-unified-cors'
             }
           })
@@ -503,9 +506,11 @@ const handler: ExportedHandler<Env> = {
 
         try {
         // R2からデータを取得
-        const r2Key = tag 
+        const manifest = await currentGeneration(env.R2_BUCKET)
+        const legacyKey = tag
           ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
           : `rankings/${genre}/${period}/all.json`
+        const r2Key = rankingKey(manifest, legacyKey)
         
         console.log(`[Worker v2.0] Fetching from R2: ${r2Key}`)
         const r2Object = await env.R2_BUCKET.get(r2Key)
@@ -601,6 +606,7 @@ const handler: ExportedHandler<Env> = {
         headers.set('CDN-Cache-Control', 'no-store')
         headers.set('Vercel-CDN-Cache-Control', 'no-store')
         headers.set('ETag', etag)
+        headers.set('X-Ranking-Generation', manifest?.generation || 'legacy')
         headers.set('X-Data-Source', 'r2-direct')
         headers.set('X-Cache-Status', 'MISS')
         headers.set('CF-Cache-Status', 'MISS')

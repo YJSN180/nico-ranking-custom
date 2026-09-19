@@ -8,6 +8,7 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import type { KVRankingData, RankingItem, TagDetail } from '../types/ranking'
+import { createR2Store } from './lib/r2-store'
 
 // R2に保存するタグデータの構造
 interface TagAccumulationData {
@@ -22,51 +23,17 @@ interface TagAccumulationData {
 }
 
 // Cloudflare R2からタグデータを取得
-async function getExistingTagsFromR2(): Promise<TagAccumulationData> {
-  const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
-  const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
-  const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID
-
-  if (!R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY || !CF_ACCOUNT_ID) {
-    console.log('R2 credentials not found, starting with empty tag list')
-    return {
-      tags: [],
-      metadata: {
-        version: 1,
-        lastUpdated: new Date().toISOString(),
-        totalUniqueTags: 0,
-        lastAccumulationSource: 'initial',
-        weeklyUpdateCount: 1
-      }
+export async function getExistingTagsFromR2(): Promise<TagAccumulationData> {
+  const existing = await createR2Store().read('tag-accumulation.json')
+  if (existing) {
+    const value = existing.data
+    if (!Array.isArray(value.tags) || value.tags.some((tag: unknown) => typeof tag !== 'string') ||
+        !Number.isFinite(value.metadata?.version) || !Number.isFinite(value.metadata?.weeklyUpdateCount)) {
+      throw new Error('Invalid existing tag accumulation; retaining last-known-good object')
     }
+    return value
   }
-
-  try {
-    // R2 API endpoint for nico-ranking bucket
-    const endpoint = `https://${CF_ACCOUNT_ID}.r2.cloudflarestorage.com`
-    const url = `${endpoint}/nico-ranking/tag-accumulation.json`
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `AWS4-HMAC-SHA256 Credential=${R2_ACCESS_KEY_ID}/...`,
-        // Note: In a real implementation, we'd need to properly sign the request
-        // For now, we'll use a simpler approach via Workers
-      }
-    })
-
-    if (response.ok) {
-      const existingData = await response.json() as TagAccumulationData
-      console.log(`📥 Loaded existing tags: ${existingData.metadata.totalUniqueTags} unique tags`)
-      return existingData
-    } else {
-      console.log('No existing tag data found in R2, starting fresh')
-    }
-  } catch (error) {
-    console.log('Error loading existing tags:', error)
-  }
-
-  // Return default structure if loading fails
+  // Only a confirmed missing object may initialize a new cumulative list.
   return {
     tags: [],
     metadata: {
@@ -210,7 +177,8 @@ async function extractTagsFromPartialResults(): Promise<Set<string>> {
       const content = await fs.readFile(path.join(tmpDir, file), 'utf-8')
       
       try {
-        const results = JSON.parse(content)
+        const parsed = JSON.parse(content)
+        const results = Array.isArray(parsed) ? parsed : parsed.results
         if (!Array.isArray(results)) continue
 
         for (const result of results) {
