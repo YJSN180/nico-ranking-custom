@@ -42,6 +42,54 @@ describe('Video Stats Updater Worker', () => {
   });
 
   describe('scheduled handler', () => {
+    function generationFixture() {
+      const manifest = { version: 1, generation: '123-1', counts: { 'all/24h': 2, 'all/hour': 2 },
+        collectedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
+      env.R2_BUCKET._storage.set('rankings/current.json', manifest);
+      env.R2_BUCKET._storage.set('rankings/generations/123-1/metadata.json',
+        { version: 1, updatedAt: manifest.collectedAt, tagsByGenrePeriod: { 'all/24h': {}, 'all/hour': {} } });
+      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/24h/all.json', mockRankingData);
+      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/hour/all.json', mockRankingDataHour);
+      setupSnapshotAPIMock({ 'sm1,sm2,sm3': { data: ['sm1', 'sm2', 'sm3'].map(contentId => ({ contentId })) } });
+      return manifest;
+    }
+
+    it('reads only the pinned generation and records its stats source', async () => {
+      generationFixture();
+      await runScheduled();
+      expect(env.R2_BUCKET.list).not.toHaveBeenCalled();
+      expect(env.R2_BUCKET.get).not.toHaveBeenCalledWith('rankings/all/24h/all.json');
+      const source = JSON.parse(env.R2_BUCKET._storage.get('pipeline/video-stats-source.json'));
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(source.generation).toBe('123-1');
+      expect(source.updatedAt).toBe(stats.metadata.updatedAt);
+    });
+
+    it('does not replace good stats if a published object is missing', async () => {
+      generationFixture();
+      env.R2_BUCKET._storage.delete('rankings/generations/123-1/all/hour/all.json');
+      await expect(runScheduled()).rejects.toThrow('Published ranking missing');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('rejects a generation switch during a stats fetch', async () => {
+      const manifest = generationFixture();
+      const fetchStats = global.fetch;
+      global.fetch = vi.fn(async (...args) => {
+        env.R2_BUCKET._storage.set('rankings/current.json', { ...manifest, generation: '124-1' });
+        return fetchStats(...args);
+      });
+      await expect(runScheduled()).rejects.toThrow('generation changed');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('preserves previous stats after a count collapse', async () => {
+      generationFixture();
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', JSON.stringify({ metadata: { totalVideos: 100 } }));
+      await expect(runScheduled()).rejects.toThrow('50%');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
     it('should fetch ranking data from R2 and update video stats in KV', async () => {
       // Setup R2 mock data
       env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);

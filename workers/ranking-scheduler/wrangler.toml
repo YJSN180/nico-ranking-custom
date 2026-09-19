@@ -1,0 +1,23 @@
+name = "nico-ranking-scheduler"
+account_id = "5984977746a3dfcd71415bed5c324eb1"
+main = "index.js"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+DISPATCH_ENABLED = "false"
+ENVIRONMENT = "production"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "nico-ranking"
+
+[[kv_namespaces]]
+binding = "STATS_KV"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[observability]
+enabled = true
