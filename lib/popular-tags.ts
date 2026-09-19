@@ -6,7 +6,11 @@ import { scrapeRankingPage } from './scraper'
 import type { RankingGenre } from '../types/ranking-config'
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
-  const base = process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
+  // Reuse the same-origin proxy on Vercel, as the SSR ranking loader does.
+  const deployment = process.env.VERCEL_URL
+  const base = deployment
+    ? deployment.startsWith('http') ? deployment : `https://${deployment}`
+    : process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
   const url = new URL('/api/ranking', base)
   url.search = new URLSearchParams({ genre, period }).toString()
   const response = await fetch(url, {

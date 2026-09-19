@@ -20,6 +20,7 @@ const fetchWorker = worker.fetch as unknown as (
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('active generation readers', () => {
@@ -84,6 +85,7 @@ describe('active generation readers', () => {
   )
 
   it('popular tags use the public ranking gateway without a KV dependency', async () => {
+    vi.stubEnv('VERCEL_URL', undefined)
     const fetch = vi.fn(async (_url: unknown) =>
       Response.json({ popularTags: ['tag'] }),
     )
@@ -103,4 +105,21 @@ describe('active generation readers', () => {
     )
     expect(scrapeRankingPage).not.toHaveBeenCalled()
   })
+
+  it.each(['preview.vercel.app', 'https://preview.vercel.app'])(
+    'uses the existing Next proxy on Vercel (%s)',
+    async (deployment) => {
+      vi.stubEnv('VERCEL_URL', deployment)
+      vi.stubEnv('NEXT_PUBLIC_API_GATEWAY_URL', 'https://nico-rank.com')
+      const fetch = vi.fn(async () => Response.json({ popularTags: ['tag'] }))
+      vi.stubGlobal('fetch', fetch)
+
+      expect(await getPopularTags('game', 'hour')).toEqual(['tag'])
+      expect(fetch).toHaveBeenCalledWith(
+        new URL('https://preview.vercel.app/api/ranking?genre=game&period=hour'),
+        expect.any(Object),
+      )
+      expect(scrapeRankingPage).not.toHaveBeenCalled()
+    },
+  )
 })
