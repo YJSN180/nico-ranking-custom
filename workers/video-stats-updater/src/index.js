@@ -12,6 +12,7 @@ import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../..
 // Constants
 const STATS_KEY = 'VIDEO_STATS_LATEST';
 const BATCH_SIZE = 50; // Snapshot API batch size
+const SNAPSHOT_CONCURRENCY = 6;
 
 // Default metadata when not found in R2
 const DEFAULT_METADATA = {
@@ -333,8 +334,7 @@ async function fetchVideoStats(videoIds, apiKey) {
   
   console.log(`Fetching stats for ${videoIds.length} videos in ${batches.length} batches`);
   
-  // Process batches in parallel
-  const batchPromises = batches.map(async (batch, index) => {
+  const fetchBatch = async (batch, index) => {
     try {
       const url = buildSnapshotAPIUrl(batch);
       
@@ -376,13 +376,22 @@ async function fetchVideoStats(videoIds, apiKey) {
       });
       throw error;
     }
-  });
-  
-  // Merge all batch results
-  const batchResults = await Promise.all(batchPromises);
-  batchResults.forEach(batchStats => {
-    Object.assign(allStats, batchStats);
-  });
+  };
+
+  // Start timeouts only when a slot is available, and hold it through body consumption.
+  let nextBatch = 0;
+  let firstError;
+  await Promise.all(Array.from({ length: Math.min(SNAPSHOT_CONCURRENCY, batches.length) }, async () => {
+    while (!firstError && nextBatch < batches.length) {
+      const index = nextBatch++;
+      try {
+        Object.assign(allStats, await fetchBatch(batches[index], index));
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+  }));
+  if (firstError) throw firstError;
   
   return allStats;
 }

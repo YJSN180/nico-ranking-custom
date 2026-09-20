@@ -42,6 +42,63 @@ describe('Video Stats Updater Worker', () => {
   });
 
   describe('scheduled handler', () => {
+    function largeRankingFixture() {
+      const items = Array.from({ length: 650 }, (_, i) => ({ id: `sm${1000 + i}` }));
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', { items });
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', { items: [] });
+      return items;
+    }
+
+    it('bounds Snapshot requests through body consumption and processes every batch', async () => {
+      const items = largeRankingFixture();
+      let active = 0;
+      let peak = 0;
+      global.fetch = vi.fn(async (url) => {
+        active++;
+        peak = Math.max(peak, active);
+        const filter = JSON.parse(new URL(url).searchParams.get('jsonFilter'));
+        return {
+          ok: true,
+          async json() {
+            await new Promise(resolve => setTimeout(resolve, 1));
+            active--;
+            return { data: filter.filters.map(({ value }) => ({ contentId: value })) };
+          },
+        };
+      });
+      await runScheduled();
+      expect(peak).toBeLessThanOrEqual(6);
+      expect(active).toBe(0);
+      expect(global.fetch).toHaveBeenCalledTimes(13);
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(Object.keys(stats.stats).sort()).toEqual(items.map(item => item.id).sort());
+    });
+
+    it('stops queued Snapshot batches and preserves previous stats on a request failure', async () => {
+      largeRankingFixture();
+      const previous = JSON.stringify(mockVideoStats);
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', previous);
+      let active = 0;
+      global.fetch = vi.fn(async () => {
+        if (global.fetch.mock.calls.length === 1) return { ok: false, status: 503, statusText: 'Unavailable' };
+        active++;
+        return {
+          ok: true,
+          async json() {
+            await new Promise(resolve => setTimeout(resolve, 1));
+            active--;
+            return { data: [] };
+          },
+        };
+      });
+      await expect(runScheduled()).rejects.toThrow('Failed to fetch video stats');
+      expect(global.fetch).toHaveBeenCalledTimes(6);
+      expect(active).toBe(0);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(env.STATS_KV._storage.get('VIDEO_STATS_LATEST')).toBe(previous);
+    });
+
     function paginatedLegacyFixture() {
       env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
       env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockRankingData);
