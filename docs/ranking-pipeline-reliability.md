@@ -5,11 +5,14 @@
 - GitHub Actionsの8グループ収集は維持する。外部schedulerはCloudflare Cronで5分ごとに確認し、毎時20分の最新slotだけをworkflow_dispatchする。過去slotは積み上げない。
 - GitHub Appは対象repositoryのみ、Actions write / Contents read。個人PATは使わない。
 - 8グループ、23ジャンル×2期間、人気タグ別データ、run/attempt/slot、収集日時を検証する。NGの取得・構造検証が失敗したら公開しない。
+- タグの1ページ目がHTTP 202かつserver-responseもHTTP_202と「このランキングは準備中です。」を明示した場合のみ、その期間の人気タグ候補から外し、group artifactのunavailableTagsに記録する。空データや新しい取得日時を捏造しない。必須ジャンルの202、タグの2ページ目以降の202、通信・解析エラーは公開を止める。ページ終端は上流paginationを優先し、NG除外後の件数不足を理由に存在しない次ページを取得しない。
+- r2-aggregateのタグキャッシュはジョブ内スナップショットとして再利用する。エントリ自体の7日TTLは維持し、同ジョブで補完済みの値を再読込で失わない。KVバックエンドの5分再読込は変更しない。タグ取得は本文受信もタイムアウト対象とする。
 - 集約はローカル処理。validated-publication artifactを先に保存してからR2へ書く。
 - 新形式はrankings/generations/{runId}-{attempt}/配下にgzip JSONを保存する。全件read-back→metadata→世代manifest→current.jsonの条件付き更新の順。
 - current.jsonが存在しないときだけ旧canonical keyを読む。破損したmanifestでは旧形式へ黙って戻らない。公開APIのJSON shapeは変更しない。
-- 個々のジャンル/期間が前回の50%未満なら公開しない。正当な大幅減少も停止するため、NG方針変更や上流仕様変更時は人が原因を確認する。
+- 24時間ランキングの各ジャンル、総合の毎時ランキング、毎時ランキングの全ジャンル合計が前回の50%未満なら公開しない。小規模ジャンルの毎時件数は自然変動が大きいため、単独の半減はhourly-count-driftとして記録し、全体の公開停止にはしない。NG方針変更や上流仕様変更時は人が原因を確認する。
 - APIはリクエストごと、statsは更新処理ごとに世代を固定する。公開ランキングは既存のno-storeを維持。X-Ranking-Generationヘッダーで世代を確認できる。
+- 世代移行前のstats discoveryもR2一覧のtruncated/cursorを最後まで辿る。過去のタグファイルで1,000件を超えても後方ジャンルを落とさない。一覧の途中失敗・不正cursorでは更新を中止して前回統計を維持する。世代移行後のmanifest経由の読み込みは一覧取得を行わない。
 - stats更新はR2 leaseで重複を抑止し、書き込み直前に世代とleaseを再確認する。KVの公開schemaは維持し、対応世代はpipeline/video-stats-source.jsonに記録する。
 - KVとR2の間に原子的トランザクションはない。KV書き込み直後の世代切り替えやsidecar失敗はあり得る。世代とupdatedAtの照合で検知し、次回更新で回復する。
 - KV補助コピー、派生NG、タグキャッシュの失敗は公開済みランキングを巻き戻さない。ただしworkflowは失敗とし、pipeline/auxiliary.jsonにも状態を残す。
@@ -84,7 +87,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 ## ローカル検証
 
 ```sh
-npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts
+npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
 npm run test:worker:video-stats
 npx tsc --noEmit -p tsconfig.pipeline.json
 npm run typecheck
@@ -92,3 +95,23 @@ npm run typecheck:workers
 ```
 
 ローカルテストとdry-runは本番受け入れの代替ではない。main反映、GitHub App設定、readerデプロイ、世代publish有効化、scheduler切り替え、7日間監視は別々に完了を記録する。
+
+## 2026-09-20 収集停止の調査
+
+- main b64d52bdbのrun 35425246060 / 35439040597 / 35448762027 / 35459933320では、上流が準備中として返すタグランキングを欠損として判定し、集約・公開を停止していた。最後のrunではgroup 3の65分タイムアウトも併発した。GitHub App認証で起動に失敗した事象ではない。
+- 長時間化につながるコード上の問題として、本文受信を制限しないタグ取得タイムアウトと、R2に未反映の同ジョブ内キャッシュを5分後の再読込で失う挙動を修正した。これらだけで65分超過の全原因を説明できたわけではない。
+- 読取専用の実データ検証では、本番NGを適用した23ジャンル×2期間の本体取得が完了した。毎時合計は前回15,554件に対し14,294件。play/hourは174件から80件への正当な減少で、旧50%判定はここでも停止したが、新判定は全46組で通過した。
+- nature / society / dance / radioは両期間のタグ別取得も検証した。この4ジャンル検証ではNG・タグ補完を省き、準備中タグの除外とページ終端を確認した。本番R2キャッシュを使った別の20動画タグ補完は、初回13.4秒、再実行時は20件すべてキャッシュヒット・外部タグ取得0回だった。
+- 通信失敗・不正JSON・必須ランキング欠損・2ページ目以降の準備中は引き続き失敗させる。準備中タグの除外後、旧canonical公開と世代公開の双方で一覧に未取得タグが残らず、既存タグデータを空で上書きしないことをインメモリ公開テストで検証した。
+- この調査では本番書込・commit・push・deployは実施していない。GitHub Actionsの8並列・全タグ補完・R2公開・公開後検証の通し実行と、65分以内の完走はmain反映後の受け入れ事項として残る。schedulerのdispatch有効化とは分けて確認する。
+- 追加の全量検証で、本番rankings/に2,395キー（本体46組）があるのに、旧stats discoveryが最初の1,000キーで停止する不備も確認した。後続ページの本体を含める処理と、一覧取得失敗時のfail-closedを追加した。この修正にはvideo-stats-updaterの明示デプロイが必要で、収集スクリプトのmain反映だけでは有効にならない。
+
+### 同日の全量・非公開リハーサル
+
+- Node 20.20.0で本番の収集CLIを8プロセス起動し、実際のランキング、本番NG、本番R2タグキャッシュを読み取り、タグ詳細補完も有効にした。全8グループ成功、最長42分46秒。23ジャンル×2期間の本体40,085件、344タグランキング64,091件（いずれも重複込み）を取得した。この回は準備中タグの発生・除外は0件であり、202分岐は別の再現テストで確認している。
+- 設定はworkflowの既定値を使用した。GitHub secretsの非公開の上書き値やGitHub runnerの実行環境を再現したものではなく、GitHub Actionsでも65分以内と保証する結果ではない。
+- 実際の集約CLIとpublishRankingを使い、旧canonical形式と世代形式の両方でgzip保存・read-back・公開順を検証した。API Gatewayの実ハンドラに各形式390通りのランキングとmetadataを読み込ませ、動画ID列・件数・タグ一覧・更新日時・世代ヘッダーを照合した。R2はローカルのテスト用bindingであり、本番に公開してはいない。
+- 動画統計Workerの実ハンドラと実Snapshot APIで、両形式とも27,994動画の統計を取得し、読取時の本番値10,701件に対する50%閾値と更新日時の前進を確認した。旧形式は本番キー一覧2,395件を再現した3ページを辿り、本体46組をすべて読んだ。世代形式は一覧取得0回で同じ46組を読んだ。KV更新はローカルbindingのみ。
+- accumulate-tags / write-to-r2 / sync-ranking-auxiliary / merge-tag-cache-deltas-to-r2 / record-pipeline-statusの5本の実CLIも成功。SDK・fetchの書込先だけをローカルに退避して497書込を記録し、390ランキング、KV補助コピー3組、派生NG6,496件、タグキャッシュ8 artifact・100 shard・差分24,759件を照合した。ランキング本体の後にmetadataが保存されること、補助同期のfailed=falseも確認した。
+- HTTPのGET/HEAD以外を拒否する検証用ガードを併用し、本番R2/KVへの書込、Workerの本番trigger、commit・push・deployは実施していない。検証用スクリプトと結果はgitignore対象のtmp/pipeline-acceptance/1789907307933に保存した。これはローカルの実行IDであり、GitHubのrun IDではない。
+- Worker回帰テスト29件、Workerビルド・構文チェック、Wrangler deploy --dry-runは成功。R2一覧の後続ページ失敗・不正cursorで前回統計を維持するテストを含む。Cloudflare runtime上の実動作、本番初回公開、次回定期実行、公開UI/APIの更新確認は未完了で、main反映と明示Workerデプロイの後に確認する。

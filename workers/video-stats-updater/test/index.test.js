@@ -42,6 +42,64 @@ describe('Video Stats Updater Worker', () => {
   });
 
   describe('scheduled handler', () => {
+    function paginatedLegacyFixture() {
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockRankingData);
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockRankingDataHour);
+      env.R2_BUCKET._storage.set('rankings/nature/hour/all.json', { items: [{ id: 'sm4' }] });
+      env.R2_BUCKET.list
+        .mockResolvedValueOnce({
+          objects: [
+            { key: 'rankings/all/24h/all.json' },
+            { key: 'rankings/all/hour/all.json' },
+            ...Array.from({ length: 998 }, (_, i) => ({ key: `rankings/all/hour/tags/${i}.json` })),
+          ],
+          truncated: true,
+          cursor: 'page-2',
+        })
+        .mockResolvedValueOnce({
+          objects: [{ key: 'rankings/nature/hour/all.json' }],
+          truncated: false,
+        });
+      setupSnapshotAPIMock({
+        'sm2,sm3': { data: ['sm2', 'sm3'].map(contentId => ({ contentId })) },
+        'sm1,sm2,sm3': { data: ['sm1', 'sm2', 'sm3'].map(contentId => ({ contentId })) },
+        'sm1,sm2,sm3,sm4': { data: ['sm1', 'sm2', 'sm3', 'sm4'].map(contentId => ({ contentId })) },
+      });
+    }
+
+    it('includes legacy rankings after the first 1000 R2 objects', async () => {
+      paginatedLegacyFixture();
+      await runScheduled();
+      expect(env.R2_BUCKET.list).toHaveBeenCalledTimes(2);
+      expect(env.R2_BUCKET.list).toHaveBeenLastCalledWith({ prefix: 'rankings/', limit: 1000, cursor: 'page-2' });
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(stats.metadata.totalVideos).toBe(4);
+      expect(stats.stats).toHaveProperty('sm4');
+    });
+
+    it('preserves previous stats if a later discovery page fails', async () => {
+      paginatedLegacyFixture();
+      env.R2_BUCKET.list.mockReset()
+        .mockResolvedValueOnce({ objects: [{ key: 'rankings/all/hour/all.json' }], truncated: true, cursor: 'next' })
+        .mockRejectedValueOnce(new Error('Listing unavailable'));
+      const previous = JSON.stringify({ metadata: { totalVideos: 3 }, stats: { sm1: {} } });
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', previous);
+      await expect(runScheduled()).rejects.toThrow('Listing unavailable');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(env.STATS_KV._storage.get('VIDEO_STATS_LATEST')).toBe(previous);
+    });
+
+    it.each([undefined, 'repeated'])('rejects invalid discovery cursor %s instead of publishing a partial list', async (cursor) => {
+      paginatedLegacyFixture();
+      env.R2_BUCKET.list.mockReset().mockResolvedValue({
+        objects: [{ key: 'rankings/all/hour/all.json' }], truncated: true, cursor,
+      });
+      await expect(runScheduled()).rejects.toThrow('Invalid R2 listing cursor');
+      expect(env.R2_BUCKET.list.mock.calls.length).toBeLessThanOrEqual(2);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
     function generationFixture() {
       const manifest = { version: 1, generation: '123-1', counts: { 'all/24h': 2, 'all/hour': 2 },
         collectedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };

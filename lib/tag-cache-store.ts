@@ -170,6 +170,7 @@ export async function readTagCacheShardFromR2(shardIdOrKey: string | number): Pr
         Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking',
         Key: getR2ShardKey(shardIdOrKey),
       }),
+      { abortSignal: AbortSignal.timeout(20_000) },
     )
     const buffer = await bodyToArrayBuffer(response.Body)
     if (!buffer) return null
@@ -180,6 +181,8 @@ export async function readTagCacheShardFromR2(shardIdOrKey: string | number): Pr
     }
     console.warn('[Tag Cache R2] Failed to read shard:', error)
     return null
+  } finally {
+    client.destroy()
   }
 }
 
