@@ -87,6 +87,21 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 
 ## ローカル検証
 
+### 公開後のアプリケーション検証とBot対策
+
+- GitHub runnerから公開URLへ送る機械的なGETは、Bot Fight Modeによりチャレンジされることがある。WAF/Bot対策の無効化やUser-Agent偽装で回避しない。
+- `video-stats-updater` の `GET /verify-ranking` を既存 `WORKER_AUTH_KEY` で認証し、`PRODUCTION_GATEWAY` service binding経由で本番ルーター `nico-ranking-api-gateway` の固定ランキングURLを読む。ルーターの現在のBlue/Green選択を通し、世代・件数・収集日時をR2/公開artifactと照合する。
+- このエンドポイントは任意URL、クエリ、書込メソッドを受け付けず、呼出元の認証情報をルーターへ転送しない。認証失敗、不正JSON、空ランキング、fallback応答では検証を失敗させる。KV/R2への書込は行わない。
+- 検証対象はアプリケーションと配信データの整合性であり、公開ホストのWAF、DNS、ブラウザ到達性の成功を意味しない。検証結果の `publicEdgeVerification` に未検査であることを記録する。公開UI/APIのブラウザ確認は別途行う。
+- 導入時は新binding付きstats Workerを先にデプロイし、続いて検証スクリプト/workflowをmainへ反映する。逆順では新エンドポイント未配備のため検証が失敗する。cron、scheduler有効化、世代切替は変更しない。
+- `npx tsx scripts/check-ranking-gateway.ts` は現行R2とルーターを読むだけの運用チェック。承認済みenv経路でR2認証と `WORKER_AUTH_KEY` を渡す。公開の途中でETagが変われば再確認し、古いデータを一致扱いにしない。3時間監視および手動実行で利用する。freshnessの判定は既存healthチェックが別途行う。
+
+### 依存関係の監査
+
+- Unified CIのDependency AuditはPRでもrootとvideo-stats-updater双方のlockfileを監査し、moderate以上で失敗させる。開発依存も除外しない。
+- Next.jsは15系を維持し修正版に更新。Vitestは4.1系へ移行し、コンストラクタモックは通常関数、fork設定はトップレベルに置く。Worker実ランタイムテストには `@cloudflare/vitest-plugin` を使用する。
+- ローカル監査は `npm audit` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
+
 ```sh
 npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
 npm run test:worker:video-stats

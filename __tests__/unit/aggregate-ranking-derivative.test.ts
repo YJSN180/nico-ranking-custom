@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as fs from 'fs/promises'
 
 // Mock modules
-vi.mock('fs/promises')
+vi.mock('fs/promises', () => ({ readdir: vi.fn(), readFile: vi.fn() }))
 vi.mock('pako', () => ({
   gzip: vi.fn((data) => Buffer.from(data)),
   ungzip: vi.fn((data) => data)

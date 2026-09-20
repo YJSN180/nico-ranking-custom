@@ -2,6 +2,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { createR2Store } from './lib/r2-store'
+import { fetchVerifiedRanking } from './lib/verify-ranking-response'
 import { fetchChecked } from '../lib/pipeline/retry'
 import {
   CURRENT_KEY,
@@ -94,16 +95,15 @@ async function main() {
         stats.metadata.totalVideos < (before?.metadata?.totalVideos || 0) * 0.5
       )
         throw new Error('Stats count drift')
-      const publicResponse = await fetchChecked(
-        'https://nico-rank.com/api/ranking?genre=all&period=24h',
+      const ranking = await fetchVerifiedRanking(
+        process.env.VIDEO_STATS_WORKER_URL ||
+          'https://video-stats-updater.yjsn180180.workers.dev',
+        workerKey,
       )
-      const ranking = (await publicResponse.json()) as {
-        metadata?: { updatedAt: string }
-        items?: unknown[]
-      }
       if (
-        ranking.metadata?.updatedAt === expected.collectedAt &&
-        ranking.items?.length === expected.counts['all/24h']
+        ranking.updatedAt === expected.collectedAt &&
+        ranking.count === expected.counts['all/24h'] &&
+        ranking.generation === (manifest?.generation || 'legacy')
       ) {
         const output =
           process.env.VERIFY_OUTPUT_PATH ||
@@ -117,6 +117,9 @@ async function main() {
             collectedAt: expected.collectedAt,
             statsUpdatedAt: stats.metadata.updatedAt,
             totalVideos: stats.metadata.totalVideos,
+            rankingVerification: ranking,
+            publicEdgeVerification:
+              'not-checked-service-binding-does-not-test-WAF',
           }),
         )
         return
@@ -125,7 +128,7 @@ async function main() {
     await new Promise((resolve) => setTimeout(resolve, 10_000))
   }
   throw new Error(
-    'Published generation did not reach video stats and public API within 6 minutes',
+    'Published generation did not reach video stats and production gateway within 6 minutes',
   )
 }
 main().catch((error) => {

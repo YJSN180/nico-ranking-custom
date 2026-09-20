@@ -9,6 +9,8 @@ import { currentGeneration, rankingKey, STATS_SOURCE_KEY } from '../../utils/ran
 import { acquireLease } from '../../utils/r2-lease.js';
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js';
 
+import { isWorkerAuthorized, verifyRanking } from './verify-ranking.js';
+
 // Constants
 const STATS_KEY = 'VIDEO_STATS_LATEST';
 const BATCH_SIZE = 50; // Snapshot API batch size
@@ -515,12 +517,15 @@ const handler = {
   
   async fetch(request, env, _ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/verify-ranking') {
+      return verifyRanking(request, env);
+    }
     
     // Manual trigger endpoint with auth
     if (url.pathname === '/trigger' && request.method === 'POST') {
       // Check authorization
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader || authHeader !== `Bearer ${env.WORKER_AUTH_KEY}`) {
+      if (!isWorkerAuthorized(request, env.WORKER_AUTH_KEY)) {
         return new Response('Unauthorized', { status: 401 });
       }
       
