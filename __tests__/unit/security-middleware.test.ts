@@ -45,7 +45,7 @@ const createMockResponse = (status: number, body?: any, headers?: Record<string,
 }
 
 vi.mock('next/server', () => ({
-  NextRequest: vi.fn((url, init) => {
+  NextRequest: vi.fn(function (url, init) {
     const urlObj = new URL(url)
     return {
       url,

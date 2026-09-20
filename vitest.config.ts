@@ -80,18 +80,9 @@ export default defineConfig({
     ],
     testTimeout: process.env.CI ? 120000 : 10000,  // CI環境では2分に増加
     pool: 'forks',  // CI環境でのより安定した実行のためforksに統一
-    poolOptions: {
-      forks: {
-        // シャード環境に対応したメモリ使用量制限
-        maxForks: process.env.CI && process.env.VITEST_SHARD ? 1 : (process.env.CI ? 2 : 4),
-        minForks: 1,
-        // シャード環境では singleFork を有効化して安定性向上
-        singleFork: process.env.CI && process.env.VITEST_SHARD ? true : false,
-        // メモリリークを防ぐためワーカーを定期的にリサイクル
-        isolate: true,
-        execArgv: process.env.CI ? ['--expose-gc', '--max-old-space-size=8192'] : []
-      }
-    },
+    maxWorkers: process.env.CI && process.env.VITEST_SHARD ? 1 : (process.env.CI ? 2 : 4),
+    isolate: true,
+    execArgv: process.env.CI ? ['--expose-gc', '--max-old-space-size=8192'] : [],
     // CI環境での追加設定 (シャード対応版)
     ...(process.env.CI ? {
       isolate: true,  // 各テストファイルを分離
@@ -103,9 +94,6 @@ export default defineConfig({
       },
       // シャード実行時は並列を無効化してメモリとCPUの競合を防ぐ
       fileParallelism: !process.env.VITEST_SHARD,  // シャード時は無効
-      maxWorkers: process.env.VITEST_SHARD ? 1 : undefined,  // シャード時は1ワーカー
-      maxThreads: 2,  // シャード環境では2スレッドまで許可
-      minThreads: 1,
       teardownTimeout: 15000,  // テストの後片付けタイムアウト
       // React concurrent mode conflict prevention
       retry: 1,  // 失敗時の再試行
@@ -124,7 +112,6 @@ export default defineConfig({
       provider: 'v8',
       reporter: process.env.CI ? ['text', 'json', 'lcov', 'json-summary'] : ['text', 'json', 'html'],
       reportsDirectory: './coverage',
-      all: false,  // CI環境では実行されたファイルのみカバレッジを収集
       clean: !process.env.VITEST_SHARD,  // シャード実行時は削除しない
       exclude: [
         'node_modules/**',

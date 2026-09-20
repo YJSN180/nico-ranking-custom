@@ -29,7 +29,7 @@ describe('Popover Positioning Tests', () => {
     originalInnerWidth = window.innerWidth
 
     // ResizeObserverをモック
-    global.ResizeObserver = vi.fn().mockImplementation((callback: () => void) => {
+    global.ResizeObserver = vi.fn().mockImplementation(function (callback: () => void) {
       resizeCallback = callback
       return {
         observe: vi.fn(),

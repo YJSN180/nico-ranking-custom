@@ -43,8 +43,12 @@ describe('useMylistOperations - カウント更新テスト', () => {
       getVideosInMylist: vi.fn().mockResolvedValue([])
     }
 
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager)
-    vi.mocked(MylistManager).mockImplementation(() => mockMylistManager)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager
+    })
+    vi.mocked(MylistManager).mockImplementation(function () {
+      return mockMylistManager
+    })
   })
   
   afterEach(() => {

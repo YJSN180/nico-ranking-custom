@@ -142,6 +142,7 @@ scripts/*
 !scripts/test-worker-stats-fetch.ts
 !scripts/verify-r2-contract.ts
 !scripts/check-data-pipeline-health.ts
+!scripts/check-ranking-gateway.ts
 !scripts/prepare-ranking-run.ts
 !scripts/record-pipeline-status.ts
 !scripts/sync-ranking-auxiliary.ts
@@ -149,6 +150,7 @@ scripts/*
 !scripts/lib/
 scripts/lib/*
 !scripts/lib/r2-store.ts
+!scripts/lib/verify-ranking-response.ts
 !scripts/emergency-rollback.js
 !scripts/blue-green-switch.sh
 !scripts/emergency-rollback.sh

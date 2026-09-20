@@ -58,6 +58,9 @@ jobs:
       - name: Lint check
         run: npm run lint
 
+      - name: Run application regression tests
+        run: npx vitest run
+
   worker-tests:
     name: Worker Contract Tests
     runs-on: ubuntu-latest
@@ -86,8 +89,11 @@ jobs:
       - name: Run video-stats-updater tests
         run: npm run test:worker:video-stats
 
+      - name: Run video-stats-updater tests in workerd
+        run: npm --prefix workers/video-stats-updater test -- --run
+
       - name: Run ranking pipeline failure tests
-        run: npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
+        run: npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-verification.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
 
       - name: Typecheck ranking pipeline scripts
         run: npx tsc --noEmit -p tsconfig.pipeline.json
@@ -538,6 +544,22 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  dependency-audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit application dependencies
+        run: npm audit --audit-level moderate
+      - name: Audit Worker dependencies
+        if: always()
+        run: npm audit --prefix workers/video-stats-updater --audit-level moderate
+
   # Job 8: Security & Quality (runs in parallel after build)
   security-quality:
     name: Security & Quality
@@ -681,7 +703,7 @@ jobs:
   summary:
     name: Pipeline Summary
     runs-on: ubuntu-latest
-    needs: [quick-checks, worker-tests, build-test, merge-coverage, e2e-tests, merge-reports, security-quality, performance-monitoring, benchmark-report]
+    needs: [quick-checks, worker-tests, build-test, merge-coverage, e2e-tests, merge-reports, dependency-audit, security-quality, performance-monitoring, benchmark-report]
     if: always()
     
     steps:
@@ -698,6 +720,7 @@ jobs:
           echo "- Build Test: ${{ needs.build-test.result }}"
           echo "- Coverage Tests: ${{ needs.merge-coverage.result }}"
           echo "- Worker Contracts: ${{ needs.worker-tests.result }}"
+          echo "- Dependency Audit: ${{ needs.dependency-audit.result }}"
           echo "- E2E Tests: ${{ needs.e2e-tests.result }}"
           echo "- Merge Reports: ${{ needs.merge-reports.result }}"
           echo "- Security & Quality: ${{ needs.security-quality.result }}"
