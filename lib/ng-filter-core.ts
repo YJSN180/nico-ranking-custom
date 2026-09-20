@@ -34,6 +34,9 @@ export function filterWithNGListCore(
   const videoTitleExactSet = new Set(ngList.videoTitles.exact)
   const authorIdSet = new Set(ngList.authorIds)
   const authorNameExactSet = new Set(ngList.authorNames.exact)
+  // 粗悪コンテンツ自動NG（許可リスト適用済み）。手動リストの後に評価し、派生NGには積まない
+  const autoAuthorIdSet = new Set(ngList.autoAuthorIds ?? [])
+  const autoVideoIdSet = new Set(ngList.autoVideoIds ?? [])
 
   const filteredItems = itemsWithResetRank.filter(item => {
     if (videoIdSet.has(item.id)) {
@@ -71,6 +74,14 @@ export function filterWithNGListCore(
 
     if (options.tagFilter && options.tagFilter(item)) {
       newDerivedIds.push(item.id)
+      return false
+    }
+
+    if (autoVideoIdSet.has(item.id)) {
+      return false
+    }
+
+    if (item.authorId && autoAuthorIdSet.has(item.authorId)) {
       return false
     }
 
