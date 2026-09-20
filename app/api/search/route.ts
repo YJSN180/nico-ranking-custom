@@ -89,7 +89,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       source: 'snapshot',
       boundary,
       realtimeCount: 0,
-      cacheControl: 'public, s-maxage=60, stale-while-revalidate=300',
+      // SWR を短めにして、自動NG・許可リストの反映遅れを 3 分以内に抑える
+      cacheControl: 'public, s-maxage=60, stale-while-revalidate=120',
     })
   }
 

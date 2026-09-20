@@ -2,6 +2,9 @@
 import { kv } from './simple-kv'
 import type { NGList } from '@/types/ng-list'
 import { migrateLegacyNGList, createEmptyNGList } from './ng-list-migration'
+import { collectAutoNg, mergeAutoNgIntoList } from './lqng/merge'
+import { getLqngConfig, getLqngVerdicts, invalidateLqngCache, isLqngEnabled } from './lqng/server'
+import type { AutoNgSets } from './lqng/types'
 
 // 管理者NGリストの短期メモリキャッシュ（検索リアルタイム統合計画 S1 / P2）
 // 検索・SSRのたびに KV を2読み（REST往復）していたのを、関数インスタンス内で
@@ -11,6 +14,19 @@ let ngListCache: { value: NGList; fetchedAt: number } | null = null
 
 export function invalidateServerNGListCache(): void {
   ngListCache = null
+  invalidateLqngCache()
+}
+
+// 粗悪コンテンツ自動NG（lib/lqng）: Worker が書く判定テーブルから、許可リストを除いた
+// 投稿者 ID・動画 ID を取り出す。失敗時や無効時は空（サービスを落とさない）
+async function loadAutoNg(): Promise<AutoNgSets> {
+  if (!isLqngEnabled()) return { authorIds: [], videoIds: [] }
+  try {
+    const [config, verdicts] = await Promise.all([getLqngConfig(), getLqngVerdicts()])
+    return collectAutoNg(verdicts, config, new Date())
+  } catch {
+    return { authorIds: [], videoIds: [] }
+  }
 }
 
 // Get NG list from KV
@@ -20,17 +36,22 @@ export async function getServerNGList(): Promise<NGList> {
     return ngListCache.value
   }
   try {
-    const [manual, derived] = await Promise.all([
+    const [manual, derived, auto] = await Promise.all([
       kv.get<any>('ng-list-manual'),
-      kv.get<string[]>('ng-list-derived')
+      kv.get<string[]>('ng-list-derived'),
+      loadAutoNg()
     ])
     
     // マイグレーション処理を適用
     const migratedManual = migrateLegacyNGList(manual)
     
-    const value: NGList = {
+    let value: NGList = {
       ...migratedManual,
       derivedVideoIds: derived || []
+    }
+    // 自動NGは手動リストより後に評価される（ng-filter-core）。何も無ければ欄自体を足さない
+    if (auto.authorIds.length > 0 || auto.videoIds.length > 0) {
+      value = mergeAutoNgIntoList(value, auto)
     }
     if (cacheEnabled) {
       ngListCache = { value, fetchedAt: Date.now() }
