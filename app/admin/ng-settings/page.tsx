@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import type { NGList } from '@/types/ng-list'
 import { createEmptyNGList, migrateLegacyNGList } from '@/lib/ng-list-migration'
 import { DerivedNGList } from './components/DerivedNGList'
+import { AutoNGPanel } from './components/AutoNGPanel'
 import { captureWebException } from '@/lib/sentry/capture'
 
 // 常時ライトモード適用のためのラッパー
@@ -45,6 +46,7 @@ export default function NGSettingsPage() {
   const [newVideoTitle, setNewVideoTitle] = useState('')
   const [videoTitleMatchType, setVideoTitleMatchType] = useState<'exact' | 'partial'>('exact')
   const [newAuthorId, setNewAuthorId] = useState('')
+  const [bulkAuthorIds, setBulkAuthorIds] = useState('')
   const [newAuthorName, setNewAuthorName] = useState('')
   const [authorNameMatchType, setAuthorNameMatchType] = useState<'exact' | 'partial'>('exact')
 
@@ -302,6 +304,18 @@ export default function NGSettingsPage() {
     }
   }
 
+  // 投稿者 ID をまとめて追加（改行・カンマ・空白区切り。重複と既登録は除く）
+  const addAuthorIdsBulk = useCallback((text: string) => {
+    const ids = Array.from(new Set(text.split(/[\s,、]+/).map((s) => s.trim()).filter((s) => /^(\d{1,12}|channel\/ch\d{1,12})$/.test(s))))
+    if (ids.length === 0) return
+    setNgList(prev => {
+      const existing = new Set(prev.authorIds)
+      const added = ids.filter((id) => !existing.has(id))
+      return added.length === 0 ? prev : { ...prev, authorIds: [...prev.authorIds, ...added] }
+    })
+    setBulkAuthorIds('')
+  }, [])
+
   // アイテムを削除
   const removeItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, index: number, matchType?: 'exact' | 'partial') => {
     setNgList(prev => {
@@ -340,9 +354,20 @@ export default function NGSettingsPage() {
   return (
     <LightModeWrapper>
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '20px' }}>
-      <h1 style={{ marginBottom: '30px' }}>NG設定管理</h1>
-      
-      {/* 自動NG機能の説明 */}
+      <h1 style={{ marginBottom: '8px' }}>NG設定管理</h1>
+      <nav aria-label="セクション" style={{ display: 'flex', gap: '14px', marginBottom: '24px', fontSize: '14px' }}>
+        <a href="#auto-ng-title" style={{ color: '#2f5fd1' }}>自動NG</a>
+        <a href="#manual-ng" style={{ color: '#2f5fd1' }}>手動NG</a>
+        <a href="#derived-ng" style={{ color: '#2f5fd1' }}>派生NG</a>
+      </nav>
+
+      {/* 自動NG（粗悪コンテンツ） */}
+      <AutoNGPanel
+        manualAuthorIds={ngList.authorIds}
+        onCopyToManualNG={(authorId) => addAuthorIdsBulk(authorId)}
+      />
+
+      {/* 派生NGの説明 */}
       <div style={{ 
         marginBottom: '30px', 
         padding: '15px', 
@@ -350,7 +375,7 @@ export default function NGSettingsPage() {
         borderRadius: '8px', 
         border: '1px solid #90caf9' 
       }}>
-        <h3 style={{ marginBottom: '10px', color: '#1976d2' }}>🤖 自動NG機能について</h3>
+        <h3 style={{ marginBottom: '10px', color: '#1976d2' }}>派生NGについて</h3>
         <p style={{ margin: '0', color: '#424242', lineHeight: '1.5' }}>
           手動NGリスト（タイトル・投稿者名）でフィルタリングされた動画のIDは、
           自動的に「派生NGリスト」に追加され、以後確実に非表示になります。
@@ -360,7 +385,7 @@ export default function NGSettingsPage() {
       </div>
       
       {/* 手動NGリスト */}
-      <div style={{ marginBottom: '40px' }}>
+      <div id="manual-ng" style={{ marginBottom: '40px' }}>
         <h2>手動NGリスト</h2>
         
         {/* 動画ID */}
@@ -455,6 +480,19 @@ export default function NGSettingsPage() {
             />
             <button onClick={() => addItem('authorIds', newAuthorId)}>追加</button>
           </div>
+          <details style={{ marginBottom: '10px' }}>
+            <summary style={{ cursor: 'pointer' }}>複数の投稿者IDをまとめて追加</summary>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <textarea
+                value={bulkAuthorIds}
+                onChange={(e) => setBulkAuthorIds(e.target.value)}
+                placeholder={'1 行に 1 つ、またはカンマ区切り\n例: 12345678\nchannel/ch1234'}
+                aria-label="投稿者IDの一括追加"
+                style={{ flex: 1, padding: '8px', minHeight: '80px' }}
+              />
+              <button onClick={() => addAuthorIdsBulk(bulkAuthorIds)} disabled={!bulkAuthorIds.trim()}>まとめて追加</button>
+            </div>
+          </details>
           <ul>
             {ngList.authorIds.map((id, index) => (
               <li key={index} style={{ marginBottom: '5px' }}>
@@ -537,6 +575,7 @@ export default function NGSettingsPage() {
       </div>
 
       {/* 派生NGリスト */}
+      <div id="derived-ng" />
       <DerivedNGList
         initialData={ngList.derivedVideoIds || []}
         onUpdate={(newList) => {
