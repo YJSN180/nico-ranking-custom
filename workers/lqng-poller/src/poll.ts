@@ -1,0 +1,413 @@
+// ポーリング本体（差分取得 → 補完 → 投稿者確認 → 判定 → 保留の期限処理 → 保存）
+// 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
+// 1 回の実行で: 外部呼び出し ≤ subrequestBudget、KV 書き込み ≤ 4 キー。
+import { decideHold, evaluateDeletion, evaluateVideo } from '../../../lib/lqng/rules'
+import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
+import { AccessLimitedError, type PollDeps, type SourceVideo } from './sources'
+import {
+  acquireLock,
+  loadState,
+  pushEvent,
+  releaseLock,
+  saveState,
+  type KvLike,
+  type LoadedState,
+  type TrackedAuthor,
+  type TrackedPost,
+} from './state'
+
+export const LIMITS = {
+  /** 1 回の実行で getthumbinfo を叩く上限 */
+  thumbPerRun: 25,
+  /** 1 回の実行でユーザー情報 API を叩く上限 */
+  usersPerRun: 10,
+  /** 外部呼び出しの総予算（無料プランの 50/実行 に KV 分の余裕を残す） */
+  subrequestBudget: 40,
+  /** nvapi 新着検索は最大 3 ページなので予算上は 3 とみなす */
+  nvapiCost: 3,
+  lockTtlSeconds: 600,
+  /** 現存投稿者を再確認する間隔 */
+  userRecheckHours: 6,
+  /** 補完に失敗した動画を諦めるまでの試行回数 */
+  pendingMaxAttempts: 3,
+  /** 差分取得の重なり（取りこぼし防止） */
+  sinceOverlapMinutes: 10,
+  /** 初回実行で遡る時間 */
+  firstPollLookbackMinutes: 30,
+  /** 動画単位の判定を保持する日数（投稿者 NG は恒久） */
+  videoVerdictRetentionDays: 90,
+  releasedRetentionDays: 7,
+  evidenceMax: 10,
+} as const
+
+export type RunMode = 'poll' | 'sweep'
+
+export interface RunResult {
+  mode: RunMode
+  skipped: string | null
+  newVideos: number
+  enriched: number
+  usersChecked: number
+  subrequests: number
+  kvWrites: number
+  note?: string
+}
+
+const HOUR_MS = 3600_000
+const DAY_MS = 24 * HOUR_MS
+const MINUTE_MS = 60_000
+
+const isUserId = (authorId: string): boolean => /^\d{1,12}$/.test(authorId)
+
+function toObservation(author: TrackedAuthor | undefined): AuthorObservation | null {
+  if (!author) return null
+  return {
+    authorId: author.authorId,
+    status: author.status,
+    followerCount: author.followerCount,
+    visibility: author.visibility,
+    postTimes: author.posts.map((p) => p.at),
+    deletedObservedAt: author.deletedObservedAt,
+  }
+}
+
+function postToVideo(post: TrackedPost, authorId: string | null): VideoObservation {
+  return {
+    id: post.id,
+    title: post.title,
+    authorId,
+    registeredAt: post.at,
+    tagDetails: post.tagDetails,
+    ownerVisibility: post.ownerVisibility,
+  }
+}
+
+function mergeReasons(a: readonly LqngRuleId[], b: readonly LqngRuleId[]): LqngRuleId[] {
+  return Array.from(new Set([...a, ...b]))
+}
+
+class Session {
+  subrequests = 0
+  newVideos = 0
+  enriched = 0
+  usersChecked = 0
+  note: string | undefined
+
+  constructor(
+    readonly state: LoadedState,
+    readonly deps: PollDeps,
+    readonly now: Date
+  ) {}
+
+  get nowIso(): string {
+    return this.now.toISOString()
+  }
+
+  get config(): LqngConfig {
+    return this.state.config
+  }
+
+  budgetLeft(cost = 1): boolean {
+    return this.subrequests + cost <= LIMITS.subrequestBudget
+  }
+
+  spend(cost = 1): void {
+    this.subrequests += cost
+  }
+
+  isKnownVideo(id: string): boolean {
+    if (this.state.verdicts.videos[id]) return true
+    if (this.state.tracking.pending.some((p) => p.id === id)) return true
+    for (const author of Object.values(this.state.tracking.authors)) if (author.posts.some((p) => p.id === id)) return true
+    return false
+  }
+
+  ensureAuthor(authorId: string): TrackedAuthor {
+    const existing = this.state.tracking.authors[authorId]
+    if (existing) return existing
+    const created: TrackedAuthor = {
+      authorId,
+      firstSeenAt: this.nowIso,
+      lastPostAt: this.nowIso,
+      posts: [],
+      status: 'unknown',
+      lastCheckedAt: null,
+      followerCount: null,
+      nickname: null,
+      visibility: null,
+      deletedObservedAt: null,
+    }
+    this.state.tracking.authors[authorId] = created
+    return created
+  }
+
+  setAuthorNg(authorId: string, reasons: LqngRuleId[], evidence: LqngEvidence | null): void {
+    if (this.config.allowlist.authorIds.includes(authorId)) return
+    const tracked = this.state.tracking.authors[authorId]
+    const current = this.state.verdicts.authors[authorId]
+    const evidenceList = current?.evidence ?? []
+    if (evidence && !evidenceList.some((e) => e.videoId === evidence.videoId)) {
+      evidenceList.unshift(evidence)
+      if (evidenceList.length > LIMITS.evidenceMax) evidenceList.length = LIMITS.evidenceMax
+    }
+    const merged = current ? mergeReasons(current.reasons, reasons) : reasons
+    const isNew = !current
+    this.state.verdicts.authors[authorId] = {
+      status: 'ng',
+      reasons: merged,
+      since: current?.since ?? this.nowIso,
+      evidence: evidenceList,
+      nickname: tracked?.nickname ?? current?.nickname ?? null,
+      followerCount: tracked?.followerCount ?? current?.followerCount ?? null,
+      visibility: tracked?.visibility ?? current?.visibility ?? null,
+      deletedObservedAt: tracked?.deletedObservedAt ?? current?.deletedObservedAt ?? null,
+    }
+    if (isNew || merged.length !== (current?.reasons.length ?? 0)) {
+      pushEvent(this.state.events, { at: this.nowIso, kind: 'author_ng', authorId, reasons: merged, id: evidence?.videoId })
+    }
+  }
+
+  /** 動画 1 件を評価して判定テーブルを更新する（何度呼んでも同じ結果になる） */
+  applyVideo(video: VideoObservation): void {
+    const author = video.authorId ? this.state.tracking.authors[video.authorId] : undefined
+    const evaluation = evaluateVideo(video, toObservation(author), this.config)
+    const current = this.state.verdicts.videos[video.id]
+    if (evaluation.ng) {
+      const changed = !current || current.status !== 'ng' || current.reasons.join() !== evaluation.reasons.join()
+      this.state.verdicts.videos[video.id] = {
+        status: 'ng',
+        reasons: evaluation.reasons,
+        authorId: video.authorId,
+        title: video.title,
+        registeredAt: video.registeredAt,
+        since: current?.status === 'ng' ? current.since : this.nowIso,
+      }
+      if (changed) pushEvent(this.state.events, { at: this.nowIso, kind: 'video_ng', id: video.id, authorId: video.authorId, reasons: evaluation.reasons })
+      if (evaluation.escalate && video.authorId) {
+        this.setAuthorNg(video.authorId, evaluation.escalateReasons, { videoId: video.id, title: video.title, registeredAt: video.registeredAt, rules: evaluation.reasons })
+      }
+      return
+    }
+    if (current?.status === 'ng') return // 一度 NG になった動画は解放しない（許可リストは合流時に効く）
+    const hold = decideHold(video, toObservation(author), this.config, this.now)
+    if (hold.hold) {
+      if (current?.status !== 'hold') pushEvent(this.state.events, { at: this.nowIso, kind: 'hold', id: video.id, authorId: video.authorId, note: hold.signals.join(',') })
+      this.state.verdicts.videos[video.id] = {
+        status: 'hold',
+        reasons: [],
+        holdSignals: hold.signals,
+        authorId: video.authorId,
+        title: video.title,
+        registeredAt: video.registeredAt,
+        since: current?.status === 'hold' ? current.since : this.nowIso,
+        holdUntil: hold.until,
+      }
+      return
+    }
+    if (current?.status === 'hold') {
+      this.state.verdicts.videos[video.id] = { ...current, status: 'released', holdUntil: null }
+      pushEvent(this.state.events, { at: this.nowIso, kind: 'released', id: video.id, authorId: video.authorId })
+    }
+  }
+
+  /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */
+  ingest(videos: SourceVideo[]): void {
+    for (const v of videos) {
+      if (this.isKnownVideo(v.id)) continue
+      this.newVideos++
+      const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility }
+      if (v.authorId) {
+        const author = this.ensureAuthor(v.authorId)
+        author.posts.push({ id: v.id, title: v.title, at: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility })
+        if (v.registeredAt > author.lastPostAt) author.lastPostAt = v.registeredAt
+        if (v.ownerVisibility && !author.visibility) author.visibility = v.ownerVisibility
+        this.state.tracking.pending.push({ id: v.id, authorId: v.authorId, attempts: 0 })
+      }
+      this.applyVideo(observation)
+    }
+  }
+
+  /** getthumbinfo でロック状態を補完し、再判定する */
+  async enrichPending(): Promise<void> {
+    const pending = this.state.tracking.pending
+    const keep: typeof pending = []
+    let processed = 0
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i]!
+      if (processed >= LIMITS.thumbPerRun || !this.budgetLeft()) {
+        keep.push(...pending.slice(i))
+        break
+      }
+      const author = item.authorId ? this.state.tracking.authors[item.authorId] : undefined
+      const post = author?.posts.find((p) => p.id === item.id)
+      if (!author || !post) continue // 追跡から外れた（期限切れなど）
+      processed++
+      this.spend()
+      let result
+      try {
+        result = await this.deps.fetchThumbInfo(item.id)
+      } catch (error) {
+        if (error instanceof AccessLimitedError) {
+          pushEvent(this.state.events, { at: this.nowIso, kind: 'access_limited', note: error.message })
+          this.note = error.message
+          keep.push(...pending.slice(i))
+          break
+        }
+        result = { ok: false as const, reason: 'error' as const }
+      }
+      if (result.ok) {
+        post.tagDetails = result.info.tagDetails
+        post.ownerVisibility = result.info.ownerVisibility
+        author.visibility = result.info.ownerVisibility
+        if (result.info.nickname && !author.nickname) author.nickname = result.info.nickname
+        this.enriched++
+        this.applyVideo(postToVideo(post, author.authorId))
+        continue
+      }
+      if (result.reason === 'deleted') continue // 動画自体が消えた
+      if (item.attempts + 1 < LIMITS.pendingMaxAttempts) keep.push({ ...item, attempts: item.attempts + 1 })
+    }
+    this.state.tracking.pending = keep
+  }
+
+  /** ユーザー情報 API で存在・フォロワー数を確認し、削除なら A∧C を判定する */
+  async checkAuthors(): Promise<void> {
+    const recheckBefore = this.now.getTime() - LIMITS.userRecheckHours * HOUR_MS
+    const candidates = Object.values(this.state.tracking.authors)
+      .filter((a) => isUserId(a.authorId) && a.status !== 'deleted')
+      .filter((a) => a.lastCheckedAt === null || new Date(a.lastCheckedAt).getTime() <= recheckBefore)
+      .sort((a, b) => (a.lastCheckedAt ?? '').localeCompare(b.lastCheckedAt ?? '') || a.firstSeenAt.localeCompare(b.firstSeenAt))
+      .slice(0, LIMITS.usersPerRun)
+    for (const author of candidates) {
+      if (!this.budgetLeft()) break
+      this.spend()
+      let info
+      try {
+        info = await this.deps.fetchUserInfo(author.authorId)
+      } catch (error) {
+        if (error instanceof AccessLimitedError) {
+          pushEvent(this.state.events, { at: this.nowIso, kind: 'access_limited', note: error.message })
+          this.note = error.message
+          break
+        }
+        continue
+      }
+      this.usersChecked++
+      author.lastCheckedAt = this.nowIso
+      if (info.status === 'error') continue
+      if (info.status === 'existing') {
+        author.status = 'existing'
+        author.followerCount = info.followerCount
+        if (info.nickname) author.nickname = info.nickname
+      } else {
+        author.status = 'deleted'
+        author.deletedObservedAt = author.deletedObservedAt ?? this.nowIso
+        pushEvent(this.state.events, { at: this.nowIso, kind: 'author_deleted', authorId: author.authorId })
+        const deletion = evaluateDeletion(toObservation(author)!, this.config)
+        if (deletion.ng) this.setAuthorNg(author.authorId, ['A_C'], null)
+      }
+      // フォロワー数・状態が分かったので、この投稿者の動画を判定し直す（昇格条件・保留信号）
+      for (const post of author.posts) this.applyVideo(postToVideo(post, author.authorId))
+    }
+  }
+
+  /** 保留の期限切れを解放し、古い項目を刈り込む */
+  expireAndPrune(): void {
+    const nowMs = this.now.getTime()
+    for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
+      if (verdict.status === 'hold' && verdict.holdUntil && new Date(verdict.holdUntil).getTime() <= nowMs) {
+        const author = verdict.authorId ? this.state.tracking.authors[verdict.authorId] : undefined
+        const post = author?.posts.find((p) => p.id === id)
+        if (post && author) {
+          this.applyVideo(postToVideo(post, author.authorId)) // ルール該当なら NG、無ければ released
+        } else {
+          this.state.verdicts.videos[id] = { ...verdict, status: 'released', holdUntil: null }
+          pushEvent(this.state.events, { at: this.nowIso, kind: 'released', id, authorId: verdict.authorId })
+        }
+      }
+    }
+    const trackMs = this.config.trackDays * DAY_MS
+    for (const [authorId, author] of Object.entries(this.state.tracking.authors)) {
+      author.posts = author.posts.filter((p) => nowMs - new Date(p.at).getTime() <= trackMs)
+      const stale = nowMs - new Date(author.lastPostAt).getTime() > trackMs
+      if (stale && author.posts.length === 0) delete this.state.tracking.authors[authorId]
+    }
+    this.state.tracking.pending = this.state.tracking.pending.filter((p) => p.authorId && this.state.tracking.authors[p.authorId])
+    for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
+      const ageMs = nowMs - new Date(verdict.since).getTime()
+      const retention = verdict.status === 'released' ? LIMITS.releasedRetentionDays : LIMITS.videoVerdictRetentionDays
+      if (ageMs > retention * DAY_MS) delete this.state.verdicts.videos[id]
+    }
+  }
+}
+
+function yesterdayJst(now: Date): string {
+  const jst = new Date(now.getTime() + 9 * HOUR_MS)
+  jst.setUTCDate(jst.getUTCDate() - 1)
+  return jst.toISOString().slice(0, 10)
+}
+
+export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promise<RunResult> {
+  const now = deps.now()
+  const nowIso = now.toISOString()
+  const base: RunResult = { mode, skipped: null, newVideos: 0, enriched: 0, usersChecked: 0, subrequests: 0, kvWrites: 0 }
+  if (!(await acquireLock(kv, nowIso, LIMITS.lockTtlSeconds))) return { ...base, skipped: 'locked' }
+  try {
+    const state = await loadState(kv, nowIso)
+    const before = { verdicts: JSON.stringify(state.verdicts), events: JSON.stringify(state.events) }
+    const session = new Session(state, deps, now)
+    if (!state.config.enabled) return { ...base, skipped: 'disabled' }
+
+    if (mode === 'sweep') {
+      const date = yesterdayJst(now)
+      if (!state.config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
+      if (state.tracking.lastSweepDate === date) return { ...base, skipped: 'already_swept' }
+      session.spend(LIMITS.nvapiCost)
+      const videos = await deps.fetchSweepVideos(state.config.sweepGenre, date)
+      // スイープは追跡情報が無いのでタイトルルールだけ（authorId は昇格の宛先に使う）
+      for (const v of videos) {
+        if (session.isKnownVideo(v.id)) continue
+        session.newVideos++
+        session.applyVideo({ id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null })
+      }
+      state.tracking.lastSweepDate = date
+    } else {
+      const since = state.tracking.lastPollAt
+        ? new Date(new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS)
+        : new Date(now.getTime() - LIMITS.firstPollLookbackMinutes * MINUTE_MS)
+      if (state.config.pollTags.length > 0) {
+        session.spend(LIMITS.nvapiCost)
+        try {
+          session.ingest(await deps.fetchNewVideos(state.config.pollTags, since.toISOString()))
+        } catch (error) {
+          if (!(error instanceof AccessLimitedError)) throw error
+          pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: error.message })
+          session.note = error.message
+        }
+      }
+      await session.enrichPending()
+      await session.checkAuthors()
+      session.expireAndPrune()
+      state.tracking.lastPollAt = nowIso
+    }
+
+    state.tracking.updatedAt = nowIso
+    state.verdicts.updatedAt = nowIso
+    const summary = {
+      at: nowIso,
+      mode,
+      newVideos: session.newVideos,
+      enriched: session.enriched,
+      usersChecked: session.usersChecked,
+      subrequests: session.subrequests,
+      kvWrites: 0,
+      ...(session.note ? { note: session.note } : {}),
+    }
+    state.events.lastRun = summary
+    pushEvent(state.events, { at: nowIso, kind: mode, note: `new=${session.newVideos} enriched=${session.enriched} users=${session.usersChecked}` })
+    const kvWrites = await saveState(kv, before, state)
+    return { ...base, newVideos: session.newVideos, enriched: session.enriched, usersChecked: session.usersChecked, subrequests: session.subrequests, kvWrites, ...(session.note ? { note: session.note } : {}) }
+  } finally {
+    await releaseLock(kv)
+  }
+}

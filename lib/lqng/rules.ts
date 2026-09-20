@@ -53,9 +53,16 @@ function isAllowlisted(video: VideoObservation, config: LqngConfig): boolean {
   return video.authorId !== null && config.allowlist.authorIds.includes(video.authorId)
 }
 
-/** 現存投稿者の D 昇格に課すフォロワー条件。削除済み・不明はフォロワー数が取れないため無条件 */
+/**
+ * D の投稿者昇格に課すフォロワー条件。
+ * - 現存: フォロワー ≤ followerMax のときだけ
+ * - 削除済み: フォロワー数が取れないため無条件
+ * - 未確認（unknown）・追跡なし: まだ判断できないので昇格しない（ユーザー確認後に再評価される）
+ */
 function followerAllowsEscalation(author: AuthorObservation | null, config: LqngConfig): boolean {
-  if (!author || author.status !== 'existing') return true
+  if (!author) return false
+  if (author.status === 'deleted') return true
+  if (author.status !== 'existing') return false
   if (author.followerCount === null || author.followerCount === undefined) return false
   return author.followerCount <= config.followerMax
 }

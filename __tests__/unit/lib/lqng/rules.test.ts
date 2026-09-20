@@ -88,6 +88,12 @@ describe('evaluateVideo', () => {
 
     const unknownFollowers = evaluateVideo(v, author({ followerCount: null }), config)
     expect(unknownFollowers.escalate).toBe(false)
+
+    // 未確認の投稿者（ユーザー情報 API をまだ叩いていない）は判断を保留する
+    const unchecked = evaluateVideo(v, author({ status: 'unknown', followerCount: null }), config)
+    expect(unchecked.ng).toBe(true)
+    expect(unchecked.escalate).toBe(false)
+    expect(evaluateVideo(v, null, config).escalate).toBe(false)
   })
 
   it('D: 削除済み投稿者はフォロワー数が取れないため無条件に昇格', () => {
