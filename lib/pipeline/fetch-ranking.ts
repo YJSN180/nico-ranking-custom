@@ -3,6 +3,67 @@ import type { RankingItem } from '../../types/ranking'
 
 const GOOGLEBOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
 
+export class RankingNotReadyError extends Error {
+  constructor(
+    readonly genre: RankingGenre,
+    readonly period: '24h' | 'hour',
+    readonly tag: string | undefined,
+    readonly page: number,
+  ) {
+    super(`Ranking not ready: ${genre}/${period}, tag=${tag ?? '(main)'}, page=${page}`)
+    this.name = 'RankingNotReadyError'
+  }
+}
+
+function parseRankingPage(
+  html: string,
+  status: number,
+  genre: RankingGenre,
+  period: '24h' | 'hour',
+  tag: string | undefined,
+  page: number,
+) {
+  const serverData = extractServerResponseData(html)
+  if (
+    status === 202 &&
+    serverData.meta?.status === 202 &&
+    serverData.meta?.code === 'HTTP_202' &&
+    serverData.meta?.errorHeading === 'このランキングは準備中です。'
+  ) {
+    throw new RankingNotReadyError(genre, period, tag, page)
+  }
+  const rankingData = serverData.data?.response?.$getTeibanRanking?.data
+  if (status !== 200 || !Array.isArray(rankingData?.items)) {
+    throw new Error(`Invalid ranking response: ${genre}/${period}, tag=${tag ?? '(main)'}, page=${page}, HTTP ${status}`)
+  }
+  const pagination = serverData.data?.response?.page?.pagination
+  const hasNextPage =
+    pagination?.page === page &&
+    Number.isInteger(pagination.pageSize) &&
+    pagination.pageSize > 0 &&
+    Number.isInteger(pagination.totalCount) &&
+    pagination.totalCount >= 0
+      ? page * pagination.pageSize < pagination.totalCount
+      : undefined
+  const items: RankingItem[] = rankingData.items.map((item: any, index: number) => ({
+    rank: (page - 1) * 100 + index + 1,
+    id: item.id,
+    title: item.title,
+    thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
+    views: item.count?.view || 0,
+    comments: item.count?.comment || 0,
+    mylists: item.count?.mylist || 0,
+    likes: item.count?.like || 0,
+    tags: item.tags || [],
+    authorId: item.owner?.id || item.user?.id,
+    authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
+    authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
+    registeredAt: item.registeredAt || item.startTime || item.createTime,
+    duration: item.duration,
+  }))
+  return { items, popularTags: extractTrendTags(serverData), hasNextPage }
+}
+
 export async function fetchWithGooglebot(url: string): Promise<Response> {
   const response = await fetch(url, {
     signal: AbortSignal.timeout(20_000),
@@ -62,7 +123,7 @@ export async function fetchRankingPageWithRetry(
   page: number = 1,
   maxRetries: number = 3,
   genreIdMap?: Record<RankingGenre, string>
-): Promise<{ items: RankingItem[]; popularTags: string[] }> {
+): Promise<{ items: RankingItem[]; popularTags: string[]; hasNextPage?: boolean }> {
   let genreId = genreIdMap ? genreIdMap[genre] : genre
   let url = `https://www.nicovideo.jp/ranking/genre/${genreId}?term=${period}`
 
@@ -104,65 +165,15 @@ export async function fetchRankingPageWithRetry(
 
           const correctedResponse = await fetchWithGooglebot(url)
           const correctedHtml = await correctedResponse.text()
-          const correctedServerData = extractServerResponseData(correctedHtml)
-          const correctedRankingData = correctedServerData.data?.response?.$getTeibanRanking?.data
-
-          if (!correctedRankingData) {
-            throw new Error('ランキングデータが見つかりません（修正後）')
-          }
-
-          const popularTags = extractTrendTags(correctedServerData)
-          const startRank = (page - 1) * 100 + 1
-          const items: RankingItem[] = (correctedRankingData.items || []).map((item: any, index: number) => ({
-            rank: startRank + index,
-            id: item.id,
-            title: item.title,
-            thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
-            views: item.count?.view || 0,
-            comments: item.count?.comment || 0,
-            mylists: item.count?.mylist || 0,
-            likes: item.count?.like || 0,
-            tags: item.tags || [],
-            authorId: item.owner?.id || item.user?.id,
-            authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
-            authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
-            registeredAt: item.registeredAt || item.startTime || item.createTime,
-            duration: item.duration
-          }))
-
-          return { items, popularTags }
+          return parseRankingPage(correctedHtml, correctedResponse.status, genre, period, tag, page)
         }
       }
 
-      const serverData = extractServerResponseData(html)
-      const rankingData = serverData.data?.response?.$getTeibanRanking?.data
-
-      if (!rankingData) {
-        throw new Error('ランキングデータが見つかりません')
-      }
-
-      const popularTags = extractTrendTags(serverData)
-      const startRank = (page - 1) * 100 + 1
-      const items: RankingItem[] = (rankingData.items || []).map((item: any, index: number) => ({
-        rank: startRank + index,
-        id: item.id,
-        title: item.title,
-        thumbURL: convertThumbnailUrl(item.thumbnail?.url || item.thumbnail?.middleUrl || ''),
-        views: item.count?.view || 0,
-        comments: item.count?.comment || 0,
-        mylists: item.count?.mylist || 0,
-        likes: item.count?.like || 0,
-        tags: item.tags || [],
-        authorId: item.owner?.id || item.user?.id,
-        authorName: item.owner?.name || item.user?.nickname || item.channel?.name,
-        authorIcon: item.owner?.iconUrl || item.user?.iconUrl || item.channel?.iconUrl,
-        registeredAt: item.registeredAt || item.startTime || item.createTime,
-        duration: item.duration
-      }))
-
-      return { items, popularTags }
+      return parseRankingPage(html, response.status, genre, period, tag, page)
     } catch (error: any) {
       lastError = error
+
+      if (error instanceof RankingNotReadyError) throw error
 
       if (error.message && error.message.includes('404')) {
         throw error

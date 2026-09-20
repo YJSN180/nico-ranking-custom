@@ -87,7 +87,7 @@ jobs:
         run: npm run test:worker:video-stats
 
       - name: Run ranking pipeline failure tests
-        run: npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts
+        run: npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
 
       - name: Typecheck ranking pipeline scripts
         run: npx tsc --noEmit -p tsconfig.pipeline.json

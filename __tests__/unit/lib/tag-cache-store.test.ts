@@ -1,9 +1,27 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment node
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { S3Client } from '@aws-sdk/client-s3'
+import { gzipSync } from 'node:zlib'
 import {
   mergeTagCacheShard,
   pickTagCacheEntry,
   type TagCacheEntry,
+  readTagCacheShardFromR2,
 } from '@/lib/tag-cache-store'
+
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
+
+it('bounds R2 reads and closes the client after gzip parsing', async () => {
+  for (const key of ['CLOUDFLARE_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY']) vi.stubEnv(key, 'test-placeholder')
+  const send = vi.spyOn(S3Client.prototype, 'send').mockImplementation(async (_command: any, options: any) => {
+    expect(options.abortSignal).toBeInstanceOf(AbortSignal)
+    return { Body: { transformToByteArray: async () => gzipSync(JSON.stringify({ sm1: success(new Date().toISOString()) })) } }
+  })
+  const destroy = vi.spyOn(S3Client.prototype, 'destroy').mockImplementation(() => {})
+  expect(await readTagCacheShardFromR2(1)).toHaveProperty('sm1')
+  expect(send).toHaveBeenCalledTimes(1)
+  expect(destroy).toHaveBeenCalledTimes(1)
+})
 
 const success = (fetchedAt: string, tag = 'Tag'): TagCacheEntry => ({
   tags: [{ name: tag, isLocked: false }],

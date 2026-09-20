@@ -20,7 +20,7 @@ import {
   getTagEnrichmentSettingsFromEnv,
 } from '../lib/pipeline/tag-enrichment'
 import { writeRankingToCloudflareKVApi } from '../lib/pipeline/storage'
-import { fetchRankingPageWithRetry } from '../lib/pipeline/fetch-ranking'
+import { fetchRankingPageWithRetry, RankingNotReadyError } from '../lib/pipeline/fetch-ranking'
 import { GENRE_ID_MAP as STATIC_GENRE_ID_MAP } from '../lib/genre-mapping'
 import * as fs from 'fs/promises'
 import * as path from 'path'
@@ -273,10 +273,7 @@ async function processGenre(
       stopWhenPageItemsLessThan: 100,
       onError: 'throw',
       fetchPage: (genre, period, tag, page) =>
-        fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP).catch(error => {
-          if (page > 1 && error instanceof Error && /Fetch failed: 404\b/.test(error.message)) return { items: [], popularTags: [] }
-          throw error
-        }),
+        fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP),
       normalizeItems: (items) => items,
       filterItems: async (items) => ngFilter(items),
       onDerivedIds: (newDerivedIds, context) => {
@@ -288,17 +285,11 @@ async function processGenre(
         }
       },
       onFetchError: (error, context) => {
-        const message = error instanceof Error ? error.message : String(error)
-        if (message.includes('404')) {
-          console.log(
-            `Reached end of pages for ${genre}/${context.period} at page ${context.page} (404 - this is normal)`,
-          )
-        } else {
-          console.error(
-            `Failed to fetch page ${context.page} for ${genre}/${context.period}:`,
-            error,
-          )
-        }
+        if (error instanceof RankingNotReadyError && context.kind === 'tag' && context.page === 1) return
+        console.error(
+          `Failed ranking fetch: ${JSON.stringify(context)}`,
+          error,
+        )
       },
       includeTagRankings: true,
       tagTargetCount: 300,
@@ -308,6 +299,7 @@ async function processGenre(
       tagDedupe: false,
       tagStopWhenPageItemsLessThan: 100,
       tagOnError: 'throw',
+      omitNotReadyTags: true,
       popularTagsStrategy: 'shared',
       tagFetchOrder: 'tag-first',
       tagEnrichment: async (items, context) =>
@@ -342,6 +334,9 @@ async function processGenre(
   }
 
   if (result.hadErrors) throw new Error(`Incomplete collection: ${genre}`)
+  if (result.unavailableTags?.length) {
+    console.warn(`[Ranking availability] ${genre}: ${JSON.stringify(result.unavailableTags)}`)
+  }
   validateGenre(genre, result.data)
   return result
 }

@@ -144,26 +144,33 @@ async function discoverAvailableData(r2Bucket) {
   try {
     console.log('Discovering available data in R2...');
     
-    // List objects with rankings/ prefix
-    const list = await r2Bucket.list({
-      prefix: 'rankings/',
-      limit: 1000
-    });
-    
     const genres = new Set();
     const periods = new Set();
     const availablePaths = [];
-    
-    for (const object of list.objects) {
-      // Parse path like rankings/all/24h/all.json
-      const parts = object.key.split('/');
-      if (parts.length >= 4 && parts[3] === 'all.json') {
-        const genre = parts[1];
-        const period = parts[2];
-        genres.add(genre);
-        periods.add(period);
-        availablePaths.push(object.key);
+    const seenCursors = new Set();
+    let cursor;
+
+    // Historical tag objects can fill a page before later genres appear.
+    while (true) {
+      const list = await r2Bucket.list({
+        prefix: 'rankings/',
+        limit: 1000,
+        ...(cursor ? { cursor } : {}),
+      });
+      for (const object of list.objects) {
+        const parts = object.key.split('/');
+        if (parts.length === 4 && parts[3] === 'all.json') {
+          genres.add(parts[1]);
+          periods.add(parts[2]);
+          availablePaths.push(object.key);
+        }
       }
+      if (!list.truncated) break;
+      if (typeof list.cursor !== 'string' || !list.cursor || seenCursors.has(list.cursor)) {
+        throw new Error('Invalid R2 listing cursor');
+      }
+      cursor = list.cursor;
+      seenCursors.add(cursor);
     }
     
     console.log(`Found ${genres.size} genres: ${Array.from(genres).join(', ')}`);
@@ -186,11 +193,7 @@ async function discoverAvailableData(r2Bucket) {
         worker_version: 'video-stats-updater',
       },
     });
-    return {
-      genres: DEFAULT_METADATA.genres,
-      periods: DEFAULT_METADATA.periods,
-      availablePaths: []
-    };
+    throw error;
   }
 }
 

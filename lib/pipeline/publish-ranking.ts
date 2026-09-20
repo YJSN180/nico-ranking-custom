@@ -114,6 +114,15 @@ export async function publishRanking(
     )
   }
   assertCounts(counts, baseline)
+  const hourlyDrops = Object.keys(counts).filter(
+    (key) => key.endsWith('/hour') && baseline[key] > 0 && counts[key] < baseline[key] * 0.5,
+  )
+  if (hourlyDrops.length) {
+    console.warn(JSON.stringify({
+      stage: 'hourly-count-drift',
+      drops: hourlyDrops.map((key) => ({ key, current: counts[key], previous: baseline[key] })),
+    }))
+  }
   if (!Object.values(counts).some((count) => count > 0))
     throw new Error('All rankings are empty')
   const manifest = {

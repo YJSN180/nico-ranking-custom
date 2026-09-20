@@ -68,6 +68,10 @@ export function getTagFetchRunStats(): TagFetchRunStats {
 
 export function resetTagFetchRunStats(): void {
   runStats = createEmptyStats()
+  if (getTagCacheBackend() === 'r2-aggregate') {
+    for (const key of Object.keys(memoryCacheByShard)) delete memoryCacheByShard[key]
+    for (const key of Object.keys(memoryCacheLoadedAt)) delete memoryCacheLoadedAt[key]
+  }
 }
 
 type TagFetchResult = { ok: true; tags: TagDetail[] } | { ok: false; reason: string }
@@ -110,13 +114,8 @@ function getShardKey(videoId: string): string {
 }
 
 async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, { ...options, signal: controller.signal })
-  } finally {
-    clearTimeout(timeoutId)
-  }
+  // The signal must remain active while the caller consumes the response body.
+  return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) })
 }
 
 function isFreshSuccess(entry: TagCacheEntry, now: number): boolean {
@@ -210,7 +209,11 @@ async function loadTagCacheForItems(items: RankingItem[]): Promise<{ cacheByShar
 
   for (const shardKey of shardKeys) {
     const loadedAt = memoryCacheLoadedAt[shardKey]
-    if (memoryCacheByShard[shardKey] && loadedAt && (now - loadedAt) < MEMORY_CACHE_MAX_AGE_MS) {
+    // Aggregate jobs publish only after collection; reloading discards this run's fresh entries.
+    if (
+      memoryCacheByShard[shardKey] && loadedAt &&
+      (getTagCacheBackend() === 'r2-aggregate' || (now - loadedAt) < MEMORY_CACHE_MAX_AGE_MS)
+    ) {
       cacheByShard[shardKey] = memoryCacheByShard[shardKey]
       continue
     }
@@ -545,8 +548,7 @@ export async function enrichRankingItemsWithTagDetails(
     const cacheResult = await loadTagCacheForItems(items)
     cacheByShard = cacheResult.cacheByShard
     cacheShardKeys = cacheResult.shardKeys
-    const totalCached = cacheShardKeys.reduce((count, shardKey) => count + Object.keys(cacheByShard[shardKey] || {}).length, 0)
-    console.warn(`[Tag Cache] Loaded ${totalCached} cached entries across ${cacheShardKeys.length} shards`)
+    console.warn(`[Tag Cache] Looking up ${items.length} videos across ${cacheShardKeys.length} shards`)
   }
 
   // バッチ処理

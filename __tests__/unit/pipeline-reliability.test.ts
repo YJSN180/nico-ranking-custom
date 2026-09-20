@@ -172,6 +172,33 @@ describe('complete publication contract', () => {
 })
 
 describe('generation publication', () => {
+  it.each([false, true])('omits unavailable tags without publishing empty replacements (generations=%s)', async (generations) => {
+    const { store, entries } = memoryStore()
+    const previous = aggregateArtifacts(artifacts(), '100')
+    const oldManifest = await publishRanking(store, previous, generations)
+    const oldTagKey = generations
+      ? rankingKey(oldManifest, 'rankings/all/hour/tags/tag.json')
+      : 'rankings/all/hour/tags/tag.json'
+    const oldTag = structuredClone(entries.get(oldTagKey))
+    const input = artifacts()
+    input[0].results[0].data.hour.popularTags = []
+    input[0].results[0].data.hour.tags = {}
+    const next = aggregateArtifacts(input, '100')
+    next.publication.generation = '101-1'
+    next.publication.collectedAt = new Date().toISOString()
+    next.metadata.updatedAt = next.publication.collectedAt
+    const manifest = await publishRanking(store, next, generations)
+    const key = (canonical: string) => generations ? rankingKey(manifest, canonical) : canonical
+    expect(entries.get(key('rankings/all/hour/all.json'))?.data.popularTags).toEqual([])
+    expect(entries.get(key('rankings/metadata.json'))?.data.tagsByGenrePeriod['all/hour'].tags).toEqual([])
+    expect(entries.get(key('rankings/all/24h/tags/tag.json'))?.data.items).toHaveLength(1)
+    expect(entries.get(oldTagKey)).toEqual(oldTag)
+    if (generations) {
+      expect(entries.has(key('rankings/all/hour/tags/tag.json'))).toBe(false)
+      expect(entries.get(CURRENT_KEY)?.data.generation).toBe('101-1')
+    }
+  })
+
   it('allows dots inside tag names but rejects traversal segments', () => {
     const manifest = {
       version: 1,

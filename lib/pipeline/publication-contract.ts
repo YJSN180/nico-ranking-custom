@@ -145,9 +145,21 @@ export function assertCounts(
     if (
       !Number.isFinite(count) ||
       count < 0 ||
-      (previous[key] > 0 && count < previous[key] * 0.5)
+      (previous[key] > 0 &&
+        count < previous[key] * 0.5 &&
+        (!key.endsWith('/hour') || key === 'all/hour'))
     ) {
       throw new Error(`Ranking count dropped below 50%: ${key}`)
     }
+  }
+  // Small hourly genres vary naturally; detect an overall hourly collapse instead.
+  const hourlyKeys = Object.keys(current).filter((key) => key.endsWith('/hour'))
+  const hourlyCurrent = hourlyKeys.reduce((sum, key) => sum + current[key], 0)
+  const hourlyPrevious = hourlyKeys.reduce(
+    (sum, key) => sum + (previous[key] || 0),
+    0,
+  )
+  if (hourlyPrevious > 0 && hourlyCurrent < hourlyPrevious * 0.5) {
+    throw new Error('Hourly ranking total dropped below 50%')
   }
 }

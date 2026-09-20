@@ -3,6 +3,7 @@ import type { RankingItem } from '../../types/ranking'
 export interface FetchPageResult<T> {
   items: T[]
   popularTags?: string[]
+  hasNextPage?: boolean
 }
 
 export interface CollectRankingOptions<T> {
@@ -88,7 +89,10 @@ export async function collectRankingItems<T>(options: CollectRankingOptions<T>):
       allItems.push(...filteredItems)
     }
 
-    if (stopWhenPageItemsLessThan && pageItems.length < stopWhenPageItemsLessThan) {
+    if (
+      pageResult.hasNextPage === false ||
+      (pageResult.hasNextPage === undefined && stopWhenPageItemsLessThan && pageItems.length < stopWhenPageItemsLessThan)
+    ) {
       break
     }
 
