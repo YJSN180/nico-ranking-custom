@@ -343,6 +343,11 @@
 }
 
 /* 検索結果 */
+/* 下部ページ送りで先頭へ戻すとき、スティッキーヘッダに隠れないよう余白を取る */
+.search-results {
+  scroll-margin-top: calc(var(--header-height, 72px) + 8px);
+}
+
 .search-results__meta {
   display: flex;
   align-items: center;

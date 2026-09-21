@@ -284,6 +284,7 @@ export function SearchClient() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([])
   const [detailsOpen, setDetailsOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
+  const resultsRef = useRef<HTMLDivElement | null>(null)
   const hasSearchedRef = useRef(false)
 
   // 保存済み検索と詳細条件の開閉状態を復元
@@ -470,10 +471,19 @@ export function SearchClient() {
     [form, runSearch]
   )
 
-  const handlePageChange = useCallback(
+  // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す
+  const handlePageChangeTop = useCallback(
     (nextPage: number) => {
       void runSearch(form, nextPage)
-      window.scrollTo({ top: 0 })
+    },
+    [form, runSearch]
+  )
+
+  const handlePageChangeBottom = useCallback(
+    (nextPage: number) => {
+      void runSearch(form, nextPage)
+      // スティッキーヘッダ分は .search-results の scroll-margin-top で吸収する
+      resultsRef.current?.scrollIntoView({ block: 'start' })
     },
     [form, runSearch]
   )
@@ -950,7 +960,7 @@ export function SearchClient() {
       )}
 
       {!error && filteredItems && (
-        <div className="search-results">
+        <div className="search-results" ref={resultsRef}>
           <div className="search-results__meta">
             <span>
               検索結果 {totalCount.toLocaleString()} 件
@@ -968,6 +978,15 @@ export function SearchClient() {
             </span>
             <TagToggleButton />
           </div>
+
+          {/* 上部ページネーション（ランキング画面と同じ配置） */}
+          <Pagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={Math.min(totalCount, 100000)}
+            itemsPerPage={SEARCH_PAGE_SIZE}
+            onPageChange={handlePageChangeTop}
+          />
 
           {filteredItems.length === 0 ? (
             <div className="search-results__status">
@@ -990,13 +1009,13 @@ export function SearchClient() {
             </ul>
           )}
 
-          {/* ランキングと共通のページネーション（フェーズ4-3） */}
+          {/* 下部ページネーション（ランキングと共通の部品） */}
           <Pagination
             currentPage={page}
             totalPages={totalPages}
             totalItems={Math.min(totalCount, 100000)}
             itemsPerPage={SEARCH_PAGE_SIZE}
-            onPageChange={handlePageChange}
+            onPageChange={handlePageChangeBottom}
           />
         </div>
       )}
