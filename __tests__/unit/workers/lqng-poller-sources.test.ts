@@ -49,10 +49,10 @@ describe('fetchNewVideosFromNvapi', () => {
 describe('fetchThumbInfoFromExt', () => {
   const xml = (inner: string) => `<?xml version="1.0"?><nicovideo_thumb_response status="ok"><thumb>${inner}</thumb></nicovideo_thumb_response>`
 
-  it('lock 属性付きタグと投稿者を取り出す（<tags> 要素は誤検出しない）', async () => {
-    const body = xml('<user_id>12</user_id><user_nickname>n &amp; m</user_nickname><tags domain="jp"><tag lock="1">A</tag><tag>B &lt;c&gt;</tag><tag lock="1">C</tag></tags>')
+  it('lock 属性付きタグと投稿者を取り出す（<tags> 要素は誤検出しない・&amp;lt; は二重復号しない）', async () => {
+    const body = xml('<user_id>12</user_id><user_nickname>n &amp; m &amp;lt;x&amp;gt; &#39;q&#39;</user_nickname><tags domain="jp"><tag lock="1">A</tag><tag>B &lt;c&gt;</tag><tag lock="1">C</tag></tags>')
     const r = await fetchThumbInfoFromExt('sm1', vi.fn(async () => response(body, 200, true)) as unknown as typeof fetch)
-    expect(r).toEqual({ ok: true, info: { tagDetails: [{ name: 'A', isLocked: true }, { name: 'B <c>', isLocked: false }, { name: 'C', isLocked: true }], ownerVisibility: 'visible', nickname: 'n & m' } })
+    expect(r).toEqual({ ok: true, info: { tagDetails: [{ name: 'A', isLocked: true }, { name: 'B <c>', isLocked: false }, { name: 'C', isLocked: true }], ownerVisibility: 'visible', nickname: "n & m &lt;x&gt; 'q'" } })
   })
 
   it('投稿者が空なら hidden、削除済みは deleted、403 はアクセス制限', async () => {

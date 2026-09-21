@@ -105,8 +105,17 @@ export async function fetchNewVideosFromNvapi(tags: string[], sinceIso: string, 
   return out
 }
 
+// 1 パスで復号する（&amp; を先に戻す逐次 replace は &amp;lt; → < の二重復号になる）
+const XML_ENTITIES = new Map<string, string>([
+  ['amp', '&'],
+  ['lt', '<'],
+  ['gt', '>'],
+  ['quot', '"'],
+  ['apos', "'"],
+  ['#39', "'"],
+])
 const decodeXml = (s: string): string =>
-  s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+  s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (match, name: string) => XML_ENTITIES.get(name) ?? match)
 
 function pickXml(xml: string, tag: string): string | undefined {
   const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
