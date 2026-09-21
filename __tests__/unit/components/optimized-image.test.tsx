@@ -23,6 +23,7 @@ vi.mock('next/image', () => ({
         data-sizes={sizes}
         data-priority={priority}
         data-unoptimized={unoptimized}
+        data-next-image="true"
         {...props}
       />
     )
@@ -90,7 +91,8 @@ describe('OptimizedImage', () => {
       )
       const img = container.querySelector('img')
       expect(img?.getAttribute('src')).toBe('https://img.nicoprofile.nimg.jp/usericon/159/1594318.jpg?1546416069')
-      expect(img?.getAttribute('decoding')).toBe('async')
+      // next/image（モックは data-next-image を付ける）を通していない
+      expect(img?.getAttribute('data-next-image')).toBeNull()
     })
 
     it('isNicoCdnImage はニコニコ系ホストだけを真にする', () => {
