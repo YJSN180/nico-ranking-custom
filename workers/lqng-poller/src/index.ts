@@ -3,6 +3,7 @@
 // - 10 20 * * *   : 05:10 JST に Snapshot「前日分」のタイトルスイープ
 // 判定ロジックは lib/lqng（Next.js と共用）。設定・許可リストは KV lqng:config（管理画面で編集）。
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js'
+import { commitBackfill, createLiveBackfillDeps, emptyDeltas, runBackfillStep, type BackfillCursor, type BackfillDeltas } from './backfill'
 import { runPoll, type RunMode, type RunResult } from './poll'
 import { createLiveDeps } from './sources'
 import type { KvLike } from './state'
@@ -54,7 +55,23 @@ const handler = {
       if (!env.WORKER_AUTH_KEY || auth !== `Bearer ${env.WORKER_AUTH_KEY}`) {
         return new Response('Unauthorized', { status: 401 })
       }
-      const mode: RunMode = url.searchParams.get('mode') === 'sweep' ? 'sweep' : 'poll'
+      const modeParam = url.searchParams.get('mode')
+      // 過去分のバックフィル（駆動は scripts/lqng-backfill-driver.ts）。走査は KV を書かず、commit だけが書く
+      if (modeParam === 'backfill' || modeParam === 'backfill-commit') {
+        try {
+          const body = (await request.json().catch(() => ({}))) as { cursor?: BackfillCursor | null; pages?: number; days?: number | null; deltas?: BackfillDeltas }
+          if (modeParam === 'backfill') {
+            return Response.json(await runBackfillStep(env.LQNG_KV, createLiveBackfillDeps(), body.cursor ?? null, { pages: body.pages, days: body.days ?? null }))
+          }
+          return Response.json(await commitBackfill(env.LQNG_KV, new Date(), body.deltas ?? emptyDeltas()))
+        } catch (error) {
+          captureWorkerException(error, {
+            tags: { runtime: 'cloudflare-worker', surface: 'lqng-poller', endpoint_family: 'trigger', worker_version: 'lqng-poller', mode: modeParam },
+          })
+          return Response.json({ error: error instanceof Error ? error.message : 'error' }, { status: 500 })
+        }
+      }
+      const mode: RunMode = modeParam === 'sweep' ? 'sweep' : 'poll'
       try {
         return Response.json(await run(env, mode))
       } catch (error) {

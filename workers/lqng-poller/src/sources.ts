@@ -56,6 +56,7 @@ const NVAPI_USER_URL = 'https://nvapi.nicovideo.jp/v1/users/'
 const THUMB_URL = 'https://ext.nicovideo.jp/api/getthumbinfo/'
 const SNAPSHOT_URL = 'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
 const PAGE_SIZE = 100
+export const SNAPSHOT_PAGE_SIZE = PAGE_SIZE
 const MAX_PAGES = 3
 const TIMEOUT_MS = 8000
 
@@ -165,6 +166,54 @@ interface SnapshotItem {
   userId: number | null
   channelId: number | null
   startTime: string
+  /** 空白区切りのタグ名（fields に tags を含めたときだけ） */
+  tags?: string | null
+}
+
+export interface SnapshotVideo extends SourceVideo {
+  /** Snapshot が返すタグ名（ロック状態は含まない） */
+  tags: string[]
+}
+
+export interface SnapshotPage {
+  videos: SnapshotVideo[]
+  totalCount: number
+}
+
+function mapSnapshotItem(v: SnapshotItem): SnapshotVideo {
+  const authorId = v.channelId !== null && v.channelId !== undefined ? `channel/ch${v.channelId}` : v.userId !== null && v.userId !== undefined ? String(v.userId) : null
+  const tags = typeof v.tags === 'string' ? v.tags.split(/\s+/).filter((t) => t.length > 0) : []
+  return { id: v.contentId, title: v.title, authorId, registeredAt: v.startTime, ownerVisibility: null, tags }
+}
+
+/** Snapshot の filters[startTime] は +09:00 表記で渡す（Z 表記は使わない） */
+export function toSnapshotTime(iso: string): string {
+  const jst = new Date(new Date(iso).getTime() + 9 * 3600_000)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`
+}
+
+/**
+ * Snapshot: 対象タグ（OR・完全一致）の [startIso, endIso) 区間を新しい順に 1 ページ（100 件）取る。
+ * バックフィル用。ロック状態は含まないので D の候補絞り込みにだけタグ名を使う。
+ */
+export async function fetchSnapshotWindowPage(tags: string[], startIso: string, endIso: string, offset: number, fetchImpl: typeof fetch = fetch): Promise<SnapshotPage> {
+  const params = new URLSearchParams({
+    q: tags.join(' OR '),
+    targets: 'tagsExact',
+    fields: 'contentId,title,userId,channelId,startTime,tags',
+    _sort: '-startTime',
+    _limit: String(PAGE_SIZE),
+    _offset: String(offset),
+    'filters[startTime][gte]': toSnapshotTime(startIso),
+    'filters[startTime][lt]': toSnapshotTime(endIso),
+    _context: 'nico-rank.com lqng-poller',
+  })
+  const res = await fetchImpl(`${SNAPSHOT_URL}?${params.toString()}`, { headers: { 'User-Agent': 'nico-rank.com lqng-poller' }, signal: AbortSignal.timeout(TIMEOUT_MS) })
+  if (!res.ok) throw new Error(`snapshot_http_${res.status}`)
+  const json = (await res.json()) as { meta?: { status?: number; totalCount?: number }; data?: SnapshotItem[] }
+  if (json.meta?.status !== 200 || !json.data) throw new Error('snapshot_invalid_response')
+  return { videos: json.data.map(mapSnapshotItem), totalCount: json.meta.totalCount ?? json.data.length }
 }
 
 /** Snapshot: 指定ジャンルの、JST 日付 dateJst（YYYY-MM-DD）に投稿された動画（最大 300 件） */

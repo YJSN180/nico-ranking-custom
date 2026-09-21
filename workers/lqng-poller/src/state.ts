@@ -58,6 +58,7 @@ export type LqngEventKind =
   | 'released'
   | 'author_deleted'
   | 'access_limited'
+  | 'backfill'
   | 'error'
 
 export interface LqngEvent {

@@ -23,5 +23,6 @@ export const LQNG_EVENT_KIND_LABELS: Record<string, string> = {
   released: '解放',
   author_deleted: '投稿者の削除を観測',
   access_limited: 'アクセス制限を検知',
+  backfill: 'バックフィル（過去分の取り込み）',
   error: 'エラー',
 }

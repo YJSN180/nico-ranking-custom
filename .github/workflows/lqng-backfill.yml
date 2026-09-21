@@ -1,0 +1,57 @@
+name: LQNG Backfill
+
+# 粗悪コンテンツ自動NG: 過去分のバックフィル（手動起動）
+# Worker lqng-poller の /trigger?mode=backfill を繰り返し呼び、判定差分をまとめて書き込む。
+# 走査は KV を書かないため、KV の書き込み枠は commit 回数分（数回）しか消費しない。
+on:
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: '1 回の呼び出しで読む Snapshot ページ数（1〜8、100 件/ページ）'
+        required: false
+        default: '3'
+        type: string
+      max_calls:
+        description: '最大呼び出し回数（上限に達したら途中終了。書き込み済みの判定は残る）'
+        required: false
+        default: '800'
+        type: string
+      days:
+        description: '遡る日数（空欄で全履歴）'
+        required: false
+        default: ''
+        type: string
+      commit_every:
+        description: '何回の呼び出しごとに判定差分を書き込むか'
+        required: false
+        default: '40'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backfill driver
+        env:
+          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+          LQNG_WORKER_URL: https://lqng-poller.yjsn180180.workers.dev
+          BACKFILL_PAGES: ${{ inputs.pages }}
+          BACKFILL_MAX_CALLS: ${{ inputs.max_calls }}
+          BACKFILL_DAYS: ${{ inputs.days }}
+          BACKFILL_COMMIT_EVERY: ${{ inputs.commit_every }}
+        run: npx tsx scripts/lqng-backfill-driver.ts
