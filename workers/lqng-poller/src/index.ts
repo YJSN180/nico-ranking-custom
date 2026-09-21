@@ -60,9 +60,43 @@ const handler = {
         eventCounts[e.kind] = (eventCounts[e.kind] ?? 0) + 1
       }
       const lastRun = state.events.lastRun
+      // ?author=ID で、その投稿者の追跡・判定状態（件数と状態のみ。名前・タイトルは返さない）
+      const authorId = url.searchParams.get('author')
+      const tracked = authorId ? state.tracking.authors[authorId] : undefined
+      const authorVerdict = authorId ? state.verdicts.authors[authorId] : undefined
+      const videoStatuses: Record<string, number> = {}
+      if (authorId) {
+        for (const v of Object.values(state.verdicts.videos)) {
+          if (v.authorId === authorId) videoStatuses[v.status] = (videoStatuses[v.status] ?? 0) + 1
+        }
+      }
+      const author = authorId
+        ? {
+            id: authorId,
+            allowlisted: state.config.allowlist.authorIds.includes(authorId),
+            tracked: tracked
+              ? {
+                  status: tracked.status,
+                  posts: tracked.posts.length,
+                  enrichedPosts: tracked.posts.filter((post) => post.tagDetails !== null).length,
+                  lockedGroupsMax: Math.max(0, ...tracked.posts.map((post) => (post.tagDetails ? state.config.tagGroups.filter((g) => g.some((name) => post.tagDetails!.some((t) => t.isLocked && t.name === name))).length : 0))),
+                  firstSeenAt: tracked.firstSeenAt,
+                  lastPostAt: tracked.lastPostAt,
+                  lastCheckedAt: tracked.lastCheckedAt,
+                  followerCount: tracked.followerCount,
+                  visibility: tracked.visibility,
+                  deletedObservedAt: tracked.deletedObservedAt,
+                }
+              : null,
+            verdict: authorVerdict ? { status: authorVerdict.status, reasons: authorVerdict.reasons, since: authorVerdict.since } : null,
+            videoVerdicts: videoStatuses,
+            pending: state.tracking.pending.filter((item) => item.authorId === authorId).length,
+          }
+        : undefined
       return Response.json(
         {
           time: nowIso,
+          ...(author ? { author } : {}),
           config: { enabled: state.config.enabled, pollTags: state.config.pollTags.length, titleNeedles: state.config.titleNeedles.length, keywordNeedles: state.config.keywordNeedles.length, tagGroups: state.config.tagGroups.length, allowlistAuthors: state.config.allowlist.authorIds.length },
           tracking: { lastPollAt: state.tracking.lastPollAt, lastSweepDate: state.tracking.lastSweepDate, authors: Object.keys(state.tracking.authors).length, pending: state.tracking.pending.length },
           verdicts: { authors: Object.keys(state.verdicts.authors).length, videos: Object.keys(state.verdicts.videos).length, updatedAt: state.verdicts.updatedAt },
