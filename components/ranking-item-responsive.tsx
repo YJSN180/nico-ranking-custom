@@ -281,7 +281,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
               </a>
               {/* 投稿者情報 */}
               <div className="ranking-item-responsive__author">
-                {(item.authorName || item.authorId) && item.authorId && (
+                {item.authorId && item.authorDeleted ? (
+                  <span
+                    className="ranking-item-responsive__author-name ranking-item-responsive__author-name--deleted"
+                    title={`退会済みユーザー（ID: ${item.authorId}）`}
+                  >
+                    退会済み（{item.authorId}）
+                  </span>
+                ) : (item.authorName || item.authorId) && item.authorId ? (
                   <a
                     href={item.authorId.startsWith('channel/') 
                       ? `https://ch.nicovideo.jp/${item.authorId.replace('channel/', '')}`
@@ -339,7 +346,7 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                       {item.authorName || item.authorId}
                     </span>
                   </a>
-                )}
+                ) : null}
                 <span className="ranking-item-responsive__separator">·</span>
                 <span 
                   className="ranking-item-responsive__date"

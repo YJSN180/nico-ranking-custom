@@ -17,7 +17,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const started = Date.now()
   const result = await fetchOwnerInfo({ userIds, channelVideoIds })
   return NextResponse.json(
-    { users: result.users, channels: result.channels, failed: result.failed, elapsedMs: Date.now() - started },
+    { users: result.users, channels: result.channels, missing: result.missing, failed: result.failed, elapsedMs: Date.now() - started },
     // 投稿者名・アイコンは滅多に変わらないので CDN でも長めに保持する
     { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } }
   )

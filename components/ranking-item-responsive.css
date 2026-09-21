@@ -44,7 +44,10 @@
   padding: 0;
 }
 
-/* PC幅のフラット行（検索ページ）: paddingを広めに取り、タイトルは2行折返し */
+/* PC幅のフラット行（検索ページ）: paddingを広めに取り、タイトルは2行折返し。
+   本文（タイトル・投稿者・統計）はランキング行と同じく上から詰めて並べる。
+   以前はサムネ高さに伸ばして統計を下端に貼り付けていたが、投稿者行と統計の間に
+   空きができてランキング行と印象が揃わなかったため廃止（ユーザー指摘 2026-09-21） */
 @media (min-width: 641px) {
   .ranking-item-responsive--flat .ranking-item-responsive__content {
     padding: 10px 4px;
@@ -52,18 +55,10 @@
 
   .ranking-item-responsive--flat .ranking-item-responsive__title {
     -webkit-line-clamp: 2;
-    margin-bottom: 0;
-  }
-
-  /* 本文（タイトル〜統計）がサムネイル(94px)より低いと統計の下だけ空くため、
-     行の高さいっぱいに伸ばしてタイトルを上端・統計を下端に揃える（本家と同じ見え方） */
-  .ranking-item-responsive--flat .ranking-item-responsive__content {
-    align-items: stretch;
   }
 
   .ranking-item-responsive--flat .ranking-item-responsive__details {
     overflow: visible;
-    justify-content: space-between;
   }
 }
 
@@ -210,6 +205,17 @@
 
 .ranking-item-responsive__author-name:hover {
   text-decoration: underline;
+}
+
+/* 退会済み（投稿者情報の照会で 404）: リンクにせず薄く表示。ID は NG 登録のために残す */
+.ranking-item-responsive__author-name--deleted {
+  color: var(--text-secondary);
+  opacity: 0.8;
+  cursor: default;
+}
+
+.ranking-item-responsive__author-name--deleted:hover {
+  text-decoration: none;
 }
 
 .ranking-item-responsive__separator {

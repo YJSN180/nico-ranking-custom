@@ -43,6 +43,8 @@ export interface OwnerInfoResult {
   users: Record<string, OwnerInfo>
   /** チャンネルID（"ch1234" 形式） → 情報 */
   channels: Record<string, OwnerInfo>
+  /** 存在しなかったユーザーID（nvapi 404 = 退会済み）。failed とは区別する */
+  missing: string[]
   /** 失敗したユーザーID / 動画ID */
   failed: string[]
 }
@@ -103,6 +105,8 @@ interface CacheEntry<T> {
 }
 
 const userCache = new Map<string, CacheEntry<OwnerInfo>>()
+/** 退会済みは戻らないので、こちらも同じ TTL でメモして再照会を避ける */
+const missingUserCache = new Map<string, CacheEntry<true>>()
 const channelByVideoCache = new Map<string, CacheEntry<{ id: string; info: OwnerInfo }>>()
 
 function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string, now: number): T | undefined {
@@ -117,6 +121,7 @@ function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string, now: numbe
 
 export function clearOwnerInfoCache(): void {
   userCache.clear()
+  missingUserCache.clear()
   channelByVideoCache.clear()
 }
 
@@ -139,12 +144,13 @@ export async function fetchOwnerInfo(
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY
   const timeoutMs = options.timeoutMs ?? DEFAULT_PER_REQUEST_TIMEOUT_MS
   const now = options.now ?? Date.now()
-  const result: OwnerInfoResult = { users: {}, channels: {}, failed: [] }
+  const result: OwnerInfoResult = { users: {}, channels: {}, missing: [], failed: [] }
 
   const pendingUsers: string[] = []
   for (const id of input.userIds) {
     const cached = readCache(userCache, id, now)
     if (cached) result.users[id] = cached
+    else if (readCache(missingUserCache, id, now)) result.missing.push(id)
     else pendingUsers.push(id)
   }
   const pendingVideos: string[] = []
@@ -154,16 +160,23 @@ export async function fetchOwnerInfo(
     else pendingVideos.push(id)
   }
 
-  const fetchJson = async (url: string, headers: Record<string, string>): Promise<unknown | null> => {
+  const fetchJson = async (url: string, headers: Record<string, string>): Promise<{ status: number; body: unknown | null }> => {
     const res = await fetchImpl(url, { headers, cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
-    if (!res.ok) return null
-    return res.json()
+    if (!res.ok) return { status: res.status, body: null }
+    return { status: res.status, body: await res.json() }
   }
 
   const tasks: Array<() => Promise<void>> = [
     ...pendingUsers.map((id) => async () => {
       try {
-        const info = parseUserInfo(await fetchJson(buildUserInfoUrl(id), NVAPI_HEADERS))
+        const { status, body } = await fetchJson(buildUserInfoUrl(id), NVAPI_HEADERS)
+        if (status === 404) {
+          // 退会済み。一時的な失敗（5xx・タイムアウト）とは区別して表示側で明示する
+          result.missing.push(id)
+          missingUserCache.set(id, { value: true, expiresAt: now + CACHE_TTL_MS })
+          return
+        }
+        const info = parseUserInfo(body)
         if (!info) {
           result.failed.push(id)
           return
@@ -176,7 +189,7 @@ export async function fetchOwnerInfo(
     }),
     ...pendingVideos.map((videoId) => async () => {
       try {
-        const channel = parseChannelInfo(await fetchJson(buildV3GuestUrl(videoId), V3_GUEST_HEADERS))
+        const channel = parseChannelInfo((await fetchJson(buildV3GuestUrl(videoId), V3_GUEST_HEADERS)).body)
         if (!channel) {
           result.failed.push(videoId)
           return

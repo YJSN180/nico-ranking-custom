@@ -352,11 +352,13 @@ export function SearchClient() {
     }
     if (userIds.size === 0 && channelVideos.size === 0) return
 
-    const applyOwners = (users: Record<string, OwnerInfo>, channels: Record<string, OwnerInfo>): void => {
+    const applyOwners = (users: Record<string, OwnerInfo>, channels: Record<string, OwnerInfo>, missing: string[]): void => {
+      const deleted = new Set(missing)
       setItems((prev) =>
         prev
           ? prev.map((it) => {
               if (it.authorName || !it.authorId) return it
+              if (deleted.has(it.authorId)) return { ...it, authorDeleted: true }
               const info = it.authorId.startsWith('channel/')
                 ? channels[it.authorId.slice('channel/'.length)]
                 : users[it.authorId]
@@ -381,9 +383,9 @@ export function SearchClient() {
         try {
           const res = await fetch(`/api/search/owners?${query}`, { signal })
           if (!res.ok) return
-          const body = (await res.json()) as { users?: Record<string, OwnerInfo>; channels?: Record<string, OwnerInfo> }
+          const body = (await res.json()) as { users?: Record<string, OwnerInfo>; channels?: Record<string, OwnerInfo>; missing?: string[] }
           if (requestId !== ownersRequestIdRef.current) return
-          applyOwners(body.users ?? {}, body.channels ?? {})
+          applyOwners(body.users ?? {}, body.channels ?? {}, body.missing ?? [])
         } catch {
           // 補完は任意機能なので失敗（abort 含む）しても検索結果はそのまま（ID 表示のまま）
         }

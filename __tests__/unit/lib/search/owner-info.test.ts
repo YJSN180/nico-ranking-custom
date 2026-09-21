@@ -57,7 +57,7 @@ describe('fetchOwnerInfo', () => {
       return { ok: true, json: async () => ({ data: { channel: { id: `ch-${vid}`, name: `channel-${vid}`, thumbnail: { smallUrl: `https://c/${vid}.jpg` } } } }) } as unknown as Response
     })
 
-  it('ユーザーは nvapi、チャンネルは v3_guest から集め、失敗分は failed に入れて部分成功で返す', async () => {
+  it('ユーザーは nvapi、チャンネルは v3_guest から集め、404 は missing・他の失敗は failed に入れて部分成功で返す', async () => {
     const calls: string[] = []
     const fetchImpl = makeFetch(calls)
     const result = await fetchOwnerInfo(
@@ -66,8 +66,18 @@ describe('fetchOwnerInfo', () => {
     )
     expect(result.users).toEqual({ '1': { name: 'user-1', icon: 'https://i/1.jpg' } })
     expect(result.channels).toEqual({ 'ch-so5': { name: 'channel-so5', icon: 'https://c/so5.jpg' } })
-    expect(result.failed.sort()).toEqual(['2', '3', 'so9'])
+    expect(result.missing).toEqual(['2'])
+    expect(result.failed.sort()).toEqual(['3', 'so9'])
     expect(calls).toHaveLength(5)
+  })
+
+  it('退会済み(404)もメモし、再照会しない', async () => {
+    const calls: string[] = []
+    const fetchImpl = makeFetch(calls) as unknown as typeof fetch
+    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl })
+    const second = await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl })
+    expect(second.missing).toEqual(['2'])
+    expect(calls).toHaveLength(1)
   })
 
   it('取得済みの投稿者はメモリキャッシュから返し、再取得しない', async () => {
