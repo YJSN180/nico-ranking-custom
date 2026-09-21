@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { OptimizedImage } from '@/components/optimized-image'
+import { OptimizedImage, isNicoCdnImage } from '@/components/optimized-image'
 
 // Next.js Image コンポーネントのモック
 vi.mock('next/image', () => ({
@@ -60,7 +60,9 @@ describe('OptimizedImage', () => {
       const nicoUrls = [
         'https://tn.smilevideo.jp/thumbnail.jpg',
         'https://nicovideo.cdn.nimg.jp/video.jpg',
-        'https://secure-dcdn.cdn.nimg.jp/usericon.jpg'
+        'https://secure-dcdn.cdn.nimg.jp/usericon.jpg',
+        // 2026-09 からのユーザーアイコン配信元
+        'https://img.nicoprofile.nimg.jp/usericon/159/1594318.jpg?1546416069'
       ]
 
       nicoUrls.forEach(url => {
@@ -78,6 +80,27 @@ describe('OptimizedImage', () => {
         // 通常の<img>タグが使用されていることを確認
         expect(img?.getAttribute('data-unoptimized')).toBeNull()
       })
+    })
+  })
+
+  describe('ニコニコ系 CDN の判定', () => {
+    it('*.nimg.jp / *.smilevideo.jp は最適化を通さず元 URL のまま <img> で表示する', () => {
+      const { container } = render(
+        <OptimizedImage src="https://img.nicoprofile.nimg.jp/usericon/159/1594318.jpg?1546416069" alt="icon" width={18} height={18} />
+      )
+      const img = container.querySelector('img')
+      expect(img?.getAttribute('src')).toBe('https://img.nicoprofile.nimg.jp/usericon/159/1594318.jpg?1546416069')
+      expect(img?.getAttribute('decoding')).toBe('async')
+    })
+
+    it('isNicoCdnImage はニコニコ系ホストだけを真にする', () => {
+      expect(isNicoCdnImage('https://img.nicoprofile.nimg.jp/usericon/1/1.jpg')).toBe(true)
+      expect(isNicoCdnImage('https://secure-dcdn.cdn.nimg.jp/comch/channel-icon/128x128/ch1.jpg')).toBe(true)
+      expect(isNicoCdnImage('https://tn.smilevideo.jp/smile?i=1')).toBe(true)
+      expect(isNicoCdnImage('https://example.com/nimg.jp/x.jpg')).toBe(false)
+      expect(isNicoCdnImage('https://evil-nimg.jp/x.jpg')).toBe(false)
+      expect(isNicoCdnImage('/local.png')).toBe(false)
+      expect(isNicoCdnImage(undefined)).toBe(false)
     })
   })
 
