@@ -62,6 +62,7 @@ function deps(over: Partial<BackfillDeps> = {}): BackfillDeps {
   return {
     now: () => T0,
     fetchWindowPage: pager([]),
+    fetchTagPage: vi.fn(async () => ({ items: [], totalCount: 0, hasNext: false })),
     fetchUserInfo: vi.fn(async () => existing(100)),
     fetchThumbInfo: vi.fn(async (): Promise<ThumbResult> => ({ ok: true, info: { tagDetails: locked('x'), ownerVisibility: 'visible', nickname: 'n' } })),
     ...over,
@@ -165,6 +166,34 @@ describe('runBackfillStep', () => {
     const c2 = createBackfillCursor(T0, null)
     expect(c2.floor).toBe(BACKFILL_LIMITS.floorDefault)
     expect(new Date(c2.windowStart).getTime()).toBe(T0.getTime() - BACKFILL_LIMITS.windowDays * 24 * 3600_000)
+  })
+})
+
+describe('runBackfillStep（pages ソース: 本家タグページで直近を補完）', () => {
+  const pageItem = (id: string, authorId: string, minutesAgo: number) => ({ id, title: `t-${id}`, registeredAt: at(minutesAgo), owner: { ownerType: 'user', id: authorId, name: 'n', visibility: 'visible' } })
+
+  it('タグごとにページを進め、floor より古い動画で次のタグへ。連投＋退会済みは A∧C', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const fetchTagPage = vi.fn(async (tag: string, page: number) => {
+      if (tag === 'tagA' && page === 1) return { items: Array.from({ length: 32 }, (_, i) => pageItem(`a${i}`, '6001', 1 + i)), totalCount: 100, hasNext: true }
+      if (tag === 'tagA' && page === 2) return { items: [pageItem('a-old', '6002', 5 * 24 * 60)], totalCount: 100, hasNext: true } // floor（2 日）より古い
+      return { items: [pageItem('a0', '6001', 1), pageItem('b1', '6003', 30)], totalCount: 2, hasNext: false } // tagB: a0 は重複
+    })
+    const fetchUserInfo = vi.fn(async (id: string) => (id === '6001' ? deleted : existing(50)))
+    const d = deps({ fetchTagPage, fetchUserInfo })
+    const r = await runBackfillStep(m.kv, d, null, { pages: 8, source: 'pages' })
+    expect(r.cursor.source).toBe('pages')
+    expect(vi.mocked(fetchTagPage).mock.calls.map((c) => `${c[0]}:${c[1]}`)).toEqual(['tagA:1', 'tagA:2', 'tagB:1'])
+    expect(r.deltas.authors['6001']?.reasons).toEqual(['A_C'])
+    expect(r.deltas.authors['6003']).toBeUndefined()
+    expect(r.done).toBe(true)
+    expect(r.cursor.stats.videos).toBe(34) // 32 + 2（floor より古い 1 件は数えない）
+  })
+
+  it('pages ソースの既定の遡りは 2 日', () => {
+    const c = createBackfillCursor(T0, null, 'pages')
+    expect(new Date(c.floor).getTime()).toBe(T0.getTime() - 2 * 24 * 3600_000)
+    expect(c.tagIndex).toBe(0)
   })
 })
 

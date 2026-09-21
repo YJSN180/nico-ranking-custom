@@ -88,11 +88,11 @@ function mapNicoPageVideo(v: NicoPageVideo): SourceVideo {
   return { id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: owner === null ? null : hidden ? 'hidden' : 'visible' }
 }
 
-export const NICO_PAGES_PER_TAG = 2
+export const NICO_PAGES_PER_TAG = 3
 
 /**
  * 本家のタグページ（投稿日時が新しい順）から since 以降の新着を集める。nvapi の検索索引より反映が早い。
- * タグごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 2 ページ目まで読む。
+ * タグごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 3 ページ目まで読む。
  * 同じ動画が複数タグに出ても 1 回だけ返す。HTTP エラー・構造変化は throw（呼び出し側で nvapi に縮退）。
  */
 export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<SourceVideo[]> {

@@ -136,9 +136,9 @@ const handler = {
       // 過去分のバックフィル（駆動は scripts/lqng-backfill-driver.ts）。走査は KV を書かず、commit だけが書く
       if (modeParam === 'backfill' || modeParam === 'backfill-commit') {
         try {
-          const body = (await request.json().catch(() => ({}))) as { cursor?: BackfillCursor | null; pages?: number; days?: number | null; deltas?: BackfillDeltas }
+          const body = (await request.json().catch(() => ({}))) as { cursor?: BackfillCursor | null; pages?: number; days?: number | null; source?: 'snapshot' | 'pages'; deltas?: BackfillDeltas }
           if (modeParam === 'backfill') {
-            return Response.json(await runBackfillStep(env.LQNG_KV, createLiveBackfillDeps(), body.cursor ?? null, { pages: body.pages, days: body.days ?? null }))
+            return Response.json(await runBackfillStep(env.LQNG_KV, createLiveBackfillDeps(), body.cursor ?? null, { pages: body.pages, days: body.days ?? null, source: body.source === 'pages' ? 'pages' : 'snapshot' }))
           }
           return Response.json(await commitBackfill(env.LQNG_KV, new Date(), body.deltas ?? emptyDeltas()))
         } catch (error) {

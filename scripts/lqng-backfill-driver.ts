@@ -19,6 +19,8 @@ const pages = intEnv('BACKFILL_PAGES', 3)
 const maxCalls = intEnv('BACKFILL_MAX_CALLS', 800)
 const commitEvery = intEnv('BACKFILL_COMMIT_EVERY', 40)
 const sleepMs = intEnv('BACKFILL_SLEEP_MS', 300)
+const sourceRaw = process.env.BACKFILL_SOURCE?.trim()
+const source: 'snapshot' | 'pages' = sourceRaw === 'pages' ? 'pages' : 'snapshot'
 const daysRaw = process.env.BACKFILL_DAYS?.trim()
 const days = daysRaw ? Number(daysRaw) : null
 if (daysRaw && !(Number.isFinite(days) && (days as number) > 0)) throw new Error('BACKFILL_DAYS must be a positive number')
@@ -70,14 +72,14 @@ async function commit(deltas: BackfillDeltas): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  let cursor: BackfillCursor | null = endAt ? createBackfillCursor(endAt, days) : null
+  let cursor: BackfillCursor | null = endAt ? createBackfillCursor(endAt, days, source) : null
   let pending = emptyDeltas()
   let sinceCommit = 0
   let done = false
   let calls = 0
-  console.log(`backfill start: pages=${pages} maxCalls=${maxCalls} days=${days ?? 'all'} end=${endAt ? endAt.toISOString() : 'now'} commitEvery=${commitEvery}`)
+  console.log(`backfill start: source=${source} pages=${pages} maxCalls=${maxCalls} days=${days ?? (source === 'pages' ? '2' : 'all')} end=${endAt ? endAt.toISOString() : 'now'} commitEvery=${commitEvery}`)
   while (calls < maxCalls) {
-    const r = await call<BackfillStepResult>('backfill', { cursor, pages, days })
+    const r = await call<BackfillStepResult>('backfill', { cursor, pages, days, source })
     if (r.skipped === 'locked') {
       await sleep(5_000)
       continue

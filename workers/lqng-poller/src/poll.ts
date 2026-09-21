@@ -23,8 +23,8 @@ export const LIMITS = {
   usersPerRun: 10,
   /** 外部呼び出しの総予算（無料プランの 50/実行 に KV 分の余裕を残す） */
   subrequestBudget: 40,
-  /** 新着取得の予算。本家タグページはタグ 3 × 最大 2 ページ、予備の nvapi は最大 3 ページなので 6 とみなす */
-  nvapiCost: 6,
+  /** 新着取得の予算。本家タグページはタグ 3 × 最大 3 ページ（予備の nvapi は最大 3 ページ）なので 9 とみなす */
+  nvapiCost: 9,
   lockTtlSeconds: 600,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,

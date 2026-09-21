@@ -38,6 +38,14 @@ on:
         required: false
         default: ''
         type: string
+      source:
+        description: '取得元。snapshot=全履歴（Snapshot API）、pages=本家タグページ（直近数日、Snapshot 未反映分の補完）'
+        required: false
+        default: 'snapshot'
+        type: choice
+        options:
+          - snapshot
+          - pages
 
 permissions:
   contents: read
@@ -69,4 +77,5 @@ jobs:
           BACKFILL_DAYS: ${{ inputs.days }}
           BACKFILL_COMMIT_EVERY: ${{ inputs.commit_every }}
           BACKFILL_END: ${{ inputs.end }}
+          BACKFILL_SOURCE: ${{ inputs.source }}
         run: npx tsx scripts/lqng-backfill-driver.ts

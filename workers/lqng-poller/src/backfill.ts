@@ -25,6 +25,7 @@ import {
   type UserInfo,
 } from './sources'
 import { acquireLock, loadState, pushEvent, releaseLock, type KvLike } from './state'
+import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageResult } from '../../../lib/search/nico-page-search'
 
 export const BACKFILL_LIMITS = {
   pagesDefault: 3,
@@ -42,6 +43,8 @@ export const BACKFILL_LIMITS = {
   evidencePerAuthor: 3,
   /** これより前は走査しない（ニコニコ動画の開始以前） */
   floorDefault: '2007-03-01T00:00:00.000Z',
+  /** pages ソースの既定の遡り日数（Snapshot の更新遅れと Worker 停止の隙間を埋める用途） */
+  pagesDefaultDays: 2,
   lockTtlSeconds: 120,
 } as const
 
@@ -49,9 +52,13 @@ const HOUR_MS = 3600_000
 const DAY_MS = 24 * HOUR_MS
 const isUserId = (authorId: string | null): authorId is string => authorId !== null && /^\d{1,12}$/.test(authorId)
 
+export type BackfillSource = 'snapshot' | 'pages'
+
 export interface BackfillDeps {
   now: () => Date
   fetchWindowPage: (tags: string[], startIso: string, endIso: string, offset: number) => Promise<SnapshotPage>
+  /** 本家タグページ（投稿日時が新しい順）。Snapshot の索引に未反映の直近数日を補完するときに使う */
+  fetchTagPage: (tag: string, page: number) => Promise<NicoPageResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
 }
@@ -60,6 +67,7 @@ export function createLiveBackfillDeps(fetchImpl: typeof fetch = fetch): Backfil
   return {
     now: () => new Date(),
     fetchWindowPage: (tags, startIso, endIso, offset) => fetchSnapshotWindowPage(tags, startIso, endIso, offset, fetchImpl),
+    fetchTagPage: (tag, page) => fetchNicoSearchPage('tag', tag, page, fetchImpl),
     fetchUserInfo: (id) => fetchUserInfoFromNvapi(id, fetchImpl),
     fetchThumbInfo: (id) => fetchThumbInfoFromExt(id, fetchImpl),
   }
@@ -93,6 +101,11 @@ export interface BackfillStats {
 /** 呼び出しの間で持ち回る走査状態（KV には置かない） */
 export interface BackfillCursor {
   version: 1
+  /** 取得元。snapshot は全履歴（30 日窓）、pages は本家タグページ（直近数日の取りこぼし補完） */
+  source: BackfillSource
+  /** pages 用: 何番目のタグの何ページ目か */
+  tagIndex: number
+  page: number
   /** 走査中の窓 [windowStart, windowEnd)（UTC ISO） */
   windowEnd: string
   windowStart: string
@@ -117,8 +130,9 @@ export interface BackfillDeltas {
 
 export interface BackfillStepOptions {
   pages?: number
-  /** 遡る日数。null/未指定で全履歴 */
+  /** 遡る日数。null/未指定で全履歴（pages ソースでは 2 日） */
   days?: number | null
+  source?: BackfillSource
 }
 
 export interface BackfillStepResult {
@@ -141,12 +155,16 @@ export function emptyDeltas(): BackfillDeltas {
   return { authors: {}, videos: {} }
 }
 
-export function createBackfillCursor(now: Date, days: number | null | undefined): BackfillCursor {
+export function createBackfillCursor(now: Date, days: number | null | undefined, source: BackfillSource = 'snapshot'): BackfillCursor {
   const end = now.getTime()
-  const floorMs = days && days > 0 ? end - days * DAY_MS : new Date(BACKFILL_LIMITS.floorDefault).getTime()
+  const effectiveDays = days && days > 0 ? days : source === 'pages' ? BACKFILL_LIMITS.pagesDefaultDays : null
+  const floorMs = effectiveDays ? end - effectiveDays * DAY_MS : new Date(BACKFILL_LIMITS.floorDefault).getTime()
   const start = Math.max(floorMs, end - BACKFILL_LIMITS.windowDays * DAY_MS)
   return {
     version: 1,
+    source,
+    tagIndex: 0,
+    page: 1,
     windowEnd: new Date(end).toISOString(),
     windowStart: new Date(start).toISOString(),
     offset: 0,
@@ -160,7 +178,8 @@ export function createBackfillCursor(now: Date, days: number | null | undefined)
   }
 }
 
-function windowsExhausted(cursor: BackfillCursor): boolean {
+function windowsExhausted(cursor: BackfillCursor, tagCount = 0): boolean {
+  if (cursor.source === 'pages') return cursor.tagIndex >= tagCount
   return new Date(cursor.windowEnd).getTime() <= new Date(cursor.floor).getTime()
 }
 
@@ -316,7 +335,8 @@ class BackfillSession {
         }
       }
       const keyword = this.config.keywordNeedles.length > 0 && containsAnyNormalized(v.title, this.config.keywordNeedles)
-      if ((evaluation.frequent || keyword) && this.presentGroups(v.tags) >= this.config.lockGroupsMin && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
+      const groupsMayMatch = this.cursor.source === 'pages' ? true : this.presentGroups(v.tags) >= this.config.lockGroupsMin
+      if ((evaluation.frequent || keyword) && groupsMayMatch && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
         this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, times })
       }
     }
@@ -402,7 +422,7 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   const now = deps.now()
   const nowIso = now.toISOString()
   const state = await loadState(kv, nowIso)
-  const cursor = cursorIn ?? createBackfillCursor(now, options.days ?? null)
+  const cursor = cursorIn ?? createBackfillCursor(now, options.days ?? null, options.source ?? 'snapshot')
   const empty: BackfillStepResult = { skipped: null, cursor, done: false, deltas: emptyDeltas(), subrequests: 0 }
   if (!state.config.enabled) return { ...empty, skipped: 'disabled' }
   if (state.config.pollTags.length === 0) return { ...empty, skipped: 'no_poll_tags' }
@@ -415,10 +435,30 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
     nowIso
   )
   cursor.stats.calls++
+  const tags = state.config.pollTags
   const pages = Math.max(1, Math.min(BACKFILL_LIMITS.pagesMax, Math.floor(options.pages ?? BACKFILL_LIMITS.pagesDefault)))
-  for (let i = 0; i < pages && !windowsExhausted(cursor) && session.budgetLeft(); i++) {
+  for (let i = 0; i < pages && !windowsExhausted(cursor, tags.length) && session.budgetLeft(); i++) {
     session.subrequests++
-    const page = await deps.fetchWindowPage(state.config.pollTags, cursor.windowStart, cursor.windowEnd, cursor.offset)
+    if (cursor.source === 'pages') {
+      // 本家タグページ: タグごとに新しい順にページを進め、floor より古い動画が出たら次のタグへ
+      const tag = tags[cursor.tagIndex]!
+      const result = await deps.fetchTagPage(tag, cursor.page)
+      cursor.stats.pages++
+      const floorMs = new Date(cursor.floor).getTime()
+      const inRange = result.items.filter((v) => new Date(v.registeredAt).getTime() >= floorMs)
+      session.ingestPage(
+        inRange.map((v): SnapshotVideo => ({ id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: v.owner === null ? null : v.owner?.visibility === 'hidden' ? 'hidden' : 'visible', tags: [] }))
+      )
+      const reachedFloor = inRange.length < result.items.length
+      if (reachedFloor || !result.hasNext || result.items.length < NICO_PAGE_SIZE) {
+        cursor.tagIndex++
+        cursor.page = 1
+      } else {
+        cursor.page++
+      }
+      continue
+    }
+    const page = await deps.fetchWindowPage(tags, cursor.windowStart, cursor.windowEnd, cursor.offset)
     cursor.stats.pages++
     session.ingestPage(page.videos)
     if (page.videos.length < SNAPSHOT_PAGE_SIZE || cursor.offset + SNAPSHOT_PAGE_SIZE >= page.totalCount) advanceWindow(cursor)
@@ -427,7 +467,7 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   await session.checkUsers(deps)
   await session.enrichThumbs(deps)
 
-  const done = windowsExhausted(cursor) && cursor.pendingUsers.length === 0 && cursor.pendingThumbs.length === 0
+  const done = windowsExhausted(cursor, tags.length) && cursor.pendingUsers.length === 0 && cursor.pendingThumbs.length === 0
   return { skipped: null, cursor, done, deltas: session.deltas, subrequests: session.subrequests, ...(session.note ? { note: session.note } : {}) }
 }
 
