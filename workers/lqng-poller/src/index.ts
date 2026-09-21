@@ -117,6 +117,9 @@ const handler = {
           verdicts: { authors: Object.keys(state.verdicts.authors).length, videos: Object.keys(state.verdicts.videos).length, updatedAt: state.verdicts.updatedAt },
           lastRun: lastRun ? { at: lastRun.at, mode: lastRun.mode, newVideos: lastRun.newVideos, enriched: lastRun.enriched, usersChecked: lastRun.usersChecked, subrequests: lastRun.subrequests, kvWrites: lastRun.kvWrites, note: lastRun.note ?? null } : null,
           eventsLast24h: eventCounts,
+          // 直近の実行の内訳（件数のみ）と、直近イベントの種別だけの時系列
+          recentRuns: state.events.items.filter((e) => e.kind === 'poll' || e.kind === 'sweep').slice(0, 40).map((e) => ({ at: e.at, kind: e.kind, note: e.note ?? null })),
+          recentEvents: state.events.items.slice(0, 60).map((e) => ({ at: e.at, kind: e.kind, ...(e.kind === 'access_limited' || e.kind === 'error' || e.kind === 'backfill' ? { note: e.note ?? null } : {}) })),
           lockHeld: (await env.LQNG_KV.get('lqng:lock')) !== null,
         },
         { headers: { 'Cache-Control': 'no-store' } }
