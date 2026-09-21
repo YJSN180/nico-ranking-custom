@@ -54,6 +54,7 @@ next-env.d.ts
 .dev.vars
 wrangler.toml
 !workers/ranking-scheduler/wrangler.toml
+!workers/lqng-poller/wrangler.toml
 
 # OpenNext build artifacts
 .open-next/

@@ -1,0 +1,31 @@
+name = "lqng-poller"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "5984977746a3dfcd71415bed5c324eb1"
+upload_source_maps = true
+
+# 差分ポーリング（15 分）と、05:10 JST（= 20:10 UTC）の前日分タイトルスイープ
+[triggers]
+crons = ["*/15 * * * *", "10 20 * * *"]
+
+# 既存の名前空間を共用（キーは lqng: 接頭辞で分離）
+[[kv_namespaces]]
+binding = "LQNG_KV"
+id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
+
+[vars]
+ENVIRONMENT = "production"
+# WORKER_AUTH_KEY（/trigger 用）と SENTRY_WORKER_DSN は Cloudflare Secrets で設定する
+
+[env.production]
+name = "lqng-poller"
+
+[env.staging]
+name = "lqng-poller-staging"
+
+[dev]
+port = 8789
+
+[observability]
+enabled = true
