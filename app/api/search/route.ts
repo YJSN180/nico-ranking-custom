@@ -25,6 +25,7 @@ import {
   type RealtimeSegment,
 } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
+import { fetchFreshItems, mergeFreshIntoRealtime } from '@/lib/search/fresh-segment'
 import { isRealtimeEnabled } from '@/lib/search/realtime-search'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 import type { RankingItem } from '@/types/ranking'
@@ -123,7 +124,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // Snapshot 側は境界より前だけ（filters[startTime][lt]=T）を取り、nvapi 側（minRegisteredAt=T）と
   // 構成的に排他にする。これで dedup に頼らず offset 計算が厳密になり、ページ間の重複が起きない
-  const [realtimeResult, snapshotResult] = await Promise.all([
+  // 最新区間（本家ページ）は nvapi と並列に取り、失敗しても nvapi だけで続ける（隠れ依存にしない）
+  const [realtimeResult, snapshotResult, freshResult] = await Promise.all([
     fetchRealtimeSegment(conditions, boundary, fetch, 4000, AbortSignal.timeout(REALTIME_BUDGET_MS)).then(
       (segment): { segment: RealtimeSegment; error?: undefined } => ({ segment }),
       (error: unknown): { segment?: undefined; error: string } => ({
@@ -131,6 +133,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       })
     ),
     fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, boundary),
+    fetchFreshItems(conditions, boundary).then(
+      (items): { items: RankingItem[]; error?: undefined } => ({ items }),
+      (error: unknown): { items: RankingItem[]; error: string } => ({ items: [], error: error instanceof Error ? error.message : 'fresh_error' })
+    ),
   ])
 
   if (isFailure(snapshotResult)) {
@@ -156,7 +162,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const segment = realtimeResult.segment
-  const plan = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, segment.items.length)
+  // 本家ページの最新動画（nvapi 未反映分）をリアルタイム区間に併合してから、ページを組み立てる
+  const withFresh = mergeFreshIntoRealtime(freshResult.items, segment.items)
+  const realtimeItems = withFresh.items
+  const plan = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, realtimeItems.length)
   let snapshotItems = snapshotResult.items
   // 仮の窓 [provisional.offset, +PAGE) が実際に必要な窓を覆っていなければ取り直す
   const covers =
@@ -173,12 +182,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     snapshotItems = snapshotItems.slice(plan.snapshotOffset - provisional.snapshotOffset)
   }
 
-  const merged = assembleMergedPage(segment.items, snapshotItems, plan)
-  return await respond(merged, segment.items.length + snapshotResult.totalCount, conditions, {
+  const merged = assembleMergedPage(realtimeItems, snapshotItems, plan)
+  return await respond(merged, realtimeItems.length + snapshotResult.totalCount, conditions, {
     source: 'merged',
     boundary,
-    realtimeCount: segment.items.length,
+    realtimeCount: realtimeItems.length,
     realtimeTruncated: segment.truncated,
+    freshCount: withFresh.added,
+    ...(freshResult.error ? { freshError: freshResult.error } : {}),
     cacheControl: 'public, s-maxage=30, stale-while-revalidate=60',
   })
 }
@@ -188,6 +199,9 @@ interface RespondMeta {
   boundary: string
   realtimeCount: number
   realtimeTruncated?: boolean
+  /** 本家ページから足した最新動画の数（nvapi に未反映だった分） */
+  freshCount?: number
+  freshError?: string
   realtimeError?: string
   cacheControl: string
 }
@@ -217,6 +231,8 @@ async function respond(
       realtimeCount: meta.realtimeCount,
       ...(meta.realtimeTruncated ? { realtimeTruncated: true } : {}),
       ...(meta.realtimeError ? { realtimeError: meta.realtimeError } : {}),
+      ...(meta.freshCount !== undefined ? { freshCount: meta.freshCount } : {}),
+      ...(meta.freshError ? { freshError: meta.freshError } : {}),
     },
     { headers: { 'Cache-Control': meta.cacheControl } }
   )
