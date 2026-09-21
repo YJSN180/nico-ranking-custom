@@ -3,9 +3,16 @@ name: LQNG Backfill
 # 粗悪コンテンツ自動NG: 過去分のバックフィル（手動起動）
 # Worker lqng-poller の /trigger?mode=backfill を繰り返し呼び、判定差分をまとめて書き込む。
 # 走査は KV を書かないため、KV の書き込み枠は commit 回数分（数回）しか消費しない。
+# 注意: workflow_dispatch は既定ブランチにこのファイルがあるときだけ起動できる。
+# 駆動スクリプトと Worker のコードは ref 入力のブランチから取り出す。
 on:
   workflow_dispatch:
     inputs:
+      ref:
+        description: '駆動スクリプトを取り出すブランチ（自動NG の実装があるブランチ）'
+        required: false
+        default: 'feature/site-improvements'
+        type: string
       pages:
         description: '1 回の呼び出しで読む Snapshot ページ数（1〜8、100 件/ページ）'
         required: false
@@ -36,6 +43,8 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
