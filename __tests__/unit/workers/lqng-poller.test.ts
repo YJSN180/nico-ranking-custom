@@ -65,6 +65,21 @@ function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
 }
 
 describe('lqng-poller runPoll', () => {
+  it('主経路の新着取得が壊れたら予備（nvapi）で取り込み、履歴に理由を残す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const primary = vi.fn(async () => {
+      throw new Error('server-response meta not found')
+    })
+    const fallback = vi.fn(async () => [video({ id: 'sm70', authorId: '7001' })])
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }), 'poll')
+    expect(r.skipped).toBeNull()
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(r.newVideos).toBe(1)
+    expect(r.note).toContain('fallback')
+    const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
+    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('new_videos_primary_failed'))).toBe(true)
+  })
+
   it('連投中の投稿者は待ち行列が長くても先に存在確認・補完される', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     // 通常の投稿者 12 人（各 1 本、先に観測）と、最後に観測された連投者 1 人（4 本を 6 分以内）

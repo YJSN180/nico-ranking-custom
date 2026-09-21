@@ -18,13 +18,13 @@ import {
 
 export const LIMITS = {
   /** 1 回の実行で getthumbinfo を叩く上限 */
-  thumbPerRun: 25,
+  thumbPerRun: 20,
   /** 1 回の実行でユーザー情報 API を叩く上限 */
   usersPerRun: 10,
   /** 外部呼び出しの総予算（無料プランの 50/実行 に KV 分の余裕を残す） */
   subrequestBudget: 40,
-  /** nvapi 新着検索は最大 3 ページなので予算上は 3 とみなす */
-  nvapiCost: 3,
+  /** 新着取得の予算。本家タグページはタグ 3 × 最大 2 ページ、予備の nvapi は最大 3 ページなので 6 とみなす */
+  nvapiCost: 6,
   lockTtlSeconds: 600,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,
@@ -402,9 +402,24 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
         try {
           session.ingest(await deps.fetchNewVideos(state.config.pollTags, since.toISOString()))
         } catch (error) {
-          if (!(error instanceof AccessLimitedError)) throw error
-          pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: error.message })
-          session.note = error.message
+          if (error instanceof AccessLimitedError) {
+            pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: error.message })
+            session.note = error.message
+          } else if (deps.fetchNewVideosFallback) {
+            // 主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。原因は履歴に残す
+            const reason = error instanceof Error ? error.message : 'error'
+            pushEvent(state.events, { at: nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
+            session.note = `fallback: ${reason}`
+            try {
+              session.ingest(await deps.fetchNewVideosFallback(state.config.pollTags, since.toISOString()))
+            } catch (fallbackError) {
+              if (!(fallbackError instanceof AccessLimitedError)) throw fallbackError
+              pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: fallbackError.message })
+              session.note = fallbackError.message
+            }
+          } else {
+            throw error
+          }
         }
       }
       await session.enrichPending()

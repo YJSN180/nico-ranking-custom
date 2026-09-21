@@ -1,6 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
+import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -36,7 +37,9 @@ export class AccessLimitedError extends Error {
 
 export interface PollDeps {
   now: () => Date
+  /** 新着の主経路（本家のタグページ）。失敗時は fetchNewVideosFallback（nvapi）へ */
   fetchNewVideos: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
+  fetchNewVideosFallback?: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
   fetchSweepVideos: (genre: string, dateJst: string) => Promise<SourceVideo[]>
@@ -78,7 +81,44 @@ function mapNvapiItem(item: NvapiItem): SourceVideo | null {
   return { id: item.id, title: item.title, authorId, registeredAt: item.registeredAt, ownerVisibility: owner === null ? null : hidden ? 'hidden' : 'visible' }
 }
 
-/** nvapi 新着検索: タグ OR、投稿日時の新しい順、since 以降を最大 3 ページ */
+/** 本家タグページの 1 件を SourceVideo にする */
+function mapNicoPageVideo(v: NicoPageVideo): SourceVideo {
+  const owner = v.owner ?? null
+  const hidden = owner?.visibility === 'hidden'
+  return { id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: owner === null ? null : hidden ? 'hidden' : 'visible' }
+}
+
+export const NICO_PAGES_PER_TAG = 2
+
+/**
+ * 本家のタグページ（投稿日時が新しい順）から since 以降の新着を集める。nvapi の検索索引より反映が早い。
+ * タグごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 2 ページ目まで読む。
+ * 同じ動画が複数タグに出ても 1 回だけ返す。HTTP エラー・構造変化は throw（呼び出し側で nvapi に縮退）。
+ */
+export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<SourceVideo[]> {
+  const sinceMs = new Date(sinceIso).getTime()
+  const seen = new Set<string>()
+  const out: SourceVideo[] = []
+  for (const tag of tags) {
+    for (let page = 1; page <= NICO_PAGES_PER_TAG; page++) {
+      const result = await fetchNicoSearchPage('tag', tag, page, fetchImpl, TIMEOUT_MS)
+      let reachedSince = false
+      for (const item of result.items) {
+        if (new Date(item.registeredAt).getTime() < sinceMs) {
+          reachedSince = true
+          break
+        }
+        if (seen.has(item.id)) continue
+        seen.add(item.id)
+        out.push(mapNicoPageVideo(item))
+      }
+      if (reachedSince || !result.hasNext || result.items.length < NICO_PAGE_SIZE) break
+    }
+  }
+  return out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))
+}
+
+/** nvapi 新着検索: タグ OR、投稿日時の新しい順、since 以降を最大 3 ページ（本家ページが使えないときの予備） */
 export async function fetchNewVideosFromNvapi(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<SourceVideo[]> {
   const out: SourceVideo[] = []
   for (let page = 1; page <= MAX_PAGES; page++) {
@@ -249,7 +289,8 @@ export async function fetchSweepVideosFromSnapshot(genre: string, dateJst: strin
 export function createLiveDeps(fetchImpl: typeof fetch = fetch): PollDeps {
   return {
     now: () => new Date(),
-    fetchNewVideos: (tags, since) => fetchNewVideosFromNvapi(tags, since, fetchImpl),
+    fetchNewVideos: (tags, since) => fetchNewVideosFromNicoPages(tags, since, fetchImpl),
+    fetchNewVideosFallback: (tags, since) => fetchNewVideosFromNvapi(tags, since, fetchImpl),
     fetchThumbInfo: (id) => fetchThumbInfoFromExt(id, fetchImpl),
     fetchUserInfo: (id) => fetchUserInfoFromNvapi(id, fetchImpl),
     fetchSweepVideos: (genre, date) => fetchSweepVideosFromSnapshot(genre, date, fetchImpl),

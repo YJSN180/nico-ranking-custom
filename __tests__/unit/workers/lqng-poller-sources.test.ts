@@ -5,6 +5,7 @@ import {
   fetchSweepVideosFromSnapshot,
   fetchThumbInfoFromExt,
   fetchUserInfoFromNvapi,
+  fetchNewVideosFromNicoPages,
 } from '@/workers/lqng-poller/src/sources'
 
 // 応答の形は実測に基づくが、値はすべて合成
@@ -91,5 +92,45 @@ describe('fetchSweepVideosFromSnapshot', () => {
     expect(url.searchParams.get('filters[startTime][gte]')).toBe('2026-01-31T00:00:00+09:00')
     expect(url.searchParams.get('filters[startTime][lt]')).toBe('2026-02-01T00:00:00+09:00')
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('fetchNewVideosFromNicoPages', () => {
+  const T = (min: number): string => new Date(Date.UTC(2026, 8, 22, 0, 0) - min * 60_000).toISOString()
+  const pageHtml = (items: Array<Record<string, unknown>>, hasNext: boolean) => {
+    const payload = { data: { response: { $getSearchVideoV2: { data: { totalCount: 999, hasNext, items } } } } }
+    const attr = JSON.stringify(payload).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    return `<html><head><meta name="server-response" content="${attr}"></head></html>`
+  }
+  const item = (id: string, minutesAgo: number, over: Record<string, unknown> = {}) => ({ id, title: `t-${id}`, registeredAt: T(minutesAgo), owner: { ownerType: 'user', id: '4001', name: 'n', visibility: 'visible' }, ...over })
+
+  it('タグごとに新しい順のページを読み、since より古い動画で止め、複数タグの重複は 1 回にする', async () => {
+    const calls: string[] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls.push(url)
+      const tag = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '')
+      const body = tag === 'tagA' ? pageHtml([item('sm1', 5), item('sm2', 20), item('sm3', 400)], true) : pageHtml([item('sm2', 20), item('sm9', 30, { owner: { ownerType: 'channel', id: '77' }, isChannelVideo: true })], false)
+      return { ok: true, text: async () => body } as unknown as Response
+    })
+    const videos = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(calls).toHaveLength(2) // 各タグ 1 ページ（tagA は since より古い動画で打ち切り）
+    expect(videos.map((v) => v.id)).toEqual(['sm1', 'sm2', 'sm9'])
+    expect(videos.find((v) => v.id === 'sm9')?.authorId).toBe('channel/ch77')
+  })
+
+  it('ページ末尾まで since より新しい動画が続くときだけ 2 ページ目を読む', async () => {
+    const full = Array.from({ length: 32 }, (_, i) => item(`p${i}`, i))
+    const fetchImpl = vi.fn(async (url: string) => {
+      const page = new URL(url).searchParams.get('page') ?? '1'
+      return { ok: true, text: async () => (page === '1' ? pageHtml(full, true) : pageHtml([item('q1', 40), item('q2', 500)], true)) } as unknown as Response
+    })
+    const videos = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(videos).toHaveLength(33)
+  })
+
+  it('構造が変わっていれば投げる（呼び出し側で nvapi に縮退する）', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => '<html></html>' }) as unknown as Response)
+    await expect(fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)).rejects.toThrow('server-response')
   })
 })

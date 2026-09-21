@@ -5,7 +5,7 @@
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js'
 import { commitBackfill, createLiveBackfillDeps, emptyDeltas, runBackfillStep, type BackfillCursor, type BackfillDeltas } from './backfill'
 import { runPoll, type RunMode, type RunResult } from './poll'
-import { createLiveDeps, fetchNewVideosFromNvapi } from './sources'
+import { createLiveDeps, fetchNewVideosFromNicoPages, fetchNewVideosFromNvapi } from './sources'
 import { loadState, type KvLike } from './state'
 
 interface Env {
@@ -53,18 +53,19 @@ const handler = {
     if (url.pathname === '/status') {
       const nowIso = new Date().toISOString()
       const state = await loadState(env.LQNG_KV, nowIso)
-      // ?probe=nvapi[&sinceMinutes=N]: ポーラーと同じ条件で nvapi 新着検索を Worker から叩き、件数と時刻だけ返す（診断用）
+      // ?probe=pages|nvapi[&sinceMinutes=N]: ポーラーと同じ条件で新着取得を Worker から叩き、件数と時刻だけ返す（診断用）
       let probe: Record<string, unknown> | undefined
-      if (url.searchParams.get('probe') === 'nvapi') {
+      const probeKind = url.searchParams.get('probe')
+      if (probeKind === 'nvapi' || probeKind === 'pages') {
         const minutes = Math.max(1, Math.min(24 * 60, Number(url.searchParams.get('sinceMinutes')) || 60))
         const since = new Date(Date.now() - minutes * 60_000).toISOString()
         const colo = (request as Request & { cf?: { colo?: string; country?: string } }).cf
         try {
-          const videos = await fetchNewVideosFromNvapi(state.config.pollTags, since)
+          const videos = probeKind === 'pages' ? await fetchNewVideosFromNicoPages(state.config.pollTags, since) : await fetchNewVideosFromNvapi(state.config.pollTags, since)
           const times = videos.map((v) => v.registeredAt).sort()
-          probe = { ok: true, since, count: videos.length, first: times[0] ?? null, last: times[times.length - 1] ?? null, colo: colo?.colo ?? null, country: colo?.country ?? null }
+          probe = { source: probeKind, ok: true, since, count: videos.length, first: times[0] ?? null, last: times[times.length - 1] ?? null, colo: colo?.colo ?? null, country: colo?.country ?? null }
         } catch (error) {
-          probe = { ok: false, since, error: error instanceof Error ? error.message : 'error', colo: colo?.colo ?? null, country: colo?.country ?? null }
+          probe = { source: probeKind, ok: false, since, error: error instanceof Error ? error.message : 'error', colo: colo?.colo ?? null, country: colo?.country ?? null }
         }
       }
       const dayAgo = Date.now() - 24 * 3600_000
