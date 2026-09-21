@@ -33,7 +33,16 @@ export interface NicoPageResult {
   hasNext: boolean
 }
 
-export type NicoPageKind = 'keyword' | 'tag'
+/**
+ * ページ種別。ショート動画（ss で始まる ID）は本家でも別タブ（/search_shorts, /tag_shorts）で、
+ * 通常の動画検索や nvapi の動画検索には含まれない。ショートの投稿日時順は sort=registeredAt。
+ */
+export type NicoPageKind = 'keyword' | 'tag' | 'keyword_shorts' | 'tag_shorts'
+
+const PAGE_PATHS: Record<NicoPageKind, string> = { keyword: 'search', tag: 'tag', keyword_shorts: 'search_shorts', tag_shorts: 'tag_shorts' }
+
+export const isShortsKind = (kind: NicoPageKind): boolean => kind === 'keyword_shorts' || kind === 'tag_shorts'
+export const shortsKindOf = (kind: 'keyword' | 'tag'): NicoPageKind => (kind === 'tag' ? 'tag_shorts' : 'keyword_shorts')
 
 export class NicoPageParseError extends Error {
   constructor(message: string) {
@@ -44,10 +53,9 @@ export class NicoPageParseError extends Error {
 
 /** 投稿日時が新しい順のページ URL。複数タグは空白区切りで AND */
 export function buildNicoSearchPageUrl(kind: NicoPageKind, query: string, page = 1): string {
-  const path = kind === 'tag' ? 'tag' : 'search'
-  const params = new URLSearchParams({ sort: 'f', order: 'd' })
+  const params = new URLSearchParams(isShortsKind(kind) ? { sort: 'registeredAt', order: 'd' } : { sort: 'f', order: 'd' })
   if (page > 1) params.set('page', String(page))
-  return `${NICO_SEARCH_BASE}/${path}/${encodeURIComponent(query.trim())}?${params.toString()}`
+  return `${NICO_SEARCH_BASE}/${PAGE_PATHS[kind]}/${encodeURIComponent(query.trim())}?${params.toString()}`
 }
 
 // 属性値の実体参照を 1 パスで復号する（&amp; を先に戻す逐次 replace は二重復号になる）

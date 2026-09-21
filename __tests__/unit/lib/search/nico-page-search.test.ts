@@ -38,6 +38,11 @@ describe('nico-page-search', () => {
     expect(buildNicoSearchPageUrl('tag', 'a b', 2)).toBe('https://www.nicovideo.jp/tag/a%20b?sort=f&order=d&page=2')
   })
 
+  it('URL: ショートは /search_shorts, /tag_shorts で、投稿日時順は sort=registeredAt', () => {
+    expect(buildNicoSearchPageUrl('keyword_shorts', 'x')).toBe('https://www.nicovideo.jp/search_shorts/x?sort=registeredAt&order=d')
+    expect(buildNicoSearchPageUrl('tag_shorts', 'x', 3)).toBe('https://www.nicovideo.jp/tag_shorts/x?sort=registeredAt&order=d&page=3')
+  })
+
   it('属性の実体参照は 1 パスで復号する（&amp;lt; は &lt; のまま）', () => {
     expect(decodeHtmlAttribute('&quot;a&quot; &amp; &lt;b&gt; &#39;c&#x27; &amp;lt;')).toBe('"a" & <b> \'c\' &lt;')
   })

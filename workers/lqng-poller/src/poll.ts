@@ -18,13 +18,13 @@ import {
 
 export const LIMITS = {
   /** 1 回の実行で getthumbinfo を叩く上限 */
-  thumbPerRun: 20,
+  thumbPerRun: 18,
   /** 1 回の実行でユーザー情報 API を叩く上限 */
   usersPerRun: 10,
   /** 外部呼び出しの総予算（無料プランの 50/実行 に KV 分の余裕を残す） */
   subrequestBudget: 40,
-  /** 新着取得の予算。本家タグページはタグ 3 × 最大 3 ページ（予備の nvapi は最大 3 ページ）なので 9 とみなす */
-  nvapiCost: 9,
+  /** 新着取得の予算。本家タグページはタグ 3 × 種別 2（動画/ショート）× 最大 2 ページ = 12 とみなす（予備の nvapi は 3） */
+  nvapiCost: 12,
   lockTtlSeconds: 600,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,

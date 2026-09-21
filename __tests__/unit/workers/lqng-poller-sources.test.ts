@@ -104,28 +104,37 @@ describe('fetchNewVideosFromNicoPages', () => {
   }
   const item = (id: string, minutesAgo: number, over: Record<string, unknown> = {}) => ({ id, title: `t-${id}`, registeredAt: T(minutesAgo), owner: { ownerType: 'user', id: '4001', name: 'n', visibility: 'visible' }, ...over })
 
-  it('タグごとに新しい順のページを読み、since より古い動画で止め、複数タグの重複は 1 回にする', async () => {
+  it('タグ×種別（動画/ショート）ごとに新しい順のページを読み、since より古い動画で止め、重複は 1 回にする', async () => {
     const calls: string[] = []
     const fetchImpl = vi.fn(async (url: string) => {
       calls.push(url)
-      const tag = decodeURIComponent(new URL(url).pathname.split('/').pop() ?? '')
-      const body = tag === 'tagA' ? pageHtml([item('sm1', 5), item('sm2', 20), item('sm3', 400)], true) : pageHtml([item('sm2', 20), item('sm9', 30, { owner: { ownerType: 'channel', id: '77' }, isChannelVideo: true })], false)
+      const u = new URL(url)
+      const tag = decodeURIComponent(u.pathname.split('/').pop() ?? '')
+      const shorts = u.pathname.startsWith('/tag_shorts/')
+      const body = shorts
+        ? pageHtml([item('ss5', 3), item('sm2', 20)], false) // ショート: 新規 1 件 + 重複 1 件
+        : tag === 'tagA'
+          ? pageHtml([item('sm1', 5), item('sm2', 20), item('sm3', 400)], true)
+          : pageHtml([item('sm2', 20), item('sm9', 30, { owner: { ownerType: 'channel', id: '77' }, isChannelVideo: true })], false)
       return { ok: true, text: async () => body } as unknown as Response
     })
     const videos = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
-    expect(calls).toHaveLength(2) // 各タグ 1 ページ（tagA は since より古い動画で打ち切り）
-    expect(videos.map((v) => v.id)).toEqual(['sm1', 'sm2', 'sm9'])
+    expect(calls).toHaveLength(4) // 2 タグ × 2 種別 × 1 ページ（tagA の動画は since より古い動画で打ち切り）
+    expect(calls.some((u) => u.includes('/tag_shorts/') && u.includes('sort=registeredAt'))).toBe(true)
+    expect(videos.map((v) => v.id)).toEqual(['ss5', 'sm1', 'sm2', 'sm9'])
     expect(videos.find((v) => v.id === 'sm9')?.authorId).toBe('channel/ch77')
   })
 
   it('ページ末尾まで since より新しい動画が続くときだけ 2 ページ目を読む', async () => {
     const full = Array.from({ length: 32 }, (_, i) => item(`p${i}`, i))
     const fetchImpl = vi.fn(async (url: string) => {
-      const page = new URL(url).searchParams.get('page') ?? '1'
+      const u = new URL(url)
+      if (u.pathname.startsWith('/tag_shorts/')) return { ok: true, text: async () => pageHtml([], false) } as unknown as Response
+      const page = u.searchParams.get('page') ?? '1'
       return { ok: true, text: async () => (page === '1' ? pageHtml(full, true) : pageHtml([item('q1', 40), item('q2', 500)], true)) } as unknown as Response
     })
     const videos = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(fetchImpl).toHaveBeenCalledTimes(3) // 動画 2 ページ + ショート 1 ページ（同じ内容が返るが重複除外）
     expect(videos).toHaveLength(33)
   })
 

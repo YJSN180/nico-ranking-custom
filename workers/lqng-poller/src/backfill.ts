@@ -25,7 +25,8 @@ import {
   type UserInfo,
 } from './sources'
 import { acquireLock, loadState, pushEvent, releaseLock, type KvLike } from './state'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageResult } from '../../../lib/search/nico-page-search'
+import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
+import { NICO_PAGE_KINDS } from './sources'
 
 export const BACKFILL_LIMITS = {
   pagesDefault: 3,
@@ -58,7 +59,7 @@ export interface BackfillDeps {
   now: () => Date
   fetchWindowPage: (tags: string[], startIso: string, endIso: string, offset: number) => Promise<SnapshotPage>
   /** 本家タグページ（投稿日時が新しい順）。Snapshot の索引に未反映の直近数日を補完するときに使う */
-  fetchTagPage: (tag: string, page: number) => Promise<NicoPageResult>
+  fetchTagPage: (tag: string, page: number, kind: NicoPageKind) => Promise<NicoPageResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
 }
@@ -67,7 +68,7 @@ export function createLiveBackfillDeps(fetchImpl: typeof fetch = fetch): Backfil
   return {
     now: () => new Date(),
     fetchWindowPage: (tags, startIso, endIso, offset) => fetchSnapshotWindowPage(tags, startIso, endIso, offset, fetchImpl),
-    fetchTagPage: (tag, page) => fetchNicoSearchPage('tag', tag, page, fetchImpl),
+    fetchTagPage: (tag, page, kind) => fetchNicoSearchPage(kind, tag, page, fetchImpl),
     fetchUserInfo: (id) => fetchUserInfoFromNvapi(id, fetchImpl),
     fetchThumbInfo: (id) => fetchThumbInfoFromExt(id, fetchImpl),
   }
@@ -103,7 +104,7 @@ export interface BackfillCursor {
   version: 1
   /** 取得元。snapshot は全履歴（30 日窓）、pages は本家タグページ（直近数日の取りこぼし補完） */
   source: BackfillSource
-  /** pages 用: 何番目のタグの何ページ目か */
+  /** pages 用: 何番目の「タグ×種別」の何ページ目か（種別は動画/ショートの順） */
   tagIndex: number
   page: number
   /** 走査中の窓 [windowStart, windowEnd)（UTC ISO） */
@@ -179,7 +180,7 @@ export function createBackfillCursor(now: Date, days: number | null | undefined,
 }
 
 function windowsExhausted(cursor: BackfillCursor, tagCount = 0): boolean {
-  if (cursor.source === 'pages') return cursor.tagIndex >= tagCount
+  if (cursor.source === 'pages') return cursor.tagIndex >= tagCount * NICO_PAGE_KINDS.length
   return new Date(cursor.windowEnd).getTime() <= new Date(cursor.floor).getTime()
 }
 
@@ -440,9 +441,10 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   for (let i = 0; i < pages && !windowsExhausted(cursor, tags.length) && session.budgetLeft(); i++) {
     session.subrequests++
     if (cursor.source === 'pages') {
-      // 本家タグページ: タグごとに新しい順にページを進め、floor より古い動画が出たら次のタグへ
-      const tag = tags[cursor.tagIndex]!
-      const result = await deps.fetchTagPage(tag, cursor.page)
+      // 本家タグページ: タグ×種別（動画/ショート）ごとに新しい順にページを進め、floor より古い動画が出たら次へ
+      const tag = tags[Math.floor(cursor.tagIndex / NICO_PAGE_KINDS.length)]!
+      const kind = NICO_PAGE_KINDS[cursor.tagIndex % NICO_PAGE_KINDS.length]!
+      const result = await deps.fetchTagPage(tag, cursor.page, kind)
       cursor.stats.pages++
       const floorMs = new Date(cursor.floor).getTime()
       const inRange = result.items.filter((v) => new Date(v.registeredAt).getTime() >= floorMs)

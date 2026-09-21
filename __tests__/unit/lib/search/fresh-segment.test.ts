@@ -34,11 +34,14 @@ describe('fetchFreshItems', () => {
     const first = await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(first.map((it) => it.id)).toEqual(['new1'])
     expect(first[0]?.authorName).toBe('n')
+    // 動画とショートの 2 ページを取る（同じ内容でも ID で重複除外）
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(fetchImpl).mock.calls.map((c) => new URL(String(c[0])).pathname.split('/')[1]).sort()).toEqual(['search', 'search_shorts'])
     const second = await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 30_000 })
     expect(second).toHaveLength(1)
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
-    await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 70_000 })
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+    await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 70_000 })
+    expect(fetchImpl).toHaveBeenCalledTimes(4)
   })
 
   it('範囲・日付フィルタを後付けし、対象外の条件では取得しない', async () => {

@@ -3,7 +3,7 @@
 // 本家ページには投稿から数分の動画まで載る（2026-09-22 実測）。
 // 失敗（HTTP エラー・構造変化）は呼び出し側で無視し、nvapi だけの結果に静かに戻す。
 import type { RankingItem } from '@/types/ranking'
-import { fetchNicoSearchPage, type NicoPageVideo } from './nico-page-search'
+import { fetchNicoSearchPage, shortsKindOf, type NicoPageVideo } from './nico-page-search'
 import { applyRealtimeRangeFilters, mapNvapiVideoToRankingItem, type NvapiVideo } from './realtime-search'
 import type { SearchConditions } from './snapshot-search'
 
@@ -86,8 +86,17 @@ export async function fetchFreshItems(
   if (cached && now - cached.at < FRESH_CACHE_TTL_MS) {
     items = cached.items
   } else {
-    const page = await fetchNicoSearchPage(query.kind, query.query, 1, options.fetchImpl ?? fetch, FRESH_TIMEOUT_MS)
-    items = page.items.map((v, i) => mapNvapiVideoToRankingItem(toNvapiVideo(v), i + 1))
+    // 動画（/search, /tag）とショート（/search_shorts, /tag_shorts）の 1 ページ目を並列に取る。
+    // Snapshot 区間にはショートも含まれるので、最新区間でも同じく含める
+    const fetchImpl = options.fetchImpl ?? fetch
+    const [longs, shorts] = await Promise.all([
+      fetchNicoSearchPage(query.kind, query.query, 1, fetchImpl, FRESH_TIMEOUT_MS),
+      fetchNicoSearchPage(shortsKindOf(query.kind), query.query, 1, fetchImpl, FRESH_TIMEOUT_MS),
+    ])
+    const seen = new Set<string>()
+    items = [...longs.items, ...shorts.items]
+      .filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)))
+      .map((v, i) => mapNvapiVideoToRankingItem(toNvapiVideo(v), i + 1))
     if (cache.size >= FRESH_CACHE_MAX) {
       const oldest = cache.keys().next().value
       if (oldest !== undefined) cache.delete(oldest)

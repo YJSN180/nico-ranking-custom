@@ -1,7 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageVideo } from '../../../lib/search/nico-page-search'
+import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -88,11 +88,14 @@ function mapNicoPageVideo(v: NicoPageVideo): SourceVideo {
   return { id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: owner === null ? null : hidden ? 'hidden' : 'visible' }
 }
 
-export const NICO_PAGES_PER_TAG = 3
+export const NICO_PAGES_PER_TAG = 2
+/** タグごとに読む種別: 通常の動画（/tag）とショート（/tag_shorts、ss で始まる ID） */
+export const NICO_PAGE_KINDS: readonly NicoPageKind[] = ['tag', 'tag_shorts']
 
 /**
- * 本家のタグページ（投稿日時が新しい順）から since 以降の新着を集める。nvapi の検索索引より反映が早い。
- * タグごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 3 ページ目まで読む。
+ * 本家のタグページ（投稿日時が新しい順）から since 以降の新着を集める。nvapi の検索索引より反映が早く、
+ * nvapi の動画検索には無いショート（ss）も /tag_shorts から拾える。
+ * タグ×種別ごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 2 ページ目まで読む。
  * 同じ動画が複数タグに出ても 1 回だけ返す。HTTP エラー・構造変化は throw（呼び出し側で nvapi に縮退）。
  */
 export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<SourceVideo[]> {
@@ -100,8 +103,8 @@ export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: stri
   const seen = new Set<string>()
   const out: SourceVideo[] = []
   for (const tag of tags) {
-    for (let page = 1; page <= NICO_PAGES_PER_TAG; page++) {
-      const result = await fetchNicoSearchPage('tag', tag, page, fetchImpl, TIMEOUT_MS)
+    for (const kind of NICO_PAGE_KINDS) for (let page = 1; page <= NICO_PAGES_PER_TAG; page++) {
+      const result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
       let reachedSince = false
       for (const item of result.items) {
         if (new Date(item.registeredAt).getTime() < sinceMs) {

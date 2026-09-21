@@ -174,7 +174,8 @@ describe('runBackfillStep（pages ソース: 本家タグページで直近を�
 
   it('タグごとにページを進め、floor より古い動画で次のタグへ。連投＋退会済みは A∧C', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const fetchTagPage = vi.fn(async (tag: string, page: number) => {
+    const fetchTagPage = vi.fn(async (tag: string, page: number, kind: string) => {
+      if (kind === 'tag_shorts') return { items: [], totalCount: 0, hasNext: false }
       if (tag === 'tagA' && page === 1) return { items: Array.from({ length: 32 }, (_, i) => pageItem(`a${i}`, '6001', 1 + i)), totalCount: 100, hasNext: true }
       if (tag === 'tagA' && page === 2) return { items: [pageItem('a-old', '6002', 5 * 24 * 60)], totalCount: 100, hasNext: true } // floor（2 日）より古い
       return { items: [pageItem('a0', '6001', 1), pageItem('b1', '6003', 30)], totalCount: 2, hasNext: false } // tagB: a0 は重複
@@ -183,7 +184,7 @@ describe('runBackfillStep（pages ソース: 本家タグページで直近を�
     const d = deps({ fetchTagPage, fetchUserInfo })
     const r = await runBackfillStep(m.kv, d, null, { pages: 8, source: 'pages' })
     expect(r.cursor.source).toBe('pages')
-    expect(vi.mocked(fetchTagPage).mock.calls.map((c) => `${c[0]}:${c[1]}`)).toEqual(['tagA:1', 'tagA:2', 'tagB:1'])
+    expect(vi.mocked(fetchTagPage).mock.calls.map((c) => `${c[0]}:${c[2]}:${c[1]}`)).toEqual(['tagA:tag:1', 'tagA:tag:2', 'tagA:tag_shorts:1', 'tagB:tag:1', 'tagB:tag_shorts:1'])
     expect(r.deltas.authors['6001']?.reasons).toEqual(['A_C'])
     expect(r.deltas.authors['6003']).toBeUndefined()
     expect(r.done).toBe(true)
