@@ -19,6 +19,16 @@ interface OptimizedImageProps {
   onError?: () => void
 }
 
+// ニコニコ系 CDN（*.nimg.jp / *.smilevideo.jp）はアクセス制限があるため最適化を通さず直接表示する。
+// ホストを列挙していた頃、ユーザーアイコンの配信元が img.nicoprofile.nimg.jp に変わり、
+// remotePatterns に無いホストとして /_next/image が 400 を返し、フォールバック画像（黒）が
+// 出る回帰があった（2026-09-21）。以後はドメイン単位で判定する
+const NICO_CDN_IMAGE = /^https?:\/\/([a-z0-9-]+\.)*(nimg\.jp|smilevideo\.jp)(\/|$)/i
+
+export function isNicoCdnImage(src: string | undefined | null): boolean {
+  return typeof src === 'string' && NICO_CDN_IMAGE.test(src)
+}
+
 /**
  * 画像最適化Imageコンポーネント
  * - ローカル画像（/で始まる）: Next.js最適化を使用（WebP/AVIF変換）
@@ -43,12 +53,8 @@ export function OptimizedImage({
   const [imgSrc, setImgSrc] = useState(src)
   const [hasError, setHasError] = useState(false)
   
-  // ニコニコ動画CDNのサムネイル判定
-  const isNicoThumbnail = src && (
-    src.includes('tn.smilevideo.jp') ||
-    src.includes('nicovideo.cdn.nimg.jp') ||
-    src.includes('secure-dcdn.cdn.nimg.jp')
-  )
+  // ニコニコ系 CDN の画像判定（サムネイル・投稿者アイコン）
+  const isNicoThumbnail = isNicoCdnImage(src)
   
   const handleError = () => {
     if (!hasError && fallbackSrc) {
