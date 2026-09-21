@@ -33,6 +33,11 @@ on:
         required: false
         default: '40'
         type: string
+      end:
+        description: '走査の開始時点（ISO 日時、空欄で現在）。途中終了した続きはログの最後の窓の終端を指定する'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -63,4 +68,5 @@ jobs:
           BACKFILL_MAX_CALLS: ${{ inputs.max_calls }}
           BACKFILL_DAYS: ${{ inputs.days }}
           BACKFILL_COMMIT_EVERY: ${{ inputs.commit_every }}
+          BACKFILL_END: ${{ inputs.end }}
         run: npx tsx scripts/lqng-backfill-driver.ts

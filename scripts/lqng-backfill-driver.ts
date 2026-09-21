@@ -4,7 +4,7 @@
 // 判定差分をまとめて /trigger?mode=backfill-commit で KV に書き込む。
 // 実行元は .github/workflows/lqng-backfill.yml（WORKER_AUTH_KEY は Secrets）。
 // 公開リポジトリの Actions ログに出るため、ID・名前・タイトルは出力しない（件数のみ）。
-import { emptyDeltas, mergeDeltas, type BackfillCommitResult, type BackfillCursor, type BackfillDeltas, type BackfillStepResult } from '../workers/lqng-poller/src/backfill'
+import { createBackfillCursor, emptyDeltas, mergeDeltas, type BackfillCommitResult, type BackfillCursor, type BackfillDeltas, type BackfillStepResult } from '../workers/lqng-poller/src/backfill'
 
 const base = (process.env.LQNG_WORKER_URL ?? 'https://lqng-poller.yjsn180180.workers.dev').replace(/\/+$/, '')
 const key = process.env.WORKER_AUTH_KEY
@@ -22,6 +22,11 @@ const sleepMs = intEnv('BACKFILL_SLEEP_MS', 300)
 const daysRaw = process.env.BACKFILL_DAYS?.trim()
 const days = daysRaw ? Number(daysRaw) : null
 if (daysRaw && !(Number.isFinite(days) && (days as number) > 0)) throw new Error('BACKFILL_DAYS must be a positive number')
+
+// 走査の開始時点（この時刻より前を新しい順に走査）。途中終了した続きを再開するときに使う
+const endRaw = process.env.BACKFILL_END?.trim()
+const endAt = endRaw ? new Date(endRaw) : null
+if (endRaw && !(endAt && Number.isFinite(endAt.getTime()))) throw new Error('BACKFILL_END must be an ISO date')
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -65,12 +70,12 @@ async function commit(deltas: BackfillDeltas): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  let cursor: BackfillCursor | null = null
+  let cursor: BackfillCursor | null = endAt ? createBackfillCursor(endAt, days) : null
   let pending = emptyDeltas()
   let sinceCommit = 0
   let done = false
   let calls = 0
-  console.log(`backfill start: pages=${pages} maxCalls=${maxCalls} days=${days ?? 'all'} commitEvery=${commitEvery}`)
+  console.log(`backfill start: pages=${pages} maxCalls=${maxCalls} days=${days ?? 'all'} end=${endAt ? endAt.toISOString() : 'now'} commitEvery=${commitEvery}`)
   while (calls < maxCalls) {
     const r = await call<BackfillStepResult>('backfill', { cursor, pages, days })
     if (r.skipped === 'locked') {
