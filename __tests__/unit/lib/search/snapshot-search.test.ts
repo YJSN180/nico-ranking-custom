@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   buildSnapshotSearchUrl,
   buildTagJsonFilter,
   mapSnapshotVideoToRankingItem,
   parseSearchConditions,
   SEARCH_PAGE_SIZE,
+  fetchSnapshotNewestStartTime,
 } from '@/lib/search/snapshot-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
 import type { RankingItem } from '@/types/ranking'
@@ -229,5 +230,26 @@ describe('buildSnapshotSearchUrl: マージ用の窓', () => {
     const url = new URL(buildSnapshotSearchUrl(conditions, { startTimeBefore: '2026-09-02T05:00:00+09:00' }))
     expect(url.searchParams.get('filters[startTime][lt]')).toBeNull()
     expect(url.searchParams.get('filters[startTime][lte]')).toBeTruthy()
+  })
+})
+
+describe('fetchSnapshotNewestStartTime', () => {
+  const conditions = parseSearchConditions(new URLSearchParams({ q: '初音ミク', sort: '-viewCounter' }))
+
+  it('同じ条件を新しい順・1 件で問い合わせ、最新の投稿時刻を返す', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ meta: { status: 200 }, data: [{ startTime: '2026-09-21T04:28:31+09:00' }] }) }) as unknown as Response)
+    await expect(fetchSnapshotNewestStartTime(conditions, fetchImpl as unknown as typeof fetch)).resolves.toBe('2026-09-21T04:28:31+09:00')
+    const url = new URL(String(vi.mocked(fetchImpl).mock.calls[0]?.[0]))
+    expect(url.searchParams.get('q')).toBe('初音ミク')
+    expect(url.searchParams.get('_sort')).toBe('-startTime')
+    expect(url.searchParams.get('_limit')).toBe('1')
+    expect(url.searchParams.get('_offset')).toBe('0')
+  })
+
+  it('該当なしは null、上流エラーは throw', async () => {
+    const empty = vi.fn(async () => ({ ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) }) as unknown as Response)
+    await expect(fetchSnapshotNewestStartTime(conditions, empty as unknown as typeof fetch)).resolves.toBeNull()
+    const down = vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response)
+    await expect(fetchSnapshotNewestStartTime(conditions, down as unknown as typeof fetch)).rejects.toThrow('snapshot_http_503')
   })
 })

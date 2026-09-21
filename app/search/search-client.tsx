@@ -35,13 +35,21 @@ import type { NGType } from '@/components/quick-ng-button'
 import '@/components/ranking-item-responsive.css'
 import './search.css'
 
+/** 境界時刻を「M/D HH:mm」（JST）で表示する。不正な値は null */
+const formatCutoff = (iso?: string): string | null => {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (!Number.isFinite(d.getTime())) return null
+  return d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
 interface SearchApiResponse {
   items: RankingItem[]
   totalCount: number
   page: number
   pageSize: number
   excludedCount: number
-  /** merged: 直近5:00以降のリアルタイム区間を先頭に連結 / snapshot: 毎朝5時時点のみ */
+  /** merged: 境界（Snapshot が持つ最新投稿時刻）以降のリアルタイム区間を先頭に連結 / snapshot: 索引時点のみ */
   source?: 'merged' | 'snapshot'
   boundary?: string
   realtimeCount?: number
@@ -274,6 +282,8 @@ export function SearchClient() {
   // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数（次ページ要求のヒント）
   const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
   const realtimeCountRef = useRef(0)
+  /** 前回応答の境界（2 ページ目以降に返してページ間で一貫させる） */
+  const boundaryRef = useRef<string | null>(null)
   // リアルタイム区間のタグ補完（S4）: 応答表示後に非同期で取得し、古い検索の結果は捨てる
   const tagsRequestIdRef = useRef(0)
   const ownersRequestIdRef = useRef(0)
@@ -414,6 +424,9 @@ export function SearchClient() {
       if (searchPage > 1 && realtimeCountRef.current > 0) {
         apiParams.set('rtCount', String(realtimeCountRef.current))
       }
+      if (searchPage > 1 && boundaryRef.current) {
+        apiParams.set('boundary', boundaryRef.current)
+      }
 
       try {
         const res = await fetch(`/api/search?${apiParams.toString()}`, { signal: controller.signal })
@@ -433,6 +446,7 @@ export function SearchClient() {
         setTotalCount(data.totalCount)
         setPage(data.page)
         realtimeCountRef.current = data.realtimeCount ?? 0
+        boundaryRef.current = data.source === 'merged' && data.boundary ? data.boundary : null
         setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
         void enrichRealtimeTags(data, controller.signal)
         void enrichOwners(data, controller.signal)
@@ -969,11 +983,11 @@ export function SearchClient() {
                 className={`search-results__source search-results__source--${resultMeta?.source ?? 'snapshot'}`}
                 title={
                   resultMeta?.source === 'merged'
-                    ? `直近5:00以降の新着 ${resultMeta.realtimeCount} 件をリアルタイムに取得し、先頭に表示しています`
-                    : '検索インデックスは毎朝5時に更新されます。それ以降の新着動画は含まれません'
+                    ? `${formatCutoff(resultMeta.boundary) ?? '索引更新'} 以降の新着 ${resultMeta.realtimeCount} 件をリアルタイムに取得し、先頭に表示しています`
+                    : '検索インデックス（毎朝更新）の時点までの結果です。それ以降の新着動画は含まれません'
                 }
               >
-                {resultMeta?.source === 'merged' ? 'リアルタイム込み' : '毎朝5時時点'}
+                {resultMeta?.source === 'merged' ? 'リアルタイム込み' : '索引時点'}
               </span>
             </span>
             <TagToggleButton />
@@ -993,7 +1007,7 @@ export function SearchClient() {
               条件に一致する動画が見つかりませんでした。
               {resultMeta?.source !== 'merged' && (
                 <div className="search-results__hint">
-                  ※ 検索対象は毎朝5時時点のデータです。それ以降の新着動画は「投稿日時が新しい順」でタグのAND条件のみの検索にするとリアルタイムに含まれます。
+                  ※ 検索対象は検索インデックス（毎朝更新）の時点までのデータです。それ以降の新着動画は「投稿日時が新しい順」でタグのAND条件のみの検索にするとリアルタイムに含まれます。
                 </div>
               )}
             </div>

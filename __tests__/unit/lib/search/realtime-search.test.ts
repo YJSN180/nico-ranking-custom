@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   getRealtimeBoundary,
+  isRealtimeCandidate,
   isRealtimeMergeable,
+  parseRequestedBoundary,
+  resolveRealtimeBoundary,
+  formatJstIso,
   buildNvapiSearchUrl,
   mapNvapiVideoToRankingItem,
   applyRealtimeRangeFilters,
@@ -55,6 +59,32 @@ describe('isRealtimeMergeable', () => {
   })
   it('条件が空なら不可', () => {
     expect(isRealtimeMergeable(base({ q: '' }), T)).toBe(false)
+  })
+})
+
+describe('境界の決定（Snapshot の索引の実際の最新時刻に合わせる）', () => {
+  const now = new Date('2026-09-21T21:50:00Z') // 06:50 JST
+
+  it('isRealtimeCandidate は境界に依存しない条件だけで判定する', () => {
+    expect(isRealtimeCandidate(base())).toBe(true)
+    expect(isRealtimeCandidate(base({ sort: '-viewCounter' }))).toBe(false)
+    expect(isRealtimeCandidate(base({ tagConditions: [{ tag: 'a', operator: 'OR' }] }))).toBe(false)
+    expect(isRealtimeCandidate(base({ q: '' }))).toBe(false)
+  })
+
+  it('parseRequestedBoundary は不正・未来・60 日超を捨てる', () => {
+    expect(parseRequestedBoundary(null, now)).toBeNull()
+    expect(parseRequestedBoundary('x', now)).toBeNull()
+    expect(parseRequestedBoundary('2026-09-22T12:00:00+09:00', now)).toBeNull()
+    expect(parseRequestedBoundary('2026-06-01T00:00:00+09:00', now)).toBeNull()
+    expect(parseRequestedBoundary('2026-09-21T04:28:31+09:00', now)).toBe('2026-09-21T04:28:31+09:00')
+  })
+
+  it('resolveRealtimeBoundary は 持ち回り > Snapshot 最新 > 48 時間前 の順に使う', () => {
+    expect(resolveRealtimeBoundary({ requested: '2026-09-21T04:28:31+09:00', newestSnapshotStartTime: '2026-09-20T00:00:00+09:00', now })).toBe('2026-09-21T04:28:31+09:00')
+    expect(resolveRealtimeBoundary({ requested: 'broken', newestSnapshotStartTime: '2026-09-21T04:28:31+09:00', now })).toBe('2026-09-21T04:28:31+09:00')
+    expect(resolveRealtimeBoundary({ now })).toBe('2026-09-20T06:50:00+09:00')
+    expect(formatJstIso(new Date('2026-09-21T21:50:00Z'))).toBe('2026-09-22T06:50:00+09:00')
   })
 })
 

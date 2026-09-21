@@ -289,6 +289,28 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions, window: Sna
   return `${SNAPSHOT_API_URL}?${params.toString()}`
 }
 
+/**
+ * 同じ条件で Snapshot が持つ最新の投稿時刻を 1 件だけ取る（リアルタイム区間の境界の決定用）。
+ * 該当なしなら null。上流エラーは throw（呼び出し側で従来の境界に縮退する）。
+ */
+export async function fetchSnapshotNewestStartTime(
+  conditions: SearchConditions,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 3000
+): Promise<string | null> {
+  const url = buildSnapshotSearchUrl({ ...conditions, sort: '-startTime', page: 1 }, { offset: 0, limit: 1 })
+  const res = await fetchImpl(url, {
+    headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!res.ok) throw new Error(`snapshot_http_${res.status}`)
+  const payload = (await res.json()) as { meta?: { status?: number }; data?: Array<{ startTime?: unknown }> }
+  if (payload.meta?.status !== 200 || !Array.isArray(payload.data)) throw new Error('snapshot_invalid_response')
+  const startTime = payload.data[0]?.startTime
+  return typeof startTime === 'string' ? startTime : null
+}
+
 /** スナップショットAPIのレスポンスを RankingItem に変換 */
 export function mapSnapshotVideoToRankingItem(
   video: SnapshotVideo,

@@ -1,6 +1,8 @@
 // リアルタイム検索（検索リアルタイム統合計画 S2）
-// Snapshot API のインデックスは毎朝5時時点で止まるため、「直近5:00以降」の区間だけを
+// Snapshot API のインデックスは毎朝 5 時前後の更新で止まるため、それ以降の区間だけを
 // ニコニコ公式フロントが使う nvapi v2 search から取得し、Snapshot結果の先頭にマージする。
+// 境界 T は固定の 05:00 JST ではなく、同じ条件で Snapshot が実際に持つ最新の投稿時刻から決める
+// （更新の完了が遅れると、固定境界では索引未反映の 1 日分がどちらの区間にも入らない。2026-09-22 実測）。
 // nvapi は非公開APIだが、既存の lib/scraper.ts と同じヘッダーで既に依存している。
 import type { RankingItem } from '@/types/ranking'
 import type { SearchConditions } from './snapshot-search'
@@ -73,6 +75,52 @@ export function getRealtimeBoundary(now: Date = new Date()): string {
   return `${b.getUTCFullYear()}-${pad(b.getUTCMonth() + 1)}-${pad(b.getUTCDate())}T${pad(SNAPSHOT_CUTOFF_HOUR_JST)}:00:00+09:00`
 }
 
+const HOUR_MS = 60 * 60 * 1000
+const DAY_MS = 24 * HOUR_MS
+/** クライアントが持ち回る境界として受け付ける上限（これより古い値は捨てて決め直す） */
+export const REALTIME_BOUNDARY_MAX_AGE_DAYS = 60
+/** Snapshot に 1 件も無い条件で使う既定の遡り幅 */
+export const REALTIME_BOUNDARY_FALLBACK_HOURS = 48
+
+/** Date を +09:00 表記の ISO 文字列にする（Snapshot の filters と nvapi の minRegisteredAt の両方が受け付ける形） */
+export function formatJstIso(date: Date): string {
+  const jst = new Date(date.getTime() + JST_OFFSET_MS)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`
+}
+
+/** 境界に依存しない条件（並び順・タグ条件・条件の有無）だけでマージ候補か判定する */
+export function isRealtimeCandidate(conditions: SearchConditions): boolean {
+  if (conditions.sort !== '-startTime') return false
+  if (conditions.tagConditions.some((c) => c.operator !== 'AND')) return false
+  if (!conditions.q && conditions.tagConditions.length === 0 && conditions.genres.length === 0) return false
+  return true
+}
+
+/** 2 ページ目以降にクライアントが返してくる境界の検証。不正・未来・古すぎる値は null */
+export function parseRequestedBoundary(raw: string | null | undefined, now: Date = new Date()): string | null {
+  if (!raw) return null
+  const t = new Date(raw).getTime()
+  if (!Number.isFinite(t)) return null
+  if (t > now.getTime()) return null
+  if (now.getTime() - t > REALTIME_BOUNDARY_MAX_AGE_DAYS * DAY_MS) return null
+  return raw
+}
+
+/**
+ * リアルタイム区間の境界 T を決める。
+ * 1. クライアントが持ち回った境界（ページ間で一貫させる）
+ * 2. 同じ条件で Snapshot が持つ最新の投稿時刻（それ以降は Snapshot に無いので nvapi で補う）
+ * 3. Snapshot に 1 件も無ければ REALTIME_BOUNDARY_FALLBACK_HOURS 前
+ */
+export function resolveRealtimeBoundary(input: { requested?: string | null; newestSnapshotStartTime?: string | null; now?: Date }): string {
+  const now = input.now ?? new Date()
+  const requested = parseRequestedBoundary(input.requested ?? null, now)
+  if (requested) return requested
+  if (input.newestSnapshotStartTime) return input.newestSnapshotStartTime
+  return formatJstIso(new Date(now.getTime() - REALTIME_BOUNDARY_FALLBACK_HOURS * HOUR_MS))
+}
+
 /**
  * この条件でリアルタイム区間をマージできるか。
  * - ソートが「投稿日時が新しい順」のときだけ（境界とソートキーが一致し、区間を先頭に置ける）
@@ -80,10 +128,8 @@ export function getRealtimeBoundary(now: Date = new Date()): string {
  * - 投稿日範囲の上限が境界より前なら区間は空なので不要
  */
 export function isRealtimeMergeable(conditions: SearchConditions, boundary: string): boolean {
-  if (conditions.sort !== '-startTime') return false
-  if (conditions.tagConditions.some((c) => c.operator !== 'AND')) return false
+  if (!isRealtimeCandidate(conditions)) return false
   if (conditions.dateTo && new Date(conditions.dateTo).getTime() < new Date(boundary).getTime()) return false
-  if (!conditions.q && conditions.tagConditions.length === 0 && conditions.genres.length === 0) return false
   return true
 }
 

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   buildSnapshotSearchUrl,
+  fetchSnapshotNewestStartTime,
   mapSnapshotVideoToRankingItem,
   parseSearchConditions,
   SEARCH_PAGE_SIZE,
@@ -16,8 +17,11 @@ import {
   assembleMergedPage,
   fetchRealtimeSegment,
   getRealtimeBoundary,
+  isRealtimeCandidate,
   isRealtimeMergeable,
+  parseRequestedBoundary,
   planMergedPage,
+  resolveRealtimeBoundary,
   type RealtimeSegment,
 } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
@@ -76,8 +80,24 @@ const isFailure = (r: SnapshotPage | SnapshotFailure): r is SnapshotFailure => '
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const conditions = parseSearchConditions(request.nextUrl.searchParams)
-  const boundary = getRealtimeBoundary()
-  const mergeable = isRealtimeEnabled() && isRealtimeMergeable(conditions, boundary)
+  const now = new Date()
+  // 境界 T: 同じ条件で Snapshot の索引が実際に持つ最新の投稿時刻。2 ページ目以降はクライアントが
+  // 前回応答の boundary を返すので、それを使ってページ間で一貫させる。取得に失敗したら従来の 05:00 JST
+  let boundary = getRealtimeBoundary(now)
+  let mergeable = false
+  if (isRealtimeEnabled() && isRealtimeCandidate(conditions)) {
+    const requested = parseRequestedBoundary(request.nextUrl.searchParams.get('boundary'), now)
+    if (requested) {
+      boundary = requested
+    } else {
+      try {
+        boundary = resolveRealtimeBoundary({ newestSnapshotStartTime: await fetchSnapshotNewestStartTime(conditions), now })
+      } catch {
+        boundary = getRealtimeBoundary(now)
+      }
+    }
+    mergeable = isRealtimeMergeable(conditions, boundary)
+  }
 
   // ---- Snapshot 単独（従来どおり） ----
   if (!mergeable) {
