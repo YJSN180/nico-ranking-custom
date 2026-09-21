@@ -19,6 +19,11 @@ id = "80f4535c379b4e8cb89ce6dbdb7d2dc9"
 binding = "R2_BUCKET"
 bucket_name = "nico-ranking"
 
+# Read-only publication verification follows the production router's active deployment.
+[[services]]
+binding = "PRODUCTION_GATEWAY"
+service = "nico-ranking-api-gateway"
+
 # Worker auth key for manual triggers is managed as a Cloudflare secret
 [vars]
 ENVIRONMENT = "production"

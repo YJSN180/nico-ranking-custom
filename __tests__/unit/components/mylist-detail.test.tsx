@@ -83,7 +83,9 @@ describe('MylistDetailClient', () => {
       isInitialized: vi.fn().mockReturnValue(true),
       getDB: vi.fn()
     }
-    DBManager.mockImplementation(() => mockDBManager)
+    DBManager.mockImplementation(function () {
+      return mockDBManager
+    })
     
     // MylistManagerのモック
     mockMylistManager = {
@@ -96,7 +98,9 @@ describe('MylistDetailClient', () => {
       deleteMylist: vi.fn().mockResolvedValue(undefined),
       searchVideosInMylist: vi.fn().mockResolvedValue(mockVideos)
     }
-    MylistManager.mockImplementation(() => mockMylistManager)
+    MylistManager.mockImplementation(function () {
+      return mockMylistManager
+    })
   })
 
   afterEach(() => {

@@ -1,230 +1,137 @@
 #!/usr/bin/env npx tsx
-import { GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
-import { mkdirSync, writeFileSync } from 'fs'
-import { dirname } from 'path'
-import { parseBufferAsJSON } from '../lib/unified-compression.js'
-
-type VideoStatsPayload = {
-  stats?: Record<string, unknown>
-  metadata?: {
-    updatedAt?: string
-    totalVideos?: number
-  }
-}
-
-const BUCKET_NAME = 'nico-ranking'
-const DEFAULT_WORKER_URL = 'https://video-stats-updater.yjsn180180.workers.dev'
-const POLL_INTERVAL_MS = 10_000
-const MAX_POLLS = 12
-
-function requireEnv(name: string): string {
-  const value = process.env[name]
-
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`)
-  }
-
-  return value
-}
-
-function getOptionalEnv(name: string, fallback?: string): string | undefined {
-  return process.env[name] || fallback
-}
-
-function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
-}
-
-async function bodyToArrayBuffer(body: any): Promise<ArrayBuffer> {
-  const bytes = await body.transformToByteArray()
-  return toArrayBuffer(bytes)
-}
-
-const accountId = requireEnv('CLOUDFLARE_ACCOUNT_ID')
-const apiToken = requireEnv('CLOUDFLARE_API_TOKEN')
-const kvNamespaceId = requireEnv('CLOUDFLARE_KV_NAMESPACE_ID')
-const r2AccessKeyId = requireEnv('R2_ACCESS_KEY_ID')
-const r2SecretAccessKey = requireEnv('R2_SECRET_ACCESS_KEY')
-const workerAuthKey = requireEnv('WORKER_AUTH_KEY')
-const workerUrl = getOptionalEnv('VIDEO_STATS_WORKER_URL', DEFAULT_WORKER_URL)!
-const outputPath = process.env.VERIFY_OUTPUT_PATH
-
-const s3Client = new S3Client({
-  region: 'auto',
-  endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: r2AccessKeyId,
-    secretAccessKey: r2SecretAccessKey,
-  },
-})
-
-async function fetchR2Json(key: string) {
-  const [headResponse, getResponse] = await Promise.all([
-    s3Client.send(
-      new HeadObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-      }),
-    ),
-    s3Client.send(
-      new GetObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-      }),
-    ),
-  ])
-
-  if (!getResponse.Body) {
-    throw new Error(`R2 object has no body: ${key}`)
-  }
-
-  const buffer = await bodyToArrayBuffer(getResponse.Body)
-  const parsed = await parseBufferAsJSON<Record<string, any>>(buffer)
-
-  if (!parsed) {
-    throw new Error(`Failed to parse R2 JSON: ${key}`)
-  }
-
-  return {
-    data: parsed,
-    contentEncoding: headResponse.ContentEncoding || 'identity',
-  }
-}
-
-async function fetchVideoStatsLatest(): Promise<VideoStatsPayload | null> {
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvNamespaceId}/values/VIDEO_STATS_LATEST`,
-    {
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-      },
-    },
-  )
-
-  if (response.status === 404) {
-    return null
-  }
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch VIDEO_STATS_LATEST: ${response.status} ${response.statusText}`)
-  }
-
-  return (await response.json()) as VideoStatsPayload
-}
-
-function pickSampleRankingKey(metadata: Record<string, any>): string {
-  const genrePeriodKeys = Object.keys(metadata.tagsByGenrePeriod || {})
-
-  if (genrePeriodKeys.length > 0) {
-    const [genre, period] = genrePeriodKeys[0].split('/')
-    if (genre && period) {
-      return `rankings/${genre}/${period}/all.json`
-    }
-  }
-
-  return 'rankings/all/24h/all.json'
-}
-
-async function triggerVideoStatsWorker() {
-  const response = await fetch(`${workerUrl}/trigger`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${workerAuthKey}`,
-    },
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to trigger video-stats-updater: ${response.status} ${response.statusText} ${errorText}`)
-  }
-
-  return await response.json()
-}
-
-async function sleep(ms: number) {
-  await new Promise(resolve => setTimeout(resolve, ms))
-}
-
-async function waitForFreshStats(previousUpdatedAt?: string | null) {
-  for (let attempt = 1; attempt <= MAX_POLLS; attempt += 1) {
-    const current = await fetchVideoStatsLatest()
-    const currentUpdatedAt = current?.metadata?.updatedAt
-
-    if (currentUpdatedAt && currentUpdatedAt !== previousUpdatedAt) {
-      return current
-    }
-
-    console.log(`Waiting for VIDEO_STATS_LATEST to advance... (${attempt}/${MAX_POLLS})`)
-    await sleep(POLL_INTERVAL_MS)
-  }
-
-  throw new Error('VIDEO_STATS_LATEST.updatedAt did not advance after manual trigger')
-}
-
-function writeSummaryIfRequested(summary: Record<string, unknown>) {
-  if (!outputPath) {
-    return
-  }
-
-  mkdirSync(dirname(outputPath), { recursive: true })
-  writeFileSync(outputPath, JSON.stringify(summary, null, 2))
-}
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { createR2Store } from './lib/r2-store'
+import { fetchVerifiedRanking } from './lib/verify-ranking-response'
+import { fetchChecked } from '../lib/pipeline/retry'
+import {
+  CURRENT_KEY,
+  STATS_SOURCE_KEY,
+  rankingKey,
+} from '../workers/utils/ranking-generation.js'
 
 async function main() {
-  console.log('Verifying R2 compression contract and post-publish video stats flow...')
-
-  const previousStats = await fetchVideoStatsLatest()
-  const previousUpdatedAt = previousStats?.metadata?.updatedAt || null
-  const previousTotalVideos = previousStats?.metadata?.totalVideos || 0
-
-  const metadataResult = await fetchR2Json('rankings/metadata.json')
-  const sampleRankingKey = pickSampleRankingKey(metadataResult.data)
-  const sampleRankingResult = await fetchR2Json(sampleRankingKey)
-
-  if (!Array.isArray(sampleRankingResult.data.items) || sampleRankingResult.data.items.length === 0) {
-    throw new Error(`Sample ranking data is empty: ${sampleRankingKey}`)
+  const store = createR2Store()
+  const expected = JSON.parse(
+    await readFile('./tmp/post-publish/publication.json', 'utf8'),
+  )
+  const manifest = (await store.read(CURRENT_KEY))?.data || null
+  if (manifest && manifest.generation !== expected.generation)
+    throw new Error('Publication was superseded')
+  const metadata = await store.read(
+    rankingKey(manifest, 'rankings/metadata.json'),
+  )
+  if (metadata?.data.updatedAt !== expected.collectedAt)
+    throw new Error('Metadata does not match the published artifact')
+  for (const [pair, value] of Object.entries(
+    metadata.data.tagsByGenrePeriod,
+  ) as Array<[string, any]>) {
+    const keys = [`rankings/${pair}/all.json`]
+    if (value.tags.length)
+      keys.push(
+        `rankings/${pair}/tags/${encodeURIComponent(value.tags[0])}.json`,
+      )
+    for (const key of keys) {
+      const result = await store.read(rankingKey(manifest, key))
+      if (
+        !result ||
+        !Array.isArray(result.data.items) ||
+        result.data.metadata?.updatedAt !== expected.collectedAt
+      ) {
+        throw new Error(`Invalid published ranking: ${key}`)
+      }
+    }
   }
-
-  console.log(`metadata.json content-encoding: ${metadataResult.contentEncoding}`)
-  console.log(`${sampleRankingKey} content-encoding: ${sampleRankingResult.contentEncoding}`)
-
-  const triggerResult = await triggerVideoStatsWorker()
-  console.log(`Triggered video-stats-updater: ${JSON.stringify(triggerResult)}`)
-
-  const currentStats = await waitForFreshStats(previousUpdatedAt)
-  const currentUpdatedAt = currentStats?.metadata?.updatedAt
-  const currentTotalVideos = currentStats?.metadata?.totalVideos || 0
-
-  if (!currentUpdatedAt) {
-    throw new Error('VIDEO_STATS_LATEST.metadata.updatedAt is missing after trigger')
-  }
-
-  if (currentTotalVideos <= 0) {
-    throw new Error('VIDEO_STATS_LATEST.metadata.totalVideos must be greater than 0')
-  }
-
-  if (previousTotalVideos > 0 && currentTotalVideos < previousTotalVideos * 0.5) {
-    throw new Error(
-      `VIDEO_STATS_LATEST totalVideos dropped too far: previous=${previousTotalVideos}, current=${currentTotalVideos}`,
+  const {
+    CLOUDFLARE_ACCOUNT_ID: account,
+    CLOUDFLARE_API_TOKEN: token,
+    CLOUDFLARE_KV_NAMESPACE_ID: namespace,
+    WORKER_AUTH_KEY: workerKey,
+  } = process.env
+  if (!account || !token || !namespace || !workerKey)
+    throw new Error('Missing post-publish credentials')
+  type Stats = { metadata?: { updatedAt: string; totalVideos: number } }
+  const getStats = async (): Promise<Stats> =>
+    (
+      await fetchChecked(
+        `https://api.cloudflare.com/client/v4/accounts/${account}/storage/kv/namespaces/${namespace}/values/VIDEO_STATS_LATEST`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      )
+    ).json() as Promise<Stats>
+  const before = await getStats().catch((error) => {
+    if (error.status === 404) return null
+    throw error
+  })
+  // A trigger may finish even if its response is lost. Poll before deciding to retry the trigger.
+  try {
+    const response = await fetch(
+      `${process.env.VIDEO_STATS_WORKER_URL || 'https://video-stats-updater.yjsn180180.workers.dev'}/trigger`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${workerKey}` },
+        signal: AbortSignal.timeout(30_000),
+      },
     )
+    if ([401, 403].includes(response.status))
+      throw new Error('Stats trigger authentication failed')
+  } catch (error: any) {
+    if (!['TimeoutError', 'AbortError'].includes(error.name)) throw error
   }
-
-  const summary = {
-    checkedAt: new Date().toISOString(),
-    metadataContentEncoding: metadataResult.contentEncoding,
-    sampleRankingKey,
-    sampleRankingContentEncoding: sampleRankingResult.contentEncoding,
-    previousUpdatedAt,
-    currentUpdatedAt,
-    previousTotalVideos,
-    currentTotalVideos,
+  for (let i = 0; i < 36; i++) {
+    const stats = await getStats()
+    const source = manifest ? (await store.read(STATS_SOURCE_KEY))?.data : null
+    const fresh =
+      stats.metadata?.updatedAt !== before?.metadata?.updatedAt &&
+      Date.parse(stats.metadata?.updatedAt) >
+        (Date.parse(before?.metadata?.updatedAt) || 0) &&
+      Date.now() - Date.parse(stats.metadata.updatedAt) < 15 * 60_000
+    const matches =
+      !manifest ||
+      (source?.generation === expected.generation &&
+        source?.updatedAt === stats.metadata?.updatedAt)
+    if (fresh && matches) {
+      if (
+        !(stats.metadata.totalVideos > 0) ||
+        stats.metadata.totalVideos < (before?.metadata?.totalVideos || 0) * 0.5
+      )
+        throw new Error('Stats count drift')
+      const ranking = await fetchVerifiedRanking(
+        process.env.VIDEO_STATS_WORKER_URL ||
+          'https://video-stats-updater.yjsn180180.workers.dev',
+        workerKey,
+      )
+      if (
+        ranking.updatedAt === expected.collectedAt &&
+        ranking.count === expected.counts['all/24h'] &&
+        ranking.generation === (manifest?.generation || 'legacy')
+      ) {
+        const output =
+          process.env.VERIFY_OUTPUT_PATH ||
+          './tmp/post-publish/verify-r2-contract.json'
+        await mkdir(dirname(output), { recursive: true })
+        await writeFile(
+          output,
+          JSON.stringify({
+            checkedAt: new Date().toISOString(),
+            generation: expected.generation,
+            collectedAt: expected.collectedAt,
+            statsUpdatedAt: stats.metadata.updatedAt,
+            totalVideos: stats.metadata.totalVideos,
+            rankingVerification: ranking,
+            publicEdgeVerification:
+              'not-checked-service-binding-does-not-test-WAF',
+          }),
+        )
+        return
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10_000))
   }
-
-  writeSummaryIfRequested(summary)
-  console.log(JSON.stringify(summary, null, 2))
+  throw new Error(
+    'Published generation did not reach video stats and production gateway within 6 minutes',
+  )
 }
-
-main().catch(error => {
+main().catch((error) => {
   console.error(error)
-  process.exit(1)
+  process.exitCode = 1
 })

@@ -4,6 +4,8 @@ import { gzipSync } from 'zlib';
 export function setupMockBindings(env) {
   // Mock R2 bucket
   const r2Storage = new Map();
+  const etags = new Map();
+  let version = 0;
   env.R2_BUCKET = {
     get: vi.fn(async (key) => {
       const data = r2Storage.get(key);
@@ -15,10 +17,15 @@ export function setupMockBindings(env) {
         return data;
       }
 
-      return createMockR2Object(data);
+      return { ...createMockR2Object(data), etag: etags.get(key) || 'fixture' };
     }),
-    put: vi.fn(async (key, value) => {
+    put: vi.fn(async (key, value, options) => {
+      if (options?.onlyIf?.etagDoesNotMatch === '*' && r2Storage.has(key)) return null;
+      if (options?.onlyIf?.etagMatches && (etags.get(key) || 'fixture') !== options.onlyIf.etagMatches) return null;
       r2Storage.set(key, value);
+      const etag = String(++version);
+      etags.set(key, etag);
+      return { etag };
     }),
     list: vi.fn(async () => ({
       objects: Array.from(r2Storage.keys()).map((key) => ({ key })),
@@ -29,8 +36,9 @@ export function setupMockBindings(env) {
   // Mock KV namespace
   const kvStorage = new Map();
   env.STATS_KV = {
-    get: vi.fn(async (key) => {
-      return kvStorage.get(key) || null;
+    get: vi.fn(async (key, type) => {
+      const value = kvStorage.get(key);
+      return value ? (type === 'json' ? JSON.parse(value) : value) : null;
     }),
     put: vi.fn(async (key, value) => {
       kvStorage.set(key, value);

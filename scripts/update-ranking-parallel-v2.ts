@@ -2,7 +2,8 @@
 import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import type { TagFetchRunStats } from '../lib/tag-fetcher-simple'
-import { kv } from '../lib/simple-kv'
+import { fetchChecked } from '../lib/pipeline/retry'
+import { RANKING_GROUPS, validateGenre } from '../lib/pipeline/publication-contract'
 import {
   getTagFetchRunStats,
   resetTagFetchRunStats,
@@ -12,13 +13,14 @@ import {
   writeTagCacheDeltaArtifact,
 } from '../lib/tag-cache-store'
 import { createCoreNgFilter } from '../lib/pipeline/ng-filter'
-import { buildGenreRanking } from '../lib/pipeline/run-update'
+import { buildGenreRanking, type GenreRankingResult } from '../lib/pipeline/run-update'
+import { validateNGLists } from '../lib/pipeline/ng-contract'
 import {
   createTagEnricher,
   getTagEnrichmentSettingsFromEnv,
 } from '../lib/pipeline/tag-enrichment'
 import { writeRankingToCloudflareKVApi } from '../lib/pipeline/storage'
-import { fetchRankingPageWithRetry } from '../lib/pipeline/fetch-ranking'
+import { fetchRankingPageWithRetry, RankingNotReadyError } from '../lib/pipeline/fetch-ranking'
 import { GENRE_ID_MAP as STATIC_GENRE_ID_MAP } from '../lib/genre-mapping'
 import * as fs from 'fs/promises'
 import * as path from 'path'
@@ -55,16 +57,7 @@ const ALL_GENRES: RankingGenre[] = [
 const GENRE_ID_MAP: Record<RankingGenre, string> = { ...STATIC_GENRE_ID_MAP }
 
 // Custom group definitions for 8-group strategy
-const CUSTOM_GROUPS: string[][] = [
-  ['all', 'game'], // Group 1
-  ['anime', 'vocaloid'], // Group 2
-  ['voicesynthesis', 'entertainment'], // Group 3
-  ['music', 'sing'], // Group 4
-  ['dance', 'play', 'commentary', 'cooking'], // Group 5 (old Group 3)
-  ['travel', 'nature', 'vehicle', 'technology'], // Group 6 (old Group 4)
-  ['society', 'mmd', 'vtuber', 'radio'], // Group 7 (old Group 5)
-  ['sports', 'animal', 'other'], // Group 8 (old Group 6)
-]
+const CUSTOM_GROUPS = RANKING_GROUPS
 
 const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'nico-ranking'
 
@@ -211,10 +204,14 @@ async function getNGList(): Promise<NGList> {
     // Always fetch fresh NG list from KV to ensure we have the latest data
     // This prevents issues where admin updates NG list between GitHub Actions runs
     console.log('Fetching fresh NG list from KV')
-    const [manual, derived] = await Promise.all([
-      kv.get<any>('ng-list-manual'),
-      kv.get<string[]>('ng-list-derived'),
-    ])
+    const { CLOUDFLARE_ACCOUNT_ID: account, CLOUDFLARE_KV_NAMESPACE_ID: namespace, CLOUDFLARE_API_TOKEN: token } = process.env
+    if (!account || !namespace || !token) throw new Error('Missing NG credentials')
+    const read = async (key: string) => (await fetchChecked(
+      `https://api.cloudflare.com/client/v4/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )).json()
+    const [manual, derived] = await Promise.all([read('ng-list-manual'), read('ng-list-derived')])
+    validateNGLists(manual, derived)
 
     const legacyData = {
       videoIds: manual?.videoIds || [],
@@ -227,13 +224,7 @@ async function getNGList(): Promise<NGList> {
     return migrateLegacyNGList(legacyData)
   } catch (error) {
     console.error('Failed to fetch NG list:', error)
-    return {
-      videoIds: [],
-      videoTitles: { exact: [], partial: [] },
-      authorIds: [],
-      authorNames: { exact: [], partial: [] },
-      derivedVideoIds: [],
-    }
+    throw error
   }
 }
 
@@ -244,21 +235,7 @@ const tagEnricher = createTagEnricher(tagEnrichmentSettings)
 async function processGenre(
   genre: RankingGenre,
   ngList: NGList,
-): Promise<{
-  genre: RankingGenre
-  data: {
-    '24h': {
-      items: RankingItem[]
-      popularTags: string[]
-      tags: Record<string, RankingItem[]>
-    }
-    hour: {
-      items: RankingItem[]
-      popularTags: string[]
-      tags: Record<string, RankingItem[]>
-    }
-  }
-}> {
+): Promise<GenreRankingResult> {
   console.log(`[${new Date().toISOString()}] Starting ${genre}...`)
 
   const enableTagFetching = tagEnrichmentSettings.enabled
@@ -294,11 +271,11 @@ async function processGenre(
       pageDelayMs: 500,
       dedupe: false,
       stopWhenPageItemsLessThan: 100,
-      onError: 'break',
+      onError: 'throw',
       fetchPage: (genre, period, tag, page) =>
         fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP),
       normalizeItems: (items) => items,
-      filterItems: (items) => ngFilter(items),
+      filterItems: async (items) => ngFilter(items),
       onDerivedIds: (newDerivedIds, context) => {
         if (newDerivedIds.length > 0) {
           ngList.derivedVideoIds.push(...newDerivedIds)
@@ -308,17 +285,11 @@ async function processGenre(
         }
       },
       onFetchError: (error, context) => {
-        const message = error instanceof Error ? error.message : String(error)
-        if (message.includes('404')) {
-          console.log(
-            `Reached end of pages for ${genre}/${context.period} at page ${context.page} (404 - this is normal)`,
-          )
-        } else {
-          console.error(
-            `Failed to fetch page ${context.page} for ${genre}/${context.period}:`,
-            error,
-          )
-        }
+        if (error instanceof RankingNotReadyError && context.kind === 'tag' && context.page === 1) return
+        console.error(
+          `Failed ranking fetch: ${JSON.stringify(context)}`,
+          error,
+        )
       },
       includeTagRankings: true,
       tagTargetCount: 300,
@@ -327,7 +298,8 @@ async function processGenre(
       tagPageDelayMs: 500,
       tagDedupe: false,
       tagStopWhenPageItemsLessThan: 100,
-      tagOnError: 'break',
+      tagOnError: 'throw',
+      omitNotReadyTags: true,
       popularTagsStrategy: 'shared',
       tagFetchOrder: 'tag-first',
       tagEnrichment: async (items, context) =>
@@ -361,6 +333,11 @@ async function processGenre(
     )
   }
 
+  if (result.hadErrors) throw new Error(`Incomplete collection: ${genre}`)
+  if (result.unavailableTags?.length) {
+    console.warn(`[Ranking availability] ${genre}: ${JSON.stringify(result.unavailableTags)}`)
+  }
+  validateGenre(genre, result.data)
   return result
 }
 
@@ -437,10 +414,10 @@ async function main() {
         totalItemsCount += result.data['24h'].items.length
         totalItemsCount += result.data['hour'].items.length
 
-        for (const tagItems of Object.values(result.data['24h'].tags)) {
+        for (const tagItems of Object.values(result.data['24h'].tags || {})) {
           totalItemsCount += (tagItems as RankingItem[]).length
         }
-        for (const tagItems of Object.values(result.data['hour'].tags)) {
+        for (const tagItems of Object.values(result.data['hour'].tags || {})) {
           totalItemsCount += (tagItems as RankingItem[]).length
         }
       }
@@ -545,6 +522,15 @@ if (process.argv[2] === '--group') {
   // Run only for this group and save partial results
   ;(async () => {
     const startTime = Date.now()
+    let collectionComplete = false
+    // Pending promises alone do not keep Node alive. Bound unfinished library work explicitly.
+    const deadline = setTimeout(() => {
+      console.error(`Group ${groupId} exceeded its 65 minute deadline`)
+      process.exit(1)
+    }, 65 * 60_000)
+    process.once('beforeExit', () => {
+      if (!collectionComplete) { console.error(`Group ${groupId} exited before writing its artifact`); process.exitCode = 1 }
+    })
     resetTagFetchRunStats()
     resetTagCacheDelta()
     const ngList = await getNGList()
@@ -569,9 +555,13 @@ if (process.argv[2] === '--group') {
     const tmpDir = './tmp'
     await fs.mkdir(tmpDir, { recursive: true })
     await fs.writeFile(
-      path.join(tmpDir, `ranking-group-${groupId}.json`),
-      JSON.stringify(results, null, 2),
+      path.join(tmpDir, `ranking-group-${groupId}.json.partial`),
+      JSON.stringify({ version: 1, runId: process.env.GITHUB_RUN_ID,
+        attempt: process.env.GITHUB_RUN_ATTEMPT || '1', slot: process.env.RANKING_SLOT || '',
+        groupId, collectedAt: new Date(startTime).toISOString(), completedAt: new Date().toISOString(), results }),
     )
+    await fs.rename(path.join(tmpDir, `ranking-group-${groupId}.json.partial`), path.join(tmpDir, `ranking-group-${groupId}.json`))
+    collectionComplete = true
 
     // Check if new derived entries were found
     const newDerivedCount = ngList.derivedVideoIds.length
@@ -630,6 +620,7 @@ if (process.argv[2] === '--group') {
       )
       process.exit(1)
     }
+    clearTimeout(deadline)
   })().catch((error) => {
     console.error(`Group ${groupId} failed catastrophically:`, error)
     process.exit(1)

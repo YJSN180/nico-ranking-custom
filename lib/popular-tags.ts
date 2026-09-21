@@ -3,25 +3,28 @@
 // 最新のデータはgetPopularTags関数で取得すること
 
 import { scrapeRankingPage } from './scraper'
-import { getGenreRanking } from './cloudflare-kv'
 import { kv } from './simple-kv'
+import { POPULAR_TAGS_LATEST_KEY, type PopularTagsLatest } from './pipeline/popular-tags-latest'
 import type { RankingGenre } from '../types/ranking-config'
 
-// パイプライン（scripts/aggregate-ranking-results-direct.ts）が書き出す人気タグだけの小キー。
-// ランキング本体（数百KB〜）を丸読みしていた /api/popular-tags の遅さ（1〜3s）を解消する。
-export const POPULAR_TAGS_LATEST_KEY = 'POPULAR_TAGS_LATEST'
-const POPULAR_TAGS_CACHE_TTL_MS = 5 * 60 * 1000
+export { POPULAR_TAGS_LATEST_KEY } from './pipeline/popular-tags-latest'
+export type { PopularTagsLatest } from './pipeline/popular-tags-latest'
 
-export interface PopularTagsLatest {
-  updatedAt: string
-  genres: Record<string, { '24h': string[]; hour: string[] }>
-  all: { '24h': string[]; hour: string[] }
-}
+// パイプライン（scripts/sync-ranking-auxiliary.ts）が公開成功後に書き出す人気タグだけの小キー。
+// ランキング本体（数百KB〜）を丸読みしていた /api/popular-tags の遅さ（1〜3s）を解消する。
+// 未生成・不正・読取失敗のときは従来経路（ゲートウェイ → スクレイパー）へ落ちる。
+const POPULAR_TAGS_CACHE_TTL_MS = 5 * 60 * 1000
 
 let popularTagsLatestCache: { value: PopularTagsLatest | null; fetchedAt: number } | null = null
 
 export function invalidatePopularTagsLatestCache(): void {
   popularTagsLatestCache = null
+}
+
+function isPopularTagsLatest(value: unknown): value is PopularTagsLatest {
+  if (typeof value !== 'object' || value === null) return false
+  const { genres, all } = value as Record<string, unknown>
+  return typeof genres === 'object' && genres !== null && typeof all === 'object' && all !== null
 }
 
 async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
@@ -30,13 +33,37 @@ async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
     return popularTagsLatestCache.value
   }
   try {
-    const value = await kv.get<PopularTagsLatest>(POPULAR_TAGS_LATEST_KEY)
-    const valid = value && typeof value === 'object' && value.genres && value.all ? value : null
+    const value = await kv.get<unknown>(POPULAR_TAGS_LATEST_KEY)
+    const valid = isPopularTagsLatest(value) ? value : null
     if (cacheEnabled) popularTagsLatestCache = { value: valid, fetchedAt: Date.now() }
     return valid
   } catch {
     return null
   }
+}
+
+async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
+  // Reuse the same-origin proxy on Vercel, as the SSR ranking loader does.
+  const deployment = process.env.VERCEL_URL
+  const base = deployment
+    ? deployment.startsWith('http') ? deployment : `https://${deployment}`
+    : process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
+  const url = new URL('/api/ranking', base)
+  url.search = new URLSearchParams({ genre, period }).toString()
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'nico-ranking-web/1.0',
+    },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (!response.ok) throw new Error('Ranking gateway unavailable')
+  const data = await response.json() as { popularTags?: unknown }
+  if (!Array.isArray(data.popularTags) || data.popularTags.some((tag: unknown) => typeof tag !== 'string')) {
+    throw new Error('Invalid popular tags')
+  }
+  return data as { popularTags: string[] }
 }
 
 // ジャンルの人気タグを取得（キャッシュ付き）
@@ -78,13 +105,13 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
   }
   
   try {
-    // 1. Cloudflare KVから取得を試みる
+    // 1. 公開済みR2世代をAPI gateway経由で取得
     const cfData = await getGenreRanking(genre, period)
     if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
       return cfData.popularTags
     }
   } catch (error) {
-    // Failed to get popular tags from Cloudflare KV - trying fallback
+    // Gateway unavailable; try the existing scraper fallback.
   }
   
   try {
@@ -105,13 +132,13 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
 // 個別ジャンルの人気タグを取得（内部用、allジャンルの集計で使用）
 async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
   try {
-    // 1. Cloudflare KVから取得を試みる
+    // 1. 公開済みR2世代をAPI gateway経由で取得
     const cfData = await getGenreRanking(genre, period)
     if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
       return cfData.popularTags
     }
   } catch (error) {
-    // Failed to get popular tags from Cloudflare KV - trying fallback
+    // Gateway unavailable; try the existing scraper fallback.
   }
   
   try {

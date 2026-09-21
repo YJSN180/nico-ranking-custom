@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "incremental": false },
+  "include": [
+    "scripts/accumulate-tags.ts",
+    "scripts/aggregate-ranking-results-direct.ts",
+    "scripts/update-ranking-parallel-v2.ts",
+    "scripts/write-to-r2.ts",
+    "scripts/prepare-ranking-run.ts",
+    "scripts/record-pipeline-status.ts",
+    "scripts/sync-ranking-auxiliary.ts",
+    "scripts/manage-ranking-generations.ts",
+    "scripts/verify-r2-contract.ts",
+    "scripts/check-data-pipeline-health.ts",
+    "scripts/check-ranking-gateway.ts",
+    "scripts/lib/r2-store.ts",
+    "lib/pipeline/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}

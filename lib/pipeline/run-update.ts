@@ -2,6 +2,7 @@ import type { RankingGenre } from '../../types/ranking-config'
 import type { RankingItem } from '../../types/ranking'
 import type { KVRankingData } from '../cloudflare-kv'
 import { collectRankingItems } from './collect-ranking-items'
+import { RankingNotReadyError } from './fetch-ranking'
 
 export type RankingPeriod = '24h' | 'hour'
 export type RankingKind = 'main' | 'tag'
@@ -33,7 +34,7 @@ export interface RunUpdateConfig<T> {
     period: RankingPeriod,
     tag: string | undefined,
     page: number,
-  ) => Promise<{ items: T[]; popularTags?: string[] }>
+  ) => Promise<{ items: T[]; popularTags?: string[]; hasNextPage?: boolean }>
   normalizeItems: (items: T[], context: RankingContext) => RankingItem[]
   filterItems: (
     items: RankingItem[],
@@ -53,6 +54,7 @@ export interface RunUpdateConfig<T> {
   tagStopOnEmptyPage?: boolean
   tagStopWhenPageItemsLessThan?: number
   tagOnError?: 'throw' | 'break'
+  omitNotReadyTags?: boolean
   popularTagsStrategy?: 'shared' | 'per-period'
   tagFetchOrder?: 'tag-first' | 'period-first'
   tagEnrichment?: (
@@ -65,6 +67,11 @@ export interface GenreRankingResult {
   genre: RankingGenre
   data: KVRankingData['genres'][string]
   hadErrors: boolean
+  unavailableTags?: Array<{
+    period: RankingPeriod
+    tag: string
+    reason: 'upstream-not-ready'
+  }>
 }
 
 export interface RunUpdateResult {
@@ -150,6 +157,29 @@ export async function buildGenreRanking<T>(
   }
 
   let hadErrors = false
+  const unavailableTags: NonNullable<GenreRankingResult['unavailableTags']> = []
+  const handleTagError = (error: unknown, context: RankingContext) => {
+    if (
+      config.omitNotReadyTags &&
+      error instanceof RankingNotReadyError &&
+      error.page === 1 &&
+      error.genre === genre &&
+      error.period === context.period &&
+      error.tag === context.tag &&
+      context.tag
+    ) {
+      // Do not publish an empty replacement or advertise a ranking the upstream has not produced.
+      data[context.period].popularTags = data[context.period].popularTags.filter(
+        tag => tag !== context.tag,
+      )
+      unavailableTags.push({
+        period: context.period, tag: context.tag, reason: 'upstream-not-ready',
+      })
+      return
+    }
+    if (config.tagOnError === 'throw') throw error
+    hadErrors = true
+  }
 
   for (const period of config.periods) {
     const context: RankingContext = { genre, period, kind: 'main' }
@@ -167,6 +197,7 @@ export async function buildGenreRanking<T>(
       }
       popularTagsByPeriod[period] = result.popularTags
     } catch (error) {
+      if (config.onError === 'throw') throw error
       hadErrors = true
       data[period] = { items: [], popularTags: [], tags: {} }
     }
@@ -231,7 +262,8 @@ export async function buildGenreRanking<T>(
                 context,
               )
               data[period].tags[tag] = enriched
-            } catch {
+            } catch (error) {
+              handleTagError(error, context)
               continue
             }
           }
@@ -271,7 +303,8 @@ export async function buildGenreRanking<T>(
                 context,
               )
               data[period].tags[tag] = enriched
-            } catch {
+            } catch (error) {
+              handleTagError(error, context)
               continue
             }
           }
@@ -312,7 +345,8 @@ export async function buildGenreRanking<T>(
               context,
             )
             data[period].tags[tag] = enriched
-          } catch {
+          } catch (error) {
+            handleTagError(error, context)
             continue
           }
         }
@@ -324,6 +358,7 @@ export async function buildGenreRanking<T>(
     genre,
     data,
     hadErrors,
+    unavailableTags,
   }
 }
 

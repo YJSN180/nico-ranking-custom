@@ -25,6 +25,26 @@ afterEach(() => {
 })
 
 describe('tag-fetcher-simple (Nicolog -> getthumbinfo)', () => {
+  it.each(['r2-aggregate', 'kv'])('keeps a job snapshot only for %s backend', async backend => {
+    vi.stubEnv('TAG_CACHE_BACKEND', backend)
+    const { mod, store, kv } = await loadModule()
+    const read = vi.spyOn(store, 'readTagCacheShard').mockImplementation(async () => ({}))
+    vi.spyOn(kv, 'set').mockResolvedValue()
+    global.fetch = vi.fn().mockImplementation(async () => new Response('<td class="tdtag"><li class="lock">Fresh</li></td>'))
+    const items: RankingItem[] = [{ rank: 1, id: 'sm-snapshot', title: 't', thumbURL: '', views: 1 }]
+    await mod.enrichRankingItemsWithTagDetails(items, 1, 0, true)
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now + 6 * 60_000)
+    const [again] = await mod.enrichRankingItemsWithTagDetails(items, 1, 0, true)
+    expect(again.tags).toEqual(['Fresh'])
+    expect(read).toHaveBeenCalledTimes(backend === 'r2-aggregate' ? 1 : 2)
+    expect(global.fetch).toHaveBeenCalledTimes(backend === 'r2-aggregate' ? 1 : 2)
+    if (backend === 'r2-aggregate') {
+      mod.resetTagFetchRunStats()
+      await mod.enrichRankingItemsWithTagDetails(items, 1, 0, true)
+      expect(read).toHaveBeenCalledTimes(2)
+    }
+  })
   it('parses Nicolog tags, prefers lock, and ignores genre', async () => {
     const html = `
       <html><body>

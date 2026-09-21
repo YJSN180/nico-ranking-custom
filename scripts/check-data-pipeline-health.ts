@@ -1,6 +1,9 @@
 #!/usr/bin/env npx tsx
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
+import { createR2Store } from './lib/r2-store'
+import { fetchChecked } from '../lib/pipeline/retry'
+import { CURRENT_KEY, STATS_SOURCE_KEY, pipelineHealth } from '../workers/utils/ranking-generation.js'
 
 type HealthBaseline = {
   checkedAt: string
@@ -45,7 +48,7 @@ async function fetchVideoStatsLatest() {
   const apiToken = requireEnv('CLOUDFLARE_API_TOKEN')
   const kvNamespaceId = requireEnv('CLOUDFLARE_KV_NAMESPACE_ID')
 
-  const response = await fetch(
+  const response = await fetchChecked(
     `https://api.cloudflare.com/client/v4/accounts/${accountId}/storage/kv/namespaces/${kvNamespaceId}/values/VIDEO_STATS_LATEST`,
     {
       headers: {
@@ -75,12 +78,16 @@ async function main() {
 
   const baseline = readBaseline(baselineFile)
   const errors: string[] = []
+  const store = createR2Store()
+  const manifest = (await store.read(CURRENT_KEY))?.data || (await store.read('rankings/metadata.json'))?.data
+  const source = (await store.read(STATS_SOURCE_KEY))?.data
+  errors.push(...pipelineHealth(manifest, stats, source).problems)
 
   if (!updatedAt) {
     errors.push('VIDEO_STATS_LATEST.metadata.updatedAt is missing')
   }
 
-  if (ageMinutes === null || ageMinutes > MAX_AGE_MINUTES) {
+  if (ageMinutes === null || !Number.isFinite(ageMinutes) || ageMinutes < -1 || ageMinutes > MAX_AGE_MINUTES) {
     errors.push(`VIDEO_STATS_LATEST is too old: ageMinutes=${ageMinutes}`)
   }
 

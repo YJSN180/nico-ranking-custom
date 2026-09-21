@@ -1,292 +1,183 @@
 name: Update Nico Ranking Data (Parallel)
-# Last updated: 2025-07-02 to reactivate cron scheduler - retry fix
+run-name: Ranking ${{ inputs.slot || github.run_id }}
 
 on:
   schedule:
-    # Run at 20 minutes past every hour (60-minute interval)
-    # Previous 30-minute interval caused conflicts when runs took 40-50 minutes
     - cron: '20 * * * *'
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: 'UTC hourly slot supplied by the scheduler; blank for manual runs'
+        type: string
+      resume_run_id:
+        description: 'Optional trusted main run with a validated-publication artifact (max age 120 minutes)'
+        type: string
 
-# 同時実行を防ぐ
+permissions:
+  contents: read
+  actions: read
+
 concurrency:
   group: update-ranking
   cancel-in-progress: false
-  
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID || '80f4535c379b4e8cb89ce6dbdb7d2dc9' }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  R2_BUCKET_NAME: nico-ranking
+
 jobs:
-  # Step 0: Fetch NG list job is no longer needed
-  # Each parallel job will fetch fresh NG list from KV directly
-  
-  # Step 1: Fetch rankings in parallel groups
-  fetch-rankings:
+  prepare:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.RANKING_EXTERNAL_SCHEDULER_ENABLED != 'true')
     runs-on: ubuntu-latest
-    # Only run on schedule or manual dispatch, not on push
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 5
+    outputs:
+      slot: ${{ steps.guard.outputs.slot }}
+      should_run: ${{ steps.guard.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RANKING_SLOT: ${{ inputs.slot }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        run: npx tsx scripts/prepare-ranking-run.ts
+
+  fetch-rankings:
+    needs: prepare
+    if: needs.prepare.outputs.should_run == 'true' && inputs.resume_run_id == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
     strategy:
       matrix:
         group: [1, 2, 3, 4, 5, 6, 7, 8]
       max-parallel: 8
-      fail-fast: false # Continue other groups even if one fails
-    
+      fail-fast: false
+    env:
+      RANKING_SLOT: ${{ needs.prepare.outputs.slot }}
+      ENABLE_TAG_FETCHING: ${{ secrets.ENABLE_TAG_FETCHING || 'true' }}
+      TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '1000' }}
+      TAG_FETCH_GENRES: ''
+      TAG_FETCH_FOR_TAG_RANKINGS: ${{ secrets.TAG_FETCH_FOR_TAG_RANKINGS || 'true' }}
+      TAG_CACHE_BACKEND: r2-aggregate
+      TAG_CACHE_R2_PREFIX: tag-cache/v1
+      TAG_FETCH_NICOLOG_CONCURRENCY: ${{ secrets.TAG_FETCH_NICOLOG_CONCURRENCY || '2' }}
+      TAG_FETCH_NICOLOG_MIN_INTERVAL_MS: ${{ secrets.TAG_FETCH_NICOLOG_MIN_INTERVAL_MS || '500' }}
+      TAG_FETCH_GETTHUMB_CONCURRENCY: ${{ secrets.TAG_FETCH_GETTHUMB_CONCURRENCY || '10' }}
+      TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS: ${{ secrets.TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS || '150' }}
+      TAG_FETCH_NICOLOG_TIMEOUT_MS: ${{ secrets.TAG_FETCH_NICOLOG_TIMEOUT_MS || '8000' }}
+      TAG_FETCH_GETTHUMB_TIMEOUT_MS: ${{ secrets.TAG_FETCH_GETTHUMB_TIMEOUT_MS || '5000' }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-    
-    - name: Install dependencies
-      run: npm ci
-    
-    - name: Fetch rankings for group ${{ matrix.group }}
-      env:
-        # Cloudflare KV credentials - EXACTLY THE SAME AS ORIGINAL
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        R2_BUCKET_NAME: nico-ranking
-        # Add KV Namespace ID fallback
-        CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
-        # Tag fetching configuration
-        ENABLE_TAG_FETCHING: ${{ secrets.ENABLE_TAG_FETCHING || 'true' }}
-        TAG_FETCH_MAX_VIDEOS: ${{ secrets.TAG_FETCH_MAX_VIDEOS || '1000' }}
-        TAG_FETCH_GENRES: ''
-        TAG_FETCH_FOR_TAG_RANKINGS: ${{ secrets.TAG_FETCH_FOR_TAG_RANKINGS || 'true' }}
-        TAG_CACHE_BACKEND: r2-aggregate
-        TAG_CACHE_R2_PREFIX: tag-cache/v1
-        TAG_FETCH_NICOLOG_CONCURRENCY: ${{ secrets.TAG_FETCH_NICOLOG_CONCURRENCY || '2' }}
-        TAG_FETCH_NICOLOG_MIN_INTERVAL_MS: ${{ secrets.TAG_FETCH_NICOLOG_MIN_INTERVAL_MS || '500' }}
-        TAG_FETCH_GETTHUMB_CONCURRENCY: ${{ secrets.TAG_FETCH_GETTHUMB_CONCURRENCY || '10' }}
-        TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS: ${{ secrets.TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS || '150' }}
-        TAG_FETCH_NICOLOG_TIMEOUT_MS: ${{ secrets.TAG_FETCH_NICOLOG_TIMEOUT_MS || '8000' }}
-        TAG_FETCH_GETTHUMB_TIMEOUT_MS: ${{ secrets.TAG_FETCH_GETTHUMB_TIMEOUT_MS || '5000' }}
-      run: |
-        echo "Starting group ${{ matrix.group }} at $(date)"
-        # Debug: Check if environment variables are set
-        echo "Debug: Checking environment variables..."
-        echo "CLOUDFLARE_ACCOUNT_ID is set: $([ -n "$CLOUDFLARE_ACCOUNT_ID" ] && echo 'YES' || echo 'NO')"
-        echo "CLOUDFLARE_KV_NAMESPACE_ID is set: $([ -n "$CLOUDFLARE_KV_NAMESPACE_ID" ] && echo 'YES' || echo 'NO')"
-        echo "CLOUDFLARE_API_TOKEN is set: $([ -n "$CLOUDFLARE_API_TOKEN" ] && echo 'YES' || echo 'NO')"
-        echo "ENABLE_TAG_FETCHING: $ENABLE_TAG_FETCHING"
-        echo "TAG_FETCH_MAX_VIDEOS: $TAG_FETCH_MAX_VIDEOS"
-        echo "TAG_FETCH_GENRES: $TAG_FETCH_GENRES"
-        echo "TAG_FETCH_FOR_TAG_RANKINGS: $TAG_FETCH_FOR_TAG_RANKINGS"
-        echo "TAG_FETCH_NICOLOG_CONCURRENCY: $TAG_FETCH_NICOLOG_CONCURRENCY"
-        echo "TAG_FETCH_NICOLOG_MIN_INTERVAL_MS: $TAG_FETCH_NICOLOG_MIN_INTERVAL_MS"
-        echo "TAG_FETCH_GETTHUMB_CONCURRENCY: $TAG_FETCH_GETTHUMB_CONCURRENCY"
-        echo "TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS: $TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS"
-        echo "TAG_FETCH_NICOLOG_TIMEOUT_MS: $TAG_FETCH_NICOLOG_TIMEOUT_MS"
-        echo "TAG_FETCH_GETTHUMB_TIMEOUT_MS: $TAG_FETCH_GETTHUMB_TIMEOUT_MS"
-        
-        # Use fallback if KV_NAMESPACE_ID is not set
-        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
-          export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
-          echo "Using fallback KV namespace ID"
-        fi
-        
-        # Use improved version with better error handling and retry logic
-        npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
-    
-    - name: Upload partial results
-      uses: actions/upload-artifact@v4
-      with:
-        name: ranking-data-group-${{ matrix.group }}
-        path: ./tmp/ranking-group-${{ matrix.group }}.json
-        retention-days: 1
-        if-no-files-found: error
-    
-    - name: Upload NG derived results (if exists)
-      uses: actions/upload-artifact@v4
-      with:
-        name: ng-derived-group-${{ matrix.group }}
-        path: ./tmp/ng-derived-group-${{ matrix.group }}.json
-        retention-days: 1
-        if-no-files-found: ignore
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Collect complete group
+        run: npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ranking-data-group-${{ matrix.group }}
+          path: ./tmp/ranking-group-${{ matrix.group }}.json
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ranking-auxiliary-group-${{ matrix.group }}
+          path: |
+            ./tmp/ng-derived-group-${{ matrix.group }}.json
+            ./tmp/tag-cache-delta-group-${{ matrix.group }}.json
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: ignore
 
-    - name: Upload tag cache delta (if exists)
-      uses: actions/upload-artifact@v4
-      with:
-        name: tag-cache-delta-group-${{ matrix.group }}
-        path: ./tmp/tag-cache-delta-group-${{ matrix.group }}.json
-        retention-days: 1
-        if-no-files-found: ignore
-
-  # Step 2: Aggregate results and write to KV
   aggregate-and-write:
-    needs: fetch-rankings
+    needs: [prepare, fetch-rankings]
+    if: always() && needs.prepare.outputs.should_run == 'true' && (needs.fetch-rankings.result == 'success' || (inputs.resume_run_id != '' && needs.prepare.result == 'success'))
     runs-on: ubuntu-latest
-    # Only run on schedule or manual dispatch, and if fetch-rankings completed
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    
+    timeout-minutes: 25
+    env:
+      RANKING_GENERATIONS_ENABLED: ${{ vars.RANKING_GENERATIONS_ENABLED || 'false' }}
+      RESUME_RUN_ID: ${{ inputs.resume_run_id }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-    
-    - name: Install dependencies
-      run: npm ci
-    
-    - name: Create temp directory
-      run: mkdir -p ./tmp
-    
-    - name: Download ranking artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: ./tmp
-        pattern: ranking-data-group-*
-    
-    - name: Download NG derived artifacts (if exists)
-      uses: actions/download-artifact@v4
-      with:
-        path: ./tmp
-        pattern: ng-derived-group-*
-      continue-on-error: true
-
-    - name: Download tag cache delta artifacts (if exists)
-      uses: actions/download-artifact@v4
-      with:
-        path: ./tmp
-        pattern: tag-cache-delta-group-*
-      continue-on-error: true
-    
-    - name: List downloaded files
-      run: |
-        echo "Downloaded artifacts:"
-        ls -la ./tmp/
-        echo "Complete directory structure:"
-        find ./tmp -type f -name "*.json" | sort
-        echo "Ranking files:"
-        find ./tmp -name "ranking-group-*.json" | sort
-        echo "NG derived files:"
-        find ./tmp -name "ng-derived-group-*.json" | sort
-        echo "Tag cache delta files:"
-        find ./tmp -name "tag-cache-delta-group-*.json" | sort
-    
-    - name: Move files to correct location
-      run: |
-        # GitHub Actions creates subdirectories for each artifact
-        # First, show the structure
-        echo "Directory structure before moving:"
-        find ./tmp -type f -name "*.json" | sort
-        
-        # Move all JSON files to the tmp directory root
-        # Use a more robust approach that handles nested directories
-        for file in $(find ./tmp -type f -name "*.json" | grep -v "^./tmp/[^/]*\.json$"); do
-          echo "Moving: $file"
-          mv "$file" ./tmp/ 2>/dev/null || echo "Failed to move: $file"
-        done
-        
-        echo ""
-        echo "Files after moving:"
-        ls -la ./tmp/ranking-group-*.json 2>/dev/null || echo "No ranking group files found"
-        echo ""
-        echo "Total ranking group files found: $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
-        echo "Total NG derived files found: $(ls ./tmp/ng-derived-group-*.json 2>/dev/null | wc -l)"
-        echo "NG derived files after moving:"
-        ls -la ./tmp/ng-derived-group-*.json 2>/dev/null || echo "No NG derived files found after moving"
-        echo "Tag cache delta files after moving:"
-        ls -la ./tmp/tag-cache-delta-group-*.json 2>/dev/null || echo "No tag cache delta files found after moving"
-    
-    - name: Aggregate and write to KV
-      env:
-        # Cloudflare KV credentials - EXACTLY THE SAME AS ORIGINAL
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        # Add KV Namespace ID fallback
-        CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
-      run: |
-        echo "Aggregating results and writing to KV..."
-        echo "Expected 8 group files, found $(ls ./tmp/ranking-group-*.json 2>/dev/null | wc -l)"
-        
-        # Use fallback if KV_NAMESPACE_ID is not set
-        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
-          export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
-          echo "Using fallback KV namespace ID"
-        fi
-        
-        npx tsx scripts/aggregate-ranking-results-direct.ts
-
-    - name: Accumulate tags for autocomplete
-      env:
-        # Cloudflare credentials for tag accumulation
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        # R2 credentials for tag storage
-        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        # Add KV Namespace ID fallback
-        CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK: "80f4535c379b4e8cb89ce6dbdb7d2dc9"
-      run: |
-        echo "🏷️  Accumulating tags for autocomplete functionality..."
-        
-        # Use fallback if KV_NAMESPACE_ID is not set
-        if [ -z "$CLOUDFLARE_KV_NAMESPACE_ID" ]; then
-          export CLOUDFLARE_KV_NAMESPACE_ID="$CLOUDFLARE_KV_NAMESPACE_ID_FALLBACK"
-          echo "Using fallback KV namespace ID for tag accumulation"
-        fi
-        
-        npx tsx scripts/accumulate-tags.ts
-    
-    - name: Write to R2
-      if: success()
-      env:
-        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      run: |
-        echo "📤 Uploading to R2..."
-        npx tsx scripts/write-to-r2.ts
-
-    - name: Merge tag cache deltas to R2
-      if: success()
-      env:
-        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        R2_BUCKET_NAME: nico-ranking
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        TAG_CACHE_R2_PREFIX: tag-cache/v1
-      run: |
-        echo "Merging tag cache deltas to R2..."
-        npx tsx scripts/merge-tag-cache-deltas-to-r2.ts ./tmp
-
-    - name: Verify post-publish contract
-      if: success()
-      env:
-        R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-        R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
-        WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
-      run: |
-        mkdir -p ./tmp/post-publish
-        VERIFY_OUTPUT_PATH=./tmp/post-publish/verify-r2-contract.json \
-          npx tsx scripts/verify-r2-contract.ts
-
-    - name: Upload post-publish verification artifact
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: post-publish-verification
-        path: ./tmp/post-publish/verify-r2-contract.json
-        retention-days: 7
-        if-no-files-found: ignore
-    
-    - name: Report completion
-      run: |
-        echo "✅ Ranking update completed at $(date)"
-        echo "Check the logs above for details on processing time and item counts."
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run_id == ''
+        with:
+          pattern: ranking-*-group-*
+          path: ./tmp
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run_id != ''
+        with:
+          name: validated-publication
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
+          path: ./tmp
+      - name: Validate all groups and aggregate
+        if: inputs.resume_run_id == ''
+        run: npx tsx scripts/aggregate-ranking-results-direct.ts
+      - name: Preserve validated publication before any remote writes
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-publication
+          path: |
+            ./tmp/latest-aggregated-data.json
+            ./tmp/ng-derived-group-*.json
+            ./tmp/tag-cache-delta-group-*.json
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: error
+      - name: Accumulate autocomplete tags
+        id: tags
+        continue-on-error: true
+        run: npx tsx scripts/accumulate-tags.ts
+      - name: Publish ranking
+        id: publish
+        run: npx tsx scripts/write-to-r2.ts
+      - name: Verify published generation and stats
+        id: verify
+        env:
+          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+          VERIFY_OUTPUT_PATH: ./tmp/post-publish/verify-r2-contract.json
+        run: npx tsx scripts/verify-r2-contract.ts
+      - name: Synchronize auxiliary KV copies and derived NG
+        id: kv
+        if: always() && steps.publish.outcome == 'success'
+        continue-on-error: true
+        run: npx tsx scripts/sync-ranking-auxiliary.ts
+      - name: Merge tag cache
+        id: cache
+        if: always() && steps.publish.outcome == 'success'
+        continue-on-error: true
+        env:
+          TAG_CACHE_R2_PREFIX: tag-cache/v1
+        run: npx tsx scripts/merge-tag-cache-deltas-to-r2.ts ./tmp
+      - name: Record auxiliary status
+        if: always() && steps.publish.outcome == 'success'
+        env:
+          AUXILIARY_FAILED: ${{ steps.tags.outcome == 'failure' || steps.kv.outcome == 'failure' || steps.cache.outcome == 'failure' }}
+        run: npx tsx scripts/record-pipeline-status.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: post-publish-verification
+          path: ./tmp/post-publish/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

@@ -42,6 +42,169 @@ describe('Video Stats Updater Worker', () => {
   });
 
   describe('scheduled handler', () => {
+    function largeRankingFixture() {
+      const items = Array.from({ length: 650 }, (_, i) => ({ id: `sm${1000 + i}` }));
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', { items });
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', { items: [] });
+      return items;
+    }
+
+    it('bounds Snapshot requests through body consumption and processes every batch', async () => {
+      const items = largeRankingFixture();
+      let active = 0;
+      let peak = 0;
+      global.fetch = vi.fn(async (url) => {
+        active++;
+        peak = Math.max(peak, active);
+        const filter = JSON.parse(new URL(url).searchParams.get('jsonFilter'));
+        return {
+          ok: true,
+          async json() {
+            await new Promise(resolve => setTimeout(resolve, 1));
+            active--;
+            return { data: filter.filters.map(({ value }) => ({ contentId: value })) };
+          },
+        };
+      });
+      await runScheduled();
+      expect(peak).toBeLessThanOrEqual(6);
+      expect(active).toBe(0);
+      expect(global.fetch).toHaveBeenCalledTimes(13);
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(Object.keys(stats.stats).sort()).toEqual(items.map(item => item.id).sort());
+    });
+
+    it('stops queued Snapshot batches and preserves previous stats on a request failure', async () => {
+      largeRankingFixture();
+      const previous = JSON.stringify(mockVideoStats);
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', previous);
+      let active = 0;
+      global.fetch = vi.fn(async () => {
+        if (global.fetch.mock.calls.length === 1) return { ok: false, status: 503, statusText: 'Unavailable' };
+        active++;
+        return {
+          ok: true,
+          async json() {
+            await new Promise(resolve => setTimeout(resolve, 1));
+            active--;
+            return { data: [] };
+          },
+        };
+      });
+      await expect(runScheduled()).rejects.toThrow('Failed to fetch video stats');
+      expect(global.fetch).toHaveBeenCalledTimes(6);
+      expect(active).toBe(0);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(env.STATS_KV._storage.get('VIDEO_STATS_LATEST')).toBe(previous);
+    });
+
+    function paginatedLegacyFixture() {
+      env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);
+      env.R2_BUCKET._storage.set('rankings/all/24h/all.json', mockRankingData);
+      env.R2_BUCKET._storage.set('rankings/all/hour/all.json', mockRankingDataHour);
+      env.R2_BUCKET._storage.set('rankings/nature/hour/all.json', { items: [{ id: 'sm4' }] });
+      env.R2_BUCKET.list
+        .mockResolvedValueOnce({
+          objects: [
+            { key: 'rankings/all/24h/all.json' },
+            { key: 'rankings/all/hour/all.json' },
+            ...Array.from({ length: 998 }, (_, i) => ({ key: `rankings/all/hour/tags/${i}.json` })),
+          ],
+          truncated: true,
+          cursor: 'page-2',
+        })
+        .mockResolvedValueOnce({
+          objects: [{ key: 'rankings/nature/hour/all.json' }],
+          truncated: false,
+        });
+      setupSnapshotAPIMock({
+        'sm2,sm3': { data: ['sm2', 'sm3'].map(contentId => ({ contentId })) },
+        'sm1,sm2,sm3': { data: ['sm1', 'sm2', 'sm3'].map(contentId => ({ contentId })) },
+        'sm1,sm2,sm3,sm4': { data: ['sm1', 'sm2', 'sm3', 'sm4'].map(contentId => ({ contentId })) },
+      });
+    }
+
+    it('includes legacy rankings after the first 1000 R2 objects', async () => {
+      paginatedLegacyFixture();
+      await runScheduled();
+      expect(env.R2_BUCKET.list).toHaveBeenCalledTimes(2);
+      expect(env.R2_BUCKET.list).toHaveBeenLastCalledWith({ prefix: 'rankings/', limit: 1000, cursor: 'page-2' });
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(stats.metadata.totalVideos).toBe(4);
+      expect(stats.stats).toHaveProperty('sm4');
+    });
+
+    it('preserves previous stats if a later discovery page fails', async () => {
+      paginatedLegacyFixture();
+      env.R2_BUCKET.list.mockReset()
+        .mockResolvedValueOnce({ objects: [{ key: 'rankings/all/hour/all.json' }], truncated: true, cursor: 'next' })
+        .mockRejectedValueOnce(new Error('Listing unavailable'));
+      const previous = JSON.stringify({ metadata: { totalVideos: 3 }, stats: { sm1: {} } });
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', previous);
+      await expect(runScheduled()).rejects.toThrow('Listing unavailable');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(env.STATS_KV._storage.get('VIDEO_STATS_LATEST')).toBe(previous);
+    });
+
+    it.each([undefined, 'repeated'])('rejects invalid discovery cursor %s instead of publishing a partial list', async (cursor) => {
+      paginatedLegacyFixture();
+      env.R2_BUCKET.list.mockReset().mockResolvedValue({
+        objects: [{ key: 'rankings/all/hour/all.json' }], truncated: true, cursor,
+      });
+      await expect(runScheduled()).rejects.toThrow('Invalid R2 listing cursor');
+      expect(env.R2_BUCKET.list.mock.calls.length).toBeLessThanOrEqual(2);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    function generationFixture() {
+      const manifest = { version: 1, generation: '123-1', counts: { 'all/24h': 2, 'all/hour': 2 },
+        collectedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
+      env.R2_BUCKET._storage.set('rankings/current.json', manifest);
+      env.R2_BUCKET._storage.set('rankings/generations/123-1/metadata.json',
+        { version: 1, updatedAt: manifest.collectedAt, tagsByGenrePeriod: { 'all/24h': {}, 'all/hour': {} } });
+      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/24h/all.json', mockRankingData);
+      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/hour/all.json', mockRankingDataHour);
+      setupSnapshotAPIMock({ 'sm1,sm2,sm3': { data: ['sm1', 'sm2', 'sm3'].map(contentId => ({ contentId })) } });
+      return manifest;
+    }
+
+    it('reads only the pinned generation and records its stats source', async () => {
+      generationFixture();
+      await runScheduled();
+      expect(env.R2_BUCKET.list).not.toHaveBeenCalled();
+      expect(env.R2_BUCKET.get).not.toHaveBeenCalledWith('rankings/all/24h/all.json');
+      const source = JSON.parse(env.R2_BUCKET._storage.get('pipeline/video-stats-source.json'));
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(source.generation).toBe('123-1');
+      expect(source.updatedAt).toBe(stats.metadata.updatedAt);
+    });
+
+    it('does not replace good stats if a published object is missing', async () => {
+      generationFixture();
+      env.R2_BUCKET._storage.delete('rankings/generations/123-1/all/hour/all.json');
+      await expect(runScheduled()).rejects.toThrow('Published ranking missing');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('rejects a generation switch during a stats fetch', async () => {
+      const manifest = generationFixture();
+      const fetchStats = global.fetch;
+      global.fetch = vi.fn(async (...args) => {
+        env.R2_BUCKET._storage.set('rankings/current.json', { ...manifest, generation: '124-1' });
+        return fetchStats(...args);
+      });
+      await expect(runScheduled()).rejects.toThrow('generation changed');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('preserves previous stats after a count collapse', async () => {
+      generationFixture();
+      env.STATS_KV._storage.set('VIDEO_STATS_LATEST', JSON.stringify({ metadata: { totalVideos: 100 } }));
+      await expect(runScheduled()).rejects.toThrow('50%');
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
     it('should fetch ranking data from R2 and update video stats in KV', async () => {
       // Setup R2 mock data
       env.R2_BUCKET._storage.set('rankings/metadata.json', mockRankingMetadata);

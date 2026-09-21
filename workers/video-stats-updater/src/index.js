@@ -5,11 +5,16 @@ import {
   batchArray 
 } from './utils.js';
 import { readR2Text } from '../../utils/r2-json.js';
+import { currentGeneration, rankingKey, STATS_SOURCE_KEY } from '../../utils/ranking-generation.js';
+import { acquireLease } from '../../utils/r2-lease.js';
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js';
+
+import { isWorkerAuthorized, verifyRanking } from './verify-ranking.js';
 
 // Constants
 const STATS_KEY = 'VIDEO_STATS_LATEST';
 const BATCH_SIZE = 50; // Snapshot API batch size
+const SNAPSHOT_CONCURRENCY = 6;
 
 // Default metadata when not found in R2
 const DEFAULT_METADATA = {
@@ -47,13 +52,14 @@ function reportR2ReadFailure(error, {
  * @param {R2Bucket} r2Bucket - R2 bucket binding
  * @returns {Promise<Object>} Ranking metadata
  */
-async function fetchRankingMetadata(r2Bucket) {
-  const r2Key = 'rankings/metadata.json';
+async function fetchRankingMetadata(r2Bucket, manifest) {
+  const r2Key = rankingKey(manifest, 'rankings/metadata.json');
 
   try {
     const metadataObject = await r2Bucket.get(r2Key);
     
     if (!metadataObject) {
+      if (manifest) throw new Error('Published ranking metadata is missing');
       console.warn('No metadata found in R2, using defaults');
       return DEFAULT_METADATA;
     }
@@ -113,6 +119,7 @@ async function fetchRankingMetadata(r2Bucket) {
     
     return {
       ...metadata,
+      publication: manifest,
       genres,
       periods
     };
@@ -140,26 +147,33 @@ async function discoverAvailableData(r2Bucket) {
   try {
     console.log('Discovering available data in R2...');
     
-    // List objects with rankings/ prefix
-    const list = await r2Bucket.list({
-      prefix: 'rankings/',
-      limit: 1000
-    });
-    
     const genres = new Set();
     const periods = new Set();
     const availablePaths = [];
-    
-    for (const object of list.objects) {
-      // Parse path like rankings/all/24h/all.json
-      const parts = object.key.split('/');
-      if (parts.length >= 4 && parts[3] === 'all.json') {
-        const genre = parts[1];
-        const period = parts[2];
-        genres.add(genre);
-        periods.add(period);
-        availablePaths.push(object.key);
+    const seenCursors = new Set();
+    let cursor;
+
+    // Historical tag objects can fill a page before later genres appear.
+    while (true) {
+      const list = await r2Bucket.list({
+        prefix: 'rankings/',
+        limit: 1000,
+        ...(cursor ? { cursor } : {}),
+      });
+      for (const object of list.objects) {
+        const parts = object.key.split('/');
+        if (parts.length === 4 && parts[3] === 'all.json') {
+          genres.add(parts[1]);
+          periods.add(parts[2]);
+          availablePaths.push(object.key);
+        }
       }
+      if (!list.truncated) break;
+      if (typeof list.cursor !== 'string' || !list.cursor || seenCursors.has(list.cursor)) {
+        throw new Error('Invalid R2 listing cursor');
+      }
+      cursor = list.cursor;
+      seenCursors.add(cursor);
     }
     
     console.log(`Found ${genres.size} genres: ${Array.from(genres).join(', ')}`);
@@ -182,11 +196,7 @@ async function discoverAvailableData(r2Bucket) {
         worker_version: 'video-stats-updater',
       },
     });
-    return {
-      genres: DEFAULT_METADATA.genres,
-      periods: DEFAULT_METADATA.periods,
-      availablePaths: []
-    };
+    throw error;
   }
 }
 
@@ -208,7 +218,9 @@ async function fetchRankingData(r2Bucket, metadata) {
   };
   
   // First, try to discover what's actually available
-  const discovered = await discoverAvailableData(r2Bucket);
+  const discovered = metadata.publication
+    ? { genres: metadata.genres, periods: metadata.periods, availablePaths: Object.keys(metadata.publication.counts) }
+    : await discoverAvailableData(r2Bucket);
   rankingData.metadata.availablePathsCount = discovered.availablePaths.length;
   const genresToFetch = discovered.genres.length > 0 ? discovered.genres : metadata.genres;
   const periodsToFetch = discovered.periods.length > 0 ? discovered.periods : metadata.periods;
@@ -224,7 +236,7 @@ async function fetchRankingData(r2Bucket, metadata) {
         (async () => {
           try {
             // New path format: rankings/{genre}/{period}/all.json
-            const r2Key = `rankings/${genre}/${period}/all.json`;
+            const r2Key = rankingKey(metadata.publication, `rankings/${genre}/${period}/all.json`);
             console.log(`Attempting to fetch: ${r2Key}`);
             
             const dataObject = await r2Bucket.get(r2Key);
@@ -277,6 +289,7 @@ async function fetchRankingData(r2Bucket, metadata) {
               
               console.log(`✓ Loaded ${data.items?.length || 0} items for ${genre}/${period}`);
             } else {
+              if (metadata.publication) throw new Error(`Published ranking missing: ${r2Key}`);
               console.log(`✗ No data found for ${genre}/${period}`);
             }
           } catch (error) {
@@ -323,12 +336,12 @@ async function fetchVideoStats(videoIds, apiKey) {
   
   console.log(`Fetching stats for ${videoIds.length} videos in ${batches.length} batches`);
   
-  // Process batches in parallel
-  const batchPromises = batches.map(async (batch, index) => {
+  const fetchBatch = async (batch, index) => {
     try {
       const url = buildSnapshotAPIUrl(batch);
       
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(20_000),
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
           'Accept': 'application/json',
@@ -365,13 +378,22 @@ async function fetchVideoStats(videoIds, apiKey) {
       });
       throw error;
     }
-  });
-  
-  // Merge all batch results
-  const batchResults = await Promise.all(batchPromises);
-  batchResults.forEach(batchStats => {
-    Object.assign(allStats, batchStats);
-  });
+  };
+
+  // Start timeouts only when a slot is available, and hold it through body consumption.
+  let nextBatch = 0;
+  let firstError;
+  await Promise.all(Array.from({ length: Math.min(SNAPSHOT_CONCURRENCY, batches.length) }, async () => {
+    while (!firstError && nextBatch < batches.length) {
+      const index = nextBatch++;
+      try {
+        Object.assign(allStats, await fetchBatch(batches[index], index));
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+  }));
+  if (firstError) throw firstError;
   
   return allStats;
 }
@@ -383,9 +405,18 @@ async function processVideoStatsUpdate(env) {
   console.log('=== Starting video stats update ===');
   console.log(`Time: ${new Date().toISOString()}`);
   
+  let lease;
   try {
+      const manifest = await currentGeneration(env.R2_BUCKET).catch(error => {
+        reportR2ReadFailure(error, { upstreamKind: 'r2-metadata', r2Key: 'rankings/current.json', parseStage: 'manifest-read' });
+        throw new Error('Failed to fetch ranking metadata manifest', { cause: error });
+      });
+      if (manifest) {
+        lease = await acquireLease(env.R2_BUCKET, 'pipeline/stats-lease.json', 5 * 60_000);
+        if (!lease) return { success: false, skipped: 'already-running' };
+      }
       // 1. Fetch ranking metadata from R2
-      const metadata = await fetchRankingMetadata(env.R2_BUCKET);
+      const metadata = await fetchRankingMetadata(env.R2_BUCKET, manifest);
       console.log(`Using metadata - Genres: ${metadata.genres.join(', ')}, Periods: ${metadata.periods.join(', ')}`);
       
       // 2. Fetch all ranking data from R2
@@ -415,7 +446,18 @@ async function processVideoStatsUpdate(env) {
       };
 
       // 6. Write to KV
+      const previous = await env.STATS_KV.get(STATS_KEY, 'json');
+      if (!statsData.metadata.totalVideos || (previous?.metadata?.totalVideos > 0 &&
+          statsData.metadata.totalVideos < previous.metadata.totalVideos * 0.5)) throw new Error('Video stats count dropped below 50%');
+      if (manifest) {
+        await lease.assertOwned();
+        if ((await currentGeneration(env.R2_BUCKET))?.generation !== manifest.generation) throw new Error('Ranking generation changed during stats refresh');
+      }
       await env.STATS_KV.put(STATS_KEY, JSON.stringify(statsData));
+      if (manifest) await env.R2_BUCKET.put(STATS_SOURCE_KEY, JSON.stringify({
+        generation: manifest.generation, collectedAt: manifest.collectedAt,
+        updatedAt: statsData.metadata.updatedAt, totalVideos: statsData.metadata.totalVideos,
+      }));
 
       console.log(`✓ Successfully updated stats for ${statsData.metadata.totalVideos} videos`);
       console.log('=== Video stats update completed ===');
@@ -446,6 +488,8 @@ async function processVideoStatsUpdate(env) {
       } else {
         throw error;
       }
+    } finally {
+      if (lease) await lease.release();
     }
 }
 
@@ -473,12 +517,15 @@ const handler = {
   
   async fetch(request, env, _ctx) {
     const url = new URL(request.url);
+
+    if (url.pathname === '/verify-ranking') {
+      return verifyRanking(request, env);
+    }
     
     // Manual trigger endpoint with auth
     if (url.pathname === '/trigger' && request.method === 'POST') {
       // Check authorization
-      const authHeader = request.headers.get('Authorization');
-      if (!authHeader || authHeader !== `Bearer ${env.WORKER_AUTH_KEY}`) {
+      if (!isWorkerAuthorized(request, env.WORKER_AUTH_KEY)) {
         return new Response('Unauthorized', { status: 401 });
       }
       

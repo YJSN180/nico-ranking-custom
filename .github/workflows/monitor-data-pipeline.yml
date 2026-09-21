@@ -12,11 +12,11 @@ concurrency:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
       issues: write
-      pull-requests: write
 
     steps:
       - name: Checkout repository
@@ -46,15 +46,26 @@ jobs:
           echo "previous_conclusion=$PREVIOUS_CONCLUSION" >> "$GITHUB_OUTPUT"
 
           if [ -n "$PREVIOUS_SUCCESS_RUN_ID" ]; then
-            gh run download "$PREVIOUS_SUCCESS_RUN_ID" --name data-pipeline-baseline --dir ./tmp/monitor || true
+            gh run download "$PREVIOUS_SUCCESS_RUN_ID" --name data-pipeline-baseline --dir ./tmp/monitor/previous
           fi
 
+      - name: Verify production gateway against current R2 ranking (read only)
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+        run: npx tsx scripts/check-ranking-gateway.ts
+
       - name: Check data pipeline health
+        if: ${{ !cancelled() }}
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_KV_NAMESPACE_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
-          VIDEO_STATS_BASELINE_FILE: ./tmp/monitor/data-pipeline-baseline.json
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          VIDEO_STATS_BASELINE_FILE: ./tmp/monitor/previous/current-baseline.json
           VIDEO_STATS_OUTPUT_FILE: ./tmp/monitor/current-baseline.json
           VIDEO_STATS_MAX_AGE_MINUTES: '15'
         run: |

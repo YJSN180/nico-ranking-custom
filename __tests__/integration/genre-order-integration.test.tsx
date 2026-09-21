@@ -127,7 +127,7 @@ describe('Genre Order Integration', () => {
       expect(screen.getByText('適用')).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }))
+    fireEvent.click(screen.getByRole('button', { name: '設定を閉じる' }))
 
     expect(confirmMock).toHaveBeenCalledWith('変更を破棄してもよろしいですか？')
     expect(onClose).not.toHaveBeenCalled()
