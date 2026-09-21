@@ -6,7 +6,7 @@ import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../..
 import { commitBackfill, createLiveBackfillDeps, emptyDeltas, runBackfillStep, type BackfillCursor, type BackfillDeltas } from './backfill'
 import { runPoll, type RunMode, type RunResult } from './poll'
 import { createLiveDeps } from './sources'
-import type { KvLike } from './state'
+import { loadState, type KvLike } from './state'
 
 interface Env {
   LQNG_KV: KvLike
@@ -48,6 +48,30 @@ const handler = {
     const url = new URL(request.url)
     if (url.pathname === '/health') {
       return Response.json({ status: 'ok', time: new Date().toISOString() })
+    }
+    // 運用確認用（認証なし）。件数と直近の実行サマリだけを返し、ID・名前・タイトルは含めない
+    if (url.pathname === '/status') {
+      const nowIso = new Date().toISOString()
+      const state = await loadState(env.LQNG_KV, nowIso)
+      const dayAgo = Date.now() - 24 * 3600_000
+      const eventCounts: Record<string, number> = {}
+      for (const e of state.events.items) {
+        if (new Date(e.at).getTime() < dayAgo) break
+        eventCounts[e.kind] = (eventCounts[e.kind] ?? 0) + 1
+      }
+      const lastRun = state.events.lastRun
+      return Response.json(
+        {
+          time: nowIso,
+          config: { enabled: state.config.enabled, pollTags: state.config.pollTags.length, titleNeedles: state.config.titleNeedles.length, keywordNeedles: state.config.keywordNeedles.length, tagGroups: state.config.tagGroups.length, allowlistAuthors: state.config.allowlist.authorIds.length },
+          tracking: { lastPollAt: state.tracking.lastPollAt, lastSweepDate: state.tracking.lastSweepDate, authors: Object.keys(state.tracking.authors).length, pending: state.tracking.pending.length },
+          verdicts: { authors: Object.keys(state.verdicts.authors).length, videos: Object.keys(state.verdicts.videos).length, updatedAt: state.verdicts.updatedAt },
+          lastRun: lastRun ? { at: lastRun.at, mode: lastRun.mode, newVideos: lastRun.newVideos, enriched: lastRun.enriched, usersChecked: lastRun.usersChecked, subrequests: lastRun.subrequests, kvWrites: lastRun.kvWrites, note: lastRun.note ?? null } : null,
+          eventsLast24h: eventCounts,
+          lockHeld: (await env.LQNG_KV.get('lqng:lock')) !== null,
+        },
+        { headers: { 'Cache-Control': 'no-store' } }
+      )
     }
     // 手動実行（デバッグ・初回投入用）。WORKER_AUTH_KEY で保護
     if (url.pathname === '/trigger' && request.method === 'POST') {
