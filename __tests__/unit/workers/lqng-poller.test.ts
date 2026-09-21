@@ -222,7 +222,7 @@ describe('lqng-poller runPoll', () => {
     expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)!.items.some((e) => e.kind === 'access_limited')).toBe(true)
   })
 
-  it('スイープは前日分にタイトルルールだけを掛け、同じ日は二度走らない', async () => {
+  it('スイープは前日分を取り込んで判定し、同じ日は二度走らない', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     const sweep = vi.fn(async () => [video({ id: 'sm50', title: 'テ ス ト マ ン', authorId: '3001', registeredAt: at(-24 * 60) }), video({ id: 'sm51', title: '無関係', authorId: '3002' })])
     const r1 = await runPoll(m.kv, deps({ fetchSweepVideos: sweep }), 'sweep')
@@ -236,7 +236,7 @@ describe('lqng-poller runPoll', () => {
     expect(r2.skipped).toBe('already_swept')
   })
 
-  it('同じ動画は二度取り込まず、差分の since は前回実行の 10 分前になる', async () => {
+  it('同じ動画は二度取り込まず、差分の since は前回実行から重なり分（6 時間）前になる', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     const fetchNew = vi.fn(async () => [video({ id: 'sm60' })])
     await runPoll(m.kv, deps({ fetchNewVideos: fetchNew }), 'poll')

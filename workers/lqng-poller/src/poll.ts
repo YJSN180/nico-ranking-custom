@@ -30,8 +30,12 @@ export const LIMITS = {
   userRecheckHours: 6,
   /** 補完に失敗した動画を諦めるまでの試行回数 */
   pendingMaxAttempts: 3,
-  /** 差分取得の重なり（取りこぼし防止） */
-  sinceOverlapMinutes: 10,
+  /**
+   * 差分取得の重なり。nvapi の検索インデックスには投稿から数十分以上の反映遅れがあり、
+   * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は isKnownVideo で
+   * 除外されるので、6 時間まで広げても取得ページ数（最大 3）は変わらない
+   */
+  sinceOverlapMinutes: 6 * 60,
   /** 初回実行で遡る時間 */
   // 初回（lastPollAt 無し）だけ直近 1 日を対象にする。取得は新しい順で最大 3 ページ（300 件）なので
   // 予算は変わらず、投入直後から当日分の連投（HK / C 系）を拾える
@@ -382,12 +386,12 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
       if (state.tracking.lastSweepDate === date) return { ...base, skipped: 'already_swept' }
       session.spend(LIMITS.nvapiCost)
       const videos = await deps.fetchSweepVideos(state.config.sweepGenre, date)
-      // スイープは追跡情報が無いのでタイトルルールだけ（authorId は昇格の宛先に使う）
-      for (const v of videos) {
-        if (session.isKnownVideo(v.id)) continue
-        session.newVideos++
-        session.applyVideo({ id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null })
-      }
+      // 前日分をポーリングと同じく追跡に取り込む（差分取得の取りこぼしに対する日次の安全網）。
+      // 取り込み済みの動画は除外されるので、通常は少数だけが新たに追跡される
+      session.ingest(videos)
+      await session.enrichPending()
+      await session.checkAuthors()
+      session.expireAndPrune()
       state.tracking.lastSweepDate = date
     } else {
       const since = state.tracking.lastPollAt
