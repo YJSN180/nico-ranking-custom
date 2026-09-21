@@ -6,7 +6,7 @@ import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObse
 import { AccessLimitedError, type PollDeps, type SourceVideo } from './sources'
 import {
   acquireLock,
-  loadState,
+  loadEnabled, loadState,
   pushEvent,
   releaseLock,
   saveState,
@@ -351,11 +351,14 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   const now = deps.now()
   const nowIso = now.toISOString()
   const base: RunResult = { mode, skipped: null, newVideos: 0, enriched: 0, usersChecked: 0, subrequests: 0, kvWrites: 0 }
+  // 無効時はロックを取らずに抜ける（KV の書き込み枠はアカウント共通なので消費しない）
+  if (!(await loadEnabled(kv))) return { ...base, skipped: 'disabled' }
   if (!(await acquireLock(kv, nowIso, LIMITS.lockTtlSeconds))) return { ...base, skipped: 'locked' }
   try {
     const state = await loadState(kv, nowIso)
     const before = { verdicts: JSON.stringify(state.verdicts), events: JSON.stringify(state.events) }
     const session = new Session(state, deps, now)
+    // ロック取得後に設定が変わっていた場合の二重ガード
     if (!state.config.enabled) return { ...base, skipped: 'disabled' }
 
     if (mode === 'sweep') {

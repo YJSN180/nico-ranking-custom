@@ -69,8 +69,8 @@ describe('lqng-poller runPoll', () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, enabled: false } })
     const r = await runPoll(m.kv, deps(), 'poll')
     expect(r.skipped).toBe('disabled')
-    expect(m.puts.filter((k) => k !== LQNG_KV_KEYS.lock)).toEqual([])
-    expect(m.store.has(LQNG_KV_KEYS.lock)).toBe(false) // ロックは解放される
+    expect(m.puts).toEqual([]) // ロックも含めて一切書かない（KV 書き込み枠を消費しない）
+    expect(m.store.has(LQNG_KV_KEYS.lock)).toBe(false)
   })
 
   it('ロックが残っていればスキップする', async () => {

@@ -134,6 +134,11 @@ export interface LoadedState {
   events: LqngEvents
 }
 
+/** 有効フラグだけを読む。無効時にロック取得の KV 書き込み（1 日 96 回）を避けるための軽量読み */
+export async function loadEnabled(kv: KvLike): Promise<boolean> {
+  return normalizeLqngConfig(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.config), null)).enabled
+}
+
 export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
   const [config, verdicts, tracking, events] = await Promise.all([
     kv.get(LQNG_KV_KEYS.config),
