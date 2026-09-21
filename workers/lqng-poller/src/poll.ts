@@ -33,7 +33,9 @@ export const LIMITS = {
   /** 差分取得の重なり（取りこぼし防止） */
   sinceOverlapMinutes: 10,
   /** 初回実行で遡る時間 */
-  firstPollLookbackMinutes: 30,
+  // 初回（lastPollAt 無し）だけ直近 1 日を対象にする。取得は新しい順で最大 3 ページ（300 件）なので
+  // 予算は変わらず、投入直後から当日分の連投（HK / C 系）を拾える
+  firstPollLookbackMinutes: 24 * 60,
   /** 動画単位の判定を保持する日数（投稿者 NG は恒久） */
   videoVerdictRetentionDays: 90,
   releasedRetentionDays: 7,
