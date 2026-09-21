@@ -1,7 +1,7 @@
 // ポーリング本体（差分取得 → 補完 → 投稿者確認 → 判定 → 保留の期限処理 → 保存）
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
 // 1 回の実行で: 外部呼び出し ≤ subrequestBudget、KV 書き込み ≤ 4 キー。
-import { decideHold, evaluateDeletion, evaluateVideo } from '../../../lib/lqng/rules'
+import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { AccessLimitedError, type PollDeps, type SourceVideo } from './sources'
 import {
@@ -229,9 +229,18 @@ class Session {
     }
   }
 
-  /** getthumbinfo でロック状態を補完し、再判定する */
+  /** 投稿頻度 C に当たっている投稿者か（待ち行列の優先順位に使う） */
+  isFrequentAuthor(authorId: string | null): boolean {
+    const author = authorId ? this.state.tracking.authors[authorId] : undefined
+    return !!author && isFrequent(author.posts.map((p) => p.at), this.config.freq)
+  }
+
+  /** getthumbinfo でロック状態を補完し、再判定する。連投中の投稿者の動画を先に処理する */
   async enrichPending(): Promise<void> {
     const pending = this.state.tracking.pending
+      .map((item, index) => ({ item, index, priority: this.isFrequentAuthor(item.authorId) ? 0 : 1 }))
+      .sort((a, b) => a.priority - b.priority || a.index - b.index)
+      .map((x) => x.item)
     const keep: typeof pending = []
     let processed = 0
     for (let i = 0; i < pending.length; i++) {
@@ -275,10 +284,14 @@ class Session {
   /** ユーザー情報 API で存在・フォロワー数を確認し、削除なら A∧C を判定する */
   async checkAuthors(): Promise<void> {
     const recheckBefore = this.now.getTime() - LIMITS.userRecheckHours * HOUR_MS
+    // 連投中（C 該当）の投稿者を最優先にする。初回取り込みで待ち行列が長いときに、
+    // 新しい連投の A∧C 判定が数時間後回しになるのを防ぐ
     const candidates = Object.values(this.state.tracking.authors)
       .filter((a) => isUserId(a.authorId) && a.status !== 'deleted')
       .filter((a) => a.lastCheckedAt === null || new Date(a.lastCheckedAt).getTime() <= recheckBefore)
-      .sort((a, b) => (a.lastCheckedAt ?? '').localeCompare(b.lastCheckedAt ?? '') || a.firstSeenAt.localeCompare(b.firstSeenAt))
+      .map((a) => ({ a, priority: this.isFrequentAuthor(a.authorId) ? 0 : 1 }))
+      .sort((x, y) => x.priority - y.priority || (x.a.lastCheckedAt ?? '').localeCompare(y.a.lastCheckedAt ?? '') || x.a.firstSeenAt.localeCompare(y.a.firstSeenAt))
+      .map((x) => x.a)
       .slice(0, LIMITS.usersPerRun)
     for (const author of candidates) {
       if (!this.budgetLeft()) break

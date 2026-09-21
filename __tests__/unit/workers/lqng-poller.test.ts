@@ -65,6 +65,24 @@ function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
 }
 
 describe('lqng-poller runPoll', () => {
+  it('連投中の投稿者は待ち行列が長くても先に存在確認・補完される', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // 通常の投稿者 12 人（各 1 本、先に観測）と、最後に観測された連投者 1 人（4 本を 6 分以内）
+    const normal = Array.from({ length: 12 }, (_, i) => video({ id: `n${i}`, authorId: `${3000 + i}`, registeredAt: at(-60 - i) }))
+    const burst = Array.from({ length: 4 }, (_, i) => video({ id: `b${i}`, authorId: '4000', registeredAt: at(-2 - i) }))
+    const fetchUserInfo = vi.fn(async (id: string) => (id === '4000' ? ({ status: 'deleted', followerCount: null, nickname: null } as UserInfo) : existing(100)))
+    const fetchThumbInfo = vi.fn(async () => okThumb())
+    const d = deps({ fetchNewVideos: vi.fn(async () => [...normal, ...burst]), fetchUserInfo, fetchThumbInfo })
+    const r = await runPoll(m.kv, d, 'poll')
+    expect(r.skipped).toBeNull()
+    // 存在確認は 1 回 10 人まで。連投者 4000 が先頭に来る
+    expect(vi.mocked(fetchUserInfo).mock.calls[0]?.[0]).toBe('4000')
+    // 補完も連投者の動画から始まる
+    expect(vi.mocked(fetchThumbInfo).mock.calls.slice(0, 4).map((c) => c[0])).toEqual(['b0', 'b1', 'b2', 'b3'])
+    // 削除済み ∧ 連投 → 同じ実行内で投稿者 NG
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['4000']?.reasons).toEqual(['A_C'])
+  })
+
   it('設定が無効なら何も書かずに終了する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, enabled: false } })
     const r = await runPoll(m.kv, deps(), 'poll')
