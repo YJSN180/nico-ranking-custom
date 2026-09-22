@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { clearFreshCache, fetchFreshItems, freshQueryFor, mergeFreshIntoRealtime } from '@/lib/search/fresh-segment'
+import { clearFreshCache, fetchFreshItems, freshQueryFor, mergeFreshIntoRealtime, FRESH_MAX_PAGES } from '@/lib/search/fresh-segment'
 import type { SearchConditions } from '@/lib/search/snapshot-search'
 import type { RankingItem } from '@/types/ranking'
 
 const base = (over: Partial<SearchConditions> = {}): SearchConditions => ({ q: '初音ミク', targets: 'keyword', contentType: 'all', sort: '-startTime', genres: [], tagConditions: [], page: 1, ...over })
 
-const pageHtml = (items: Array<Record<string, unknown>>) => {
-  const payload = { data: { response: { $getSearchVideoV2: { data: { totalCount: items.length, hasNext: false, items } } } } }
+const pageHtml = (items: Array<Record<string, unknown>>, hasNext = false) => {
+  const payload = { data: { response: { $getSearchVideoV2: { data: { totalCount: items.length, hasNext, items } } } } }
   return `<html><head><meta name="server-response" content="${JSON.stringify(payload).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"></head></html>`
 }
 const item = (id: string, registeredAt: string, view = 10) => ({ id, title: `t-${id}`, registeredAt, duration: 30, count: { view, comment: 0, mylist: 0, like: 0 }, owner: { ownerType: 'user', id: '1001', name: 'n', iconUrl: 'https://i/1.jpg' } })
@@ -68,6 +68,24 @@ describe('fetchFreshItems', () => {
     // すべて は long のキャッシュを流用せず、動画+ショートの 2 ページを取り直す
     await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(paths().slice(3).sort()).toEqual(['search', 'search_shorts'])
+  })
+
+  it('1 ページ目が全件境界より新しく続きがあるときだけ、2 ページ目以降を読み足す（読み足しの失敗は無視）', async () => {
+    const boundary = '2026-09-21T04:28:31+09:00'
+    const newer = (id: string) => item(id, '2026-09-22T06:00:00+09:00')
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const page = new URL(String(url)).searchParams.get('page') ?? '1'
+      if (page === '1') return { ok: true, text: async () => pageHtml([newer('p1a'), newer('p1b')], true) } as unknown as Response
+      if (page === '2') return { ok: true, text: async () => pageHtml([newer('p2a'), item('old', '2026-09-20T00:00:00+09:00')], true) } as unknown as Response
+      return { ok: false, status: 503 } as unknown as Response
+    })
+    const items = await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(items.map((it) => it.id)).toEqual(['p1a', 'p1b', 'p2a'])
+    expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES)
+    // 1 ページ目に境界より古い動画が混じれば読み足さない
+    const single = vi.fn(async () => ({ ok: true, text: async () => pageHtml([newer('a'), item('old', '2026-09-20T00:00:00+09:00')], true) }) as unknown as Response)
+    await fetchFreshItems(base({ contentType: 'short', q: 'other' }), boundary, { fetchImpl: single as unknown as typeof fetch, now: 1_000 })
+    expect(single).toHaveBeenCalledTimes(1)
   })
 
   it('HTTP エラー・構造変化は投げる', async () => {
