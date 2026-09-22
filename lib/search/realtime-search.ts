@@ -238,6 +238,9 @@ export async function fetchRealtimeSegment(
   /** 区間全体の時間予算。超えたら残りページを諦めて throw（呼び出し側で Snapshot 単独に縮退） */
   overallSignal?: AbortSignal
 ): Promise<RealtimeSegment> {
+  // nvapi の動画検索はショート（ss）を返さない。ショートだけの検索では nvapi 区間は空で、
+  // 最新区間（本家のショートページ、lib/search/fresh-segment.ts）だけがリアルタイム区間になる
+  if (conditions.contentType === 'short') return { items: [], upstreamTotal: 0, truncated: false }
   const collected: RankingItem[] = []
   let upstreamTotal = 0
   let truncated = false

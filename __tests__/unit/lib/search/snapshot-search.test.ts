@@ -42,6 +42,13 @@ describe('parseSearchConditions', () => {
     const conditions = parseSearchConditions(new URLSearchParams('viewsMin=-100'))
     expect(conditions.viewsMin).toBeUndefined()
   })
+
+  it('動画の種類は long / short だけを受け付け、未指定・不正値は all', () => {
+    expect(parseSearchConditions(new URLSearchParams()).contentType).toBe('all')
+    expect(parseSearchConditions(new URLSearchParams('contentType=short')).contentType).toBe('short')
+    expect(parseSearchConditions(new URLSearchParams('contentType=long')).contentType).toBe('long')
+    expect(parseSearchConditions(new URLSearchParams('contentType=nonsense')).contentType).toBe('all')
+  })
 })
 
 describe('buildSnapshotSearchUrl', () => {
@@ -78,6 +85,12 @@ describe('buildSnapshotSearchUrl', () => {
     const conditions = parseSearchConditions(new URLSearchParams('q=test&page=3'))
     const url = new URL(buildSnapshotSearchUrl(conditions))
     expect(url.searchParams.get('_offset')).toBe(String(2 * SEARCH_PAGE_SIZE))
+  })
+
+  it('動画の種類は索引側の filters[contentType] で絞る（all は指定なし）', () => {
+    expect(new URL(buildSnapshotSearchUrl(parseSearchConditions(new URLSearchParams('q=test')))).searchParams.get('filters[contentType][0]')).toBeNull()
+    expect(new URL(buildSnapshotSearchUrl(parseSearchConditions(new URLSearchParams('q=test&contentType=short')))).searchParams.get('filters[contentType][0]')).toBe('short')
+    expect(new URL(buildSnapshotSearchUrl(parseSearchConditions(new URLSearchParams('q=test&contentType=long')))).searchParams.get('filters[contentType][0]')).toBe('long')
   })
 })
 
@@ -244,6 +257,12 @@ describe('fetchSnapshotNewestStartTime', () => {
     expect(url.searchParams.get('_sort')).toBe('-startTime')
     expect(url.searchParams.get('_limit')).toBe('1')
     expect(url.searchParams.get('_offset')).toBe('0')
+  })
+
+  it('動画の種類の絞り込みも境界の問い合わせに引き継ぐ', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) }) as unknown as Response)
+    await fetchSnapshotNewestStartTime(parseSearchConditions(new URLSearchParams({ q: 'x', contentType: 'short' })), fetchImpl as unknown as typeof fetch)
+    expect(new URL(String(vi.mocked(fetchImpl).mock.calls[0]?.[0])).searchParams.get('filters[contentType][0]')).toBe('short')
   })
 
   it('該当なしは null、上流エラーは throw', async () => {

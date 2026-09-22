@@ -3,7 +3,7 @@ import { clearFreshCache, fetchFreshItems, freshQueryFor, mergeFreshIntoRealtime
 import type { SearchConditions } from '@/lib/search/snapshot-search'
 import type { RankingItem } from '@/types/ranking'
 
-const base = (over: Partial<SearchConditions> = {}): SearchConditions => ({ q: '初音ミク', targets: 'keyword', sort: '-startTime', genres: [], tagConditions: [], page: 1, ...over })
+const base = (over: Partial<SearchConditions> = {}): SearchConditions => ({ q: '初音ミク', targets: 'keyword', contentType: 'all', sort: '-startTime', genres: [], tagConditions: [], page: 1, ...over })
 
 const pageHtml = (items: Array<Record<string, unknown>>) => {
   const payload = { data: { response: { $getSearchVideoV2: { data: { totalCount: items.length, hasNext: false, items } } } } }
@@ -52,6 +52,22 @@ describe('fetchFreshItems', () => {
     const dated = await fetchFreshItems(base({ dateTo: '2026-09-22T05:30:00+09:00' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })
     expect(dated.map((it) => it.id)).toEqual(['b'])
     expect(await fetchFreshItems(base({ genres: ['ゲーム'] }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })).toEqual([])
+  })
+
+  it('動画の種類で絞る検索では該当する種別のページだけを取り、種類ごとに別キャッシュにする', async () => {
+    const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('n1', '2026-09-22T06:42:18+09:00')]) }) as unknown as Response)
+    const boundary = '2026-09-21T04:28:31+09:00'
+    const paths = () => vi.mocked(fetchImpl).mock.calls.map((c) => new URL(String(c[0])).pathname.split('/')[1])
+    await fetchFreshItems(base({ contentType: 'long' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(paths()).toEqual(['search'])
+    await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(paths()).toEqual(['search', 'search_shorts'])
+    // タグ検索のショートは /tag_shorts
+    await fetchFreshItems(base({ targets: 'tag', contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(paths()).toEqual(['search', 'search_shorts', 'tag_shorts'])
+    // すべて は long のキャッシュを流用せず、動画+ショートの 2 ページを取り直す
+    await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(paths().slice(3).sort()).toEqual(['search', 'search_shorts'])
   })
 
   it('HTTP エラー・構造変化は投げる', async () => {

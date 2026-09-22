@@ -3,7 +3,7 @@
 // 本家ページには投稿から数分の動画まで載る（2026-09-22 実測）。
 // 失敗（HTTP エラー・構造変化）は呼び出し側で無視し、nvapi だけの結果に静かに戻す。
 import type { RankingItem } from '@/types/ranking'
-import { fetchNicoSearchPage, shortsKindOf, type NicoPageVideo } from './nico-page-search'
+import { fetchNicoSearchPage, shortsKindOf, type NicoPageKind, type NicoPageVideo } from './nico-page-search'
 import { applyRealtimeRangeFilters, mapNvapiVideoToRankingItem, type NvapiVideo } from './realtime-search'
 import type { SearchConditions } from './snapshot-search'
 
@@ -79,7 +79,8 @@ export async function fetchFreshItems(
 ): Promise<RankingItem[]> {
   const query = freshQueryFor(conditions)
   if (!query) return []
-  const key = `${query.kind}:${query.query}`
+  // 動画の種類ごとに別キャッシュ（取るページの組み合わせが違う）
+  const key = `${conditions.contentType}:${query.kind}:${query.query}`
   const now = options.now ?? Date.now()
   const cached = cache.get(key)
   let items: RankingItem[]
@@ -87,14 +88,18 @@ export async function fetchFreshItems(
     items = cached.items
   } else {
     // 動画（/search, /tag）とショート（/search_shorts, /tag_shorts）の 1 ページ目を並列に取る。
-    // Snapshot 区間にはショートも含まれるので、最新区間でも同じく含める
+    // Snapshot 区間にはショートも含まれるので、最新区間でも同じく含める。動画の種類で絞る検索では該当する種別だけ
     const fetchImpl = options.fetchImpl ?? fetch
-    const [longs, shorts] = await Promise.all([
-      fetchNicoSearchPage(query.kind, query.query, 1, fetchImpl, FRESH_TIMEOUT_MS),
-      fetchNicoSearchPage(shortsKindOf(query.kind), query.query, 1, fetchImpl, FRESH_TIMEOUT_MS),
-    ])
+    const kinds: NicoPageKind[] =
+      conditions.contentType === 'long'
+        ? [query.kind]
+        : conditions.contentType === 'short'
+          ? [shortsKindOf(query.kind)]
+          : [query.kind, shortsKindOf(query.kind)]
+    const pages = await Promise.all(kinds.map((kind) => fetchNicoSearchPage(kind, query.query, 1, fetchImpl, FRESH_TIMEOUT_MS)))
     const seen = new Set<string>()
-    items = [...longs.items, ...shorts.items]
+    items = pages
+      .flatMap((page) => page.items)
       .filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)))
       .map((v, i) => mapNvapiVideoToRankingItem(toNvapiVideo(v), i + 1))
     if (cache.size >= FRESH_CACHE_MAX) {

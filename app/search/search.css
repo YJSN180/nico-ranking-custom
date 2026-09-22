@@ -190,11 +190,56 @@
   color: var(--text-secondary);
 }
 
-.search-form__targets label {
+.search-form__radios {
+  display: flex;
+  gap: 12px;
+}
+
+.search-form__radios label {
   display: flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
+}
+
+/* 動画の種類（すべて / 動画 / ショート）: ジャンルチップと同じ見た目のセグメント。ラジオは視覚的に隠すがフォーカスは残す */
+.search-form__types {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+}
+
+.search-form__type {
+  position: relative;
+  padding: 3px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.search-form__type input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.search-form__type:has(input:focus-visible) {
+  outline: 2px solid var(--primary-color, #0066cc);
+  outline-offset: 1px;
+}
+
+.search-form__type--active {
+  background: var(--primary-color, #0066cc);
+  color: #fff;
 }
 
 /* 詳細条件（折りたたみ） */

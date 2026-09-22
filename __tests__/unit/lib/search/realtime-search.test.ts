@@ -19,6 +19,7 @@ import type { SearchConditions } from '@/lib/search/snapshot-search'
 const base = (over: Partial<SearchConditions> = {}): SearchConditions => ({
   q: '初音ミク',
   targets: 'keyword',
+  contentType: 'all',
   sort: '-startTime',
   genres: [],
   tagConditions: [],
@@ -179,6 +180,16 @@ describe('fetchRealtimeSegment', () => {
   it('上流エラーは throw する（呼び出し側で Snapshot 単独に縮退）', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 403 } as unknown as Response)
     await expect(fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)).rejects.toThrow('nvapi_http_403')
+  })
+  it('ショートだけの検索では nvapi を呼ばず空の区間を返す（nvapi はショートを返さない）', async () => {
+    const fetchImpl = vi.fn()
+    const seg = await fetchRealtimeSegment(base({ contentType: 'short' }), T, fetchImpl as unknown as typeof fetch)
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(seg).toEqual({ items: [], upstreamTotal: 0, truncated: false })
+    // 動画だけ・すべて は従来どおり nvapi を使う
+    fetchImpl.mockResolvedValue(mkResponse([], false, 0))
+    await fetchRealtimeSegment(base({ contentType: 'long' }), T, fetchImpl as unknown as typeof fetch)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 })
 

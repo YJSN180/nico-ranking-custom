@@ -20,9 +20,12 @@ import {
   type SavedSearch,
 } from '@/lib/search/saved-searches'
 import {
+  SEARCH_CONTENT_TYPE_OPTIONS,
   SEARCH_GENRES,
   SEARCH_PAGE_SIZE,
   SEARCH_SORT_OPTIONS,
+  parseSearchContentType,
+  type SearchContentType,
   type SearchTagCondition,
   type SearchTagOperator,
 } from '@/lib/search/snapshot-search'
@@ -60,6 +63,8 @@ interface SearchApiResponse {
 interface FormState {
   q: string
   targets: 'keyword' | 'tag'
+  /** 動画の種類（all=すべて / long=動画 / short=ショート） */
+  contentType: SearchContentType
   sort: string
   genres: string[]
   viewsMin: string
@@ -90,6 +95,7 @@ const TAG_OPERATOR_LABELS: Record<SearchTagOperator, string> = {
 const EMPTY_FORM: FormState = {
   q: '',
   targets: 'keyword',
+  contentType: 'all',
   sort: '-viewCounter',
   genres: [],
   viewsMin: '',
@@ -140,6 +146,13 @@ function buildActiveChips(form: FormState): ActiveChip[] {
       key: 'q',
       label: `${form.targets === 'tag' ? 'タグ' : 'キーワード'}: ${form.q.trim()}`,
       clear: (f) => ({ ...f, q: '' }),
+    })
+  }
+  if (form.contentType !== 'all') {
+    chips.push({
+      key: 'contentType',
+      label: `種類: ${SEARCH_CONTENT_TYPE_OPTIONS.find((o) => o.value === form.contentType)?.label ?? form.contentType}`,
+      clear: (f) => ({ ...f, contentType: 'all' }),
     })
   }
   form.tagConditions.forEach((condition, index) => {
@@ -197,6 +210,7 @@ function buildQueryParams(form: FormState, page: number): URLSearchParams {
   const params = new URLSearchParams()
   if (form.q) params.set('q', form.q)
   if (form.targets !== 'keyword') params.set('targets', form.targets)
+  if (form.contentType !== 'all') params.set('contentType', form.contentType)
   if (form.sort !== '-viewCounter') params.set('sort', form.sort)
   form.genres.forEach((g) => params.append('genre', g))
 
@@ -246,6 +260,7 @@ function parseFormFromUrl(params: URLSearchParams): { form: FormState; page: num
     form: {
       q: params.get('q') ?? '',
       targets: params.get('targets') === 'tag' ? 'tag' : 'keyword',
+      contentType: parseSearchContentType(params.get('contentType')),
       sort: SEARCH_SORT_OPTIONS.some((o) => o.value === sort) ? sort : '-viewCounter',
       genres,
       viewsMin: params.get('viewsMin') ?? '',
@@ -467,7 +482,7 @@ export function SearchClient() {
   useEffect(() => {
     if (hasSearchedRef.current) return
     const params = new URLSearchParams(searchParams.toString())
-    const hasCondition = ['q', 'genre', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax', 'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot'].some(
+    const hasCondition = ['q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax', 'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot'].some(
       (key) => params.has(key)
     )
     if (hasCondition) {
@@ -651,25 +666,52 @@ export function SearchClient() {
           スペース区切り = すべて含む ／ <code>A OR B</code> = いずれか ／ <code>-語</code> = 除外
         </p>
 
-        <div className="search-form__row search-form__targets" role="radiogroup" aria-label="検索対象">
-          <label>
-            <input
-              type="radio"
-              name="targets"
-              checked={form.targets === 'keyword'}
-              onChange={() => updateField('targets', 'keyword')}
-            />
-            キーワード検索
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="targets"
-              checked={form.targets === 'tag'}
-              onChange={() => updateField('targets', 'tag')}
-            />
-            タグ検索
-          </label>
+        <div className="search-form__row search-form__targets">
+          <div className="search-form__radios" role="radiogroup" aria-label="検索対象">
+            <label>
+              <input
+                type="radio"
+                name="targets"
+                checked={form.targets === 'keyword'}
+                onChange={() => updateField('targets', 'keyword')}
+              />
+              キーワード検索
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="targets"
+                checked={form.targets === 'tag'}
+                onChange={() => updateField('targets', 'tag')}
+              />
+              タグ検索
+            </label>
+          </div>
+          {/* 動画の種類: 索引側（Snapshot の contentType）で絞るので、ソート・ジャンルと同じく変更で即再検索 */}
+          <div className="search-form__types" role="radiogroup" aria-label="動画の種類">
+            {SEARCH_CONTENT_TYPE_OPTIONS.map((option) => {
+              const active = form.contentType === option.value
+              return (
+                <label key={option.value} className={`search-form__type${active ? ' search-form__type--active' : ''}`}>
+                  <input
+                    type="radio"
+                    name="contentType"
+                    value={option.value}
+                    checked={active}
+                    onChange={() => {
+                      const next = { ...form, contentType: option.value }
+                      if (hasSearchedRef.current) {
+                        applyAndSearch(next)
+                      } else {
+                        setForm(next)
+                      }
+                    }}
+                  />
+                  {option.label}
+                </label>
+              )
+            })}
+          </div>
           <select
             className="search-form__sort"
             value={form.sort}

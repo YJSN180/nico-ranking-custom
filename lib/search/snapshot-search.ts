@@ -50,6 +50,23 @@ export const SEARCH_SORT_OPTIONS = [
   { value: '+lastCommentTime', label: 'コメントが古い順' },
 ] as const
 
+/**
+ * 動画の種類。Snapshot API の contentType（2026-04-15 追加、enum long/short）で索引側で絞る。
+ * ショート（ss で始まる ID）は本家では別タブだが、Snapshot の索引には動画と一緒に入っている。
+ */
+export type SearchContentType = 'all' | 'long' | 'short'
+
+export const SEARCH_CONTENT_TYPE_OPTIONS: ReadonlyArray<{ value: SearchContentType; label: string }> = [
+  { value: 'all', label: 'すべて' },
+  { value: 'long', label: '動画' },
+  { value: 'short', label: 'ショート' },
+]
+
+/** URL / API パラメータの contentType を安全に読む（不正値・未指定は all） */
+export function parseSearchContentType(value: string | null | undefined): SearchContentType {
+  return value === 'long' || value === 'short' ? value : 'all'
+}
+
 const VALID_SORT_VALUES = new Set<string>(SEARCH_SORT_OPTIONS.map((o) => o.value))
 const VALID_GENRES = new Set<string>(SEARCH_GENRES)
 
@@ -72,6 +89,8 @@ export interface SearchConditions {
   q: string
   /** keyword: タイトル・説明文・タグを対象 / tag: タグ完全一致 */
   targets: 'keyword' | 'tag'
+  /** 動画の種類（all=絞り込みなし / long=動画 / short=ショート） */
+  contentType: SearchContentType
   sort: string
   genres: string[]
   viewsMin?: number
@@ -158,6 +177,7 @@ export function parseSearchConditions(params: URLSearchParams): SearchConditions
   return {
     q: (params.get('q') ?? '').slice(0, 200),
     targets: params.get('targets') === 'tag' ? 'tag' : 'keyword',
+    contentType: parseSearchContentType(params.get('contentType')),
     sort: VALID_SORT_VALUES.has(sort) ? sort : '-viewCounter',
     genres: rawGenres,
     viewsMin: parsePositiveInt(params.get('viewsMin')),
@@ -265,6 +285,8 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions, window: Sna
   conditions.genres.forEach((genre, index) => {
     params.set(`filters[genre][${index}]`, genre)
   })
+  // 動画の種類は索引側で絞る（後付けフィルタだとページ内の件数が欠けて offset が狂う）
+  if (conditions.contentType !== 'all') params.set('filters[contentType][0]', conditions.contentType)
   appendRangeFilter(params, 'viewCounter', conditions.viewsMin, conditions.viewsMax)
   appendRangeFilter(params, 'commentCounter', conditions.commentsMin, conditions.commentsMax)
   appendRangeFilter(params, 'likeCounter', conditions.likesMin, conditions.likesMax)
