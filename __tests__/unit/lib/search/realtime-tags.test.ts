@@ -9,6 +9,8 @@ import {
 describe('sanitizeVideoIds', () => {
   it('形式不正・重複を除き上限で打ち切る', () => {
     expect(sanitizeVideoIds('sm1, sm2,sm1,bad,so3,nm4,<script>')).toEqual(['sm1', 'sm2', 'so3', 'nm4'])
+    // ショート（ss）はリアルタイム区間（本家ショートページ由来）に現れるので通す
+    expect(sanitizeVideoIds('ss46804402,xx1')).toEqual(['ss46804402'])
     const many = Array.from({ length: 50 }, (_, i) => `sm${i + 1}`).join(',')
     expect(sanitizeVideoIds(many)).toHaveLength(REALTIME_TAGS_MAX_VIDEOS)
     expect(sanitizeVideoIds(null)).toEqual([])

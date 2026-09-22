@@ -31,7 +31,8 @@ const V3_GUEST_HEADERS: Record<string, string> = {
 }
 
 const USER_ID_PATTERN = /^\d{1,12}$/
-const VIDEO_ID_PATTERN = /^(sm|so|nm)\d{1,12}$/
+/** チャンネルの代表動画にはショート（ss）も来る */
+const VIDEO_ID_PATTERN = /^(sm|so|nm|ss)\d{1,12}$/
 
 export interface OwnerInfo {
   name: string

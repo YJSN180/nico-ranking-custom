@@ -17,7 +17,8 @@ const V3_GUEST_HEADERS: Record<string, string> = {
   'Accept-Language': 'ja,en;q=0.9',
 }
 
-const VIDEO_ID_PATTERN = /^(sm|so|nm)\d{1,12}$/
+/** ショート（ss）も対象。v3_guest は ss にもタグ付きで応答する（2026-09-22 実測） */
+const VIDEO_ID_PATTERN = /^(sm|so|nm|ss)\d{1,12}$/
 
 export function sanitizeVideoIds(raw: string | null, max = REALTIME_TAGS_MAX_VIDEOS): string[] {
   if (!raw) return []

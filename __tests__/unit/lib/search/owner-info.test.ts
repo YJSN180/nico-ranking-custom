@@ -16,6 +16,7 @@ describe('sanitizeUserIds / sanitizeChannelVideoIds', () => {
     expect(sanitizeUserIds(Array.from({ length: 80 }, (_, i) => String(i + 1)).join(','))).toHaveLength(OWNER_INFO_MAX_USERS)
     expect(sanitizeUserIds(null)).toEqual([])
     expect(sanitizeChannelVideoIds('so1,sm2,so1,bad')).toEqual(['so1', 'sm2'])
+    expect(sanitizeChannelVideoIds('ss3,ab4')).toEqual(['ss3'])
     expect(sanitizeChannelVideoIds(Array.from({ length: 30 }, (_, i) => `so${i + 1}`).join(','))).toHaveLength(OWNER_INFO_MAX_CHANNEL_VIDEOS)
   })
 })
