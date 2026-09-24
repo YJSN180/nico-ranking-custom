@@ -275,8 +275,8 @@ describe('AutoNGPanel', () => {
     expect(screen.getByText(/保留時間は 0〜168 の整数にしてください/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
 
-    fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '0' } })
-    expect(screen.getByText(/投稿者の追跡日数は 1〜30 の整数にしてください/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '1' } })
+    expect(screen.getByText(/投稿者の追跡日数は 2〜30 の整数にしてください/)).toBeInTheDocument()
     expect(save).toBeDisabled()
     fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '7' } })
     expect(save).toBeEnabled()

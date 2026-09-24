@@ -44,8 +44,8 @@ describe('validateLqngConfigInput', () => {
       [{ followerMax: 1001 }, 'フォロワー上限は 0〜1000 の整数にしてください'],
       [{ followerMax: -1 }, 'フォロワー上限は 0〜1000 の整数にしてください'],
       [{ holdHours: 169 }, '保留時間は 0〜168 の整数にしてください'],
-      [{ trackDays: 0 }, '投稿者の追跡日数は 1〜30 の整数にしてください'],
-      [{ trackDays: 31 }, '投稿者の追跡日数は 1〜30 の整数にしてください'],
+      [{ trackDays: 1 }, '投稿者の追跡日数は 2〜30 の整数にしてください'],
+      [{ trackDays: 31 }, '投稿者の追跡日数は 2〜30 の整数にしてください'],
       [{ deletionWindowDays: 31 }, '削除とみなす日数は 1〜30 の整数にしてください'],
       [{ lockGroupsMin: 0 }, 'ロック群の閾値は 1〜20 の整数にしてください'],
       [{ freq: { dayCount: 0, burstCount: 3, burstMinutes: 30 } }, '24 時間の本数は 1〜100 の整数にしてください'],
@@ -64,6 +64,13 @@ describe('validateLqngConfigInput', () => {
     expect(validateLqngConfigInput({ ...valid, pollTags: [] })).toEqual(['有効にするにはポーリング対象タグが 1 つ以上必要です'])
     expect(validateLqngConfigInput({ ...valid, enabled: false, pollTags: [] })).toEqual([])
     expect(validateLqngConfigInput({ ...valid, tagGroups: [['a']], lockGroupsMin: 2 })).toEqual(['ロック群の閾値がグループ数を超えています'])
+  })
+
+  it('追跡日数は 2 日以上（日次スイープが取り込む前日分より短くしない）。正規化でも 2 未満は 2 にする', () => {
+    expect(validateLqngConfigInput({ ...valid, trackDays: 2 })).toEqual([])
+    expect(normalizeLqngConfig({ ...valid, trackDays: 1 }).trackDays).toBe(2)
+    expect(normalizeLqngConfig({ ...valid, trackDays: 0 }).trackDays).toBe(2)
+    expect(normalizeLqngConfig({ ...valid, trackDays: 7 }).trackDays).toBe(7)
   })
 
   it('退会確認の対照（controlUserId）は数字 1〜12 桁だけ受け付け、設定されているときだけ持つ', () => {

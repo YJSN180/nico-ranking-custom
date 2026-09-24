@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { validateLqngConfigInput } from '@/lib/lqng/config'
+import { LQNG_TRACK_DAYS_MIN, validateLqngConfigInput } from '@/lib/lqng/config'
 import { LQNG_CONTROL_MISSING_WARNING } from '@/lib/lqng/labels'
 import type { LqngConfig } from '@/lib/lqng/types'
 import styles from './auto-ng.module.css'
@@ -276,7 +276,7 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
           </div>
           <div className={styles.field}>
             <label htmlFor="lqng-track-days">投稿者の追跡日数</label>
-            <input id="lqng-track-days" type="number" min={1} value={draft.trackDays} onChange={(e) => update('trackDays', Number(e.target.value))} />
+            <input id="lqng-track-days" type="number" min={LQNG_TRACK_DAYS_MIN} value={draft.trackDays} onChange={(e) => update('trackDays', Number(e.target.value))} />
           </div>
           <div className={styles.field}>
             <label htmlFor="lqng-deletion-days">削除とみなす投稿からの日数（A∧C）</label>
