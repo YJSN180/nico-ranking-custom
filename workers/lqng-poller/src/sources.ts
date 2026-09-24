@@ -83,9 +83,9 @@ interface NvapiItem {
 function mapNvapiItem(item: NvapiItem): SourceVideo | null {
   if (typeof item.id !== 'string' || typeof item.title !== 'string' || typeof item.registeredAt !== 'string') return null
   const owner = item.owner ?? null
-  const rawId = owner?.id !== undefined && owner?.id !== null ? String(owner.id) : null
   const isChannel = item.isChannelVideo === true || owner?.ownerType === 'channel'
-  const authorId = rawId ? (isChannel ? `channel/ch${rawId}` : rawId) : null
+  // チャンネルの owner.id は "123" でも "ch123" でも来るので、本家ページと同じ規則で channel/chNNN にそろえる
+  const authorId = nicoPageOwnerId({ id: item.id, title: item.title, registeredAt: item.registeredAt, owner, isChannelVideo: item.isChannelVideo })
   const hidden = owner?.visibility === 'hidden' || (owner !== null && !owner.name && !isChannel)
   return { id: item.id, title: item.title, authorId, registeredAt: item.registeredAt, ownerVisibility: owner === null ? null : hidden ? 'hidden' : 'visible' }
 }

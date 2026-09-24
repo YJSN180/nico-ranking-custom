@@ -41,6 +41,23 @@ describe('fetchNewVideosFromNvapi', () => {
     ])
   })
 
+  it('チャンネルの owner.id が ch 付き（"ch78"）で来ても channel/chch78 にしない', async () => {
+    const fetchImpl = vi.fn(async () =>
+      response({
+        meta: { status: 200 },
+        data: {
+          hasNext: false,
+          items: [
+            { id: 'so7', title: 'c', registeredAt: '2026-01-01T00:02:00+09:00', isChannelVideo: true, owner: { id: 'ch78', ownerType: 'channel', name: 'ch' } },
+            { id: 'so8', title: 'c', registeredAt: '2026-01-01T00:03:00+09:00', owner: { id: 'ch79', ownerType: 'channel', name: 'ch' } },
+          ],
+        },
+      })
+    )
+    const videos = await fetchNewVideosFromNvapi(['t1'], '2026-01-01T00:00:00.000Z', fetchImpl as unknown as typeof fetch)
+    expect(videos.map((v) => v.authorId)).toEqual(['channel/ch78', 'channel/ch79'])
+  })
+
   it('403 はアクセス制限として投げる', async () => {
     const fetchImpl = vi.fn(async () => response('', 403, true))
     await expect(fetchNewVideosFromNvapi(['t'], '2026-01-01T00:00:00.000Z', fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(AccessLimitedError)
