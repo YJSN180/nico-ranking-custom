@@ -51,7 +51,7 @@ npx wrangler deploy --dry-run -c workers/ranking-scheduler/wrangler.toml
 - R2公開は最大8並列。成功済みのimmutable objectは再アップロードしない。current.jsonのETag競合時は別runの公開を上書きしない。
 - 収集グループは65分で明示失敗、jobは70分。正常終了してartifactがない場合もActions側で失敗。9月1日の欠損原因自体が再現できたという意味ではない。
 - 収集グループは、ランキングのページ取得・タグキャッシュのシャード読込・タグ詳細の1件ごとに進捗を記録する。10分進捗がなければ`process.getActiveResourcesInfo()`の要約を出してexit 1で終わり、65分の期限を待たずに再実行へ回す。
-- 公開後検証（verify-r2-contract）は統計が新しい世代に追いつくまで最大12分待つ。統計のcronは5分ごと・1回約45秒で、R2 leaseで直列化されるため、公開前に始まった回やleaseと重なったtriggerのせいで1〜2周遅れうる。/triggerが`{skipped: 'already-running'}`（lease中）を返したら60秒後に、応答が失われた・失敗した場合は統計が3分動かなければ再送する（最大8回）。1回の更新が約45秒かかるため、triggerの応答は120秒まで待つ。途中で切断すると更新が打ち切られてleaseが残り、次のcronが空振りしうる。
+- 公開後検証（verify-r2-contract）は統計が新しい世代に追いつくまで最大12分待つ。統計のcronは5分ごと・1回約45秒で、R2 leaseで直列化されるため、公開前に始まった回やleaseと重なったtriggerのせいで1〜2周遅れうる。/triggerが`{skipped: 'already-running'}`（lease中）を返したら60秒後に、応答が失われた・失敗した場合は統計が3分動かなければ再送する（最大8回）。1回の更新が約45秒かかるため、triggerの応答は120秒まで待つ。途中で切断すると更新が打ち切られてleaseが残るおそれがあり、その場合は次のcronが空振りする。
 - schedulerは稼働中runをcancelせず待機する。100分超ならstalledを通知。送信記録を先にR2へ保存し、応答が失われても15分間は再送しない。slotごと最大2回。
 - 同slotの失敗runはrerun-failed-jobs。成功グループのartifactを再利用する。補助同期が失敗した場合も後段jobだけ再試行する。
 - GitHub自体が停止・runner不足の場合、dispatch成功だけでは収集成功にならない。鮮度監視で別途検知する。
