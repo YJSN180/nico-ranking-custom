@@ -114,7 +114,7 @@ export interface LqngEvents {
   version: 1
   items: LqngEvent[]
   /**
-   * 旧来の置き場所（管理画面の overview API がまだここを読む）。正は tracking.lastRun で、
+   * 旧来の置き場所。正は tracking.lastRun で、管理画面は追跡表に無いときだけここを読む。
    * 履歴を書く回に限り同じ内容をここにも入れる（書き込み回数は増やさない）
    */
   lastRun: LqngRunSummary | null

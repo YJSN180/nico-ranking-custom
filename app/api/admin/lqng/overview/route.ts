@@ -27,7 +27,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const [config, verdicts, trackingRaw, eventsRaw] = await Promise.all([
       readLqngConfigStrict(),
       readLqngVerdictsStrict(),
-      kv.get<{ lastPollAt?: string | null; lastSweepDate?: string | null; authors?: Record<string, unknown>; pending?: unknown[] }>(LQNG_KV_KEYS.tracking).catch(() => null),
+      kv.get<{ lastPollAt?: string | null; lastSweepDate?: string | null; authors?: Record<string, unknown>; pending?: unknown[]; lastRun?: unknown }>(LQNG_KV_KEYS.tracking).catch(() => null),
       kv.get<EventsPayload>(LQNG_KV_KEYS.events).catch(() => null),
     ])
     const tracking: TrackingSummary = {
@@ -41,7 +41,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         envEnabled: isLqngEnabled(),
         config,
         verdicts,
-        events: { items: Array.isArray(eventsRaw?.items) ? eventsRaw.items : [], lastRun: eventsRaw?.lastRun ?? null },
+        // 直近の実行は Worker が毎回更新する追跡表のものを使う。履歴側は出来事のあった回しか更新されない旧来の置き場所
+        events: { items: Array.isArray(eventsRaw?.items) ? eventsRaw.items : [], lastRun: trackingRaw?.lastRun ?? eventsRaw?.lastRun ?? null },
         tracking,
       })
     )

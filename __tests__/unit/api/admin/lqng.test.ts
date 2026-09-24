@@ -58,6 +58,16 @@ describe('admin lqng API', () => {
     expect(body.envEnabled).toBe(true)
   })
 
+  it('overview の直近の実行は追跡表の lastRun を優先し、無いとき（更新前の Worker の追跡表）は履歴の lastRun を使う', async () => {
+    store.set(LQNG_KV_KEYS.config, { enabled: true })
+    store.set(LQNG_KV_KEYS.verdicts, { version: 1, authors: {}, videos: {}, updatedAt: 't' })
+    store.set(LQNG_KV_KEYS.events, { items: [], lastRun: { at: 'events' } })
+    store.set(LQNG_KV_KEYS.tracking, { authors: {}, pending: [], lastRun: { at: 'tracking' } })
+    expect((await (await getOverview(authed('/api/admin/lqng/overview'))).json()).events.lastRun).toEqual({ at: 'tracking' })
+    store.set(LQNG_KV_KEYS.tracking, { authors: {}, pending: [] })
+    expect((await (await getOverview(authed('/api/admin/lqng/overview'))).json()).events.lastRun).toEqual({ at: 'events' })
+  })
+
   it('config PUT は正規化して保存し、不正な形は 400', async () => {
     // 未設定（404）の版番号は既定値の updatedAt
     const res = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ enabled: true, pollTags: ['t1'], tagGroups: [['a', 'a'], []], lockGroupsMin: 1, updatedAt: '1970-01-01T00:00:00.000Z' }) }))
