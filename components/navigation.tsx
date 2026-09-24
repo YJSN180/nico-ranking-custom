@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
+import { lockViewportScroll } from '@/lib/scroll-lock'
 import styles from './navigation.module.css'
 import { 
   HamburgerIcon, 
@@ -138,25 +139,17 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [isOpen, closeMenu])
 
-  // サイドドロワー表示時のボディスクロール制御
+  // サイドドロワー表示時は背景のスクロールを止める（モバイル幅のみ）。
+  // body ではなく html で止める（body に付けると sticky ヘッダーが外れる。lib/scroll-lock.ts）
   useEffect(() => {
     // テスト環境対応
-    if (typeof window === 'undefined' || !window.matchMedia) {
+    if (!isOpen || typeof window === 'undefined' || !window.matchMedia) {
       return
     }
-    
-    // CSSメディアクエリでモバイル判定 - 防御的コーディング
-    const mediaQuery = window.matchMedia && window.matchMedia('(max-width: 768px)')
-    
-    if (mediaQuery && mediaQuery.matches && isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+      return
     }
-
-    return () => {
-      document.body.style.overflow = ''
-    }
+    return lockViewportScroll()
   }, [isOpen])
 
   // SSR時にデスクトップ版→マウント後にモバイル版へ差し替わるちらつきを避けるため、

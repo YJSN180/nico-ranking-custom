@@ -191,14 +191,15 @@ body {
   background-color: var(--background-color);
   transition: background-color 0.3s ease, color 0.3s ease;
   min-height: 100vh;
-  /* 横スクロール防止 */
-  overflow-x: hidden;
+  /* 横スクロール防止。hidden はスクロールコンテナを作り、中の position: sticky
+     （モバイルのヘッダー）がビューポートに追従しなくなるため clip を使う */
+  overflow-x: clip;
   max-width: 100vw;
 }
 
-/* 横スクロール防止のための追加設定 */
+/* 横スクロール防止のための追加設定（body と同じ理由で clip） */
 html {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
 }
 
@@ -207,10 +208,10 @@ html {
   box-sizing: border-box;
 }
 
-/* コンテナの最大幅制限 */
+/* コンテナの最大幅制限（sticky を壊さないよう clip。body と同じ理由） */
 .container, main, body > div {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* グラデーション背景 */
