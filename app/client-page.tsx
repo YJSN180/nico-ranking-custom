@@ -148,7 +148,7 @@ export default function ClientPage({
   const { rankings: customRankings, selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
   
   // PWA環境でのナビゲーション状態管理
-  useNavigationState()
+  const { clearState: clearNavigationScrollState } = useNavigationState()
   
   // PWAリロード機能
   const { isPulling, pullDistance } = usePullToRefresh()
@@ -427,6 +427,11 @@ export default function ClientPage({
         const url = new URL(link.href)
         if (url.origin === window.location.origin && url.pathname !== '/') {
           saveCurrentState()
+        } else if (url.origin === window.location.origin && url.pathname === '/') {
+          // ホーム・ロゴ: 明示的なトップへの移動。遷移後に ClientPage は key で作り直されるため、
+          // 以前保存した状態（ジャンル・ページ・スクロール位置）で上書き復元されないよう消す
+          localStorage.removeItem('ranking-navigation-state')
+          clearNavigationScrollState()
         }
       }
     }
@@ -457,8 +462,8 @@ export default function ClientPage({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [])
-  
+  }, [clearNavigationScrollState])
+
   // localStorageから復元する設定を管理
   const [shouldRestore, setShouldRestore] = useState(null)
   
