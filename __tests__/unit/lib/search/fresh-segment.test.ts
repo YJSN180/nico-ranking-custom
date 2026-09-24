@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { clearFreshCache, fetchFreshItems, freshQueryFor, mergeFreshIntoRealtime, FRESH_MAX_PAGES } from '@/lib/search/fresh-segment'
+import { clearFreshCache, fetchFreshItems, mergeFreshIntoRealtime, FRESH_MAX_PAGES } from '@/lib/search/fresh-segment'
 import type { SearchConditions } from '@/lib/search/snapshot-search'
 import type { RankingItem } from '@/types/ranking'
 
@@ -11,19 +11,6 @@ const pageHtml = (items: Array<Record<string, unknown>>, hasNext = false) => {
 }
 const item = (id: string, registeredAt: string, view = 10) => ({ id, title: `t-${id}`, registeredAt, duration: 30, count: { view, comment: 0, mylist: 0, like: 0 }, owner: { ownerType: 'user', id: '1001', name: 'n', iconUrl: 'https://i/1.jpg' } })
 const ri = (id: string, registeredAt: string): RankingItem => ({ rank: 0, id, title: id, thumbURL: '', views: 0, registeredAt })
-
-describe('freshQueryFor', () => {
-  it('キーワードは /search/、タグ検索と AND タグは /tag/（空白区切り）', () => {
-    expect(freshQueryFor(base())).toEqual({ kind: 'keyword', query: '初音ミク' })
-    expect(freshQueryFor(base({ targets: 'tag', tagConditions: [{ tag: 'b', operator: 'AND' }] }))).toEqual({ kind: 'tag', query: '初音ミク b' })
-    expect(freshQueryFor(base({ q: '', tagConditions: [{ tag: 'b', operator: 'AND' }] }))).toEqual({ kind: 'tag', query: 'b' })
-  })
-  it('ジャンル指定・OR/NOT・キーワードとタグの併用は対象外', () => {
-    expect(freshQueryFor(base({ genres: ['ゲーム'] }))).toBeNull()
-    expect(freshQueryFor(base({ tagConditions: [{ tag: 'b', operator: 'OR' }] }))).toBeNull()
-    expect(freshQueryFor(base({ tagConditions: [{ tag: 'b', operator: 'AND' }] }))).toBeNull()
-  })
-})
 
 describe('fetchFreshItems', () => {
   beforeEach(() => clearFreshCache())
@@ -86,6 +73,25 @@ describe('fetchFreshItems', () => {
     const single = vi.fn(async () => ({ ok: true, text: async () => pageHtml([newer('a'), item('old', '2026-09-20T00:00:00+09:00')], true) }) as unknown as Response)
     await fetchFreshItems(base({ contentType: 'short', q: 'other' }), boundary, { fetchImpl: single as unknown as typeof fetch, now: 1_000 })
     expect(single).toHaveBeenCalledTimes(1)
+  })
+
+  it('境界ちょうどの動画も含める（境界以降。索引側は境界より前なので重ならない）', async () => {
+    const boundary = '2026-09-21T04:28:32+09:00'
+    const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('after', '2026-09-21T05:00:00+09:00'), item('at', boundary), item('before', '2026-09-21T04:28:31+09:00')]) }) as unknown as Response)
+    const items = await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(items.map((it) => it.id)).toEqual(['after', 'at'])
+  })
+
+  it('1 ページ目が全件境界以降（境界ちょうどを含む）で続きがあれば読み足す', async () => {
+    const boundary = '2026-09-21T04:28:32+09:00'
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const page = new URL(String(url)).searchParams.get('page') ?? '1'
+      if (page === '1') return { ok: true, text: async () => pageHtml([item('p1', '2026-09-21T05:00:00+09:00'), item('p1-at', boundary)], true) } as unknown as Response
+      return { ok: true, text: async () => pageHtml([item(`p${page}-old`, '2026-09-20T00:00:00+09:00')], false) } as unknown as Response
+    })
+    const items = await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES)
+    expect(items.map((it) => it.id)).toEqual(['p1', 'p1-at'])
   })
 
   it('HTTP エラー・構造変化は投げる', async () => {

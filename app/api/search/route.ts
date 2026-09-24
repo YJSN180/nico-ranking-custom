@@ -1,7 +1,7 @@
 // 詳細検索API（検索リアルタイム統合計画 S3）
 // Snapshot 検索API v2（毎朝5時時点のインデックス・強力なフィルタ）を基本とし、
-// 条件がマージ可能なときは「直近5:00以降」の区間だけを nvapi v2（リアルタイム）から
-// 取得して先頭に連結する。両APIとも CORS 非対応のためサーバー側で呼び出し、
+// 条件がマージ可能なときは索引の最新より後の区間だけを新着の取得元（nvapi v2・本家の検索ページ）から
+// 取得して先頭に連結する。どれも CORS 非対応のためサーバー側で呼び出し、
 // あわせてサイト側の粗悪コンテンツ除外ルールと管理者NGリストを適用する。
 import { NextRequest, NextResponse } from 'next/server'
 import {
@@ -82,7 +82,7 @@ const isFailure = (r: SnapshotPage | SnapshotFailure): r is SnapshotFailure => '
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const conditions = parseSearchConditions(request.nextUrl.searchParams)
   const now = new Date()
-  // 境界 T: 同じ条件で Snapshot の索引が実際に持つ最新の投稿時刻。2 ページ目以降はクライアントが
+  // 境界 T: 同じ条件で Snapshot の索引が実際に持つ最新の投稿時刻の 1 秒後。2 ページ目以降はクライアントが
   // 前回応答の boundary を返すので、それを使ってページ間で一貫させる。取得に失敗したら従来の 05:00 JST
   let boundary = getRealtimeBoundary(now)
   let mergeable = false
@@ -122,9 +122,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const rtCountHint = Math.max(0, parseInt(request.nextUrl.searchParams.get('rtCount') ?? '0', 10) || 0)
   const provisional = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, rtCountHint)
 
-  // Snapshot 側は境界より前だけ（filters[startTime][lt]=T）を取り、nvapi 側（minRegisteredAt=T）と
-  // 構成的に排他にする。これで dedup に頼らず offset 計算が厳密になり、ページ間の重複が起きない
-  // 最新区間（本家ページ）は nvapi と並列に取り、失敗しても nvapi だけで続ける（隠れ依存にしない）
+  // Snapshot 側は境界より前だけ（filters[startTime][lt]=T）を取り、新着側（nvapi の minRegisteredAt=T と
+  // 本家ページの T 以降）と構成的に排他にする。これで dedup に頼らず offset 計算が厳密になり、ページ間の重複が起きない
+  // 最新区間（本家ページ）は nvapi と並列に取り、失敗しても nvapi だけで続ける（隠れ依存にしない）。
+  // ただしショートだけの検索では本家ページが唯一の新着の取得元なので、その失敗は新着の失敗として扱う
   const [realtimeResult, snapshotResult, freshResult] = await Promise.all([
     fetchRealtimeSegment(conditions, boundary, fetch, 4000, AbortSignal.timeout(REALTIME_BUDGET_MS)).then(
       (segment): { segment: RealtimeSegment; error?: undefined } => ({ segment }),
@@ -143,12 +144,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: snapshotResult.error, detail: snapshotResult.detail }, { status: snapshotResult.status })
   }
 
-  // リアルタイム側が落ちたら Snapshot 単独に縮退（source ラベルで可視化＝隠れフォールバックにしない）
-  if (!realtimeResult.segment) {
-    const snapshot =
-      provisional.snapshotOffset === (conditions.page - 1) * SEARCH_PAGE_SIZE
-        ? snapshotResult
-        : await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE)
+  // 新着側が落ちたら Snapshot 単独に縮退（source ラベルで可視化＝隠れフォールバックにしない）。
+  // 並列に取った Snapshot は境界より前だけなので使わず、境界なしで取り直す（境界以降の索引の動画を落とさない）
+  const realtimeError = realtimeResult.error ?? (conditions.contentType === 'short' ? freshResult.error : undefined)
+  if (!realtimeResult.segment || realtimeError) {
+    const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE)
     if (isFailure(snapshot)) {
       return NextResponse.json({ error: snapshot.error, detail: snapshot.detail }, { status: snapshot.status })
     }
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       source: 'snapshot',
       boundary,
       realtimeCount: 0,
-      realtimeError: realtimeResult.error,
+      realtimeError: realtimeError ?? 'realtime_error',
       cacheControl: 'public, s-maxage=30, stale-while-revalidate=60',
     })
   }

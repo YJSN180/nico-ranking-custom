@@ -4,7 +4,7 @@
 // 失敗（HTTP エラー・構造変化）は呼び出し側で無視し、nvapi だけの結果に静かに戻す。
 import type { RankingItem } from '@/types/ranking'
 import { fetchNicoSearchPage, shortsKindOf, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from './nico-page-search'
-import { applyRealtimeRangeFilters, mapNvapiVideoToRankingItem, type NvapiVideo } from './realtime-search'
+import { applyRealtimeRangeFilters, freshQueryFor, mapNvapiVideoToRankingItem, type NvapiVideo } from './realtime-search'
 import type { SearchConditions } from './snapshot-search'
 
 export const FRESH_CACHE_TTL_MS = 60_000
@@ -15,28 +15,6 @@ const FRESH_TIMEOUT_MS = 3000
  * ショートは nvapi に無いので本家ページだけが区間の供給源になり、連投があると 1 ページに収まらない
  */
 export const FRESH_MAX_PAGES = 3
-
-export interface FreshQuery {
-  kind: 'keyword' | 'tag'
-  query: string
-}
-
-/**
- * 本家ページの URL で表せる条件だけを対象にする。
- * ジャンル指定、タグの OR/NOT、キーワードとタグの併用は対象外（null）。
- */
-export function freshQueryFor(conditions: SearchConditions): FreshQuery | null {
-  if (conditions.genres.length > 0) return null
-  if (conditions.tagConditions.some((c) => c.operator !== 'AND')) return null
-  const andTags = conditions.tagConditions.map((c) => c.tag).filter((t) => t.length > 0)
-  if (conditions.targets === 'tag') {
-    const tags = [conditions.q, ...andTags].filter((t) => t.length > 0)
-    return tags.length > 0 ? { kind: 'tag', query: tags.join(' ') } : null
-  }
-  if (!conditions.q) return andTags.length > 0 ? { kind: 'tag', query: andTags.join(' ') } : null
-  if (andTags.length > 0) return null
-  return { kind: 'keyword', query: conditions.q }
-}
 
 function toNvapiVideo(v: NicoPageVideo): NvapiVideo {
   const owner = v.owner ?? undefined
@@ -73,15 +51,16 @@ export function clearFreshCache(): void {
   cache.clear()
 }
 
-const isNewerThan = (boundaryMs: number) => (v: NicoPageVideo): boolean => new Date(v.registeredAt).getTime() > boundaryMs
+// 境界以降（境界ちょうどを含む）。索引側は境界より前だけを持つので重ならず、重なっても動画 ID で除かれる
+const isAtOrAfter = (boundaryMs: number) => (v: NicoPageVideo): boolean => new Date(v.registeredAt).getTime() >= boundaryMs
 
 /**
- * 種別ごとに 1 ページ目を取り、全件が境界より新しく続きがあるときだけ 2〜FRESH_MAX_PAGES ページ目を並列に読み足す。
+ * 種別ごとに 1 ページ目を取り、全件が境界以降で続きがあるときだけ 2〜FRESH_MAX_PAGES ページ目を並列に読み足す。
  * 読み足しの失敗は無視して取れた分だけ返す（1 ページ目の失敗は throw）。
  */
 async function fetchKindPages(kind: NicoPageKind, query: string, boundaryMs: number, fetchImpl: typeof fetch): Promise<NicoPageVideo[]> {
   const first = await fetchNicoSearchPage(kind, query, 1, fetchImpl, FRESH_TIMEOUT_MS)
-  const saturated = first.hasNext && first.items.length > 0 && first.items.every(isNewerThan(boundaryMs))
+  const saturated = first.hasNext && first.items.length > 0 && first.items.every(isAtOrAfter(boundaryMs))
   if (!saturated || FRESH_MAX_PAGES < 2) return first.items
   const rest = await Promise.allSettled(
     Array.from({ length: FRESH_MAX_PAGES - 1 }, (_, i) => fetchNicoSearchPage(kind, query, i + 2, fetchImpl, FRESH_TIMEOUT_MS))
@@ -91,7 +70,7 @@ async function fetchKindPages(kind: NicoPageKind, query: string, boundaryMs: num
 }
 
 /**
- * 本家ページの 1 ページ目を取り、境界より新しい動画だけを RankingItem にして返す（60 秒メモリキャッシュ）。
+ * 本家ページの 1 ページ目を取り、境界以降の動画だけを RankingItem にして返す（60 秒メモリキャッシュ）。
  * 条件が対象外なら空配列。失敗は throw する。
  */
 export async function fetchFreshItems(
@@ -131,7 +110,7 @@ export async function fetchFreshItems(
     }
     cache.set(key, { at: now, items })
   }
-  const newer = items.filter((it) => it.registeredAt !== undefined && new Date(it.registeredAt).getTime() > boundaryMs)
+  const newer = items.filter((it) => it.registeredAt !== undefined && new Date(it.registeredAt).getTime() >= boundaryMs)
   return applyRealtimeRangeFilters(applyDateFilters(newer, conditions), conditions)
 }
 
