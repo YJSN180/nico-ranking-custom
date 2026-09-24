@@ -147,9 +147,6 @@ export default function ClientPage({
   const { visibleGenres } = useGenreOrderV2()
   const { rankings: customRankings, selectedRanking, selectRanking, isLoading: customRankingsLoading } = useCustomRankings()
   
-  // PWA環境でのナビゲーション状態管理
-  const { clearState: clearNavigationScrollState } = useNavigationState()
-  
   // PWAリロード機能
   const { isPulling, pullDistance } = usePullToRefresh()
 
@@ -221,20 +218,24 @@ export default function ClientPage({
   // フェーズ2.5-1: SSRはランキングの1ページ目のみHTMLに埋め込むため、
   // マウント後に残り全件をバックグラウンドで補完する（完了後は従来どおり
   // クライアント側slice でページ切替が即時になる）
-  const [isFullDataPending, setIsFullDataPending] = useState(
-    () => (initialTotalCount ?? 0) > (initialData.items?.length || 0)
+  // pending: 補完待ち・取得中 / done: そろった（または不要） / error: 取得に失敗（再試行できる）
+  const [fullDataStatus, setFullDataStatus] = useState<'pending' | 'done' | 'error'>(
+    () => ((initialTotalCount ?? 0) > (initialData.items?.length || 0) ? 'pending' : 'done')
   )
-  useEffect(() => {
-    if (!isFullDataPending) return
+  const isFullDataPending = fullDataStatus === 'pending'
+  // 実行中（または完了済み）の全件取得。失敗したときだけ空に戻して再試行できるようにする
+  const fullFetchControllerRef = useRef<AbortController | null>(null)
 
+  const startFullFetch = useCallback(function startFullFetch() {
+    if (fullFetchControllerRef.current) return
     const controller = new AbortController()
+    fullFetchControllerRef.current = controller
+    setFullDataStatus('pending')
+
     const params = new URLSearchParams({ genre: initialGenre, period: initialPeriod })
     if (initialTag) params.set('tag', initialTag)
 
-    // 全件 JSON（本番で約200KB）は LCP に不要なので、load 後のアイドル時に開始して
-    // 初期描画（CSS/フォント/サムネイル）と帯域・メインスレッドを競合させない
-    const startFetch = () =>
-      fetch(`/api/ranking/full?${params.toString()}`, { signal: controller.signal })
+    fetch(`/api/ranking/full?${params.toString()}`, { signal: controller.signal })
       .then((res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()
@@ -247,22 +248,59 @@ export default function ClientPage({
           current.genre === initialGenre &&
           current.period === initialPeriod &&
           current.tag === initialTag
-        if (unchanged && Array.isArray(data.items) && data.items.length > 0) {
-          setFullRankingData([...data.items].sort((a, b) => a.rank - b.rank))
+        if (!unchanged) {
+          setFullDataStatus('done')
+          return
         }
-        setIsFullDataPending(false)
+        if (!Array.isArray(data.items) || data.items.length === 0) {
+          throw new Error('empty ranking data')
+        }
+        setFullRankingData([...data.items].sort((a, b) => a.rank - b.rank))
+        setFullDataStatus('done')
       })
       .catch(() => {
-        if (!controller.signal.aborted) setIsFullDataPending(false)
+        if (controller.signal.aborted) return
+        fullFetchControllerRef.current = null
+        const current = configRef.current
+        if (current.genre !== initialGenre || current.period !== initialPeriod || current.tag !== initialTag) {
+          // 補完中に条件が変わった（新しい条件は通常フェッチが全件を取得する）
+          setFullDataStatus('done')
+          return
+        }
+        // 101位以降を黙って消さない。ページ送りは総件数のまま残し、再試行を出す
+        setFullDataStatus('error')
+        showToast('101位以降を読み込めませんでした', 'error', {
+          action: { label: '再試行', onAction: startFullFetch }
+        })
       })
+    // setFullRankingData は useState の setter（安定）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialGenre, initialPeriod, initialTag])
 
+  useEffect(() => {
+    if (!isFullDataPending) return
+    // アンマウント時に取得を止める（Strict Mode の再マウントでもう一度始められるよう参照も外す）
+    const abortFullFetch = () => {
+      fullFetchControllerRef.current?.abort()
+      fullFetchControllerRef.current = null
+    }
+
+    // 2ページ目以降で開いたときは、待たずにすぐ取得する（スクロール位置の復元もこれを待つ）
+    if (initialPage > 1) {
+      startFullFetch()
+      return abortFullFetch
+    }
+
+    // 全件 JSON（本番で約200KB）は LCP に不要なので、load 後のアイドル時に開始して
+    // 初期描画（CSS/フォント/サムネイル）と帯域・メインスレッドを競合させない
     let idleHandle: number | undefined
+    let cancelled = false
     const scheduleIdle = () => {
-      if (controller.signal.aborted) return
+      if (cancelled) return
       if (typeof window.requestIdleCallback === 'function') {
-        idleHandle = window.requestIdleCallback(() => void startFetch(), { timeout: 2000 })
+        idleHandle = window.requestIdleCallback(() => startFullFetch(), { timeout: 2000 })
       } else {
-        idleHandle = window.setTimeout(() => void startFetch(), 300)
+        idleHandle = window.setTimeout(() => startFullFetch(), 300)
       }
     }
     if (document.readyState === 'complete') {
@@ -272,7 +310,8 @@ export default function ClientPage({
     }
 
     return () => {
-      controller.abort()
+      cancelled = true
+      abortFullFetch()
       window.removeEventListener('load', scheduleIdle)
       if (idleHandle !== undefined) {
         if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleHandle)
@@ -310,6 +349,12 @@ export default function ClientPage({
   useEffect(() => {
     currentPageRef.current = currentPage
   }, [currentPage])
+
+  // ナビゲーション状態（スクロール位置）の保存・復元。
+  // 2ページ目以降は全件の補完が終わるまで内容が無いので、復元はそれを待つ
+  const { clearState: clearNavigationScrollState } = useNavigationState({
+    isReady: currentPage <= 1 || fullDataStatus !== 'pending'
+  })
 
   // 外部ナビゲーション中の状態管理（UX制御）
   const [isNavigating, setIsNavigating] = useState(false)
@@ -928,6 +973,10 @@ export default function ClientPage({
     
     scrollNextPageRef.current = jumpToTop && page > currentPage
     setCurrentPage(page)
+    // 2ページ目以降へ移ったら、全件の補完（load 後のアイドル待ち）を待たずにすぐ始める
+    if (page > 1 && isFullDataPending) {
+      startFullFetch()
+    }
     
     // クライアントサイドページネーション: URLのみ更新（データ再取得なし）
     const params = new URLSearchParams()
@@ -946,7 +995,7 @@ export default function ClientPage({
     const newUrl = params.toString() ? `?${params.toString()}` : '/'
     window.history.replaceState(null, '', newUrl)
 
-  }, [currentPage, config])
+  }, [currentPage, config, isFullDataPending, startFullFetch])
 
   const handlePageChangeTop = useCallback(
     (page: number) => triggerPageChange(page, { jumpToTop: false }),
@@ -1325,7 +1374,7 @@ export default function ClientPage({
   // NGリスト適用時の処理は不要（ngListの変更で自動的に再計算される）
 
   // クライアントサイドページネーション処理 (同期的なNGフィルタリング + 時間範囲フィルタリング)
-  const { displayItems, totalPages, totalItemsCount, totalBeforeTimeFilter } = useMemo(() => {
+  const { displayItems, totalPages, totalItemsCount, paginationTotalItems, totalBeforeTimeFilter } = useMemo(() => {
     // データソースを決定（カスタムランキング表示中は専用データを使用）
     const sourceData = isShowingCustomRanking ? customRankingDisplayData : fullRankingData
     
@@ -1344,7 +1393,7 @@ export default function ClientPage({
     // ページ数を推定してページネーションを先に正しく表示する
     // （時間範囲フィルタ適用中は実データ基準を優先する）
     const pendingTotalPages =
-      isFullDataPending && !isShowingCustomRanking && initialTotalCount && totalCount === totalBeforeTime
+      fullDataStatus !== 'done' && !isShowingCustomRanking && initialTotalCount && totalCount === totalBeforeTime
         ? Math.ceil(initialTotalCount / ITEMS_PER_PAGE)
         : 0
 
@@ -1360,9 +1409,11 @@ export default function ClientPage({
       displayItems: result,
       totalPages: Math.max(calculatedTotalPages, pendingTotalPages),
       totalItemsCount: totalCount,
+      // ページ送りの件数表示: 全件がそろう前・取得に失敗したときは SSR の総件数（ページ数と揃える）
+      paginationTotalItems: pendingTotalPages > 0 && initialTotalCount ? initialTotalCount : totalCount,
       totalBeforeTimeFilter: totalBeforeTime
     }
-  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange, isFullDataPending, initialTotalCount])
+  }, [fullRankingData, ngList, currentPage, isShowingCustomRanking, customRankingDisplayData, timeRange, fullDataStatus, initialTotalCount])
   
   // リアルタイム統計更新を無効化
   // 理由: KVのバッチ読み取りはキーごとに課金されるため、
@@ -1376,6 +1427,9 @@ export default function ClientPage({
   // （補完データ到着後に該当ページが slice されて表示される）
   const waitingForFullData =
     isFullDataPending && !isShowingCustomRanking && currentPage > 1 && displayItems.length === 0
+  // 全件の補完に失敗し、2ページ目以降の内容が無い（再試行を出す）
+  const fullDataFailed =
+    fullDataStatus === 'error' && !isShowingCustomRanking && currentPage > 1 && displayItems.length === 0
   
   // レンダリング
   try {
@@ -1451,7 +1505,41 @@ export default function ClientPage({
         </div>
       )}
       
-      {!loading && !waitingForFullData && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
+      {/* 全件の補完に失敗したときの 2ページ目以降: 空表示にせず、再試行を出す */}
+      {fullDataFailed && !loading && !error && visibleGenres.length > 0 && (
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <div style={{
+            fontSize: '16px',
+            color: 'var(--text-secondary)',
+            marginBottom: '20px'
+          }}>
+            101位以降を読み込めませんでした
+          </div>
+          <button
+            onClick={() => startFullFetch()}
+            style={{
+              padding: '10px 20px',
+              fontSize: '14px',
+              backgroundColor: 'var(--primary-color)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            再試行
+          </button>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={paginationTotalItems}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={handlePageChangeTop}
+          />
+        </div>
+      )}
+
+      {!loading && !waitingForFullData && !fullDataFailed && !error && (finalDisplayItems.length === 0 || visibleGenres.length === 0) && (
         <div style={{ textAlign: 'center', padding: '40px' }}>
           <div style={{ 
             fontSize: '16px', 
@@ -1518,7 +1606,7 @@ export default function ClientPage({
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            totalItems={totalItemsCount}
+            totalItems={paginationTotalItems}
             itemsPerPage={ITEMS_PER_PAGE}
             onPageChange={handlePageChangeTop}
           />
@@ -1557,7 +1645,7 @@ export default function ClientPage({
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
-            totalItems={totalItemsCount}
+            totalItems={paginationTotalItems}
             itemsPerPage={ITEMS_PER_PAGE}
             onPageChange={handlePageChangeBottom}
           />
