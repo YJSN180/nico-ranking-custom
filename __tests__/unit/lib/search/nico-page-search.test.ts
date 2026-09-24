@@ -47,6 +47,14 @@ describe('nico-page-search', () => {
     expect(decodeHtmlAttribute('&quot;a&quot; &amp; &lt;b&gt; &#39;c&#x27; &amp;lt;')).toBe('"a" & <b> \'c\' &lt;')
   })
 
+  it('数値参照は 0 埋めの有無や 10 進・16 進によらず復号する（&#039; など）', () => {
+    expect(decodeHtmlAttribute('&#039;a&#0039; &#x2f; &#X41; &#12354; &amp;#039;')).toBe("'a' / A あ &#039;")
+  })
+
+  it('範囲外・サロゲート・NUL の数値参照と未知の名前はそのまま残す', () => {
+    expect(decodeHtmlAttribute('&#0; &#xD800; &#x110000; &nbspx;')).toBe('&#0; &#xD800; &#x110000; &nbspx;')
+  })
+
   it('server-response の JSON から items / totalCount / hasNext を取り出し、壊れた項目は落とす', () => {
     const r = parseNicoSearchPage(html)
     expect(r.totalCount).toBe(3)
