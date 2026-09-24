@@ -6,6 +6,7 @@ import {
   fetchThumbInfoFromExt,
   fetchUserInfoFromNvapi,
   fetchNewVideosFromNicoPages,
+  NicoPagesFailedError,
 } from '@/workers/lqng-poller/src/sources'
 
 // 応答の形は実測に基づくが、値はすべて合成
@@ -157,8 +158,9 @@ describe('fetchNewVideosFromNicoPages', () => {
           : pageHtml([item('sm2', 20), item('sm9', 30, { owner: { ownerType: 'channel', id: '77' }, isChannelVideo: true })], false)
       return { ok: true, text: async () => body } as unknown as Response
     })
-    const { videos, failures } = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
+    const { videos, failures, requests } = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
     expect(calls).toHaveLength(4) // 2 タグ × 2 種別 × 1 ページ（tagA の動画は since より古い動画で打ち切り）
+    expect(requests).toBe(4)
     expect(calls.some((u) => u.includes('/tag_shorts/') && u.includes('sort=registeredAt'))).toBe(true)
     expect(videos.map((v) => v.id)).toEqual(['ss5', 'sm1', 'sm2', 'sm9'])
     expect(videos.find((v) => v.id === 'sm9')?.authorId).toBe('channel/ch77')
@@ -205,7 +207,9 @@ describe('fetchNewVideosFromNicoPages', () => {
 
   it('全部のページが取れないときだけ投げる（構造の変化など。呼び出し側で nvapi に縮退する）', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => '<html></html>' }) as unknown as Response)
-    await expect(fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)).rejects.toThrow('server-response')
-    expect(fetchImpl).toHaveBeenCalledTimes(2) // 動画・ショートとも 1 ページ目で失敗
+    const error = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(NicoPagesFailedError)
+    expect((error as NicoPagesFailedError).message).toContain('server-response')
+    expect((error as NicoPagesFailedError).requests).toBe(2) // 動画・ショートとも 1 ページ目で失敗
   })
 })

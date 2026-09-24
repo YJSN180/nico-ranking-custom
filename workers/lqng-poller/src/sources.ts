@@ -44,6 +44,20 @@ export interface NewVideosResult {
   videos: SourceVideo[]
   /** 取れなかったページ（タグは名前でなく設定の並び順の番号で表す。例: t0:tag_shorts:p1 nico_page_http_503） */
   failures: string[]
+  /** 実際に送ったリクエスト数（失敗したページも含む。サブリクエスト予算の消費に使う） */
+  requests: number
+}
+
+/** 本家タグページが 1 ページも取れなかった（呼び出し側で予備の nvapi に縮退する） */
+export class NicoPagesFailedError extends Error {
+  constructor(
+    readonly failures: string[],
+    /** 実際に送ったリクエスト数 */
+    readonly requests: number
+  ) {
+    super(`nico_pages_failed: ${failures.join('; ')}`)
+    this.name = 'NicoPagesFailedError'
+  }
 }
 
 export interface PollDeps {
@@ -73,7 +87,8 @@ const THUMB_URL = 'https://ext.nicovideo.jp/api/getthumbinfo/'
 const SNAPSHOT_URL = 'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
 const PAGE_SIZE = 100
 export const SNAPSHOT_PAGE_SIZE = PAGE_SIZE
-const MAX_PAGES = 3
+/** nvapi 新着検索・日次スイープ（Snapshot）で読む最大ページ数 */
+export const MAX_PAGES = 3
 const TIMEOUT_MS = 8000
 
 interface NvapiItem {
@@ -119,11 +134,13 @@ export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: stri
   const out: SourceVideo[] = []
   const failures: string[] = []
   let succeeded = 0
+  let requests = 0
   let limited = false
   for (const [tagIndex, tag] of tags.entries()) {
     for (const kind of NICO_PAGE_KINDS) {
       for (let page = 1; page <= NICO_PAGES_PER_TAG && !limited; page++) {
         let result: NicoPageResult
+        requests++
         try {
           result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
         } catch (error) {
@@ -147,8 +164,8 @@ export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: stri
       }
     }
   }
-  if (succeeded === 0 && failures.length > 0) throw new Error(`nico_pages_failed: ${failures.join('; ')}`)
-  return { videos: out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt)), failures }
+  if (succeeded === 0 && failures.length > 0) throw new NicoPagesFailedError(failures, requests)
+  return { videos: out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt)), failures, requests }
 }
 
 /** nvapi 新着検索: タグ OR、投稿日時の新しい順、since 以降を最大 3 ページ（本家ページが使えないときの予備） */

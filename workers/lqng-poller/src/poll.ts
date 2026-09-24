@@ -5,7 +5,7 @@
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
-import { AccessLimitedError, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from './sources'
+import { AccessLimitedError, MAX_PAGES, NicoPagesFailedError, NICO_PAGE_KINDS, NICO_PAGES_PER_TAG, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from './sources'
 import {
   captureBaseline,
   loadEnabled,
@@ -25,8 +25,11 @@ export const LIMITS = {
   usersPerRun: 10,
   /** 外部呼び出しの総予算（無料プランの 50/実行 に KV 分の余裕を残す） */
   subrequestBudget: 40,
-  /** 新着取得の予算。本家タグページはタグ 3 × 種別 2（動画/ショート）× 最大 2 ページ = 12 とみなす（予備の nvapi は 3） */
-  nvapiCost: 12,
+  /** 新着取得に使うタグの上限。本家タグページは タグ × 種別 2（動画/ショート）× 最大 2 ページ = 最大 12 リクエスト */
+  pollTagsMax: 3,
+  /** 予備（nvapi）・日次スイープ（Snapshot）は送ったページ数を返さないので、最大ページ数で見積もる */
+  fallbackCost: MAX_PAGES,
+  sweepCost: MAX_PAGES,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,
   /** 退会の確定に要る、1 回目の 404 から 2 回目の確認までの間隔 */
@@ -270,18 +273,22 @@ class Session {
    * 取得できたときだけ true（false の回は最終取得時刻を進めず、次回に同じ区間を取り直す）
    */
   async ingestNewVideos(sinceIso: string): Promise<boolean> {
-    const tags = this.config.pollTags
-    if (tags.length === 0) return true
-    this.spend(LIMITS.nvapiCost)
+    if (this.config.pollTags.length === 0) return true
+    // タグ数を抑えて、新着取得のリクエスト数（予算）に上限を設ける
+    const tags = this.config.pollTags.slice(0, LIMITS.pollTagsMax)
+    if (this.config.pollTags.length > tags.length) this.addNote(`poll_tags_capped: ${this.config.pollTags.length}>${LIMITS.pollTagsMax}`)
     let primaryError: unknown
     try {
       const result = await this.deps.fetchNewVideos(tags, sinceIso)
+      this.spend(result.requests)
       this.ingest(result.videos)
       // 一部のページだけ取れなかった回は、取れた分を使う（予備には縮退しない）。
       // 取れなかったページの動画は次回以降の重なり（sinceOverlapMinutes）で取り直す
       if (result.failures.length > 0) this.addNote(`new_videos_partial: ${result.failures.join('; ')}`)
       return true
     } catch (error) {
+      // 送ったページ数が分からない失敗は最大で見積もる
+      this.spend(error instanceof NicoPagesFailedError ? error.requests : tags.length * NICO_PAGE_KINDS.length * NICO_PAGES_PER_TAG)
       if (error instanceof AccessLimitedError) {
         this.recordAccessLimited(error)
         return false
@@ -294,6 +301,7 @@ class Session {
       // 原因は履歴に残す
       pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
       this.addNote(`fallback: ${reason}`)
+      this.spend(LIMITS.fallbackCost)
       try {
         this.ingest(await fallback(tags, sinceIso))
         return true
@@ -561,7 +569,7 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   session.expireAndPrune()
 
   if (mode === 'sweep' && state.config.sweepGenre) {
-    session.spend(LIMITS.nvapiCost)
+    session.spend(LIMITS.sweepCost)
     const videos = await deps.fetchSweepVideos(state.config.sweepGenre, sweepDate)
     // 前日分をポーリングと同じく追跡に取り込む（差分取得の取りこぼしに対する日次の安全網）。
     // 取り込み済みの動画は除外されるので、通常は少数だけが新たに追跡される

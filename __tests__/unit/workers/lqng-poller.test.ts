@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runPoll, LIMITS } from '@/workers/lqng-poller/src/poll'
 import { commitBackfill } from '@/workers/lqng-poller/src/backfill'
-import { AccessLimitedError, type NewVideosResult, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
+import { AccessLimitedError, NicoPagesFailedError, type NewVideosResult, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
 import type { LqngEvents, LqngTracking } from '@/workers/lqng-poller/src/state'
@@ -29,8 +29,8 @@ const T0 = new Date('2026-02-01T12:00:00+09:00')
 const at = (min: number): string => new Date(T0.getTime() + min * 60_000).toISOString()
 
 const video = (over: Partial<SourceVideo>): SourceVideo => ({ id: 'sm1', title: '通常', authorId: '1001', registeredAt: at(-1), ownerVisibility: 'visible', ...over })
-/** 主経路（本家タグページ）の取得結果 */
-const pages = (videos: SourceVideo[], failures: string[] = []): NewVideosResult => ({ videos, failures })
+/** 主経路（本家タグページ）の取得結果（既定は 2 タグ × 2 種別 × 1 ページ = 4 リクエスト） */
+const pages = (videos: SourceVideo[], failures: string[] = [], requests = 4): NewVideosResult => ({ videos, failures, requests })
 const locked = (...names: string[]) => names.map((name) => ({ name, isLocked: true }))
 const okThumb = (tags = locked('x')): ThumbResult => ({ ok: true, info: { tagDetails: tags, ownerVisibility: 'visible', nickname: 'n' } })
 const existing = (followerCount: number): UserInfo => ({ status: 'existing', followerCount, nickname: 'n' })
@@ -743,5 +743,30 @@ describe('lqng-poller getthumbinfo の失敗の扱い', () => {
     expect(pending).toHaveLength(8)
     expect(pending.every((p) => p.attempts === 0)).toBe(true)
     expect(r.note).toContain('getthumbinfo_unavailable')
+  })
+})
+
+describe('lqng-poller 外部呼び出しの予算', () => {
+  it('新着取得は実際に送ったページ数だけ予算を使う', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [], 5)) }), 'poll')
+    expect(r.subrequests).toBe(5)
+  })
+
+  it('本家ページが全部失敗した回も、送ったページ数を使ったうえで予備の分を足す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const primary = vi.fn(async () => {
+      throw new NicoPagesFailedError(['t0:tag:p1 nico_page_http_500'], 4)
+    })
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: vi.fn(async () => []) }), 'poll')
+    expect(r.subrequests).toBe(4 + LIMITS.fallbackCost)
+  })
+
+  it('新着取得に使うタグは上限までにし、超えた分は注記する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, pollTags: ['t1', 't2', 't3', 't4', 't5'] } })
+    const fetchNew = vi.fn(async () => pages([]))
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: fetchNew }), 'poll')
+    expect((fetchNew.mock.calls[0] as unknown as [string[], string])[0]).toEqual(['t1', 't2', 't3'])
+    expect(r.note).toContain(`poll_tags_capped: 5>${LIMITS.pollTagsMax}`)
   })
 })
