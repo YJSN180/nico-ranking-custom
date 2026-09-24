@@ -97,7 +97,58 @@ describe('NG List API', () => {
 
       expect(response.status).toBe(200)
       expect(data).toEqual({ success: true })
-      expect(setNGListManual).toHaveBeenCalledWith(ngList)
+      // 旧形式（文字列の配列）のタイトル・投稿者名は完全一致として保存する（読み取り側と同じ解釈）
+      expect(setNGListManual).toHaveBeenCalledWith({
+        videoIds: ['sm123'],
+        videoTitles: { exact: ['Test Video'], partial: [] },
+        authorIds: ['author1'],
+        authorNames: { exact: ['Test Author'], partial: [] }
+      })
+    })
+
+    it('手動NGの 4 項目だけを保存し、GET が返す自動NG・派生NGを手動に固定しない', async () => {
+      const manual = {
+        videoIds: ['sm1'],
+        videoTitles: { exact: ['t'], partial: [] },
+        authorIds: ['12345678'],
+        authorNames: { exact: [], partial: ['n'] }
+      }
+      ;(setNGListManual as any).mockResolvedValueOnce(undefined)
+
+      const request = new NextRequest('http://localhost/api/admin/ng-list', {
+        method: 'POST',
+        headers: {
+          'authorization': 'Bearer valid-token',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ ...manual, autoAuthorIds: ['1001'], autoVideoIds: ['sm-auto'], derivedVideoIds: ['sm-derived'], extra: 'x' })
+      })
+
+      const response = await POST(request)
+      expect(response.status).toBe(200)
+      expect(setNGListManual).toHaveBeenCalledWith(manual)
+    })
+
+    it('本文や各項目の形が違えば 400 で保存しない', async () => {
+      const valid = { videoIds: [], videoTitles: { exact: [], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] } }
+      const bodies = [
+        'null',
+        '[]',
+        JSON.stringify({ ...valid, videoIds: 'sm1' }),
+        JSON.stringify({ ...valid, authorIds: [1] }),
+        JSON.stringify({ ...valid, videoTitles: { exact: ['t'] } }),
+        JSON.stringify({ ...valid, authorNames: 'n' })
+      ]
+      for (const body of bodies) {
+        const request = new NextRequest('http://localhost/api/admin/ng-list', {
+          method: 'POST',
+          headers: { 'authorization': 'Bearer valid-token', 'content-type': 'application/json' },
+          body
+        })
+        const response = await POST(request)
+        expect(response.status).toBe(400)
+      }
+      expect(setNGListManual).not.toHaveBeenCalled()
     })
 
     it('should return 400 for invalid data format', async () => {
