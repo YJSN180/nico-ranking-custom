@@ -1,192 +1,374 @@
-const SENSITIVE_QUERY_KEYS = new Set([
-  'authorization',
-  'cookie',
-  'key',
-  'memo',
-  'password',
-  'q',
-  'query',
-  'tag',
-  'title',
-  'token',
-  'username',
+import type { Breadcrumb, Event } from '@sentry/nextjs'
+
+type SpanJSON = NonNullable<Event['spans']>[number]
+type SpanData = SpanJSON['data']
+type RequestData = NonNullable<Event['request']>
+type Contexts = NonNullable<Event['contexts']>
+type EventException = NonNullable<NonNullable<Event['exception']>['values']>[number]
+type StackFrame = NonNullable<NonNullable<EventException['stacktrace']>['frames']>[number]
+type PrimitiveTag = string | number | boolean | null | undefined
+
+const REDACTED = '[redacted]'
+
+// クエリは許可リストのキーだけ値を残す。検索語が入る q / keyword / tagAnd などを含め、それ以外の値はすべて伏せる
+const ALLOWED_QUERY_KEYS = new Set([
+  'genre',
+  'period',
+  'page',
+  'limit',
+  'offset',
+  'sort',
+  'order',
+  'targets',
+  'contentType',
+  '_sort',
+  '_offset',
+  '_limit',
 ])
 
-const DYNAMIC_PATH_PATTERNS: Array<[RegExp, string]> = [
+// 検索語や ID がパスに入る URL をテンプレートにする
+const PATH_TEMPLATES: Array<[RegExp, string]> = [
+  [/^\/(search|tag|search_shorts|tag_shorts)\/[^/]+/, '/$1/:query'],
+  [/^\/api\/watch\/v3_guest\/[^/]+/, '/api/watch/v3_guest/:videoId'],
+  [/^\/v1\/users\/[^/]+/, '/v1/users/:userId'],
+  // bulk は一括処理のルートなのでそのまま残す
+  [/^\/api\/admin\/ng-list\/derived\/(?!bulk(?:\/|$))[^/]+/, '/api/admin/ng-list/derived/:videoId'],
   [/\/api\/thumbnail\/[^/]+/g, '/api/thumbnail/:videoId'],
   [/\/api\/hd-thumbnail\/[^/]+/g, '/api/hd-thumbnail/:videoId'],
   [/\/mylists\/[^/]+/g, '/mylists/:id'],
 ]
 
-type PrimitiveTag = string | number | boolean | null | undefined
+// パーセントエンコード・空白・非 ASCII を含むパスのセグメントやクエリのキー名は、利用者の入力とみなして伏せる
+const USER_TEXT = /%|[^\x21-\x7e]/
+const URL_SCHEME = /^([a-z][a-z\d+.-]*):/i
+const HTTP_URL = /^https?:\/\//i
+const HTTP_ORIGIN = /^https?:\/\/[^/?#]*/i
+const PLACEHOLDER_BASE = 'https://placeholder.invalid'
 
-function scrubSearchParams(searchParams: URLSearchParams) {
+// 「GET /path」「RSC GET /path」「GET https://…」や URL 単体。「middleware GET」のように URL を含まない文字列は対象外
+const URL_TEXT = /^((?:[A-Za-z]+\s+)*)((?:\/|https?:\/\/)[\s\S]*)$/i
+// 文中の URL（例外メッセージなど）。絶対 URL と、区切り文字の直後から始まるパス
+const EMBEDDED_URL = /(https?:\/\/[^\s"'<>`]+)|(^|[\s("'=,:;[{])(\/(?!\/)[^\s"'<>`]*)/gi
+const SCRIPT_FILE = /\.(?:[cm]?js|jsx|tsx?)$/i
+const SENSITIVE_MESSAGE = /authorization|cookie|password|token/i
+
+const DROPPED_SPAN_ATTRIBUTES = new Set([
+  'url.query',
+  'http.query',
+  'url.fragment',
+  'http.fragment',
+  'http.request.body.data',
+])
+// ヘッダー（referer・next-url・next-router-state-tree など）にはページの URL や検索語が入るので送らない
+const DROPPED_SPAN_ATTRIBUTE_PREFIXES = ['http.request.header.', 'http.response.header.']
+const URL_SPAN_ATTRIBUTES = new Set(['url', 'url.full', 'http.url', 'http.target', 'url.path'])
+// ルート名やスパン名。INP などの単独スパンは transaction 属性にページのパスを持つ
+const URL_TEXT_SPAN_ATTRIBUTES = new Set(['next.span_name', 'http.route', 'transaction'])
+const BREADCRUMB_URL_KEYS = ['url', 'to', 'from']
+
+const SENDING_ENVIRONMENTS = new Set(['production', 'preview'])
+
+function scrubSearchParams(searchParams: URLSearchParams): string {
   const nextParams = new URLSearchParams()
 
-  for (const [key, value] of searchParams.entries()) {
-    if (SENSITIVE_QUERY_KEYS.has(key.toLowerCase())) {
-      nextParams.set(key, '[redacted]')
-      continue
+  searchParams.forEach((value, key) => {
+    if (ALLOWED_QUERY_KEYS.has(key)) {
+      nextParams.append(key, value)
+      return
     }
 
-    nextParams.set(key, value)
-  }
+    nextParams.append(USER_TEXT.test(key) ? REDACTED : key, REDACTED)
+  })
 
-  return nextParams
+  return nextParams.toString()
 }
 
-function normalizeDynamicPath(pathname: string) {
-  return DYNAMIC_PATH_PATTERNS.reduce(
+function templatePath(pathname: string): string {
+  const templatedPath = PATH_TEMPLATES.reduce(
     (currentPath, [pattern, replacement]) => currentPath.replace(pattern, replacement),
     pathname,
   )
+
+  return templatedPath
+    .split('/')
+    .map((segment) => (USER_TEXT.test(segment) ? ':redacted' : segment))
+    .join('/')
 }
 
-export function getSentryEnvironment() {
-  return process.env.VERCEL_ENV || process.env.NODE_ENV || 'development'
+/**
+ * クエリを許可リストで伏せ、パスをテンプレートにし、フラグメントと認証情報を落とす。
+ * 絶対 URL はオリジンを残し、相対 URL は相対のまま返す。
+ */
+export function scrubUrl(input: string): string {
+  if (!input) return input
+
+  const scheme = URL_SCHEME.exec(input)?.[1].toLowerCase()
+  if (scheme && scheme !== 'http' && scheme !== 'https') {
+    return `${scheme}:${REDACTED}`
+  }
+
+  let url: URL
+  try {
+    url = new URL(input, PLACEHOLDER_BASE)
+  } catch {
+    return REDACTED
+  }
+
+  const origin = scheme ? `${url.protocol}//${url.host}` : ''
+  const query = scrubSearchParams(url.searchParams)
+
+  return `${origin}${templatePath(url.pathname)}${query ? `?${query}` : ''}`
 }
 
-export function isProductionSentryEnvironment(environment = getSentryEnvironment()) {
-  return environment === 'production'
-}
-
-export function sanitizeUrlForSentry(input?: string | null) {
+/** scrubUrl の結果からオリジンを外したもの（トランザクション名を同じルートでまとめるため） */
+export function sanitizeUrlForSentry(input?: string | null): string | undefined {
   if (!input) return undefined
 
-  try {
-    const url = input.startsWith('http://') || input.startsWith('https://')
-      ? new URL(input)
-      : new URL(input, 'https://nico-rank.com')
-
-    const normalizedPath = normalizeDynamicPath(url.pathname)
-    const nextParams = scrubSearchParams(url.searchParams)
-    const nextSearch = nextParams.toString()
-
-    return nextSearch ? `${normalizedPath}?${nextSearch}` : normalizedPath
-  } catch {
-    const [withoutHash] = input.split('#')
-    const [pathname, rawSearch = ''] = withoutHash.split('?')
-    const nextParams = scrubSearchParams(new URLSearchParams(rawSearch))
-    const normalizedPath = normalizeDynamicPath(pathname || input)
-    const nextSearch = nextParams.toString()
-
-    return nextSearch ? `${normalizedPath}?${nextSearch}` : normalizedPath
-  }
+  return scrubUrl(input).replace(HTTP_ORIGIN, '')
 }
 
-export function normalizeTransactionName(name?: string | null) {
+function rewriteUrlText(text: string, rewriteUrl: (url: string) => string): string {
+  const match = URL_TEXT.exec(text)
+
+  return match ? `${match[1]}${rewriteUrl(match[2])}` : text
+}
+
+function scrubUrlsInText(text: string): string {
+  return text.replace(
+    EMBEDDED_URL,
+    (_match: string, absoluteUrl: string | undefined, boundary: string | undefined, path: string | undefined) =>
+      absoluteUrl ? scrubUrl(absoluteUrl) : `${boundary ?? ''}${scrubUrl(path ?? '')}`,
+  )
+}
+
+export function normalizeTransactionName(name?: string | null): string | undefined {
   if (!name) return name ?? undefined
 
-  const methodMatch = name.match(/^([A-Z]+)\s+(.+)$/)
-  if (methodMatch) {
-    const [, method, url] = methodMatch
-    const sanitizedUrl = sanitizeUrlForSentry(url) || normalizeDynamicPath(url)
-    return `${method} ${sanitizedUrl}`
-  }
-
-  return sanitizeUrlForSentry(name) || normalizeDynamicPath(name)
+  return rewriteUrlText(name, (url) => sanitizeUrlForSentry(url) ?? url)
 }
 
-function scrubRequest(request: Record<string, unknown> | undefined) {
-  if (!request) return request
+function scrubSpanData(data: SpanData | undefined): SpanData {
+  const nextData: SpanData = {}
+  if (!data) return nextData
 
-  const nextRequest = { ...request }
-  delete nextRequest.cookies
-  delete nextRequest.data
-  delete nextRequest.fragment
-  delete nextRequest.headers
-  delete nextRequest.query_string
+  for (const [key, value] of Object.entries(data)) {
+    if (DROPPED_SPAN_ATTRIBUTES.has(key) || DROPPED_SPAN_ATTRIBUTE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+      continue
+    }
 
-  if (typeof nextRequest.url === 'string') {
-    nextRequest.url = sanitizeUrlForSentry(nextRequest.url)
+    if (typeof value === 'string' && URL_SPAN_ATTRIBUTES.has(key)) {
+      nextData[key] = scrubUrl(value)
+    } else if (typeof value === 'string' && URL_TEXT_SPAN_ATTRIBUTES.has(key)) {
+      nextData[key] = rewriteUrlText(value, scrubUrl)
+    } else {
+      nextData[key] = value
+    }
+  }
+
+  return nextData
+}
+
+/** beforeSendSpan 用。トランザクションのルートと子のスパンの両方に適用される */
+export function scrubSpan(span: SpanJSON): SpanJSON {
+  const nextSpan: SpanJSON = { ...span, data: scrubSpanData(span.data) }
+
+  if (typeof nextSpan.description === 'string') {
+    nextSpan.description = rewriteUrlText(nextSpan.description, scrubUrl)
+  }
+
+  return nextSpan
+}
+
+function scrubRequest(request: RequestData): RequestData {
+  // ヘッダー・Cookie・本文・クエリ文字列は送らず、メソッドと整えた URL だけを残す
+  const nextRequest: RequestData = {}
+
+  if (typeof request.method === 'string') {
+    nextRequest.method = request.method
+  }
+
+  if (typeof request.url === 'string') {
+    nextRequest.url = scrubUrl(request.url)
   }
 
   return nextRequest
 }
 
-function scrubContexts(contexts: Record<string, any> | undefined) {
-  if (!contexts) return contexts
+function scrubContexts(contexts: Contexts): Contexts {
+  const nextContexts: Contexts = { ...contexts }
+  delete nextContexts.response
 
-  const nextContexts = { ...contexts }
-
-  if (nextContexts.response) {
-    delete nextContexts.response
+  const trace = nextContexts.trace
+  if (trace?.data && typeof trace.data === 'object') {
+    const data = scrubSpanData(trace.data)
+    delete data['http.request.body.size']
+    delete data['http.response.body.size']
+    nextContexts.trace = { ...trace, data }
   }
 
-  if (nextContexts.trace?.data && typeof nextContexts.trace.data === 'object') {
-    const traceData = { ...nextContexts.trace.data }
-
-    if (typeof traceData.url === 'string') {
-      traceData.url = sanitizeUrlForSentry(traceData.url)
-    }
-
-    delete traceData['http.request.body.size']
-    delete traceData['http.response.body.size']
-
-    nextContexts.trace = {
-      ...nextContexts.trace,
-      data: traceData,
-    }
+  // Next.js の onRequestError が入れるリクエストパス（クエリ付き）
+  const nextjs = nextContexts.nextjs
+  if (nextjs && typeof nextjs.request_path === 'string') {
+    nextContexts.nextjs = { ...nextjs, request_path: scrubUrl(nextjs.request_path) }
   }
 
   return nextContexts
 }
 
-export function scrubBreadcrumb<T extends Record<string, any> | null>(breadcrumb: T): T {
+function scrubFrameLocation(location: string): string {
+  // インラインスクリプトのフレームにはページの URL が入る。スクリプトファイルはソースマップ解決のため触らない
+  if (!HTTP_URL.test(location)) return location
+
+  const [path] = location.split(/[?#]/)
+  return SCRIPT_FILE.test(path) ? location : scrubUrl(location)
+}
+
+function scrubFrame(frame: StackFrame): StackFrame {
+  const nextFrame: StackFrame = { ...frame }
+
+  if (typeof nextFrame.filename === 'string') {
+    nextFrame.filename = scrubFrameLocation(nextFrame.filename)
+  }
+
+  if (typeof nextFrame.abs_path === 'string') {
+    nextFrame.abs_path = scrubFrameLocation(nextFrame.abs_path)
+  }
+
+  return nextFrame
+}
+
+function scrubException(exception: EventException): EventException {
+  const nextException: EventException = { ...exception }
+
+  if (typeof nextException.value === 'string') {
+    nextException.value = scrubUrlsInText(nextException.value)
+  }
+
+  const frames = nextException.stacktrace?.frames
+  if (frames) {
+    nextException.stacktrace = { ...nextException.stacktrace, frames: frames.map(scrubFrame) }
+  }
+
+  return nextException
+}
+
+export function scrubBreadcrumb(breadcrumb: Breadcrumb | null): Breadcrumb | null {
   if (!breadcrumb) return breadcrumb
 
-  const nextBreadcrumb: Record<string, any> = { ...breadcrumb }
+  const nextBreadcrumb: Breadcrumb = { ...breadcrumb }
 
-  if (typeof nextBreadcrumb.message === 'string' && /authorization|cookie|password|token/i.test(nextBreadcrumb.message)) {
-    nextBreadcrumb.message = '[redacted]'
+  if (typeof nextBreadcrumb.message === 'string') {
+    nextBreadcrumb.message = SENSITIVE_MESSAGE.test(nextBreadcrumb.message)
+      ? REDACTED
+      : scrubUrlsInText(nextBreadcrumb.message)
   }
 
   if (nextBreadcrumb.data && typeof nextBreadcrumb.data === 'object') {
-    const nextData = { ...nextBreadcrumb.data }
+    const nextData: Record<string, unknown> = { ...nextBreadcrumb.data }
 
-    if (typeof nextData.url === 'string') {
-      nextData.url = sanitizeUrlForSentry(nextData.url)
+    for (const key of BREADCRUMB_URL_KEYS) {
+      const value = nextData[key]
+      if (typeof value === 'string') {
+        nextData[key] = scrubUrl(value)
+      }
     }
 
-    if (typeof nextData.to === 'string') {
-      nextData.to = sanitizeUrlForSentry(nextData.to)
-    }
-
-    if (typeof nextData.from === 'string') {
-      nextData.from = sanitizeUrlForSentry(nextData.from)
+    if (Array.isArray(nextData.arguments)) {
+      nextData.arguments = nextData.arguments.map((argument: unknown) =>
+        typeof argument === 'string' ? scrubUrlsInText(argument) : argument,
+      )
     }
 
     delete nextData.headers
     delete nextData.input
     delete nextData.response
+    delete nextData['http.query']
+    delete nextData['http.fragment']
 
     nextBreadcrumb.data = nextData
   }
 
-  return nextBreadcrumb as T
+  return nextBreadcrumb
 }
 
-export function scrubEvent<T extends Record<string, any>>(event: T): T {
-  const nextEvent: Record<string, any> = { ...event }
+/** サーバー（Node.js / Edge）用。console の出力はリクエストの中身を含みうるので breadcrumb にしない */
+export function scrubServerBreadcrumb(breadcrumb: Breadcrumb | null): Breadcrumb | null {
+  if (!breadcrumb || breadcrumb.category === 'console') return null
 
-  nextEvent.request = scrubRequest(nextEvent.request)
-  nextEvent.contexts = scrubContexts(nextEvent.contexts)
+  return scrubBreadcrumb(breadcrumb)
+}
+
+function isPresent<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined
+}
+
+export function scrubEvent<T extends Event>(event: T): T {
+  const nextEvent: T = { ...event }
+
+  if (nextEvent.request) {
+    nextEvent.request = scrubRequest(nextEvent.request)
+  }
+
+  if (nextEvent.contexts) {
+    nextEvent.contexts = scrubContexts(nextEvent.contexts)
+  }
 
   if (Array.isArray(nextEvent.breadcrumbs)) {
-    nextEvent.breadcrumbs = nextEvent.breadcrumbs
-      .map((breadcrumb: Record<string, any>) => scrubBreadcrumb(breadcrumb))
-      .filter(Boolean)
+    nextEvent.breadcrumbs = nextEvent.breadcrumbs.map(scrubBreadcrumb).filter(isPresent)
   }
 
-  if (nextEvent.user) {
-    delete nextEvent.user
+  if (Array.isArray(nextEvent.spans)) {
+    nextEvent.spans = nextEvent.spans.map(scrubSpan)
   }
+
+  if (nextEvent.exception?.values) {
+    nextEvent.exception = { ...nextEvent.exception, values: nextEvent.exception.values.map(scrubException) }
+  }
+
+  if (typeof nextEvent.message === 'string') {
+    nextEvent.message = scrubUrlsInText(nextEvent.message)
+  }
+
+  if (typeof nextEvent.logentry?.message === 'string') {
+    nextEvent.logentry = { ...nextEvent.logentry, message: scrubUrlsInText(nextEvent.logentry.message) }
+  }
+
+  delete nextEvent.user
 
   if (nextEvent.transaction) {
     nextEvent.transaction = normalizeTransactionName(nextEvent.transaction)
   }
 
-  return nextEvent as T
+  return nextEvent
+}
+
+/**
+ * client.on('createDsc') 用。DSC のトランザクション名はエンベロープのヘッダーと baggage に載り、
+ * beforeSend 系を通らないためここで整える（SDK の約束どおり、渡された DSC をその場で書き換える）。
+ */
+export function scrubDynamicSamplingContext(dsc: { transaction?: string }): void {
+  if (dsc.transaction) {
+    dsc.transaction = normalizeTransactionName(dsc.transaction)
+  }
+}
+
+/**
+ * Sentry の環境名。next.config.mjs がビルド時の VERCEL_ENV を NEXT_PUBLIC_SENTRY_ENVIRONMENT として埋め込むため、
+ * クライアントでも production / preview を名乗れる。どちらも無ければ local（ローカルの本番ビルドも local）。
+ */
+export function getSentryEnvironment(): string {
+  return process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || 'local'
+}
+
+export function isProductionSentryEnvironment(environment = getSentryEnvironment()): boolean {
+  return environment === 'production'
+}
+
+/** DSN があり、production か preview のときだけ送る。それ以外は NEXT_PUBLIC_SENTRY_FORCE_ENABLE=true のときだけ */
+export function isSentryEnabled(dsn: string | undefined, environment = getSentryEnvironment()): boolean {
+  if (!dsn) return false
+
+  return SENDING_ENVIRONMENTS.has(environment) || process.env.NEXT_PUBLIC_SENTRY_FORCE_ENABLE === 'true'
 }
 
 export function buildSafeTags(tags: Record<string, PrimitiveTag>) {
