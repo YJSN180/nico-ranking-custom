@@ -3,6 +3,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { createR2Store } from './lib/r2-store'
 import { fetchVerifiedRanking } from './lib/verify-ranking-response'
+import {
+  sendStatsTrigger,
+  waitForPublishedStats,
+  type VideoStats,
+} from './lib/wait-for-published-stats'
 import { fetchChecked } from '../lib/pipeline/retry'
 import {
   CURRENT_KEY,
@@ -50,85 +55,49 @@ async function main() {
   } = process.env
   if (!account || !token || !namespace || !workerKey)
     throw new Error('Missing post-publish credentials')
-  type Stats = { metadata?: { updatedAt: string; totalVideos: number } }
-  const getStats = async (): Promise<Stats> =>
+  const getStats = async (): Promise<VideoStats> =>
     (
       await fetchChecked(
         `https://api.cloudflare.com/client/v4/accounts/${account}/storage/kv/namespaces/${namespace}/values/VIDEO_STATS_LATEST`,
         { headers: { Authorization: `Bearer ${token}` } },
       )
-    ).json() as Promise<Stats>
+    ).json() as Promise<VideoStats>
   const before = await getStats().catch((error) => {
     if (error.status === 404) return null
     throw error
   })
-  // A trigger may finish even if its response is lost. Poll before deciding to retry the trigger.
-  try {
-    const response = await fetch(
-      `${process.env.VIDEO_STATS_WORKER_URL || 'https://video-stats-updater.yjsn180180.workers.dev'}/trigger`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${workerKey}` },
-        signal: AbortSignal.timeout(30_000),
-      },
-    )
-    if ([401, 403].includes(response.status))
-      throw new Error('Stats trigger authentication failed')
-  } catch (error: any) {
-    if (!['TimeoutError', 'AbortError'].includes(error.name)) throw error
-  }
-  for (let i = 0; i < 36; i++) {
-    const stats = await getStats()
-    const source = manifest ? (await store.read(STATS_SOURCE_KEY))?.data : null
-    const fresh =
-      stats.metadata?.updatedAt !== before?.metadata?.updatedAt &&
-      Date.parse(stats.metadata?.updatedAt) >
-        (Date.parse(before?.metadata?.updatedAt) || 0) &&
-      Date.now() - Date.parse(stats.metadata.updatedAt) < 15 * 60_000
-    const matches =
-      !manifest ||
-      (source?.generation === expected.generation &&
-        source?.updatedAt === stats.metadata?.updatedAt)
-    if (fresh && matches) {
-      if (
-        !(stats.metadata.totalVideos > 0) ||
-        stats.metadata.totalVideos < (before?.metadata?.totalVideos || 0) * 0.5
-      )
-        throw new Error('Stats count drift')
-      const ranking = await fetchVerifiedRanking(
-        process.env.VIDEO_STATS_WORKER_URL ||
-          'https://video-stats-updater.yjsn180180.workers.dev',
-        workerKey,
-      )
-      if (
-        ranking.updatedAt === expected.collectedAt &&
-        ranking.count === expected.counts['all/24h'] &&
-        ranking.generation === (manifest?.generation || 'legacy')
-      ) {
-        const output =
-          process.env.VERIFY_OUTPUT_PATH ||
-          './tmp/post-publish/verify-r2-contract.json'
-        await mkdir(dirname(output), { recursive: true })
-        await writeFile(
-          output,
-          JSON.stringify({
-            checkedAt: new Date().toISOString(),
-            generation: expected.generation,
-            collectedAt: expected.collectedAt,
-            statsUpdatedAt: stats.metadata.updatedAt,
-            totalVideos: stats.metadata.totalVideos,
-            rankingVerification: ranking,
-            publicEdgeVerification:
-              'not-checked-service-binding-does-not-test-WAF',
-          }),
-        )
-        return
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10_000))
-  }
-  throw new Error(
-    'Published generation did not reach video stats and production gateway within 6 minutes',
+  const workerUrl =
+    process.env.VIDEO_STATS_WORKER_URL ||
+    'https://video-stats-updater.yjsn180180.workers.dev'
+  const { stats, ranking } = await waitForPublishedStats({
+    expected: {
+      generation: expected.generation,
+      collectedAt: expected.collectedAt,
+      allCount: expected.counts['all/24h'],
+      generationMode: Boolean(manifest),
+    },
+    before,
+    readStats: getStats,
+    readSource: async () => (await store.read(STATS_SOURCE_KEY))?.data ?? null,
+    readGatewayRanking: () => fetchVerifiedRanking(workerUrl, workerKey),
+    trigger: () => sendStatsTrigger(workerUrl, workerKey),
+  })
+  const output =
+    process.env.VERIFY_OUTPUT_PATH ||
+    './tmp/post-publish/verify-r2-contract.json'
+  await mkdir(dirname(output), { recursive: true })
+  await writeFile(
+    output,
+    JSON.stringify({
+      checkedAt: new Date().toISOString(),
+      generation: expected.generation,
+      collectedAt: expected.collectedAt,
+      statsUpdatedAt: stats.metadata?.updatedAt,
+      totalVideos: stats.metadata?.totalVideos,
+      rankingVerification: ranking,
+      publicEdgeVerification:
+        'not-checked-service-binding-does-not-test-WAF',
+    }),
   )
 }
 main().catch((error) => {

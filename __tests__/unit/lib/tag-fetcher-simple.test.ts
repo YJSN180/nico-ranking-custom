@@ -20,8 +20,165 @@ async function loadModule() {
 
 afterEach(() => {
   global.fetch = originalFetch
+  vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
+})
+
+type TagCacheStoreModule = typeof import('@/lib/tag-cache-store')
+
+function itemsInDistinctShards(store: TagCacheStoreModule, count: number): { items: RankingItem[]; shardKeys: string[] } {
+  const items: RankingItem[] = []
+  const shardKeys: string[] = []
+  for (let n = 0; items.length < count; n += 1) {
+    const id = `sm${700000 + n}`
+    const shardKey = store.getShardKeyForVideoId(id)
+    if (shardKeys.includes(shardKey)) continue
+    shardKeys.push(shardKey)
+    items.push({ rank: items.length + 1, id, title: 't', thumbURL: '', views: 1 })
+  }
+  return { items, shardKeys }
+}
+
+function cachedShard(videoId: string, tag: string) {
+  return {
+    [videoId]: { tags: [{ name: tag, isLocked: false }], fetchedAt: new Date().toISOString(), source: 'nicolog' as const },
+  }
+}
+
+function track<T>(promise: Promise<T>): { promise: Promise<T>; state: () => 'settled' | 'pending' } {
+  let settled = false
+  promise.then(() => { settled = true }, () => { settled = true })
+  return { promise, state: () => (settled ? 'settled' : 'pending') }
+}
+
+function logLines(spy: { mock: { calls: unknown[][] } }): string[] {
+  return spy.mock.calls.map((args) => args.map(String).join(' '))
+}
+
+describe('tag cache loading bounds', () => {
+  it('continues with the shards read before the load budget and fetches the rest normally', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    const { mod, store } = await loadModule()
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { items, shardKeys } = itemsInDistinctShards(store, 3)
+    vi.spyOn(store, 'readTagCacheShard').mockImplementation(async (shardKey: string) => {
+      const index = shardKeys.indexOf(shardKey)
+      if (index === 2) return new Promise(() => {})
+      return cachedShard(items[index].id, `cached-${index}`)
+    })
+    const fetchMock = vi.fn(async () => new Response('<td class="tdtag"><li class="tag">Network</li></td>'))
+    global.fetch = fetchMock as typeof fetch
+
+    const run = track(mod.enrichRankingItemsWithTagDetails(items, items.length, 0, true))
+    await vi.advanceTimersByTimeAsync(179_000)
+    expect(run.state()).toBe('pending')
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(run.state()).toBe('settled')
+    const result = await run.promise
+    expect(result.map(item => item.tags)).toEqual([['cached-0'], ['cached-1'], ['Network']])
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(logLines(warn).join('\n')).toMatch(/load budget of 180s reached.*2\/3 shards/i)
+  })
+
+  it('lets TAG_CACHE_LOAD_BUDGET_MS shorten the load budget', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    vi.stubEnv('TAG_CACHE_LOAD_BUDGET_MS', '5000')
+    const { mod, store } = await loadModule()
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { items } = itemsInDistinctShards(store, 1)
+    vi.spyOn(store, 'readTagCacheShard').mockImplementation(() => new Promise(() => {}))
+    global.fetch = vi.fn(async () => new Response('<td class="tdtag"><li class="tag">Network</li></td>')) as typeof fetch
+
+    const run = track(mod.enrichRankingItemsWithTagDetails(items, items.length, 0, true))
+    await vi.advanceTimersByTimeAsync(4_000)
+    expect(run.state()).toBe('pending')
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(run.state()).toBe('settled')
+  })
+
+  it('reads each shard once with bounded concurrency', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    vi.stubEnv('TAG_CACHE_LOAD_CONCURRENCY', '3')
+    const { mod, store } = await loadModule()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { items, shardKeys } = itemsInDistinctShards(store, 10)
+    let active = 0
+    let peak = 0
+    const read = vi.spyOn(store, 'readTagCacheShard').mockImplementation(async (shardKey: string) => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      active -= 1
+      const index = shardKeys.indexOf(shardKey)
+      return cachedShard(items[index].id, `cached-${index}`)
+    })
+    global.fetch = vi.fn(async () => {
+      throw new Error('network should not be called')
+    }) as typeof fetch
+
+    const result = await mod.enrichRankingItemsWithTagDetails(items, items.length, 0, true)
+
+    expect(result.map(item => item.tags?.[0])).toEqual(shardKeys.map((_key, index) => `cached-${index}`))
+    expect(read).toHaveBeenCalledTimes(10)
+    expect(new Set(read.mock.calls.map(([shardKey]) => shardKey)).size).toBe(10)
+    expect(peak).toBe(3)
+  })
+
+  it('logs load progress and the slowest outstanding shard while reads are pending', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    const { mod, store } = await loadModule()
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { items, shardKeys } = itemsInDistinctShards(store, 2)
+    vi.spyOn(store, 'readTagCacheShard').mockImplementation(async (shardKey: string) => {
+      const index = shardKeys.indexOf(shardKey)
+      if (index === 1) await new Promise(resolve => setTimeout(resolve, 25_000))
+      return cachedShard(items[index].id, `cached-${index}`)
+    })
+    global.fetch = vi.fn(async () => {
+      throw new Error('network should not be called')
+    }) as typeof fetch
+    const slowShardId = store.getShardIdFromKey(shardKeys[1])
+
+    const pending = mod.enrichRankingItemsWithTagDetails(items, items.length, 0, true)
+    await vi.advanceTimersByTimeAsync(10_000)
+    const progress = logLines(warn).join('\n')
+    expect(progress).toMatch(/\[Tag Cache\] Loading: 1\/2 shards settled/)
+    expect(progress).toContain(`shard ${slowShardId} 10s`)
+    expect(progress).toContain('10.0s elapsed')
+
+    await vi.advanceTimersByTimeAsync(20_000)
+    await pending
+    expect(logLines(warn).join('\n')).toMatch(/\[Tag Cache\] Loaded: 2\/2 shards settled \(found 2, missing 0, failed 0\), 2 entries/)
+  })
+
+  it('reports progress for each settled shard read to the stall watchdog', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    const { mod, store } = await loadModule()
+    const watchdog = await import('@/lib/pipeline/stall-watchdog')
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const progress = vi.spyOn(watchdog, 'reportPipelineProgress')
+    const { items, shardKeys } = itemsInDistinctShards(store, 2)
+    vi.spyOn(store, 'readTagCacheShard').mockImplementation(async (shardKey: string) => {
+      const index = shardKeys.indexOf(shardKey)
+      if (index === 1) throw new Error('R2 unavailable')
+      return cachedShard(items[index].id, 'cached')
+    })
+    global.fetch = vi.fn(async () => new Response('<td class="tdtag"><li class="tag">Network</li></td>')) as typeof fetch
+
+    const result = await mod.enrichRankingItemsWithTagDetails(items, items.length, 0, true)
+
+    expect(result.map(item => item.tags)).toEqual([['cached'], ['Network']])
+    const labels = progress.mock.calls.map(([label]) => label)
+    for (const shardKey of shardKeys) {
+      expect(labels).toContain(`tag cache shard ${store.getShardIdFromKey(shardKey)}`)
+    }
+  })
 })
 
 describe('tag-fetcher-simple (Nicolog -> getthumbinfo)', () => {

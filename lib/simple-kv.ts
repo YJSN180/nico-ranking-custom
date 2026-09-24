@@ -18,6 +18,31 @@ function getBaseUrl() {
   return `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}`
 }
 
+// Covers the response body too: the signal stays attached while it is read.
+const KV_REQUEST_TIMEOUT_MS = 20_000
+
+type KvOperation = 'get' | 'set' | 'delete'
+
+class KvHttpError extends Error {
+  constructor(operation: KvOperation, readonly status: number) {
+    super(`KV ${operation} failed: ${status}`)
+  }
+}
+
+function describeKvFailure(error: unknown): string {
+  if (error instanceof KvHttpError) return `http_${error.status}`
+  if (error instanceof Error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') return 'timeout'
+    return error instanceof TypeError ? 'network' : error.name
+  }
+  return 'unknown'
+}
+
+// Key names never reach the log; they can identify users or internal data.
+function logKvFailure(operation: KvOperation, attempt: number, attempts: number, cause: string): void {
+  console.warn(`[KV] ${operation} attempt ${attempt}/${attempts} failed: ${cause}`)
+}
+
 class SimpleKV {
   /**
    * Get a value from KV
@@ -37,6 +62,7 @@ class SimpleKV {
           headers: {
             'Authorization': `Bearer ${CF_API_TOKEN}`,
           },
+          signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
         })
 
         if (response.status === 404) {
@@ -44,6 +70,7 @@ class SimpleKV {
         }
 
         if (response.status === 429) {
+          logKvFailure('get', attempt + 1, maxRetries, 'http_429')
           // Rate limited, wait with exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
           // KV rate limited, retrying with exponential backoff
@@ -53,7 +80,7 @@ class SimpleKV {
         }
 
         if (!response.ok) {
-          throw new Error(`KV get failed: ${response.status}`)
+          throw new KvHttpError('get', response.status)
         }
 
         const text = await response.text()
@@ -63,13 +90,12 @@ class SimpleKV {
           return text as T
         }
       } catch (error) {
+        logKvFailure('get', attempt + 1, maxRetries, describeKvFailure(error))
         if (attempt === maxRetries - 1) {
-          // Sanitize key for logging to prevent format string injection
-          const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
           // KV get error - returning null as fallback
           return null
         }
-        
+
         // Retry on network errors
         const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
         // KV request failed, retrying with exponential backoff
@@ -112,9 +138,11 @@ class SimpleKV {
             'Content-Type': 'application/json',
           },
           body,
+          signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
         })
 
         if (response.status === 429) {
+          logKvFailure('set', attempt + 1, maxRetries, 'http_429')
           // Rate limited - use exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
           await new Promise(resolve => setTimeout(resolve, delay))
@@ -122,13 +150,14 @@ class SimpleKV {
         }
 
         if (!response.ok) {
-          throw new Error(`KV set failed: ${response.status}`)
+          throw new KvHttpError('set', response.status)
         }
-        
+
         // Success
         return
       } catch (error) {
         lastError = error
+        logKvFailure('set', attempt + 1, maxRetries, describeKvFailure(error))
         if (attempt === maxRetries - 1) {
           throw error
         }
@@ -145,15 +174,23 @@ class SimpleKV {
       throw new Error('Cloudflare KV credentials not configured')
     }
 
-    const response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${CF_API_TOKEN}`,
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${CF_API_TOKEN}`,
+        },
+        signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
+      })
+    } catch (error) {
+      logKvFailure('delete', 1, 1, describeKvFailure(error))
+      throw error
+    }
 
     if (!response.ok && response.status !== 404) {
-      throw new Error(`KV delete failed: ${response.status}`)
+      logKvFailure('delete', 1, 1, `http_${response.status}`)
+      throw new KvHttpError('delete', response.status)
     }
   }
 
