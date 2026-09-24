@@ -410,34 +410,54 @@ class BackfillSession {
     }
   }
 
-  /** 404 が出た呼び出しで、API が存在するユーザーに 200 を返しているか確かめる。問題なければ null、保留ならその理由 */
+  /**
+   * 404 が出た呼び出しで、API が存在するユーザーに 200 を返しているか確かめる。問題なければ null、保留ならその理由。
+   * ポーリングと同じく設定の対照を先に使い、それが 404・失敗なら走査中の候補で確かめ直す
+   */
   private async verifyUserApi(deps: BackfillDeps, batch: ReadonlyArray<{ authorId: string; info: UserInfo }>): Promise<string | null> {
     if (batch.some((b) => b.info.status === 'existing')) return null
-    const control = this.pickControl(new Set(batch.map((b) => b.authorId)))
-    if (control === null) return 'no_control'
-    if (!this.budgetLeft()) return 'no_budget'
-    this.subrequests++
-    let result: string | null
-    try {
-      const info = await deps.fetchUserInfo(control)
-      result = info.status === 'existing' ? null : info.status === 'deleted' ? 'control_404' : 'control_error'
-    } catch (error) {
-      result = error instanceof AccessLimitedError ? 'control_access_limited' : 'control_error'
+    const exclude = new Set(batch.map((b) => b.authorId))
+    const configured = this.config.controlUserId
+    let hold = 'no_control'
+    if (configured) {
+      const result = await this.checkControl(deps, configured)
+      if (result === null) return null
+      // 設定の対照は管理者が選んだものなので入れ替えない。ID は注記に出さない
+      if (result === 'control_404') this.note = this.note ? `${this.note}; control_not_found` : 'control_not_found'
+      // アクセス制限なら同じ呼び出しでほかの対照を確かめても通らない。予算切れも次の呼び出しに回す
+      if (result === 'control_access_limited' || result === 'no_budget') return result
+      exclude.add(configured)
+      hold = result
     }
-    // 走査中の投稿者を対照にして失敗したら、次からは別の投稿者に入れ替える（設定の対照は管理者が選んだものなので外さない）
-    if (result !== null && control !== this.config.controlUserId) {
+    const control = this.pickControl(exclude)
+    if (control === null) return hold
+    const result = await this.checkControl(deps, control)
+    // 走査中の投稿者を対照にして失敗したら、次からは別の投稿者に入れ替える
+    if (result !== null && result !== 'no_budget') {
       this.cursor.rejectedControls = [...(this.cursor.rejectedControls ?? []), control].slice(-BACKFILL_LIMITS.rejectedControlsMax)
     }
     return result
   }
 
+  /** 対照を 1 件確かめる。存在すれば null、そうでなければ保留の理由 */
+  private async checkControl(deps: BackfillDeps, control: string): Promise<string | null> {
+    if (!this.budgetLeft()) return 'no_budget'
+    this.subrequests++
+    try {
+      const info = await deps.fetchUserInfo(control)
+      return info.status === 'existing' ? null : info.status === 'deleted' ? 'control_404' : 'control_error'
+    } catch (error) {
+      return error instanceof AccessLimitedError ? 'control_access_limited' : 'control_error'
+    }
+  }
+
   /**
-   * 対照: 設定の controlUserId を先に使う。無ければ、この走査で controlFreshMinutes 以内に存在を確認した投稿者のうち、
+   * 走査中の対照の候補: この走査で controlFreshMinutes 以内に存在を確認した投稿者のうち、
    * フォロワーが followerMax より多く、対照として失敗していない人（フォロワーの多い順）。
-   * 走査で確かめるのは連投者なので同じ波で退会しうる。期限と入れ替えで、同じ対照に居座らせない
+   * 走査で確かめるのは連投者なので同じ波で退会しうる。期限と入れ替えで、同じ対照に居座らせない。
+   * 設定の対照が無いとき、または設定の対照が 404・失敗だったときに使う
    */
   private pickControl(exclude: ReadonlySet<string>): string | null {
-    if (this.config.controlUserId) return this.config.controlUserId
     const nowMs = new Date(this.nowIso).getTime()
     const rejected = new Set(this.cursor.rejectedControls ?? [])
     const known = Object.entries(this.cursor.checked)

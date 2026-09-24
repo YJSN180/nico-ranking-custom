@@ -23,7 +23,7 @@ vi.mock('@/lib/simple-kv', () => ({
 import { GET as getOverview } from '@/app/api/admin/lqng/overview/route'
 import { GET as getConfig, PUT as putConfig } from '@/app/api/admin/lqng/config/route'
 import { POST as postAllowlist } from '@/app/api/admin/lqng/allowlist/route'
-import { LQNG_KV_KEYS } from '@/lib/lqng/config'
+import { LQNG_ISSUE_CONTROL_NOT_FOUND, LQNG_KV_KEYS } from '@/lib/lqng/config'
 
 const authed = (url: string, init?: RequestInit) => new NextRequest(`http://localhost${url}`, { ...init, headers: { authorization: 'Basic x', 'content-type': 'application/json', ...(init?.headers ?? {}) } })
 
@@ -58,7 +58,7 @@ describe('admin lqng API', () => {
     expect(body.config.enabled).toBe(true)
     expect(body.config.titleNeedles).toEqual(['x'])
     expect(Object.keys(body.verdicts.authors)).toEqual(['1'])
-    expect(body.tracking).toEqual({ lastPollAt: 'p', lastSweepDate: 'd', trackedAuthors: 2, pendingVideos: 1 })
+    expect(body.tracking).toEqual({ lastPollAt: 'p', lastSweepDate: 'd', trackedAuthors: 2, pendingVideos: 1, controlNotFound: false })
     expect(body.events.items).toHaveLength(1)
     expect(body.envEnabled).toBe(true)
   })
@@ -71,6 +71,24 @@ describe('admin lqng API', () => {
     expect((await (await getOverview(authed('/api/admin/lqng/overview'))).json()).events.lastRun).toEqual({ at: 'tracking' })
     store.set(LQNG_KV_KEYS.tracking, { authors: {}, pending: [] })
     expect((await (await getOverview(authed('/api/admin/lqng/overview'))).json()).events.lastRun).toEqual({ at: 'events' })
+  })
+
+  it('overview は設定の対照が直近の確認で見つからなかった（404）ことを返す。設定を直した後や、存在を確かめられた後は返さない', async () => {
+    const controlNotFound = async (): Promise<boolean> => (await (await getOverview(authed('/api/admin/lqng/overview'))).json()).tracking.controlNotFound
+    const issue = (okStreak: number) => ({ [LQNG_ISSUE_CONTROL_NOT_FOUND]: { signature: '1999', okStreak, reportedAt: 't' } })
+    store.set(LQNG_KV_KEYS.config, { enabled: true, controlUserId: '1999' })
+    store.set(LQNG_KV_KEYS.verdicts, { version: 1, authors: {}, videos: {}, updatedAt: 't' })
+    store.set(LQNG_KV_KEYS.tracking, { authors: {}, pending: [], issues: issue(0) })
+    expect(await controlNotFound()).toBe(true)
+    // 存在を確かめられた（記録は出たり消えたりの間引きのために少し残る）
+    store.set(LQNG_KV_KEYS.tracking, { authors: {}, pending: [], issues: issue(1) })
+    expect(await controlNotFound()).toBe(false)
+    // 設定の ID を直した後は、前の ID の記録で警告しない
+    store.set(LQNG_KV_KEYS.tracking, { authors: {}, pending: [], issues: issue(0) })
+    store.set(LQNG_KV_KEYS.config, { enabled: true, controlUserId: '1998' })
+    expect(await controlNotFound()).toBe(false)
+    store.set(LQNG_KV_KEYS.config, { enabled: true })
+    expect(await controlNotFound()).toBe(false)
   })
 
   it('config PUT は正規化して保存し、不正な形は 400', async () => {
