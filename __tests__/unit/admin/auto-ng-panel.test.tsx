@@ -52,7 +52,8 @@ describe('AutoNGPanel', () => {
       if (url === '/api/admin/lqng/allowlist') {
         const body = JSON.parse(String(init?.body)) as { action: string; id: string }
         const authorIds = body.action === 'add' ? ['9001', body.id] : ['9001'].filter((x) => x !== body.id)
-        return jsonResponse({ success: true, allowlist: { authorIds, videoIds: [], notes: {} } })
+        // API は保存後の設定全体（版番号つき）を返す
+        return jsonResponse({ success: true, config: { ...overview.config, allowlist: { authorIds, videoIds: [], notes: {} }, updatedAt: '2026-01-03T00:00:00.000Z' } })
       }
       if (url === '/api/admin/lqng/config') return jsonResponse({ success: true, config: { ...overview.config, holdHours: 12 } })
       return jsonResponse({ error: 'not found' }, 404)
@@ -82,6 +83,24 @@ describe('AutoNGPanel', () => {
     const call = fetchMock.mock.calls.find((c) => c[0] === '/api/admin/lqng/allowlist')!
     expect(JSON.parse(String((call[1] as RequestInit).body))).toMatchObject({ action: 'add', kind: 'author', id: '1001' })
     await waitFor(() => expect(screen.getAllByText('許可を解除')).toHaveLength(2))
+  })
+
+  it('許可リストの更新後は、応答に含まれる設定全体で状態を置き換える', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/allowlist') {
+        // 別の画面で日次スイープのジャンルが変わっていた（許可リスト以外も最新になる）
+        return jsonResponse({ success: true, config: { ...overview.config, sweepGenre: 'べつのジャンル', allowlist: { authorIds: ['9001', '1001'], videoIds: [] }, updatedAt: '2026-01-03T00:00:00.000Z' } })
+      }
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    fireEvent.click(screen.getByText('許可リストへ'))
+    await waitFor(() => expect(screen.getAllByText('許可を解除')).toHaveLength(2))
+    fireEvent.click(screen.getByRole('tab', { name: /概要/ }))
+    expect(screen.getByText('ジャンル: べつのジャンル')).toBeInTheDocument()
   })
 
   it('「手動NGに写す」はコールバックに投稿者 ID を渡す', async () => {
@@ -121,5 +140,31 @@ describe('AutoNGPanel', () => {
     fetchMock.mockImplementation(async () => jsonResponse({ error: 'x' }, 500))
     render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
     expect(await screen.findByText(/読み込みに失敗しました/)).toBeInTheDocument()
+  })
+
+  it('再読み込みに失敗したら、保存・許可リストの操作を無効にして理由を表示する', async () => {
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fetchMock.mockImplementation(async () => jsonResponse({ error: 'KV unavailable' }, 503))
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
+    expect(await screen.findByText(/読み込みに失敗しました \(503\)/)).toBeInTheDocument()
+    expect(screen.getByText(/保存と許可リストの操作を止めています/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    expect(screen.getByText('許可リストへ')).toBeDisabled()
+    expect(screen.getByText('許可を解除')).toBeDisabled()
+    fireEvent.click(screen.getByRole('tab', { name: /許可リスト/ }))
+    for (const button of screen.getAllByRole('button', { name: '削除' })) expect(button).toBeDisabled()
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+    expect(screen.getByRole('button', { name: '設定を保存' })).toBeDisabled()
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/admin/lqng/allowlist', expect.anything())
+
+    // 読み直しに成功すれば操作できる状態に戻る
+    fetchMock.mockImplementation(async (url: string) => (url === '/api/admin/lqng/overview' ? jsonResponse(overview) : jsonResponse({ error: 'not found' }, 404)))
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
+    await waitFor(() => expect(screen.queryByText(/読み込みに失敗しました/)).not.toBeInTheDocument())
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    expect(screen.getByText('許可リストへ')).toBeEnabled()
   })
 })

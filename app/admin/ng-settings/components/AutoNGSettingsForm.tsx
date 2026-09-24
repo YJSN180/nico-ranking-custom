@@ -7,6 +7,8 @@ import styles from './auto-ng.module.css'
 interface AutoNGSettingsFormProps {
   config: LqngConfig
   onSave: (next: LqngConfig) => Promise<void>
+  /** 最新の設定を読めていないとき true（保存させない） */
+  readOnly?: boolean
 }
 
 const linesToArray = (text: string): string[] =>
@@ -78,7 +80,7 @@ function fromDraft(draft: Draft, base: LqngConfig): LqngConfig {
   }
 }
 
-export function AutoNGSettingsForm({ config, onSave }: AutoNGSettingsFormProps) {
+export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGSettingsFormProps) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(config))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ kind: 'saved' | 'error'; text: string } | null>(null)
@@ -110,7 +112,7 @@ export function AutoNGSettingsForm({ config, onSave }: AutoNGSettingsFormProps) 
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (validation.length > 0) return
+    if (readOnly || validation.length > 0) return
     setSaving(true)
     try {
       await onSave(fromDraft(draft, config))
@@ -240,7 +242,7 @@ export function AutoNGSettingsForm({ config, onSave }: AutoNGSettingsFormProps) 
       )}
 
       <div className={styles.formFooter}>
-        <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={saving || !dirty || validation.length > 0}>
+        <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={readOnly || saving || !dirty || validation.length > 0}>
           {saving ? '保存中…' : '設定を保存'}
         </button>
         <button type="button" className={styles.button} disabled={saving || !dirty} onClick={() => setDraft(toDraft(config))}>

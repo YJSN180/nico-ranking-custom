@@ -120,25 +120,35 @@ function Pager({ page, totalPages, setPage }: { page: number; totalPages: number
   )
 }
 
+/** 503 は KV を読めなかった（既定値を土台に保存しないよう、サーバーが書き込みを止めた） */
+const KV_UNAVAILABLE_NOTE = 'KV から設定を読み取れませんでした。'
+
 export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelProps) {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  /** 概要の読み込み失敗。表示中の内容が最新と限らないので、保存系の操作を止める */
+  const [loadError, setLoadError] = useState<string | null>(null)
+  /** 許可リストなど個々の操作の失敗 */
+  const [actionError, setActionError] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('overview')
   const [query, setQuery] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  /** 読み込みに成功するたびに設定フォームを作り直す（保存後の置き換えでは作り直さない） */
+  const [formKey, setFormKey] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError(null)
+    setLoadError(null)
+    setActionError(null)
     try {
       const res = await fetch('/api/admin/lqng/overview', { credentials: 'same-origin' })
-      if (!res.ok) throw new Error(`読み込みに失敗しました (${res.status})`)
+      if (!res.ok) throw new Error(`読み込みに失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}` : ''}`)
       setOverview((await res.json()) as Overview)
+      setFormKey((key) => key + 1)
       setNow(Date.now())
     } catch (e) {
-      setError(e instanceof Error ? e.message : '読み込みに失敗しました')
+      setLoadError(e instanceof Error ? e.message : '読み込みに失敗しました')
     } finally {
       setLoading(false)
     }
@@ -148,6 +158,9 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
     void load()
   }, [load])
 
+  // 最新の概要を読めているときだけ保存系の操作を許す（読み込み失敗・読み込み中は止める）
+  const writable = overview !== null && loadError === null && !loading
+
   const allowlist = overview?.config.allowlist ?? { authorIds: [], videoIds: [] }
   const allowedAuthors = useMemo(() => new Set(allowlist.authorIds), [allowlist.authorIds])
   const allowedVideos = useMemo(() => new Set(allowlist.videoIds), [allowlist.videoIds])
@@ -156,6 +169,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
   const updateAllowlist = useCallback(
     async (action: 'add' | 'remove', kind: 'author' | 'video', id: string, note?: string) => {
       setBusyId(id)
+      setActionError(null)
       try {
         const res = await fetch('/api/admin/lqng/allowlist', {
           method: 'POST',
@@ -163,11 +177,12 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, kind, id, note }),
         })
-        if (!res.ok) throw new Error(`許可リストの更新に失敗しました (${res.status})`)
-        const body = (await res.json()) as { allowlist: LqngConfig['allowlist'] }
-        setOverview((prev) => (prev ? { ...prev, config: { ...prev.config, allowlist: body.allowlist } } : prev))
+        if (!res.ok) throw new Error(`許可リストの更新に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
+        const body = (await res.json()) as { config: LqngConfig }
+        // 許可リストだけを差し込まず、保存後の設定全体（版番号を含む）で置き換える
+        setOverview((prev) => (prev ? { ...prev, config: body.config } : prev))
       } catch (e) {
-        setError(e instanceof Error ? e.message : '許可リストの更新に失敗しました')
+        setActionError(e instanceof Error ? e.message : '許可リストの更新に失敗しました')
       } finally {
         setBusyId(null)
       }
@@ -206,6 +221,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
   const holdsPaged = usePaged(holds, query, matchVideo)
 
   const effectiveEnabled = Boolean(overview?.envEnabled && overview?.config.enabled)
+  const allowlistDisabled = (id: string): boolean => !writable || busyId === id
 
   return (
     <section className={styles.panel} aria-labelledby="auto-ng-title">
@@ -228,7 +244,17 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
         </div>
       </div>
 
-      {error && <div className={styles.error}>{error}</div>}
+      {loadError && (
+        <div className={styles.error} role="alert">
+          {loadError}
+          {overview && <div>表示中の内容は最新とは限らないため、最新の設定を読み込めるまで保存と許可リストの操作を止めています。「再読み込み」で読み直してください。</div>}
+        </div>
+      )}
+      {actionError && (
+        <div className={styles.error} role="alert">
+          {actionError}
+        </div>
+      )}
 
       <div className={styles.tabs} role="tablist" aria-label="自動NGの表示切り替え">
         {(Object.keys(TAB_LABELS) as Tab[]).map((key) => {
@@ -357,11 +383,11 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
                         <td>
                           <div className={styles.actions}>
                             {allowed ? (
-                              <button type="button" className={styles.button} disabled={busyId === a.id} onClick={() => void updateAllowlist('remove', 'author', a.id)}>
+                              <button type="button" className={styles.button} disabled={allowlistDisabled(a.id)} onClick={() => void updateAllowlist('remove', 'author', a.id)}>
                                 許可を解除
                               </button>
                             ) : (
-                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={busyId === a.id} onClick={() => void updateAllowlist('add', 'author', a.id, '管理画面で解除')}>
+                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={allowlistDisabled(a.id)} onClick={() => void updateAllowlist('add', 'author', a.id, '管理画面で解除')}>
                                 許可リストへ
                               </button>
                             )}
@@ -437,11 +463,11 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
                         <td>
                           <div className={styles.actions}>
                             {allowed ? (
-                              <button type="button" className={styles.button} disabled={busyId === v.id} onClick={() => void updateAllowlist('remove', 'video', v.id)}>
+                              <button type="button" className={styles.button} disabled={allowlistDisabled(v.id)} onClick={() => void updateAllowlist('remove', 'video', v.id)}>
                                 許可を解除
                               </button>
                             ) : (
-                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={busyId === v.id} onClick={() => void updateAllowlist('add', 'video', v.id, '管理画面で解除')}>
+                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={allowlistDisabled(v.id)} onClick={() => void updateAllowlist('add', 'video', v.id, '管理画面で解除')}>
                                 許可リストへ
                               </button>
                             )}
@@ -460,9 +486,9 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
 
       {overview && tab === 'events' && <EventList items={overview.events.items} />}
 
-      {overview && tab === 'allowlist' && <AllowlistEditor allowlist={allowlist} busyId={busyId} onChange={updateAllowlist} />}
+      {overview && tab === 'allowlist' && <AllowlistEditor allowlist={allowlist} busyId={busyId} disabled={!writable} onChange={updateAllowlist} />}
 
-      {overview && tab === 'settings' && <AutoNGSettingsForm config={overview.config} onSave={saveConfig} />}
+      {overview && tab === 'settings' && <AutoNGSettingsForm key={formKey} config={overview.config} onSave={saveConfig} readOnly={!writable} />}
     </section>
   )
 }
@@ -504,10 +530,13 @@ function EventList({ items }: { items: EventItem[] }) {
 function AllowlistEditor({
   allowlist,
   busyId,
+  disabled,
   onChange,
 }: {
   allowlist: LqngConfig['allowlist']
   busyId: string | null
+  /** 最新の設定を読めていないときは追加・削除を止める */
+  disabled: boolean
   onChange: (action: 'add' | 'remove', kind: 'author' | 'video', id: string, note?: string) => Promise<void>
 }) {
   const [kind, setKind] = useState<'author' | 'video'>('author')
@@ -544,7 +573,7 @@ function AllowlistEditor({
                 </td>
                 <td>{notes[x] ?? ''}</td>
                 <td>
-                  <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={busyId === x} onClick={() => void onChange('remove', k, x)}>
+                  <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={disabled || busyId === x} onClick={() => void onChange('remove', k, x)}>
                     削除
                   </button>
                 </td>
@@ -564,7 +593,7 @@ function AllowlistEditor({
         </select>
         <input type="text" value={id} onChange={(e) => setId(e.target.value)} placeholder={kind === 'author' ? '例: 12345678 または channel/ch1234' : '例: sm12345'} aria-label="ID" onKeyDown={(e) => e.key === 'Enter' && void submit()} />
         <input type="text" value={note} onChange={(e) => setNote(e.target.value)} placeholder="メモ（任意）" aria-label="メモ" onKeyDown={(e) => e.key === 'Enter' && void submit()} />
-        <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} disabled={!id.trim() || busyId !== null} onClick={() => void submit()}>
+        <button type="button" className={`${styles.button} ${styles.buttonPrimary}`} disabled={disabled || !id.trim() || busyId !== null} onClick={() => void submit()}>
           追加
         </button>
       </div>

@@ -2,12 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const store = new Map<string, unknown>()
+// failing に入れたキーは読み取り失敗（429 の連続・5xx など）、`set:<key>` は書き込み失敗にする
+const failing = new Set<string>()
+const kvSet = vi.fn(async (key: string, value: unknown) => {
+  if (failing.has(`set:${key}`)) throw new Error('KV set failed: 429')
+  store.set(key, value)
+})
 vi.mock('@/lib/simple-kv', () => ({
   kv: {
-    get: vi.fn(async (key: string) => (store.has(key) ? store.get(key) : null)),
-    set: vi.fn(async (key: string, value: unknown) => {
-      store.set(key, value)
+    // 従来の get は失敗も null（未設定と区別できない）
+    get: vi.fn(async (key: string) => (failing.has(key) ? null : store.has(key) ? store.get(key) : null)),
+    getStrict: vi.fn(async (key: string) => {
+      if (failing.has(key)) throw new Error(`KV get failed: 503 (${key})`)
+      return store.has(key) ? store.get(key) : null
     }),
+    set: (key: string, value: unknown) => kvSet(key, value),
   },
 }))
 
@@ -21,6 +30,7 @@ const authed = (url: string, init?: RequestInit) => new NextRequest(`http://loca
 describe('admin lqng API', () => {
   beforeEach(() => {
     store.clear()
+    failing.clear()
     vi.clearAllMocks()
   })
 
@@ -66,15 +76,64 @@ describe('admin lqng API', () => {
     store.set(LQNG_KV_KEYS.config, { enabled: true, allowlist: { authorIds: ['1'], videoIds: [] } })
     const add = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22', note: '確認済み' }) }))
     expect(add.status).toBe(200)
-    expect((await add.json()).allowlist).toEqual({ authorIds: ['1', '22'], videoIds: [], notes: { '22': '確認済み' } })
+    expect((await add.json()).config.allowlist).toEqual({ authorIds: ['1', '22'], videoIds: [], notes: { '22': '確認済み' } })
 
     const addVideo = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'video', id: 'sm9' }) }))
-    expect((await addVideo.json()).allowlist.videoIds).toEqual(['sm9'])
+    expect((await addVideo.json()).config.allowlist.videoIds).toEqual(['sm9'])
 
     const remove = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'remove', kind: 'author', id: '22' }) }))
-    expect((await remove.json()).allowlist).toEqual({ authorIds: ['1'], videoIds: ['sm9'], notes: {} })
+    expect((await remove.json()).config.allowlist).toEqual({ authorIds: ['1'], videoIds: ['sm9'], notes: {} })
 
     const bad = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: 'not-an-id' }) }))
     expect(bad.status).toBe(400)
+  })
+  it('overview は設定・判定テーブルを読めなければ既定値を返さず 503', async () => {
+    store.set(LQNG_KV_KEYS.config, { enabled: true, titleNeedles: ['x'] })
+    failing.add(LQNG_KV_KEYS.config)
+    const res = await getOverview(authed('/api/admin/lqng/overview'))
+    expect(res.status).toBe(503)
+    expect(res.headers.get('cache-control')).toContain('no-store')
+    expect(await res.json()).not.toHaveProperty('config')
+
+    failing.clear()
+    failing.add(LQNG_KV_KEYS.verdicts)
+    expect((await getOverview(authed('/api/admin/lqng/overview'))).status).toBe(503)
+  })
+
+  it('overview は追跡・イベントの読み取り失敗だけなら 200 で空の要約を返す', async () => {
+    failing.add(LQNG_KV_KEYS.tracking)
+    failing.add(LQNG_KV_KEYS.events)
+    const res = await getOverview(authed('/api/admin/lqng/overview'))
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.tracking.lastPollAt).toBeNull()
+    expect(body.events.items).toEqual([])
+  })
+
+  it('config GET は読み取り失敗を 503 にする', async () => {
+    failing.add(LQNG_KV_KEYS.config)
+    expect((await getConfig(authed('/api/admin/lqng/config'))).status).toBe(503)
+  })
+
+  it('allowlist POST は設定を読めなければ 503 を返し、既定値を土台に書き込まない', async () => {
+    store.set(LQNG_KV_KEYS.config, { enabled: true, titleNeedles: ['てすとまん'], allowlist: { authorIds: ['1'], videoIds: [] } })
+    failing.add(LQNG_KV_KEYS.config)
+    const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
+    expect(res.status).toBe(503)
+    expect(kvSet).not.toHaveBeenCalled()
+    expect(store.get(LQNG_KV_KEYS.config)).toMatchObject({ enabled: true, titleNeedles: ['てすとまん'] })
+  })
+
+  it('allowlist POST は未設定（404）なら既定値に 1 件足して保存する', async () => {
+    const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'video', id: 'sm1' }) }))
+    expect(res.status).toBe(200)
+    expect((store.get(LQNG_KV_KEYS.config) as { allowlist: { videoIds: string[] } }).allowlist.videoIds).toEqual(['sm1'])
+  })
+
+  it('allowlist POST は KV への書き込み失敗を成功扱いにしない', async () => {
+    failing.add(`set:${LQNG_KV_KEYS.config}`)
+    const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
+    expect(res.status).toBe(500)
+    expect(await res.json()).not.toHaveProperty('success')
   })
 })

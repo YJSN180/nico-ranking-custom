@@ -2,8 +2,8 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { kv } from '@/lib/simple-kv'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
-import { getLqngConfig, getLqngVerdicts, invalidateLqngCache, isLqngEnabled } from '@/lib/lqng/server'
-import { isAdminAuthenticated, unauthorized, withNoStore } from '../_shared'
+import { isLqngEnabled, readLqngConfigStrict, readLqngVerdictsStrict } from '@/lib/lqng/server'
+import { isAdminAuthenticated, kvUnavailable, unauthorized, withNoStore } from '../_shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,11 +22,11 @@ interface EventsPayload {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!isAdminAuthenticated(request)) return unauthorized()
   try {
-    // 管理画面は常に最新を見たいので、サーバー側の 60 秒キャッシュを飛ばす
-    invalidateLqngCache()
+    // 管理画面は常に最新を見たいのでキャッシュを通さない。設定・判定テーブルを読めなければ
+    // 既定値（無効・空）を返さずに 503 にする（画面が既定値を土台に保存しないように）
     const [config, verdicts, trackingRaw, eventsRaw] = await Promise.all([
-      getLqngConfig(),
-      getLqngVerdicts(),
+      readLqngConfigStrict(),
+      readLqngVerdictsStrict(),
       kv.get<{ lastPollAt?: string | null; lastSweepDate?: string | null; authors?: Record<string, unknown>; pending?: unknown[] }>(LQNG_KV_KEYS.tracking).catch(() => null),
       kv.get<EventsPayload>(LQNG_KV_KEYS.events).catch(() => null),
     ])
@@ -47,6 +47,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     )
   } catch (error) {
     console.error('Failed to load lqng overview:', error)
-    return withNoStore(NextResponse.json({ error: 'Failed to load overview' }, { status: 500 }))
+    return kvUnavailable()
   }
 }
