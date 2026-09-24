@@ -77,18 +77,30 @@ describe('lqng-poller /status', () => {
     expect(upstream).not.toHaveBeenCalled()
   })
 
+  const authed = (url: string) => new Request(url, { headers: { Authorization: `Bearer ${AUTH_KEY}` } })
+
+  it('投稿者を指定した問い合わせは /trigger と同じ認証が必要（無い・違えば 401。ID の形式より先に見る）', async () => {
+    const { env } = setup()
+    expect((await fetchWorker(new Request('https://w.test/status?author=1001'), env)).status).toBe(401)
+    expect((await fetchWorker(new Request('https://w.test/status?author=1001', { headers: { Authorization: 'Bearer wrong' } }), env)).status).toBe(401)
+    expect((await fetchWorker(new Request('https://w.test/status?author=constructor'), env)).status).toBe(401)
+    expect((await fetchWorker(new Request('https://w.test/status?author=1001'), { LQNG_KV: env.LQNG_KV })).status).toBe(401)
+    // 投稿者を指定しない件数だけの問い合わせは認証なしのまま
+    expect((await fetchWorker(new Request('https://w.test/status'), env)).status).toBe(200)
+  })
+
   it.each(['constructor', '__proto__', 'toString', 'abc', '1234567890123', 'channel/ch', 'channel/chx1', 'ch55', '12 34', ''])(
     'author=%s は 400 を返す',
     async (author) => {
       const { env } = setup()
-      const res = await fetchWorker(new Request(`https://w.test/status?author=${encodeURIComponent(author)}`), env)
+      const res = await fetchWorker(authed(`https://w.test/status?author=${encodeURIComponent(author)}`), env)
       expect(res.status).toBe(400)
     }
   )
 
   it('数字の ID と channel/ch＋数字は受け付け、追跡・判定の件数だけを返す', async () => {
     const { env } = setup()
-    const user = await fetchWorker(new Request('https://w.test/status?author=1001'), env)
+    const user = await fetchWorker(authed('https://w.test/status?author=1001'), env)
     expect(user.status).toBe(200)
     const userBody = (await user.json()) as { author: { id: string; tracked: { posts: number; lockedGroupsMax: number } | null; verdict: unknown } }
     expect(userBody.author.id).toBe('1001')
@@ -96,12 +108,12 @@ describe('lqng-poller /status', () => {
     expect(userBody.author.tracked?.lockedGroupsMax).toBe(1)
     expect(userBody.author.verdict).toBeNull()
 
-    const channel = await fetchWorker(new Request(`https://w.test/status?author=${encodeURIComponent('channel/ch55')}`), env)
+    const channel = await fetchWorker(authed(`https://w.test/status?author=${encodeURIComponent('channel/ch55')}`), env)
     expect(channel.status).toBe(200)
     const channelBody = (await channel.json()) as { author: { id: string; tracked: unknown } }
     expect(channelBody.author.tracked).not.toBeNull()
 
-    const unknown = await fetchWorker(new Request('https://w.test/status?author=2002'), env)
+    const unknown = await fetchWorker(authed('https://w.test/status?author=2002'), env)
     const unknownBody = (await unknown.json()) as { author: { tracked: unknown; verdict: unknown } }
     expect(unknownBody.author.tracked).toBeNull()
     expect(unknownBody.author.verdict).toBeNull()

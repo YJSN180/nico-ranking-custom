@@ -33,6 +33,11 @@ const AUTHOR_ID_PATTERN = /^(?:\d{1,12}|channel\/ch\d{1,12})$/
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
+/** /trigger と、投稿者を指定した /status に使う認証（WORKER_AUTH_KEY の Bearer） */
+function isAuthorized(request: Request, env: Env): boolean {
+  return !!env.WORKER_AUTH_KEY && request.headers.get('Authorization') === `Bearer ${env.WORKER_AUTH_KEY}`
+}
+
 /** ポーラーと同じ条件で新着取得を試し、件数と時刻だけ返す（診断用。KV は書かない） */
 async function probeNewVideos(request: Request, env: Env, url: URL): Promise<Response> {
   const source = url.searchParams.get('source') === 'nvapi' ? 'nvapi' : 'pages'
@@ -78,11 +83,12 @@ const handler = {
     if (url.pathname === '/health') {
       return Response.json({ status: 'ok', time: new Date().toISOString() })
     }
-    // 運用確認用（認証なし）。件数と直近の実行サマリだけを返し、ID・名前・タイトルは含めない。
+    // 運用確認用。件数と直近の実行サマリは認証なしで返し、ID・名前・タイトルは含めない。
     // 外部への取得（probe）は認証付きの /trigger?mode=probe に置く
     if (url.pathname === '/status') {
-      // ?author=ID で、その投稿者の追跡・判定状態（件数と状態のみ。名前・タイトルは返さない）
+      // ?author=ID で、その投稿者の追跡・判定状態（判定理由・フォロワー数・退会の観測時刻を含むので /trigger と同じ認証を要る）
       const authorId = url.searchParams.get('author')
+      if (authorId !== null && !isAuthorized(request, env)) return new Response('Unauthorized', { status: 401, headers: NO_STORE })
       if (authorId !== null && !AUTHOR_ID_PATTERN.test(authorId)) {
         return Response.json({ error: 'invalid author id' }, { status: 400, headers: NO_STORE })
       }
@@ -154,10 +160,7 @@ const handler = {
     }
     // 手動実行（デバッグ・初回投入用）。WORKER_AUTH_KEY で保護
     if (url.pathname === '/trigger' && request.method === 'POST') {
-      const auth = request.headers.get('Authorization')
-      if (!env.WORKER_AUTH_KEY || auth !== `Bearer ${env.WORKER_AUTH_KEY}`) {
-        return new Response('Unauthorized', { status: 401 })
-      }
+      if (!isAuthorized(request, env)) return new Response('Unauthorized', { status: 401 })
       const modeParam = url.searchParams.get('mode')
       // 診断: ?mode=probe&source=pages|nvapi[&sinceMinutes=N]
       if (modeParam === 'probe') return probeNewVideos(request, env, url)
