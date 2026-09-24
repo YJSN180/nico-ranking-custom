@@ -13,6 +13,8 @@ const removedArtifactPaths = [
   'debug-after-click.png',
   'debug-custom-rankings.html',
   'debug-safari-detection.js',
+  // 実在の投稿者 ID・名前を含むランキングデータ（パイプラインの出力は ./tmp/ に置く）
+  'ranking-group-1.json',
   'workers/video-stats-updater/src/index-backup.js',
   'workers/video-stats-updater/src/index-fixed.js',
   'workers/video-stats-updater/test-debug.js',
