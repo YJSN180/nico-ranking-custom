@@ -8,10 +8,14 @@
 //     watch v3_guest の data.channel.{id,name,thumbnail} から取れるので、チャンネルごとに
 //     代表動画 1 件を叩いて解決する。
 import { buildV3GuestUrl } from '@/lib/search/realtime-tags'
+import { withTimeout } from '../abort-signal'
 
-/** 1リクエストあたりの上限（未認証で叩ける増幅器になるため有界に保つ） */
-export const OWNER_INFO_MAX_USERS = 50
-export const OWNER_INFO_MAX_CHANNEL_VIDEOS = 10
+/**
+ * 1リクエストあたりの上限（未認証で叩ける増幅器になるため有界に保つ）。
+ * 25 件 ÷ 並列 8 = 4 巡で、全件が遅くても呼び出し側の期限（/api/search/owners は 8 秒）で打ち切れる量にする
+ */
+export const OWNER_INFO_MAX_USERS = 20
+export const OWNER_INFO_MAX_CHANNEL_VIDEOS = 5
 const DEFAULT_CONCURRENCY = 8
 const DEFAULT_PER_REQUEST_TIMEOUT_MS = 2500
 /** 名前・アイコンは滅多に変わらないので長めにメモする（Vercel インスタンス内） */
@@ -48,6 +52,18 @@ export interface OwnerInfoResult {
   missing: string[]
   /** 失敗したユーザーID / 動画ID */
   failed: string[]
+}
+
+/**
+ * 名前が条件に当たる投稿者を、検索結果の投稿者 ID の形（ユーザーは数字、チャンネルは channel/chNNN）で返す。
+ * Snapshot 由来の行には名前が無く、/api/search では投稿者名 NG を当てられないため、名前が分かったここで当てる
+ */
+export function authorIdsMatchingNames(result: OwnerInfoResult, matches: (name: string) => boolean): string[] {
+  const users = Object.entries(result.users).filter(([, info]) => matches(info.name)).map(([id]) => id)
+  const channels = Object.entries(result.channels)
+    .filter(([, info]) => matches(info.name))
+    .map(([id]) => (id.startsWith('ch') ? `channel/${id}` : `channel/ch${id}`))
+  return [...users, ...channels]
 }
 
 function sanitizeIds(raw: string | null, pattern: RegExp, max: number): string[] {
@@ -131,6 +147,8 @@ export interface FetchOwnerInfoOptions {
   concurrency?: number
   timeoutMs?: number
   now?: number
+  /** 呼び出し全体の期限。切れたら、まだ問い合わせていない分は問い合わせずに failed にする */
+  signal?: AbortSignal
 }
 
 /**
@@ -162,49 +180,57 @@ export async function fetchOwnerInfo(
   }
 
   const fetchJson = async (url: string, headers: Record<string, string>): Promise<{ status: number; body: unknown | null }> => {
-    const res = await fetchImpl(url, { headers, cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
+    const res = await fetchImpl(url, { headers, cache: 'no-store', signal: withTimeout(timeoutMs, options.signal) })
     if (!res.ok) return { status: res.status, body: null }
     return { status: res.status, body: await res.json() }
   }
 
-  const tasks: Array<() => Promise<void>> = [
-    ...pendingUsers.map((id) => async () => {
-      try {
-        const { status, body } = await fetchJson(buildUserInfoUrl(id), NVAPI_HEADERS)
-        if (status === 404) {
-          // 退会済み。一時的な失敗（5xx・タイムアウト）とは区別して表示側で明示する
-          result.missing.push(id)
-          missingUserCache.set(id, { value: true, expiresAt: now + CACHE_TTL_MS })
-          return
-        }
-        const info = parseUserInfo(body)
-        if (!info) {
-          result.failed.push(id)
-          return
-        }
-        result.users[id] = info
-        userCache.set(id, { value: info, expiresAt: now + CACHE_TTL_MS })
-      } catch {
+  const fetchUser = async (id: string): Promise<void> => {
+    try {
+      const { status, body } = await fetchJson(buildUserInfoUrl(id), NVAPI_HEADERS)
+      if (status === 404) {
+        // 退会済み。一時的な失敗（5xx・タイムアウト）とは区別して表示側で明示する
+        result.missing.push(id)
+        missingUserCache.set(id, { value: true, expiresAt: now + CACHE_TTL_MS })
+        return
+      }
+      const info = parseUserInfo(body)
+      if (!info) {
         result.failed.push(id)
+        return
       }
-    }),
-    ...pendingVideos.map((videoId) => async () => {
-      try {
-        const channel = parseChannelInfo((await fetchJson(buildV3GuestUrl(videoId), V3_GUEST_HEADERS)).body)
-        if (!channel) {
-          result.failed.push(videoId)
-          return
-        }
-        result.channels[channel.id] = channel.info
-        channelByVideoCache.set(videoId, { value: channel, expiresAt: now + CACHE_TTL_MS })
-      } catch {
+      result.users[id] = info
+      userCache.set(id, { value: info, expiresAt: now + CACHE_TTL_MS })
+    } catch {
+      result.failed.push(id)
+    }
+  }
+
+  const fetchChannel = async (videoId: string): Promise<void> => {
+    try {
+      const channel = parseChannelInfo((await fetchJson(buildV3GuestUrl(videoId), V3_GUEST_HEADERS)).body)
+      if (!channel) {
         result.failed.push(videoId)
+        return
       }
-    }),
+      result.channels[channel.id] = channel.info
+      channelByVideoCache.set(videoId, { value: channel, expiresAt: now + CACHE_TTL_MS })
+    } catch {
+      result.failed.push(videoId)
+    }
+  }
+
+  const tasks: Array<{ id: string; run: () => Promise<void> }> = [
+    ...pendingUsers.map((id) => ({ id, run: () => fetchUser(id) })),
+    ...pendingVideos.map((videoId) => ({ id: videoId, run: () => fetchChannel(videoId) })),
   ]
 
   for (let i = 0; i < tasks.length; i += concurrency) {
-    await Promise.all(tasks.slice(i, i + concurrency).map((task) => task()))
+    if (options.signal?.aborted) {
+      result.failed.push(...tasks.slice(i).map((task) => task.id))
+      break
+    }
+    await Promise.all(tasks.slice(i, i + concurrency).map((task) => task.run()))
   }
   return result
 }

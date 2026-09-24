@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // KV をキー→値の表でモックする。failing に入れたキーは読み取り失敗（例外）にする
 const store = new Map<string, unknown>()
 const failing = new Set<string>()
-const getStrict = vi.fn(async (key: string, _options?: { attempts?: number }) => {
+const getStrict = vi.fn(async (key: string, _options?: { attempts?: number; signal?: AbortSignal; timeoutMs?: number }) => {
   if (failing.has(key)) throw new Error(`kv down: ${key}`)
   return store.has(key) ? store.get(key) : null
 })
@@ -14,7 +14,7 @@ const set = vi.fn(async (key: string, value: unknown) => {
 vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: async (key: string) => (store.has(key) ? store.get(key) : null),
-    getStrict: (key: string, options?: { attempts?: number }) => getStrict(key, options),
+    getStrict: (key: string, options?: { attempts?: number; signal?: AbortSignal; timeoutMs?: number }) => getStrict(key, options),
     set: (key: string, value: unknown) => set(key, value),
   },
 }))
@@ -81,6 +81,13 @@ describe('lib/lqng/server', () => {
       expect(config.enabled).toBe(true)
       expect(config.titleNeedles).toEqual(['てすとまん'])
       expect(Object.keys((await getLqngVerdicts()).authors)).toEqual(['1001'])
+    })
+
+    it('期限（signal）と 1 回のタイムアウトを KV の読み取りに渡す', async () => {
+      store.set(LQNG_KV_KEYS.config, storedConfig)
+      const deadline = new AbortController()
+      await getLqngConfig({ signal: deadline.signal, timeoutMs: 3000 })
+      expect(getStrict).toHaveBeenLastCalledWith(LQNG_KV_KEYS.config, { attempts: 1, signal: deadline.signal, timeoutMs: 3000 })
     })
 
     it('サイト側の読み取りは常に 1 回だけ試す（再試行の待ちをリクエストに乗せない）', async () => {

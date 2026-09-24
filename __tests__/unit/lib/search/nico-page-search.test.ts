@@ -79,6 +79,17 @@ describe('nico-page-search', () => {
     expect(parseNicoSearchPage(swapped).items).toHaveLength(3)
   })
 
+  it('fetchNicoSearchPage は全体の期限（signal）が切れていたら、その中断を fetch に伝える', async () => {
+    const deadline = new AbortController()
+    deadline.abort()
+    const ok = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(init?.signal?.aborted).toBe(true)
+      return { ok: true, text: async () => html } as unknown as Response
+    })
+    await fetchNicoSearchPage('tag', 'x', 1, ok as unknown as typeof fetch, 6000, deadline.signal)
+    expect(ok).toHaveBeenCalledTimes(1)
+  })
+
   it('fetchNicoSearchPage は HTML を取ってパースし、HTTP エラーは投げる', async () => {
     const ok = vi.fn(async () => ({ ok: true, text: async () => html }) as unknown as Response)
     const r = await fetchNicoSearchPage('tag', 'x', 1, ok as unknown as typeof fetch)

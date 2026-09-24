@@ -10,6 +10,15 @@ export interface NGFilterCoreResult {
   newDerivedIds: string[]
 }
 
+/**
+ * 投稿者名 NG（完全一致・部分一致）に当たるか。下の filterWithNGListCore と同じ規則で、
+ * 検索で後から名前が分かった投稿者（/api/search/owners）に使う
+ */
+export function matchesAuthorNameNG(name: string, authorNames: NGList['authorNames']): boolean {
+  if (!name) return false
+  return authorNames.exact.includes(name) || authorNames.partial.some((partial) => name.includes(partial))
+}
+
 export function filterWithNGListCore(
   items: RankingItem[],
   ngList: NGList,

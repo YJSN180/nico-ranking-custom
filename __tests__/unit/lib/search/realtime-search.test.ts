@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  freshQueryFor,
   getRealtimeBoundary,
   isRealtimeCandidate,
   isRealtimeMergeable,
@@ -53,7 +54,7 @@ describe('isRealtimeMergeable', () => {
   it('タグOR/NOTを含むと不可、ANDのみなら可', () => {
     expect(isRealtimeMergeable(base({ tagConditions: [{ tag: 'a', operator: 'OR' }] }), T)).toBe(false)
     expect(isRealtimeMergeable(base({ tagConditions: [{ tag: 'a', operator: 'NOT' }] }), T)).toBe(false)
-    expect(isRealtimeMergeable(base({ tagConditions: [{ tag: 'a', operator: 'AND' }] }), T)).toBe(true)
+    expect(isRealtimeMergeable(base({ q: '', tagConditions: [{ tag: 'a', operator: 'AND' }] }), T)).toBe(true)
   })
   it('投稿日上限が境界より前なら不可', () => {
     expect(isRealtimeMergeable(base({ dateTo: '2026-09-01T00:00:00+09:00' }), T)).toBe(false)
@@ -73,6 +74,26 @@ describe('境界の決定（Snapshot の索引の実際の最新時刻に合わ�
     expect(isRealtimeCandidate(base({ q: '' }))).toBe(false)
   })
 
+  it('nvapi が 400 を返す条件（ジャンルだけ、キーワード＋AND タグ）は対象外', () => {
+    expect(isRealtimeCandidate(base({ q: '', genres: ['ゲーム'] }))).toBe(false)
+    expect(isRealtimeCandidate(base({ tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(false)
+    expect(isRealtimeCandidate(base({ q: '  ', genres: ['ゲーム'] }))).toBe(false)
+  })
+
+  it('キーワードだけ・タグだけ（タグ検索の語を含む）と、それらとジャンルの併用は対象', () => {
+    expect(isRealtimeCandidate(base({ genres: ['ゲーム'] }))).toBe(true)
+    expect(isRealtimeCandidate(base({ q: '', tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(true)
+    expect(isRealtimeCandidate(base({ targets: 'tag', tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(true)
+    expect(isRealtimeCandidate(base({ q: '', genres: ['ゲーム'], tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(true)
+  })
+
+  it('ショートだけの検索は nvapi に無いので、本家のショートページで表せる条件のときだけ対象', () => {
+    expect(isRealtimeCandidate(base({ contentType: 'short' }))).toBe(true)
+    expect(isRealtimeCandidate(base({ contentType: 'short', q: '', tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(true)
+    expect(isRealtimeCandidate(base({ contentType: 'short', genres: ['ゲーム'] }))).toBe(false)
+    expect(isRealtimeCandidate(base({ contentType: 'short', tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(false)
+  })
+
   it('parseRequestedBoundary は不正・未来・60 日超を捨てる', () => {
     expect(parseRequestedBoundary(null, now)).toBeNull()
     expect(parseRequestedBoundary('x', now)).toBeNull()
@@ -83,9 +104,16 @@ describe('境界の決定（Snapshot の索引の実際の最新時刻に合わ�
 
   it('resolveRealtimeBoundary は 持ち回り > Snapshot 最新 > 48 時間前 の順に使う', () => {
     expect(resolveRealtimeBoundary({ requested: '2026-09-21T04:28:31+09:00', newestSnapshotStartTime: '2026-09-20T00:00:00+09:00', now })).toBe('2026-09-21T04:28:31+09:00')
-    expect(resolveRealtimeBoundary({ requested: 'broken', newestSnapshotStartTime: '2026-09-21T04:28:31+09:00', now })).toBe('2026-09-21T04:28:31+09:00')
+    expect(resolveRealtimeBoundary({ requested: 'broken', newestSnapshotStartTime: '2026-09-21T04:28:31+09:00', now })).toBe('2026-09-21T04:28:32+09:00')
     expect(resolveRealtimeBoundary({ now })).toBe('2026-09-20T06:50:00+09:00')
     expect(formatJstIso(new Date('2026-09-21T21:50:00Z'))).toBe('2026-09-22T06:50:00+09:00')
+  })
+
+  it('境界は Snapshot の最新の 1 秒後にして、索引の最新の動画を索引側（境界より前）に入れる', () => {
+    expect(resolveRealtimeBoundary({ newestSnapshotStartTime: '2026-09-21T04:28:31+09:00', now })).toBe('2026-09-21T04:28:32+09:00')
+    expect(resolveRealtimeBoundary({ newestSnapshotStartTime: '2026-09-21T04:59:59+09:00', now })).toBe('2026-09-21T05:00:00+09:00')
+    // 読めない値は 48 時間前にする
+    expect(resolveRealtimeBoundary({ newestSnapshotStartTime: 'broken', now })).toBe('2026-09-20T06:50:00+09:00')
   })
 })
 
@@ -142,6 +170,16 @@ describe('mapNvapiVideoToRankingItem', () => {
     })
     expect(item.tags).toBeUndefined()
   })
+
+  it('チャンネルの owner.id が ch 付き（"ch100200"）で来ても channel/chch にしない', () => {
+    const map = (owner: { id?: string | number; ownerType?: string }, isChannelVideo?: boolean) =>
+      mapNvapiVideoToRankingItem({ id: 'so1', title: 't', registeredAt: '', owner, isChannelVideo }, 1).authorId
+    expect(map({ id: 'ch100200', ownerType: 'channel' }, true)).toBe('channel/ch100200')
+    expect(map({ id: 'ch100201', ownerType: 'channel' })).toBe('channel/ch100201')
+    expect(map({ id: 100202 }, true)).toBe('channel/ch100202')
+    expect(map({ id: 3003, ownerType: 'user' })).toBe('3003')
+    expect(mapNvapiVideoToRankingItem({ id: 'sm5', title: 't', registeredAt: '' }, 1).authorId).toBeUndefined()
+  })
 })
 
 describe('applyRealtimeRangeFilters', () => {
@@ -176,6 +214,19 @@ describe('fetchRealtimeSegment', () => {
     const seg = await fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)
     expect(fetchImpl).toHaveBeenCalledTimes(REALTIME_MAX_PAGES)
     expect(seg.truncated).toBe(true)
+  })
+  it('打ち切ったときは、取れた中で最も古い投稿時刻（後付けフィルタの前）を floor に返す', async () => {
+    const at = (n: number) => `2026-09-02T${String(20 - n).padStart(2, '0')}:00:00+09:00`
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(mkResponse([{ id: 'a', title: 'a', registeredAt: at(1), count: { view: 1 } }], true, 999))
+      .mockResolvedValueOnce(mkResponse([{ id: 'b', title: 'b', registeredAt: at(2), count: { view: 1 } }], true, 999))
+      .mockResolvedValueOnce(mkResponse([{ id: 'c', title: 'c', registeredAt: at(3), count: { view: 1 } }], true, 999))
+    const seg = await fetchRealtimeSegment(base({ viewsMin: 100 }), T, fetchImpl as unknown as typeof fetch)
+    expect(seg.items).toEqual([])
+    expect(seg.floor).toBe(at(3))
+    const complete = vi.fn().mockResolvedValue(mkResponse([{ id: 'a', title: 'a', registeredAt: at(1), count: {} }], false, 1))
+    expect((await fetchRealtimeSegment(base(), T, complete as unknown as typeof fetch)).floor).toBeUndefined()
   })
   it('上流エラーは throw する（呼び出し側で Snapshot 単独に縮退）', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 403 } as unknown as Response)
@@ -230,5 +281,18 @@ describe('applyRealtimeRangeFilters: duration 不明の扱い', () => {
     const unknown = mapNvapiVideoToRankingItem({ id: 'u', title: 'u', registeredAt: '', count: { view: 1 } }, 1)
     expect(applyRealtimeRangeFilters([unknown], base({ durationMax: 60 }))).toEqual([])
     expect(applyRealtimeRangeFilters([unknown], base()).map((i) => i.id)).toEqual(['u'])
+  })
+})
+
+describe('freshQueryFor', () => {
+  it('キーワードは /search/、タグ検索と AND タグは /tag/（空白区切り）', () => {
+    expect(freshQueryFor(base())).toEqual({ kind: 'keyword', query: '初音ミク' })
+    expect(freshQueryFor(base({ targets: 'tag', tagConditions: [{ tag: 'b', operator: 'AND' }] }))).toEqual({ kind: 'tag', query: '初音ミク b' })
+    expect(freshQueryFor(base({ q: '', tagConditions: [{ tag: 'b', operator: 'AND' }] }))).toEqual({ kind: 'tag', query: 'b' })
+  })
+  it('ジャンル指定・OR/NOT・キーワードとタグの併用は対象外', () => {
+    expect(freshQueryFor(base({ genres: ['ゲーム'] }))).toBeNull()
+    expect(freshQueryFor(base({ tagConditions: [{ tag: 'b', operator: 'OR' }] }))).toBeNull()
+    expect(freshQueryFor(base({ tagConditions: [{ tag: 'b', operator: 'AND' }] }))).toBeNull()
   })
 })

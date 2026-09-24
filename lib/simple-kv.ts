@@ -1,5 +1,6 @@
 // Simple KV utility using Cloudflare KV REST API
 // Provides a unified interface for key-value storage operations
+import { withTimeout } from './abort-signal'
 
 // Get environment variables dynamically at runtime
 function getEnvVars() {
@@ -22,7 +23,21 @@ const MAX_ATTEMPTS = 3
 
 const backoffDelay = (attempt: number): number => Math.min(1000 * Math.pow(2, attempt), 10000)
 
-const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+/** ms だけ待つ。signal が中断されたらすぐに戻る（呼び出し側で中断を確かめる） */
+const sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
+  new Promise(resolve => {
+    if (signal?.aborted) {
+      resolve()
+      return
+    }
+    const done = (): void => {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', done)
+      resolve()
+    }
+    const timer = setTimeout(done, ms)
+    signal?.addEventListener('abort', done, { once: true })
+  })
 
 /** KV の読み取り失敗（404 以外）。未設定（404）とは区別する */
 export class KvReadError extends Error {
@@ -35,7 +50,15 @@ export class KvReadError extends Error {
   }
 }
 
-export interface GetStrictOptions {
+/** 読み取りの時間予算。どちらも未指定なら従来どおり打ち切らない */
+export interface KvReadOptions {
+  /** 全体の期限。中断されたら再試行をやめて KvReadError を投げる */
+  signal?: AbortSignal
+  /** 1 回の読み取りのタイムアウト（ミリ秒） */
+  timeoutMs?: number
+}
+
+export interface GetStrictOptions extends KvReadOptions {
   /** 試行回数（既定 3）。直前の成功値で代替できる読み取りは 1 にして待たせない */
   attempts?: number
 }
@@ -116,16 +139,20 @@ class SimpleKV {
     }
 
     const attempts = Math.max(1, Math.floor(options.attempts ?? MAX_ATTEMPTS))
+    const { signal, timeoutMs } = options
     let lastError = new KvReadError('KV get failed')
 
     for (let attempt = 0; attempt < attempts; attempt++) {
-      if (attempt > 0) await sleep(backoffDelay(attempt - 1))
+      if (attempt > 0) await sleep(backoffDelay(attempt - 1), signal)
+      // 期限が切れたら再試行しない（呼び出し側は直前の成功値などで続ける）
+      if (signal?.aborted) throw new KvReadError('KV get aborted: deadline exceeded')
       let response: Response
       try {
         response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
           headers: {
             'Authorization': `Bearer ${CF_API_TOKEN}`,
           },
+          signal: timeoutMs !== undefined ? withTimeout(timeoutMs, signal) : signal,
         })
       } catch (error) {
         lastError = new KvReadError(`KV get failed: ${error instanceof Error ? error.message : 'network error'}`)

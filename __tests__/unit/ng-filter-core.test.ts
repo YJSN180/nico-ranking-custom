@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { RankingItem } from '@/types/ranking'
 import type { NGList } from '@/types/ng-list'
 import type { ExtendedNGList, TagNGList } from '@/types/ng-list-extended'
-import { filterWithNGListCore } from '@/lib/ng-filter-core'
+import { filterWithNGListCore, matchesAuthorNameNG } from '@/lib/ng-filter-core'
 
 const makeItem = (overrides: Partial<RankingItem>): RankingItem => ({
   rank: 1,
@@ -217,5 +217,23 @@ describe('filterWithNGListCore', () => {
       expect(core.filteredItems.map(item => item.id)).toEqual(baseline.filteredItems.map(item => item.id))
       expect(core.newDerivedIds).toEqual(baseline.newDerivedIds)
     }
+  })
+})
+
+describe('matchesAuthorNameNG（検索の投稿者名の後付けでも使う規則）', () => {
+  const authorNames = { exact: ['名前A'], partial: ['部分'] }
+
+  it('完全一致と部分一致で当てる', () => {
+    expect(matchesAuthorNameNG('名前A', authorNames)).toBe(true)
+    expect(matchesAuthorNameNG('前に部分がある名前', authorNames)).toBe(true)
+    expect(matchesAuthorNameNG('名前AB', authorNames)).toBe(false)
+    expect(matchesAuthorNameNG('', authorNames)).toBe(false)
+  })
+
+  it('filterWithNGListCore の投稿者名 NG と同じ結果になる', () => {
+    const ngList: NGList = { ...baseNgList, authorNames }
+    const items = ['名前A', '名前AB', '前に部分がある名前', 'other'].map((authorName, i) => makeItem({ id: `sm${i + 1}`, authorName }))
+    const kept = filterWithNGListCore(items, ngList).filteredItems.map((it) => it.authorName)
+    expect(kept).toEqual(items.filter((it) => !matchesAuthorNameNG(it.authorName ?? '', authorNames)).map((it) => it.authorName))
   })
 })

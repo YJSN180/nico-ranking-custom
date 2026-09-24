@@ -355,6 +355,7 @@
 }
 
 .search-form__genre {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -368,8 +369,19 @@
   user-select: none;
 }
 
+/* チェックボックスは見た目だけ隠す（display: none だとキーボードでも読み上げでも操作できない）。動画の種類のラジオと同じ */
 .search-form__genre input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.search-form__genre:has(input:focus-visible) {
+  outline: 2px solid var(--primary-color, #0066cc);
+  outline-offset: 1px;
 }
 
 .search-form__genre--active {
@@ -485,4 +497,23 @@
   font-size: 12.5px;
   color: var(--text-muted);
   line-height: 1.7;
+}
+
+/* 新着区間の打ち切り・取得失敗のお知らせ */
+.search-results__notices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+}
+
+.search-results__notice {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
 }

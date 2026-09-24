@@ -1,10 +1,13 @@
 // リアルタイム検索（検索リアルタイム統合計画 S2）
 // Snapshot API のインデックスは毎朝 5 時前後の更新で止まるため、それ以降の区間だけを
 // ニコニコ公式フロントが使う nvapi v2 search から取得し、Snapshot結果の先頭にマージする。
-// 境界 T は固定の 05:00 JST ではなく、同じ条件で Snapshot が実際に持つ最新の投稿時刻から決める
+// 境界 T は固定の 05:00 JST ではなく、同じ条件で Snapshot が実際に持つ最新の投稿時刻の 1 秒後にする
 // （更新の完了が遅れると、固定境界では索引未反映の 1 日分がどちらの区間にも入らない。2026-09-22 実測）。
+// 索引の最新の動画は索引側（T より前）に入るので、新着の取得元に無い動画（ショートなど）でも欠けない。
 // nvapi は非公開APIだが、既存の lib/scraper.ts と同じヘッダーで既に依存している。
 import type { RankingItem } from '@/types/ranking'
+import { withTimeout } from '../abort-signal'
+import { nicoPageOwnerId } from './nico-page-search'
 import type { SearchConditions } from './snapshot-search'
 
 export const NVAPI_SEARCH_URL = 'https://nvapi.nicovideo.jp/v2/search/video'
@@ -51,14 +54,6 @@ export function isRealtimeEnabled(): boolean {
   return process.env.SEARCH_REALTIME_ENABLED !== 'false'
 }
 
-/** 全体予算（overall）と1リクエストのタイムアウトを合成する */
-function combineSignals(overall: AbortSignal | undefined, timeoutMs: number): AbortSignal {
-  const perRequest = AbortSignal.timeout(timeoutMs)
-  if (!overall) return perRequest
-  const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any
-  return typeof anyFn === 'function' ? anyFn([overall, perRequest]) : overall
-}
-
 /**
  * 境界 T = 直近の 05:00 JST（現在が5時前なら前日5時）。
  * サーバーのタイムゾーンに依存しないよう UTC ミリ秒から JST を計算する。
@@ -89,12 +84,49 @@ export function formatJstIso(date: Date): string {
   return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`
 }
 
-/** 境界に依存しない条件（並び順・タグ条件・条件の有無）だけでマージ候補か判定する */
+export interface FreshQuery {
+  kind: 'keyword' | 'tag'
+  query: string
+}
+
+/**
+ * 本家の検索ページ・タグページ（最新区間、lib/search/fresh-segment.ts）の URL で表せる条件だけを対象にする。
+ * ジャンル指定、タグの OR/NOT、キーワードとタグの併用は対象外（null）。
+ */
+export function freshQueryFor(conditions: SearchConditions): FreshQuery | null {
+  if (conditions.genres.length > 0) return null
+  if (conditions.tagConditions.some((c) => c.operator !== 'AND')) return null
+  const andTags = conditions.tagConditions.map((c) => c.tag).filter((t) => t.length > 0)
+  if (conditions.targets === 'tag') {
+    const tags = [conditions.q, ...andTags].filter((t) => t.length > 0)
+    return tags.length > 0 ? { kind: 'tag', query: tags.join(' ') } : null
+  }
+  if (!conditions.q) return andTags.length > 0 ? { kind: 'tag', query: andTags.join(' ') } : null
+  if (andTags.length > 0) return null
+  return { kind: 'keyword', query: conditions.q }
+}
+
+/**
+ * nvapi の動画検索が受け付ける条件か。keyword と tag はどちらか一方だけが必須で、
+ * ジャンルだけ（keyword, tag or lockTag is required）と併用（only keyword, tag or lockTag can be set）は 400 になる（2026-09-25 実測）。
+ */
+function isNvapiQueryable(conditions: SearchConditions): boolean {
+  const q = conditions.q.trim()
+  const hasKeyword = conditions.targets === 'keyword' && q.length > 0
+  const hasTag = (conditions.targets === 'tag' && q.length > 0) || conditions.tagConditions.some((c) => c.operator === 'AND' && c.tag.trim().length > 0)
+  return hasKeyword !== hasTag
+}
+
+/**
+ * 境界に依存しない条件（並び順・タグ条件・新着の取得元が応じるか）だけでマージ候補か判定する。
+ * 取得元が応じない条件で合成すると、毎回失敗して代わりの経路に入るだけなので、はじめから索引だけにする。
+ */
 export function isRealtimeCandidate(conditions: SearchConditions): boolean {
   if (conditions.sort !== '-startTime') return false
   if (conditions.tagConditions.some((c) => c.operator !== 'AND')) return false
-  if (!conditions.q && conditions.tagConditions.length === 0 && conditions.genres.length === 0) return false
-  return true
+  // ショートは nvapi に無く、本家のショートページ（最新区間）だけが境界以降の取得元になる
+  if (conditions.contentType === 'short') return freshQueryFor(conditions) !== null
+  return isNvapiQueryable(conditions)
 }
 
 /** 2 ページ目以降にクライアントが返してくる境界の検証。不正・未来・古すぎる値は null */
@@ -108,16 +140,18 @@ export function parseRequestedBoundary(raw: string | null | undefined, now: Date
 }
 
 /**
- * リアルタイム区間の境界 T を決める。
+ * リアルタイム区間の境界 T を決める。Snapshot 側は T より前、新着側（nvapi・本家ページ）は T 以降を受け持つ。
  * 1. クライアントが持ち回った境界（ページ間で一貫させる）
- * 2. 同じ条件で Snapshot が持つ最新の投稿時刻（それ以降は Snapshot に無いので nvapi で補う）
- * 3. Snapshot に 1 件も無ければ REALTIME_BOUNDARY_FALLBACK_HOURS 前
+ * 2. 同じ条件で Snapshot が持つ最新の投稿時刻の 1 秒後（投稿時刻は秒単位なので、索引の最新は Snapshot 側に入る。
+ *    それより後は Snapshot に無いので新着側で補う）
+ * 3. Snapshot に 1 件も無い（または読めない）ときは REALTIME_BOUNDARY_FALLBACK_HOURS 前
  */
 export function resolveRealtimeBoundary(input: { requested?: string | null; newestSnapshotStartTime?: string | null; now?: Date }): string {
   const now = input.now ?? new Date()
   const requested = parseRequestedBoundary(input.requested ?? null, now)
   if (requested) return requested
-  if (input.newestSnapshotStartTime) return input.newestSnapshotStartTime
+  const newest = input.newestSnapshotStartTime ? new Date(input.newestSnapshotStartTime).getTime() : Number.NaN
+  if (Number.isFinite(newest)) return formatJstIso(new Date(newest + 1000))
   return formatJstIso(new Date(now.getTime() - REALTIME_BOUNDARY_FALLBACK_HOURS * HOUR_MS))
 }
 
@@ -125,7 +159,7 @@ export function resolveRealtimeBoundary(input: { requested?: string | null; newe
  * この条件でリアルタイム区間をマージできるか。
  * - ソートが「投稿日時が新しい順」のときだけ（境界とソートキーが一致し、区間を先頭に置ける）
  * - タグの OR / NOT は nvapi 応答にタグが無く後付け判定できないため不可
- * - 投稿日範囲の上限が境界より前なら区間は空なので不要
+ * - 投稿日範囲の上限が境界より前（＝索引の最新以前）なら区間は空で、索引だけで足りるので不要
  */
 export function isRealtimeMergeable(conditions: SearchConditions, boundary: string): boolean {
   if (!isRealtimeCandidate(conditions)) return false
@@ -175,12 +209,8 @@ export interface NvapiSearchResponse {
 }
 
 export function mapNvapiVideoToRankingItem(video: NvapiVideo, rank: number): RankingItem {
-  const ownerId = video.owner?.id !== undefined && video.owner?.id !== null ? String(video.owner.id) : undefined
-  const authorId = ownerId
-    ? video.isChannelVideo || video.owner?.ownerType === 'channel'
-      ? `channel/ch${ownerId}`
-      : ownerId
-    : undefined
+  // チャンネルの owner.id は "123" でも "ch123" でも来るので、本家ページ・Worker と同じ規則で channel/chNNN にそろえる
+  const authorId = nicoPageOwnerId(video) ?? undefined
   return {
     rank,
     id: video.id,
@@ -224,6 +254,8 @@ export interface RealtimeSegment {
   upstreamTotal: number
   /** REALTIME_MAX_PAGES で打ち切った場合 true */
   truncated: boolean
+  /** 打ち切ったとき、取れた中で最も古い投稿時刻（後付けフィルタ前）。境界からこの時刻までの投稿は欠けうる */
+  floor?: string
 }
 
 /**
@@ -248,7 +280,7 @@ export async function fetchRealtimeSegment(
     const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
       headers: NVAPI_HEADERS,
       cache: 'no-store',
-      signal: combineSignals(overallSignal, timeoutMs),
+      signal: withTimeout(timeoutMs, overallSignal),
     })
     if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
     const payload = (await res.json()) as NvapiSearchResponse
@@ -260,7 +292,9 @@ export async function fetchRealtimeSegment(
     if (page === REALTIME_MAX_PAGES) truncated = true
   }
   const filtered = applyRealtimeRangeFilters(collected, conditions).map((it, i) => ({ ...it, rank: i + 1 }))
-  return { items: filtered, upstreamTotal, truncated }
+  // nvapi は新しい順に返すので、取れた最後の動画が最も古い
+  const floor = truncated ? collected[collected.length - 1]?.registeredAt : undefined
+  return { items: filtered, upstreamTotal, truncated, ...(floor ? { floor } : {}) }
 }
 
 // ===== マージ（S3） =====

@@ -88,6 +88,30 @@ describe('simple-kv', () => {
       await expect(kv.getStrict('k')).rejects.toThrow('Cloudflare KV credentials not configured')
       expect(fetchMock).not.toHaveBeenCalled()
     })
+
+    it('期限（signal）を fetch に渡し、期限が切れたら再試行せずに KvReadError を投げる', async () => {
+      const deadline = new AbortController()
+      fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
+        expect(init?.signal).toBeInstanceOf(AbortSignal)
+        // 1 回目の失敗の直後に期限が切れる
+        deadline.abort()
+        return respond(503)
+      })
+      const { error } = await settle(kv.getStrict('k', { signal: deadline.signal }))
+      expect(error).toBeInstanceOf(KvReadError)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('1 回の読み取りが応答しなければ timeoutMs で打ち切る', async () => {
+      vi.useRealTimers()
+      fetchMock.mockImplementation(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true })
+          })
+      )
+      await expect(kv.getStrict('k', { attempts: 1, timeoutMs: 20 })).rejects.toBeInstanceOf(KvReadError)
+    })
   })
 
   describe('get（従来どおり）', () => {

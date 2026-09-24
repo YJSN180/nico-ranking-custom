@@ -57,7 +57,33 @@ interface SearchApiResponse {
   boundary?: string
   realtimeCount?: number
   realtimeTruncated?: boolean
+  /** 新着区間を打ち切ったとき、投稿が欠けうる範囲 */
+  realtimeGap?: { from: string; to: string }
+  /** 新着の取得に失敗して索引だけの結果にしたとき */
   realtimeError?: string
+  /** 本家の検索ページ（最新の投稿）の取得に失敗したとき（nvapi の新着は含む） */
+  freshError?: string
+}
+
+type ResultMeta = Pick<SearchApiResponse, 'boundary' | 'realtimeGap' | 'realtimeError' | 'freshError'> & {
+  source: 'merged' | 'snapshot'
+  realtimeCount: number
+}
+
+/** 新着区間について利用者に知らせること（打ち切りと取得の失敗） */
+function realtimeNotices(meta: ResultMeta | null): string[] {
+  if (!meta) return []
+  const notices: string[] = []
+  if (meta.source === 'snapshot' && meta.realtimeError) {
+    notices.push('新着動画を取得できなかったため、検索インデックスの時点までの結果を表示しています。時間をおいて再度検索してください。')
+  }
+  if (meta.source === 'merged') {
+    const from = formatCutoff(meta.realtimeGap?.from)
+    const to = formatCutoff(meta.realtimeGap?.to)
+    if (from && to) notices.push(`新着が多いため、${from}〜${to} に投稿された動画の一部を表示できていません。`)
+    if (meta.freshError) notices.push('最新の投稿の一部を取得できませんでした。時間をおいて再度検索してください。')
+  }
+  return notices
 }
 
 interface FormState {
@@ -245,6 +271,12 @@ function buildQueryParams(form: FormState, page: number): URLSearchParams {
   return params
 }
 
+/** URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する） */
+const SEARCH_CONDITION_KEYS = [
+  'q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax',
+  'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot',
+] as const
+
 /** URLのクエリパラメータからフォーム状態を復元 */
 function parseFormFromUrl(params: URLSearchParams): { form: FormState; page: number } {
   const secToMin = (v: string | null): string => {
@@ -290,15 +322,17 @@ export function SearchClient() {
   const searchParams = useSearchParams()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
 
-  const initial = useMemo(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())), [searchParams])
-  const [form, setForm] = useState<FormState>(initial.form)
-  const [page, setPage] = useState(initial.page)
+  // 初期値だけ URL から作る。その後の URL の変化は下の同期（useEffect）で反映する
+  const [form, setForm] = useState<FormState>(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())).form)
+  const [page, setPage] = useState(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())).page)
   const [items, setItems] = useState<RankingItem[] | null>(null)
-  // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数（次ページ要求のヒント）
-  const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
-  const realtimeCountRef = useRef(0)
-  /** 前回応答の境界（2 ページ目以降に返してページ間で一貫させる） */
-  const boundaryRef = useRef<string | null>(null)
+  // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数
+  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null)
+  /**
+   * 直前に表示した結果の条件（ページを除く URL クエリ）と、そのときの境界・新着件数。
+   * 同じ条件の 2 ページ目以降にだけ返して、ページ間で区間を一貫させる（別の条件へは持ち越さない）
+   */
+  const pagingHintRef = useRef<{ conditionKey: string; boundary: string | null; realtimeCount: number } | null>(null)
   // リアルタイム区間のタグ補完（S4）: 応答表示後に非同期で取得し、古い検索の結果は捨てる
   const tagsRequestIdRef = useRef(0)
   const ownersRequestIdRef = useRef(0)
@@ -311,6 +345,10 @@ export function SearchClient() {
   const abortRef = useRef<AbortController | null>(null)
   const resultsRef = useRef<HTMLDivElement | null>(null)
   const hasSearchedRef = useRef(false)
+  /** runSearch が書き換えたが、まだ searchParams に届いていない URL クエリ（古い順）。届いたら読み捨てる */
+  const pendingUrlWritesRef = useRef<string[]>([])
+  /** いま表示中（または取得中）の検索の URL クエリ。同じ URL への変化では検索し直さない */
+  const currentQueryRef = useRef<string | null>(null)
 
   // 保存済み検索と詳細条件の開閉状態を復元
   useEffect(() => {
@@ -330,6 +368,7 @@ export function SearchClient() {
 
   // リアルタイム区間（nvapi 由来）の動画はタグを持たないため、表示後に v3_guest 経由で
   // tags / tagDetails を後付けする。これでタグ系のユーザーNG・タグ表示が区間にも効く。
+  // サーバーが自動 NG のロックタグ規則 D に当たると判定した動画（hiddenIds）は、ここで一覧から外す。
   const enrichRealtimeTags = useCallback(async (data: SearchApiResponse, signal?: AbortSignal) => {
     // 早期 return より前に採番し、新しい検索が来たら（結果がマージでなくても）古い補完を無効化する
     const requestId = ++tagsRequestIdRef.current
@@ -342,16 +381,19 @@ export function SearchClient() {
         const chunk = targets.slice(i, i + REALTIME_TAGS_MAX_VIDEOS)
         const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(chunk.join(','))}`, { signal })
         if (!res.ok) return
-        const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>> }
+        const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>>; hiddenIds?: string[] }
         if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
         const details = body.tagDetails
+        const hidden = new Set(body.hiddenIds ?? [])
         setItems((prev) =>
           prev
-            ? prev.map((it) =>
-                details[it.id]
-                  ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
-                  : it
-              )
+            ? prev
+                .filter((it) => !hidden.has(it.id))
+                .map((it) =>
+                  details[it.id]
+                    ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
+                    : it
+                )
             : prev
         )
       }
@@ -363,6 +405,7 @@ export function SearchClient() {
   // Snapshot API には投稿者名・アイコンが無い（userId / channelId のみ）ため、表示後に
   // /api/search/owners で後付けし、ランキング画面と同じ投稿者表示にする。
   // ユーザーは ID ごと、チャンネルは代表動画 1 件ごとに問い合わせる。
+  // サーバーが管理者の投稿者名 NG に当たると判定した投稿者（hiddenAuthorIds）の動画は、ここで一覧から外す。
   const enrichOwners = useCallback(async (data: SearchApiResponse, signal?: AbortSignal) => {
     const requestId = ++ownersRequestIdRef.current
     const userIds = new Set<string>()
@@ -378,18 +421,26 @@ export function SearchClient() {
     }
     if (userIds.size === 0 && channelVideos.size === 0) return
 
-    const applyOwners = (users: Record<string, OwnerInfo>, channels: Record<string, OwnerInfo>, missing: string[]): void => {
+    const applyOwners = (
+      users: Record<string, OwnerInfo>,
+      channels: Record<string, OwnerInfo>,
+      missing: string[],
+      hiddenAuthorIds: string[]
+    ): void => {
       const deleted = new Set(missing)
+      const hidden = new Set(hiddenAuthorIds)
       setItems((prev) =>
         prev
-          ? prev.map((it) => {
-              if (it.authorName || !it.authorId) return it
-              if (deleted.has(it.authorId)) return { ...it, authorDeleted: true }
-              const info = it.authorId.startsWith('channel/')
-                ? channels[it.authorId.slice('channel/'.length)]
-                : users[it.authorId]
-              return info ? { ...it, authorName: info.name, authorIcon: info.icon ?? it.authorIcon } : it
-            })
+          ? prev
+              .filter((it) => !(it.authorId && hidden.has(it.authorId)))
+              .map((it) => {
+                if (it.authorName || !it.authorId) return it
+                if (deleted.has(it.authorId)) return { ...it, authorDeleted: true }
+                const info = it.authorId.startsWith('channel/')
+                  ? channels[it.authorId.slice('channel/'.length)]
+                  : users[it.authorId]
+                return info ? { ...it, authorName: info.name, authorIcon: info.icon ?? it.authorIcon } : it
+              })
           : prev
       )
     }
@@ -409,9 +460,14 @@ export function SearchClient() {
         try {
           const res = await fetch(`/api/search/owners?${query}`, { signal })
           if (!res.ok) return
-          const body = (await res.json()) as { users?: Record<string, OwnerInfo>; channels?: Record<string, OwnerInfo>; missing?: string[] }
+          const body = (await res.json()) as {
+            users?: Record<string, OwnerInfo>
+            channels?: Record<string, OwnerInfo>
+            missing?: string[]
+            hiddenAuthorIds?: string[]
+          }
           if (requestId !== ownersRequestIdRef.current) return
-          applyOwners(body.users ?? {}, body.channels ?? {}, body.missing ?? [])
+          applyOwners(body.users ?? {}, body.channels ?? {}, body.missing ?? [], body.hiddenAuthorIds ?? [])
         } catch {
           // 補完は任意機能なので失敗（abort 含む）しても検索結果はそのまま（ID 表示のまま）
         }
@@ -432,15 +488,20 @@ export function SearchClient() {
 
       const params = buildQueryParams(searchForm, searchPage)
       const queryString = params.toString()
-      router.replace(queryString ? `/search?${queryString}` : '/search', { scroll: false })
-
-      // 2ページ目以降はリアルタイム件数のヒントを渡し、サーバーが Snapshot を並列取得できるようにする
-      const apiParams = new URLSearchParams(params)
-      if (searchPage > 1 && realtimeCountRef.current > 0) {
-        apiParams.set('rtCount', String(realtimeCountRef.current))
+      const conditionKey = buildQueryParams(searchForm, 1).toString()
+      currentQueryRef.current = queryString
+      if (queryString !== new URLSearchParams(window.location.search).toString()) {
+        pendingUrlWritesRef.current.push(queryString)
+        router.replace(queryString ? `/search?${queryString}` : '/search', { scroll: false })
       }
-      if (searchPage > 1 && boundaryRef.current) {
-        apiParams.set('boundary', boundaryRef.current)
+
+      // 2ページ目以降は、直前に表示した結果と同じ条件のときだけ境界とリアルタイム件数のヒントを渡す
+      // （件数のヒントでサーバーが Snapshot を並列取得できる）
+      const apiParams = new URLSearchParams(params)
+      const hint = pagingHintRef.current
+      if (searchPage > 1 && hint && hint.conditionKey === conditionKey) {
+        if (hint.realtimeCount > 0) apiParams.set('rtCount', String(hint.realtimeCount))
+        if (hint.boundary) apiParams.set('boundary', hint.boundary)
       }
 
       try {
@@ -460,9 +521,19 @@ export function SearchClient() {
         setItems(data.items)
         setTotalCount(data.totalCount)
         setPage(data.page)
-        realtimeCountRef.current = data.realtimeCount ?? 0
-        boundaryRef.current = data.source === 'merged' && data.boundary ? data.boundary : null
-        setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
+        pagingHintRef.current = {
+          conditionKey,
+          boundary: data.source === 'merged' && data.boundary ? data.boundary : null,
+          realtimeCount: data.realtimeCount ?? 0,
+        }
+        setResultMeta({
+          source: data.source ?? 'snapshot',
+          boundary: data.boundary,
+          realtimeCount: data.realtimeCount ?? 0,
+          realtimeGap: data.realtimeGap,
+          realtimeError: data.realtimeError,
+          freshError: data.freshError,
+        })
         void enrichRealtimeTags(data, controller.signal)
         void enrichOwners(data, controller.signal)
       } catch (err) {
@@ -478,19 +549,42 @@ export function SearchClient() {
     [router, enrichRealtimeTags, enrichOwners]
   )
 
-  // URLに条件付きで直接アクセスした場合は自動検索
-  useEffect(() => {
-    if (hasSearchedRef.current) return
-    const params = new URLSearchParams(searchParams.toString())
-    const hasCondition = ['q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax', 'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot'].some(
-      (key) => params.has(key)
-    )
-    if (hasCondition) {
-      void runSearch(initial.form, initial.page)
-    }
-    // 初回マウント時のみ実行
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // URL から条件が消えたとき（ナビの「検索」など）は、検索前の表示に戻す
+  const resetResults = useCallback((query: string) => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    currentQueryRef.current = query
+    hasSearchedRef.current = false
+    pagingHintRef.current = null
+    setIsLoading(false)
+    setError(null)
+    setItems(null)
+    setTotalCount(0)
+    setResultMeta(null)
+    setLastForm(null)
   }, [])
+
+  // URL（外部システム）に画面を合わせる。直接アクセス、ブラウザの戻る・進む、ヘッダーやボトムナビからの遷移で
+  // searchParams が変わったら、URL から条件を戻して検索し直す。runSearch が自分で書いた URL が届いたときは読み捨てる
+  useEffect(() => {
+    const query = new URLSearchParams(searchParams.toString()).toString()
+    const pending = pendingUrlWritesRef.current
+    const ownWrite = pending.indexOf(query)
+    if (ownWrite >= 0) {
+      // それより前の書き込みは、あとの書き込みに追い越されて届かない
+      pending.splice(0, ownWrite + 1)
+      return
+    }
+    if (query === currentQueryRef.current) return
+    const params = new URLSearchParams(query)
+    const parsed = parseFormFromUrl(params)
+    setForm(parsed.form)
+    if (SEARCH_CONDITION_KEYS.some((key) => params.has(key))) {
+      void runSearch(parsed.form, parsed.page)
+    } else {
+      resetResults(query)
+    }
+  }, [searchParams, runSearch, resetResults])
 
   const handleSubmit = useCallback(
     (event: React.FormEvent) => {
@@ -500,21 +594,23 @@ export function SearchClient() {
     [form, runSearch]
   )
 
-  // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す
+  // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す。
+  // 送るのは実行済みの条件（lastForm）。入力欄で編集中の、まだ送信していない条件は使わない
   const handlePageChangeTop = useCallback(
     (nextPage: number) => {
-      void runSearch(form, nextPage)
+      if (lastForm) void runSearch(lastForm, nextPage)
     },
-    [form, runSearch]
+    [lastForm, runSearch]
   )
 
   const handlePageChangeBottom = useCallback(
     (nextPage: number) => {
-      void runSearch(form, nextPage)
+      if (!lastForm) return
+      void runSearch(lastForm, nextPage)
       // スティッキーヘッダ分は .search-results の scroll-margin-top で吸収する
       resultsRef.current?.scrollIntoView({ block: 'start' })
     },
-    [form, runSearch]
+    [lastForm, runSearch]
   )
 
   // ユーザーNGリストを自動適用
@@ -642,6 +738,7 @@ export function SearchClient() {
   }, [form])
 
   const activeChips = useMemo(() => (lastForm ? buildActiveChips(lastForm) : []), [lastForm])
+  const notices = realtimeNotices(resultMeta)
 
   return (
     <TagDisplayProvider>
@@ -1034,6 +1131,16 @@ export function SearchClient() {
             </span>
             <TagToggleButton />
           </div>
+
+          {notices.length > 0 && (
+            <div className="search-results__notices" role="status">
+              {notices.map((notice) => (
+                <p key={notice} className="search-results__notice">
+                  {notice}
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* 上部ページネーション（ランキング画面と同じ配置） */}
           <Pagination
