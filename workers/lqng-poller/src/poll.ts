@@ -1,4 +1,4 @@
-// ポーリング本体（差分取得 → 補完 → 投稿者確認 → 判定 → 保留の期限処理 → 保存）
+// ポーリング本体（受け箱の合流 → 刈り込み・保留の期限処理 → 差分取得 → 補完 → 投稿者確認 → 保存）
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
 // 1 回の実行で: 外部呼び出し ≤ subrequestBudget。KV は内容が変わったキーだけ書く（定常は追跡表の 1 回）。
 // ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
@@ -486,9 +486,19 @@ class Session {
     return new Date(author.lastCheckedAt).getTime() - new Date(author.deletedObservedAt).getTime() < LIMITS.deletedRecheckDays * DAY_MS
   }
 
-  /** 保留の期限切れを解放し、古い項目を刈り込む */
+  /**
+   * 追跡期間を過ぎた投稿・投稿者を刈り込み、保留の期限切れを解放する。
+   * 実行の最初に呼ぶ（停止明けなどに、追跡期間外の古い連投で C / A∧C を判定しないため）
+   */
   expireAndPrune(): void {
     const nowMs = this.now.getTime()
+    const trackMs = this.config.trackDays * DAY_MS
+    for (const [authorId, author] of Object.entries(this.state.tracking.authors)) {
+      author.posts = author.posts.filter((p) => nowMs - new Date(p.at).getTime() <= trackMs)
+      const stale = nowMs - new Date(author.lastPostAt).getTime() > trackMs
+      if (stale && author.posts.length === 0 && !this.awaitingDeletedRecheck(author)) delete this.state.tracking.authors[authorId]
+    }
+    this.state.tracking.pending = this.state.tracking.pending.filter((p) => p.authorId && this.state.tracking.authors[p.authorId])
     for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
       if (verdict.status === 'hold' && verdict.holdUntil && new Date(verdict.holdUntil).getTime() <= nowMs) {
         const author = verdict.authorId ? this.state.tracking.authors[verdict.authorId] : undefined
@@ -501,13 +511,6 @@ class Session {
         }
       }
     }
-    const trackMs = this.config.trackDays * DAY_MS
-    for (const [authorId, author] of Object.entries(this.state.tracking.authors)) {
-      author.posts = author.posts.filter((p) => nowMs - new Date(p.at).getTime() <= trackMs)
-      const stale = nowMs - new Date(author.lastPostAt).getTime() > trackMs
-      if (stale && author.posts.length === 0 && !this.awaitingDeletedRecheck(author)) delete this.state.tracking.authors[authorId]
-    }
-    this.state.tracking.pending = this.state.tracking.pending.filter((p) => p.authorId && this.state.tracking.authors[p.authorId])
     for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
       const ageMs = nowMs - new Date(verdict.since).getTime()
       const retention = verdict.status === 'released' ? LIMITS.releasedRetentionDays : LIMITS.videoVerdictRetentionDays
@@ -540,6 +543,8 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   // バックフィルの確定分を先に合流する（以降の判定は合流後の判定表を見る）
   const inbox = await readInbox(kv, LIMITS.inboxPerRun)
   session.mergeInbox(inbox)
+  // 判定に使う前に、追跡期間を過ぎた投稿を刈り込む（停止明けに古い連投で C / A∧C を成立させない）
+  session.expireAndPrune()
 
   if (mode === 'sweep' && state.config.sweepGenre) {
     session.spend(LIMITS.nvapiCost)
@@ -549,7 +554,6 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     session.ingest(videos)
     await session.enrichPending()
     await session.checkAuthors()
-    session.expireAndPrune()
     state.tracking.lastSweepDate = sweepDate
   } else {
     const since = state.tracking.lastPollAt
@@ -558,7 +562,6 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     const fetched = await session.ingestNewVideos(since.toISOString())
     await session.enrichPending()
     await session.checkAuthors()
-    session.expireAndPrune()
     // 新着を取れなかった回は進めない（取れなかった区間を次回の重なりで取り直す）
     if (fetched) state.tracking.lastPollAt = nowIso
   }

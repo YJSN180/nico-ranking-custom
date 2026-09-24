@@ -663,3 +663,49 @@ describe('lqng-poller 保存の順番', () => {
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm96?.status).toBe('ng')
   })
 })
+
+describe('lqng-poller 追跡の刈り込みの順番', () => {
+  it('停止明けでも、追跡期間を過ぎた古い連投では A∧C を成立させない（刈り込んでから退会を確かめる）', async () => {
+    const days = (d: number): string => new Date(T0.getTime() - d * 24 * 3600_000).toISOString()
+    const suspectedAt = new Date(T0.getTime() - 2 * 3600_000).toISOString()
+    const tracking: LqngTracking = {
+      version: 1,
+      lastPollAt: days(8), // 8 日間止まっていた
+      lastSweepDate: null,
+      authors: {
+        '1001': {
+          authorId: '1001',
+          firstSeenAt: days(8),
+          lastPostAt: days(1),
+          posts: [
+            // 8 日前の連投（追跡期間 7 日の外）と、1 日前の 1 本
+            { id: 'sm1', title: 't', at: days(8), tagDetails: [], ownerVisibility: 'visible' },
+            { id: 'sm2', title: 't', at: new Date(new Date(days(8)).getTime() + 60_000).toISOString(), tagDetails: [], ownerVisibility: 'visible' },
+            { id: 'sm3', title: 't', at: new Date(new Date(days(8)).getTime() + 120_000).toISOString(), tagDetails: [], ownerVisibility: 'visible' },
+            { id: 'sm4', title: 't', at: days(1), tagDetails: [], ownerVisibility: 'visible' },
+          ],
+          status: 'existing',
+          lastCheckedAt: suspectedAt,
+          followerCount: 100,
+          nickname: 'n',
+          visibility: 'visible',
+          deletedObservedAt: null,
+          deletionSuspectedAt: suspectedAt,
+        },
+      },
+      pending: [],
+      lastRun: null,
+      recentRuns: [],
+      updatedAt: days(8),
+    }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
+    const info = vi.fn(async (): Promise<UserInfo> => ({ status: 'deleted', followerCount: null, nickname: null }))
+    await runPoll(m.kv, deps({ fetchUserInfo: info }), 'poll')
+    expect(info).toHaveBeenCalledWith('1001')
+    const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
+    expect(author.status).toBe('deleted') // 退会は確定する
+    expect(author.posts.map((p) => p.id)).toEqual(['sm4'])
+    // 古い連投は刈り込まれているので投稿頻度 C に当たらず、A∧C にはならない
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})
