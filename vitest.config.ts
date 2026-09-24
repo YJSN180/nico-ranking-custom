@@ -54,8 +54,6 @@ export default defineConfig({
         '__tests__/unit/video-context-menu.test.tsx',  // React createRoot conflicts in CI (Document not available after first test)
         // Additional exclusions for shard stability
         '__tests__/unit/scripts/ng-filtering-cron.test.ts',  // Heavy memory usage in shard 2
-        '__tests__/unit/api/admin/ng-list.test.ts',  // NG list API conflicts in shard 4
-        '__tests__/unit/api/admin/ng-list-derived.test.ts',  // NG list API conflicts in shard 4
         '__tests__/unit/admin/ng-management.test.tsx',  // Missing admin/ng-management/page file
         '__tests__/unit/kv-optimization.test.ts',      // Import path mismatch for workers/kv-optimization
         // '__tests__/unit/ng-list-continuous-rank.test.tsx' - disabled by renaming to .disabled
