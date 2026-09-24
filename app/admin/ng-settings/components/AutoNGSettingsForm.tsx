@@ -83,13 +83,58 @@ function fromDraft(draft: Draft, base: LqngConfig): LqngConfig {
   }
 }
 
-// 下書きは初回の config から作る。読み込み直し（再読み込み）では親が key を変えて作り直し、
-// 保存後は応答の設定で下書きを作り直す。親が許可リストの更新などで config を置き換えても、
-// 編集中の下書きと「保存しました」は消さない（props から派生状態を useEffect で作らない）
+const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+
+const copyField = <K extends keyof Draft>(target: Draft, source: Draft, key: K): void => {
+  target[key] = source[key]
+}
+
+/**
+ * 下書きを新しい版の設定に載せ替える。土台から編集した項目だけを残し、ほかは最新の値にする
+ * （他の画面で変わった項目を、編集していない古い値で上書きしない）。
+ * keptChanges は、残した編集が最新の値と食い違うか（利用者に知らせる）
+ */
+function rebaseDraft(current: Draft, base: Draft, fresh: Draft): { draft: Draft; keptChanges: boolean } {
+  const next: Draft = { ...fresh }
+  let keptChanges = false
+  for (const key of Object.keys(fresh) as Array<keyof Draft>) {
+    if (sameValue(current[key], base[key])) continue
+    copyField(next, current, key)
+    if (!sameValue(current[key], fresh[key])) keptChanges = true
+  }
+  return { draft: next, keptChanges }
+}
+
+type FormMessage = { kind: 'saved' | 'error' | 'notice'; text: string }
+
+const MESSAGE_CLASS: Record<FormMessage['kind'], keyof typeof styles> = {
+  saved: 'saved',
+  error: 'error',
+  notice: 'dirty',
+}
+
+// 下書きは初回の config から作り、保存後は応答の設定で作り直す。親から新しい版の設定が届いたら
+// （再読み込み・許可リストの更新）、編集中の項目を残して載せ替える。「保存しました」は props の変化では消さない
 export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGSettingsFormProps) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(config))
+  /** 下書きの土台（最後に読み込んだか保存した設定）と、その版 */
+  const [base, setBase] = useState<{ version: string; draft: Draft }>(() => ({ version: config.updatedAt, draft: toDraft(config) }))
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState<{ kind: 'saved' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<FormMessage | null>(null)
+
+  // 新しい版の設定が届いたら、描画中にその場で載せ替える（props から state を作り直すのに useEffect を使わない、
+  // React の「props の変化に合わせて state を調整する」形。版がそろえば条件が偽になり 1 度で終わる）
+  if (config.updatedAt !== base.version) {
+    const fresh = toDraft(config)
+    const rebased = rebaseDraft(draft, base.draft, fresh)
+    setDraft(rebased.draft)
+    setBase({ version: config.updatedAt, draft: fresh })
+    if (rebased.keptChanges) {
+      setMessage({ kind: 'notice', text: '最新の設定を読み込みました。編集中だった項目はそのまま残しています。内容を確かめてから保存してください。' })
+    } else if (message?.kind === 'error') {
+      setMessage(null)
+    }
+  }
 
   const dirty = useMemo(() => JSON.stringify(fromDraft(draft, config)) !== JSON.stringify(config), [draft, config])
 
@@ -112,8 +157,9 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
     setSaving(true)
     try {
       const saved = await onSave(fromDraft(draft, config))
-      // 保存後の設定（新しい版番号つき）で下書きを作り直す。メッセージはここで出し、props の変化では消さない
+      // 保存後の設定（新しい版番号つき）で下書きと土台を作り直す。メッセージはここで出し、props の変化では消さない
       setDraft(toDraft(saved))
+      setBase({ version: saved.updatedAt, draft: toDraft(saved) })
       setMessage({ kind: 'saved', text: '保存しました。反映まで最大 3 分かかります。' })
     } catch (error) {
       setMessage({ kind: 'error', text: error instanceof Error ? error.message : '保存に失敗しました' })
@@ -243,11 +289,19 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
         <button type="submit" className={`${styles.button} ${styles.buttonPrimary}`} disabled={readOnly || saving || !dirty || validation.length > 0}>
           {saving ? '保存中…' : '設定を保存'}
         </button>
-        <button type="button" className={styles.button} disabled={saving || !dirty} onClick={() => setDraft(toDraft(config))}>
+        <button
+          type="button"
+          className={styles.button}
+          disabled={saving || !dirty}
+          onClick={() => {
+            setDraft(toDraft(config))
+            setMessage(null)
+          }}
+        >
           変更を破棄
         </button>
         {dirty && !message && <span className={styles.dirty}>未保存の変更があります</span>}
-        {message && <span className={message.kind === 'saved' ? styles.saved : styles.error}>{message.text}</span>}
+        {message && <span className={styles[MESSAGE_CLASS[message.kind]]}>{message.text}</span>}
       </div>
     </form>
   )

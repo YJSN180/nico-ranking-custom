@@ -141,8 +141,6 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
   /** 設定を保存している最中（許可リストの操作と同時に走らせない） */
   const [savingConfig, setSavingConfig] = useState(false)
   const [now, setNow] = useState(() => Date.now())
-  /** 読み込みに成功するたびに設定フォームを作り直す（保存後の置き換えでは作り直さない） */
-  const [formKey, setFormKey] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -151,8 +149,8 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
     try {
       const res = await fetch('/api/admin/lqng/overview', { credentials: 'same-origin' })
       if (!res.ok) throw new Error(`読み込みに失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}` : ''}`)
+      // 設定フォームは作り直さない（新しい版が届いたら、フォームが編集中の項目を残して載せ替える）
       setOverview((await res.json()) as Overview)
-      setFormKey((key) => key + 1)
       setNow(Date.now())
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : '読み込みに失敗しました')
@@ -514,7 +512,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
 
       {overview && tab === 'allowlist' && <AllowlistEditor allowlist={allowlist} busyId={busyId} disabled={!writable || savingConfig} onChange={updateAllowlist} />}
 
-      {overview && tab === 'settings' && <AutoNGSettingsForm key={formKey} config={overview.config} onSave={saveConfig} readOnly={!writable || busyId !== null} />}
+      {overview && tab === 'settings' && <AutoNGSettingsForm config={overview.config} onSave={saveConfig} readOnly={!writable || busyId !== null} />}
     </section>
   )
 }

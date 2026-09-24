@@ -310,6 +310,57 @@ describe('AutoNGPanel', () => {
     expect(await screen.findByText(/他の画面で設定が更新されています/)).toHaveTextContent('再読み込み')
   })
 
+  it('409 のあと再読み込みしても下書きは消えず、編集した項目だけを残して最新の設定と版に載せ替える', async () => {
+    // 他の画面でフォロワー上限が 10 → 20 に変わり、版が進んでいた
+    const latest = { ...overview.config, followerMax: 20, updatedAt: '2026-01-05T00:00:00.000Z' }
+    let reloaded = false
+    const puts: Array<Record<string, unknown>> = []
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(reloaded ? { ...overview, config: latest } : overview)
+      if (url === '/api/admin/lqng/config') {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+        puts.push(body)
+        if (body.updatedAt !== latest.updatedAt) return jsonResponse({ error: 'Config version conflict' }, 409)
+        return jsonResponse({ success: true, config: { ...latest, ...body, allowlist: latest.allowlist, updatedAt: '2026-01-06T00:00:00.000Z' } })
+      }
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+    expect(await screen.findByText(/他の画面で設定が更新されています/)).toBeInTheDocument()
+
+    reloaded = true
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
+    expect(await screen.findByText(/最新の設定を読み込みました/)).toHaveTextContent('編集中だった項目はそのまま残しています')
+    expect(screen.queryByText(/他の画面で設定が更新されています/)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('保留時間（時間）')).toHaveValue(12)
+    expect(screen.getByLabelText('フォロワー上限（人）')).toHaveValue(20)
+
+    fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+    expect(await screen.findByText(/保存しました/)).toBeInTheDocument()
+    expect(puts[1]).toMatchObject({ updatedAt: latest.updatedAt, holdHours: 12, followerMax: 20 })
+  })
+
+  it('編集していないときの再読み込みでは、他の画面で変わった値に置き換える（案内は出さない）', async () => {
+    let reloaded = false
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(reloaded ? { ...overview, config: { ...overview.config, holdHours: 8, updatedAt: '2026-01-05T00:00:00.000Z' } } : overview)
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    reloaded = true
+    fireEvent.click(screen.getByRole('button', { name: '再読み込み' }))
+    await waitFor(() => expect(screen.getByLabelText('保留時間（時間）')).toHaveValue(8))
+    expect(screen.queryByText(/最新の設定を読み込みました/)).not.toBeInTheDocument()
+    expect(screen.queryByText('未保存の変更があります')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '設定を保存' })).toBeDisabled()
+  })
+
   it('許可リストの操作中は、他の行の許可リストボタンも無効にする', async () => {
     let finish: (value: Response) => void = () => {}
     fetchMock.mockImplementation(async (url: string) => {
