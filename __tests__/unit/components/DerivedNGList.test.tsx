@@ -85,9 +85,10 @@ describe('DerivedNGList', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /削除/ })[0])
 
     await waitFor(() => {
+      // 管理 API の書き込みは application/json 必須（middleware の CSRF 対策）
       expect(global.fetch).toHaveBeenCalledWith(
         '/api/admin/ng-list/derived/sm12345',
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE', headers: { 'Content-Type': 'application/json' } })
       )
       expect(onUpdate).toHaveBeenCalledWith(['sm67890', 'sm11111'])
     })
