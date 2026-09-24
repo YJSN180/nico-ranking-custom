@@ -421,6 +421,23 @@ describe('lqng-poller 受け箱（バックフィルの確定）の合流', () =
     expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'backfill')?.note).toBe('投稿者 +0 / 動画 +2')
   })
 
+  it('投稿者 ID の無い NG 差分で保留を上書きするときも投稿者 ID を引き継ぎ、許可リストの投稿者の動画は NG にしない', async () => {
+    const at0 = '2026-01-31T00:00:00.000Z'
+    const hold = (authorId: string) => ({ status: 'hold', reasons: [], holdSignals: ['hidden_owner'], authorId, title: 't', registeredAt: at0, since: at0, holdUntil: '2026-02-01T09:00:00.000Z' })
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: { version: 1, authors: {}, videos: { sm811: hold('9001'), sm812: hold('7601') }, updatedAt: at0 },
+      'lqng:inbox:run1:000001': inboxItem(1, { authors: {}, videos: { sm811: videoVerdict(null), sm812: videoVerdict(null) } }),
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    // 許可リストの投稿者（9001）の動画は NG にせず、投稿者 ID も残る（保留は許可リストなので通常どおり解放される）
+    expect(verdicts.videos.sm811?.status).not.toBe('ng')
+    expect(verdicts.videos.sm811?.authorId).toBe('9001')
+    // それ以外は NG になるが、投稿者 ID は既存の判定から引き継ぐ
+    expect(verdicts.videos.sm812).toMatchObject({ status: 'ng', authorId: '7601' })
+  })
+
   it('許可リストの投稿者・動画と、投稿者 NG の動画は合流しない', async () => {
     const m = memoryKv({
       [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['9001'], videoIds: ['sm732'] } },

@@ -167,8 +167,13 @@ export function mergeDeltasIntoVerdicts(verdicts: LqngVerdicts, deltas: Backfill
     // 一時的な保留や、保留が明けて当時の情報では当たらなかった「解放」より強い）
     const current = Object.hasOwn(verdicts.videos, videoId) ? verdicts.videos[videoId] : undefined
     if (current?.status === 'ng' || allowVideos.has(videoId)) continue
-    if (verdict.authorId !== null && (allowAuthors.has(verdict.authorId) || Object.hasOwn(verdicts.authors, verdict.authorId))) continue
-    verdicts.videos[videoId] = { ...verdict, since: nowIso }
+    // 差分に投稿者 ID が無ければ既存の判定の ID を引き継ぐ（表示側は投稿者 ID で許可リストを照合するので、
+    // 消すと許可リストの投稿者の動画が NG として出てしまう）。許可リストは両方の ID で確かめる
+    const authorId = verdict.authorId ?? current?.authorId ?? null
+    const authorIds = [verdict.authorId, current?.authorId].filter((id): id is string => typeof id === 'string')
+    if (authorIds.some((id) => allowAuthors.has(id))) continue
+    if (authorId !== null && Object.hasOwn(verdicts.authors, authorId)) continue
+    verdicts.videos[videoId] = { ...verdict, authorId, since: nowIso }
     result.videosAdded++
   }
   return result
