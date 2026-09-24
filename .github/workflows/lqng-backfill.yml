@@ -81,4 +81,6 @@ jobs:
           BACKFILL_SOURCE: ${{ inputs.source }}
           # 受け箱のキー（lqng:inbox:<runId>:<seq>）に使う。再実行（attempt）ごとに別のキーになる
           LQNG_BACKFILL_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+          # ジョブの上限（timeout-minutes: 180）で打ち切られる前に、見つけた差分を確定して終える
+          BACKFILL_DEADLINE_MINUTES: '165'
         run: npx tsx scripts/lqng-backfill-driver.ts

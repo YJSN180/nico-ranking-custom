@@ -106,6 +106,49 @@ describe('runBackfillDriver', () => {
     })
   })
 
+  it('退会判定の保留が続いたら、未確定の差分を確定してから抜ける', async () => {
+    const cursor = createBackfillCursor(T0, 1)
+    const commits: unknown[] = []
+    let steps = 0
+    const call = vi.fn(async (mode: string, body: unknown): Promise<unknown> => {
+      if (mode === 'backfill-commit') {
+        commits.push(body)
+        return { skipped: null, key: 'k', authors: 1, videos: 0, kvWrites: 1 }
+      }
+      steps++
+      const deltas = steps === 1 ? { authors: { '5401': authorVerdict(['B']) }, videos: {} } : emptyDeltas()
+      const result: BackfillStepResult = { skipped: null, cursor, done: false, deltas, subrequests: 1, note: 'deletion_held: control_404' }
+      return result
+    })
+    const r = await runBackfillDriver({ ...options, maxHeldInRow: 3 }, { call: call as unknown as BackfillDriverIo['call'], sleep: async () => {}, log: () => {} })
+    expect(steps).toBe(3)
+    expect(r.done).toBe(false)
+    expect(r.stopped).toBe('deletion_held')
+    expect(commits).toHaveLength(1)
+  })
+
+  it('ドライバ自身の期限を過ぎたら、次の呼び出しをせずに未確定の差分を確定して抜ける', async () => {
+    const cursor = createBackfillCursor(T0, 1)
+    let clock = 0
+    const commits: unknown[] = []
+    let steps = 0
+    const call = vi.fn(async (mode: string, body: unknown): Promise<unknown> => {
+      if (mode === 'backfill-commit') {
+        commits.push(body)
+        return { skipped: null, key: 'k', authors: 1, videos: 0, kvWrites: 1 }
+      }
+      steps++
+      clock += 60_000 // 1 回の呼び出しに 1 分
+      const result: BackfillStepResult = { skipped: null, cursor, done: false, deltas: { authors: { [String(5500 + steps)]: authorVerdict(['B']) }, videos: {} }, subrequests: 1 }
+      return result
+    })
+    const r = await runBackfillDriver({ ...options, deadlineAt: 150_000 }, { call: call as unknown as BackfillDriverIo['call'], sleep: async () => {}, log: () => {}, now: () => clock })
+    expect(steps).toBe(3) // 0 分・1 分・2 分に呼び、3 分の時点で期限（2.5 分）を過ぎている
+    expect(r.stopped).toBe('deadline')
+    expect(commits).toHaveLength(1)
+    expect(Object.keys((commits[0] as { deltas: BackfillDeltas }).deltas.authors)).toHaveLength(3)
+  })
+
   it('何も見つからなければ確定しない', async () => {
     const { io, commits } = scripted([emptyDeltas()])
     const r = await runBackfillDriver(options, io)

@@ -48,6 +48,10 @@ export const BACKFILL_LIMITS = {
   floorDefault: '2007-03-01T00:00:00.000Z',
   /** pages ソースの既定の遡り日数（Snapshot の更新遅れと Worker 停止の隙間を埋める用途） */
   pagesDefaultDays: 2,
+  /** 走査中に存在を確認した投稿者を対照に使える期限（分） */
+  controlFreshMinutes: 60,
+  /** 対照にして失敗した投稿者を覚えておく数 */
+  rejectedControlsMax: 50,
 } as const
 
 const HOUR_MS = 3600_000
@@ -79,6 +83,8 @@ export interface BackfillCheckedAuthor {
   status: 'existing' | 'deleted'
   followerCount: number | null
   nickname: string | null
+  /** 確かめた時刻（対照に使える期限の判定に使う。無ければ対照にしない） */
+  checkedAt?: string
 }
 
 export interface BackfillPendingThumb {
@@ -122,6 +128,8 @@ export interface BackfillCursor {
   /** 存在確認済みの投稿者 */
   checked: Record<string, BackfillCheckedAuthor>
   pendingUsers: string[]
+  /** 対照にして 404・失敗だった投稿者（同じ対照に居座らないよう、次からは使わない） */
+  rejectedControls?: string[]
   pendingThumbs: BackfillPendingThumb[]
   /** 存在確認待ちの投稿者の根拠（A∧C になったときに付ける） */
   evidence: Record<string, LqngEvidence[]>
@@ -396,7 +404,7 @@ class BackfillSession {
         continue
       }
       this.cursor.stats.usersChecked++
-      this.cursor.checked[authorId] = { status, followerCount: info.followerCount, nickname: info.nickname }
+      this.cursor.checked[authorId] = { status, followerCount: info.followerCount, nickname: info.nickname, checkedAt: this.nowIso }
       if (status === 'deleted') this.addAuthorNg(authorId, ['A_C'], this.cursor.evidence[authorId] ?? [])
       delete this.cursor.evidence[authorId]
     }
@@ -409,21 +417,34 @@ class BackfillSession {
     if (control === null) return 'no_control'
     if (!this.budgetLeft()) return 'no_budget'
     this.subrequests++
+    let result: string | null
     try {
       const info = await deps.fetchUserInfo(control)
-      if (info.status === 'existing') return null
-      return info.status === 'deleted' ? 'control_404' : 'control_error'
+      result = info.status === 'existing' ? null : info.status === 'deleted' ? 'control_404' : 'control_error'
     } catch (error) {
-      return error instanceof AccessLimitedError ? 'control_access_limited' : 'control_error'
+      result = error instanceof AccessLimitedError ? 'control_access_limited' : 'control_error'
     }
+    // 走査中の投稿者を対照にして失敗したら、次からは別の投稿者に入れ替える（設定の対照は管理者が選んだものなので外さない）
+    if (result !== null && control !== this.config.controlUserId) {
+      this.cursor.rejectedControls = [...(this.cursor.rejectedControls ?? []), control].slice(-BACKFILL_LIMITS.rejectedControlsMax)
+    }
+    return result
   }
 
-  /** 対照: 走査中に存在を確認した投稿者（フォロワーの多い順）。いなければ設定の controlUserId */
+  /**
+   * 対照: 設定の controlUserId を先に使う。無ければ、この走査で controlFreshMinutes 以内に存在を確認した投稿者のうち、
+   * フォロワーが followerMax より多く、対照として失敗していない人（フォロワーの多い順）。
+   * 走査で確かめるのは連投者なので同じ波で退会しうる。期限と入れ替えで、同じ対照に居座らせない
+   */
   private pickControl(exclude: ReadonlySet<string>): string | null {
+    if (this.config.controlUserId) return this.config.controlUserId
+    const nowMs = new Date(this.nowIso).getTime()
+    const rejected = new Set(this.cursor.rejectedControls ?? [])
     const known = Object.entries(this.cursor.checked)
-      .filter(([id, c]) => c.status === 'existing' && isUserId(id) && !exclude.has(id))
+      .filter(([id, c]) => c.status === 'existing' && isUserId(id) && !exclude.has(id) && !rejected.has(id))
+      .filter(([, c]) => (c.followerCount ?? 0) > this.config.followerMax && c.checkedAt !== undefined && nowMs - new Date(c.checkedAt).getTime() <= BACKFILL_LIMITS.controlFreshMinutes * 60_000)
       .sort((x, y) => (y[1].followerCount ?? -1) - (x[1].followerCount ?? -1))
-    return known[0]?.[0] ?? this.config.controlUserId ?? null
+    return known[0]?.[0] ?? null
   }
 
   async enrichThumbs(deps: BackfillDeps): Promise<void> {

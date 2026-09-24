@@ -99,15 +99,47 @@ describe('runBackfillStep', () => {
     expect(r.deltas.authors['2012']?.reasons).toEqual(['A_C'])
   })
 
-  it('対照は走査中に存在を確認した投稿者（フォロワーの多い順）を先に使い、いなければ設定の controlUserId', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const cursor = createBackfillCursor(T0, 1)
-    cursor.checked['2014'] = { status: 'existing', followerCount: 50, nickname: 'n' }
-    cursor.checked['2015'] = { status: 'existing', followerCount: 900, nickname: 'n' }
-    const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => (id === '2015' ? existing(900) : deleted))
-    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2016', 6)), fetchUserInfo }), cursor, { days: 1 })
-    expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2016', '2015'])
-    expect(r.deltas.authors['2016']?.reasons).toEqual(['A_C'])
+  describe('対照の選び方（期限と入れ替え）', () => {
+    const noControlConfig = { ...config, controlUserId: null }
+    const fresh = new Date(T0.getTime() - 10 * 60_000).toISOString()
+    const stale = new Date(T0.getTime() - 2 * 3600_000).toISOString()
+
+    it('設定の controlUserId を先に使う', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const cursor = createBackfillCursor(T0, 1)
+      cursor.checked['2015'] = { status: 'existing', followerCount: 900, nickname: 'n', checkedAt: fresh }
+      const fetchUserInfo = goneExceptControl()
+      const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2016', 6)), fetchUserInfo }), cursor, { days: 1 })
+      expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2016', '1999'])
+      expect(r.deltas.authors['2016']?.reasons).toEqual(['A_C'])
+    })
+
+    it('走査中の投稿者を対照にするのは、1 時間以内に存在を確認し、フォロワーが followerMax より多い人だけ', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig })
+      const cursor = createBackfillCursor(T0, 1)
+      cursor.checked['2020'] = { status: 'existing', followerCount: 900, nickname: 'n', checkedAt: stale } // 期限切れ
+      cursor.checked['2021'] = { status: 'existing', followerCount: 5, nickname: 'n', checkedAt: fresh } // followerMax 以下
+      const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => (id === '2022' ? existing(50) : deleted))
+      const held = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2023', 6)), fetchUserInfo }), cursor, { days: 1 })
+      expect(held.note).toContain('deletion_held: no_control')
+      held.cursor.checked['2022'] = { status: 'existing', followerCount: 50, nickname: 'n', checkedAt: fresh }
+      const r = await runBackfillStep(m.kv, deps({ fetchUserInfo }), held.cursor, { days: 1 })
+      expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2023', '2023', '2022'])
+      expect(r.deltas.authors['2023']?.reasons).toEqual(['A_C'])
+    })
+
+    it('対照にした投稿者が 404 なら、次の呼び出しでは別の投稿者に入れ替える', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig })
+      const cursor = createBackfillCursor(T0, 1)
+      cursor.checked['2030'] = { status: 'existing', followerCount: 900, nickname: 'n', checkedAt: fresh }
+      cursor.checked['2031'] = { status: 'existing', followerCount: 800, nickname: 'n', checkedAt: fresh }
+      const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => (id === '2031' ? existing(800) : deleted))
+      const held = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2032', 6)), fetchUserInfo }), cursor, { days: 1 })
+      expect(held.note).toContain('deletion_held: control_404')
+      const r = await runBackfillStep(m.kv, deps({ fetchUserInfo }), held.cursor, { days: 1 })
+      expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2032', '2030', '2032', '2031'])
+      expect(r.deltas.authors['2032']?.reasons).toEqual(['A_C'])
+    })
   })
 
   it('連投でも現存なら A∧C にせず、存在確認の結果を持ち回る', async () => {
@@ -115,7 +147,7 @@ describe('runBackfillStep', () => {
     const d = deps({ fetchWindowPage: pager(burst('2002', 6)) })
     const r = await runBackfillStep(m.kv, d, null, { days: 1 })
     expect(r.deltas.authors).toEqual({})
-    expect(r.cursor.checked['2002']).toEqual({ status: 'existing', followerCount: 100, nickname: 'n' })
+    expect(r.cursor.checked['2002']).toEqual({ status: 'existing', followerCount: 100, nickname: 'n', checkedAt: T0.toISOString() })
   })
 
   it('タイトル照合（B）は存在確認なしで投稿者 NG にする', async () => {

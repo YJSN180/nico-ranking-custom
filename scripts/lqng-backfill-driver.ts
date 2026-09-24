@@ -19,13 +19,27 @@ export interface BackfillDriverOptions {
   endAt: Date | null
   /** 受け箱のキーに使う実行 ID（英数字・_・-、64 文字まで） */
   runId: string
+  /**
+   * この時刻（ミリ秒）を過ぎたら次の呼び出しをせず、未確定の差分を確定して終える。
+   * ジョブの上限時間で打ち切られて差分を失わないよう、上限より前に置く（null で期限なし）
+   */
+  deadlineAt?: number | null
+  /** 退会判定の保留（ユーザー情報 API の異常の疑い）がこの回数続いたら、確定して終える */
+  maxHeldInRow?: number
 }
 
 export interface BackfillDriverIo {
   call: <T>(mode: 'backfill' | 'backfill-commit', body: unknown) => Promise<T>
   sleep: (ms: number) => Promise<void>
   log: (line: string) => void
+  /** 現在時刻（ミリ秒）。既定は Date.now */
+  now?: () => number
 }
+
+/** 走査を終えずに止めた理由 */
+export type BackfillDriverStop = 'max_calls' | 'deadline' | 'deletion_held'
+
+const DEFAULT_MAX_HELD_IN_ROW = 5
 
 export interface BackfillDriverResult {
   done: boolean
@@ -37,6 +51,8 @@ export interface BackfillDriverResult {
   /** 受け箱に置いた回数 */
   commits: number
   cursor: BackfillCursor | null
+  /** 走査を終えずに止めた理由（終えたときは null） */
+  stopped: BackfillDriverStop | null
 }
 
 /** 走査が見つけた判定を重複なく数える（Worker の統計は呼び出しごとの検出数で、同じ投稿者を何度も数えうる） */
@@ -108,9 +124,22 @@ export async function runBackfillDriver(options: BackfillDriverOptions, io: Back
     `backfill start: source=${options.source} pages=${options.pages} maxCalls=${options.maxCalls} days=${options.days ?? (options.source === 'pages' ? '2' : 'all')}` +
       ` end=${options.endAt ? options.endAt.toISOString() : 'now'} commitEvery=${options.commitEvery} runId=${options.runId}`
   )
+  const now = io.now ?? Date.now
+  const maxHeldInRow = options.maxHeldInRow ?? DEFAULT_MAX_HELD_IN_ROW
+  let heldInRow = 0
+  let stopped: BackfillDriverStop | null = null
   let scanFailed = false
   try {
-    while (calls < options.maxCalls) {
+    while (!done && stopped === null) {
+      if (calls >= options.maxCalls) {
+        stopped = 'max_calls'
+        break
+      }
+      if (options.deadlineAt !== undefined && options.deadlineAt !== null && now() >= options.deadlineAt) {
+        io.log('stopping: reached the driver deadline (queued deltas are committed before exiting)')
+        stopped = 'deadline'
+        break
+      }
       const r = await io.call<BackfillStepResult>('backfill', { cursor, pages: options.pages, days: options.days, source: options.source })
       if (r.skipped) throw new Error(`backfill skipped: ${r.skipped}`)
       calls++
@@ -130,6 +159,12 @@ export async function runBackfillDriver(options: BackfillDriverOptions, io: Back
         done = true
         break
       }
+      heldInRow = r.note?.includes('deletion_held') ? heldInRow + 1 : 0
+      if (heldInRow >= maxHeldInRow) {
+        io.log(`stopping: deletion checks were held ${heldInRow} times in a row (user API or control unavailable); set controlUserId or retry later`)
+        stopped = 'deletion_held'
+        break
+      }
       if (sinceCommit >= options.commitEvery) await commitPending()
       // アクセス制限や退会判定の保留（ユーザー情報 API の異常の疑い）を検知したら十分に間を空ける
       await io.sleep(r.note?.includes('access limited') || r.note?.includes('deletion_held') ? 60_000 : options.sleepMs)
@@ -146,7 +181,7 @@ export async function runBackfillDriver(options: BackfillDriverOptions, io: Back
       io.log(`final commit failed after an earlier error: ${messageOf(commitError)}`)
     }
   }
-  return { done, calls, authorsNg: found.authorsNg, videosNg: found.videosNg, commits, cursor }
+  return { done, calls, authorsNg: found.authorsNg, videosNg: found.videosNg, commits, cursor, stopped }
 }
 
 const intEnv = (name: string, fallback: number): number => {
@@ -166,6 +201,8 @@ function readOptions(): BackfillDriverOptions {
   if (endRaw && !(endAt && Number.isFinite(endAt.getTime()))) throw new Error('BACKFILL_END must be an ISO date')
   const runId = process.env.LQNG_BACKFILL_RUN_ID?.trim() || `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(runId)) throw new Error('LQNG_BACKFILL_RUN_ID must be 1-64 characters of A-Z, a-z, 0-9, _ or -')
+  // ドライバ自身の期限（分）。ジョブの上限時間より短くし、打ち切られる前に確定して終える
+  const deadlineMinutes = intEnv('BACKFILL_DEADLINE_MINUTES', 0)
   return {
     pages: intEnv('BACKFILL_PAGES', 3),
     maxCalls: intEnv('BACKFILL_MAX_CALLS', 800),
@@ -175,6 +212,8 @@ function readOptions(): BackfillDriverOptions {
     days,
     endAt,
     runId,
+    deadlineAt: deadlineMinutes > 0 ? Date.now() + deadlineMinutes * 60_000 : null,
+    maxHeldInRow: intEnv('BACKFILL_MAX_HELD_IN_ROW', DEFAULT_MAX_HELD_IN_ROW),
   }
 }
 
@@ -214,9 +253,10 @@ async function main(): Promise<void> {
   }
   const r = await runBackfillDriver(readOptions(), { call: createHttpCall(base, key), sleep, log })
   const stats = r.cursor ? { ...r.cursor.stats, authorsNg: r.authorsNg, videosNg: r.videosNg } : null
-  log(JSON.stringify({ stage: 'backfill', done: r.done, calls: r.calls, commits: r.commits, stats }))
+  log(JSON.stringify({ stage: 'backfill', done: r.done, stopped: r.stopped, calls: r.calls, commits: r.commits, stats }))
   if (!r.done) {
-    log('backfill not finished (max calls reached). Re-run to continue from scratch; already queued verdicts are kept.')
+    const resume = r.cursor?.source === 'snapshot' ? ` To continue, re-run with end=${r.cursor.windowEnd}.` : ' Re-run to continue.'
+    log(`backfill not finished (${r.stopped ?? 'stopped'}). Already queued verdicts are kept.${resume}`)
     process.exitCode = 2
   }
 }
