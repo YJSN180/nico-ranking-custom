@@ -4,7 +4,8 @@
 /** どれか 1 つが中断されたら中断されるシグナル（undefined は無視する）。理由は最初に中断されたものを引き継ぐ */
 export function anySignal(signals: ReadonlyArray<AbortSignal | undefined>): AbortSignal {
   const list = signals.filter((signal): signal is AbortSignal => signal !== undefined)
-  if (list.length === 1) return list[0]
+  const [only] = list
+  if (list.length === 1 && only) return only
   if (typeof AbortSignal.any === 'function') return AbortSignal.any(list)
   const controller = new AbortController()
   for (const signal of list) {
