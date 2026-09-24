@@ -355,6 +355,7 @@
 }
 
 .search-form__genre {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -368,8 +369,19 @@
   user-select: none;
 }
 
+/* チェックボックスは見た目だけ隠す（display: none だとキーボードでも読み上げでも操作できない）。動画の種類のラジオと同じ */
 .search-form__genre input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.search-form__genre:has(input:focus-visible) {
+  outline: 2px solid var(--primary-color, #0066cc);
+  outline-offset: 1px;
 }
 
 .search-form__genre--active {
