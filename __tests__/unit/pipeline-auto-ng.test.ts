@@ -2,6 +2,7 @@
 // 粗悪コンテンツ自動NG（lqng）をパイプラインで公開前に当てる（計画 S6）。
 // ID・タイトルはすべて合成値。
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { gunzipSync } from 'node:zlib'
 import {
   autoNgFailedGroups,
   createKvJsonReader,
@@ -11,7 +12,8 @@ import {
 } from '../../lib/pipeline/auto-ng'
 import { createPipelineNgFilter } from '../../lib/pipeline/ng-filter'
 import { buildGenreRanking } from '../../lib/pipeline/run-update'
-import { aggregateArtifacts, RANKING_GROUPS, type GroupArtifact } from '../../lib/pipeline/publication-contract'
+import { aggregateArtifacts, assertCounts, RANKING_GROUPS, type GroupArtifact } from '../../lib/pipeline/publication-contract'
+import { publishRanking, type PublicationStore } from '../../lib/pipeline/publish-ranking'
 import { scheduledSlot } from '../../workers/ranking-scheduler/scheduler.js'
 import { DEFAULT_LQNG_CONFIG, type LqngConfig, type LqngVerdicts, type VideoVerdict } from '../../lib/lqng/types'
 import { createEmptyNGList } from '../../lib/ng-list-migration'
@@ -299,5 +301,66 @@ describe('auto NG in the publication summary and the pipeline status', () => {
   it('reads no failure from publications aggregated before auto NG was applied', () => {
     expect(autoNgFailedGroups({ runId: '100', counts: { 'all/hour': 1 } })).toEqual([])
     expect(autoNgFailedGroups(undefined)).toEqual([])
+  })
+})
+
+function memoryStore(): PublicationStore {
+  const entries = new Map<string, { data: unknown; etag: string }>()
+  let version = 0
+  return {
+    read: async (key) => entries.get(key) ?? null,
+    write: async (key, bytes, options) => {
+      const old = entries.get(key)
+      if ((options.ifNoneMatch && old) || (options.ifMatch && old?.etag !== options.ifMatch)) throw new Error('CAS conflict')
+      const raw = options.gzip ? gunzipSync(bytes) : bytes
+      entries.set(key, { data: JSON.parse(Buffer.from(raw).toString()), etag: String(++version) })
+    },
+  }
+}
+
+const itemsOf = (count: number) => Array.from({ length: count }, (_, n) => ({ id: `sm${n + 1}` }))
+
+describe('count drift checks with auto NG exclusions', () => {
+  it('adds auto NG exclusions back before comparing with the previous counts', () => {
+    expect(() => assertCounts({ 'other/24h': 400 }, { 'other/24h': 1000 }, { 'other/24h': 600 })).not.toThrow()
+    expect(() => assertCounts({ 'other/24h': 400 }, { 'other/24h': 1000 })).toThrow('50%')
+    // 自動NG の分を足し戻しても半分に届かなければ、収集の欠落として止める
+    expect(() => assertCounts({ 'other/24h': 300 }, { 'other/24h': 1000 }, { 'other/24h': 100 })).toThrow('50%')
+    expect(() =>
+      assertCounts({ 'all/hour': 300, 'game/hour': 50 }, { 'all/hour': 1000, 'game/hour': 100 }, { 'all/hour': 700, 'game/hour': 50 }),
+    ).not.toThrow()
+    expect(() =>
+      assertCounts(
+        { 'all/hour': 900, 'game/hour': 10, 'music/hour': 10 },
+        { 'all/hour': 1000, 'game/hour': 1000, 'music/hour': 1000 },
+        { 'game/hour': 100 },
+      ),
+    ).toThrow('Hourly ranking total')
+  })
+
+  it('publishes a generation whose drop is covered by the aggregated auto NG exclusions', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const store = memoryStore()
+    const first = aggregateArtifacts(groupArtifacts(() => 'applied', () => undefined), '100')
+    first.genres.all['24h'].items = itemsOf(10)
+    first.genres.game.hour.items = itemsOf(10)
+    await publishRanking(store, first)
+
+    const next = (excluded?: Record<string, number>) => {
+      const data = aggregateArtifacts(groupArtifacts(() => 'applied', () => undefined), '100')
+      data.publication.generation = '101-1'
+      data.publication.collectedAt = new Date().toISOString()
+      data.metadata.updatedAt = data.publication.collectedAt
+      data.genres.all['24h'].items = itemsOf(4)
+      data.genres.game.hour.items = itemsOf(3)
+      if (excluded) data.publication.autoNg.excluded = excluded
+      return data
+    }
+    await expect(publishRanking(store, next())).rejects.toThrow('Ranking count dropped below 50%: all/24h')
+    const manifest = await publishRanking(store, next({ 'all/24h': 6, 'game/hour': 7 }))
+
+    expect(manifest.counts['all/24h']).toBe(4)
+    const drift = warn.mock.calls.flat().find((line) => String(line).includes('hourly-count-drift'))
+    expect(JSON.parse(String(drift)).drops).toEqual([{ key: 'game/hour', current: 3, previous: 10, autoNgExcluded: 7 }])
   })
 })

@@ -146,13 +146,16 @@ export function aggregateArtifacts(
 export function assertCounts(
   current: Record<string, number>,
   previous: Record<string, number> = {},
+  autoNgExcluded: Record<string, number> = {},
 ) {
+  // 自動NG で除いた件数は収集の欠落ではないので足し戻して比べる（自動NG の除外で公開を止めない）
+  const collected = (key: string) => current[key] + (autoNgExcluded[key] ?? 0)
   for (const [key, count] of Object.entries(current)) {
     if (
       !Number.isFinite(count) ||
       count < 0 ||
       (previous[key] > 0 &&
-        count < previous[key] * 0.5 &&
+        collected(key) < previous[key] * 0.5 &&
         (!key.endsWith('/hour') || key === 'all/hour'))
     ) {
       throw new Error(`Ranking count dropped below 50%: ${key}`)
@@ -160,7 +163,7 @@ export function assertCounts(
   }
   // Small hourly genres vary naturally; detect an overall hourly collapse instead.
   const hourlyKeys = Object.keys(current).filter((key) => key.endsWith('/hour'))
-  const hourlyCurrent = hourlyKeys.reduce((sum, key) => sum + current[key], 0)
+  const hourlyCurrent = hourlyKeys.reduce((sum, key) => sum + collected(key), 0)
   const hourlyPrevious = hourlyKeys.reduce(
     (sum, key) => sum + (previous[key] || 0),
     0,

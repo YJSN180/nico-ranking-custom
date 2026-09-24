@@ -98,6 +98,15 @@ export function autoNgFailedGroups(publication: unknown): string[] {
     .map(([group]) => group)
 }
 
+/** 本体ランキングから自動NG で除いた件数（ジャンル/期間）。集約した publication を渡す。無ければ空 */
+export function autoNgExcludedCounts(publication: unknown): Record<string, number> {
+  const summary = isRecord(publication) ? publication.autoNg : undefined
+  const excluded = isRecord(summary) && isRecord(summary.excluded) ? summary.excluded : {}
+  const counts: Record<string, number> = {}
+  for (const [key, value] of Object.entries(excluded)) addCount(counts, key, toCount(value))
+  return counts
+}
+
 const none = (status: AutoNgStatus): PipelineAutoNg => ({ status, sets: { authorIds: [], videoIds: [] } })
 
 export function createKvJsonReader(env: Record<string, string | undefined> = process.env): KvJsonRead {
