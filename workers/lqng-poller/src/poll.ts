@@ -2,7 +2,7 @@
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
 // 1 回の実行で: 外部呼び出し ≤ subrequestBudget。KV は内容が変わったキーだけ書く（定常は追跡表の 1 回）。
 // ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
-import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
+import { LQNG_KV_KEYS, LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
@@ -20,12 +20,15 @@ import {
 } from './sources'
 import {
   captureBaseline,
+  EVENTS_MAX,
   loadEnabled,
   loadState,
   pushEvent,
   saveState,
+  verdictsWriteProblem,
   type KvLike,
   type LoadedState,
+  type LqngEvent,
   type LqngEventKind,
   type TrackedAuthor,
   type TrackedPost,
@@ -675,6 +678,20 @@ class Session {
   }
 }
 
+/**
+ * 判定表を書けない回（読めない・投稿者 NG が減る）: 判定表・追跡表・受け箱には触れず、エラーだけを
+ * 履歴に残して監視に出す。追跡表を進めないので、直ったあとの回が同じ区間と受け箱を取り直す。
+ * 同じエラーが続く間は履歴に積み直さない（書き込みなし）
+ */
+async function refuseSave(kv: KvLike, deps: PollDeps, loadedEvents: readonly LqngEvent[], lastRun: LoadedState['events']['lastRun'], at: string, note: string): Promise<number> {
+  deps.reportError?.(new Error(note), 'verdicts')
+  if (loadedEvents[0]?.kind === 'error' && loadedEvents[0].note === note) return 0
+  const event: LqngEvent = { at, kind: 'error', note }
+  const items = [event, ...loadedEvents].slice(0, EVENTS_MAX)
+  await kv.put(LQNG_KV_KEYS.events, JSON.stringify({ version: 1, items, lastRun }))
+  return 1
+}
+
 function yesterdayJst(now: Date): string {
   const jst = new Date(now.getTime() + 9 * HOUR_MS)
   jst.setUTCDate(jst.getUTCDate() - 1)
@@ -689,12 +706,19 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   if (!(await loadEnabled(kv))) return { ...base, skipped: 'disabled' }
   const state = await loadState(kv, nowIso)
   if (!state.config.enabled) return { ...base, skipped: 'disabled' }
+  // 判定表が読めないときは空として扱わない（空で上書きすると投稿者 NG をすべて失う）
+  if (!state.verdictsReadable) {
+    const kvWrites = await refuseSave(kv, deps, state.events.items, state.events.lastRun, nowIso, 'verdicts_unreadable')
+    return { ...base, skipped: 'verdicts_unreadable', kvWrites, note: 'verdicts_unreadable' }
+  }
   const sweepDate = yesterdayJst(now)
   if (mode === 'sweep') {
     if (!state.config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
     if (state.tracking.lastSweepDate === sweepDate) return { ...base, skipped: 'already_swept' }
   }
   const baseline = captureBaseline(state)
+  /** 読み込み時の履歴（判定表を書けない回は、この回に積んだ出来事を捨ててエラーだけを残す） */
+  const loadedEvents = state.events.items.slice()
   const session = new Session(state, deps, now)
   // バックフィルの確定分を先に合流する（以降の判定は合流後の判定表を見る）
   const inbox = await readInbox(kv, LIMITS.inboxPerRun)
@@ -733,6 +757,11 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     usersChecked: session.usersChecked,
     subrequests: session.subrequests,
     ...(session.note ? { note: session.note } : {}),
+  }
+  const problem = verdictsWriteProblem(baseline, state.verdicts)
+  if (problem !== null) {
+    const kvWrites = await refuseSave(kv, deps, loadedEvents, state.events.lastRun, nowIso, problem)
+    return { ...base, ...summary, skipped: 'verdicts_shrank', kvWrites, note: problem }
   }
   const kvWrites = await saveState(
     kv,

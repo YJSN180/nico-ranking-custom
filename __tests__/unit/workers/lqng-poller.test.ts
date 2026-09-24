@@ -4,7 +4,7 @@ import { commitBackfill } from '@/workers/lqng-poller/src/backfill'
 import { AccessLimitedError, type NewVideosResult, type PageFailure, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
-import type { LqngEvents, LqngTracking, TrackedAuthor } from '@/workers/lqng-poller/src/state'
+import { captureBaseline, emptyEvents, emptyTracking, verdictsWriteProblem, type LqngEvents, type LqngTracking, type TrackedAuthor } from '@/workers/lqng-poller/src/state'
 import { memoryKv } from './helpers/lqng-memory-kv'
 
 // 合成データのみ。実在の ID・名前・タグは使わない
@@ -1031,5 +1031,44 @@ describe('lqng-poller 退会扱いの投稿者の A∧C の付け直し', () => 
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking(deletedAuthor([at(-600), at(-60)])) })
     await runPoll(m.kv, deps(), 'poll')
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})
+
+describe('lqng-poller 判定表を壊さない', () => {
+  it.each([
+    ['形が違う', '{"version":1,"authors":"x","videos":{}}'],
+    ['JSON でない', '{"authors":'],
+  ])('判定表が読めない（%s）ときは上書きせず、追跡表も進めずにエラーを記録する', async (_label, raw) => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    m.store.set(LQNG_KV_KEYS.verdicts, raw)
+    const reportError = vi.fn()
+    const fetchNew = vi.fn(async () => pages([video({ id: 'sm600', title: 'て/す/と/ま/ん' })]))
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: fetchNew, reportError }), 'poll')
+    expect(r.skipped).toBe('verdicts_unreadable')
+    expect(fetchNew).not.toHaveBeenCalled()
+    expect(m.store.get(LQNG_KV_KEYS.verdicts)).toBe(raw)
+    expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
+    expect(m.puts).toEqual([LQNG_KV_KEYS.events])
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items[0]).toMatchObject({ kind: 'error', note: 'verdicts_unreadable' })
+    expect(reportError).toHaveBeenCalledTimes(1)
+    // 続く回は同じエラーを積み直さない（書き込みなし）
+    m.reset()
+    await runPoll(m.kv, deps({ reportError }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(m.puts).toEqual([])
+    expect(reportError).toHaveBeenCalledTimes(2)
+  })
+
+  it('投稿者 NG の数が読み込み時より減る書き込みは問題として返す', () => {
+    const verdicts = (ids: string[]): LqngVerdicts => ({
+      version: 1,
+      authors: Object.fromEntries(ids.map((id) => [id, { status: 'ng' as const, reasons: ['B' as const], since: 's', evidence: [] }])),
+      videos: {},
+      updatedAt: 's',
+    })
+    const tracking = emptyTracking(T0.toISOString())
+    const baseline = captureBaseline({ verdicts: verdicts(['1', '2']), tracking, events: emptyEvents() })
+    expect(verdictsWriteProblem(baseline, verdicts(['1']))).toBe('verdicts_shrank: 2>1')
+    expect(verdictsWriteProblem(baseline, verdicts(['1', '2']))).toBeNull()
+    expect(verdictsWriteProblem(baseline, verdicts(['1', '2', '3']))).toBeNull()
   })
 })

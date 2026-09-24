@@ -183,8 +183,17 @@ export function normalizeEvents(raw: unknown): LqngEvents {
 export interface LoadedState {
   config: LqngConfig
   verdicts: LqngVerdicts
+  /** false: 判定表のキーはあるが JSON として読めない・形が違う（空として扱ってはいけない） */
+  verdictsReadable: boolean
   tracking: LqngTracking
   events: LqngEvents
+}
+
+/** 判定表の生の値が読めるか（無いのは初回として読める扱い） */
+function isReadableVerdicts(raw: string | null): boolean {
+  if (raw === null) return true
+  const parsed = parseJson<unknown>(raw, undefined)
+  return isRecord(parsed) && isRecord(parsed.authors) && isRecord(parsed.videos)
 }
 
 /** 設定だけを読む（判定表・追跡表など大きいキーを読まずに済ませたいとき用） */
@@ -207,6 +216,7 @@ export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
   return {
     config: normalizeLqngConfig(parseJson<unknown>(config, null)),
     verdicts: normalizeLqngVerdicts(parseJson<unknown>(verdicts, null)),
+    verdictsReadable: isReadableVerdicts(verdicts),
     tracking: normalizeTracking(parseJson<unknown>(tracking, null), now),
     events: normalizeEvents(parseJson<unknown>(events, null)),
   }
@@ -222,10 +232,26 @@ export interface StateBaseline {
   verdicts: string
   tracking: string
   events: string
+  /** 読み込み時の投稿者 NG の数（書き込みで減らさない） */
+  authorCount: number
 }
 
 export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>): StateBaseline {
-  return { verdicts: contentOf(state.verdicts), tracking: contentOf(state.tracking), events: JSON.stringify(state.events.items) }
+  return {
+    verdicts: contentOf(state.verdicts),
+    tracking: contentOf(state.tracking),
+    events: JSON.stringify(state.events.items),
+    authorCount: Object.keys(state.verdicts.authors).length,
+  }
+}
+
+/**
+ * 判定表を書いてよいか。投稿者 NG は恒久で、この Worker が減らすことは無いので、読み込み時より減る
+ * 書き込みは壊れた判定表・同時実行などの異常として拒否する。問題が無ければ null
+ */
+export function verdictsWriteProblem(baseline: StateBaseline, verdicts: LqngVerdicts): string | null {
+  const count = Object.keys(verdicts.authors).length
+  return count < baseline.authorCount ? `verdicts_shrank: ${baseline.authorCount}>${count}` : null
 }
 
 /**
