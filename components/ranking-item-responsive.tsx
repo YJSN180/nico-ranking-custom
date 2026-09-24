@@ -116,11 +116,14 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
       onClick={(e) => {
         // disabled状態では何もしない
         if (disabled) return;
-        // 投稿者リンクやボタンなどの子要素のクリックは除外
-          const target = e.target as HTMLElement;
-          if (target.closest('a') || target.closest('button')) return;
-          handleVideoClick();
-        }}
+        const target = e.target as HTMLElement;
+        // portal（マイリストのモーダル等）で描画した要素のクリックは、React 上は行まで
+        // 伝わるが DOM 上は行の外にある。行の中のクリックではないので動画を開かない
+        if (!e.currentTarget.contains(target)) return;
+        // 投稿者リンクやボタン、⋮メニューの中（見出し・余白を含む）のクリックは除外
+        if (target.closest('a') || target.closest('button') || target.closest('.item-action-menu')) return;
+        handleVideoClick();
+      }}
       >
       <div className="ranking-item-responsive__content">
         {/* デスクトップ用順位（モバイルでは非表示） */}
