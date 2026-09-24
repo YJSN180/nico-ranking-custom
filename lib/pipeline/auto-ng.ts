@@ -40,6 +40,64 @@ export function emptyAutoNgExcluded(): AutoNgExcludedByPeriod {
   return { '24h': { ranking: 0, tags: 0 }, hour: { ranking: 0, tags: 0 } }
 }
 
+/** 集約した公開データ（publication.autoNg）に載せる自動NG の要約。件数のキーは publication.counts と同じ「ジャンル/期間」 */
+export interface AutoNgPublicationSummary {
+  /** 収集グループごとの状態（キーはグループ番号） */
+  groups: Record<string, AutoNgStatus>
+  /** 本体ランキングから除いた件数（0 は省く） */
+  excluded: Record<string, number>
+  /** タグ別ランキングから除いた件数の合計（0 は省く。300 件で切り詰める前の、取得したページでの件数） */
+  excludedFromTags: Record<string, number>
+}
+
+/** 収集グループの成果物のうち、要約に使う部分（JSON から読むので中身は検証する） */
+export interface AutoNgGroupReport {
+  groupId: number
+  autoNg?: unknown
+  results: ReadonlyArray<{ genre: string; autoNgExcluded?: unknown }>
+}
+
+const AUTO_NG_STATUSES: readonly AutoNgStatus[] = ['applied', 'disabled', 'missing', 'invalid', 'unavailable']
+const PERIODS: readonly RankingPeriod[] = ['24h', 'hour']
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const isAutoNgStatus = (v: unknown): v is AutoNgStatus => AUTO_NG_STATUSES.some((status) => status === v)
+const toCount = (v: unknown): number => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : 0)
+
+function addCount(target: Record<string, number>, key: string, count: number): void {
+  if (count > 0) target[key] = (target[key] ?? 0) + count
+}
+
+export function summarizeAutoNg(reports: ReadonlyArray<AutoNgGroupReport>): AutoNgPublicationSummary {
+  const summary: AutoNgPublicationSummary = { groups: {}, excluded: {}, excludedFromTags: {} }
+  for (const report of reports) {
+    // 状態の無い成果物は、自動NG を当てたと確かめられないので unavailable とする
+    summary.groups[String(report.groupId)] = isAutoNgStatus(report.autoNg) ? report.autoNg : 'unavailable'
+    for (const result of report.results) {
+      const byPeriod = isRecord(result.autoNgExcluded) ? result.autoNgExcluded : {}
+      for (const period of PERIODS) {
+        const counts = byPeriod[period]
+        if (!isRecord(counts)) continue
+        addCount(summary.excluded, `${result.genre}/${period}`, toCount(counts.ranking))
+        addCount(summary.excludedFromTags, `${result.genre}/${period}`, toCount(counts.tags))
+      }
+    }
+  }
+  return summary
+}
+
+/**
+ * 自動NG を当てられずに公開したグループ（読み取り失敗・壊れた判定表）。集約した publication を渡す。
+ * 要約の無い publication（この変更より前の集約）は空を返す
+ */
+export function autoNgFailedGroups(publication: unknown): string[] {
+  const summary = isRecord(publication) ? publication.autoNg : undefined
+  const groups = isRecord(summary) && isRecord(summary.groups) ? summary.groups : {}
+  return Object.entries(groups)
+    .filter(([, status]) => !isAutoNgStatus(status) || status === 'invalid' || status === 'unavailable')
+    .map(([group]) => group)
+}
+
 const none = (status: AutoNgStatus): PipelineAutoNg => ({ status, sets: { authorIds: [], videoIds: [] } })
 
 export function createKvJsonReader(env: Record<string, string | undefined> = process.env): KvJsonRead {

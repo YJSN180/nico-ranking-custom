@@ -1,3 +1,5 @@
+import { summarizeAutoNg } from './auto-ng'
+
 export const RANKING_GROUPS = [
   ['all', 'game'],
   ['anime', 'vocaloid'],
@@ -19,7 +21,10 @@ export interface GroupArtifact {
   groupId: number
   collectedAt: string
   completedAt: string
-  results: Array<{ genre: string; data: any; hadErrors?: boolean }>
+  /** 自動NG の状態（lib/pipeline/auto-ng.ts の AutoNgStatus） */
+  autoNg?: unknown
+  /** autoNgExcluded は自動NG で除いた件数（AutoNgExcludedByPeriod） */
+  results: Array<{ genre: string; data: any; hadErrors?: boolean; autoNgExcluded?: unknown }>
 }
 
 export function validateGenre(genre: string, data: any): void {
@@ -133,6 +138,7 @@ export function aggregateArtifacts(
       generation: `${runId}-${Math.max(...artifacts.map((a) => Number(a.attempt)))}`,
       collectedAt: new Date(earliest).toISOString(),
       counts,
+      autoNg: summarizeAutoNg(artifacts),
     },
   }
 }

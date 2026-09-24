@@ -3,12 +3,16 @@
 // ID・タイトルはすべて合成値。
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  autoNgFailedGroups,
   createKvJsonReader,
   loadPipelineAutoNg,
+  type AutoNgStatus,
   type PipelineAutoNg,
 } from '../../lib/pipeline/auto-ng'
 import { createPipelineNgFilter } from '../../lib/pipeline/ng-filter'
 import { buildGenreRanking } from '../../lib/pipeline/run-update'
+import { aggregateArtifacts, RANKING_GROUPS, type GroupArtifact } from '../../lib/pipeline/publication-contract'
+import { scheduledSlot } from '../../workers/ranking-scheduler/scheduler.js'
 import { DEFAULT_LQNG_CONFIG, type LqngConfig, type LqngVerdicts, type VideoVerdict } from '../../lib/lqng/types'
 import { createEmptyNGList } from '../../lib/ng-list-migration'
 import type { NGList } from '../../types/ng-list'
@@ -236,5 +240,64 @@ describe('auto NG before publication', () => {
     const logs = warn.mock.calls.flat().join('\n')
     expect(logs).toContain('empty')
     expect(logs).not.toMatch(/lqng|1001|sm\d/)
+  })
+})
+
+/** 8 グループの成果物（各ジャンル 1 件）。自動NG の状態と除外件数だけを変えられる */
+function groupArtifacts(status: (groupId: number) => unknown, excludedFor: (genre: string) => unknown): GroupArtifact[] {
+  const now = Date.now()
+  return RANKING_GROUPS.map((genres, index) => ({
+    version: 1,
+    runId: '100',
+    attempt: '1',
+    slot: scheduledSlot(now),
+    groupId: index + 1,
+    collectedAt: new Date(now - 60_000).toISOString(),
+    completedAt: new Date(now).toISOString(),
+    autoNg: status(index + 1),
+    results: genres.map((genre) => ({
+      genre,
+      data: Object.fromEntries(
+        ['24h', 'hour'].map((period) => [period, { items: [{ id: 'sm100' }], popularTags: [], tags: {} }]),
+      ),
+      autoNgExcluded: excludedFor(genre),
+    })),
+  }))
+}
+
+describe('auto NG in the publication summary and the pipeline status', () => {
+  it('sums the exclusions per genre and period next to the counts and keeps each group status', async () => {
+    stubKv({ [CONFIG_KEY]: json(config), [VERDICTS_KEY]: json(verdicts) })
+    const { excluded } = await collect(await load())
+    const statuses: Record<number, AutoNgStatus> = { 3: 'unavailable', 4: 'invalid', 5: 'missing', 6: 'disabled' }
+    const { publication } = aggregateArtifacts(
+      groupArtifacts((id) => statuses[id] ?? 'applied', (genre) => (genre === 'all' || genre === 'game' ? excluded : undefined)),
+      '100',
+    )
+
+    expect(publication.autoNg).toEqual({
+      groups: { 1: 'applied', 2: 'applied', 3: 'unavailable', 4: 'invalid', 5: 'missing', 6: 'disabled', 7: 'applied', 8: 'applied' },
+      excluded: { 'all/24h': 2, 'all/hour': 2, 'game/24h': 2, 'game/hour': 2 },
+      excludedFromTags: { 'all/24h': 2, 'all/hour': 2, 'game/24h': 2, 'game/hour': 2 },
+    })
+    // 読み取り失敗と壊れた判定表だけを補助の失敗として残す（キーなし・無効は失敗にしない）
+    expect(autoNgFailedGroups(publication)).toEqual(['3', '4'])
+  })
+
+  it('treats a group without a status as unavailable and ignores malformed counts', () => {
+    const { publication } = aggregateArtifacts(
+      groupArtifacts((id) => (id === 2 ? undefined : 'applied'), () => ({ '24h': { ranking: -1, tags: 'x' }, hour: null })),
+      '100',
+    )
+
+    expect(publication.autoNg.groups['2']).toBe('unavailable')
+    expect(publication.autoNg.excluded).toEqual({})
+    expect(publication.autoNg.excludedFromTags).toEqual({})
+    expect(autoNgFailedGroups(publication)).toEqual(['2'])
+  })
+
+  it('reads no failure from publications aggregated before auto NG was applied', () => {
+    expect(autoNgFailedGroups({ runId: '100', counts: { 'all/hour': 1 } })).toEqual([])
+    expect(autoNgFailedGroups(undefined)).toEqual([])
   })
 })
