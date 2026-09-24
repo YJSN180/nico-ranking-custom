@@ -217,6 +217,14 @@ describe('lqng-poller runPoll', () => {
     expect(verdicts.authors['1001']?.deletedObservedAt).toBe(later.toISOString())
   })
 
+  it('同じ秒に公開された別々の動画 3 本は連投として扱う（キーワード ∧ 連投 = HK）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const sameSecond = ['sm97', 'sm98', 'sm99'].map((id) => video({ id, title: 'ほもと見る何か', registeredAt: at(-1) }))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(sameSecond)) }), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(verdicts.authors['1001']?.reasons).toContain('HK')
+  })
+
   it('1〜2 本で退会した投稿者は A∧C に当たらない', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm20' })])) }), 'poll')

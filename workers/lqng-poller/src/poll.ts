@@ -83,7 +83,7 @@ function toObservation(author: TrackedAuthor | undefined): AuthorObservation | n
     status: author.status,
     followerCount: author.followerCount,
     visibility: author.visibility,
-    postTimes: author.posts.map((p) => p.at),
+    posts: author.posts.map((p) => ({ id: p.id, at: p.at })),
     deletedObservedAt: author.deletedObservedAt,
   }
 }
@@ -335,7 +335,7 @@ class Session {
   /** 投稿頻度 C に当たっている投稿者か（待ち行列の優先順位に使う） */
   isFrequentAuthor(authorId: string | null): boolean {
     const author = authorId ? this.state.tracking.authors[authorId] : undefined
-    return !!author && isFrequent(author.posts.map((p) => p.at), this.config.freq)
+    return !!author && isFrequent(author.posts, this.config.freq)
   }
 
   /** getthumbinfo でロック状態を補完し、再判定する。連投中の投稿者の動画を先に処理する */

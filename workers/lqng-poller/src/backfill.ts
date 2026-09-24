@@ -12,7 +12,7 @@
 //   （実データ検証と同じ評価）。
 import { containsAnyNormalized } from '../../../lib/lqng/normalize'
 import { evaluateVideo } from '../../../lib/lqng/rules'
-import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
+import type { AuthorObservation, LqngConfig, LqngEvidence, LqngPost, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { emptyDeltas, inboxKey, normalizeDeltas, writeInboxItem, type BackfillDeltas } from './inbox'
 import {
   AccessLimitedError,
@@ -85,8 +85,8 @@ export interface BackfillPendingThumb {
   authorId: string
   title: string
   registeredAt: string
-  /** 投稿頻度の再評価用に、取り込み時点の投稿時刻を写しておく */
-  times: string[]
+  /** 投稿頻度の再評価用に、取り込み時点の投稿（ID と時刻）を写しておく */
+  posts: LqngPost[]
 }
 
 export interface BackfillStats {
@@ -99,9 +99,12 @@ export interface BackfillStats {
   videosNg: number
 }
 
+/** カーソルの形の版。持ち回りの途中で Worker が更新されたら、古い形のカーソルは受け付けない */
+export const BACKFILL_CURSOR_VERSION = 2
+
 /** 呼び出しの間で持ち回る走査状態（KV には置かない） */
 export interface BackfillCursor {
-  version: 1
+  version: typeof BACKFILL_CURSOR_VERSION
   /** 取得元。snapshot は全履歴（30 日窓）、pages は本家タグページ（直近数日の取りこぼし補完） */
   source: BackfillSource
   /** pages 用: 何番目の「タグ×種別」の何ページ目か（種別は動画/ショートの順） */
@@ -113,8 +116,8 @@ export interface BackfillCursor {
   offset: number
   /** これより前は走査しない */
   floor: string
-  /** 直近 carryHours 分の投稿者 → 投稿時刻（C の判定用） */
-  carry: Record<string, string[]>
+  /** 直近 carryHours 分の投稿者 → 投稿（C の判定用。動画 ID で重複を除く） */
+  carry: Record<string, LqngPost[]>
   /** 存在確認済みの投稿者 */
   checked: Record<string, BackfillCheckedAuthor>
   pendingUsers: string[]
@@ -165,7 +168,7 @@ export function createBackfillCursor(now: Date, days: number | null | undefined,
   const floorMs = effectiveDays ? end - effectiveDays * DAY_MS : new Date(BACKFILL_LIMITS.floorDefault).getTime()
   const start = Math.max(floorMs, end - BACKFILL_LIMITS.windowDays * DAY_MS)
   return {
-    version: 1,
+    version: BACKFILL_CURSOR_VERSION,
     source,
     tagIndex: 0,
     page: 1,
@@ -240,7 +243,7 @@ class BackfillSession {
     return video.authorId !== null && this.config.allowlist.authorIds.includes(video.authorId)
   }
 
-  authorObservation(authorId: string | null, times: string[]): AuthorObservation | null {
+  authorObservation(authorId: string | null, posts: LqngPost[]): AuthorObservation | null {
     if (authorId === null) return null
     const checked = this.cursor.checked[authorId]
     return {
@@ -248,7 +251,7 @@ class BackfillSession {
       status: checked?.status ?? 'unknown',
       followerCount: checked?.followerCount ?? null,
       visibility: null,
-      postTimes: times,
+      posts,
       deletedObservedAt: checked?.status === 'deleted' ? this.nowIso : null,
     }
   }
@@ -311,15 +314,15 @@ class BackfillSession {
       if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id]) continue
       if (this.isAllowlisted(v)) continue
 
-      let times: string[] = []
+      let posts: LqngPost[] = []
       if (v.authorId) {
         const list = (this.cursor.carry[v.authorId] ??= [])
-        if (!list.includes(v.registeredAt)) list.push(v.registeredAt)
+        if (!list.some((p) => p.id === v.id)) list.push({ id: v.id, at: v.registeredAt })
         if (list.length > BACKFILL_LIMITS.carryPerAuthor) list.splice(0, list.length - BACKFILL_LIMITS.carryPerAuthor)
-        times = list.slice()
+        posts = list.slice()
       }
       const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null }
-      const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, times), this.config)
+      const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, posts), this.config)
       const evidence: LqngEvidence = { videoId: v.id, title: v.title, registeredAt: v.registeredAt, rules: evaluation.reasons }
       if (evaluation.ng) {
         this.addVideoNg(v, evaluation.reasons)
@@ -341,7 +344,7 @@ class BackfillSession {
       const keyword = this.config.keywordNeedles.length > 0 && containsAnyNormalized(v.title, this.config.keywordNeedles)
       const groupsMayMatch = this.cursor.source === 'pages' ? true : this.presentGroups(v.tags) >= this.config.lockGroupsMin
       if ((evaluation.frequent || keyword) && groupsMayMatch && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
-        this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, times })
+        this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, posts })
       }
     }
     if (oldest) this.pruneCarry(oldest)
@@ -350,8 +353,8 @@ class BackfillSession {
   /** 新しい順に進むので、現在位置より carryHours 以上新しい投稿時刻は二度と窓に入らない */
   pruneCarry(oldestIso: string): void {
     const limit = new Date(oldestIso).getTime() + BACKFILL_LIMITS.carryHours * HOUR_MS
-    for (const [authorId, times] of Object.entries(this.cursor.carry)) {
-      const kept = times.filter((t) => new Date(t).getTime() <= limit)
+    for (const [authorId, posts] of Object.entries(this.cursor.carry)) {
+      const kept = posts.filter((p) => new Date(p.at).getTime() <= limit)
       if (kept.length === 0) delete this.cursor.carry[authorId]
       else this.cursor.carry[authorId] = kept
     }
@@ -412,7 +415,7 @@ class BackfillSession {
       this.cursor.stats.thumbs++
       if (!result.ok) continue
       const observation: VideoObservation = { id: item.id, title: item.title, authorId: item.authorId, registeredAt: item.registeredAt, tagDetails: result.info.tagDetails, ownerVisibility: result.info.ownerVisibility }
-      const evaluation = evaluateVideo(observation, this.authorObservation(item.authorId, item.times), this.config)
+      const evaluation = evaluateVideo(observation, this.authorObservation(item.authorId, item.posts), this.config)
       if (!evaluation.ng) continue
       this.addVideoNg(item, evaluation.reasons)
       if (evaluation.escalate) this.addAuthorNg(item.authorId, evaluation.escalateReasons, [{ videoId: item.id, title: item.title, registeredAt: item.registeredAt, rules: evaluation.reasons }])
@@ -428,6 +431,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   const state = await loadState(kv, nowIso)
   const cursor = cursorIn ?? createBackfillCursor(now, options.days ?? null, options.source ?? 'snapshot')
   const empty: BackfillStepResult = { skipped: null, cursor, done: false, deltas: emptyDeltas(), subrequests: 0 }
+  // 走査の途中で Worker が更新された（カーソルの形が変わった）ときは、最初からやり直してもらう
+  if (cursor.version !== BACKFILL_CURSOR_VERSION) return { ...empty, skipped: 'cursor_version' }
   if (!state.config.enabled) return { ...empty, skipped: 'disabled' }
   if (state.config.pollTags.length === 0) return { ...empty, skipped: 'no_poll_tags' }
 

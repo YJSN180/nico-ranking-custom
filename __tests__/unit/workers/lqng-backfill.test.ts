@@ -98,6 +98,20 @@ describe('runBackfillStep', () => {
     expect(r.cursor.pendingUsers).toEqual([])
   })
 
+  it('同じ秒に公開された別々の動画 3 本も連投として数える（キーワード ∧ 連投 = HK）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const sameSecond = ['a', 'b', 'c'].map((suffix) => video({ id: `sm2010${suffix === 'a' ? 1 : suffix === 'b' ? 2 : 3}`, authorId: '2010', title: 'ほもと見る何か', registeredAt: at(1) }))
+    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(sameSecond) }), null, { days: 1 })
+    expect(r.deltas.authors['2010']?.reasons).toContain('HK')
+  })
+
+  it('古い形式（version 1）のカーソルは受け付けない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const legacy = { ...createBackfillCursor(T0, 1), version: 1 } as unknown as Parameters<typeof runBackfillStep>[2]
+    const r = await runBackfillStep(m.kv, deps(), legacy, { days: 1 })
+    expect(r.skipped).toBe('cursor_version')
+  })
+
   it('連投 ∧ ロックタグ群（C∧D）は該当群のタグを持つ動画だけ補完して判定する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     const fetchThumbInfo = vi.fn(async (): Promise<ThumbResult> => ({ ok: true, info: { tagDetails: locked('g1', 'g2', 'g3'), ownerVisibility: 'visible', nickname: 'n' } }))
