@@ -170,6 +170,16 @@ describe('mapNvapiVideoToRankingItem', () => {
     })
     expect(item.tags).toBeUndefined()
   })
+
+  it('チャンネルの owner.id が ch 付き（"ch100200"）で来ても channel/chch にしない', () => {
+    const map = (owner: { id?: string | number; ownerType?: string }, isChannelVideo?: boolean) =>
+      mapNvapiVideoToRankingItem({ id: 'so1', title: 't', registeredAt: '', owner, isChannelVideo }, 1).authorId
+    expect(map({ id: 'ch100200', ownerType: 'channel' }, true)).toBe('channel/ch100200')
+    expect(map({ id: 'ch100201', ownerType: 'channel' })).toBe('channel/ch100201')
+    expect(map({ id: 100202 }, true)).toBe('channel/ch100202')
+    expect(map({ id: 3003, ownerType: 'user' })).toBe('3003')
+    expect(mapNvapiVideoToRankingItem({ id: 'sm5', title: 't', registeredAt: '' }, 1).authorId).toBeUndefined()
+  })
 })
 
 describe('applyRealtimeRangeFilters', () => {

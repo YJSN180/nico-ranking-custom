@@ -6,6 +6,7 @@
 // 索引の最新の動画は索引側（T より前）に入るので、新着の取得元に無い動画（ショートなど）でも欠けない。
 // nvapi は非公開APIだが、既存の lib/scraper.ts と同じヘッダーで既に依存している。
 import type { RankingItem } from '@/types/ranking'
+import { nicoPageOwnerId } from './nico-page-search'
 import type { SearchConditions } from './snapshot-search'
 
 export const NVAPI_SEARCH_URL = 'https://nvapi.nicovideo.jp/v2/search/video'
@@ -215,12 +216,8 @@ export interface NvapiSearchResponse {
 }
 
 export function mapNvapiVideoToRankingItem(video: NvapiVideo, rank: number): RankingItem {
-  const ownerId = video.owner?.id !== undefined && video.owner?.id !== null ? String(video.owner.id) : undefined
-  const authorId = ownerId
-    ? video.isChannelVideo || video.owner?.ownerType === 'channel'
-      ? `channel/ch${ownerId}`
-      : ownerId
-    : undefined
+  // チャンネルの owner.id は "123" でも "ch123" でも来るので、本家ページ・Worker と同じ規則で channel/chNNN にそろえる
+  const authorId = nicoPageOwnerId(video) ?? undefined
   return {
     rank,
     id: video.id,

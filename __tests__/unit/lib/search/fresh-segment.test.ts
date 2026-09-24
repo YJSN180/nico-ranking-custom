@@ -94,6 +94,13 @@ describe('fetchFreshItems', () => {
     expect(items.map((it) => it.id)).toEqual(['p1', 'p1-at'])
   })
 
+  it('本家ページのチャンネル動画（owner.id が ch 付き）の投稿者 ID を channel/chNNN にそろえる', async () => {
+    const channelItem = { ...item('so9', '2026-09-22T06:00:00+09:00'), isChannelVideo: true, owner: { ownerType: 'channel', id: 'ch100300', name: 'c' } }
+    const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([channelItem]) }) as unknown as Response)
+    const items = await fetchFreshItems(base({ contentType: 'long' }), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(items.map((it) => it.authorId)).toEqual(['channel/ch100300'])
+  })
+
   it('HTTP エラー・構造変化は投げる', async () => {
     const down = vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response)
     await expect(fetchFreshItems(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: down as unknown as typeof fetch })).rejects.toThrow('nico_page_http_503')
