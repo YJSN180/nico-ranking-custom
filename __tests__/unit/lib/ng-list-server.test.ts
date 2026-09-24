@@ -121,6 +121,21 @@ describe('NG List Server Functions', () => {
       expect(vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual').length).toBe(calls + 1)
     })
 
+    it('期限（signal）と 1 回のタイムアウトを、手動・派生・自動NG の読み取りすべてに渡す', async () => {
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': [] }))
+      const deadline = new AbortController()
+      await getServerNGList({ signal: deadline.signal, timeoutMs: 3000 })
+      const keys = vi.mocked(kv.getStrict).mock.calls.map(([key, options]) => [key, options?.signal === deadline.signal, options?.timeoutMs])
+      expect(keys).toEqual(
+        expect.arrayContaining([
+          ['ng-list-manual', true, 3000],
+          ['ng-list-derived', true, 3000],
+          ['lqng:config', true, 3000],
+          ['lqng:verdicts', true, 3000],
+        ])
+      )
+    })
+
     it('手動リストに紛れた自動NGの欄は手動として扱わない', async () => {
       vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': { ...manual, autoAuthorIds: ['1001'], autoVideoIds: ['sm-auto'] }, 'ng-list-derived': [] }))
       const result = await getServerNGList()

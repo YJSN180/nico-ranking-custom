@@ -27,14 +27,24 @@ import {
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
 import { fetchFreshItems, mergeFreshIntoRealtime } from '@/lib/search/fresh-segment'
 import { isRealtimeEnabled } from '@/lib/search/realtime-search'
-import { filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { applyServerNgContext, loadServerNgContext, type ServerNgContext } from '@/lib/ng-filter-server'
+import { anySignal, withTimeout } from '@/lib/abort-signal'
 import type { RankingItem } from '@/types/ranking'
 
 export const revalidate = 0
 
+/**
+ * リクエスト全体の期限。上流と KV のすべての呼び出しに配り、関数の上限（vercel.json の maxDuration 15 秒）より前に
+ * 設計した応答で終える（個々のタイムアウトの合計は上限を超えうる）
+ */
+const SEARCH_DEADLINE_MS = 12000
 const FETCH_TIMEOUT_MS = 10000
+const BOUNDARY_TIMEOUT_MS = 3000
 /** リアルタイム区間取得の全体予算。超過時は Snapshot 単独に縮退する（プラットフォーム504より先に必ず効かせる） */
 const REALTIME_BUDGET_MS = 4000
+const NVAPI_TIMEOUT_MS = 4000
+/** 管理者 NG・自動 NG の KV 読み取り 1 回のタイムアウト（再試行を含めて全体の期限で打ち切る） */
+const KV_READ_TIMEOUT_MS = 3000
 
 type SnapshotPage = { items: RankingItem[]; totalCount: number }
 type SnapshotFailure = { error: string; status: number; detail?: string }
@@ -43,6 +53,7 @@ async function fetchSnapshotPage(
   conditions: SearchConditions,
   offset: number,
   limit: number,
+  deadline: AbortSignal,
   startTimeBefore?: string
 ): Promise<SnapshotPage | SnapshotFailure> {
   let response: Response
@@ -50,10 +61,10 @@ async function fetchSnapshotPage(
     response = await fetch(buildSnapshotSearchUrl(conditions, { offset, limit, startTimeBefore }), {
       headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
       cache: 'no-store',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: withTimeout(FETCH_TIMEOUT_MS, deadline),
     })
   } catch (error) {
-    const isTimeout = error instanceof Error && error.name === 'TimeoutError'
+    const isTimeout = deadline.aborted || (error instanceof Error && error.name === 'TimeoutError')
     return { error: isTimeout ? 'search_timeout' : 'search_unreachable', status: 504 }
   }
   if (!response.ok) {
@@ -80,6 +91,10 @@ async function fetchSnapshotPage(
 const isFailure = (r: SnapshotPage | SnapshotFailure): r is SnapshotFailure => 'error' in r
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const deadline = AbortSignal.timeout(SEARCH_DEADLINE_MS)
+  // NG の読み取りは上流の問い合わせと並列に始める（後から始めると、残りの予算が少ないときに KV 待ちで期限を越える）。
+  // 失敗や期限切れでも投げず、直前の成功値（無ければ空）で続く
+  const ngContext = loadServerNgContext({ signal: deadline, timeoutMs: KV_READ_TIMEOUT_MS })
   const conditions = parseSearchConditions(request.nextUrl.searchParams)
   const now = new Date()
   // 境界 T: 同じ条件で Snapshot の索引が実際に持つ最新の投稿時刻の 1 秒後。2 ページ目以降はクライアントが
@@ -92,7 +107,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       boundary = requested
     } else {
       try {
-        boundary = resolveRealtimeBoundary({ newestSnapshotStartTime: await fetchSnapshotNewestStartTime(conditions), now })
+        boundary = resolveRealtimeBoundary({
+          newestSnapshotStartTime: await fetchSnapshotNewestStartTime(conditions, fetch, BOUNDARY_TIMEOUT_MS, deadline),
+          now,
+        })
       } catch {
         boundary = getRealtimeBoundary(now)
       }
@@ -102,11 +120,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // ---- Snapshot 単独（従来どおり） ----
   if (!mergeable) {
-    const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE)
+    const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE, deadline)
     if (isFailure(snapshot)) {
       return NextResponse.json({ error: snapshot.error, detail: snapshot.detail }, { status: snapshot.status })
     }
-    return await respond(snapshot.items, snapshot.totalCount, conditions, {
+    return await respond(snapshot.items, snapshot.totalCount, conditions, ngContext, {
       source: 'snapshot',
       boundary,
       realtimeCount: 0,
@@ -127,14 +145,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // 最新区間（本家ページ）は nvapi と並列に取り、失敗しても nvapi だけで続ける（隠れ依存にしない）。
   // ただしショートだけの検索では本家ページが唯一の新着の取得元なので、その失敗は新着の失敗として扱う
   const [realtimeResult, snapshotResult, freshResult] = await Promise.all([
-    fetchRealtimeSegment(conditions, boundary, fetch, 4000, AbortSignal.timeout(REALTIME_BUDGET_MS)).then(
+    fetchRealtimeSegment(conditions, boundary, fetch, NVAPI_TIMEOUT_MS, anySignal([deadline, AbortSignal.timeout(REALTIME_BUDGET_MS)])).then(
       (segment): { segment: RealtimeSegment; error?: undefined } => ({ segment }),
       (error: unknown): { segment?: undefined; error: string } => ({
         error: error instanceof Error ? error.message : 'realtime_error',
       })
     ),
-    fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, boundary),
-    fetchFreshItems(conditions, boundary).then(
+    fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, deadline, boundary),
+    fetchFreshItems(conditions, boundary, { signal: deadline }).then(
       (items): { items: RankingItem[]; error?: undefined } => ({ items }),
       (error: unknown): { items: RankingItem[]; error: string } => ({ items: [], error: error instanceof Error ? error.message : 'fresh_error' })
     ),
@@ -148,11 +166,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // 並列に取った Snapshot は境界より前だけなので使わず、境界なしで取り直す（境界以降の索引の動画を落とさない）
   const realtimeError = realtimeResult.error ?? (conditions.contentType === 'short' ? freshResult.error : undefined)
   if (!realtimeResult.segment || realtimeError) {
-    const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE)
+    const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE, deadline)
     if (isFailure(snapshot)) {
       return NextResponse.json({ error: snapshot.error, detail: snapshot.detail }, { status: snapshot.status })
     }
-    return await respond(snapshot.items, snapshot.totalCount, conditions, {
+    return await respond(snapshot.items, snapshot.totalCount, conditions, ngContext, {
       source: 'snapshot',
       boundary,
       realtimeCount: 0,
@@ -173,7 +191,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     (plan.snapshotOffset >= provisional.snapshotOffset &&
       plan.snapshotOffset + plan.snapshotLimit <= provisional.snapshotOffset + SEARCH_PAGE_SIZE)
   if (!covers) {
-    const refetched = await fetchSnapshotPage(conditions, plan.snapshotOffset, SEARCH_PAGE_SIZE, boundary)
+    const refetched = await fetchSnapshotPage(conditions, plan.snapshotOffset, SEARCH_PAGE_SIZE, deadline, boundary)
     if (isFailure(refetched)) {
       return NextResponse.json({ error: refetched.error, detail: refetched.detail }, { status: refetched.status })
     }
@@ -183,7 +201,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const merged = assembleMergedPage(realtimeItems, snapshotItems, plan)
-  return await respond(merged, realtimeItems.length + snapshotResult.totalCount, conditions, {
+  return await respond(merged, realtimeItems.length + snapshotResult.totalCount, conditions, ngContext, {
     source: 'merged',
     boundary,
     realtimeCount: realtimeItems.length,
@@ -210,12 +228,13 @@ async function respond(
   items: RankingItem[],
   totalCount: number,
   conditions: SearchConditions,
+  ngContext: Promise<ServerNgContext>,
   meta: RespondMeta
 ): Promise<NextResponse> {
   // サイト側の粗悪コンテンツ除外ルール → 管理者NGリスト（ランキングと同じKV上のリスト）
   // どちらもリアルタイム区間・Snapshot 区間の両方に同一適用される
   const { items: exclusionFiltered, excludedCount } = applyExclusionRules(items)
-  const { filteredItems, filteredCount } = await filterRankingItemsServer(exclusionFiltered)
+  const { filteredItems, filteredCount = 0 } = applyServerNgContext(exclusionFiltered, await ngContext)
   // NGフィルタは rank を 1 から振り直すため、ページ内の通し番号に戻す
   const pageStart = (conditions.page - 1) * SEARCH_PAGE_SIZE
   const renumbered = filteredItems.map((it, i) => ({ ...it, rank: pageStart + i + 1 }))

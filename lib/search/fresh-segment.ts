@@ -58,12 +58,12 @@ const isAtOrAfter = (boundaryMs: number) => (v: NicoPageVideo): boolean => new D
  * 種別ごとに 1 ページ目を取り、全件が境界以降で続きがあるときだけ 2〜FRESH_MAX_PAGES ページ目を並列に読み足す。
  * 読み足しの失敗は無視して取れた分だけ返す（1 ページ目の失敗は throw）。
  */
-async function fetchKindPages(kind: NicoPageKind, query: string, boundaryMs: number, fetchImpl: typeof fetch): Promise<NicoPageVideo[]> {
-  const first = await fetchNicoSearchPage(kind, query, 1, fetchImpl, FRESH_TIMEOUT_MS)
+async function fetchKindPages(kind: NicoPageKind, query: string, boundaryMs: number, fetchImpl: typeof fetch, signal?: AbortSignal): Promise<NicoPageVideo[]> {
+  const first = await fetchNicoSearchPage(kind, query, 1, fetchImpl, FRESH_TIMEOUT_MS, signal)
   const saturated = first.hasNext && first.items.length > 0 && first.items.every(isAtOrAfter(boundaryMs))
   if (!saturated || FRESH_MAX_PAGES < 2) return first.items
   const rest = await Promise.allSettled(
-    Array.from({ length: FRESH_MAX_PAGES - 1 }, (_, i) => fetchNicoSearchPage(kind, query, i + 2, fetchImpl, FRESH_TIMEOUT_MS))
+    Array.from({ length: FRESH_MAX_PAGES - 1 }, (_, i) => fetchNicoSearchPage(kind, query, i + 2, fetchImpl, FRESH_TIMEOUT_MS, signal))
   )
   const extra = rest.flatMap((r): NicoPageResult[] => (r.status === 'fulfilled' ? [r.value] : []))
   return [...first.items, ...extra.flatMap((page) => page.items)]
@@ -76,7 +76,8 @@ async function fetchKindPages(kind: NicoPageKind, query: string, boundaryMs: num
 export async function fetchFreshItems(
   conditions: SearchConditions,
   boundary: string,
-  options: { fetchImpl?: typeof fetch; now?: number } = {}
+  /** signal は呼び出し全体の期限（任意）。ページごとのタイムアウトと早い方で打ち切る */
+  options: { fetchImpl?: typeof fetch; now?: number; signal?: AbortSignal } = {}
 ): Promise<RankingItem[]> {
   const query = freshQueryFor(conditions)
   if (!query) return []
@@ -98,7 +99,7 @@ export async function fetchFreshItems(
         : conditions.contentType === 'short'
           ? [shortsKindOf(query.kind)]
           : [query.kind, shortsKindOf(query.kind)]
-    const pages = await Promise.all(kinds.map((kind) => fetchKindPages(kind, query.query, boundaryMs, fetchImpl)))
+    const pages = await Promise.all(kinds.map((kind) => fetchKindPages(kind, query.query, boundaryMs, fetchImpl, options.signal)))
     const seen = new Set<string>()
     items = pages
       .flat()

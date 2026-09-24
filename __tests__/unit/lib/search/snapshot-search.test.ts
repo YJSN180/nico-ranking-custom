@@ -276,6 +276,17 @@ describe('fetchSnapshotNewestStartTime', () => {
     expect(url.searchParams.get('filters[startTime][lt]')).toBeNull()
   })
 
+  it('全体の期限（signal）を fetch に渡す', async () => {
+    const deadline = new AbortController()
+    deadline.abort()
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      expect(init?.signal?.aborted).toBe(true)
+      return { ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) } as unknown as Response
+    })
+    await fetchSnapshotNewestStartTime(conditions, fetchImpl as unknown as typeof fetch, 3000, deadline.signal)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
   it('該当なしは null、上流エラーは throw', async () => {
     const empty = vi.fn(async () => ({ ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) }) as unknown as Response)
     await expect(fetchSnapshotNewestStartTime(conditions, empty as unknown as typeof fetch)).resolves.toBeNull()

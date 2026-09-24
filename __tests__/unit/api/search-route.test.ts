@@ -5,13 +5,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-// 管理者 NG・自動 NG は空（KV は未設定）
+// 管理者 NG・自動 NG は空（KV は未設定）。kvHang のときは期限（signal）で中断されるまで応答しない
+let kvHang = false
 vi.mock('@/lib/simple-kv', () => ({
-  kv: { get: vi.fn(async () => null), getStrict: vi.fn(async () => null), set: vi.fn() },
+  kv: {
+    get: vi.fn(async () => null),
+    getStrict: vi.fn(async (_key: string, options?: { signal?: AbortSignal }) => {
+      if (!kvHang) return null
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () => reject(new Error('KV get aborted')), { once: true })
+      })
+    }),
+    set: vi.fn(),
+  },
 }))
 
 import { GET } from '@/app/api/search/route'
 import { clearFreshCache } from '@/lib/search/fresh-segment'
+import { kv } from '@/lib/simple-kv'
 
 type Kind = 'long' | 'short'
 
@@ -42,7 +53,15 @@ const isoAt = (msValue: number): string => new Date(msValue).toISOString()
 let videos: FakeVideo[] = []
 let nvapiStatus = 200
 let pageStatus = 200
+/** Snapshot のページ取得（境界の問い合わせ以外）が、中断されるまで応答しない */
+let snapshotPageHang = false
 let calls: URL[] = []
+
+const hang = (signal?: AbortSignal | null): Promise<Response> =>
+  new Promise((_resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason)
+    signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+  })
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -126,10 +145,15 @@ function pageResponse(url: URL): Response {
   return new Response(`<html><head><meta name="server-response" content="${content}"></head></html>`, { status: 200 })
 }
 
-const fakeFetch = vi.fn(async (input: string | URL | Request): Promise<Response> => {
+const fakeFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
   calls.push(url)
-  if (url.hostname === 'snapshot.search.nicovideo.jp') return snapshotResponse(url)
+  // 実際の fetch と同じく、中断済みのシグナルでは即座に失敗する
+  if (init?.signal?.aborted) throw init.signal.reason
+  if (url.hostname === 'snapshot.search.nicovideo.jp') {
+    if (snapshotPageHang && url.searchParams.get('_limit') !== '1') return hang(init?.signal)
+    return snapshotResponse(url)
+  }
   if (url.hostname === 'nvapi.nicovideo.jp') return nvapiResponse(url)
   if (url.hostname === 'www.nicovideo.jp') return pageResponse(url)
   throw new Error(`unexpected fetch: ${url.href}`)
@@ -278,5 +302,71 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
     const { body } = await search(`q=x&sort=-startTime&dateFrom=${dateFrom}&dateTo=${dateTo}`)
     expect(body.source).toBe('merged')
     expect(ids(body)).toEqual(['sm9103', 'sm9102', 'ss9101', 'sm9101', 'sm1060', 'ss2001', 'sm1059', 'sm1058', 'ss2002', 'sm1057', 'sm1056'])
+  })
+})
+
+describe('/api/search: 全体の期限（S-e）', () => {
+  // 個々のタイムアウトは発火させず、12 秒の全体の期限だけをテストから切る
+  let deadline: AbortController | null = null
+
+  beforeEach(() => {
+    seedWorld()
+    nvapiStatus = 200
+    pageStatus = 200
+    snapshotPageHang = false
+    kvHang = false
+    calls = []
+    deadline = null
+    fakeFetch.mockClear()
+    vi.mocked(kv.getStrict).mockClear()
+    clearFreshCache()
+    vi.stubGlobal('fetch', fakeFetch)
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
+      const controller = new AbortController()
+      if (ms === 12_000) deadline = controller
+      return controller.signal
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+    snapshotPageHang = false
+    kvHang = false
+  })
+
+  const expire = (): void => {
+    deadline?.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+  }
+
+  it('Snapshot が応答しなくても、期限で打ち切って search_timeout（504）を返す', async () => {
+    snapshotPageHang = true
+    const pending = search('q=x&sort=-viewCounter')
+    await vi.waitFor(() => expect(callsTo('snapshot.search.nicovideo.jp').length).toBeGreaterThan(0))
+    expire()
+    const { status, body } = await pending
+    expect(status).toBe(504)
+    expect(body).toMatchObject({ error: 'search_timeout' })
+  })
+
+  it('KV（管理者 NG・自動 NG）が応答しなくても、期限で打ち切って結果を返す', async () => {
+    kvHang = true
+    const pending = search('q=x&sort=-viewCounter')
+    await vi.waitFor(() => expect(vi.mocked(kv.getStrict)).toHaveBeenCalled())
+    await vi.waitFor(() => expect(callsTo('snapshot.search.nicovideo.jp').length).toBeGreaterThan(0))
+    expire()
+    const { status, body } = await pending
+    expect(status).toBe(200)
+    expect(body.items.length).toBeGreaterThan(0)
+  })
+
+  it('新着の取得にも全体の期限を渡す（期限切れなら索引へ縮退し、索引も取れなければ 504）', async () => {
+    const pending = search('q=x&sort=-startTime')
+    expire()
+    const { status } = await pending
+    expect(status).toBe(504)
+    for (const call of fakeFetch.mock.calls) {
+      expect(call[1]?.signal?.aborted).toBe(true)
+    }
   })
 })

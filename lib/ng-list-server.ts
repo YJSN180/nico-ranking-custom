@@ -1,5 +1,5 @@
 // Server-side NG list management using Cloudflare KV
-import { kv } from './simple-kv'
+import { kv, type KvReadOptions } from './simple-kv'
 import type { NGList } from '@/types/ng-list'
 import { migrateLegacyNGList, createEmptyNGList } from './ng-list-migration'
 import { collectAutoNg, mergeAutoNgIntoList } from './lqng/merge'
@@ -42,10 +42,10 @@ const toStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
 
 // 手動 NG と派生 NG を読む。未設定（404）は空、読み取り失敗は例外（空の一覧と取り違えない）
-async function readManualAndDerived(attempts?: number): Promise<NGList> {
+async function readManualAndDerived(attempts?: number, options: KvReadOptions = {}): Promise<NGList> {
   const [manual, derived] = await Promise.all([
-    kv.getStrict<unknown>('ng-list-manual', { attempts }),
-    kv.getStrict<unknown>('ng-list-derived', { attempts }),
+    kv.getStrict<unknown>('ng-list-manual', { attempts, ...options }),
+    kv.getStrict<unknown>('ng-list-derived', { attempts, ...options }),
   ])
   // マイグレーション処理を適用
   return { ...pickManualNGList(migrateLegacyNGList(manual)), derivedVideoIds: toStringArray(derived) }
@@ -54,10 +54,10 @@ async function readManualAndDerived(attempts?: number): Promise<NGList> {
 // 粗悪コンテンツ自動NG（lib/lqng）: Worker が書く判定テーブルから、許可リストを除いた
 // 投稿者 ID・動画 ID を取り出す。失敗時や無効時は空（サービスを落とさない）。
 // ok=false は読み取りに失敗して代替値を使ったこと（その結果はキャッシュしない）
-async function loadAutoNg(): Promise<{ sets: AutoNgSets; ok: boolean }> {
+async function loadAutoNg(options: KvReadOptions): Promise<{ sets: AutoNgSets; ok: boolean }> {
   if (!isLqngEnabled()) return { sets: { authorIds: [], videoIds: [] }, ok: true }
   try {
-    const [config, verdicts] = await Promise.all([loadLqngConfig(), loadLqngVerdicts()])
+    const [config, verdicts] = await Promise.all([loadLqngConfig(options), loadLqngVerdicts(options)])
     return { sets: collectAutoNg(verdicts.value, config.value, new Date()), ok: config.ok && verdicts.ok }
   } catch {
     return { sets: { authorIds: [], videoIds: [] }, ok: false }
@@ -65,7 +65,8 @@ async function loadAutoNg(): Promise<{ sets: AutoNgSets; ok: boolean }> {
 }
 
 // Get NG list from KV
-export async function getServerNGList(): Promise<NGList> {
+// options は読み取りの時間予算（検索 API の全体の期限など）。期限切れは読み取り失敗と同じく直前の成功値（無ければ空）で続ける
+export async function getServerNGList(options: KvReadOptions = {}): Promise<NGList> {
   const cacheEnabled = process.env.NODE_ENV !== 'test'
   const now = Date.now()
   if (cacheEnabled && ngListCache && now - ngListCache.fetchedAt < NG_LIST_CACHE_TTL_MS) {
@@ -74,11 +75,11 @@ export async function getServerNGList(): Promise<NGList> {
   if (cacheEnabled && lastGoodNGList && now < retryAt) {
     return lastGoodNGList
   }
-  const autoPromise = loadAutoNg()
+  const autoPromise = loadAutoNg(options)
   let base: NGList
   try {
     // 直前の成功値があれば 1 回だけ試し、失敗したらすぐそれを返す（リクエストを再試行の待ちに巻き込まない）
-    base = await readManualAndDerived(lastGoodNGList ? 1 : undefined)
+    base = await readManualAndDerived(lastGoodNGList ? 1 : undefined, options)
   } catch {
     if (lastGoodNGList) {
       retryAt = Date.now() + RETRY_AFTER_FAILURE_MS

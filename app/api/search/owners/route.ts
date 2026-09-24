@@ -8,6 +8,9 @@ import { fetchOwnerInfo, sanitizeChannelVideoIds, sanitizeUserIds } from '@/lib/
 
 export const revalidate = 0
 
+/** 全体の期限。関数の上限（vercel.json の maxDuration 15 秒）より前に、取れた分だけで応答する */
+const OWNERS_DEADLINE_MS = 8000
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const userIds = sanitizeUserIds(request.nextUrl.searchParams.get('users'))
   const channelVideoIds = sanitizeChannelVideoIds(request.nextUrl.searchParams.get('videos'))
@@ -15,10 +18,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'no_ids' }, { status: 400 })
   }
   const started = Date.now()
-  const result = await fetchOwnerInfo({ userIds, channelVideoIds })
+  const result = await fetchOwnerInfo({ userIds, channelVideoIds }, { signal: AbortSignal.timeout(OWNERS_DEADLINE_MS) })
   return NextResponse.json(
     { users: result.users, channels: result.channels, missing: result.missing, failed: result.failed, elapsedMs: Date.now() - started },
-    // 投稿者名・アイコンは滅多に変わらないので CDN でも長めに保持する
-    { headers: { 'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=604800' } }
+    {
+      headers: {
+        // 投稿者名・アイコンは滅多に変わらないので CDN でも長めに保持する。
+        // 取れなかった分がある応答は、同じ URL で取り直せるように短くする
+        'Cache-Control':
+          result.failed.length > 0 ? 'public, s-maxage=60, stale-while-revalidate=60' : 'public, s-maxage=86400, stale-while-revalidate=604800',
+      },
+    }
   )
 }

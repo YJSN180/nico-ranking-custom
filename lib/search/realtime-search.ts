@@ -6,6 +6,7 @@
 // 索引の最新の動画は索引側（T より前）に入るので、新着の取得元に無い動画（ショートなど）でも欠けない。
 // nvapi は非公開APIだが、既存の lib/scraper.ts と同じヘッダーで既に依存している。
 import type { RankingItem } from '@/types/ranking'
+import { withTimeout } from '../abort-signal'
 import { nicoPageOwnerId } from './nico-page-search'
 import type { SearchConditions } from './snapshot-search'
 
@@ -51,14 +52,6 @@ const JST_OFFSET_MS = 9 * 60 * 60 * 1000
 /** 環境変数による即時ロールバック（'false' で Snapshot 単独）。/api/search と /api/search/realtime で共有 */
 export function isRealtimeEnabled(): boolean {
   return process.env.SEARCH_REALTIME_ENABLED !== 'false'
-}
-
-/** 全体予算（overall）と1リクエストのタイムアウトを合成する */
-function combineSignals(overall: AbortSignal | undefined, timeoutMs: number): AbortSignal {
-  const perRequest = AbortSignal.timeout(timeoutMs)
-  if (!overall) return perRequest
-  const anyFn = (AbortSignal as unknown as { any?: (signals: AbortSignal[]) => AbortSignal }).any
-  return typeof anyFn === 'function' ? anyFn([overall, perRequest]) : overall
 }
 
 /**
@@ -285,7 +278,7 @@ export async function fetchRealtimeSegment(
     const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
       headers: NVAPI_HEADERS,
       cache: 'no-store',
-      signal: combineSignals(overallSignal, timeoutMs),
+      signal: withTimeout(timeoutMs, overallSignal),
     })
     if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
     const payload = (await res.json()) as NvapiSearchResponse

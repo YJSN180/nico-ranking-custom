@@ -91,6 +91,30 @@ describe('fetchOwnerInfo', () => {
     expect(second.channels['ch-so5']?.name).toBe('channel-so5')
   })
 
+  it('全体の期限が切れたら、まだ問い合わせていない分は問い合わせずに failed にする', async () => {
+    const calls: string[] = []
+    const inner = makeFetch(calls)
+    const deadline = new AbortController()
+    // 最初の 2 件（1 回目の並列）を返したところで期限が切れる
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      const res = await inner(url)
+      if (calls.length === 2) deadline.abort()
+      return res
+    })
+    const result = await fetchOwnerInfo(
+      { userIds: ['1', '4', '5', '6'], channelVideoIds: ['so5'] },
+      { fetchImpl: fetchImpl as unknown as typeof fetch, concurrency: 2, signal: deadline.signal }
+    )
+    expect(calls).toHaveLength(2)
+    expect(Object.keys(result.users).sort()).toEqual(['1', '4'])
+    expect(result.failed.sort()).toEqual(['5', '6', 'so5'])
+  })
+
+  it('1 回の呼び出しで上流へ問い合わせる件数は 25 件まで（関数の上限時間に収める）', () => {
+    expect(OWNER_INFO_MAX_USERS + OWNER_INFO_MAX_CHANNEL_VIDEOS).toBeLessThanOrEqual(25)
+  })
+
   it('TTL を過ぎたキャッシュは使わない', async () => {
     const calls: string[] = []
     const fetchImpl = makeFetch(calls) as unknown as typeof fetch

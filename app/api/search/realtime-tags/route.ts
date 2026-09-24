@@ -7,16 +7,24 @@ import { fetchTagDetailsForVideos, sanitizeVideoIds } from '@/lib/search/realtim
 
 export const revalidate = 0
 
+/** 全体の期限。関数の上限（vercel.json の maxDuration 15 秒）より前に、取れた分だけで応答する */
+const REALTIME_TAGS_DEADLINE_MS = 8000
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ids = sanitizeVideoIds(request.nextUrl.searchParams.get('ids'))
   if (ids.length === 0) {
     return NextResponse.json({ error: 'no_ids' }, { status: 400 })
   }
   const started = Date.now()
-  const result = await fetchTagDetailsForVideos(ids)
+  const result = await fetchTagDetailsForVideos(ids, { signal: AbortSignal.timeout(REALTIME_TAGS_DEADLINE_MS) })
   return NextResponse.json(
     { tagDetails: result.tagDetails, failed: result.failed, elapsedMs: Date.now() - started },
-    // 新着動画のタグは変わりうるが、数分のキャッシュは許容
-    { headers: { 'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600' } }
+    {
+      headers: {
+        // 新着動画のタグは変わりうるが、数分のキャッシュは許容。取れなかった分がある応答は短くする
+        'Cache-Control':
+          result.failed.length > 0 ? 'public, s-maxage=60, stale-while-revalidate=60' : 'public, s-maxage=300, stale-while-revalidate=600',
+      },
+    }
   )
 }

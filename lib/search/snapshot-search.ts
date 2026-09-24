@@ -3,6 +3,7 @@
 // 注意: このAPIはCORS非対応のため、必ずサーバー側（app/api/search）から呼ぶこと
 
 import type { RankingItem } from '@/types/ranking'
+import { withTimeout } from '../abort-signal'
 
 export const SNAPSHOT_API_URL =
   'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
@@ -320,7 +321,9 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions, window: Sna
 export async function fetchSnapshotNewestStartTime(
   conditions: SearchConditions,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = 3000
+  timeoutMs = 3000,
+  /** 呼び出し全体の期限（任意）。timeoutMs と早い方で打ち切る */
+  signal?: AbortSignal
 ): Promise<string | null> {
   const url = buildSnapshotSearchUrl(
     { ...conditions, sort: '-startTime', page: 1, dateFrom: undefined, dateTo: undefined },
@@ -329,7 +332,7 @@ export async function fetchSnapshotNewestStartTime(
   const res = await fetchImpl(url, {
     headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
     cache: 'no-store',
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: withTimeout(timeoutMs, signal),
   })
   if (!res.ok) throw new Error(`snapshot_http_${res.status}`)
   const payload = (await res.json()) as { meta?: { status?: number }; data?: Array<{ startTime?: unknown }> }

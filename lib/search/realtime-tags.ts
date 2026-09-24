@@ -5,6 +5,7 @@
 // Accept: */* で 200（Accept: application/json だと406）。1件 0.27〜0.34s。
 // 検索応答のクリティカルパスには載せず、クライアントが結果表示後に非同期で呼ぶ。
 import type { TagDetail } from '@/types/ranking'
+import { withTimeout } from '../abort-signal'
 
 /** 1リクエストあたりの上限。未認証で叩ける増幅器になるため小さく保つ（クライアントは分割して呼ぶ） */
 export const REALTIME_TAGS_MAX_VIDEOS = 10
@@ -73,7 +74,8 @@ export interface RealtimeTagsResult {
  */
 export async function fetchTagDetailsForVideos(
   videoIds: string[],
-  options: { fetchImpl?: typeof fetch; concurrency?: number; timeoutMs?: number } = {}
+  /** signal は呼び出し全体の期限。切れたら、まだ問い合わせていない動画は問い合わせずに failed にする */
+  options: { fetchImpl?: typeof fetch; concurrency?: number; timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<RealtimeTagsResult> {
   const fetchImpl = options.fetchImpl ?? fetch
   const concurrency = options.concurrency ?? DEFAULT_CONCURRENCY
@@ -86,7 +88,7 @@ export async function fetchTagDetailsForVideos(
       const res = await fetchImpl(buildV3GuestUrl(id), {
         headers: V3_GUEST_HEADERS,
         cache: 'no-store',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: withTimeout(timeoutMs, options.signal),
       })
       if (!res.ok) {
         failed.push(id)
@@ -99,6 +101,10 @@ export async function fetchTagDetailsForVideos(
   }
 
   for (let i = 0; i < videoIds.length; i += concurrency) {
+    if (options.signal?.aborted) {
+      failed.push(...videoIds.slice(i))
+      break
+    }
     await Promise.all(videoIds.slice(i, i + concurrency).map(fetchOne))
   }
   return { tagDetails, failed }

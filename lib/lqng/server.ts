@@ -4,7 +4,7 @@
 // - 管理 API（設定・許可リストの書き込み）: readLqngConfigStrict / readLqngVerdictsStrict。キャッシュを通さず、
 //   未設定（404）と読み取り失敗を区別して、失敗は例外にする（既定値を土台に書き込まない）。
 // 書き込みは Worker（判定テーブル）と管理画面 API（設定・許可リスト）だけが行う。
-import { kv } from '../simple-kv'
+import { kv, type KvReadOptions } from '../simple-kv'
 import { LQNG_KV_KEYS, normalizeLqngConfig, normalizeLqngVerdicts } from './config'
 import { DEFAULT_LQNG_CONFIG, EMPTY_LQNG_VERDICTS, type LqngConfig, type LqngVerdicts } from './types'
 
@@ -57,13 +57,13 @@ const defaultConfig = (): LqngConfig => ({ ...DEFAULT_LQNG_CONFIG, allowlist: { 
 
 const emptyVerdicts = (): LqngVerdicts => ({ ...EMPTY_LQNG_VERDICTS, authors: {}, videos: {} })
 
-async function readConfig(attempts?: number): Promise<LqngConfig> {
-  const raw = await kv.getStrict<unknown>(LQNG_KV_KEYS.config, { attempts })
+async function readConfig(attempts?: number, options: KvReadOptions = {}): Promise<LqngConfig> {
+  const raw = await kv.getStrict<unknown>(LQNG_KV_KEYS.config, { attempts, ...options })
   return raw === null ? defaultConfig() : normalizeLqngConfig(raw)
 }
 
-async function readVerdicts(attempts?: number): Promise<LqngVerdicts> {
-  const raw = await kv.getStrict<unknown>(LQNG_KV_KEYS.verdicts, { attempts })
+async function readVerdicts(attempts?: number, options: KvReadOptions = {}): Promise<LqngVerdicts> {
+  const raw = await kv.getStrict<unknown>(LQNG_KV_KEYS.verdicts, { attempts, ...options })
   return raw === null ? emptyVerdicts() : normalizeLqngVerdicts(raw)
 }
 
@@ -77,13 +77,18 @@ export function readLqngVerdictsStrict(): Promise<LqngVerdicts> {
   return readVerdicts()
 }
 
-async function load<T>(slot: Slot<T>, read: (attempts?: number) => Promise<T>, fallback: () => T): Promise<LqngLoadResult<T>> {
+async function load<T>(
+  slot: Slot<T>,
+  read: (attempts?: number, options?: KvReadOptions) => Promise<T>,
+  fallback: () => T,
+  options: KvReadOptions
+): Promise<LqngLoadResult<T>> {
   const now = Date.now()
   if (cacheEnabled() && slot.cached && now - slot.cached.fetchedAt < CACHE_TTL_MS) return { value: slot.cached.value, ok: true }
   if (cacheEnabled() && slot.lastGood !== null && now < slot.retryAt) return { value: slot.lastGood, ok: false }
   try {
     // 直前の成功値があれば 1 回だけ試し、失敗したらすぐそれを返す（リクエストを再試行の待ちに巻き込まない）
-    const value = await read(slot.lastGood !== null ? 1 : undefined)
+    const value = await read(slot.lastGood !== null ? 1 : undefined, options)
     slot.lastGood = value
     slot.retryAt = 0
     if (cacheEnabled()) slot.cached = { value, fetchedAt: Date.now() }
@@ -97,20 +102,21 @@ async function load<T>(slot: Slot<T>, read: (attempts?: number) => Promise<T>, f
   }
 }
 
-export function loadLqngConfig(): Promise<LqngLoadResult<LqngConfig>> {
-  return load(configSlot, readConfig, defaultConfig)
+/** options は読み取りの時間予算（検索 API の全体の期限など）。期限切れは読み取り失敗として扱う */
+export function loadLqngConfig(options: KvReadOptions = {}): Promise<LqngLoadResult<LqngConfig>> {
+  return load(configSlot, readConfig, defaultConfig, options)
 }
 
-export function loadLqngVerdicts(): Promise<LqngLoadResult<LqngVerdicts>> {
-  return load(verdictsSlot, readVerdicts, emptyVerdicts)
+export function loadLqngVerdicts(options: KvReadOptions = {}): Promise<LqngLoadResult<LqngVerdicts>> {
+  return load(verdictsSlot, readVerdicts, emptyVerdicts, options)
 }
 
-export async function getLqngConfig(): Promise<LqngConfig> {
-  return (await loadLqngConfig()).value
+export async function getLqngConfig(options: KvReadOptions = {}): Promise<LqngConfig> {
+  return (await loadLqngConfig(options)).value
 }
 
-export async function getLqngVerdicts(): Promise<LqngVerdicts> {
-  return (await loadLqngVerdicts()).value
+export async function getLqngVerdicts(options: KvReadOptions = {}): Promise<LqngVerdicts> {
+  return (await loadLqngVerdicts(options)).value
 }
 
 /** 管理画面 API が設定を保存するときに使う。updatedAt（版番号）を更新した保存値を返し、キャッシュを捨てる */

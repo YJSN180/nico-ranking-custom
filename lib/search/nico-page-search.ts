@@ -3,6 +3,7 @@
 // RSS は廃止済みで HTML が返る）。項目の形は nvapi の検索応答と同じ（$getSearchVideoV2）。
 // Next.js（/api/search）と Cloudflare Worker（lqng-poller）の両方から使うため、
 // fetch / 正規表現 / JSON だけで書き、パスエイリアス（@/）は使わない。
+import { withTimeout } from '../abort-signal'
 
 export const NICO_PAGE_SIZE = 32
 const NICO_SEARCH_BASE = 'https://www.nicovideo.jp'
@@ -127,17 +128,19 @@ export function nicoPageOwnerId(video: NicoPageVideo): string | null {
   return raw.startsWith('ch') ? `channel/${raw}` : `channel/ch${raw}`
 }
 
+/** signal は呼び出し全体の期限（任意）。timeoutMs と早い方で打ち切る */
 export async function fetchNicoSearchPage(
   kind: NicoPageKind,
   query: string,
   page = 1,
   fetchImpl: typeof fetch = fetch,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  signal?: AbortSignal
 ): Promise<NicoPageResult> {
   const res = await fetchImpl(buildNicoSearchPageUrl(kind, query, page), {
     headers: PAGE_HEADERS,
     cache: 'no-store',
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: withTimeout(timeoutMs, signal),
   })
   if (!res.ok) throw new Error(`nico_page_http_${res.status}`)
   return parseNicoSearchPage(await res.text())

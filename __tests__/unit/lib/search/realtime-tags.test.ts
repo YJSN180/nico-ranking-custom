@@ -45,3 +45,20 @@ describe('fetchTagDetailsForVideos', () => {
     expect(calls[0]).toContain('_frontendId=6')
   })
 })
+
+describe('fetchTagDetailsForVideos: 全体の期限', () => {
+  it('期限が切れたら、まだ問い合わせていない動画は問い合わせずに failed にする', async () => {
+    const deadline = new AbortController()
+    const calls: string[] = []
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      calls.push(url)
+      if (calls.length === 2) deadline.abort()
+      return { ok: true, status: 200, json: async () => ({ data: { tag: { items: [{ name: 't', isLocked: false }] } } }) } as unknown as Response
+    })
+    const result = await fetchTagDetailsForVideos(['sm1', 'sm2', 'sm3', 'sm4'], { fetchImpl: fetchImpl as unknown as typeof fetch, concurrency: 2, signal: deadline.signal })
+    expect(calls).toHaveLength(2)
+    expect(Object.keys(result.tagDetails).sort()).toEqual(['sm1', 'sm2'])
+    expect(result.failed.sort()).toEqual(['sm3', 'sm4'])
+  })
+})

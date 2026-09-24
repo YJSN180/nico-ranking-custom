@@ -101,6 +101,19 @@ describe('fetchFreshItems', () => {
     expect(items.map((it) => it.authorId)).toEqual(['channel/ch100300'])
   })
 
+  it('全体の期限（signal）を本家ページの取得に渡す', async () => {
+    const deadline = new AbortController()
+    deadline.abort()
+    const signals: Array<AbortSignal | null | undefined> = []
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      signals.push(init?.signal)
+      return { ok: true, text: async () => pageHtml([item('n1', '2026-09-22T06:42:18+09:00')]) } as unknown as Response
+    })
+    await fetchFreshItems(base(), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000, signal: deadline.signal })
+    expect(signals).toHaveLength(2)
+    expect(signals.every((signal) => signal?.aborted === true)).toBe(true)
+  })
+
   it('HTTP エラー・構造変化は投げる', async () => {
     const down = vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response)
     await expect(fetchFreshItems(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: down as unknown as typeof fetch })).rejects.toThrow('nico_page_http_503')
