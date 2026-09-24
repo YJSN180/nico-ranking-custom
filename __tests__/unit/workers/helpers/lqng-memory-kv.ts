@@ -1,4 +1,4 @@
-// lqng-poller のテスト用メモリ KV。操作の順番を記録し、put / delete を数えられるようにする
+// lqng-poller のテスト用メモリ KV。操作の順番を記録し、put / delete / list を数えられるようにする
 import type { KvLike } from '@/workers/lqng-poller/src/state'
 
 export interface MemoryKv {
@@ -33,6 +33,14 @@ export function memoryKv(initial: Record<string, unknown> = {}): MemoryKv {
       ops.push(`delete ${key}`)
       deletes.push(key)
       store.delete(key)
+    },
+    list: async ({ prefix, limit }) => {
+      ops.push(`list ${prefix}`)
+      const names = Array.from(store.keys())
+        .filter((name) => name.startsWith(prefix))
+        .sort()
+      const max = limit ?? 1000
+      return { keys: names.slice(0, max).map((name) => ({ name })), list_complete: names.length <= max }
     },
   }
   const read = <T,>(key: string): T | null => {

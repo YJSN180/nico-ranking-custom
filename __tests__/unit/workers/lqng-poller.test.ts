@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runPoll, LIMITS } from '@/workers/lqng-poller/src/poll'
+import { commitBackfill } from '@/workers/lqng-poller/src/backfill'
 import { AccessLimitedError, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
@@ -274,5 +275,114 @@ describe('lqng-poller runPoll', () => {
     expect(r.newVideos).toBe(0)
     const since = (fetchNew.mock.calls[1] as unknown as [string[], string])[1]
     expect(since).toBe(new Date(T0.getTime() - LIMITS.sinceOverlapMinutes * 60_000).toISOString())
+  })
+})
+
+describe('lqng-poller 受け箱（バックフィルの確定）の合流', () => {
+  const inboxItem = (seq: number, deltas: unknown) => ({ version: 1, runId: 'run1', seq, at: '2026-01-31T00:00:00.000Z', deltas })
+  const authorVerdict = (reasons: string[], videoId = 'sm700') => ({
+    status: 'ng',
+    reasons,
+    since: '2026-01-31T00:00:00.000Z',
+    evidence: [{ videoId, title: 't', registeredAt: '2026-01-30T00:00:00.000Z', rules: reasons }],
+    nickname: null,
+    followerCount: null,
+    visibility: null,
+    deletedObservedAt: null,
+  })
+  const videoVerdict = (authorId: string | null) => ({ status: 'ng', reasons: ['D'], authorId, title: 't', registeredAt: '2026-01-30T00:00:00.000Z', since: '2026-01-31T00:00:00.000Z' })
+
+  it('受け箱の差分を判定表へ合流し、合流したキーを消して履歴に件数を残す', async () => {
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      'lqng:inbox:run1:000001': inboxItem(1, { authors: { '7001': authorVerdict(['A_C']) }, videos: { sm701: videoVerdict('7002') } }),
+      'lqng:inbox:run1:000002': inboxItem(2, { authors: { '7003': authorVerdict(['B']) }, videos: {} }),
+    })
+    const r = await runPoll(m.kv, deps(), 'poll')
+    expect(r.skipped).toBeNull()
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(verdicts.authors['7001']?.reasons).toEqual(['A_C'])
+    expect(verdicts.authors['7001']?.since).toBe(T0.toISOString())
+    expect(verdicts.authors['7003']?.reasons).toEqual(['B'])
+    expect(verdicts.videos.sm701?.status).toBe('ng')
+    expect(Array.from(m.store.keys()).filter((k) => k.startsWith('lqng:inbox:'))).toEqual([])
+    expect(m.deletes.sort()).toEqual(['lqng:inbox:run1:000001', 'lqng:inbox:run1:000002'])
+    const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
+    expect(events.items.find((e) => e.kind === 'backfill')?.note).toBe('投稿者 +2 / 動画 +1')
+    // 書き込み数には受け箱の削除も含める（判定表・履歴・追跡表 + 削除 2）
+    expect(r.kvWrites).toBe(5)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastRun?.kvWrites).toBe(5)
+  })
+
+  it('commitBackfill が置いた差分を次のポーリングが合流する（確定は判定表を書かない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const c = await commitBackfill(m.kv, T0, { authors: { '7051': authorVerdict(['A_C']) }, videos: { sm751: videoVerdict('7052') } }, { runId: 'gh-9-1', seq: 1 })
+    expect(c.kvWrites).toBe(1)
+    expect(m.store.has(LQNG_KV_KEYS.verdicts)).toBe(false)
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(verdicts.authors['7051']?.reasons).toEqual(['A_C'])
+    expect(verdicts.videos.sm751?.reasons).toEqual(['D'])
+    expect(m.store.has('lqng:inbox:gh-9-1:000001')).toBe(false)
+  })
+
+  it('同じ差分を 2 回合流しても判定表は変わらない（2 回目は判定表を書かない）', async () => {
+    const deltas = { authors: { '7101': authorVerdict(['A_C']) }, videos: { sm711: videoVerdict('7102') } }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, 'lqng:inbox:run1:000001': inboxItem(1, deltas) })
+    await runPoll(m.kv, deps(), 'poll')
+    const first = m.store.get(LQNG_KV_KEYS.verdicts)
+    // 同じ内容がもう一度届く（再送・削除前の停止など）
+    m.store.set('lqng:inbox:run1:000002', JSON.stringify(inboxItem(2, deltas)))
+    m.reset()
+    const later = new Date(T0.getTime() + 15 * 60_000)
+    await runPoll(m.kv, deps({}, later), 'poll')
+    expect(m.store.get(LQNG_KV_KEYS.verdicts)).toBe(first)
+    expect(m.puts).not.toContain(LQNG_KV_KEYS.verdicts)
+    expect(m.deletes).toEqual(['lqng:inbox:run1:000002'])
+  })
+
+  it('既に NG の投稿者へ理由を足す差分も反映する（根拠も重複なく足す）', async () => {
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: { version: 1, authors: { '7201': authorVerdict(['B'], 'sm720') }, videos: {}, updatedAt: '2026-01-31T00:00:00.000Z' },
+      'lqng:inbox:run1:000001': inboxItem(1, { authors: { '7201': authorVerdict(['A_C'], 'sm721') }, videos: {} }),
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(verdicts.authors['7201']?.reasons).toEqual(['B', 'A_C'])
+    expect(verdicts.authors['7201']?.since).toBe('2026-01-31T00:00:00.000Z')
+    expect(verdicts.authors['7201']?.evidence.map((e) => e.videoId)).toEqual(['sm720', 'sm721'])
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'backfill')?.note).toBe('投稿者 +0 / 動画 +0 / 理由追加 1')
+  })
+
+  it('許可リストの投稿者・動画と、投稿者 NG の動画は合流しない', async () => {
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['9001'], videoIds: ['sm732'] } },
+      'lqng:inbox:run1:000001': inboxItem(1, {
+        authors: { '9001': authorVerdict(['A_C']), '7301': authorVerdict(['B']) },
+        videos: { sm731: videoVerdict('9001'), sm732: videoVerdict('7302'), sm733: videoVerdict('7301') },
+      }),
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.authors)).toEqual(['7301'])
+    expect(verdicts.videos).toEqual({})
+  })
+
+  it('壊れた受け箱は消して、履歴に記録する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    m.store.set('lqng:inbox:run1:000001', '{not json')
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.store.has('lqng:inbox:run1:000001')).toBe(false)
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note === 'inbox_invalid: 1')).toBe(true)
+  })
+
+  it('1 回に合流する受け箱は上限件数まで（残りは次回）', async () => {
+    const initial: Record<string, unknown> = { [LQNG_KV_KEYS.config]: config }
+    for (let i = 1; i <= LIMITS.inboxPerRun + 2; i++) initial[`lqng:inbox:run1:${String(i).padStart(6, '0')}`] = inboxItem(i, { authors: { [String(7400 + i)]: authorVerdict(['B']) }, videos: {} })
+    const m = memoryKv(initial)
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.deletes).toHaveLength(LIMITS.inboxPerRun)
+    expect(Array.from(m.store.keys()).filter((k) => k.startsWith('lqng:inbox:'))).toHaveLength(2)
   })
 })

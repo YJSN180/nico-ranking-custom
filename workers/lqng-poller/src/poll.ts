@@ -4,6 +4,7 @@
 // ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
+import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
 import { AccessLimitedError, type PollDeps, type SourceVideo } from './sources'
 import {
   captureBaseline,
@@ -44,6 +45,8 @@ export const LIMITS = {
   videoVerdictRetentionDays: 90,
   releasedRetentionDays: 7,
   evidenceMax: 10,
+  /** 1 回の実行で合流するバックフィルの受け箱の上限（残りは次回） */
+  inboxPerRun: 20,
 } as const
 
 export type RunMode = 'poll' | 'sweep'
@@ -216,6 +219,28 @@ class Session {
     }
   }
 
+  /** バックフィルの受け箱を判定表へ合流する（冪等。判定表を書くのはこの実行だけ） */
+  mergeInbox(items: readonly InboxItem[]): void {
+    let authorsAdded = 0
+    let reasonsAdded = 0
+    let videosAdded = 0
+    let invalid = 0
+    for (const item of items) {
+      if (!item.deltas) {
+        invalid++
+        continue
+      }
+      const r = mergeDeltasIntoVerdicts(this.state.verdicts, item.deltas, this.config, this.nowIso)
+      authorsAdded += r.authorsAdded
+      reasonsAdded += r.reasonsAdded
+      videosAdded += r.videosAdded
+    }
+    if (invalid > 0) pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `inbox_invalid: ${invalid}` })
+    if (authorsAdded + reasonsAdded + videosAdded > 0) {
+      pushEvent(this.state.events, { at: this.nowIso, kind: 'backfill', note: `投稿者 +${authorsAdded} / 動画 +${videosAdded}${reasonsAdded > 0 ? ` / 理由追加 ${reasonsAdded}` : ''}` })
+    }
+  }
+
   /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */
   ingest(videos: SourceVideo[]): void {
     for (const v of videos) {
@@ -381,6 +406,9 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   }
   const baseline = captureBaseline(state)
   const session = new Session(state, deps, now)
+  // バックフィルの確定分を先に合流する（以降の判定は合流後の判定表を見る）
+  const inbox = await readInbox(kv, LIMITS.inboxPerRun)
+  session.mergeInbox(inbox)
 
   if (mode === 'sweep' && state.config.sweepGenre) {
     session.spend(LIMITS.nvapiCost)
@@ -436,6 +464,12 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     subrequests: session.subrequests,
     ...(session.note ? { note: session.note } : {}),
   }
-  const kvWrites = await saveState(kv, baseline, state, { at: nowIso, mode, ...summary })
+  const kvWrites = await saveState(
+    kv,
+    baseline,
+    state,
+    { at: nowIso, mode, ...summary },
+    inbox.map((item) => item.key)
+  )
   return { ...base, ...summary, kvWrites }
 }

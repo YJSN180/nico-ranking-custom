@@ -4,7 +4,8 @@
 // 判定ロジックは lib/lqng（Next.js と共用）。設定・許可リストは KV lqng:config（管理画面で編集）。
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js'
 import { countLockedGroups } from '../../../lib/lqng/rules'
-import { commitBackfill, createLiveBackfillDeps, emptyDeltas, runBackfillStep, type BackfillCursor, type BackfillDeltas } from './backfill'
+import { commitBackfill, createLiveBackfillDeps, runBackfillStep, type BackfillCursor } from './backfill'
+import { InvalidInboxRefError } from './inbox'
 import { runPoll, type RunMode, type RunResult } from './poll'
 import { createLiveDeps, fetchNewVideosFromNicoPages, fetchNewVideosFromNvapi } from './sources'
 import { loadConfig, loadState, type KvLike } from './state'
@@ -146,15 +147,20 @@ const handler = {
       const modeParam = url.searchParams.get('mode')
       // 診断: ?mode=probe&source=pages|nvapi[&sinceMinutes=N]
       if (modeParam === 'probe') return probeNewVideos(request, env, url)
-      // 過去分のバックフィル（駆動は scripts/lqng-backfill-driver.ts）。走査は KV を書かず、commit だけが書く
+      // 過去分のバックフィル（駆動は scripts/lqng-backfill-driver.ts）。走査は KV を書かず、
+      // commit は判定差分を受け箱（lqng:inbox:<runId>:<seq>）に 1 回置くだけ（判定表へは次のポーリングが合流）
       if (modeParam === 'backfill' || modeParam === 'backfill-commit') {
         try {
-          const body = (await request.json().catch(() => ({}))) as { cursor?: BackfillCursor | null; pages?: number; days?: number | null; source?: 'snapshot' | 'pages'; deltas?: BackfillDeltas }
+          const body = (await request.json().catch(() => ({}))) as { cursor?: BackfillCursor | null; pages?: number; days?: number | null; source?: 'snapshot' | 'pages'; deltas?: unknown; runId?: unknown; seq?: unknown }
           if (modeParam === 'backfill') {
             return Response.json(await runBackfillStep(env.LQNG_KV, createLiveBackfillDeps(), body.cursor ?? null, { pages: body.pages, days: body.days ?? null, source: body.source === 'pages' ? 'pages' : 'snapshot' }))
           }
-          return Response.json(await commitBackfill(env.LQNG_KV, new Date(), body.deltas ?? emptyDeltas()))
+          // runId・seq を送らない旧い駆動スクリプトでも受け付ける（1 回ごとに別のキーになる）
+          const runId = typeof body.runId === 'string' ? body.runId : `legacy-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`
+          const seq = typeof body.seq === 'number' ? body.seq : 0
+          return Response.json(await commitBackfill(env.LQNG_KV, new Date(), body.deltas, { runId, seq }))
         } catch (error) {
+          if (error instanceof InvalidInboxRefError) return Response.json({ error: error.message }, { status: 400 })
           captureWorkerException(error, {
             tags: { runtime: 'cloudflare-worker', surface: 'lqng-poller', endpoint_family: 'trigger', worker_version: 'lqng-poller', mode: modeParam },
           })

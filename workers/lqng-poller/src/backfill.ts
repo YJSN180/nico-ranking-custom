@@ -1,7 +1,8 @@
 // 過去分のバックフィル（Snapshot の全履歴を新しい順に走査して判定する）
 // - 走査ステップ（runBackfillStep）は KV を読むだけで書かない。カーソルと判定差分は呼び出し側
-//   （scripts/lqng-backfill-driver.ts）が持ち回り、まとめて commitBackfill で書き込む。
-//   これで KV の書き込み枠（アカウント共通）をほとんど消費しない。
+//   （scripts/lqng-backfill-driver.ts）が持ち回り、まとめて commitBackfill で確定する。
+// - 確定は判定表を直接書かず、受け箱（lqng:inbox:<runId>:<seq>）に 1 回で置く。判定表へは次の
+//   ポーリングが冪等に合流する（判定表の書き手をポーリング 1 つにして、互いの更新を消し合わない）。
 // - 1 回の呼び出しは Snapshot ページ ≤ pages、ユーザー確認 ≤ usersPerCall、getthumbinfo ≤ thumbsPerCall
 //   に抑え、無料プランのサブリクエスト上限（50/実行）と CPU 時間に収める。
 // - ルール: B（タイトル）と HK（キーワード ∧ 頻度）は取り込み時に即判定。頻度 C に当たる投稿者だけ
@@ -9,10 +10,10 @@
 //   含まれる）に通った候補だけ getthumbinfo で補完して判定する。
 //   過去分は削除時刻が分からないため、A∧C の「投稿から 7 日以内の削除」は「現在削除済み」で代用する
 //   （実データ検証と同じ評価）。
-import { LQNG_KV_KEYS } from '../../../lib/lqng/config'
 import { containsAnyNormalized } from '../../../lib/lqng/normalize'
 import { evaluateVideo } from '../../../lib/lqng/rules'
-import type { AuthorObservation, AuthorVerdict, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation, VideoVerdict } from '../../../lib/lqng/types'
+import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
+import { emptyDeltas, inboxKey, normalizeDeltas, writeInboxItem, type BackfillDeltas } from './inbox'
 import {
   AccessLimitedError,
   SNAPSHOT_PAGE_SIZE,
@@ -24,7 +25,7 @@ import {
   type ThumbResult,
   type UserInfo,
 } from './sources'
-import { loadState, pushEvent, type KvLike } from './state'
+import { loadState, type KvLike } from './state'
 import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
 import { NICO_PAGE_KINDS } from './sources'
 
@@ -123,10 +124,7 @@ export interface BackfillCursor {
   stats: BackfillStats
 }
 
-export interface BackfillDeltas {
-  authors: Record<string, AuthorVerdict>
-  videos: Record<string, VideoVerdict>
-}
+export { emptyDeltas, type BackfillDeltas }
 
 export interface BackfillStepOptions {
   pages?: number
@@ -145,14 +143,20 @@ export interface BackfillStepResult {
 }
 
 export interface BackfillCommitResult {
+  /** 'empty': 置く差分が無かった */
   skipped: string | null
-  authorsAdded: number
-  videosAdded: number
+  /** 置いた受け箱のキー */
+  key: string | null
+  /** 受け箱に置いた投稿者・動画の数（判定表への反映は次のポーリングが行う） */
+  authors: number
+  videos: number
   kvWrites: number
 }
 
-export function emptyDeltas(): BackfillDeltas {
-  return { authors: {}, videos: {} }
+/** 確定の識別子。runId は駆動スクリプトの実行ごと、seq はその中の確定の連番（再送は同じ値で） */
+export interface BackfillCommitRef {
+  runId: string
+  seq: number
 }
 
 export function createBackfillCursor(now: Date, days: number | null | undefined, source: BackfillSource = 'snapshot'): BackfillCursor {
@@ -472,35 +476,16 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   return { skipped: null, cursor, done, deltas: session.deltas, subrequests: session.subrequests, ...(session.note ? { note: session.note } : {}) }
 }
 
-/** 判定差分を KV の判定テーブルへ合流させる（書き込みは verdicts と events の 2 回） */
-export async function commitBackfill(kv: KvLike, now: Date, deltas: BackfillDeltas): Promise<BackfillCommitResult> {
-  const nowIso = now.toISOString()
-  const none: BackfillCommitResult = { skipped: null, authorsAdded: 0, videosAdded: 0, kvWrites: 0 }
-  const state = await loadState(kv, nowIso)
-  let authorsAdded = 0
-  let videosAdded = 0
-  for (const [authorId, verdict] of Object.entries(deltas.authors)) {
-    if (state.config.allowlist.authorIds.includes(authorId)) continue
-    const current = state.verdicts.authors[authorId]
-    if (!current) {
-      state.verdicts.authors[authorId] = { ...verdict, since: nowIso }
-      authorsAdded++
-      continue
-    }
-    const merged = Array.from(new Set([...current.reasons, ...verdict.reasons]))
-    if (merged.length !== current.reasons.length) current.reasons = merged
-  }
-  for (const [videoId, verdict] of Object.entries(deltas.videos)) {
-    if (state.verdicts.videos[videoId]) continue
-    if (verdict.authorId && state.verdicts.authors[verdict.authorId]) continue
-    if (state.config.allowlist.videoIds.includes(videoId)) continue
-    state.verdicts.videos[videoId] = { ...verdict, since: nowIso }
-    videosAdded++
-  }
-  if (authorsAdded === 0 && videosAdded === 0) return none
-  state.verdicts.updatedAt = nowIso
-  pushEvent(state.events, { at: nowIso, kind: 'backfill', note: `投稿者 +${authorsAdded} / 動画 +${videosAdded}` })
-  await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
-  await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
-  return { skipped: null, authorsAdded, videosAdded, kvWrites: 2 }
+/**
+ * 判定差分を受け箱に置く（書き込みは 1 回）。判定表・履歴は読み書きしない。
+ * 同じ runId・seq の再送は同じキーの上書きになり、合流も冪等なので二重に反映されない。
+ */
+export async function commitBackfill(kv: KvLike, now: Date, deltas: unknown, ref: BackfillCommitRef): Promise<BackfillCommitResult> {
+  const key = inboxKey(ref.runId, ref.seq)
+  const normalized = normalizeDeltas(deltas)
+  const authors = Object.keys(normalized.authors).length
+  const videos = Object.keys(normalized.videos).length
+  if (authors === 0 && videos === 0) return { skipped: 'empty', key: null, authors: 0, videos: 0, kvWrites: 0 }
+  await writeInboxItem(kv, ref.runId, ref.seq, now.toISOString(), normalized)
+  return { skipped: null, key, authors, videos, kvWrites: 1 }
 }

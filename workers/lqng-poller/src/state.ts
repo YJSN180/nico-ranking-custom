@@ -5,11 +5,12 @@ import { LQNG_KV_KEYS, normalizeLqngConfig, normalizeLqngVerdicts } from '../../
 import type { AuthorStatus, LqngConfig, LqngRuleId, LqngVerdicts, OwnerVisibility } from '../../../lib/lqng/types'
 import type { TagDetail } from '../../../types/ranking'
 
-/** テスト容易性のため、Cloudflare の KVNamespace のうち使う 3 操作だけを型にする */
+/** テスト容易性のため、Cloudflare の KVNamespace のうち使う 4 操作だけを型にする */
 export interface KvLike {
   get(key: string): Promise<string | null>
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
   delete(key: string): Promise<void>
+  list(options: { prefix: string; limit?: number; cursor?: string }): Promise<{ keys: Array<{ name: string }>; list_complete: boolean; cursor?: string }>
 }
 
 export interface TrackedPost {
@@ -204,13 +205,15 @@ export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'tracking'
 
 /**
  * 内容（updatedAt を除く）が変わったキーだけを書き、updatedAt もそのときだけ進める。
+ * 合流済みの受け箱（inboxKeys）は判定表を保存した後で消す。
  * 直近の実行の要約（書き込み数を含む）は書く前に数えて追跡表に入れ、同じ数を返す。
  */
 export async function saveState(
   kv: KvLike,
   baseline: StateBaseline,
   state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>,
-  run: Omit<LqngRunSummary, 'kvWrites'>
+  run: Omit<LqngRunSummary, 'kvWrites'>,
+  inboxKeys: readonly string[] = []
 ): Promise<number> {
   const verdictsChanged = contentOf(state.verdicts) !== baseline.verdicts
   const eventsChanged = JSON.stringify(state.events.items) !== baseline.events
@@ -218,13 +221,14 @@ export async function saveState(
   state.tracking.lastRun = summary
   state.tracking.recentRuns = [{ at: run.at, mode: run.mode, ...(run.note ? { note: run.note } : {}) }, ...state.tracking.recentRuns].slice(0, RECENT_RUNS_MAX)
   const trackingChanged = contentOf(state.tracking) !== baseline.tracking
-  summary.kvWrites = (verdictsChanged ? 1 : 0) + (eventsChanged ? 1 : 0) + (trackingChanged ? 1 : 0)
+  summary.kvWrites = (verdictsChanged ? 1 : 0) + (eventsChanged ? 1 : 0) + inboxKeys.length + (trackingChanged ? 1 : 0)
   if (verdictsChanged) state.verdicts.updatedAt = run.at
   if (trackingChanged) state.tracking.updatedAt = run.at
   if (eventsChanged) state.events.lastRun = summary
   if (trackingChanged) await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
   if (verdictsChanged) await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
   if (eventsChanged) await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
+  for (const key of inboxKeys) await kv.delete(key)
   return summary.kvWrites
 }
 
