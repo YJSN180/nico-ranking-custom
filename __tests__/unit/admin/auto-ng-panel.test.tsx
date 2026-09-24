@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { AutoNGPanel } from '@/app/admin/ng-settings/components/AutoNGPanel'
 
 // 合成データのみ
@@ -163,6 +163,73 @@ describe('AutoNGPanel', () => {
     expect(sent.updatedAt).toBe('2026-01-01T00:00:00.000Z')
     expect(sent).not.toHaveProperty('allowlist')
     expect(await screen.findByText(/保存しました/)).toBeInTheDocument()
+  })
+
+  it('保存後の「保存しました」は設定の置き換えで消えず、下書きは保存後の値になる', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/config') {
+        // 実際の通信のようにタスクをまたいで応答する（マイクロタスクだけだと取り違えを再現できない）
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        return jsonResponse({ success: true, config: { ...overview.config, holdHours: 12, updatedAt: '2026-01-03T00:00:00.000Z' } })
+      }
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+    // 親が応答の設定で状態を置き換えたあとも残る
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    })
+    expect(screen.getByText(/保存しました/)).toBeInTheDocument()
+    expect(screen.getByLabelText('保留時間（時間）')).toHaveValue(12)
+    expect(screen.queryByText('未保存の変更があります')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '設定を保存' })).toBeDisabled()
+  })
+
+  it('照合語が正規化後 3 文字未満、または数値が範囲外なら理由を出して保存させない', async () => {
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    const save = screen.getByRole('button', { name: '設定を保存' })
+
+    fireEvent.change(screen.getByLabelText('照合語（B、1 行 1 語）'), { target: { value: 'てすとまん\nＡＢ' } })
+    expect(screen.getByText(/照合語「ＡＢ」は正規化すると 2 文字です/)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('照合語（B、1 行 1 語）'), { target: { value: 'てすとまん' } })
+    expect(screen.queryByText(/照合語「/)).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('フォロワー上限（人）'), { target: { value: '5000' } })
+    expect(screen.getByText(/フォロワー上限は 0〜1000 の整数にしてください/)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('フォロワー上限（人）'), { target: { value: '10' } })
+
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '1000' } })
+    expect(screen.getByText(/保留時間は 0〜168 の整数にしてください/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+
+    fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '0' } })
+    expect(screen.getByText(/投稿者の追跡日数は 1〜30 の整数にしてください/)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '7' } })
+    expect(save).toBeEnabled()
+  })
+
+  it('設定の保存が 400 なら、サーバーが返した理由を表示する', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/config') return jsonResponse({ error: 'Invalid config', problems: ['理由その1', '理由その2'] }, 400)
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+    expect(await screen.findByText(/理由その1/)).toHaveTextContent('理由その2')
   })
 
   it('設定の保存が 409 なら、最新の設定を読み直すよう案内する', async () => {

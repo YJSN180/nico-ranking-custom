@@ -204,6 +204,11 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
     if (res.status === 409) {
       throw new Error('他の画面で設定が更新されています。「再読み込み」で最新の設定を読み直してから、もう一度保存してください。')
     }
+    if (res.status === 400) {
+      const body = (await res.json().catch(() => null)) as { problems?: unknown } | null
+      const problems = Array.isArray(body?.problems) ? body.problems.filter((p): p is string => typeof p === 'string') : []
+      throw new Error(`設定を保存できませんでした (400)${problems.length > 0 ? `: ${problems.join(' / ')}` : ''}`)
+    }
     if (!res.ok) throw new Error(`設定の保存に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
     const body = (await res.json()) as { config: LqngConfig }
     setOverview((prev) => (prev ? { ...prev, config: body.config } : prev))

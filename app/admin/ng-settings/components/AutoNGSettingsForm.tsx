@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { validateLqngConfigInput } from '@/lib/lqng/config'
 import type { LqngConfig } from '@/lib/lqng/types'
 import styles from './auto-ng.module.css'
 
@@ -59,6 +60,7 @@ function toDraft(config: LqngConfig): Draft {
   }
 }
 
+// 数値は丸めずに渡す。範囲外・小数は validateLqngConfigInput で理由を示して保存させない（黙って丸めない）
 function fromDraft(draft: Draft, base: LqngConfig): LqngConfig {
   return {
     ...base,
@@ -68,38 +70,31 @@ function fromDraft(draft: Draft, base: LqngConfig): LqngConfig {
     titleNeedles: linesToArray(draft.titleNeedles),
     keywordNeedles: linesToArray(draft.keywordNeedles),
     tagGroups: draft.tagGroups.map(parseGroup).filter((g) => g.length > 0),
-    lockGroupsMin: Math.max(1, Math.floor(draft.lockGroupsMin || 1)),
+    lockGroupsMin: draft.lockGroupsMin,
     freq: {
-      dayCount: Math.max(1, Math.floor(draft.dayCount || 1)),
-      burstCount: Math.max(1, Math.floor(draft.burstCount || 1)),
-      burstMinutes: Math.max(1, Math.floor(draft.burstMinutes || 1)),
+      dayCount: draft.dayCount,
+      burstCount: draft.burstCount,
+      burstMinutes: draft.burstMinutes,
     },
-    followerMax: Math.max(0, Math.floor(draft.followerMax || 0)),
-    holdHours: Math.max(0, Math.floor(draft.holdHours || 0)),
-    trackDays: Math.max(1, Math.floor(draft.trackDays || 1)),
-    deletionWindowDays: Math.max(1, Math.floor(draft.deletionWindowDays || 1)),
+    followerMax: draft.followerMax,
+    holdHours: draft.holdHours,
+    trackDays: draft.trackDays,
+    deletionWindowDays: draft.deletionWindowDays,
   }
 }
 
+// 下書きは初回の config から作る。読み込み直し（再読み込み）では親が key を変えて作り直し、
+// 保存後は応答の設定で下書きを作り直す。親が許可リストの更新などで config を置き換えても、
+// 編集中の下書きと「保存しました」は消さない（props から派生状態を useEffect で作らない）
 export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGSettingsFormProps) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(config))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ kind: 'saved' | 'error'; text: string } | null>(null)
 
-  useEffect(() => {
-    setDraft(toDraft(config))
-    setMessage(null)
-  }, [config])
-
   const dirty = useMemo(() => JSON.stringify(fromDraft(draft, config)) !== JSON.stringify(config), [draft, config])
 
-  const validation = useMemo(() => {
-    const next = fromDraft(draft, config)
-    const problems: string[] = []
-    if (next.enabled && next.pollTags.length === 0) problems.push('有効にするにはポーリング対象タグが 1 つ以上必要です')
-    if (next.tagGroups.length > 0 && next.lockGroupsMin > next.tagGroups.length) problems.push('ロック群の閾値がグループ数を超えています')
-    return problems
-  }, [draft, config])
+  // 画面と管理 API で同じ検証を使う（上限・下限、照合語の長さ、有効化の条件など）
+  const validation = useMemo(() => validateLqngConfigInput(fromDraft(draft, config)), [draft, config])
 
   const update = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setDraft((prev) => ({ ...prev, [key]: value }))
@@ -116,7 +111,9 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
     if (readOnly || validation.length > 0) return
     setSaving(true)
     try {
-      await onSave(fromDraft(draft, config))
+      const saved = await onSave(fromDraft(draft, config))
+      // 保存後の設定（新しい版番号つき）で下書きを作り直す。メッセージはここで出し、props の変化では消さない
+      setDraft(toDraft(saved))
       setMessage({ kind: 'saved', text: '保存しました。反映まで最大 3 分かかります。' })
     } catch (error) {
       setMessage({ kind: 'error', text: error instanceof Error ? error.message : '保存に失敗しました' })

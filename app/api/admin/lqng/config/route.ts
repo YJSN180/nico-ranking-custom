@@ -1,7 +1,7 @@
 // 自動NG の設定（タグ群・照合語・閾値・ポーリング対象）の読み書き
 // 許可リストはここでは変えない（/api/admin/lqng/allowlist の差分 API だけで変える）
 import { NextResponse, type NextRequest } from 'next/server'
-import { normalizeLqngConfig } from '@/lib/lqng/config'
+import { normalizeLqngConfig, validateLqngConfigInput } from '@/lib/lqng/config'
 import { readLqngConfigStrict, saveLqngConfig } from '@/lib/lqng/server'
 import { invalidateServerNGListCache } from '@/lib/ng-list-server'
 import { isAdminAuthenticated, kvUnavailable, readConfigForWrite, unauthorized, withNoStore } from '../_shared'
@@ -36,6 +36,11 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const baseVersion = typeof input.updatedAt === 'string' ? input.updatedAt : null
   if (!baseVersion) {
     return withNoStore(NextResponse.json({ error: 'Missing config version (updatedAt)' }, { status: 400 }))
+  }
+  // 範囲外の数値や短すぎる照合語は、既定値で黙って補わずに理由を返す
+  const problems = validateLqngConfigInput(input)
+  if (problems.length > 0) {
+    return withNoStore(NextResponse.json({ error: 'Invalid config', problems }, { status: 400 }))
   }
   const current = await readConfigForWrite()
   if (current.response) return current.response

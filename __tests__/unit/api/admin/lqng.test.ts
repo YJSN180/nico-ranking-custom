@@ -60,17 +60,28 @@ describe('admin lqng API', () => {
 
   it('config PUT は正規化して保存し、不正な形は 400', async () => {
     // 未設定（404）の版番号は既定値の updatedAt
-    const res = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ enabled: true, tagGroups: [['a', 'a'], []], freq: { dayCount: 0 }, updatedAt: '1970-01-01T00:00:00.000Z' }) }))
+    const res = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ enabled: true, pollTags: ['t1'], tagGroups: [['a', 'a'], []], lockGroupsMin: 1, updatedAt: '1970-01-01T00:00:00.000Z' }) }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.config.tagGroups).toEqual([['a']])
-    expect(body.config.freq.dayCount).toBe(1)
     const saved = store.get(LQNG_KV_KEYS.config) as { enabled: boolean; updatedAt: string }
     expect(saved.enabled).toBe(true)
     expect(saved.updatedAt).not.toBe('1970-01-01T00:00:00.000Z')
 
     expect((await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: '[1]' }))).status).toBe(400)
     expect((await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: '{' }))).status).toBe(400)
+  })
+
+  it('config PUT は上限・下限や照合語の長さに反する値を黙って丸めず 400 で理由を返す', async () => {
+    const base = { enabled: false, updatedAt: '1970-01-01T00:00:00.000Z' }
+    const cases = [{ freq: { dayCount: 0 } }, { followerMax: 100000 }, { holdHours: 10000 }, { trackDays: 365 }, { titleNeedles: ['ab'] }, { enabled: true }]
+    for (const override of cases) {
+      const res = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ ...base, ...override }) }))
+      expect(res.status).toBe(400)
+      const body = await res.json()
+      expect(body.problems.length).toBeGreaterThan(0)
+    }
+    expect(kvSet).not.toHaveBeenCalled()
   })
 
   it('allowlist POST は追加・削除とメモを扱い、ID 形式を検証する', async () => {
