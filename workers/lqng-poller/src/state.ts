@@ -44,6 +44,12 @@ export interface PendingVideo {
   attempts: number
 }
 
+export interface UnattributedVideo {
+  id: string
+  /** 投稿時刻（刈り込みに使う） */
+  at: string
+}
+
 /** 1 回の実行の要約（管理画面・/status の表示用） */
 export interface LqngRunSummary {
   at: string
@@ -70,6 +76,8 @@ export interface LqngTracking {
   authors: Record<string, TrackedAuthor>
   /** getthumbinfo の補完待ち（持ち越し） */
   pending: PendingVideo[]
+  /** 取り込んだ投稿者 ID の無い動画（重なり区間で毎回新着として数え直さないため。追跡期間で消す） */
+  unattributed: UnattributedVideo[]
   /** 直近の実行の要約。毎回書く追跡表に置き、履歴（events）への毎回の書き込みを避ける */
   lastRun: LqngRunSummary | null
   /** 直近の実行の時刻と注記（新しい順、/status の運用確認用） */
@@ -116,7 +124,7 @@ export const EVENTS_MAX = 500
 export const RECENT_RUNS_MAX = 40
 
 export function emptyTracking(now: string): LqngTracking {
-  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], lastRun: null, recentRuns: [], updatedAt: now }
+  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], unattributed: [], lastRun: null, recentRuns: [], updatedAt: now }
 }
 
 export function emptyEvents(): LqngEvents {
@@ -147,6 +155,7 @@ export function normalizeTracking(raw: unknown, now: string): LqngTracking {
     lastSweepDate: typeof raw.lastSweepDate === 'string' ? raw.lastSweepDate : null,
     authors: raw.authors as Record<string, TrackedAuthor>,
     pending: Array.isArray(raw.pending) ? (raw.pending as PendingVideo[]) : [],
+    unattributed: Array.isArray(raw.unattributed) ? raw.unattributed.filter((u): u is UnattributedVideo => isRecord(u) && typeof u.id === 'string' && typeof u.at === 'string') : [],
     lastRun: isRecord(raw.lastRun) ? (raw.lastRun as unknown as LqngRunSummary) : null,
     recentRuns: normalizeRecentRuns(raw.recentRuns),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,

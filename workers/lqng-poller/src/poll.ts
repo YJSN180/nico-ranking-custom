@@ -152,8 +152,9 @@ class Session {
   }
 
   isKnownVideo(id: string): boolean {
-    if (this.state.verdicts.videos[id]) return true
+    if (Object.hasOwn(this.state.verdicts.videos, id)) return true
     if (this.state.tracking.pending.some((p) => p.id === id)) return true
+    if (this.state.tracking.unattributed.some((u) => u.id === id)) return true
     for (const author of Object.values(this.state.tracking.authors)) if (author.posts.some((p) => p.id === id)) return true
     return false
   }
@@ -337,6 +338,8 @@ class Session {
         if (v.registeredAt > author.lastPostAt) author.lastPostAt = v.registeredAt
         if (v.ownerVisibility && !author.visibility) author.visibility = v.ownerVisibility
         this.state.tracking.pending.push({ id: v.id, authorId: v.authorId, attempts: 0 })
+      } else {
+        this.state.tracking.unattributed.push({ id: v.id, at: v.registeredAt })
       }
       this.applyVideo(observation)
     }
@@ -521,6 +524,7 @@ class Session {
       if (stale && author.posts.length === 0 && !this.awaitingDeletedRecheck(author)) delete this.state.tracking.authors[authorId]
     }
     this.state.tracking.pending = this.state.tracking.pending.filter((p) => p.authorId && this.state.tracking.authors[p.authorId])
+    this.state.tracking.unattributed = this.state.tracking.unattributed.filter((u) => nowMs - new Date(u.at).getTime() <= trackMs)
     for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
       if (verdict.status === 'hold' && verdict.holdUntil && new Date(verdict.holdUntil).getTime() <= nowMs) {
         const author = verdict.authorId ? this.state.tracking.authors[verdict.authorId] : undefined

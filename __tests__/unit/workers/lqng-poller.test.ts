@@ -287,6 +287,20 @@ describe('lqng-poller runPoll', () => {
     expect(r2.skipped).toBe('already_swept')
   })
 
+  it('投稿者 ID の無い動画も、重なり区間で毎回新着として数え直さない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const anonymous = vi.fn(async () => pages([video({ id: 'sm61', authorId: null })]))
+    const r1 = await runPoll(m.kv, deps({ fetchNewVideos: anonymous }), 'poll')
+    expect(r1.newVideos).toBe(1)
+    const r2 = await runPoll(m.kv, deps({ fetchNewVideos: anonymous }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(r2.newVideos).toBe(0)
+    // 追跡期間を過ぎたら覚えておかない
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.unattributed).toEqual([{ id: 'sm61', at: at(-1) }])
+    await runPoll(m.kv, deps({}, new Date(T0.getTime() + 8 * 24 * 3600_000)), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.unattributed).toEqual([])
+  })
+
   it('同じ動画は二度取り込まず、差分の since は前回実行から重なり分（6 時間）前になる', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     const fetchNew = vi.fn(async () => pages([video({ id: 'sm60' })]))
@@ -579,6 +593,7 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
           '1001': { authorId: '1001', firstSeenAt: oldPost, lastPostAt: oldPost, posts: [{ id: 'sm1', title: 't', at: oldPost, tagDetails: null, ownerVisibility: 'visible' }], status: 'deleted', lastCheckedAt: deletedAt, followerCount: null, nickname: 'n', visibility: 'visible', deletedObservedAt: deletedAt, deletionSuspectedAt: null },
         },
         pending: [],
+        unattributed: [],
         lastRun: null,
         recentRuns: [],
         updatedAt: deletedAt,
@@ -694,6 +709,7 @@ describe('lqng-poller 追跡の刈り込みの順番', () => {
         },
       },
       pending: [],
+      unattributed: [],
       lastRun: null,
       recentRuns: [],
       updatedAt: days(8),

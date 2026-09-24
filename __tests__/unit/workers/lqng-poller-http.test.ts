@@ -43,6 +43,7 @@ function setup() {
     lastSweepDate: null,
     authors: { '1001': trackedAuthor('1001'), 'channel/ch55': trackedAuthor('channel/ch55') },
     pending: [],
+    unattributed: [],
     lastRun: null,
     recentRuns: [],
     updatedAt: '2026-02-01T00:00:00.000Z',
@@ -115,6 +116,7 @@ describe('lqng-poller /status（直近の実行）', () => {
       lastSweepDate: null,
       authors: {},
       pending: [],
+      unattributed: [],
       lastRun,
       recentRuns: [
         { at: '2026-02-01T00:15:00.000Z', mode: 'poll' },
