@@ -151,6 +151,18 @@ describe('lqng-poller /status（直近の実行）', () => {
   })
 })
 
+describe('lqng-poller /trigger?mode=probe（対象タグの上限）', () => {
+  it('対象タグはポーリングと同じ上限（3 つ）までしか取りに行かない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, pollTags: ['t1', 't2', 't3', 't4', 't5'] } })
+    const upstream = vi.fn(async (_url: string) => new Response(pageHtml([]), { status: 200 }))
+    vi.stubGlobal('fetch', upstream)
+    const res = await fetchWorker(new Request('https://w.test/trigger?mode=probe&source=pages', { method: 'POST', headers: { Authorization: `Bearer ${AUTH_KEY}` } }), { LQNG_KV: m.kv, WORKER_AUTH_KEY: AUTH_KEY })
+    expect(res.status).toBe(200)
+    const tags = new Set(upstream.mock.calls.map((c) => decodeURIComponent(new URL(c[0]).pathname.split('/').pop() ?? '')))
+    expect(Array.from(tags)).toEqual(['t1', 't2', 't3'])
+  })
+})
+
 describe('lqng-poller /trigger?mode=probe', () => {
   it('認証が無ければ 401 で、外部へ取りに行かない', async () => {
     const { env } = setup()

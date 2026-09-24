@@ -189,6 +189,18 @@ describe('runBackfillStep', () => {
     expect(second.done).toBe(true)
   })
 
+  it('対象タグはポーリングと同じ上限（3 つ）までしか使わない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, pollTags: ['t1', 't2', 't3', 't4', 't5'] } })
+    const fetchWindowPage = pager([])
+    await runBackfillStep(m.kv, deps({ fetchWindowPage }), null, { days: 1 })
+    expect(vi.mocked(fetchWindowPage).mock.calls[0]?.[0]).toEqual(['t1', 't2', 't3'])
+
+    const fetchTagPage = vi.fn(async () => ({ items: [], totalCount: 0, hasNext: false }))
+    const r = await runBackfillStep(m.kv, deps({ fetchTagPage }), null, { pages: 8, source: 'pages' })
+    expect(Array.from(new Set(vi.mocked(fetchTagPage).mock.calls.map((c) => (c as unknown as [string])[0])))).toEqual(['t1', 't2', 't3'])
+    expect(r.done).toBe(true)
+  })
+
   it('カーソル生成: days 指定は下限を、未指定は既定の下限を使う', () => {
     const c1 = createBackfillCursor(T0, 10)
     expect(new Date(c1.floor).getTime()).toBe(T0.getTime() - 10 * 24 * 3600_000)

@@ -3,6 +3,7 @@
 // - 10 20 * * *   : 05:10 JST に Snapshot「前日分」のタイトルスイープ
 // 判定ロジックは lib/lqng（Next.js と共用）。設定・許可リストは KV lqng:config（管理画面で編集）。
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js'
+import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { countLockedGroups } from '../../../lib/lqng/rules'
 import { commitBackfill, createLiveBackfillDeps, runBackfillStep, type BackfillCursor } from './backfill'
 import { InvalidInboxRefError } from './inbox'
@@ -45,7 +46,8 @@ async function probeNewVideos(request: Request, env: Env, url: URL): Promise<Res
   const since = new Date(Date.now() - minutes * 60_000).toISOString()
   const cf = (request as Request & { cf?: { colo?: string; country?: string } }).cf
   const where = { colo: cf?.colo ?? null, country: cf?.country ?? null }
-  const { pollTags } = await loadConfig(env.LQNG_KV)
+  // ポーリングと同じ条件にする（対象タグは上限まで）
+  const pollTags = (await loadConfig(env.LQNG_KV)).pollTags.slice(0, LQNG_POLL_TAGS_MAX)
   try {
     const { videos, failures } = source === 'pages' ? await fetchNewVideosFromNicoPages(pollTags, since) : { videos: await fetchNewVideosFromNvapi(pollTags, since), failures: [] }
     const times = videos.map((v) => v.registeredAt).sort()

@@ -10,6 +10,7 @@
 //   含まれる）に通った候補だけ getthumbinfo で補完して判定する。
 //   過去分は削除時刻が分からないため、A∧C の「投稿から 7 日以内の削除」は「現在削除済み」で代用する
 //   （実データ検証と同じ評価）。
+import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { containsAnyNormalized } from '../../../lib/lqng/normalize'
 import { evaluateVideo } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngPost, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
@@ -481,7 +482,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
     nowIso
   )
   cursor.stats.calls++
-  const tags = state.config.pollTags
+  // ポーリングと同じく、対象タグは上限までにする（Snapshot の OR 条件と本家ページの巡回の両方）
+  const tags = state.config.pollTags.slice(0, LQNG_POLL_TAGS_MAX)
   const pages = Math.max(1, Math.min(BACKFILL_LIMITS.pagesMax, Math.floor(options.pages ?? BACKFILL_LIMITS.pagesDefault)))
   for (let i = 0; i < pages && !windowsExhausted(cursor, tags.length) && session.budgetLeft(); i++) {
     session.subrequests++
