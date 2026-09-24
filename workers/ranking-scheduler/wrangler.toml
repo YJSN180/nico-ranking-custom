@@ -8,7 +8,7 @@ compatibility_flags = ["nodejs_compat"]
 crons = ["*/5 * * * *"]
 
 [vars]
-DISPATCH_ENABLED = "false"
+DISPATCH_ENABLED = "true"
 ENVIRONMENT = "production"
 
 [[r2_buckets]]
