@@ -182,8 +182,11 @@ class Session {
     this.subrequests += cost
   }
 
+  /**
+   * 追跡している動画か（投稿・補完待ち・投稿者 ID の無い動画）。判定表は見ない: 判定表を書けて追跡表の前で
+   * 落ちた回の動画や、バックフィルで判定だけ入った動画を、新着に出たときに追跡へ戻すため
+   */
   isKnownVideo(id: string): boolean {
-    if (Object.hasOwn(this.state.verdicts.videos, id)) return true
     if (this.state.tracking.pending.some((p) => p.id === id)) return true
     if (this.state.tracking.unattributed.some((u) => u.id === id)) return true
     for (const author of Object.values(this.state.tracking.authors)) if (author.posts.some((p) => p.id === id)) return true
@@ -547,6 +550,32 @@ class Session {
   }
 
   /**
+   * 判定表にあって追跡に無い動画（NG・保留）のうち追跡期間内のものを、追跡と補完待ちに戻す。
+   * 判定表を書けて追跡表の前で落ちた回の動画が、投稿頻度にも補完（ロックタグ群）にも数えられなくなるのを防ぐ。
+   */
+  restoreUntrackedVerdicts(): void {
+    const nowMs = this.now.getTime()
+    const trackMs = this.config.trackDays * DAY_MS
+    const tracked = new Set<string>()
+    for (const author of Object.values(this.state.tracking.authors)) for (const post of author.posts) tracked.add(post.id)
+    for (const item of this.state.tracking.pending) tracked.add(item.id)
+    for (const item of this.state.tracking.unattributed) tracked.add(item.id)
+    for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
+      if (tracked.has(id) || verdict.status === 'released') continue
+      const atMs = new Date(verdict.registeredAt).getTime()
+      if (!Number.isFinite(atMs) || nowMs - atMs > trackMs) continue
+      if (verdict.authorId === null) {
+        this.state.tracking.unattributed.push({ id, at: verdict.registeredAt })
+        continue
+      }
+      const author = this.ensureAuthor(verdict.authorId)
+      author.posts.push({ id, title: verdict.title, at: verdict.registeredAt, tagDetails: null, ownerVisibility: null })
+      if (verdict.registeredAt > author.lastPostAt) author.lastPostAt = verdict.registeredAt
+      this.state.tracking.pending.push({ id, authorId: verdict.authorId, attempts: 0 })
+    }
+  }
+
+  /**
    * 追跡期間を過ぎた投稿・投稿者を刈り込み、保留の期限切れを解放する。
    * 実行の最初に呼ぶ（停止明けなどに、追跡期間外の古い連投で C / A∧C を判定しないため）
    */
@@ -604,7 +633,9 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   // バックフィルの確定分を先に合流する（以降の判定は合流後の判定表を見る）
   const inbox = await readInbox(kv, LIMITS.inboxPerRun)
   session.mergeInbox(inbox)
-  // 判定に使う前に、追跡期間を過ぎた投稿を刈り込む（停止明けに古い連投で C / A∧C を成立させない）
+  // 判定表にだけある動画を追跡に戻し、判定に使う前に追跡期間を過ぎた投稿を刈り込む
+  // （停止明けに古い連投で C / A∧C を成立させない）
+  session.restoreUntrackedVerdicts()
   session.expireAndPrune()
 
   if (mode === 'sweep' && state.config.sweepGenre) {

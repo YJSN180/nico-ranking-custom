@@ -725,6 +725,45 @@ describe('lqng-poller 保存の順番', () => {
     expect(writes).toEqual([`put ${LQNG_KV_KEYS.verdicts}`, `put ${LQNG_KV_KEYS.events}`, 'delete lqng:inbox:run1:000001', `put ${LQNG_KV_KEYS.tracking}`])
   })
 
+  it('判定表は書けて追跡表の前で落ちた回の動画も、次の回に追跡と補完待ちへ戻して補完する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const failingTracking = { ...m.kv, put: async (key: string, value: string) => {
+      if (key === LQNG_KV_KEYS.tracking) throw new Error('kv put failed')
+      await m.kv.put(key, value)
+    } }
+    const uploads = [video({ id: 'sm97', title: 'て/す/と/ま/ん' }), video({ id: 'sm98', authorId: '1002', ownerVisibility: 'hidden' })]
+    // この回は getthumbinfo が一時的に使えず、補完できないまま追跡表の保存で落ちる
+    const noThumb = vi.fn(async (): Promise<ThumbResult> => ({ ok: false, reason: 'unavailable' }))
+    await expect(runPoll(failingTracking, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: noThumb }), 'poll')).rejects.toThrow('kv put failed')
+    // 判定表には残ったが、追跡表は書けていない
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm98?.status).toBe('hold')
+    expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
+
+    // 次の回は新着に出なくても、判定表の動画を追跡と補完待ちに戻して補完する（ロックタグ群で D）
+    const thumb = vi.fn(async (id: string) => (id === 'sm98' ? okThumb(locked('g1', 'g2', 'g3')) : okThumb()))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([])), fetchThumbInfo: thumb }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(thumb.mock.calls.map((c) => c[0]).sort()).toEqual(['sm97', 'sm98'])
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm97'])
+    expect(tracking.authors['1002']?.posts.map((p) => p.id)).toEqual(['sm98'])
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm98?.reasons).toEqual(['D'])
+  })
+
+  it('既知かどうかは追跡だけで見る（判定だけある動画も新着に出れば追跡に入れる）', async () => {
+    const old = new Date(T0.getTime() - 8 * 24 * 3600_000).toISOString() // 追跡期間（7 日）より前
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: { version: 1, authors: {}, videos: { sm99: { status: 'ng', reasons: ['B'], authorId: '1001', title: 't', registeredAt: old, since: old } }, updatedAt: old },
+    })
+    // 追跡期間より古い判定は戻さない
+    await runPoll(m.kv, deps({}), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']).toBeUndefined()
+    // 新着として出てきたら（重なり区間など）、判定があっても追跡に入れる
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm99', registeredAt: at(-1) })])) }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm99'])
+  })
+
   it('判定表の保存に失敗したら追跡表は書かず、次回に同じ新着を取り直して判定する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     const failing = { ...m.kv, put: async (key: string, value: string) => {
