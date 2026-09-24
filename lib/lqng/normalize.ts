@@ -1,5 +1,5 @@
 // タイトル・名前の正規化と照合
-// 荒らしは「や/じ/ゅ/ま/ん」「やaじsゅaまaん」のように文字間へ記号・英数・絵文字を挿入し、
+// 荒らしは「あ/い/う/え/お」「あaいsうaえaお」のように文字間へ記号・英数・絵文字を挿入し、
 // カナの種類や濁点の付け方も変えてくるため、
 //   1. 文字種を正規化（NFKC → カタカナをひらがなへ → 分離濁点を結合 → 小書き仮名を通常形へ）
 //   2. 照合語の各文字が「この順で」現れるか（順序付き部分列一致。挿入文字の数・種類は問わない）
@@ -20,6 +20,13 @@ const SMALL_TO_LARGE: Record<string, string> = {
   ゎ: 'わ',
 }
 
+// 独立した濁点・半濁点（゛ U+309B / ゜ U+309C）→ 結合用（U+3099 / U+309A）。
+// NFKC は独立形を「空白＋結合用」に分解するため、そのままでは直前の仮名と結合しない
+const SPACING_TO_COMBINING_MARK: Record<string, string> = {
+  '\u309B': '\u3099',
+  '\u309C': '\u309A',
+}
+
 function isIgnorableCodePoint(cp: number): boolean {
   return (
     (cp >= 0x200b && cp <= 0x200f) || // ゼロ幅スペース・結合子・方向制御
@@ -32,11 +39,14 @@ function isIgnorableCodePoint(cp: number): boolean {
 
 /**
  * NFKC で全角英数・半角カナ・合字を統一し、カタカナをひらがなに、
- * 分離濁点を結合形に、小書き仮名を通常形に寄せ、ゼロ幅・結合記号・異体セレクタを除去する。
+ * 分離濁点（独立した ゛゜ を含む）を結合形に、小書き仮名を通常形に寄せ、ゼロ幅・結合記号・異体セレクタを除去する。
  * 記号や英数字は残す（一致判定側が挿入を許容するため、除去しなくてよい）。
  */
 export function normalizeText(input: string): string {
-  const nfkc = input.normalize('NFKC').normalize('NFC')
+  const nfkc = input
+    .replace(/[\u309B\u309C]/g, (mark) => SPACING_TO_COMBINING_MARK[mark] ?? mark)
+    .normalize('NFKC')
+    .normalize('NFC')
   let out = ''
   for (const ch of nfkc) {
     const cp = ch.codePointAt(0) ?? 0

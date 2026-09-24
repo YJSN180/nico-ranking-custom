@@ -1,4 +1,5 @@
 // KV に置く設定の検証と正規化（管理画面の入力と Worker の読み取りで共用）
+import { normalizeText } from './normalize'
 import { DEFAULT_LQNG_CONFIG, type LqngConfig, type LqngVerdicts, EMPTY_LQNG_VERDICTS } from './types'
 
 /** KV のキー名（接頭辞 lqng: で既存キーと分離する） */
@@ -60,6 +61,58 @@ export function normalizeLqngConfig(raw: unknown): LqngConfig {
     },
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : d.updatedAt,
   }
+}
+
+/** 照合語（B）の最小文字数（正規化後）。短い照合語は順序付き部分列一致で無関係なタイトルにも一致する */
+export const LQNG_TITLE_NEEDLE_MIN_LENGTH = 3
+
+interface NumberLimit {
+  label: string
+  min: number
+  max: number
+  read: (raw: Record<string, unknown>) => unknown
+}
+
+const readFreq = (raw: Record<string, unknown>, key: 'dayCount' | 'burstCount' | 'burstMinutes'): unknown =>
+  isRecord(raw.freq) ? raw.freq[key] : undefined
+
+/** 数値設定の下限・上限（ラベルは管理画面の表示に合わせる） */
+const NUMBER_LIMITS: readonly NumberLimit[] = [
+  { label: 'ロック群の閾値', min: 1, max: 20, read: (raw) => raw.lockGroupsMin },
+  { label: '24 時間の本数', min: 1, max: 100, read: (raw) => readFreq(raw, 'dayCount') },
+  { label: '短時間の本数', min: 1, max: 100, read: (raw) => readFreq(raw, 'burstCount') },
+  { label: '短時間の幅', min: 1, max: 1440, read: (raw) => readFreq(raw, 'burstMinutes') },
+  { label: 'フォロワー上限', min: 0, max: 1000, read: (raw) => raw.followerMax },
+  { label: '保留時間', min: 0, max: 168, read: (raw) => raw.holdHours },
+  { label: '投稿者の追跡日数', min: 1, max: 30, read: (raw) => raw.trackDays },
+  { label: '削除とみなす日数', min: 1, max: 30, read: (raw) => raw.deletionWindowDays },
+]
+
+/**
+ * 管理画面の入力（保存前の設定）を検証し、問題点を返す（空なら保存してよい）。
+ * normalizeLqngConfig は不正な値を既定値で黙って補うため、保存の前にこちらで範囲外の値を弾く。
+ * 省いた数値は既定値になるので問題にしない。画面と管理 API の両方で使う。
+ */
+export function validateLqngConfigInput(raw: unknown): string[] {
+  if (!isRecord(raw)) return ['設定の形式が正しくありません']
+  const problems: string[] = []
+  for (const limit of NUMBER_LIMITS) {
+    const value = limit.read(raw)
+    if (value === undefined) continue
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < limit.min || value > limit.max) {
+      problems.push(`${limit.label}は ${limit.min}〜${limit.max} の整数にしてください`)
+    }
+  }
+  const config = normalizeLqngConfig(raw)
+  for (const needle of config.titleNeedles) {
+    const length = Array.from(normalizeText(needle)).length
+    if (length < LQNG_TITLE_NEEDLE_MIN_LENGTH) {
+      problems.push(`照合語「${needle}」は正規化すると ${length} 文字です。${LQNG_TITLE_NEEDLE_MIN_LENGTH} 文字以上にしてください`)
+    }
+  }
+  if (config.enabled && config.pollTags.length === 0) problems.push('有効にするにはポーリング対象タグが 1 つ以上必要です')
+  if (config.tagGroups.length > 0 && config.lockGroupsMin > config.tagGroups.length) problems.push('ロック群の閾値がグループ数を超えています')
+  return problems
 }
 
 /** 判定テーブルの形を検証し、壊れていれば空を返す（サービスを落とさない） */

@@ -7,6 +7,50 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
+// 管理 API への書き込みの CSRF 対策
+// Basic 認証の資格情報はブラウザがクロスサイトの送信にも付けるため、書き込みは同一オリジンからだけ受け付ける
+const ADMIN_WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+// 公開ドメイン（Cloudflare Worker 経由では Host が Vercel のドメインになるため、Origin と Host が一致しない）
+const PUBLIC_SITE_HOST = 'nico-rank.com'
+// JSON 本文だけを受け付ける管理 API。/api/admin/update と /api/admin/mfa は本文なしの POST を送る
+// 既存の画面があるため対象外（同一オリジンの判定は全管理 API に掛ける）
+const JSON_ONLY_ADMIN_PREFIXES = ['/api/admin/lqng', '/api/admin/ng-list']
+
+function isCrossOriginWrite(request: NextRequest): boolean {
+  // ブラウザが付ける Sec-Fetch-Site を優先する（ページとリクエスト先の関係なので、プロキシで Host が変わっても正しい）
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (fetchSite) return fetchSite !== 'same-origin'
+  // 古いブラウザは Origin で判定する。どちらも無いのはブラウザ以外の呼び出し（CSRF の経路にならない）
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  let originHost: string
+  try {
+    originHost = new URL(origin).host
+  } catch {
+    return true // 'null'（opaque origin）など
+  }
+  const allowedHosts = new Set([request.nextUrl.host.toLowerCase(), PUBLIC_SITE_HOST])
+  const host = request.headers.get('host')
+  if (host) allowedHosts.add(host.toLowerCase())
+  return !allowedHosts.has(originHost)
+}
+
+function isJsonContentType(request: NextRequest): boolean {
+  const contentType = request.headers.get('content-type') ?? ''
+  return contentType.split(';')[0].trim().toLowerCase() === 'application/json'
+}
+
+/** 管理 API への書き込みを検査し、拒否するときだけ応答を返す（Basic 認証より先に判定する） */
+function guardAdminWrite(request: NextRequest, pathname: string): NextResponse | null {
+  if (isCrossOriginWrite(request)) {
+    return NextResponse.json({ error: 'Cross-origin request blocked' }, { status: 403 })
+  }
+  if (JSON_ONLY_ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) && !isJsonContentType(request)) {
+    return NextResponse.json({ error: 'Content-Type must be application/json' }, { status: 415 })
+  }
+  return null
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
@@ -36,7 +80,14 @@ const noStorePaths: string[] = []
     response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
     return response
   }
-  
+
+  // 管理 API への書き込みは、同一オリジン以外（403）と JSON 以外の本文（415）を認証より先に拒否する。
+  // 開発環境でも掛ける（読み取りの GET は対象外）
+  if (pathname.startsWith('/api/admin') && ADMIN_WRITE_METHODS.has(request.method.toUpperCase())) {
+    const rejected = guardAdminWrite(request, pathname)
+    if (rejected) return rejected
+  }
+
   // 開発環境は認証チェックをスキップ
   if (process.env.VERCEL_ENV === 'development') {
     return NextResponse.next()

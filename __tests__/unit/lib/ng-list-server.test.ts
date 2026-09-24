@@ -1,6 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   getServerNGList,
+  getAdminNGList,
+  resetServerNGListState,
   saveServerManualNGList,
   addToServerDerivedNGList,
   getNGListManual,
@@ -8,20 +10,31 @@ import {
   getServerDerivedNGList,
   clearServerDerivedNGList
 } from '@/lib/ng-list-server'
+import { resetLqngServerState } from '@/lib/lqng/server'
 
 // Mock the KV module
 vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
+    getStrict: vi.fn(),
     set: vi.fn()
   }
 }))
 
 import { kv } from '@/lib/simple-kv'
 
+// キーごとの値を返す getStrict の実装（lqng のキーは未設定＝null）
+const strictFrom = (values: Record<string, unknown>) => async (key: string) => (key in values ? values[key] : null)
+
 describe('NG List Server Functions', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+    resetServerNGListState()
+    resetLqngServerState()
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   describe('getServerNGList', () => {
@@ -34,9 +47,7 @@ describe('NG List Server Functions', () => {
       }
       const mockDerived = ['sm456', 'sm789']
 
-      ;(kv.get as any)
-        .mockResolvedValueOnce(mockManual)
-        .mockResolvedValueOnce(mockDerived)
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': mockManual, 'ng-list-derived': mockDerived }))
 
       const result = await getServerNGList()
 
@@ -56,7 +67,7 @@ describe('NG List Server Functions', () => {
     })
 
     it('should return empty lists on error', async () => {
-      ;(kv.get as any).mockRejectedValue(new Error('KV error'))
+      vi.mocked(kv.getStrict).mockRejectedValue(new Error('KV error'))
 
       const result = await getServerNGList()
 
@@ -76,12 +87,70 @@ describe('NG List Server Functions', () => {
     })
   })
 
+  describe('getServerNGList の読み取り失敗', () => {
+    const manual = { videoIds: ['sm1'], videoTitles: { exact: [], partial: [] }, authorIds: ['7'], authorNames: { exact: [], partial: [] } }
+
+    it('失敗時は直前の成功値を返す', async () => {
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': ['sm9'] }))
+      expect((await getServerNGList()).authorIds).toEqual(['7'])
+
+      vi.mocked(kv.getStrict).mockRejectedValue(new Error('KV get failed: 429'))
+      const result = await getServerNGList()
+      expect(result.authorIds).toEqual(['7'])
+      expect(result.derivedVideoIds).toEqual(['sm9'])
+    })
+
+    it('失敗を 60 秒キャッシュせず、次の呼び出しで読み直す', async () => {
+      vi.stubEnv('NODE_ENV', 'production') // キャッシュを有効にして確かめる
+      vi.mocked(kv.getStrict).mockRejectedValue(new Error('KV get failed: 503'))
+      expect((await getServerNGList()).authorIds).toEqual([])
+
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': [] }))
+      expect((await getServerNGList()).authorIds).toEqual(['7'])
+    })
+
+    it('自動NG（lqng）の読み取りが失敗した結果はキャッシュしない', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.mocked(kv.getStrict).mockImplementation(async (key: string) => {
+        if (key === 'lqng:config') throw new Error('KV get failed: 503')
+        return strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': [] })(key)
+      })
+      await getServerNGList()
+      const calls = vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual').length
+      await getServerNGList()
+      expect(vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual').length).toBe(calls + 1)
+    })
+
+    it('手動リストに紛れた自動NGの欄は手動として扱わない', async () => {
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': { ...manual, autoAuthorIds: ['1001'], autoVideoIds: ['sm-auto'] }, 'ng-list-derived': [] }))
+      const result = await getServerNGList()
+      expect(result).not.toHaveProperty('autoAuthorIds')
+      expect(result).not.toHaveProperty('autoVideoIds')
+    })
+  })
+
+  describe('getAdminNGList（管理画面用）', () => {
+    it('キャッシュを通さずに手動の 4 項目と派生NGを返す', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': { videoIds: ['sm1'], videoTitles: { exact: ['t'], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] }, autoAuthorIds: ['1001'] }, 'ng-list-derived': ['sm2'] }))
+      const first = await getAdminNGList()
+      expect(first).toEqual({ videoIds: ['sm1'], videoTitles: { exact: ['t'], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] }, derivedVideoIds: ['sm2'] })
+      await getAdminNGList()
+      expect(vi.mocked(kv.getStrict)).toHaveBeenCalledTimes(4)
+    })
+
+    it('読み取り失敗は空の一覧にせず例外にする', async () => {
+      vi.mocked(kv.getStrict).mockRejectedValue(new Error('KV get failed: 429'))
+      await expect(getAdminNGList()).rejects.toThrow('429')
+    })
+  })
+
   describe('addToServerDerivedNGList', () => {
     it('should add new video IDs to derived list without duplicates', async () => {
       const existingIds = ['sm123', 'sm456']
       const newIds = ['sm456', 'sm789', 'sm101112']
 
-      ;(kv.get as any).mockResolvedValueOnce(existingIds)
+      vi.mocked(kv.getStrict).mockResolvedValueOnce(existingIds)
       ;(kv.set as any).mockResolvedValueOnce(undefined)
 
       await addToServerDerivedNGList(newIds)
@@ -93,7 +162,7 @@ describe('NG List Server Functions', () => {
     })
 
     it('should handle empty existing list', async () => {
-      ;(kv.get as any).mockResolvedValueOnce(null)
+      vi.mocked(kv.getStrict).mockResolvedValueOnce(null)
       ;(kv.set as any).mockResolvedValueOnce(undefined)
 
       await addToServerDerivedNGList(['sm123', 'sm456'])
@@ -108,6 +177,14 @@ describe('NG List Server Functions', () => {
       await addToServerDerivedNGList([])
 
       expect(kv.get).not.toHaveBeenCalled()
+      expect(kv.getStrict).not.toHaveBeenCalled()
+      expect(kv.set).not.toHaveBeenCalled()
+    })
+
+    it('派生NGを読めなければ、追加分だけで上書きせずに例外にする', async () => {
+      vi.mocked(kv.getStrict).mockRejectedValueOnce(new Error('KV get failed: 503'))
+
+      await expect(addToServerDerivedNGList(['sm1'])).rejects.toThrow('503')
       expect(kv.set).not.toHaveBeenCalled()
     })
   })

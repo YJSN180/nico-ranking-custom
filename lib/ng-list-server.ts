@@ -3,64 +3,108 @@ import { kv } from './simple-kv'
 import type { NGList } from '@/types/ng-list'
 import { migrateLegacyNGList, createEmptyNGList } from './ng-list-migration'
 import { collectAutoNg, mergeAutoNgIntoList } from './lqng/merge'
-import { getLqngConfig, getLqngVerdicts, invalidateLqngCache, isLqngEnabled } from './lqng/server'
+import { invalidateLqngCache, isLqngEnabled, loadLqngConfig, loadLqngVerdicts } from './lqng/server'
 import type { AutoNgSets } from './lqng/types'
 
 // 管理者NGリストの短期メモリキャッシュ（検索リアルタイム統合計画 S1 / P2）
 // 検索・SSRのたびに KV を2読み（REST往復）していたのを、関数インスタンス内で
 // 60秒だけ再利用する。書き込み時は invalidate する。テスト環境では無効。
+// 読み取りに失敗した結果はキャッシュせず、直前の成功値を返す（無ければ空）。
 const NG_LIST_CACHE_TTL_MS = 60_000
+/** 読み取りに失敗したあと、KV を読み直さずに直前の成功値を返す間隔（障害中に KV を叩き続けない） */
+const RETRY_AFTER_FAILURE_MS = 10_000
 let ngListCache: { value: NGList; fetchedAt: number } | null = null
+/** 直前に読み取りに成功した値（失敗時の代替。キャッシュの無効化では消さない） */
+let lastGoodNGList: NGList | null = null
+let retryAt = 0
+
+/** 手動 NG の 4 項目 */
+export type ManualNGList = Pick<NGList, 'videoIds' | 'videoTitles' | 'authorIds' | 'authorNames'>
 
 export function invalidateServerNGListCache(): void {
   ngListCache = null
+  retryAt = 0
   invalidateLqngCache()
 }
 
+/** テスト用: キャッシュと直前の成功値をすべて捨てる */
+export function resetServerNGListState(): void {
+  invalidateServerNGListCache()
+  lastGoodNGList = null
+}
+
+/** 手動 NG の 4 項目だけを取り出す（合流済みの自動 NG などを手動として扱わない） */
+export function pickManualNGList(list: ManualNGList): ManualNGList {
+  return { videoIds: list.videoIds, videoTitles: list.videoTitles, authorIds: list.authorIds, authorNames: list.authorNames }
+}
+
+const toStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
+
+// 手動 NG と派生 NG を読む。未設定（404）は空、読み取り失敗は例外（空の一覧と取り違えない）
+async function readManualAndDerived(attempts?: number): Promise<NGList> {
+  const [manual, derived] = await Promise.all([
+    kv.getStrict<unknown>('ng-list-manual', { attempts }),
+    kv.getStrict<unknown>('ng-list-derived', { attempts }),
+  ])
+  // マイグレーション処理を適用
+  return { ...pickManualNGList(migrateLegacyNGList(manual)), derivedVideoIds: toStringArray(derived) }
+}
+
 // 粗悪コンテンツ自動NG（lib/lqng）: Worker が書く判定テーブルから、許可リストを除いた
-// 投稿者 ID・動画 ID を取り出す。失敗時や無効時は空（サービスを落とさない）
-async function loadAutoNg(): Promise<AutoNgSets> {
-  if (!isLqngEnabled()) return { authorIds: [], videoIds: [] }
+// 投稿者 ID・動画 ID を取り出す。失敗時や無効時は空（サービスを落とさない）。
+// ok=false は読み取りに失敗して代替値を使ったこと（その結果はキャッシュしない）
+async function loadAutoNg(): Promise<{ sets: AutoNgSets; ok: boolean }> {
+  if (!isLqngEnabled()) return { sets: { authorIds: [], videoIds: [] }, ok: true }
   try {
-    const [config, verdicts] = await Promise.all([getLqngConfig(), getLqngVerdicts()])
-    return collectAutoNg(verdicts, config, new Date())
+    const [config, verdicts] = await Promise.all([loadLqngConfig(), loadLqngVerdicts()])
+    return { sets: collectAutoNg(verdicts.value, config.value, new Date()), ok: config.ok && verdicts.ok }
   } catch {
-    return { authorIds: [], videoIds: [] }
+    return { sets: { authorIds: [], videoIds: [] }, ok: false }
   }
 }
 
 // Get NG list from KV
 export async function getServerNGList(): Promise<NGList> {
   const cacheEnabled = process.env.NODE_ENV !== 'test'
-  if (cacheEnabled && ngListCache && Date.now() - ngListCache.fetchedAt < NG_LIST_CACHE_TTL_MS) {
+  const now = Date.now()
+  if (cacheEnabled && ngListCache && now - ngListCache.fetchedAt < NG_LIST_CACHE_TTL_MS) {
     return ngListCache.value
   }
+  if (cacheEnabled && lastGoodNGList && now < retryAt) {
+    return lastGoodNGList
+  }
+  const autoPromise = loadAutoNg()
+  let base: NGList
   try {
-    const [manual, derived, auto] = await Promise.all([
-      kv.get<any>('ng-list-manual'),
-      kv.get<string[]>('ng-list-derived'),
-      loadAutoNg()
-    ])
-    
-    // マイグレーション処理を適用
-    const migratedManual = migrateLegacyNGList(manual)
-    
-    let value: NGList = {
-      ...migratedManual,
-      derivedVideoIds: derived || []
+    // 直前の成功値があれば 1 回だけ試し、失敗したらすぐそれを返す（リクエストを再試行の待ちに巻き込まない）
+    base = await readManualAndDerived(lastGoodNGList ? 1 : undefined)
+  } catch {
+    if (lastGoodNGList) {
+      retryAt = Date.now() + RETRY_AFTER_FAILURE_MS
+      return lastGoodNGList
     }
-    // 自動NGは手動リストより後に評価される（ng-filter-core）。何も無ければ欄自体を足さない
-    if (auto.authorIds.length > 0 || auto.videoIds.length > 0) {
-      value = mergeAutoNgIntoList(value, auto)
-    }
+    return createEmptyNGList()
+  }
+  const auto = await autoPromise
+  // 自動NGは手動リストより後に評価される（ng-filter-core）。何も無ければ欄自体を足さない
+  const value = auto.sets.authorIds.length > 0 || auto.sets.videoIds.length > 0 ? mergeAutoNgIntoList(base, auto.sets) : base
+  if (auto.ok) {
+    lastGoodNGList = value
+    retryAt = 0
     if (cacheEnabled) {
       ngListCache = { value, fetchedAt: Date.now() }
     }
-    return value
-  } catch (error) {
-    // Failed to get NG list from KV - returning empty list
-    return createEmptyNGList()
   }
+  return value
+}
+
+/**
+ * 管理画面用: キャッシュを通さずに手動 NG（4 項目）と派生 NG を読む。
+ * 読み取りに失敗したら例外にする（空の一覧を返して、それを土台に保存させない）
+ */
+export async function getAdminNGList(): Promise<NGList> {
+  return readManualAndDerived()
 }
 
 // Save manual NG list to KV
@@ -81,7 +125,8 @@ export async function addToServerDerivedNGList(videoIds: string[]): Promise<void
   if (videoIds.length === 0) return
   
   try {
-    const current = await kv.get<string[]>('ng-list-derived') || []
+    // 読み取りに失敗したら例外にする（空とみなして追加分だけで上書きしない）
+    const current = toStringArray(await kv.getStrict<unknown>('ng-list-derived'))
     const newSet = new Set([...current, ...videoIds])
     await kv.set('ng-list-derived', Array.from(newSet))
     invalidateServerNGListCache()

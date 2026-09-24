@@ -1,14 +1,27 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // KV をキー→値の表でモックし、getServerNGList / filterRankingItemsServer に自動NGが合流することを確認する
+// failing に入れたキーは読み取り失敗（get は従来どおり null、getStrict は例外）にする
 const store = new Map<string, unknown>()
-const kvGet = vi.fn(async (key: string) => (store.has(key) ? store.get(key) : null))
+const failing = new Set<string>()
+const kvGet = vi.fn(async (key: string) => (failing.has(key) ? null : store.has(key) ? store.get(key) : null))
+const kvGetStrict = vi.fn(async (key: string) => {
+  if (failing.has(key)) throw new Error(`kv down: ${key}`)
+  return store.has(key) ? store.get(key) : null
+})
 const kvSet = vi.fn(async (key: string, value: unknown) => {
   store.set(key, value)
 })
-vi.mock('@/lib/simple-kv', () => ({ kv: { get: (key: string) => kvGet(key), set: (key: string, value: unknown) => kvSet(key, value) } }))
+vi.mock('@/lib/simple-kv', () => ({
+  kv: {
+    get: (key: string) => kvGet(key),
+    getStrict: (key: string) => kvGetStrict(key),
+    set: (key: string, value: unknown) => kvSet(key, value),
+  },
+}))
 
 import { getServerNGList, invalidateServerNGListCache } from '@/lib/ng-list-server'
+import { resetLqngServerState } from '@/lib/lqng/server'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { RankingItem } from '@/types/ranking'
@@ -39,6 +52,8 @@ const item = (over: Partial<RankingItem>): RankingItem => ({ rank: 0, id: 'sm0',
 describe('lqng server integration', () => {
   beforeEach(() => {
     store.clear()
+    failing.clear()
+    resetLqngServerState()
     store.set('ng-list-manual', manual)
     store.set('ng-list-derived', ['sm-derived'])
     store.set(LQNG_KV_KEYS.config, config)
@@ -92,9 +107,7 @@ describe('lqng server integration', () => {
   })
 
   it('KV 読み取りが失敗しても自動NGなしで応答する', async () => {
-    kvGet.mockImplementationOnce(async () => manual).mockImplementationOnce(async () => []).mockImplementationOnce(async () => {
-      throw new Error('kv down')
-    })
+    failing.add(LQNG_KV_KEYS.config)
     const list = await getServerNGList()
     expect(list.authorIds).toEqual(['7'])
     expect(list.autoAuthorIds).toBeUndefined()

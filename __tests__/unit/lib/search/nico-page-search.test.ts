@@ -19,7 +19,7 @@ const payload = {
           hasNext: true,
           items: [
             { id: 'sm100', title: 'A "quoted" & <b>', registeredAt: '2026-09-22T06:42:18+09:00', duration: 16, thumbnail: { listingUrl: 'https://t/1.jpg' }, count: { view: 12, comment: 51, mylist: 0, like: 3 }, owner: { ownerType: 'user', id: '1001', name: 'n', iconUrl: 'https://i/1.jpg', visibility: 'visible' }, isChannelVideo: false },
-            { id: 'so200', title: 'ch', registeredAt: '2026-09-22T03:58:30+09:00', owner: { ownerType: 'channel', id: '2650214', name: 'c' }, isChannelVideo: true },
+            { id: 'so200', title: 'ch', registeredAt: '2026-09-22T03:58:30+09:00', owner: { ownerType: 'channel', id: '1234567', name: 'c' }, isChannelVideo: true },
             { id: 'sm300', title: 'no owner', registeredAt: '2026-09-22T02:31:07+09:00', owner: null },
             { title: 'broken (no id)' },
           ],
@@ -59,7 +59,7 @@ describe('nico-page-search', () => {
   it('投稿者 ID はユーザーが数字、チャンネルは channel/chNNN、無ければ null', () => {
     const r = parseNicoSearchPage(html)
     expect(nicoPageOwnerId(r.items[0]!)).toBe('1001')
-    expect(nicoPageOwnerId(r.items[1]!)).toBe('channel/ch2650214')
+    expect(nicoPageOwnerId(r.items[1]!)).toBe('channel/ch1234567')
     expect(nicoPageOwnerId(r.items[2]!)).toBeNull()
   })
 

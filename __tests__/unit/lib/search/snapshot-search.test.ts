@@ -199,8 +199,8 @@ describe('mapSnapshotVideoToRankingItem', () => {
   })
 
   it('チャンネル動画は channel/chXXXX 形式の authorId になる', () => {
-    const item = mapSnapshotVideoToRankingItem({ ...baseVideo, userId: null, channelId: 2650171 }, 1, 50)
-    expect(item.authorId).toBe('channel/ch2650171')
+    const item = mapSnapshotVideoToRankingItem({ ...baseVideo, userId: null, channelId: 7654321 }, 1, 50)
+    expect(item.authorId).toBe('channel/ch7654321')
     expect(item.rank).toBe(52)
   })
 })
