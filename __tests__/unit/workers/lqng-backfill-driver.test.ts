@@ -73,6 +73,39 @@ describe('runBackfillDriver', () => {
     expect(sleep).toHaveBeenCalledWith(60_000)
   })
 
+  describe('旧い Worker（ロック方式の確定）との組み合わせ', () => {
+    function withCommitResponses(responses: unknown[]) {
+      const { io, call } = scripted([{ authors: { '5301': authorVerdict(['B']) }, videos: {} }])
+      const commitBodies: unknown[] = []
+      let n = 0
+      const sleep = vi.fn(async () => {})
+      const wrapped: BackfillDriverIo = {
+        ...io,
+        sleep,
+        call: (async (mode: string, body: unknown) => {
+          if (mode !== 'backfill-commit') return call(mode, body)
+          commitBodies.push(body)
+          return responses[Math.min(n++, responses.length - 1)]
+        }) as BackfillDriverIo['call'],
+      }
+      return { io: wrapped, commitBodies, sleep }
+    }
+
+    it('確定がロック中（locked）なら間を空けて同じ連番で送り直し、通れば続ける', async () => {
+      const locked = { skipped: 'locked', authorsAdded: 0, videosAdded: 0, kvWrites: 0 }
+      const { io, commitBodies, sleep } = withCommitResponses([locked, locked, { skipped: null, authorsAdded: 1, videosAdded: 0, kvWrites: 2 }])
+      const r = await runBackfillDriver(options, io)
+      expect(r.commits).toBe(1)
+      expect(commitBodies.map((b) => (b as { seq: number }).seq)).toEqual([1, 1, 1])
+      expect(sleep).toHaveBeenCalledTimes(2)
+    })
+
+    it('ロック中が続けば、旧い Worker だと分かるメッセージで止める', async () => {
+      const { io } = withCommitResponses([{ skipped: 'locked', authorsAdded: 0, videosAdded: 0, kvWrites: 0 }])
+      await expect(runBackfillDriver(options, io)).rejects.toThrow(/locked.*lqng-poller/)
+    })
+  })
+
   it('何も見つからなければ確定しない', async () => {
     const { io, commits } = scripted([emptyDeltas()])
     const r = await runBackfillDriver(options, io)
