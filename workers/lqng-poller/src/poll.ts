@@ -587,6 +587,18 @@ class Session {
     if (observation && evaluateDeletion(observation, this.config).ng) this.setAuthorNg(author.authorId, ['A_C'], null)
   }
 
+  /**
+   * 退会扱いなのに投稿者 NG が無い追跡中の投稿者に、A∧C の評価をかけ直す（外部呼び出しなし）。
+   * 退会を確定した回の判定表の書き込みが、同時に走った別の実行に上書きされても、A∧C を失わないため。
+   */
+  reevaluateDeletedAuthors(): void {
+    for (const author of Object.values(this.state.tracking.authors)) {
+      if (author.status !== 'deleted' || Object.hasOwn(this.state.verdicts.authors, author.authorId)) continue
+      const observation = toObservation(author)
+      if (observation && evaluateDeletion(observation, this.config).ng) this.setAuthorNg(author.authorId, ['A_C'], null)
+    }
+  }
+
   /** 退会扱いのまま、まだ再確認していない（投稿が古くなっても追跡から外さない） */
   private awaitingDeletedRecheck(author: TrackedAuthor): boolean {
     if (author.status !== 'deleted' || !author.deletedObservedAt) return false
@@ -682,6 +694,7 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   // （停止明けに古い連投で C / A∧C を成立させない）
   session.restoreUntrackedVerdicts()
   session.expireAndPrune()
+  session.reevaluateDeletedAuthors()
 
   if (mode === 'sweep' && state.config.sweepGenre) {
     session.spend(LIMITS.sweepCost)

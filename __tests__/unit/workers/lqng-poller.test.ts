@@ -964,3 +964,50 @@ describe('lqng-poller 外部呼び出しの予算', () => {
     expect(r.note).toContain(`poll_tags_capped: 5>${LIMITS.pollTagsMax}`)
   })
 })
+
+describe('lqng-poller 退会扱いの投稿者の A∧C の付け直し', () => {
+  const observedAt = new Date(T0.getTime() - 60 * 60_000).toISOString()
+  const deletedAuthor = (posts: string[]): TrackedAuthor => ({
+    authorId: '1001',
+    firstSeenAt: observedAt,
+    lastPostAt: posts[posts.length - 1] ?? observedAt,
+    posts: posts.map((postAt, i) => ({ id: `sm${40 + i}`, title: 't', at: postAt, tagDetails: [], ownerVisibility: 'visible' })),
+    status: 'deleted',
+    lastCheckedAt: observedAt,
+    followerCount: null,
+    nickname: 'n',
+    visibility: 'visible',
+    deletedObservedAt: observedAt,
+    deletionSuspectedAt: null,
+  })
+  const tracking = (author: TrackedAuthor): LqngTracking => ({
+    version: 1,
+    lastPollAt: observedAt,
+    lastSweepDate: null,
+    authors: { [author.authorId]: author },
+    pending: [],
+    unattributed: [],
+    lastRun: null,
+    recentRuns: [],
+    issues: {},
+    updatedAt: observedAt,
+  })
+
+  it('判定表から A∧C が消えていても（同時実行の上書きなど）、外部呼び出しなしで付け直す', async () => {
+    const burst = [at(-180), at(-175), at(-170)]
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking(deletedAuthor(burst)) })
+    const info = vi.fn(async () => existing(5))
+    await runPoll(m.kv, deps({ fetchUserInfo: info }), 'poll')
+    expect(info).not.toHaveBeenCalled()
+    const verdict = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']
+    expect(verdict?.reasons).toEqual(['A_C'])
+    expect(verdict?.deletedObservedAt).toBe(observedAt)
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_ng' && e.authorId === '1001')).toBe(true)
+  })
+
+  it('連投でない退会扱いの投稿者には付けない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking(deletedAuthor([at(-600), at(-60)])) })
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})
