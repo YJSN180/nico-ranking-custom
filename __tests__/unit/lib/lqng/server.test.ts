@@ -83,22 +83,31 @@ describe('lib/lqng/server', () => {
       expect(Object.keys((await getLqngVerdicts()).authors)).toEqual(['1001'])
     })
 
-    it('直前の成功値があるときは 1 回だけ試して待たせない', async () => {
+    it('サイト側の読み取りは常に 1 回だけ試す（再試行の待ちをリクエストに乗せない）', async () => {
       store.set(LQNG_KV_KEYS.config, storedConfig)
       await getLqngConfig()
-      expect(getStrict).toHaveBeenLastCalledWith(LQNG_KV_KEYS.config, { attempts: undefined })
-      await getLqngConfig()
       expect(getStrict).toHaveBeenLastCalledWith(LQNG_KV_KEYS.config, { attempts: 1 })
+      await getLqngVerdicts()
+      expect(getStrict).toHaveBeenLastCalledWith(LQNG_KV_KEYS.verdicts, { attempts: 1 })
     })
 
-    it('直前の成功値が無ければ無効扱い（既定値）にするが、失敗をキャッシュしない', async () => {
+    it('直前の成功値が無い失敗でも、10 秒は既定値（無効）を返して KV を読まず、そのあと読み直す', async () => {
       vi.stubEnv('NODE_ENV', 'production') // キャッシュを有効にして確かめる
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
       failing.add(LQNG_KV_KEYS.config)
       const first = await loadLqngConfig()
       expect(first.ok).toBe(false)
       expect(first.value.enabled).toBe(false)
+      expect(getStrict).toHaveBeenCalledTimes(1)
 
-      // 失敗は 60 秒キャッシュされず、次の呼び出しで読み直す
+      // 障害中はリクエストのたびに KV を読まない
+      vi.advanceTimersByTime(5_000)
+      expect(await loadLqngConfig()).toMatchObject({ ok: false, value: { enabled: false } })
+      expect(getStrict).toHaveBeenCalledTimes(1)
+
+      // 間隔を過ぎたら読み直し、回復していれば成功値に戻る（成功値は 60 秒キャッシュ）
+      vi.advanceTimersByTime(6_000)
       failing.delete(LQNG_KV_KEYS.config)
       store.set(LQNG_KV_KEYS.config, storedConfig)
       const second = await loadLqngConfig()

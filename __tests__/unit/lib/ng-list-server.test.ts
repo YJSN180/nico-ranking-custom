@@ -34,6 +34,7 @@ describe('NG List Server Functions', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllEnvs()
   })
 
@@ -100,25 +101,51 @@ describe('NG List Server Functions', () => {
       expect(result.derivedVideoIds).toEqual(['sm9'])
     })
 
-    it('失敗を 60 秒キャッシュせず、次の呼び出しで読み直す', async () => {
+    it('サイト側の読み取りは 1 回だけ試す（再試行の待ちをリクエストに乗せない）', async () => {
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': [] }))
+      await getServerNGList()
+      const manualCalls = vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual' || key === 'ng-list-derived')
+      expect(manualCalls).toHaveLength(2)
+      for (const [, options] of manualCalls) expect(options).toEqual({ attempts: 1 })
+    })
+
+    it('直前の成功値が無い失敗でも、10 秒は空の一覧を返して KV を読まず、そのあと読み直す', async () => {
       vi.stubEnv('NODE_ENV', 'production') // キャッシュを有効にして確かめる
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
       vi.mocked(kv.getStrict).mockRejectedValue(new Error('KV get failed: 503'))
       expect((await getServerNGList()).authorIds).toEqual([])
+      const readsAfterFailure = vi.mocked(kv.getStrict).mock.calls.length
 
+      // 障害中はリクエストのたびに KV を読まない
+      vi.advanceTimersByTime(5_000)
+      expect((await getServerNGList()).authorIds).toEqual([])
+      expect(vi.mocked(kv.getStrict).mock.calls.length).toBe(readsAfterFailure)
+
+      // 間隔を過ぎたら読み直し、回復していれば正しい一覧に戻る
+      vi.advanceTimersByTime(6_000)
       vi.mocked(kv.getStrict).mockImplementation(strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': [] }))
       expect((await getServerNGList()).authorIds).toEqual(['7'])
     })
 
-    it('自動NG（lqng）の読み取りが失敗した結果はキャッシュしない', async () => {
+    it('自動NG（lqng）だけが失敗したときは、合流した一覧を 10 秒だけキャッシュする', async () => {
       vi.stubEnv('NODE_ENV', 'production')
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
       vi.mocked(kv.getStrict).mockImplementation(async (key: string) => {
         if (key === 'lqng:config') throw new Error('KV get failed: 503')
         return strictFrom({ 'ng-list-manual': manual, 'ng-list-derived': [] })(key)
       })
+      const manualReads = () => vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual').length
+      expect((await getServerNGList()).authorIds).toEqual(['7'])
+      expect(manualReads()).toBe(1)
+      vi.advanceTimersByTime(5_000)
+      expect((await getServerNGList()).authorIds).toEqual(['7'])
+      expect(manualReads()).toBe(1)
+      // 60 秒は持たない（自動NG が回復したら早めに合流し直す）
+      vi.advanceTimersByTime(6_000)
       await getServerNGList()
-      const calls = vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual').length
-      await getServerNGList()
-      expect(vi.mocked(kv.getStrict).mock.calls.filter(([key]) => key === 'ng-list-manual').length).toBe(calls + 1)
+      expect(manualReads()).toBe(2)
     })
 
     it('手動リストに紛れた自動NGの欄は手動として扱わない', async () => {

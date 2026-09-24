@@ -1,6 +1,7 @@
 // Next.js サーバー側から KV の lqng 設定・判定テーブルを読む
-// - サイト側（検索・SSR の合流）: getLqngConfig / getLqngVerdicts。成功した値だけを 60 秒メモリキャッシュし、
-//   読み取りに失敗したら直前の成功値を返す（無ければ「自動 NG なし」で継続）。失敗の結果はキャッシュしない。
+// - サイト側（検索・SSR の合流）: getLqngConfig / getLqngVerdicts。成功した値を 60 秒メモリキャッシュする。
+//   読み取りは 1 回だけ試し、失敗したら直前の成功値（無ければ「自動 NG なし」の既定値）を返す。
+//   失敗のあと 10 秒は KV を読まずに同じ代替値を返す（障害中にリクエストのたび KV を読んで待たせない）。
 // - 管理 API（設定・許可リストの書き込み）: readLqngConfigStrict / readLqngVerdictsStrict。キャッシュを通さず、
 //   未設定（404）と読み取り失敗を区別して、失敗は例外にする（既定値を土台に書き込まない）。
 // 書き込みは Worker（判定テーブル）と管理画面 API（設定・許可リスト）だけが行う。
@@ -9,7 +10,7 @@ import { LQNG_KV_KEYS, normalizeLqngConfig, normalizeLqngVerdicts } from './conf
 import { DEFAULT_LQNG_CONFIG, EMPTY_LQNG_VERDICTS, type LqngConfig, type LqngVerdicts } from './types'
 
 const CACHE_TTL_MS = 60_000
-/** 読み取りに失敗したあと、KV を読み直さずに直前の成功値を返す間隔（障害中に KV を叩き続けない） */
+/** 読み取りに失敗したあと、KV を読み直さずに代替値（直前の成功値か既定値）を返す間隔 */
 const RETRY_AFTER_FAILURE_MS = 10_000
 
 export interface LqngLoadResult<T> {
@@ -22,7 +23,7 @@ interface Slot<T> {
   cached: { value: T; fetchedAt: number } | null
   /** 直前に読み取りに成功した値（失敗時の代替。キャッシュの無効化では消さない） */
   lastGood: T | null
-  /** この時刻までは KV を読み直さない（直前の成功値がある失敗のあとだけ設定する） */
+  /** 読み取りに失敗したあと、この時刻までは KV を読み直さない */
   retryAt: number
 }
 
@@ -80,20 +81,17 @@ export function readLqngVerdictsStrict(): Promise<LqngVerdicts> {
 async function load<T>(slot: Slot<T>, read: (attempts?: number) => Promise<T>, fallback: () => T): Promise<LqngLoadResult<T>> {
   const now = Date.now()
   if (cacheEnabled() && slot.cached && now - slot.cached.fetchedAt < CACHE_TTL_MS) return { value: slot.cached.value, ok: true }
-  if (cacheEnabled() && slot.lastGood !== null && now < slot.retryAt) return { value: slot.lastGood, ok: false }
+  if (cacheEnabled() && now < slot.retryAt) return { value: slot.lastGood ?? fallback(), ok: false }
   try {
-    // 直前の成功値があれば 1 回だけ試し、失敗したらすぐそれを返す（リクエストを再試行の待ちに巻き込まない）
-    const value = await read(slot.lastGood !== null ? 1 : undefined)
+    // 1 回だけ試す（失敗したら代替値ですぐ応答し、再試行の待ちをリクエストに乗せない）
+    const value = await read(1)
     slot.lastGood = value
     slot.retryAt = 0
     if (cacheEnabled()) slot.cached = { value, fetchedAt: Date.now() }
     return { value, ok: true }
   } catch {
-    if (slot.lastGood !== null) {
-      slot.retryAt = Date.now() + RETRY_AFTER_FAILURE_MS
-      return { value: slot.lastGood, ok: false }
-    }
-    return { value: fallback(), ok: false }
+    slot.retryAt = Date.now() + RETRY_AFTER_FAILURE_MS
+    return { value: slot.lastGood ?? fallback(), ok: false }
   }
 }
 

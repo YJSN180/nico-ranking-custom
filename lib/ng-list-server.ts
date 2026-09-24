@@ -9,11 +9,12 @@ import type { AutoNgSets } from './lqng/types'
 // 管理者NGリストの短期メモリキャッシュ（検索リアルタイム統合計画 S1 / P2）
 // 検索・SSRのたびに KV を2読み（REST往復）していたのを、関数インスタンス内で
 // 60秒だけ再利用する。書き込み時は invalidate する。テスト環境では無効。
-// 読み取りに失敗した結果はキャッシュせず、直前の成功値を返す（無ければ空）。
+// 読み取りは 1 回だけ試し、失敗したら直前の成功値（無ければ空）を返す。失敗のあと 10 秒は
+// KV を読まずに同じ値を返し、自動NG だけが代替値だった一覧も 10 秒だけ持つ（障害中にリクエストのたび読まない）。
 const NG_LIST_CACHE_TTL_MS = 60_000
-/** 読み取りに失敗したあと、KV を読み直さずに直前の成功値を返す間隔（障害中に KV を叩き続けない） */
+/** 読み取りに失敗したあと、KV を読み直さずに代替値を返す間隔。自動NG が代替値だった一覧もこの間だけ持つ */
 const RETRY_AFTER_FAILURE_MS = 10_000
-let ngListCache: { value: NGList; fetchedAt: number } | null = null
+let ngListCache: { value: NGList; expiresAt: number } | null = null
 /** 直前に読み取りに成功した値（失敗時の代替。キャッシュの無効化では消さない） */
 let lastGoodNGList: NGList | null = null
 let retryAt = 0
@@ -68,33 +69,30 @@ async function loadAutoNg(): Promise<{ sets: AutoNgSets; ok: boolean }> {
 export async function getServerNGList(): Promise<NGList> {
   const cacheEnabled = process.env.NODE_ENV !== 'test'
   const now = Date.now()
-  if (cacheEnabled && ngListCache && now - ngListCache.fetchedAt < NG_LIST_CACHE_TTL_MS) {
+  if (cacheEnabled && ngListCache && now < ngListCache.expiresAt) {
     return ngListCache.value
   }
-  if (cacheEnabled && lastGoodNGList && now < retryAt) {
-    return lastGoodNGList
+  if (cacheEnabled && now < retryAt) {
+    return lastGoodNGList ?? createEmptyNGList()
   }
   const autoPromise = loadAutoNg()
   let base: NGList
   try {
-    // 直前の成功値があれば 1 回だけ試し、失敗したらすぐそれを返す（リクエストを再試行の待ちに巻き込まない）
-    base = await readManualAndDerived(lastGoodNGList ? 1 : undefined)
+    // 1 回だけ試す（失敗したら代替値ですぐ応答し、再試行の待ちをリクエストに乗せない）
+    base = await readManualAndDerived(1)
   } catch {
-    if (lastGoodNGList) {
-      retryAt = Date.now() + RETRY_AFTER_FAILURE_MS
-      return lastGoodNGList
-    }
-    return createEmptyNGList()
+    retryAt = Date.now() + RETRY_AFTER_FAILURE_MS
+    return lastGoodNGList ?? createEmptyNGList()
   }
   const auto = await autoPromise
   // 自動NGは手動リストより後に評価される（ng-filter-core）。何も無ければ欄自体を足さない
   const value = auto.sets.authorIds.length > 0 || auto.sets.videoIds.length > 0 ? mergeAutoNgIntoList(base, auto.sets) : base
-  if (auto.ok) {
-    lastGoodNGList = value
-    retryAt = 0
-    if (cacheEnabled) {
-      ngListCache = { value, fetchedAt: Date.now() }
-    }
+  // 手動・派生は読めているので直前の成功値にする（自動NG の部分は lqng 側の直前の成功値か空）
+  lastGoodNGList = value
+  retryAt = 0
+  if (cacheEnabled) {
+    // 自動NG が代替値だったときは短くだけ持ち、回復したら早めに合流し直す
+    ngListCache = { value, expiresAt: Date.now() + (auto.ok ? NG_LIST_CACHE_TTL_MS : RETRY_AFTER_FAILURE_MS) }
   }
   return value
 }

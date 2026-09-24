@@ -20,7 +20,7 @@ vi.mock('@/lib/simple-kv', () => ({
   },
 }))
 
-import { getServerNGList, invalidateServerNGListCache } from '@/lib/ng-list-server'
+import { getServerNGList, invalidateServerNGListCache, resetServerNGListState } from '@/lib/ng-list-server'
 import { resetLqngServerState } from '@/lib/lqng/server'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
@@ -53,6 +53,8 @@ describe('lqng server integration', () => {
   beforeEach(() => {
     store.clear()
     failing.clear()
+    kvGetStrict.mockClear()
+    resetServerNGListState()
     resetLqngServerState()
     store.set('ng-list-manual', manual)
     store.set('ng-list-derived', ['sm-derived'])
@@ -63,6 +65,8 @@ describe('lqng server integration', () => {
   })
   afterEach(() => {
     delete process.env.LQNG_ENABLED
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
   })
 
   it('判定テーブルの投稿者・動画が許可リストを除いて合流する', async () => {
@@ -104,6 +108,30 @@ describe('lqng server integration', () => {
     expect(result.filteredCount).toBe(7)
     // 自動NG・リクエスト時ルールで落とした分は派生NGに積まない（手動NG由来の sm7 だけ）
     expect(result.newDerivedIds).toEqual(['sm7'])
+  })
+
+  it('KV が落ちているあいだ、成功値の無いインスタンスでもリクエストのたびに KV を読まない', async () => {
+    vi.stubEnv('NODE_ENV', 'production') // キャッシュを有効にして確かめる
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+    for (const key of ['ng-list-manual', 'ng-list-derived', LQNG_KV_KEYS.config, LQNG_KV_KEYS.verdicts]) failing.add(key)
+    const items = [item({ id: 'sm-manual' }), item({ id: 'sm8' })]
+
+    // 1 回目: 各キーを 1 回ずつ読んで失敗し、NG なしで応答する
+    expect((await filterRankingItemsServer(items)).filteredItems.map((i) => i.id)).toEqual(['sm-manual', 'sm8'])
+    const firstReads = kvGetStrict.mock.calls.length
+    expect(firstReads).toBeLessThanOrEqual(5)
+
+    // 10 秒以内の 2・3 回目は KV を読まない
+    vi.advanceTimersByTime(3_000)
+    await filterRankingItemsServer(items)
+    await filterRankingItemsServer(items)
+    expect(kvGetStrict.mock.calls.length).toBe(firstReads)
+
+    // 回復後は間隔を過ぎた最初の呼び出しで正しい NG に戻る
+    failing.clear()
+    vi.advanceTimersByTime(8_000)
+    expect((await filterRankingItemsServer(items)).filteredItems.map((i) => i.id)).toEqual(['sm8'])
   })
 
   it('KV 読み取りが失敗しても自動NGなしで応答する', async () => {
