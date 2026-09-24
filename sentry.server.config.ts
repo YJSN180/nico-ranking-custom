@@ -2,9 +2,12 @@ import * as Sentry from '@sentry/nextjs'
 import {
   getSentryEnvironment,
   isProductionSentryEnvironment,
+  isSentryEnabled,
   normalizeTransactionName,
-  scrubBreadcrumb,
+  scrubDynamicSamplingContext,
   scrubEvent,
+  scrubServerBreadcrumb,
+  scrubSpan,
 } from '@/lib/sentry/shared'
 
 const environment = getSentryEnvironment()
@@ -12,7 +15,7 @@ const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
 
 Sentry.init({
   dsn,
-  enabled: Boolean(dsn),
+  enabled: isSentryEnabled(dsn, environment),
   environment,
   sendDefaultPii: false,
   tracesSampler: (samplingContext) => {
@@ -28,5 +31,8 @@ Sentry.init({
   },
   beforeSend: (event) => scrubEvent(event),
   beforeSendTransaction: (event) => scrubEvent(event),
-  beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
+  beforeSendSpan: scrubSpan,
+  beforeBreadcrumb: (breadcrumb) => scrubServerBreadcrumb(breadcrumb),
 })
+
+Sentry.getClient()?.on('createDsc', scrubDynamicSamplingContext)
