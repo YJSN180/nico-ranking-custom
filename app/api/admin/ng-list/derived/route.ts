@@ -21,14 +21,12 @@ export async function GET(request: NextRequest) {
     const CF_NAMESPACE_ID = process.env.CLOUDFLARE_KV_NAMESPACE_ID
     const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN
     
+    // KV を読めないときは、空の一覧を 200 で返さず 503 にする（手動NG の GET と同じ。
+    // 画面は再同期の失敗として扱い、表示中の一覧をそのまま残す）
+    const unavailable = () => NextResponse.json({ error: 'Failed to read derived NG list' }, { status: 503 })
+
     if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
-      // Return empty list if credentials are missing
-      return NextResponse.json({
-        videoIds: [],
-        count: 0,
-        lastUpdated: null,
-        totalVideosProcessed: 0
-      })
+      return unavailable()
     }
     
     try {
@@ -47,9 +45,12 @@ export async function GET(request: NextRequest) {
       } else if (response.status === 404) {
         // Key not found, return empty list
         derivedVideoIds = []
+      } else {
+        return unavailable()
       }
     } catch (error) {
       console.error('Failed to fetch derived NG list:', error)
+      return unavailable()
     }
     
     return NextResponse.json({
