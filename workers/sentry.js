@@ -200,6 +200,19 @@ function workerTracesSampler(environment, samplingContext) {
   return 0
 }
 
+/**
+ * 既定の HttpServer 連携（@sentry/cloudflare 10.7x で追加）は POST などの本文を読んで
+ * イベントに載せる。本文は scrubEvent で捨てているので読むだけ無駄になり、ルーターの
+ * 本文の再送とも干渉しうるため、本文を読まない設定に差し替える。
+ * 連携を持たない古い SDK では既定値をそのまま使う。
+ */
+function withoutRequestBodyCapture(defaults) {
+  if (typeof Sentry.httpServerIntegration !== 'function') return defaults
+  return defaults.map((integration) =>
+    integration?.name === 'HttpServer' ? Sentry.httpServerIntegration({ maxRequestBodySize: 'none' }) : integration,
+  )
+}
+
 export function createWorkerSentryOptions(env, overrides = {}) {
   const environment = getWorkerEnvironment(env)
   const dsn = env.SENTRY_WORKER_DSN
@@ -211,6 +224,7 @@ export function createWorkerSentryOptions(env, overrides = {}) {
     release: env.CF_VERSION_METADATA?.id,
     sendDefaultPii: false,
     enableLogs: Boolean(dsn),
+    integrations: withoutRequestBodyCapture,
     tracesSampler: (samplingContext) => workerTracesSampler(environment, samplingContext),
     beforeSend: (event) => scrubEvent(event),
     beforeSendTransaction: (event) => scrubEvent(event),

@@ -43,6 +43,26 @@ describe('workers sentry log helpers', () => {
     })
   })
 
+  it('replaces the default HttpServer integration so request bodies are never read', () => {
+    const options = createWorkerSentryOptions({
+      SENTRY_WORKER_DSN: 'https://public@example.ingest.us.sentry.io/1',
+      ENVIRONMENT: 'production',
+    })
+    expect(typeof options.integrations).toBe('function')
+    const other = { name: 'Dedupe' }
+    const defaults = [{ name: 'HttpServer', maxRequestBodySize: 'medium' }, other]
+    const result = (options.integrations as (d: Array<{ name: string }>) => Array<{ name: string; maxRequestBodySize?: string }>)(defaults)
+    expect(result).toHaveLength(2)
+    expect(result.find((i) => i.name === 'HttpServer')?.maxRequestBodySize).toBe('none')
+    expect(result).toContain(other)
+  })
+
+  it('keeps the defaults untouched when the SDK has no HttpServer integration', () => {
+    const options = createWorkerSentryOptions({ SENTRY_WORKER_DSN: 'https://public@example.ingest.us.sentry.io/1' })
+    const defaults = [{ name: 'Dedupe' }]
+    expect((options.integrations as (d: Array<{ name: string }>) => Array<{ name: string }>)(defaults)).toEqual(defaults)
+  })
+
   it('enables logs with a beforeSendLog scrubber', () => {
     const options = createWorkerSentryOptions({
       SENTRY_WORKER_DSN: 'https://public@example.ingest.us.sentry.io/1',
