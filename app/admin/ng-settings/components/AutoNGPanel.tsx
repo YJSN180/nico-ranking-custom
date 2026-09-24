@@ -125,6 +125,9 @@ function Pager({ page, totalPages, setPage }: { page: number; totalPages: number
 /** 503 は KV を読めなかった（既定値を土台に保存しないよう、サーバーが書き込みを止めた） */
 const KV_UNAVAILABLE_NOTE = 'KV から設定を読み取れませんでした。'
 
+/** 409: 読み込んだあとに設定の版が進んでいた（他の画面や、同時に走った保存・許可リストの操作） */
+const CONFIG_CONFLICT_MESSAGE = '他の画面で設定が更新されています。「再読み込み」で最新の設定を読み直してから、もう一度操作してください。'
+
 export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManualNG = true }: AutoNGPanelProps) {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
@@ -135,6 +138,8 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
   const [tab, setTab] = useState<Tab>('overview')
   const [query, setQuery] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  /** 設定を保存している最中（許可リストの操作と同時に走らせない） */
+  const [savingConfig, setSavingConfig] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   /** 読み込みに成功するたびに設定フォームを作り直す（保存後の置き換えでは作り直さない） */
   const [formKey, setFormKey] = useState(0)
@@ -167,6 +172,8 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
   const allowedAuthors = useMemo(() => new Set(allowlist.authorIds), [allowlist.authorIds])
   const allowedVideos = useMemo(() => new Set(allowlist.videoIds), [allowlist.videoIds])
   const manualSet = useMemo(() => new Set(manualAuthorIds), [manualAuthorIds])
+  // 読み込んだ設定の版。許可リストの操作にも付け、サーバーが現在の版と照合する
+  const configVersion = overview?.config.updatedAt ?? null
 
   const updateAllowlist = useCallback(
     async (action: 'add' | 'remove', kind: 'author' | 'video', id: string, note?: string) => {
@@ -177,8 +184,9 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, kind, id, note }),
+          body: JSON.stringify({ action, kind, id, note, updatedAt: configVersion }),
         })
+        if (res.status === 409) throw new Error(CONFIG_CONFLICT_MESSAGE)
         if (res.status === 400) throw new Error('許可リストの更新に失敗しました (400)。ID の形式を確認してください（投稿者: 数字か channel/ch＋数字、動画: sm・so・nm・ss＋数字）。')
         if (!res.ok) throw new Error(`許可リストの更新に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
         const body = (await res.json()) as { config: LqngConfig }
@@ -190,29 +198,32 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
         setBusyId(null)
       }
     },
-    []
+    [configVersion]
   )
 
   const saveConfig = useCallback(async (next: LqngConfig): Promise<LqngConfig> => {
-    const res = await fetch('/api/admin/lqng/config', {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      // updatedAt は読み込んだ版番号（サーバーが現在の版と照合する）。許可リストは差分 API だけで変えるので送らない
-      body: JSON.stringify({ ...next, allowlist: undefined }),
-    })
-    if (res.status === 409) {
-      throw new Error('他の画面で設定が更新されています。「再読み込み」で最新の設定を読み直してから、もう一度保存してください。')
+    setSavingConfig(true)
+    try {
+      const res = await fetch('/api/admin/lqng/config', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        // updatedAt は読み込んだ版番号（サーバーが現在の版と照合する）。許可リストは差分 API だけで変えるので送らない
+        body: JSON.stringify({ ...next, allowlist: undefined }),
+      })
+      if (res.status === 409) throw new Error(CONFIG_CONFLICT_MESSAGE)
+      if (res.status === 400) {
+        const body = (await res.json().catch(() => null)) as { problems?: unknown } | null
+        const problems = Array.isArray(body?.problems) ? body.problems.filter((p): p is string => typeof p === 'string') : []
+        throw new Error(`設定を保存できませんでした (400)${problems.length > 0 ? `: ${problems.join(' / ')}` : ''}`)
+      }
+      if (!res.ok) throw new Error(`設定の保存に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
+      const body = (await res.json()) as { config: LqngConfig }
+      setOverview((prev) => (prev ? { ...prev, config: body.config } : prev))
+      return body.config
+    } finally {
+      setSavingConfig(false)
     }
-    if (res.status === 400) {
-      const body = (await res.json().catch(() => null)) as { problems?: unknown } | null
-      const problems = Array.isArray(body?.problems) ? body.problems.filter((p): p is string => typeof p === 'string') : []
-      throw new Error(`設定を保存できませんでした (400)${problems.length > 0 ? `: ${problems.join(' / ')}` : ''}`)
-    }
-    if (!res.ok) throw new Error(`設定の保存に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
-    const body = (await res.json()) as { config: LqngConfig }
-    setOverview((prev) => (prev ? { ...prev, config: body.config } : prev))
-    return body.config
   }, [])
 
   const authors = useMemo(
@@ -234,8 +245,9 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
   const holdsPaged = usePaged(holds, query, matchVideo)
 
   const effectiveEnabled = Boolean(overview?.envEnabled && overview?.config.enabled)
-  // 許可リストの操作は 1 件ずつ（応答の設定全体で置き換えるため、操作中は他の行も止める）
-  const allowlistDisabled = !writable || busyId !== null
+  // 許可リストの操作は 1 件ずつ（応答の設定全体で置き換えるため、操作中は他の行も止める）。
+  // 設定の保存中も止める（同じ版から同時に書くと、あとの方が 409 になるか片方の変更が消える）
+  const allowlistDisabled = !writable || busyId !== null || savingConfig
 
   return (
     <section className={styles.panel} aria-labelledby="auto-ng-title">
@@ -500,9 +512,9 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
 
       {overview && tab === 'events' && <EventList items={overview.events.items} />}
 
-      {overview && tab === 'allowlist' && <AllowlistEditor allowlist={allowlist} busyId={busyId} disabled={!writable} onChange={updateAllowlist} />}
+      {overview && tab === 'allowlist' && <AllowlistEditor allowlist={allowlist} busyId={busyId} disabled={!writable || savingConfig} onChange={updateAllowlist} />}
 
-      {overview && tab === 'settings' && <AutoNGSettingsForm key={formKey} config={overview.config} onSave={saveConfig} readOnly={!writable} />}
+      {overview && tab === 'settings' && <AutoNGSettingsForm key={formKey} config={overview.config} onSave={saveConfig} readOnly={!writable || busyId !== null} />}
     </section>
   )
 }

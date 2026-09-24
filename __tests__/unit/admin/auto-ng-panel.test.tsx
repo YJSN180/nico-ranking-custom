@@ -103,6 +103,70 @@ describe('AutoNGPanel', () => {
     expect(screen.getByText('ジャンル: べつのジャンル')).toBeInTheDocument()
   })
 
+  it('許可リストの操作は読み込んだ版（updatedAt）を付けて送り、次の操作は応答の新しい版で送る', async () => {
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    fireEvent.click(screen.getByText('許可リストへ'))
+    await waitFor(() => expect(screen.getAllByText('許可を解除')).toHaveLength(2))
+    fireEvent.click(screen.getAllByText('許可を解除')[0])
+    await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/allowlist')).toHaveLength(2))
+    const bodies = fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/allowlist').map((c) => JSON.parse(String((c[1] as RequestInit).body)) as { updatedAt: string })
+    expect(bodies.map((b) => b.updatedAt)).toEqual(['2026-01-01T00:00:00.000Z', '2026-01-03T00:00:00.000Z'])
+  })
+
+  it('許可リストの操作が 409 なら、最新の設定を読み直すよう案内する', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/allowlist') return jsonResponse({ error: 'Config version conflict' }, 409)
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    fireEvent.click(screen.getByText('許可リストへ'))
+    expect(await screen.findByText(/他の画面で設定が更新されています/)).toHaveTextContent('再読み込み')
+  })
+
+  it('設定の保存中は許可リストの操作を止め、許可リストの操作中は設定を保存させない', async () => {
+    let finishPut: (value: Response) => void = () => {}
+    let finishAllowlist: (value: Response) => void = () => {}
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/config') return new Promise<Response>((resolve) => (finishPut = resolve))
+      if (url === '/api/admin/lqng/allowlist') return new Promise<Response>((resolve) => (finishAllowlist = resolve))
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+
+    // 設定を保存している最中
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/lqng/config', expect.objectContaining({ method: 'PUT' })))
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    expect(screen.getByText('許可リストへ')).toBeDisabled()
+    expect(screen.getByText('許可を解除')).toBeDisabled()
+    fireEvent.click(screen.getByRole('tab', { name: /許可リスト/ }))
+    for (const button of screen.getAllByRole('button', { name: '削除' })) expect(button).toBeDisabled()
+    await act(async () => {
+      finishPut(jsonResponse({ success: true, config: { ...overview.config, holdHours: 12, updatedAt: '2026-01-03T00:00:00.000Z' } }))
+    })
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    await waitFor(() => expect(screen.getByText('許可リストへ')).toBeEnabled())
+
+    // 許可リストを操作している最中
+    fireEvent.click(screen.getByText('許可リストへ'))
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '24' } })
+    expect(screen.getByRole('button', { name: '設定を保存' })).toBeDisabled()
+    await act(async () => {
+      finishAllowlist(jsonResponse({ success: true, config: { ...overview.config, holdHours: 12, allowlist: { authorIds: ['9001', '1001'], videoIds: [] }, updatedAt: '2026-01-04T00:00:00.000Z' } }))
+    })
+    await waitFor(() => expect(screen.getByRole('button', { name: '設定を保存' })).toBeEnabled())
+  })
+
   it('許可リストへの追加が 400 なら ID の形式を案内する', async () => {
     fetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/admin/lqng/overview') return jsonResponse(overview)

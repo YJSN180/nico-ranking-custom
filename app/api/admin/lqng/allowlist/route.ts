@@ -1,6 +1,7 @@
 // 許可リストの追加・削除（設定全体を送らずに 1 件ずつ操作できるようにする）
 // 追加は判定テーブルの再登録を防ぎ、サーバー側の NG 合流から即座に外す（キャッシュ無効化）
 // 土台の設定はキャッシュを通さずに読み、読めなければ 503 で書き込まない（既定値に 1 件足して保存しない）
+// 画面が読み込んだ版（updatedAt）と現在の版が違えば 409（設定の保存と同時に走って片方を消さない）
 import { NextResponse, type NextRequest } from 'next/server'
 import { saveLqngConfig } from '@/lib/lqng/server'
 import { invalidateServerNGListCache } from '@/lib/ng-list-server'
@@ -13,6 +14,8 @@ interface AllowlistRequest {
   kind: 'author' | 'video'
   id: string
   note?: string
+  /** 画面が読み込んだ設定の版（updatedAt） */
+  baseVersion: string | null
 }
 
 // 種別ごとの ID 形式。投稿者はユーザー ID（数字）かチャンネル（channel/chNNN）、
@@ -30,7 +33,8 @@ function parseBody(body: unknown): AllowlistRequest | null {
   const id = typeof b.id === 'string' ? b.id.trim() : ''
   if (!action || !kind || !ID_PATTERNS[kind].test(id)) return null
   const note = typeof b.note === 'string' ? b.note.trim().slice(0, 200) : undefined
-  return { action, kind, id, ...(note ? { note } : {}) }
+  const baseVersion = typeof b.updatedAt === 'string' ? b.updatedAt : null
+  return { action, kind, id, ...(note ? { note } : {}), baseVersion }
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -43,9 +47,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const req = parseBody(body)
   if (!req) return withNoStore(NextResponse.json({ error: 'Invalid allowlist request' }, { status: 400 }))
+  if (!req.baseVersion) return withNoStore(NextResponse.json({ error: 'Missing config version (updatedAt)' }, { status: 400 }))
   const current = await readConfigForWrite()
   if (current.response) return current.response
   const config = current.config
+  if (config.updatedAt !== req.baseVersion) {
+    return withNoStore(NextResponse.json({ error: 'Config version conflict' }, { status: 409 }))
+  }
   try {
     const key = req.kind === 'author' ? 'authorIds' : 'videoIds'
     const ids = new Set(config.allowlist[key])

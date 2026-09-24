@@ -27,6 +27,11 @@ import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 
 const authed = (url: string, init?: RequestInit) => new NextRequest(`http://localhost${url}`, { ...init, headers: { authorization: 'Basic x', 'content-type': 'application/json', ...(init?.headers ?? {}) } })
 
+// 許可リストの操作は、画面と同じく読み込んだ設定の版（updatedAt）を付けて送る。未設定なら既定値の版
+const currentVersion = (): string => (store.get(LQNG_KV_KEYS.config) as { updatedAt?: string } | undefined)?.updatedAt ?? '1970-01-01T00:00:00.000Z'
+const allowlistOp = (body: Record<string, string>) =>
+  postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ updatedAt: currentVersion(), ...body }) }))
+
 describe('admin lqng API', () => {
   beforeEach(() => {
     store.clear()
@@ -96,17 +101,17 @@ describe('admin lqng API', () => {
 
   it('allowlist POST は追加・削除とメモを扱い、ID 形式を検証する', async () => {
     store.set(LQNG_KV_KEYS.config, { enabled: true, allowlist: { authorIds: ['1'], videoIds: [] } })
-    const add = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22', note: '確認済み' }) }))
+    const add = await allowlistOp({ action: 'add', kind: 'author', id: '22', note: '確認済み' })
     expect(add.status).toBe(200)
     expect((await add.json()).config.allowlist).toEqual({ authorIds: ['1', '22'], videoIds: [], notes: { '22': '確認済み' } })
 
-    const addVideo = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'video', id: 'sm9' }) }))
+    const addVideo = await allowlistOp({ action: 'add', kind: 'video', id: 'sm9' })
     expect((await addVideo.json()).config.allowlist.videoIds).toEqual(['sm9'])
 
-    const remove = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'remove', kind: 'author', id: '22' }) }))
+    const remove = await allowlistOp({ action: 'remove', kind: 'author', id: '22' })
     expect((await remove.json()).config.allowlist).toEqual({ authorIds: ['1'], videoIds: ['sm9'], notes: {} })
 
-    const bad = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: 'not-an-id' }) }))
+    const bad = await allowlistOp({ action: 'add', kind: 'author', id: 'not-an-id' })
     expect(bad.status).toBe(400)
   })
   it('overview は設定・判定テーブルを読めなければ既定値を返さず 503', async () => {
@@ -138,7 +143,7 @@ describe('admin lqng API', () => {
   })
 
   it('allowlist POST は種別ごとに ID 形式を検証し、ショート（ss）の動画 ID も受け付ける', async () => {
-    const post = (body: Record<string, string>) => postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify(body) }))
+    const post = allowlistOp
     for (const id of ['sm1', 'so2', 'nm3', 'ss4']) expect((await post({ action: 'add', kind: 'video', id })).status).toBe(200)
     for (const id of ['1', '123456789012', 'channel/ch12']) expect((await post({ action: 'add', kind: 'author', id })).status).toBe(200)
     expect((store.get(LQNG_KV_KEYS.config) as { allowlist: { videoIds: string[] } }).allowlist.videoIds).toEqual(['sm1', 'so2', 'nm3', 'ss4'])
@@ -149,24 +154,50 @@ describe('admin lqng API', () => {
     for (const id of ['123', 'channel/ch1', 'sx1', 'ss', 'sm1234567890123']) expect((await post({ action: 'add', kind: 'video', id })).status).toBe(400)
   })
 
+  it('allowlist POST は読み込んだ版（updatedAt）を必須にし、現在の版と違えば 409 で書き込まない', async () => {
+    const stored = { enabled: true, pollTags: ['t1'], allowlist: { authorIds: ['1'], videoIds: [] }, updatedAt: '2026-01-01T00:00:00.000Z' }
+    store.set(LQNG_KV_KEYS.config, stored)
+    const post = (body: Record<string, string>) => postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify(body) }))
+
+    expect((await post({ action: 'add', kind: 'author', id: '22' })).status).toBe(400)
+    // 設定の保存が先に済んで版が進んでいた（古い版のまま許可リストを書くと、その保存を消してしまう）
+    expect((await post({ action: 'add', kind: 'author', id: '22', updatedAt: '2025-12-31T00:00:00.000Z' })).status).toBe(409)
+    expect(kvSet).not.toHaveBeenCalled()
+    expect(store.get(LQNG_KV_KEYS.config)).toEqual(stored)
+
+    const ok = await post({ action: 'add', kind: 'author', id: '22', updatedAt: '2026-01-01T00:00:00.000Z' })
+    expect(ok.status).toBe(200)
+    expect((await ok.json()).config.allowlist.authorIds).toEqual(['1', '22'])
+  })
+
+  it('設定の保存と許可リストの操作が同じ版から同時に走っても、あとの方は 409 になり片方の変更を消さない', async () => {
+    const stored = { enabled: true, pollTags: ['t1'], holdHours: 6, allowlist: { authorIds: ['1'], videoIds: [] }, updatedAt: '2026-01-01T00:00:00.000Z' }
+    store.set(LQNG_KV_KEYS.config, stored)
+    const put = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ ...stored, holdHours: 12 }) }))
+    expect(put.status).toBe(200)
+    const late = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22', updatedAt: stored.updatedAt }) }))
+    expect(late.status).toBe(409)
+    expect(store.get(LQNG_KV_KEYS.config)).toMatchObject({ holdHours: 12, allowlist: { authorIds: ['1'] } })
+  })
+
   it('allowlist POST は設定を読めなければ 503 を返し、既定値を土台に書き込まない', async () => {
     store.set(LQNG_KV_KEYS.config, { enabled: true, titleNeedles: ['てすとまん'], allowlist: { authorIds: ['1'], videoIds: [] } })
     failing.add(LQNG_KV_KEYS.config)
-    const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
+    const res = await allowlistOp({ action: 'add', kind: 'author', id: '22' })
     expect(res.status).toBe(503)
     expect(kvSet).not.toHaveBeenCalled()
     expect(store.get(LQNG_KV_KEYS.config)).toMatchObject({ enabled: true, titleNeedles: ['てすとまん'] })
   })
 
   it('allowlist POST は未設定（404）なら既定値に 1 件足して保存する', async () => {
-    const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'video', id: 'sm1' }) }))
+    const res = await allowlistOp({ action: 'add', kind: 'video', id: 'sm1' })
     expect(res.status).toBe(200)
     expect((store.get(LQNG_KV_KEYS.config) as { allowlist: { videoIds: string[] } }).allowlist.videoIds).toEqual(['sm1'])
   })
 
   it('allowlist POST は KV への書き込み失敗を成功扱いにしない', async () => {
     failing.add(`set:${LQNG_KV_KEYS.config}`)
-    const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
+    const res = await allowlistOp({ action: 'add', kind: 'author', id: '22' })
     expect(res.status).toBe(500)
     expect(await res.json()).not.toHaveProperty('success')
   })
@@ -195,7 +226,7 @@ describe('admin lqng API', () => {
 
     it('許可リストの更新で版番号が進むので、古い版からの保存は 409 になる', async () => {
       store.set(LQNG_KV_KEYS.config, current)
-      const add = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
+      const add = await allowlistOp({ action: 'add', kind: 'author', id: '22' })
       const addedConfig = (await add.json()).config
       expect((await put({ ...current, holdHours: 12 })).status).toBe(409)
       // 応答の最新の版からなら保存でき、追加した許可リストも消えない
