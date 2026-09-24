@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 
 // Next.js font のモック
-vi.mock('next/font/google', () => ({
-  Inter: () => ({
+vi.mock('next/font/local', () => ({
+  default: () => ({
     className: 'mocked-inter-font'
   })
 }))

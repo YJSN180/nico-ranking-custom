@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { RankingItem } from '@/types/ranking'
+import { showToast } from '@/lib/toast'
 import './video-context-menu.css'
 
 interface VideoContextMenuProps {
@@ -98,7 +99,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
         setCopySuccess(true)
         setTimeout(closeMenu, 1500)
       } catch {
-        alert('コピーに失敗しました')
+        showToast('コピーに失敗しました', 'error')
       }
       document.body.removeChild(textArea)
     }
@@ -131,9 +132,6 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   const handleSaveThumbnail = async () => {
     try {
       // HDサムネイルエンドポイントから1280x720の高解像度サムネイルを取得
-      // eslint-disable-next-line no-console
-      console.log(`[HD Thumbnail] Fetching HD thumbnail for ${video.id}`)
-      
       const response = await fetch(`/api/hd-thumbnail/${video.id}`)
       
       if (!response.ok) {
@@ -146,9 +144,6 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
       if (!thumbnailUrl) {
         throw new Error('HDサムネイルが見つかりません')
       }
-      
-      // eslint-disable-next-line no-console
-      console.log(`[HD Thumbnail] Resolution: ${data.resolution}, URL: ${thumbnailUrl}`)
       
       // プロキシAPIが利用可能か試す
       try {
@@ -192,7 +187,7 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
       
     } catch (error) {
       console.error('サムネイル保存エラー:', error)
-      alert('サムネイルの取得に失敗しました')
+      showToast('サムネイルの取得に失敗しました', 'error')
     }
   }
   

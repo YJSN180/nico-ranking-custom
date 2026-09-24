@@ -1,10 +1,19 @@
 {
+  "regions": [
+    "hnd1"
+  ],
   "functions": {
     "app/api/admin/update/route.ts": {
       "maxDuration": 60
     },
-    "app/api/cron/fetch/route.ts": {
-      "maxDuration": 60
+    "app/api/search/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/search/realtime-tags/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/search/owners/route.ts": {
+      "maxDuration": 15
     }
   },
   "github": {

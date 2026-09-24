@@ -61,8 +61,10 @@ describe('GenreOrderBackup', () => {
 
   it('imports data when confirm button is clicked in dialog', async () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const reloadSpy = vi.fn()
+    // フェーズ5-4: confirm廃止 → トースト(app:toast) + 自動リロード
+    const toastSpy = vi.fn()
+    window.addEventListener('app:toast', toastSpy)
     
     // window.location.reloadのモック
     Object.defineProperty(window, 'location', {
@@ -113,14 +115,15 @@ describe('GenreOrderBackup', () => {
     })
     
     expect(setItemSpy).toHaveBeenCalledWith('nicoRankingGenreOrder', JSON.stringify(validData.genreOrder))
-    
-    // Wait for reload confirmation dialog
+
+    // トースト通知が発火し、自動リロードが実行される（confirmは廃止済み）
     await waitFor(() => {
-      expect(confirmSpy).toHaveBeenCalledWith('インポートが完了しました。ページをリロードして変更を反映しますか？')
-    }, { timeout: 2000 })
-    
-    // Check reload was called
-    expect(reloadSpy).toHaveBeenCalled()
+      expect(toastSpy).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(reloadSpy).toHaveBeenCalled()
+    }, { timeout: 3000 })
+    window.removeEventListener('app:toast', toastSpy)
   })
 
   it('cancels import when cancel button is clicked in dialog', async () => {
@@ -183,7 +186,8 @@ describe('GenreOrderBackup', () => {
     })
   })
 
-  it('does not reload when user cancels reload confirmation', async () => {
+  // フェーズ5-4: confirmダイアログは廃止。confirmを一切出さずに自動リロードすることを検証する
+  it('reloads automatically without a confirm dialog after import', async () => {
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const reloadSpy = vi.fn()
@@ -237,13 +241,11 @@ describe('GenreOrderBackup', () => {
     })
     
     expect(setItemSpy).toHaveBeenCalledWith('nicoRankingGenreOrder', JSON.stringify(validData.genreOrder))
-    
-    // Wait for reload confirmation dialog
+
+    // confirmは表示されず、自動でリロードされる
     await waitFor(() => {
-      expect(confirmSpy).toHaveBeenCalledWith('インポートが完了しました。ページをリロードして変更を反映しますか？')
-    }, { timeout: 2000 })
-    
-    // Check reload was NOT called
-    expect(reloadSpy).not.toHaveBeenCalled()
+      expect(reloadSpy).toHaveBeenCalled()
+    }, { timeout: 3000 })
+    expect(confirmSpy).not.toHaveBeenCalled()
   })
 })

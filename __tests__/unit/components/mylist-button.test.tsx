@@ -137,8 +137,8 @@ describe('MylistButton', () => {
       const button = await screen.findByRole('button', { name: 'マイリストに追加' })
       await user.click(button)
 
-      // モーダルが表示される
-      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      // モーダルは遅延読込（next/dynamic）なので出現を待つ
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
     })
 
     it('処理中はボタンを無効化する', async () => {

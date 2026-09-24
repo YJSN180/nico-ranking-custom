@@ -21,6 +21,8 @@ export interface RankingItem {
   authorId?: string
   authorName?: string
   authorIcon?: string
+  /** 投稿者情報の照会で存在しなかった（退会済み）。検索結果の補完で付く */
+  authorDeleted?: boolean
   registeredAt?: string  // ISO 8601形式の投稿日時
   duration?: number  // 動画の再生時間（秒単位）
   // 順位管理用（NGフィルタリング後の元順位保持）

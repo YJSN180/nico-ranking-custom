@@ -3,7 +3,44 @@
 // 最新のデータはgetPopularTags関数で取得すること
 
 import { scrapeRankingPage } from './scraper'
+import { kv } from './simple-kv'
+import { POPULAR_TAGS_LATEST_KEY, type PopularTagsLatest } from './pipeline/popular-tags-latest'
 import type { RankingGenre } from '../types/ranking-config'
+
+export { POPULAR_TAGS_LATEST_KEY } from './pipeline/popular-tags-latest'
+export type { PopularTagsLatest } from './pipeline/popular-tags-latest'
+
+// パイプライン（scripts/sync-ranking-auxiliary.ts）が公開成功後に書き出す人気タグだけの小キー。
+// ランキング本体（数百KB〜）を丸読みしていた /api/popular-tags の遅さ（1〜3s）を解消する。
+// 未生成・不正・読取失敗のときは従来経路（ゲートウェイ → スクレイパー）へ落ちる。
+const POPULAR_TAGS_CACHE_TTL_MS = 5 * 60 * 1000
+
+let popularTagsLatestCache: { value: PopularTagsLatest | null; fetchedAt: number } | null = null
+
+export function invalidatePopularTagsLatestCache(): void {
+  popularTagsLatestCache = null
+}
+
+function isPopularTagsLatest(value: unknown): value is PopularTagsLatest {
+  if (typeof value !== 'object' || value === null) return false
+  const { genres, all } = value as Record<string, unknown>
+  return typeof genres === 'object' && genres !== null && typeof all === 'object' && all !== null
+}
+
+async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
+  const cacheEnabled = process.env.NODE_ENV !== 'test'
+  if (cacheEnabled && popularTagsLatestCache && Date.now() - popularTagsLatestCache.fetchedAt < POPULAR_TAGS_CACHE_TTL_MS) {
+    return popularTagsLatestCache.value
+  }
+  try {
+    const value = await kv.get<unknown>(POPULAR_TAGS_LATEST_KEY)
+    const valid = isPopularTagsLatest(value) ? value : null
+    if (cacheEnabled) popularTagsLatestCache = { value: valid, fetchedAt: Date.now() }
+    return valid
+  } catch {
+    return null
+  }
+}
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
   // Reuse the same-origin proxy on Vercel, as the SSR ranking loader does.
@@ -31,6 +68,13 @@ async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
 
 // ジャンルの人気タグを取得（キャッシュ付き）
 export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
+  // 0. 小キー（1読み・5分メモ）。未生成/不正なら従来経路へフォールバック
+  const latest = await getPopularTagsLatest()
+  if (latest) {
+    const tags = genre === 'all' ? latest.all[period] : latest.genres[genre]?.[period]
+    if (Array.isArray(tags) && tags.length > 0) return tags
+  }
+
   // 「すべて」ジャンルの場合は、他のジャンルから人気タグを集計
   if (genre === 'all') {
     try {

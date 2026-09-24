@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import type { GenreItem } from '@/types/genre-order'
 import styles from './genre-order-backup.module.css'
+import { showToast } from '@/lib/toast'
 
 interface BackupData {
   version: number
@@ -41,7 +42,7 @@ export function GenreOrderBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Failed to export genre order:', error)
-      alert('ジャンル並び替えデータのエクスポートに失敗しました')
+      showToast('ジャンル並び替えデータのエクスポートに失敗しました', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -131,11 +132,11 @@ export function GenreOrderBackup() {
       setPendingImportData(null)
       
       // リロード確認
+      // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+      showToast('インポートしました。反映のため再読み込みします…', 'success')
       setTimeout(() => {
-        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-          window.location.reload()
-        }
-      }, 1500)
+        window.location.reload()
+      }, 1800)
     } catch (error) {
       console.error('Failed to apply import:', error)
       setImportMessage({ 

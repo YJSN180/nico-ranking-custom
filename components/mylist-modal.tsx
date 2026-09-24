@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
 import Link from 'next/link'
@@ -52,7 +53,10 @@ export function MylistModal({
     e.stopPropagation()
   }
 
-  return (
+  // Portalでbody直下に描画する。呼び出し元が backdrop-filter / transform を持つ
+  // 要素（例: 3点メニューのドロップダウン）の中でも、position: fixed が
+  // その要素基準に化けず、常にビューポート中央に表示されるようにするため
+  return createPortal(
     <>
       <div 
         className={styles.overlay} 
@@ -232,6 +236,7 @@ export function MylistModal({
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

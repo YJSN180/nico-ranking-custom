@@ -166,8 +166,9 @@
   .genreButtonSelected {
     padding: 10px 20px;
     font-size: 15px;
-    transform: scale(1.05);
-    /* 選択されたボタンも中央にスナップ */
+    /* scale での拡大は禁止: overflow-x: auto のスクロールコンテナ内では
+       レイアウト外の拡大分が上下左右で切り取られ、カプセルの形が欠ける。
+       強調は padding / font-size の拡大（レイアウトに含まれる）で行う */
     scroll-snap-align: center;
   }
 }
@@ -193,8 +194,7 @@
   .tagButtonSelected {
     padding: 8px 16px;
     font-size: 14px;
-    transform: scale(1.05);
-    /* 選択されたタグボタンも中央にスナップ */
+    /* scale 禁止（genreButtonSelected と同じ理由: スクロールコンテナで欠ける） */
     scroll-snap-align: center;
     max-width: 180px; /* 選択時は少し広めに */
   }

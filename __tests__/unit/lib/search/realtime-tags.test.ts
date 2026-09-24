@@ -1,0 +1,85 @@
+import { describe, it, expect, vi } from 'vitest'
+import {
+  sanitizeVideoIds,
+  parseTagDetails,
+  parseV3GuestAuthorId,
+  fetchTagDetailsForVideos,
+  REALTIME_TAGS_MAX_VIDEOS,
+} from '@/lib/search/realtime-tags'
+
+describe('sanitizeVideoIds', () => {
+  it('形式不正・重複を除き上限で打ち切る', () => {
+    expect(sanitizeVideoIds('sm1, sm2,sm1,bad,so3,nm4,<script>')).toEqual(['sm1', 'sm2', 'so3', 'nm4'])
+    // ショート（ss）はリアルタイム区間（本家ショートページ由来）に現れるので通す
+    expect(sanitizeVideoIds('ss5,xx1')).toEqual(['ss5'])
+    const many = Array.from({ length: 50 }, (_, i) => `sm${i + 1}`).join(',')
+    expect(sanitizeVideoIds(many)).toHaveLength(REALTIME_TAGS_MAX_VIDEOS)
+    expect(sanitizeVideoIds(null)).toEqual([])
+  })
+})
+
+describe('parseTagDetails', () => {
+  it('v3_guest の data.tag.items から name/isLocked を取り出す', () => {
+    const payload = { meta: { status: 200 }, data: { tag: { items: [{ name: 'MMD', isLocked: true }, { name: '初音ミク', isLocked: false }, { name: '' }] } } }
+    expect(parseTagDetails(payload)).toEqual([{ name: 'MMD', isLocked: true }, { name: '初音ミク', isLocked: false }])
+  })
+  it('想定外の形は空配列', () => {
+    expect(parseTagDetails(null)).toEqual([])
+    expect(parseTagDetails({ data: {} })).toEqual([])
+  })
+})
+
+describe('fetchTagDetailsForVideos', () => {
+  it('並列数を絞って取得し、失敗分は failed に入れて部分成功で返す', async () => {
+    const calls: string[] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls.push(url)
+      const id = url.match(/v3_guest\/(sm\d+)/)![1]
+      if (id === 'sm2') return { ok: false, status: 500 } as unknown as Response
+      if (id === 'sm3') throw new Error('network')
+      return { ok: true, status: 200, json: async () => ({ data: { tag: { items: [{ name: `tag-${id}`, isLocked: id === 'sm1' }] } } }) } as unknown as Response
+    })
+    const result = await fetchTagDetailsForVideos(['sm1', 'sm2', 'sm3', 'sm4'], { fetchImpl: fetchImpl as unknown as typeof fetch, concurrency: 2 })
+    expect(result.tagDetails).toEqual({ sm1: [{ name: 'tag-sm1', isLocked: true }], sm4: [{ name: 'tag-sm4', isLocked: false }] })
+    expect(result.failed.sort()).toEqual(['sm2', 'sm3'])
+    expect(calls).toHaveLength(4)
+    expect(calls[0]).toContain('_frontendId=6')
+  })
+})
+
+describe('fetchTagDetailsForVideos: 全体の期限', () => {
+  it('期限が切れたら、まだ問い合わせていない動画は問い合わせずに failed にする', async () => {
+    const deadline = new AbortController()
+    const calls: string[] = []
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      calls.push(url)
+      if (calls.length === 2) deadline.abort()
+      return { ok: true, status: 200, json: async () => ({ data: { tag: { items: [{ name: 't', isLocked: false }] } } }) } as unknown as Response
+    })
+    const result = await fetchTagDetailsForVideos(['sm1', 'sm2', 'sm3', 'sm4'], { fetchImpl: fetchImpl as unknown as typeof fetch, concurrency: 2, signal: deadline.signal })
+    expect(calls).toHaveLength(2)
+    expect(Object.keys(result.tagDetails).sort()).toEqual(['sm1', 'sm2'])
+    expect(result.failed.sort()).toEqual(['sm3', 'sm4'])
+  })
+})
+
+describe('parseV3GuestAuthorId', () => {
+  it('ユーザー動画は owner.id、チャンネル動画は channel/chNNN を返す', () => {
+    expect(parseV3GuestAuthorId({ data: { owner: { id: 1001 }, channel: null } })).toBe('1001')
+    expect(parseV3GuestAuthorId({ data: { owner: null, channel: { id: 'ch3003' } } })).toBe('channel/ch3003')
+    expect(parseV3GuestAuthorId({ data: { owner: null, channel: { id: '3004' } } })).toBe('channel/ch3004')
+    expect(parseV3GuestAuthorId({ data: {} })).toBeNull()
+    expect(parseV3GuestAuthorId(null)).toBeNull()
+  })
+
+  it('fetchTagDetailsForVideos は動画ごとの投稿者 ID も返す（許可リストの判定用）', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      const id = url.match(/v3_guest\/(sm\d+)/)![1]
+      const data = id === 'sm2' ? { owner: null, channel: { id: 'ch3003' } } : { owner: { id: 1001 }, channel: null }
+      return { ok: true, status: 200, json: async () => ({ data: { ...data, tag: { items: [{ name: 't', isLocked: true }] } } }) } as unknown as Response
+    })
+    const result = await fetchTagDetailsForVideos(['sm1', 'sm2'], { fetchImpl: fetchImpl as unknown as typeof fetch })
+    expect(result.authorIds).toEqual({ sm1: '1001', sm2: 'channel/ch3003' })
+  })
+})

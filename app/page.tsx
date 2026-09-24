@@ -24,6 +24,25 @@ export const revalidate = 0
 // Prefetch hints
 export const preferredRegion = 'auto'
 
+// SSRでHTMLに埋め込むランキング件数（=1ページ分。client-page の ITEMS_PER_PAGE と揃える）
+const EMBED_ITEMS_COUNT = 100
+
+// ClientPage の key。条件（ジャンル・期間・タグ）かランキングの中身が変わったら作り直す。
+// ホーム・ロゴでの遷移では同じ画面のまま props だけが替わる。同じインスタンスのままだと
+// 全件の補完（マウント時のみ）が走らず、一覧が 1 ページ目の埋め込みに縮んでページ送りが消える。
+// 中身は全件の ID 列の簡易ハッシュ（FNV-1a）で見る（同じ条件で開き直したときの更新も拾う）
+function buildClientPageKey(genre: string, period: string, tag: string | undefined, items: RankingItem[]): string {
+  let hash = 0x811c9dc5
+  for (const item of items) {
+    const id = `${item.id},`
+    for (let i = 0; i < id.length; i++) {
+      hash ^= id.charCodeAt(i)
+      hash = Math.imul(hash, 0x01000193)
+    }
+  }
+  return [genre, period, tag ?? '', items.length, (hash >>> 0).toString(36)].join('|')
+}
+
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
 // 動的レンダリングに切り替えてキャッシュヘッダーで対応
@@ -268,11 +287,14 @@ export default async function Home({ searchParams }: PageProps) {
       return <EmptyRankingPage tag={tag} />
     }
 
-    // クライアントサイドページネーション: 全件データをクライアントに送信
-    // NGリスト即座反映とパフォーマンス向上のため
+    // フェーズ2.5-1: HTMLに埋め込むのは1ページ目のみ。
+    // 全件（約1000件・生917KB）の埋め込みは初回ダウンロード/パース/
+    // ハイドレーションをモバイルで重くするため、残りはクライアントが
+    // マウント後に /api/ranking/full で補完する（initialTotalCount が合図）
+    const embeddedItems = rankingData.slice(0, EMBED_ITEMS_COUNT)
 
     return (
-      <main style={{ 
+      <main id="main-content" style={{ 
         padding: '0',
         // CLS対策: フッターマージンを考慮したminHeight
         minHeight: 'calc(100vh - 80px)',
@@ -291,8 +313,10 @@ export default async function Home({ searchParams }: PageProps) {
             minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
           }}>
           <SuspenseWrapper>
-            <ClientPage 
-              initialData={{ items: rankingData, popularTags }} 
+            <ClientPage
+              key={buildClientPageKey(genre, period, tag, rankingData)}
+              initialData={{ items: embeddedItems, popularTags }}
+              initialTotalCount={rankingData.length}
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}

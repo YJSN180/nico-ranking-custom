@@ -1,6 +1,8 @@
 import dynamic from 'next/dynamic'
 import { HeaderWithSettings } from '@/components/header-with-settings'
 import { FooterLazy } from '@/components/footer-lazy'
+import { ErrorBoundary } from '@/components/error-boundary'
+import { ScrollToTopButton } from '@/components/scroll-to-top-button'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -20,7 +22,7 @@ const MylistsClient = dynamic(
 
 export default function MylistsPage() {
   return (
-    <main style={{ 
+    <main id="main-content" style={{ 
       padding: '0',
       minHeight: 'calc(100vh - 80px)',
       background: 'var(--background-color)'
@@ -34,8 +36,11 @@ export default function MylistsPage() {
           padding: '20px',
           minHeight: 'calc(100vh - 100px)'
         }}>
-        <MylistsClient />
+        <ErrorBoundary>
+          <MylistsClient />
+        </ErrorBoundary>
       </div>
+      <ScrollToTopButton />
       <FooterLazy />
     </main>
   )

@@ -1,5 +1,6 @@
 'use client'
 
+import { showToast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import type { TagDetail } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
@@ -59,7 +60,7 @@ export function TagContextMenu({ tagDetail, children, ngList, saveNGListDirectly
         setCopySuccess(true)
         setTimeout(closeMenu, 1500)
       } catch {
-        alert('コピーに失敗しました')
+        showToast('コピーに失敗しました', 'error')
       }
       document.body.removeChild(textArea)
     }

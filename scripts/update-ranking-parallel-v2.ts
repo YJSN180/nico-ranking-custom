@@ -9,12 +9,23 @@ import {
   resetTagFetchRunStats,
 } from '../lib/tag-fetcher-simple'
 import {
+  closeTagCacheR2Client,
   resetTagCacheDelta,
   writeTagCacheDeltaArtifact,
 } from '../lib/tag-cache-store'
-import { createCoreNgFilter } from '../lib/pipeline/ng-filter'
+import {
+  reportPipelineProgress,
+  startGroupStallWatchdog,
+} from '../lib/pipeline/stall-watchdog'
+import { createPipelineNgFilter } from '../lib/pipeline/ng-filter'
 import { buildGenreRanking, type GenreRankingResult } from '../lib/pipeline/run-update'
 import { validateNGLists } from '../lib/pipeline/ng-contract'
+import {
+  createKvJsonReader,
+  loadPipelineAutoNg,
+  type AutoNgExcludedByPeriod,
+  type PipelineAutoNg,
+} from '../lib/pipeline/auto-ng'
 import {
   createTagEnricher,
   getTagEnrichmentSettingsFromEnv,
@@ -231,11 +242,21 @@ async function getNGList(): Promise<NGList> {
 const tagEnrichmentSettings = getTagEnrichmentSettingsFromEnv()
 const tagEnricher = createTagEnricher(tagEnrichmentSettings)
 
+// 手動・派生 NG と一緒に、公開前に当てる自動NG（lib/pipeline/auto-ng.ts）を読む
+function loadNGLists(): Promise<[NGList, PipelineAutoNg]> {
+  return Promise.all([getNGList(), loadPipelineAutoNg(createKvJsonReader())])
+}
+
+function describeAutoNg(autoNg: PipelineAutoNg): string {
+  return `auto NG ${autoNg.status}: ${autoNg.sets.authorIds.length} author IDs, ${autoNg.sets.videoIds.length} video IDs`
+}
+
 // Process single genre (both periods at once to share popular tags)
 async function processGenre(
   genre: RankingGenre,
   ngList: NGList,
-): Promise<GenreRankingResult> {
+  autoNg: PipelineAutoNg,
+): Promise<GenreRankingResult & { autoNgExcluded: AutoNgExcludedByPeriod }> {
   console.log(`[${new Date().toISOString()}] Starting ${genre}...`)
 
   const enableTagFetching = tagEnrichmentSettings.enabled
@@ -259,7 +280,7 @@ async function processGenre(
     )
   }
 
-  const ngFilter = createCoreNgFilter(ngList)
+  const ngFilter = createPipelineNgFilter(ngList, autoNg.sets)
 
   const result = await buildGenreRanking(
     {
@@ -272,10 +293,13 @@ async function processGenre(
       dedupe: false,
       stopWhenPageItemsLessThan: 100,
       onError: 'throw',
-      fetchPage: (genre, period, tag, page) =>
-        fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP),
+      fetchPage: async (genre, period, tag, page) => {
+        const result = await fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP)
+        reportPipelineProgress(`ranking ${genre}/${period}/${tag === undefined ? 'main' : 'tag'} page ${page}`)
+        return result
+      },
       normalizeItems: (items) => items,
-      filterItems: async (items) => ngFilter(items),
+      filterItems: ngFilter.filterItems,
       onDerivedIds: (newDerivedIds, context) => {
         if (newDerivedIds.length > 0) {
           ngList.derivedVideoIds.push(...newDerivedIds)
@@ -314,9 +338,10 @@ async function processGenre(
   )
 
   const popularTags = result.data['24h'].popularTags
+  const excluded = ngFilter.autoNgExcluded
 
   console.log(
-    `[${new Date().toISOString()}] Completed ${genre} (24h: ${result.data['24h'].items.length} items, hour: ${result.data.hour.items.length} items, ${popularTags.length} tags)`,
+    `[${new Date().toISOString()}] Completed ${genre} (24h: ${result.data['24h'].items.length} items, hour: ${result.data.hour.items.length} items, ${popularTags.length} tags; auto NG excluded 24h: ${excluded['24h'].ranking} + ${excluded['24h'].tags} in tag rankings, hour: ${excluded.hour.ranking} + ${excluded.hour.tags} in tag rankings)`,
   )
 
   // DEBUG: Tag fetching results
@@ -338,7 +363,7 @@ async function processGenre(
     console.warn(`[Ranking availability] ${genre}: ${JSON.stringify(result.unavailableTags)}`)
   }
   validateGenre(genre, result.data)
-  return result
+  return { ...result, autoNgExcluded: excluded }
 }
 
 // Main function for parallel execution
@@ -353,10 +378,10 @@ async function main() {
     )
 
     // Get NG list
-    const ngList = await getNGList()
+    const [ngList, autoNg] = await loadNGLists()
     const originalDerivedCount = ngList.derivedVideoIds.length
     console.log(
-      `NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived`,
+      `NG list loaded: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived; ${describeAutoNg(autoNg)}`,
     )
 
     // Build final data structure
@@ -393,7 +418,7 @@ async function main() {
       )
 
       // Process batch concurrently
-      const batchPromises = batch.map((genre) => processGenre(genre, ngList))
+      const batchPromises = batch.map((genre) => processGenre(genre, ngList, autoNg))
       const batchResults = await Promise.all(batchPromises)
 
       // Add results to ranking data
@@ -528,21 +553,24 @@ if (process.argv[2] === '--group') {
       console.error(`Group ${groupId} exceeded its 65 minute deadline`)
       process.exit(1)
     }, 65 * 60_000)
+    // Fails well before the deadline when nothing progresses, printing what the process waits on.
+    const stallWatchdog = startGroupStallWatchdog(groupId)
     process.once('beforeExit', () => {
       if (!collectionComplete) { console.error(`Group ${groupId} exited before writing its artifact`); process.exitCode = 1 }
     })
     resetTagFetchRunStats()
     resetTagCacheDelta()
-    const ngList = await getNGList()
+    const [ngList, autoNg] = await loadNGLists()
     const originalDerivedCount = ngList.derivedVideoIds.length
     console.log(
-      `Group ${groupId} NG list: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived`,
+      `Group ${groupId} NG list: ${ngList.videoIds.length} video IDs, ${ngList.videoTitles.exact.length + ngList.videoTitles.partial.length} titles, ${ngList.authorIds.length} author IDs, ${ngList.authorNames.exact.length + ngList.authorNames.partial.length} author names, ${ngList.derivedVideoIds.length} derived; ${describeAutoNg(autoNg)}`,
     )
 
     // Process each genre sequentially within group
     const results = []
     for (const genre of groupGenres) {
-      const result = await processGenre(genre, ngList)
+      reportPipelineProgress(`genre ${genre} start`)
+      const result = await processGenre(genre, ngList, autoNg)
       results.push(result)
 
       // Add delay between genres
@@ -558,7 +586,8 @@ if (process.argv[2] === '--group') {
       path.join(tmpDir, `ranking-group-${groupId}.json.partial`),
       JSON.stringify({ version: 1, runId: process.env.GITHUB_RUN_ID,
         attempt: process.env.GITHUB_RUN_ATTEMPT || '1', slot: process.env.RANKING_SLOT || '',
-        groupId, collectedAt: new Date(startTime).toISOString(), completedAt: new Date().toISOString(), results }),
+        groupId, collectedAt: new Date(startTime).toISOString(), completedAt: new Date().toISOString(),
+        autoNg: autoNg.status, results }),
     )
     await fs.rename(path.join(tmpDir, `ranking-group-${groupId}.json.partial`), path.join(tmpDir, `ranking-group-${groupId}.json`))
     collectionComplete = true
@@ -620,6 +649,8 @@ if (process.argv[2] === '--group') {
       )
       process.exit(1)
     }
+    closeTagCacheR2Client()
+    stallWatchdog.stop()
     clearTimeout(deadline)
   })().catch((error) => {
     console.error(`Group ${groupId} failed catastrophically:`, error)

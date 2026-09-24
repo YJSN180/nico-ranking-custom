@@ -88,20 +88,24 @@ export function RankingSelector({ config, onConfigChange, customRankings }: Rank
             設定画面からジャンルの表示を変更してください。
           </div>
         ) : (
-          <div 
-            ref={genreScrollRef}
-            className={`${styles.buttonContainer} ${styles.genreScrollContainer}`}
-          >
-            {visibleGenres.map((genre) => (
-              <button
-                key={genre}
-                // refを削除（CSS Scroll Snapに任せる）
-                onClick={() => handleGenreChange(genre)}
-                className={`${styles.button} ${styles.genreButton} ${config.genre === genre ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
-              >
-                {GENRE_LABELS[genre]}
-              </button>
-            ))}
+          // scrollContainer で包み、モバイルで「横にスクロールできる」ことを示す
+          // 左右グラデーション（定義済みCSS）を有効化する（フェーズ4-5）
+          <div className={styles.scrollContainer}>
+            <div
+              ref={genreScrollRef}
+              className={`${styles.buttonContainer} ${styles.genreScrollContainer}`}
+            >
+              {visibleGenres.map((genre) => (
+                <button
+                  key={genre}
+                  // refを削除（CSS Scroll Snapに任せる）
+                  onClick={() => handleGenreChange(genre)}
+                  className={`${styles.button} ${styles.genreButton} ${config.genre === genre ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
+                >
+                  {GENRE_LABELS[genre]}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

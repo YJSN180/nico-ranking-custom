@@ -1,11 +1,18 @@
 'use client'
 
+import { showToast } from '@/lib/toast'
 import { useState, useRef, useCallback } from 'react'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { CustomRanking, CustomRankingFormState } from '@/types/custom-ranking'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import { useCustomRankingsOrder } from '@/hooks/use-custom-rankings-order'
-import { CustomRankingModal } from './custom-ranking-modal'
+import dynamic from 'next/dynamic'
+
+// カスタムランキング作成モーダルは開くまで不要なので初期バンドルから外す
+const CustomRankingModal = dynamic(
+  () => import('./custom-ranking-modal').then((mod) => ({ default: mod.CustomRankingModal })),
+  { ssr: false, loading: () => null }
+)
 import { DeleteConfirmationModal } from './delete-confirmation-modal'
 import { CustomRankingOrder } from './custom-ranking-order'
 import styles from './selectors.module.css'
@@ -100,9 +107,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
 
   const handleCreateCustomRanking = async (data: CustomRankingFormState) => {
     try {
-      // ローディング表示用（オプション）
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Creating custom ranking...')
       
       const newRanking = await createRanking({
         title: data.title,
@@ -129,7 +133,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     } catch (error) {
       console.error('[ERROR] Failed to create custom ranking:', error)
       // エラー時は通常のフローで処理
-      alert('カスタムランキングの作成に失敗しました。もう一度お試しください。')
+      showToast('カスタムランキングの作成に失敗しました。もう一度お試しください。', 'error')
     }
   }
 
@@ -141,8 +145,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
   const handleUpdateRanking = async (data: CustomRankingFormState) => {
     if (editingRanking) {
       try {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Updating custom ranking...')
         
         await updateRanking(editingRanking.id, {
           title: data.title,
@@ -168,7 +170,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         onConfigChange(newConfig)
       } catch (error) {
         console.error('[ERROR] Failed to update custom ranking:', error)
-        alert('カスタムランキングの更新に失敗しました。もう一度お試しください。')
+        showToast('カスタムランキングの更新に失敗しました。もう一度お試しください。', 'error')
       }
     } else {
       handleCreateCustomRanking(data)
@@ -439,16 +441,18 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           </div>
         )}
         
-        {/* カスタムランキング作成・編集モーダル */}
-        <CustomRankingModal
-          isOpen={showCustomModal}
-          onClose={handleModalClose}
-          onSave={handleUpdateRanking}
-          existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
-          editingRanking={editingRanking}
-          onPrefetchData={onPrefetchData}
-          currentPeriod={currentPeriod}
-        />
+        {/* カスタムランキング作成・編集モーダル（開いた時だけマウント） */}
+        {showCustomModal && (
+          <CustomRankingModal
+            isOpen={showCustomModal}
+            onClose={handleModalClose}
+            onSave={handleUpdateRanking}
+            existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
+            editingRanking={editingRanking}
+            onPrefetchData={onPrefetchData}
+            currentPeriod={currentPeriod}
+          />
+        )}
         
         {/* 削除確認モーダル */}
         <DeleteConfirmationModal

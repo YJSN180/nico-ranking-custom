@@ -145,3 +145,20 @@
   /* フォントが読み込まれるまでの間、レイアウトシフトを防ぐ */
   font-display: fallback;
 }
+/* モバイル用stickyヘッダー（UX改善計画 フェーズ3-2）
+   下スクロールで隠れ、上スクロールで再表示。PC版は現状維持（非sticky）。
+   注意: 表示状態では transform を宣言しないこと。transform は
+   ヘッダー内の position: fixed 要素（ドロワー等）の containing block に
+   なってしまうため、隠すときだけ付与する */
+@media (max-width: 640px) {
+  .stickyMobile {
+    position: sticky;
+    top: 0;
+    z-index: 20; /* コンテンツより上、ドロワー(40)・オーバーレイ(30)より下 */
+    transition: transform var(--motion-base, 220ms) var(--ease-out, ease-out);
+  }
+
+  .stickyMobile[data-hidden='true'] {
+    transform: translateY(-100%);
+  }
+}

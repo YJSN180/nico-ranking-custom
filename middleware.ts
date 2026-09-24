@@ -7,10 +7,59 @@ import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
 
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
+// 管理 API への書き込みの CSRF 対策
+// Basic 認証の資格情報はブラウザがクロスサイトの送信にも付けるため、書き込みは同一オリジンからだけ受け付ける
+const ADMIN_WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+// 公開ドメイン（Cloudflare Worker 経由では Host が Vercel のドメインになるため、Origin と Host が一致しない）
+const PUBLIC_SITE_HOST = 'nico-rank.com'
+// JSON 本文だけを受け付ける管理 API。/api/admin/update と /api/admin/mfa は本文なしの POST を送る
+// 既存の画面があるため対象外（同一オリジンの判定は全管理 API に掛ける）
+const JSON_ONLY_ADMIN_PREFIXES = ['/api/admin/lqng', '/api/admin/ng-list']
+
+function isCrossOriginWrite(request: NextRequest): boolean {
+  // ブラウザが付ける Sec-Fetch-Site を優先する（ページとリクエスト先の関係なので、プロキシで Host が変わっても正しい）
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (fetchSite) return fetchSite !== 'same-origin'
+  // 古いブラウザは Origin で判定する。どちらも無いのはブラウザ以外の呼び出し（CSRF の経路にならない）
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  let originHost: string
+  try {
+    originHost = new URL(origin).host
+  } catch {
+    return true // 'null'（opaque origin）など
+  }
+  const allowedHosts = new Set([request.nextUrl.host.toLowerCase(), PUBLIC_SITE_HOST])
+  const host = request.headers.get('host')
+  if (host) allowedHosts.add(host.toLowerCase())
+  return !allowedHosts.has(originHost)
+}
+
+function isJsonContentType(request: NextRequest): boolean {
+  const contentType = request.headers.get('content-type') ?? ''
+  return contentType.split(';')[0].trim().toLowerCase() === 'application/json'
+}
+
+/** 管理 API への書き込みを検査し、拒否するときだけ応答を返す（Basic 認証より先に判定する） */
+function guardAdminWrite(request: NextRequest, pathname: string): NextResponse | null {
+  if (isCrossOriginWrite(request)) {
+    return NextResponse.json({ error: 'Cross-origin request blocked' }, { status: 403 })
+  }
+  if (JSON_ONLY_ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) && !isJsonContentType(request)) {
+    return NextResponse.json({ error: 'Content-Type must be application/json' }, { status: 415 })
+  }
+  return null
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
+
+  // デバッグ用ルートは本番では公開しない
+  if (pathname.startsWith('/test-') && process.env.NODE_ENV === 'production') {
+    return new NextResponse(null, { status: 404 })
+  }
   
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
@@ -19,6 +68,11 @@ const noStorePaths: string[] = []
   // 一般的な公開APIのみ認証をスキップ
   // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
+    // 検索系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、CDN キャッシュで
+    // 上流（ニコニコ）への増幅を抑える。ランキング系の no-store 方針はそのまま
+    if (pathname.startsWith('/api/search')) {
+      return NextResponse.next()
+    }
     const response = NextResponse.next()
     // 全APIルートでno-storeを強制（Cloudflare Worker側でキャッシュ管理するため）
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
@@ -26,7 +80,14 @@ const noStorePaths: string[] = []
     response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
     return response
   }
-  
+
+  // 管理 API への書き込みは、同一オリジン以外（403）と JSON 以外の本文（415）を認証より先に拒否する。
+  // 開発環境でも掛ける（読み取りの GET は対象外）
+  if (pathname.startsWith('/api/admin') && ADMIN_WRITE_METHODS.has(request.method.toUpperCase())) {
+    const rejected = guardAdminWrite(request, pathname)
+    if (rejected) return rejected
+  }
+
   // 開発環境は認証チェックをスキップ
   if (process.env.VERCEL_ENV === 'development') {
     return NextResponse.next()
@@ -187,8 +248,8 @@ const noStorePaths: string[] = []
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
-      '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+      '</fonts/nicomoji-plus-v2-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
+      '</fonts/comic-sans-ms-bold-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
@@ -226,6 +287,13 @@ const noStorePaths: string[] = []
     response.headers.set('Content-Type', 'text/css; charset=utf-8')
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
+  } else if (request.nextUrl.pathname === '/sw.js') {
+    // Service Worker 本体は長期キャッシュしない（ページ遷移を横取りするため、
+    // 不具合の修正版がすぐ届くようにする）。ブラウザは毎回再検証し、CDN には保存させない
+    response.headers.set('Content-Type', 'application/javascript; charset=utf-8')
+    response.headers.set('Cache-Control', 'no-cache')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   } else if (request.nextUrl.pathname.match(/\.js$/)) {
     // JSファイル: 正確なMIME type設定 + 24時間キャッシュ + ETag活用
     response.headers.set('Content-Type', 'application/javascript; charset=utf-8')

@@ -430,22 +430,10 @@ describe('scraper.ts - Extended Coverage', () => {
           })
         })
         
-        // 'all'以外のジャンルでは、タグ取得APIも呼ばれる
-        if (genre !== 'all') {
-          mockFetch.mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({
-              meta: { status: 200 },
-              data: {
-                tags: [{ name: 'tag1' }, { name: 'tag2' }]
-              }
-            })
-          })
-        }
-        
         await module.scrapeRankingPage(genre, '24h')
         
-        // 最初の呼び出しがランキングAPIであることを確認
+        // ランキングAPIのみ呼ばれる（動画別タグAPI nvapi /v1/videos/{id}/tags は404で廃止済みのため呼ばない）
+        expect(mockFetch).toHaveBeenCalledTimes(1)
         expect(mockFetch).toHaveBeenCalledWith(
           `https://nvapi.nicovideo.jp/v1/ranking/genre/${id}?term=24h`,
           expect.any(Object)

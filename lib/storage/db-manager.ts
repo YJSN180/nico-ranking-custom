@@ -18,9 +18,6 @@ export class DBManager {
   private readonly version = 6  // カスタムランキング対応
 
   async init(): Promise<void> {
-    // eslint-disable-next-line no-console
-    console.log('[DBManager] init() called')
-    
     // Check if running in browser environment
     if (typeof window === 'undefined') {
       // eslint-disable-next-line no-console
@@ -38,9 +35,7 @@ export class DBManager {
     // Request persistent storage to prevent data loss
     if ('storage' in navigator && 'persist' in navigator.storage) {
       try {
-        const isPersisted = await navigator.storage.persist()
-        // eslint-disable-next-line no-console
-        console.log('[DBManager] Persistent storage:', isPersisted ? 'granted' : 'denied')
+        await navigator.storage.persist()
       } catch (error) {
         // eslint-disable-next-line no-console
         console.warn('[DBManager] Failed to request persistent storage:', error)
@@ -48,11 +43,7 @@ export class DBManager {
     }
     
     try {
-      // eslint-disable-next-line no-console
-      console.log('[DBManager] Calling openDB...')
       this.db = await this.openDB()
-      // eslint-disable-next-line no-console
-      console.log('[DBManager] openDB completed successfully')
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[DBManager] init() error:', error)
@@ -61,12 +52,8 @@ export class DBManager {
   }
 
   private async openDB(): Promise<IDBPDatabase> {
-    // eslint-disable-next-line no-console
-    console.log(`[DBManager] openDB() called - name: ${this.dbName}, version: ${this.version}`)
     return await openDB(this.dbName, this.version, {
       upgrade(db, oldVersion, _newVersion, transaction) {
-        // eslint-disable-next-line no-console
-        console.log(`[DBManager] upgrade callback triggered - oldVersion: ${oldVersion}`)
         // お気に入りストア（互換性のため残す）
         if (!db.objectStoreNames.contains('favorites')) {
           const favStore = db.createObjectStore('favorites', {

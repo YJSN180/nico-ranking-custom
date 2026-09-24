@@ -4,13 +4,17 @@
 
 - GitHub Actionsの8グループ収集は維持する。外部schedulerはCloudflare Cronで5分ごとに確認し、毎時20分の最新slotだけをworkflow_dispatchする。過去slotは積み上げない。
 - GitHub Appは対象repositoryのみ、Actions write / Contents read。個人PATは使わない。
-- 8グループ、23ジャンル×2期間、人気タグ別データ、run/attempt/slot、収集日時を検証する。NGの取得・構造検証が失敗したら公開しない。
+- 8グループ、23ジャンル×2期間、人気タグ別データ、run/attempt/slot、収集日時を検証する。手動・派生NGの取得・構造検証が失敗したら公開しない。自動NG（lqng）は読めなくても公開を止めない（「自動NG（lqng）の公開前適用」を参照）。
 - タグの1ページ目がHTTP 202かつserver-responseもHTTP_202と「このランキングは準備中です。」を明示した場合のみ、その期間の人気タグ候補から外し、group artifactのunavailableTagsに記録する。空データや新しい取得日時を捏造しない。必須ジャンルの202、タグの2ページ目以降の202、通信・解析エラーは公開を止める。ページ終端は上流paginationを優先し、NG除外後の件数不足を理由に存在しない次ページを取得しない。
 - r2-aggregateのタグキャッシュはジョブ内スナップショットとして再利用する。エントリ自体の7日TTLは維持し、同ジョブで補完済みの値を再読込で失わない。KVバックエンドの5分再読込は変更しない。タグ取得は本文受信もタイムアウト対象とする。
+- タグキャッシュのシャード読込は最大4並列（`TAG_CACHE_LOAD_CONCURRENCY`）、1回の読込全体で3分（`TAG_CACHE_LOAD_BUDGET_MS`）まで。上限に達したら読めたシャードだけで続行し、残りの動画は通常のタグ取得に回す。読めなかったシャードはそのジョブ中は空として扱う（従来の読込失敗と同じ）。どちらの環境変数もworkflowでは未設定で、CIで変える場合はjobのenvへの追記が必要。
+- R2のGetObjectはSDKのレスポンスチェックサム検証を`WHEN_REQUIRED`にする（タグキャッシュと公開用ストアの両方）。既定の`WHEN_SUPPORTED`では、`x-amz-checksum-*`付きの本文がabortや接続リセットで途切れたとき本文のストリームが終わらず、Promiseが残り続ける。破損はgzipのCRCとJSON解析で検出する。
+- R2の読み書きは1件ごとに通信20秒のabortに加え、本文受信・gzip処理を含む全体30秒の上限を持つ。公開用ストアでは上限到達をTimeoutErrorとして既存の再試行に回す。`readTagCacheShardFromR2`がnullを返すのはR2未設定と存在しないシャードだけで、その他の失敗は例外にする。収集側はKVへ切り替え、タグキャッシュのマージは読めないシャードを上書きせずに失敗する。
+- KV REST（`lib/simple-kv.ts`）の各通信は20秒で打ち切る（本文受信を含む）。失敗のたびに操作・試行回数・原因の種類（timeout、http_<status>、network）だけをログに出し、キー名は出さない。
 - 集約はローカル処理。validated-publication artifactを先に保存してからR2へ書く。
 - 新形式はrankings/generations/{runId}-{attempt}/配下にgzip JSONを保存する。全件read-back→metadata→世代manifest→current.jsonの条件付き更新の順。
 - current.jsonが存在しないときだけ旧canonical keyを読む。破損したmanifestでは旧形式へ黙って戻らない。公開APIのJSON shapeは変更しない。
-- 24時間ランキングの各ジャンル、総合の毎時ランキング、毎時ランキングの全ジャンル合計が前回の50%未満なら公開しない。小規模ジャンルの毎時件数は自然変動が大きいため、単独の半減はhourly-count-driftとして記録し、全体の公開停止にはしない。NG方針変更や上流仕様変更時は人が原因を確認する。
+- 24時間ランキングの各ジャンル、総合の毎時ランキング、毎時ランキングの全ジャンル合計が前回の50%未満なら公開しない。小規模ジャンルの毎時件数は自然変動が大きいため、単独の半減はhourly-count-driftとして記録し、全体の公開停止にはしない。自動NGで除いた件数は足し戻して比べる。NG方針変更や上流仕様変更時は人が原因を確認する。
 - APIはリクエストごと、statsは更新処理ごとに世代を固定する。公開ランキングは既存のno-storeを維持。X-Ranking-Generationヘッダーで世代を確認できる。
 - 世代移行前のstats discoveryもR2一覧のtruncated/cursorを最後まで辿る。過去のタグファイルで1,000件を超えても後方ジャンルを落とさない。一覧の途中失敗・不正cursorでは更新を中止して前回統計を維持する。世代移行後のmanifest経由の読み込みは一覧取得を行わない。
 - Snapshot APIは最大6並列とし、本文受信まで1枠を保持する。タイムアウトは待機中のバッチではなく実際の送信時に開始する。1件失敗したら未開始バッチを止め、実行中バッチの終了を待ってから更新全体を失敗させる。全ジャンル対応で数百バッチになるため、一斉送信による接続待ちを20秒の通信タイムアウトに含めない。
@@ -18,6 +22,21 @@
 - KVとR2の間に原子的トランザクションはない。KV書き込み直後の世代切り替えやsidecar失敗はあり得る。世代とupdatedAtの照合で検知し、次回更新で回復する。
 - KV補助コピー、派生NG、タグキャッシュの失敗は公開済みランキングを巻き戻さない。ただしworkflowは失敗とし、pipeline/auxiliary.jsonにも状態を残す。
 - タグ累積も共通R2 clientで既存値を読む。読取失敗時の空リスト初期化は禁止し、manual backfillと定期公開は同じGitHub concurrency groupで直列化する。
+
+## 自動NG（lqng）の公開前適用
+
+サイトはSSRと検索でリクエストのたびに自動NGを当てるが、APIからのジャンル切り替えなどには効かない。そこで収集グループが公開前にも当てる（`lib/pipeline/auto-ng.ts`、`createPipelineNgFilter`）。
+
+- 当てるもの: KVの`lqng:config`と`lqng:verdicts`を、手動・派生NGと同じ読み方（同じ`CLOUDFLARE_KV_NAMESPACE_ID`、BearerのREST、`fetchChecked`の1回20秒・最大5回・待ち180秒）で各グループが読む。statusが`ng`の動画IDと`ng`の投稿者IDから、許可リストを除いたもの（サイトと同じ`collectAutoNg`）を、手動・派生NGの後に当てる。派生NGには積まない。
+- 保留（hold）は当てない。期限付きの仮の判定で、公開データは次の公開まで残るため。サイトはSSRと検索で保留も当てる。API経由の表示では、保留中の動画は`ng`に確定した後の公開から消える。
+- 名前空間: `lqng-poller`は`LQNG_KV`（`80f4535c379b4e8cb89ce6dbdb7d2dc9`）に書く。workflowの`CLOUDFLARE_KV_NAMESPACE_ID`はsecretか同じ既定値。secretの値はリポジトリから見えないが、同じjob環境の公開後検証が、同じ名前空間に書く統計Workerの`VIDEO_STATS_LATEST`を読んで成功している（2026-09-24 run 36067412289）。
+- 設定のキーが無い、または`enabled`がfalse: 自動NGなし（`disabled`）。管理画面で無効にするとパイプラインでも止まる。Vercelの`LQNG_ENABLED`はパイプラインには効かない。
+- 判定表のキーが無い（404）: 自動NGなし（`missing`）。失敗にしない。
+- 読み取りの失敗（再試行ののち、`unavailable`）と、判定表の形が壊れている（正規化で空になる、`invalid`）: 自動NGなしで公開を続ける。`[Auto NG] ...`のログ（キー名とIDは出さない）に出し、`record-pipeline-status`が`pipeline/auxiliary.json`を`failed`（`autoNgFailedGroups`にグループ番号）にして、公開後にworkflowを失敗にする。監視では`auxiliary-sync-failed`になる。設定が読めないときは許可リストが分からないので、判定表が読めても当てない。
+- 公開を止めない理由: 自動NGが漏れるのはAPI経由の表示だけで、サイトのSSRと検索はリクエストのたびに当てる。公開を止めると全ジャンルが古いまま残り、利用者への影響のほうが大きい。
+- 読み取りの失敗は収集グループの成果物に残るので、集約ジョブだけの再実行（rerun-failed-jobs）では直らない。次の定期実行で読み直す。
+- 除外件数: 各グループの成果物に状態（`autoNg`）と、ジャンル・期間ごとの件数（`autoNgExcluded`、本体`ranking`とタグ別の合計`tags`）を置く。集約の`{"stage":"aggregated",...}`行の`autoNg`に、グループごとの状態（`groups`）、本体の件数（`excluded`、`counts`と同じキー）、タグ別の件数（`excludedFromTags`、300件で切り詰める前の件数）を出す。0件は省く。グループのログでは`Completed <genre> (...; auto NG excluded 24h: 本体 + タグ別 in tag rankings, hour: ...)`。
+- 件数急減チェック: 公開時の50%判定は`publication.autoNg.excluded`を足し戻して比べる。足し戻さないと、導入直後の初回は自動NGなしの前回と比べて落ち、小規模ジャンルで荒らしが増えたときも公開全体が止まり続けるため。収集の欠落は従来どおり止める。`hourly-count-drift`のログには`autoNgExcluded`を添える。公開後検証（`verify-r2-contract`）と統計Worker自身の50%判定は変えない。統計の`totalVideos`は全ランキングの一意な動画数で、自動NGの除外は半減の原因にならない。`all/24h`の件数一致は公開済みの件数どうしの比較。
 
 ## 安全な導入順序
 
@@ -46,6 +65,8 @@ npx wrangler deploy --dry-run -c workers/ranking-scheduler/wrangler.toml
 - 408/429/500/502/503/504、一時的な通信切断・タイムアウト: 最大5回、待機予算180秒、jitterとRetry-After。各通信20秒。認証・権限・データ破損は即失敗。
 - R2公開は最大8並列。成功済みのimmutable objectは再アップロードしない。current.jsonのETag競合時は別runの公開を上書きしない。
 - 収集グループは65分で明示失敗、jobは70分。正常終了してartifactがない場合もActions側で失敗。9月1日の欠損原因自体が再現できたという意味ではない。
+- 収集グループは、ランキングのページ取得・タグキャッシュのシャード読込・タグ詳細の1件ごとに進捗を記録する。10分進捗がなければ`process.getActiveResourcesInfo()`の要約を出してexit 1で終わり、65分の期限を待たずに再実行へ回す。
+- 公開後検証（verify-r2-contract）は統計が新しい世代に追いつくまで最大12分待つ。統計のcronは5分ごと・1回約45秒で、R2 leaseで直列化されるため、公開前に始まった回やleaseと重なったtriggerのせいで1〜2周遅れうる。/triggerが`{skipped: 'already-running'}`（lease中）を返したら60秒後に、応答が失われた・失敗した場合は統計が3分動かなければ再送する（最大8回）。1回の更新が約45秒かかるため、triggerの応答は120秒まで待つ。途中で切断すると更新が打ち切られてleaseが残るおそれがあり、その場合は次のcronが空振りする。この待ちは集約ジョブの最後の手順に置き、補助同期とタグキャッシュの統合を先に済ませる。集約ジョブの上限は、集約（約8分）と検証の待ち（最大12分余り）に余裕を足して35分にしている。
 - schedulerは稼働中runをcancelせず待機する。100分超ならstalledを通知。送信記録を先にR2へ保存し、応答が失われても15分間は再送しない。slotごと最大2回。
 - 同slotの失敗runはrerun-failed-jobs。成功グループのartifactを再利用する。補助同期が失敗した場合も後段jobだけ再試行する。
 - GitHub自体が停止・runner不足の場合、dispatch成功だけでは収集成功にならない。鮮度監視で別途検知する。
@@ -78,7 +99,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 ## 監視と受け入れ
 
 - Cloudflare側: 公開から90分でstale、120分でcritical、収集開始から150分でsource-stale。statsは15分以内かつ非ゼロ、前回健全値の50%以上。
-- 新公開の10分後にはstats世代/updatedAt、補助同期世代、公開APIの収集日時が一致すること。KVの伝播遅延は猶予内で扱う。
+- 新公開の15分後にはstats世代/updatedAt、補助同期世代、公開APIの収集日時が一致すること。KVの伝播遅延は猶予内で扱う。statsはleaseと重なると1〜2周遅れるため、10分では足りないことがある（2026-09-24の初回世代公開では約10.3分）。
 - 通知は異常分類の変化と回復時。health状態は世代・件数・分類が変わるときのみR2へ書く。毎pollのKVログ書き込みは追加しない。
 - GitHubの3時間監視も補助として残すが、GitHub cron遅延時の主監視にはしない。
 - 7日間: 各slotのdispatch時刻、実開始、収集完了、publish、stats反映を比較する。重複公開ゼロ、未公開世代の露出ゼロ、120分超の未通知停止ゼロを確認する。
@@ -103,7 +124,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 - ローカル監査は `npm audit` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
 
 ```sh
-npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
+npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts __tests__/unit/lib/tag-cache-store-r2-body.test.ts __tests__/unit/lib/simple-kv.test.ts __tests__/unit/lib/simple-kv-bounds.test.ts __tests__/unit/pipeline-r2-store.test.ts __tests__/unit/pipeline-stall-watchdog.test.ts __tests__/unit/pipeline-verification.test.ts __tests__/unit/scripts/tag-cache-scripts.test.ts __tests__/unit/pipeline-auto-ng.test.ts
 npm run test:worker:video-stats
 npx tsc --noEmit -p tsconfig.pipeline.json
 npm run typecheck
@@ -131,3 +152,19 @@ npm run typecheck:workers
 - accumulate-tags / write-to-r2 / sync-ranking-auxiliary / merge-tag-cache-deltas-to-r2 / record-pipeline-statusの5本の実CLIも成功。SDK・fetchの書込先だけをローカルに退避して497書込を記録し、390ランキング、KV補助コピー3組、派生NG6,496件、タグキャッシュ8 artifact・100 shard・差分24,759件を照合した。ランキング本体の後にmetadataが保存されること、補助同期のfailed=falseも確認した。
 - HTTPのGET/HEAD以外を拒否する検証用ガードを併用し、本番R2/KVへの書込、Workerの本番trigger、commit・push・deployは実施していない。検証用スクリプトと結果はgitignore対象のtmp/pipeline-acceptance/1789907307933に保存した。これはローカルの実行IDであり、GitHubのrun IDではない。
 - Worker回帰テスト29件、Workerビルド・構文チェック、Wrangler deploy --dry-runは成功。R2一覧の後続ページ失敗・不正cursorで前回統計を維持するテストを含む。Cloudflare runtime上の実動作、本番初回公開、次回定期実行、公開UI/APIの更新確認は未完了で、main反映と明示Workerデプロイの後に確認する。
+
+## 2026-09-24 収集グループ停止の対策
+
+- run 36046509459でgroup 3と5が65分の期限で失敗し、公開が飛んだ。group 5のログはAWS SDKのNodeバージョン警告（最初のS3 client作成時に1回出る）で止まっていた。止まったグループはいずれも最初のジャンルのタグキャッシュ読込中だった。
+- 最も疑わしいのはR2 GetObjectの本文受信。SDK既定のチェックサム検証が本文を`source.pipe()`で包むため、abortや接続リセットで元の接続が切れても包んだストリームが終わらない。そのため`transformToByteArray()`が成功も失敗もせず、I/Oも残らないまま65分の期限タイマーだけがprocessを生かしていた。ロックファイルと同じSDKとNode 20.20.0でローカル再現した。本番R2がこれらのシャードに`x-amz-checksum-crc32`を返すかは未確認。
+- 対策は、R2読込の`WHEN_REQUIRED`と1件30秒の上限、タグキャッシュ読込全体の3分上限と4並列、KV通信の20秒上限、10分無進捗での早期失敗。公開用ストア（`scripts/lib/r2-store.ts`）とタグキャッシュの書込にも同じ上限を入れた。
+
+### ログの見方
+
+- 正常: `[Tag Cache] Loaded: 100/100 shards settled (found …, missing …, failed …), … entries, 0 in flight, X.Xs elapsed`。
+- 読込が遅い: 10秒ごとに`[Tag Cache] Loading: … (waiting on shard N Ks)`が出る。
+- 失敗: `[Tag Cache R2] Failed to read shard N (…); trying KV`、`[KV] get attempt n/3 failed: timeout`。以前の停止と同じ中断なら、無音ではなく`AbortError`や`ECONNRESET`の行として見える。
+- 3分上限に到達: `[Tag Cache] Load budget of 180s reached: continuing with X/Y shards; …`。
+- 無進捗で停止: `Group N made no progress for 600s (last progress: …); active resources: {…}`。`TCPSocketWrap`や`TLSWrap`があれば通信待ち、`PipeWrap`と`Timeout`だけなら取り残されたPromise（今回と同じ型）、`FSReqCallback`やzlib系があればスレッドプール待ち。
+- 公開後検証: `[Verify] Stats trigger n: updated|busy|failed|lost … after Ns`。busyは統計Workerのlease中。
+- 自動NG: 各グループの`Group N NG list: … ; auto NG applied|disabled|missing|invalid|unavailable: …`。失敗時は`[Auto NG] Could not read the verdict table (http_503|timeout|network…)`や`[Auto NG] The verdict table is malformed …`、記録の手順で`[Auto NG] Published without auto NG for group(s) …`。

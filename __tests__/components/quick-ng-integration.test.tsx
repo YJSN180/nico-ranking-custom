@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import RankingItemResponsive from '../../components/ranking-item-responsive'
 import { TagDisplayProvider } from '../../contexts/tag-display-context'
@@ -64,7 +64,21 @@ Object.defineProperty(window, 'localStorage', {
   value: mockLocalStorage
 })
 
+// デスクトップは + / 🚫 を常時表示し、モバイルは ⋮ メニュー（ItemActionMenu）に
+// マイリスト追加と NG 設定を集約する。どちらも onQuickNGAdd に合流する
 describe('QuickNG Integration Test', () => {
+  beforeAll(() => {
+    // ⋮メニューのビュー切替（FLIP）は requestAnimationFrame を使う。jsdom では同期実行にする
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0)
+      return 0
+    })
+  })
+
+  afterAll(() => {
+    vi.unstubAllGlobals()
+  })
+
   const renderComponent = (item = mockVideo, disabled = false, onQuickNGAdd?: any) => (
     render(
       <TagDisplayProvider>
@@ -73,24 +87,19 @@ describe('QuickNG Integration Test', () => {
     )
   )
 
-  it('マイリストボタンとNGボタンが両方表示される', () => {
+  it('デスクトップ用のマイリスト・NGボタンとモバイル用の⋮メニューが表示される', () => {
     renderComponent()
     
-    // レスポンシブレイアウトで2つのマイリストボタンが存在する（モバイル用・デスクトップ用）
-    const mylistButtons = screen.getAllByTestId('mylist-button')
-    expect(mylistButtons).toHaveLength(2)
-    
-    // NGボタンも2つ存在する（モバイル用・デスクトップ用）
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    expect(ngButtons).toHaveLength(2)
+    // デスクトップ用は 1 つずつ常時表示。モバイル用は ⋮ メニューに集約されている
+    expect(screen.getAllByTestId('mylist-button')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /ng追加/i })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'その他の操作' })).toBeInTheDocument()
   })
 
   it('NGボタンクリックでポップオーバーが表示される', () => {
     renderComponent()
     
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
-    fireEvent.click(ngButton)
+    fireEvent.click(screen.getByRole('button', { name: /ng追加/i }))
     
     expect(screen.getByTestId('ng-popover')).toBeInTheDocument()
     expect(screen.getByTestId('ng-title')).toHaveTextContent('Title: Test Video Title')
@@ -100,12 +109,8 @@ describe('QuickNG Integration Test', () => {
     const mockOnQuickNGAdd = vi.fn()
     renderComponent(mockVideo, false, mockOnQuickNGAdd)
     
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
-    fireEvent.click(ngButton)
-    
-    const titleButton = screen.getByTestId('ng-title')
-    fireEvent.click(titleButton)
+    fireEvent.click(screen.getByRole('button', { name: /ng追加/i }))
+    fireEvent.click(screen.getByTestId('ng-title'))
     
     expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'title', 'Test Video Title')
   })
@@ -114,12 +119,8 @@ describe('QuickNG Integration Test', () => {
     const mockOnQuickNGAdd = vi.fn()
     renderComponent(mockVideo, false, mockOnQuickNGAdd)
     
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
-    fireEvent.click(ngButton)
-    
-    const authorButton = screen.getByTestId('ng-author')
-    fireEvent.click(authorButton)
+    fireEvent.click(screen.getByRole('button', { name: /ng追加/i }))
+    fireEvent.click(screen.getByTestId('ng-author'))
     
     expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'author', 'Test Author')
   })
@@ -128,42 +129,48 @@ describe('QuickNG Integration Test', () => {
     const mockOnQuickNGAdd = vi.fn()
     renderComponent(mockVideo, false, mockOnQuickNGAdd)
     
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    const ngButton = ngButtons[0] // 最初のNGボタンをテスト
-    fireEvent.click(ngButton)
-    
-    const authorIdButton = screen.getByTestId('ng-author-id')
-    fireEvent.click(authorIdButton)
+    fireEvent.click(screen.getByRole('button', { name: /ng追加/i }))
+    fireEvent.click(screen.getByTestId('ng-author-id'))
     
     expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'authorId', 'user123')
   })
 
-  it('disabled状態でNGボタンも無効化される', () => {
+  it('disabled状態でNGボタンと⋮メニューも無効化される', () => {
     renderComponent(mockVideo, true)
     
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    // 両方のNGボタンが無効化されていることを確認
-    ngButtons.forEach(ngButton => {
-      expect(ngButton).toBeDisabled()
-    })
+    expect(screen.getByRole('button', { name: /ng追加/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'その他の操作' })).toBeDisabled()
   })
 
-  it('マイリストエリアにCSSクラスが適用される', () => {
+  it('操作ボタンがそれぞれのエリアに配置される', () => {
     renderComponent()
     
-    // 両方のNGボタンが適切なエリアに配置されていることを検証
-    const ngButtons = screen.getAllByRole('button', { name: /ng追加/i })
-    
-    // 最初のNGボタン（モバイル用）
-    const mobileButton = ngButtons[0]
-    const mobileArea = mobileButton.closest('.ranking-item-responsive__mylist-button')
-    expect(mobileArea).toBeInTheDocument()
-    expect(mobileArea).toHaveClass('ranking-item-responsive__mylist-button')
-    
-    // 2番目のNGボタン（デスクトップ用）
-    const desktopButton = ngButtons[1]
-    const desktopArea = desktopButton.closest('.ranking-item-responsive__mylist-area')
+    // デスクトップ用: マイリストボタンと NG ボタンが同じエリアに並ぶ
+    const desktopArea = screen.getByRole('button', { name: /ng追加/i }).closest('.ranking-item-responsive__mylist-area')
     expect(desktopArea).toBeInTheDocument()
-    expect(desktopArea).toHaveClass('ranking-item-responsive__mylist-area')
+    expect(desktopArea).toContainElement(screen.getByTestId('mylist-button'))
+    
+    // モバイル用: ⋮ メニューはタイトル行のメニュー枠に置かれる
+    const menuArea = screen.getByRole('button', { name: 'その他の操作' }).closest('.ranking-item-responsive__menu')
+    expect(menuArea).toBeInTheDocument()
+  })
+
+  it('⋮メニューからもマイリスト追加とNG設定ができる', () => {
+    const mockOnQuickNGAdd = vi.fn()
+    renderComponent(mockVideo, false, mockOnQuickNGAdd)
+    
+    fireEvent.click(screen.getByRole('button', { name: 'その他の操作' }))
+    
+    // メニュー内にマイリスト追加が現れる（デスクトップ用と合わせて 2 つ）
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    expect(screen.getAllByTestId('mylist-button')).toHaveLength(2)
+    
+    // NG設定 → タイトルで NG 追加
+    fireEvent.click(screen.getByRole('button', { name: 'NG設定' }))
+    fireEvent.click(screen.getByTestId('menu-ng-title'))
+    
+    expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'title', 'Test Video Title')
+    // 選択後はメニューが閉じる
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 })

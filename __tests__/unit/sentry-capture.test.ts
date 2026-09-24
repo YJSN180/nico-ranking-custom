@@ -4,6 +4,10 @@ const captureExceptionMock = vi.fn()
 
 vi.mock('@sentry/nextjs', () => ({
   captureException: captureExceptionMock,
+  // ブラウザ側の遅延ローダー（lib/sentry/client.ts）が初期化に使う API
+  getClient: () => undefined,
+  init: vi.fn(),
+  browserTracingIntegration: () => ({ name: 'BrowserTracing' }),
   withScope: (callback: (scope: {
     setContext: (key: string, value: unknown) => void
     setExtra: (key: string, value: unknown) => void
@@ -48,6 +52,7 @@ describe('sentry capture helpers', () => {
       retryAfterSeconds: 10,
     })
 
+    await vi.dynamicImportSettled()
     expect(captureExceptionMock).toHaveBeenCalledTimes(1)
 
     vi.useRealTimers()
@@ -75,6 +80,7 @@ describe('sentry capture helpers', () => {
       retryAfterSeconds: 10,
     })
 
+    await vi.dynamicImportSettled()
     expect(captureExceptionMock).toHaveBeenCalledTimes(2)
 
     vi.useRealTimers()

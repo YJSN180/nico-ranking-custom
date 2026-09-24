@@ -13,6 +13,7 @@ import {
 import { downloadNGListBackup } from '../lib/storage/ng-backup'
 import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
 import styles from './ng-backup.module.css'
+import { showToast } from '@/lib/toast'
 
 export function NGBackup() {
   const [isExporting, setIsExporting] = useState(false)
@@ -36,7 +37,7 @@ export function NGBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Export failed:', error)
-      alert(`エクスポートに失敗しました: ${error}`)
+      showToast(`エクスポートに失敗しました: ${error}`, 'error')
     } finally {
       setIsExporting(false)
     }
