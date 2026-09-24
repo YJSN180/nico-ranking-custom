@@ -6,7 +6,6 @@ import {
   fetchThumbInfoFromExt,
   fetchUserInfoFromNvapi,
   fetchNewVideosFromNicoPages,
-  NicoPagesFailedError,
 } from '@/workers/lqng-poller/src/sources'
 
 // 応答の形は実測に基づくが、値はすべて合成
@@ -203,10 +202,13 @@ describe('fetchNewVideosFromNicoPages', () => {
     const r = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
     expect(r.videos.map((v) => v.id)).toEqual(['sm1'])
     // タグ名は出さず、設定の並び順の番号で記録する
-    expect(r.failures).toEqual(['t0:tag_shorts:p1 nico_page_http_503', 't1:tag_shorts:p1 nico_page_http_503'])
+    expect(r.failures).toEqual([
+      { tagIndex: 0, kind: 'tag_shorts', page: 1, reason: 'nico_page_http_503' },
+      { tagIndex: 1, kind: 'tag_shorts', page: 1, reason: 'nico_page_http_503' },
+    ])
   })
 
-  it('403 のページがあれば、残りのページは読まずに打ち切る', async () => {
+  it('403 はその種別のページだけ打ち切り、別の種別（通常動画）は残りのタグも読む', async () => {
     const calls: string[] = []
     const fetchImpl = vi.fn(async (url: string) => {
       calls.push(url)
@@ -214,16 +216,21 @@ describe('fetchNewVideosFromNicoPages', () => {
       return { ok: true, text: async () => pageHtml([item('sm1', 5)], false) } as unknown as Response
     })
     const r = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
-    expect(calls).toHaveLength(2) // tagA の動画・ショートまで。tagB は読まない
+    // tagA の動画・ショート（403）と tagB の動画。tagB のショートは 403 の後なので送らない
+    expect(calls.map((u) => new URL(u).pathname.split('/')[1])).toEqual(['tag', 'tag_shorts', 'tag'])
+    expect(r.requests).toBe(3)
     expect(r.videos.map((v) => v.id)).toEqual(['sm1'])
-    expect(r.failures).toEqual(['t0:tag_shorts:p1 nico_page_http_403'])
+    expect(r.failures).toEqual([
+      { tagIndex: 0, kind: 'tag_shorts', page: 1, reason: 'nico_page_http_403' },
+      { tagIndex: 1, kind: 'tag_shorts', page: 1, reason: 'skipped_after_403' },
+    ])
   })
 
-  it('全部のページが取れないときだけ投げる（構造の変化など。呼び出し側で nvapi に縮退する）', async () => {
+  it('全部のページが取れなくても投げず、取れなかったページを返す（呼び出し側で nvapi に縮退する）', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => '<html></html>' }) as unknown as Response)
-    const error = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch).catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(NicoPagesFailedError)
-    expect((error as NicoPagesFailedError).message).toContain('server-response')
-    expect((error as NicoPagesFailedError).requests).toBe(2) // 動画・ショートとも 1 ページ目で失敗
+    const r = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(r.videos).toEqual([])
+    expect(r.requests).toBe(2) // 動画・ショートとも 1 ページ目で失敗
+    expect(r.failures.map((f) => `${f.kind}:${f.reason}`)).toEqual(['tag:server-response meta not found', 'tag_shorts:server-response meta not found'])
   })
 })

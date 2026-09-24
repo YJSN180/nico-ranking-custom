@@ -6,7 +6,18 @@ import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
-import { AccessLimitedError, MAX_PAGES, NicoPagesFailedError, NICO_PAGE_KINDS, NICO_PAGES_PER_TAG, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from './sources'
+import {
+  AccessLimitedError,
+  formatPageFailure,
+  MAX_PAGES,
+  NICO_PAGE_KINDS,
+  NICO_PAGES_PER_TAG,
+  type NewVideosResult,
+  type PollDeps,
+  type SourceVideo,
+  type ThumbResult,
+  type UserInfo,
+} from './sources'
 import {
   captureBaseline,
   loadEnabled,
@@ -15,6 +26,7 @@ import {
   saveState,
   type KvLike,
   type LoadedState,
+  type LqngEventKind,
   type TrackedAuthor,
   type TrackedPost,
 } from './state'
@@ -144,6 +156,24 @@ class Session {
     this.addNote(error.message)
   }
 
+  /**
+   * 続きうる問題を記録する。注記と監視（reportError）には毎回出し、履歴には内容（signature）が
+   * 前回と変わったときだけ積む（同じ失敗が何日も続いても履歴 500 件を埋めない）
+   */
+  recordIssue(category: string, signature: string, note: string, kind: LqngEventKind, error?: unknown): void {
+    this.addNote(note)
+    if (this.state.tracking.issues[category] !== signature) {
+      pushEvent(this.state.events, { at: this.nowIso, kind, note })
+      this.state.tracking.issues[category] = signature
+    }
+    if (error !== undefined) this.deps.reportError?.(error, category)
+  }
+
+  /** 問題が解消した（次に起きたらまた履歴に積む） */
+  resolveIssue(category: string): void {
+    delete this.state.tracking.issues[category]
+  }
+
   budgetLeft(cost = 1): boolean {
     return this.subrequests + cost <= LIMITS.subrequestBudget
   }
@@ -271,60 +301,63 @@ class Session {
   }
 
   /**
-   * 新着を取得して取り込む。主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。
-   * 取得できたときだけ true（false の回は最終取得時刻を進めず、次回に同じ区間を取り直す）
+   * 新着を取得して取り込む。本家タグページの失敗はタグ×種別ごとに扱い、通常動画のページが取れなかった
+   * タグは予備（nvapi）で補う。ショートは nvapi に無いので補えない。
+   * 全タグ×種別を取れた（通常動画は予備で補えた）ときだけ true。false の回は最終取得時刻を進めず、
+   * 次の回に同じ区間を取り直す。取れなかったページは履歴（内容が変わったとき）・注記・監視に出す。
    */
   async ingestNewVideos(sinceIso: string): Promise<boolean> {
     if (this.config.pollTags.length === 0) return true
     // タグ数を抑えて、新着取得のリクエスト数（予算）に上限を設ける
     const tags = this.config.pollTags.slice(0, LIMITS.pollTagsMax)
     if (this.config.pollTags.length > tags.length) this.addNote(`poll_tags_capped: ${this.config.pollTags.length}>${LIMITS.pollTagsMax}`)
-    let primaryError: unknown
+    let result: NewVideosResult
     try {
-      const result = await this.deps.fetchNewVideos(tags, sinceIso)
-      this.spend(result.requests)
-      this.ingest(result.videos)
-      // 一部のページだけ取れなかった回は、取れた分を使う（予備には縮退しない）。
-      // 取れなかったページの動画は次回以降の重なり（sinceOverlapMinutes）で取り直す
-      if (result.failures.length > 0) this.addNote(`new_videos_partial: ${result.failures.join('; ')}`)
-      return true
+      result = await this.deps.fetchNewVideos(tags, sinceIso)
     } catch (error) {
-      // 送ったページ数が分からない失敗は最大で見積もる
-      this.spend(error instanceof NicoPagesFailedError ? error.requests : tags.length * NICO_PAGE_KINDS.length * NICO_PAGES_PER_TAG)
-      if (error instanceof AccessLimitedError) {
-        this.recordAccessLimited(error)
-        return false
+      // 想定外の例外は、全タグ×種別が取れなかったものとして扱う（送ったページ数は最大で見積もる）
+      const reason = messageOf(error)
+      result = {
+        videos: [],
+        failures: tags.flatMap((_, tagIndex) => NICO_PAGE_KINDS.map((kind) => ({ tagIndex, kind, page: 1, reason }))),
+        requests: tags.length * NICO_PAGE_KINDS.length * NICO_PAGES_PER_TAG,
       }
-      primaryError = error
     }
-    const reason = messageOf(primaryError)
-    const fallback = this.deps.fetchNewVideosFallback
-    if (fallback) {
-      // 原因は履歴に残す
-      pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
-      this.addNote(`fallback: ${reason}`)
-      this.spend(LIMITS.fallbackCost)
-      try {
-        this.ingest(await fallback(tags, sinceIso))
-        return true
-      } catch (fallbackError) {
-        if (fallbackError instanceof AccessLimitedError) {
-          this.recordAccessLimited(fallbackError)
-          return false
+    this.spend(result.requests)
+    this.ingest(result.videos)
+    if (result.failures.length === 0) {
+      this.resolveIssue('new_videos')
+      return true
+    }
+    let complete = !result.failures.some((f) => f.kind !== 'tag')
+    const parts = result.failures.map(formatPageFailure)
+    let fallbackFailure: unknown
+    // 通常動画のページが取れなかったタグは予備（nvapi）で補う
+    const regularFailed = Array.from(new Set(result.failures.filter((f) => f.kind === 'tag').map((f) => f.tagIndex))).sort((a, b) => a - b)
+    if (regularFailed.length > 0) {
+      const label = `fallback(${regularFailed.map((i) => `t${i}`).join(',')})`
+      const fallback = this.deps.fetchNewVideosFallback
+      if (!fallback) {
+        complete = false
+        parts.push(`${label}: unavailable`)
+      } else {
+        this.spend(LIMITS.fallbackCost)
+        try {
+          this.ingest(await fallback(regularFailed.map((i) => tags[i]).filter((t): t is string => t !== undefined), sinceIso))
+          parts.push(`${label}: ok`)
+        } catch (error) {
+          complete = false
+          fallbackFailure = error
+          if (error instanceof AccessLimitedError) this.recordAccessLimited(error)
+          parts.push(`${label}: ${messageOf(error)}`)
         }
-        this.failNewVideos(`fallback: ${messageOf(fallbackError)}`, fallbackError)
-        return false
       }
     }
-    this.failNewVideos(reason, primaryError)
-    return false
-  }
-
-  /** 新着を取れなかった回の記録（実行は止めずに補完・投稿者確認・受け箱の合流を続ける） */
-  private failNewVideos(reason: string, error: unknown): void {
-    pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_failed: ${reason}` })
-    this.addNote(`new_videos_failed: ${reason}`)
-    this.deps.reportError?.(error, 'new_videos')
+    // 同じ失敗かどうかは、失敗したタグ×種別と予備の成否で見る（理由の細かな違いでは履歴に積み直さない）
+    const signature = [...new Set(result.failures.map((f) => `t${f.tagIndex}:${f.kind}`))].sort().join(',') + (fallbackFailure === undefined ? '' : '|fallback')
+    const note = `new_videos_failed: ${parts.join('; ')}`
+    this.recordIssue('new_videos', signature, note, 'error', fallbackFailure instanceof Error ? fallbackFailure : new Error(`new_videos_failed: ${signature}`))
+    return complete
   }
 
   /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */

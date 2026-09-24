@@ -82,6 +82,11 @@ export interface LqngTracking {
   lastRun: LqngRunSummary | null
   /** 直近の実行の時刻と注記（新しい順、/status の運用確認用） */
   recentRuns: LqngRecentRun[]
+  /**
+   * 続いている問題（種類 → 内容の要約）。同じ問題が続く間は履歴に積み直さず、内容が変わったときと
+   * 解消後に再発したときだけ積む（注記と監視には毎回出す）
+   */
+  issues: Record<string, string>
   updatedAt: string
 }
 
@@ -124,7 +129,7 @@ export const EVENTS_MAX = 500
 export const RECENT_RUNS_MAX = 40
 
 export function emptyTracking(now: string): LqngTracking {
-  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], unattributed: [], lastRun: null, recentRuns: [], updatedAt: now }
+  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], unattributed: [], lastRun: null, recentRuns: [], issues: {}, updatedAt: now }
 }
 
 export function emptyEvents(): LqngEvents {
@@ -158,6 +163,7 @@ export function normalizeTracking(raw: unknown, now: string): LqngTracking {
     unattributed: Array.isArray(raw.unattributed) ? raw.unattributed.filter((u): u is UnattributedVideo => isRecord(u) && typeof u.id === 'string' && typeof u.at === 'string') : [],
     lastRun: isRecord(raw.lastRun) ? (raw.lastRun as unknown as LqngRunSummary) : null,
     recentRuns: normalizeRecentRuns(raw.recentRuns),
+    issues: isRecord(raw.issues) ? Object.fromEntries(Object.entries(raw.issues).filter((e): e is [string, string] => typeof e[1] === 'string')) : {},
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   }
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runPoll, LIMITS } from '@/workers/lqng-poller/src/poll'
 import { commitBackfill } from '@/workers/lqng-poller/src/backfill'
-import { AccessLimitedError, NicoPagesFailedError, type NewVideosResult, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
+import { AccessLimitedError, type NewVideosResult, type PageFailure, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
 import type { LqngEvents, LqngTracking } from '@/workers/lqng-poller/src/state'
@@ -30,7 +30,11 @@ const at = (min: number): string => new Date(T0.getTime() + min * 60_000).toISOS
 
 const video = (over: Partial<SourceVideo>): SourceVideo => ({ id: 'sm1', title: '通常', authorId: '1001', registeredAt: at(-1), ownerVisibility: 'visible', ...over })
 /** 主経路（本家タグページ）の取得結果（既定は 2 タグ × 2 種別 × 1 ページ = 4 リクエスト） */
-const pages = (videos: SourceVideo[], failures: string[] = [], requests = 4): NewVideosResult => ({ videos, failures, requests })
+const pages = (videos: SourceVideo[], failures: PageFailure[] = [], requests = 4): NewVideosResult => ({ videos, failures, requests })
+/** 取れなかったページ（tagIndex は設定の pollTags の並び順） */
+const failed = (tagIndex: number, kind: PageFailure['kind'], reason = 'nico_page_http_503'): PageFailure => ({ tagIndex, kind, page: 1, reason })
+/** 設定の 2 タグ × 2 種別がすべて取れなかった結果 */
+const allFailed = (reason: string): NewVideosResult => pages([], [failed(0, 'tag', reason), failed(0, 'tag_shorts', reason), failed(1, 'tag', reason), failed(1, 'tag_shorts', reason)])
 const locked = (...names: string[]) => names.map((name) => ({ name, isLocked: true }))
 const okThumb = (tags = locked('x')): ThumbResult => ({ ok: true, info: { tagDetails: tags, ownerVisibility: 'visible', nickname: 'n' } })
 const existing = (followerCount: number): UserInfo => ({ status: 'existing', followerCount, nickname: 'n' })
@@ -49,17 +53,15 @@ function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
 describe('lqng-poller runPoll', () => {
   it('主経路の新着取得が壊れたら予備（nvapi）で取り込み、履歴に理由を残す', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const primary = vi.fn(async () => {
-      throw new Error('server-response meta not found')
-    })
+    const primary = vi.fn(async () => allFailed('server-response meta not found'))
     const fallback = vi.fn(async () => [video({ id: 'sm70', authorId: '7001' })])
     const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }), 'poll')
     expect(r.skipped).toBeNull()
-    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(fallback).toHaveBeenCalledWith(['tagA', 'tagB'], expect.any(String))
     expect(r.newVideos).toBe(1)
-    expect(r.note).toContain('fallback')
+    expect(r.note).toContain('fallback(t0,t1): ok')
     const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
-    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('new_videos_primary_failed'))).toBe(true)
+    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('server-response meta not found'))).toBe(true)
   })
 
   it('連投中の投稿者は待ち行列が長くても先に存在確認・補完される', async () => {
@@ -432,38 +434,69 @@ describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
     return m
   }
 
-  it('主経路がアクセス制限なら最終取得時刻を進めず、次回は前回の時刻から重なり分を取り直す', async () => {
+  it('通常動画のページだけ形が変わっても、そのタグは予備（nvapi）で補い、ショートは本家から取り込む', async () => {
     const m = await afterFirstPoll()
-    const limited = vi.fn(async () => {
-      throw new AccessLimitedError('nico-page')
-    })
-    const r = await runPoll(m.kv, deps({ fetchNewVideos: limited }, later), 'poll')
-    expect(r.skipped).toBeNull()
-    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
-    const next = vi.fn(async () => pages([]))
-    await runPoll(m.kv, deps({ fetchNewVideos: next }, new Date(later.getTime() + 15 * 60_000)), 'poll')
-    const since = (next.mock.calls[0] as unknown as [string[], string])[1]
-    expect(since).toBe(new Date(T0.getTime() - LIMITS.sinceOverlapMinutes * 60_000).toISOString())
+    const primary = vi.fn(async () =>
+      pages([video({ id: 'ss80', authorId: '8001' })], [failed(0, 'tag', 'server-response meta not found'), failed(1, 'tag', 'server-response meta not found')])
+    )
+    const fallback = vi.fn(async () => [video({ id: 'sm81', authorId: '8002' })])
+    const reportError = vi.fn()
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback, reportError }, later), 'poll')
+    expect(fallback).toHaveBeenCalledWith(['tagA', 'tagB'], expect.any(String))
+    expect(r.newVideos).toBe(2)
+    // ショートは取れ、通常動画は予備で補えたので、最終取得時刻は進める
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.lastPollAt).toBe(later.toISOString())
+    // 本家ページの失敗は履歴と監視に出す
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note?.includes('t0:tag:p1 server-response meta not found'))).toBe(true)
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(r.note).toContain('fallback(t0,t1): ok')
   })
 
-  it('主経路が壊れて予備もアクセス制限なら最終取得時刻を進めない', async () => {
+  it('一部のタグの通常動画だけ取れなければ、そのタグだけ予備で補う', async () => {
     const m = await afterFirstPoll()
-    const primary = vi.fn(async () => {
-      throw new Error('server-response meta not found')
-    })
+    const fallback = vi.fn(async () => [])
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(1, 'tag')])), fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledWith(['tagB'], expect.any(String))
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(later.toISOString())
+  })
+
+  it('ショートが取れなかった回は予備では補えないので最終取得時刻を進めず、次の回に同じ区間を取り直す', async () => {
+    const m = await afterFirstPoll()
+    const fallback = vi.fn(async () => [])
+    const reportError = vi.fn()
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag_shorts')])), fetchNewVideosFallback: fallback, reportError }, later), 'poll')
+    expect(fallback).not.toHaveBeenCalled()
+    expect(r.note).toContain('new_videos_failed: t0:tag_shorts:p1 nico_page_http_503')
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+    // 次の回: 前回の最終取得時刻から重なり分を取り直し、取れなかったショートを取り込む
+    const missed = video({ id: 'ss82', authorId: '8003', registeredAt: at(5) })
+    const next = vi.fn(async () => pages([missed]))
+    const nextAt = new Date(later.getTime() + 15 * 60_000)
+    const r2 = await runPoll(m.kv, deps({ fetchNewVideos: next }, nextAt), 'poll')
+    const since = (next.mock.calls[0] as unknown as [string[], string])[1]
+    expect(since).toBe(new Date(T0.getTime() - LIMITS.sinceOverlapMinutes * 60_000).toISOString())
+    expect(r2.newVideos).toBe(1)
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.authors['8003']?.posts.map((p) => p.id)).toEqual(['ss82'])
+    expect(tracking.lastPollAt).toBe(nextAt.toISOString())
+  })
+
+  it('予備もアクセス制限なら最終取得時刻を進めない', async () => {
+    const m = await afterFirstPoll()
     const fallback = vi.fn(async () => {
       throw new AccessLimitedError('nvapi')
     })
-    await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag', 'nico_page_http_403')])), fetchNewVideosFallback: fallback }, later), 'poll')
     expect(fallback).toHaveBeenCalledTimes(1)
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'access_limited' && e.note === 'access limited: nvapi')).toBe(true)
   })
 
   it('主経路も予備も壊れていれば、記録して他の処理は続け、最終取得時刻は進めない', async () => {
     const m = await afterFirstPoll()
-    const primary = vi.fn(async () => {
-      throw new Error('nico_page_http_500')
-    })
+    const primary = vi.fn(async () => allFailed('nico_page_http_500'))
     const fallback = vi.fn(async () => {
       throw new Error('nvapi_http_503')
     })
@@ -482,32 +515,43 @@ describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
     expect(saved.pending).toEqual([])
     expect(saved.lastRun?.note).toContain('new_videos_failed')
     const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
-    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('nvapi_http_503'))).toBe(true)
+    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('fallback(t0,t1): nvapi_http_503'))).toBe(true)
     expect(reportError).toHaveBeenCalledTimes(1)
   })
 
-  it('主経路の一部（ショートなど）だけ失敗しても予備には縮退せず、取れた分を取り込んで注記する', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const primary = vi.fn(async () => pages([video({ id: 'sm92' })], ['t0:tag_shorts:p1 nico_page_http_503']))
-    const fallback = vi.fn(async () => [video({ id: 'sm93' })])
-    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }), 'poll')
-    expect(fallback).not.toHaveBeenCalled()
-    expect(r.newVideos).toBe(1)
-    expect(r.note).toContain('new_videos_partial: t0:tag_shorts:p1 nico_page_http_503')
-    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
-    expect(tracking.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm92'])
-    // 取れなかったページは次回の重なり（6 時間）で取り直すので、最終取得時刻は進める
-    expect(tracking.lastPollAt).toBe(T0.toISOString())
+  it('通常動画を予備で補えても、ショートが取れていない回は最終取得時刻を進めない', async () => {
+    const m = await afterFirstPoll()
+    const fallback = vi.fn(async () => [video({ id: 'sm91' })])
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => allFailed('server-response meta not found')), fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
   })
 
-  it('予備で取れた回は最終取得時刻を進める', async () => {
+  it('想定外の例外で新着を取れなかった回も、全ページ失敗として予備で補い、最終取得時刻は進めない', async () => {
     const m = await afterFirstPoll()
-    const primary = vi.fn(async () => {
-      throw new Error('server-response meta not found')
+    const primary = vi.fn(async (): Promise<NewVideosResult> => {
+      throw new Error('unexpected')
     })
-    const fallback = vi.fn(async () => [video({ id: 'sm91' })])
-    await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
-    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(later.toISOString())
+    const fallback = vi.fn(async () => [video({ id: 'sm92' })])
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledWith(['tagA', 'tagB'], expect.any(String))
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+  })
+
+  it('同じ失敗が続く間、履歴には最初の 1 回だけ積み、注記と監視には毎回出す（直ったあとの失敗はまた積む）', async () => {
+    const m = await afterFirstPoll()
+    const reportError = vi.fn()
+    const failing = deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag_shorts')])), reportError }, later)
+    const errorsIn = (): number => m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.filter((e) => e.kind === 'error' && e.note?.includes('tag_shorts')).length ?? 0
+    await runPoll(m.kv, failing, 'poll')
+    const r2 = await runPoll(m.kv, { ...failing, now: () => new Date(later.getTime() + 15 * 60_000) }, 'poll')
+    expect(errorsIn()).toBe(1)
+    expect(r2.note).toContain('new_videos_failed')
+    expect(reportError).toHaveBeenCalledTimes(2)
+    await runPoll(m.kv, deps({}, new Date(later.getTime() + 30 * 60_000)), 'poll')
+    await runPoll(m.kv, { ...failing, now: () => new Date(later.getTime() + 45 * 60_000) }, 'poll')
+    expect(errorsIn()).toBe(2)
   })
 })
 
@@ -596,6 +640,7 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
         unattributed: [],
         lastRun: null,
         recentRuns: [],
+        issues: {},
         updatedAt: deletedAt,
       }
       const verdicts: LqngVerdicts = {
@@ -728,6 +773,7 @@ describe('lqng-poller 追跡の刈り込みの順番', () => {
       unattributed: [],
       lastRun: null,
       recentRuns: [],
+      issues: {},
       updatedAt: days(8),
     }
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
@@ -787,10 +833,7 @@ describe('lqng-poller 外部呼び出しの予算', () => {
 
   it('本家ページが全部失敗した回も、送ったページ数を使ったうえで予備の分を足す', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const primary = vi.fn(async () => {
-      throw new NicoPagesFailedError(['t0:tag:p1 nico_page_http_500'], 4)
-    })
-    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: vi.fn(async () => []) }), 'poll')
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => allFailed('nico_page_http_500')), fetchNewVideosFallback: vi.fn(async () => []) }), 'poll')
     expect(r.subrequests).toBe(4 + LIMITS.fallbackCost)
   })
 

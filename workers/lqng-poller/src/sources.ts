@@ -39,30 +39,32 @@ export class AccessLimitedError extends Error {
   }
 }
 
+/** 本家タグページの取れなかった 1 ページ（タグは名前でなく設定の並び順の番号で表す） */
+export interface PageFailure {
+  tagIndex: number
+  kind: NicoPageKind
+  page: number
+  /** 例: nico_page_http_503、server-response meta not found、skipped_after_403（403 の後で送らなかった） */
+  reason: string
+}
+
 /** 新着の主経路（本家タグページ）の結果。取れたページの動画と、取れなかったページ */
 export interface NewVideosResult {
   videos: SourceVideo[]
-  /** 取れなかったページ（タグは名前でなく設定の並び順の番号で表す。例: t0:tag_shorts:p1 nico_page_http_503） */
-  failures: string[]
+  /** 取れなかったページ（タグ×種別ごと） */
+  failures: PageFailure[]
   /** 実際に送ったリクエスト数（失敗したページも含む。サブリクエスト予算の消費に使う） */
   requests: number
 }
 
-/** 本家タグページが 1 ページも取れなかった（呼び出し側で予備の nvapi に縮退する） */
-export class NicoPagesFailedError extends Error {
-  constructor(
-    readonly failures: string[],
-    /** 実際に送ったリクエスト数 */
-    readonly requests: number
-  ) {
-    super(`nico_pages_failed: ${failures.join('; ')}`)
-    this.name = 'NicoPagesFailedError'
-  }
-}
+/** 例: t0:tag_shorts:p1 nico_page_http_503 */
+export const formatPageFailure = (f: PageFailure): string => `t${f.tagIndex}:${f.kind}:p${f.page} ${f.reason}`
+
+const NICO_PAGE_FORBIDDEN = 'nico_page_http_403'
 
 export interface PollDeps {
   now: () => Date
-  /** 新着の主経路（本家のタグページ）。全ページ失敗したときだけ投げ、fetchNewVideosFallback（nvapi）へ */
+  /** 新着の主経路（本家のタグページ）。通常動画のページが取れなかったタグは fetchNewVideosFallback（nvapi）で補う */
   fetchNewVideos: (tags: string[], sinceIso: string) => Promise<NewVideosResult>
   fetchNewVideosFallback?: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
@@ -125,31 +127,33 @@ export const NICO_PAGE_KINDS: readonly NicoPageKind[] = ['tag', 'tag_shorts']
  * nvapi の動画検索には無いショート（ss）も /tag_shorts から拾える。
  * タグ×種別ごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 2 ページ目まで読む。
  * 同じ動画が複数タグに出ても 1 回だけ返す。
- * 失敗はタグ×種別ごとに扱い、取れたページの分は返す（ショートだけ失敗しても nvapi には縮退しない）。
- * 403（アクセス制限）に当たったら残りのページは読まない。全ページ失敗したときだけ throw（呼び出し側で nvapi に縮退）。
+ * 失敗は投げずにタグ×種別ごとに返し、取れたページの分は使う（どのタグを nvapi で補うかは呼び出し側が決める）。
+ * 403（アクセス制限）に当たった種別は、残りのタグでもその種別のページを送らない（別の種別は読み続ける）。
  */
 export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<NewVideosResult> {
   const sinceMs = new Date(sinceIso).getTime()
   const seen = new Set<string>()
   const out: SourceVideo[] = []
-  const failures: string[] = []
-  let succeeded = 0
+  const failures: PageFailure[] = []
+  const forbiddenKinds = new Set<NicoPageKind>()
   let requests = 0
-  let limited = false
   for (const [tagIndex, tag] of tags.entries()) {
     for (const kind of NICO_PAGE_KINDS) {
-      for (let page = 1; page <= NICO_PAGES_PER_TAG && !limited; page++) {
+      if (forbiddenKinds.has(kind)) {
+        failures.push({ tagIndex, kind, page: 1, reason: 'skipped_after_403' })
+        continue
+      }
+      for (let page = 1; page <= NICO_PAGES_PER_TAG; page++) {
         let result: NicoPageResult
         requests++
         try {
           result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
         } catch (error) {
           const reason = error instanceof Error ? error.message : 'error'
-          failures.push(`t${tagIndex}:${kind}:p${page} ${reason}`)
-          limited = reason === 'nico_page_http_403'
+          failures.push({ tagIndex, kind, page, reason })
+          if (reason === NICO_PAGE_FORBIDDEN) forbiddenKinds.add(kind)
           break
         }
-        succeeded++
         let reachedSince = false
         for (const item of result.items) {
           if (new Date(item.registeredAt).getTime() < sinceMs) {
@@ -165,7 +169,6 @@ export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: stri
       }
     }
   }
-  if (succeeded === 0 && failures.length > 0) throw new NicoPagesFailedError(failures, requests)
   return { videos: out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt)), failures, requests }
 }
 

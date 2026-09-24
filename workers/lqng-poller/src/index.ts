@@ -7,7 +7,7 @@ import { countLockedGroups } from '../../../lib/lqng/rules'
 import { commitBackfill, createLiveBackfillDeps, runBackfillStep, type BackfillCursor } from './backfill'
 import { InvalidInboxRefError } from './inbox'
 import { runPoll, type RunMode, type RunResult } from './poll'
-import { createLiveDeps, fetchNewVideosFromNicoPages, fetchNewVideosFromNvapi } from './sources'
+import { createLiveDeps, fetchNewVideosFromNicoPages, fetchNewVideosFromNvapi, formatPageFailure } from './sources'
 import { loadConfig, loadState, type KvLike } from './state'
 
 interface Env {
@@ -44,7 +44,10 @@ async function probeNewVideos(request: Request, env: Env, url: URL): Promise<Res
   try {
     const { videos, failures } = source === 'pages' ? await fetchNewVideosFromNicoPages(pollTags, since) : { videos: await fetchNewVideosFromNvapi(pollTags, since), failures: [] }
     const times = videos.map((v) => v.registeredAt).sort()
-    return Response.json({ probe: { source, ok: true, since, count: videos.length, first: times[0] ?? null, last: times[times.length - 1] ?? null, failures, ...where } }, { headers: NO_STORE })
+    return Response.json(
+      { probe: { source, ok: true, since, count: videos.length, first: times[0] ?? null, last: times[times.length - 1] ?? null, failures: failures.map(formatPageFailure), ...where } },
+      { headers: NO_STORE }
+    )
   } catch (error) {
     return Response.json({ probe: { source, ok: false, since, error: error instanceof Error ? error.message : 'error', ...where } }, { headers: NO_STORE })
   }

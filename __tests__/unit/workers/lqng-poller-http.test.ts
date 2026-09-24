@@ -46,6 +46,7 @@ function setup() {
     unattributed: [],
     lastRun: null,
     recentRuns: [],
+    issues: {},
     updatedAt: '2026-02-01T00:00:00.000Z',
   }
   const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
@@ -122,6 +123,7 @@ describe('lqng-poller /status（直近の実行）', () => {
         { at: '2026-02-01T00:15:00.000Z', mode: 'poll' },
         { at: '2026-02-01T00:00:00.000Z', mode: 'poll', note: 'fallback: x' },
       ],
+      issues: {},
       updatedAt: '2026-02-01T00:15:00.000Z',
     }
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking, [LQNG_KV_KEYS.events]: { version: 1, items: [], lastRun: null } })
