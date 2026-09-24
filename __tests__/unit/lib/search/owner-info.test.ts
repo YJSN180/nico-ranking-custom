@@ -6,6 +6,7 @@ import {
   parseChannelInfo,
   fetchOwnerInfo,
   clearOwnerInfoCache,
+  authorIdsMatchingNames,
   OWNER_INFO_MAX_USERS,
   OWNER_INFO_MAX_CHANNEL_VIDEOS,
 } from '@/lib/search/owner-info'
@@ -121,5 +122,17 @@ describe('fetchOwnerInfo', () => {
     await fetchOwnerInfo({ userIds: ['1'], channelVideoIds: [] }, { fetchImpl, now: 0 })
     await fetchOwnerInfo({ userIds: ['1'], channelVideoIds: [] }, { fetchImpl, now: 25 * 60 * 60 * 1000 })
     expect(calls).toHaveLength(2)
+  })
+})
+
+describe('authorIdsMatchingNames', () => {
+  it('名前が条件に当たる投稿者を、検索結果の投稿者 ID の形（ユーザーは数字、チャンネルは channel/chNNN）で返す', () => {
+    const result = {
+      users: { '1001': { name: 'safe' }, '1002': { name: 'ng-name' } },
+      channels: { ch3003: { name: 'ng-channel' }, ch3004: { name: 'safe-channel' } },
+      missing: ['1005'],
+      failed: [],
+    }
+    expect(authorIdsMatchingNames(result, (name) => name.startsWith('ng-'))).toEqual(['1002', 'channel/ch3003'])
   })
 })

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { collectAutoNg, mergeAutoNgIntoList } from '@/lib/lqng/merge'
-import { applyRequestRules } from '@/lib/lqng/request-rules'
+import { applyRequestRules, lockTagRuleHits } from '@/lib/lqng/request-rules'
 import { normalizeLqngConfig, normalizeLqngVerdicts, LQNG_KV_KEYS } from '@/lib/lqng/config'
 import { DEFAULT_LQNG_CONFIG, type LqngConfig, type LqngVerdicts } from '@/lib/lqng/types'
 import { filterWithNGListCore } from '@/lib/ng-filter-core'
@@ -98,6 +98,29 @@ describe('applyRequestRules', () => {
     expect(applyRequestRules(items, null).items).toHaveLength(1)
     expect(applyRequestRules(items, { ...config, enabled: false }).items).toHaveLength(1)
     expect(applyRequestRules(items, { ...config, titleNeedles: [], tagGroups: [] }).items).toHaveLength(1)
+  })
+})
+
+describe('lockTagRuleHits（検索の新着区間のタグ補完後に D を当てる）', () => {
+  const locked = (...names: string[]) => names.map((name) => ({ name, isLocked: true }))
+
+  it('ロック済みのタグ群が閾値以上の動画だけを返し、許可リストの動画・投稿者は除く', () => {
+    const videos = [
+      { id: 'sm1', authorId: '2001', tagDetails: locked('g1', 'g2', 'g3') },
+      { id: 'sm2', authorId: '2002', tagDetails: locked('g1', 'g2') },
+      { id: 'sm3', authorId: '2003', tagDetails: [{ name: 'g1', isLocked: true }, { name: 'g2', isLocked: true }, { name: 'g3', isLocked: false }] },
+      { id: 'sm4', authorId: '9001', tagDetails: locked('g1', 'g2', 'g3') }, // 許可投稿者
+      { id: 'sm9002', authorId: '2004', tagDetails: locked('g1', 'g2', 'g3') }, // 許可動画
+      { id: 'sm5', authorId: null, tagDetails: locked('g2', 'g3', 'g4') },
+    ]
+    expect(lockTagRuleHits(videos, config)).toEqual(['sm1', 'sm5'])
+  })
+
+  it('設定が無い・無効・タグ群が無いときは何も返さない', () => {
+    const videos = [{ id: 'sm1', authorId: '2001', tagDetails: locked('g1', 'g2', 'g3') }]
+    expect(lockTagRuleHits(videos, null)).toEqual([])
+    expect(lockTagRuleHits(videos, { ...config, enabled: false })).toEqual([])
+    expect(lockTagRuleHits(videos, { ...config, tagGroups: [] })).toEqual([])
   })
 })
 

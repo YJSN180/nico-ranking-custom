@@ -330,6 +330,7 @@ export function SearchClient() {
 
   // リアルタイム区間（nvapi 由来）の動画はタグを持たないため、表示後に v3_guest 経由で
   // tags / tagDetails を後付けする。これでタグ系のユーザーNG・タグ表示が区間にも効く。
+  // サーバーが自動 NG のロックタグ規則 D に当たると判定した動画（hiddenIds）は、ここで一覧から外す。
   const enrichRealtimeTags = useCallback(async (data: SearchApiResponse, signal?: AbortSignal) => {
     // 早期 return より前に採番し、新しい検索が来たら（結果がマージでなくても）古い補完を無効化する
     const requestId = ++tagsRequestIdRef.current
@@ -342,16 +343,19 @@ export function SearchClient() {
         const chunk = targets.slice(i, i + REALTIME_TAGS_MAX_VIDEOS)
         const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(chunk.join(','))}`, { signal })
         if (!res.ok) return
-        const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>> }
+        const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>>; hiddenIds?: string[] }
         if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
         const details = body.tagDetails
+        const hidden = new Set(body.hiddenIds ?? [])
         setItems((prev) =>
           prev
-            ? prev.map((it) =>
-                details[it.id]
-                  ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
-                  : it
-              )
+            ? prev
+                .filter((it) => !hidden.has(it.id))
+                .map((it) =>
+                  details[it.id]
+                    ? { ...it, tagDetails: details[it.id], tags: details[it.id].map((t) => t.name) }
+                    : it
+                )
             : prev
         )
       }
@@ -363,6 +367,7 @@ export function SearchClient() {
   // Snapshot API には投稿者名・アイコンが無い（userId / channelId のみ）ため、表示後に
   // /api/search/owners で後付けし、ランキング画面と同じ投稿者表示にする。
   // ユーザーは ID ごと、チャンネルは代表動画 1 件ごとに問い合わせる。
+  // サーバーが管理者の投稿者名 NG に当たると判定した投稿者（hiddenAuthorIds）の動画は、ここで一覧から外す。
   const enrichOwners = useCallback(async (data: SearchApiResponse, signal?: AbortSignal) => {
     const requestId = ++ownersRequestIdRef.current
     const userIds = new Set<string>()
@@ -378,18 +383,26 @@ export function SearchClient() {
     }
     if (userIds.size === 0 && channelVideos.size === 0) return
 
-    const applyOwners = (users: Record<string, OwnerInfo>, channels: Record<string, OwnerInfo>, missing: string[]): void => {
+    const applyOwners = (
+      users: Record<string, OwnerInfo>,
+      channels: Record<string, OwnerInfo>,
+      missing: string[],
+      hiddenAuthorIds: string[]
+    ): void => {
       const deleted = new Set(missing)
+      const hidden = new Set(hiddenAuthorIds)
       setItems((prev) =>
         prev
-          ? prev.map((it) => {
-              if (it.authorName || !it.authorId) return it
-              if (deleted.has(it.authorId)) return { ...it, authorDeleted: true }
-              const info = it.authorId.startsWith('channel/')
-                ? channels[it.authorId.slice('channel/'.length)]
-                : users[it.authorId]
-              return info ? { ...it, authorName: info.name, authorIcon: info.icon ?? it.authorIcon } : it
-            })
+          ? prev
+              .filter((it) => !(it.authorId && hidden.has(it.authorId)))
+              .map((it) => {
+                if (it.authorName || !it.authorId) return it
+                if (deleted.has(it.authorId)) return { ...it, authorDeleted: true }
+                const info = it.authorId.startsWith('channel/')
+                  ? channels[it.authorId.slice('channel/'.length)]
+                  : users[it.authorId]
+                return info ? { ...it, authorName: info.name, authorIcon: info.icon ?? it.authorIcon } : it
+              })
           : prev
       )
     }
@@ -409,9 +422,14 @@ export function SearchClient() {
         try {
           const res = await fetch(`/api/search/owners?${query}`, { signal })
           if (!res.ok) return
-          const body = (await res.json()) as { users?: Record<string, OwnerInfo>; channels?: Record<string, OwnerInfo>; missing?: string[] }
+          const body = (await res.json()) as {
+            users?: Record<string, OwnerInfo>
+            channels?: Record<string, OwnerInfo>
+            missing?: string[]
+            hiddenAuthorIds?: string[]
+          }
           if (requestId !== ownersRequestIdRef.current) return
-          applyOwners(body.users ?? {}, body.channels ?? {}, body.missing ?? [])
+          applyOwners(body.users ?? {}, body.channels ?? {}, body.missing ?? [], body.hiddenAuthorIds ?? [])
         } catch {
           // 補完は任意機能なので失敗（abort 含む）しても検索結果はそのまま（ID 表示のまま）
         }

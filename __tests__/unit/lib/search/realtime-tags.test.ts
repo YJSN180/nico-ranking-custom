@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   sanitizeVideoIds,
   parseTagDetails,
+  parseV3GuestAuthorId,
   fetchTagDetailsForVideos,
   REALTIME_TAGS_MAX_VIDEOS,
 } from '@/lib/search/realtime-tags'
@@ -60,5 +61,25 @@ describe('fetchTagDetailsForVideos: 全体の期限', () => {
     expect(calls).toHaveLength(2)
     expect(Object.keys(result.tagDetails).sort()).toEqual(['sm1', 'sm2'])
     expect(result.failed.sort()).toEqual(['sm3', 'sm4'])
+  })
+})
+
+describe('parseV3GuestAuthorId', () => {
+  it('ユーザー動画は owner.id、チャンネル動画は channel/chNNN を返す', () => {
+    expect(parseV3GuestAuthorId({ data: { owner: { id: 1001 }, channel: null } })).toBe('1001')
+    expect(parseV3GuestAuthorId({ data: { owner: null, channel: { id: 'ch3003' } } })).toBe('channel/ch3003')
+    expect(parseV3GuestAuthorId({ data: { owner: null, channel: { id: '3004' } } })).toBe('channel/ch3004')
+    expect(parseV3GuestAuthorId({ data: {} })).toBeNull()
+    expect(parseV3GuestAuthorId(null)).toBeNull()
+  })
+
+  it('fetchTagDetailsForVideos は動画ごとの投稿者 ID も返す（許可リストの判定用）', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      const id = url.match(/v3_guest\/(sm\d+)/)![1]
+      const data = id === 'sm2' ? { owner: null, channel: { id: 'ch3003' } } : { owner: { id: 1001 }, channel: null }
+      return { ok: true, status: 200, json: async () => ({ data: { ...data, tag: { items: [{ name: 't', isLocked: true }] } } }) } as unknown as Response
+    })
+    const result = await fetchTagDetailsForVideos(['sm1', 'sm2'], { fetchImpl: fetchImpl as unknown as typeof fetch })
+    expect(result.authorIds).toEqual({ sm1: '1001', sm2: 'channel/ch3003' })
   })
 })

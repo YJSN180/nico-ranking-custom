@@ -54,6 +54,18 @@ export interface OwnerInfoResult {
   failed: string[]
 }
 
+/**
+ * 名前が条件に当たる投稿者を、検索結果の投稿者 ID の形（ユーザーは数字、チャンネルは channel/chNNN）で返す。
+ * Snapshot 由来の行には名前が無く、/api/search では投稿者名 NG を当てられないため、名前が分かったここで当てる
+ */
+export function authorIdsMatchingNames(result: OwnerInfoResult, matches: (name: string) => boolean): string[] {
+  const users = Object.entries(result.users).filter(([, info]) => matches(info.name)).map(([id]) => id)
+  const channels = Object.entries(result.channels)
+    .filter(([, info]) => matches(info.name))
+    .map(([id]) => (id.startsWith('ch') ? `channel/${id}` : `channel/ch${id}`))
+  return [...users, ...channels]
+}
+
 function sanitizeIds(raw: string | null, pattern: RegExp, max: number): string[] {
   if (!raw) return []
   const seen = new Set<string>()
