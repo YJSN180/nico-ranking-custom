@@ -411,6 +411,19 @@ describe('lqng-poller 受け箱（バックフィルの確定）の合流', () =
     expect(verdicts.videos).toEqual({})
   })
 
+  it('一覧に出ても読むと無くなっていた受け箱（結果整合のずれ）は、合流も削除もせずに飛ばす', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const kv = {
+      ...m.kv,
+      list: async () => ({ keys: [{ name: 'lqng:inbox:run1:000001' }], list_complete: true }),
+    }
+    const r = await runPoll(kv, deps(), 'poll')
+    expect(r.skipped).toBeNull()
+    expect(m.deletes).toEqual([])
+    expect(m.store.has(LQNG_KV_KEYS.verdicts)).toBe(false)
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error') ?? false).toBe(false)
+  })
+
   it('壊れた受け箱は消して、履歴に記録する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     m.store.set('lqng:inbox:run1:000001', '{not json')
@@ -748,17 +761,19 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
       const info = vi.fn(async () => existing(5))
       await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 1)), 'poll')
       expect(info).toHaveBeenCalledWith('1001')
-      // 追跡中の投稿はもう無いので追跡からは外れうるが、残っていれば退会扱いは外れている
+      // 刈り込みは確認より前なので、再確認した回の終わりには追跡に残っていて、退会扱いが外れている
       const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']
-      if (author) {
-        expect(author.status).toBe('existing')
-        expect(author.deletedObservedAt).toBeNull()
-      }
+      expect(author?.status).toBe('existing')
+      expect(author?.deletedObservedAt).toBeNull()
       const verdict = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']
       expect(verdict?.status).toBe('ng')
       expect(verdict?.reasons).toEqual(['A_C'])
       expect(verdict?.deletedObservedAt).toBeNull()
       expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_restored' && e.authorId === '1001')).toBe(true)
+      // 追跡中の投稿はもう無いので、次の回に追跡から外れる（投稿者 NG は残る）
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 2)), 'poll')
+      expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']).toBeUndefined()
+      expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']?.status).toBe('ng')
     })
 
     it('確認待ちの投稿者が多くても、7 日前に確かめた退会扱いの再確認は後回しにし続けない', async () => {
@@ -940,7 +955,7 @@ describe('lqng-poller getthumbinfo の失敗の扱い', () => {
     expect(pending.map((p) => p.id)).toEqual(['sm523', 'sm524', 'sm520', 'sm521', 'sm522'])
     expect(pending.map((p) => p.transient ?? 0)).toEqual([0, 0, 1, 1, 1])
     // 2 回目: 手を付けていなかった動画から補完する
-    const thumb = vi.fn(async () => okThumb())
+    const thumb = vi.fn(async (_id: string) => okThumb())
     await runPoll(m.kv, deps({ fetchThumbInfo: thumb }, later(1)), 'poll')
     expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm523', 'sm524', 'sm520', 'sm521', 'sm522'])
   })

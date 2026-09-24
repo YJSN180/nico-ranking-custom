@@ -151,6 +151,31 @@ describe('lqng-poller /status（直近の実行）', () => {
   })
 })
 
+describe('lqng-poller /trigger?mode=backfill-commit', () => {
+  const commit = (body: unknown) =>
+    new Request('https://w.test/trigger?mode=backfill-commit', { method: 'POST', headers: { Authorization: `Bearer ${AUTH_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const deltas = { authors: { '7001': { status: 'ng', reasons: ['A_C'], since: 's', evidence: [] } }, videos: {} }
+
+  it('runId・連番を送らない旧い駆動スクリプトの確定も、受け箱の別々のキーに置く', async () => {
+    const { m, env } = setup()
+    const first = await fetchWorker(commit({ deltas }), env)
+    const second = await fetchWorker(commit({ deltas }), env)
+    expect(first.status).toBe(200)
+    const keys = [(await first.json()) as { key: string }, (await second.json()) as { key: string }].map((b) => b.key)
+    expect(keys.every((k) => /^lqng:inbox:legacy-[0-9a-z]+-[0-9a-f]{8}:000000$/.test(k))).toBe(true)
+    expect(new Set(keys).size).toBe(2)
+    expect(m.puts.filter((k) => k.startsWith('lqng:inbox:'))).toEqual(keys)
+    expect(m.store.has(LQNG_KV_KEYS.verdicts)).toBe(false)
+  })
+
+  it('不正な runId・連番は 400 で、何も書かない', async () => {
+    const { m, env } = setup()
+    const res = await fetchWorker(commit({ deltas, runId: 'a:b', seq: 1 }), env)
+    expect(res.status).toBe(400)
+    expect(m.puts).toEqual([])
+  })
+})
+
 describe('lqng-poller /trigger?mode=probe（対象タグの上限）', () => {
   it('対象タグはポーリングと同じ上限（3 つ）までしか取りに行かない', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, pollTags: ['t1', 't2', 't3', 't4', 't5'] } })
