@@ -51,7 +51,7 @@ npx wrangler deploy --dry-run -c workers/ranking-scheduler/wrangler.toml
 - R2公開は最大8並列。成功済みのimmutable objectは再アップロードしない。current.jsonのETag競合時は別runの公開を上書きしない。
 - 収集グループは65分で明示失敗、jobは70分。正常終了してartifactがない場合もActions側で失敗。9月1日の欠損原因自体が再現できたという意味ではない。
 - 収集グループは、ランキングのページ取得・タグキャッシュのシャード読込・タグ詳細の1件ごとに進捗を記録する。10分進捗がなければ`process.getActiveResourcesInfo()`の要約を出してexit 1で終わり、65分の期限を待たずに再実行へ回す。
-- 公開後検証（verify-r2-contract）は統計が新しい世代に追いつくまで最大12分待つ。統計のcronは5分ごと・1回約45秒で、R2 leaseで直列化されるため、公開前に始まった回やleaseと重なったtriggerのせいで1〜2周遅れうる。/triggerが`{skipped: 'already-running'}`（lease中）を返したら60秒後に、応答が失われた・失敗した場合は統計が3分動かなければ再送する（最大8回）。1回の更新が約45秒かかるため、triggerの応答は120秒まで待つ。途中で切断すると更新が打ち切られてleaseが残るおそれがあり、その場合は次のcronが空振りする。
+- 公開後検証（verify-r2-contract）は統計が新しい世代に追いつくまで最大12分待つ。統計のcronは5分ごと・1回約45秒で、R2 leaseで直列化されるため、公開前に始まった回やleaseと重なったtriggerのせいで1〜2周遅れうる。/triggerが`{skipped: 'already-running'}`（lease中）を返したら60秒後に、応答が失われた・失敗した場合は統計が3分動かなければ再送する（最大8回）。1回の更新が約45秒かかるため、triggerの応答は120秒まで待つ。途中で切断すると更新が打ち切られてleaseが残るおそれがあり、その場合は次のcronが空振りする。この待ちは集約ジョブの最後の手順に置き、補助同期とタグキャッシュの統合を先に済ませる。集約ジョブの上限は、集約（約8分）と検証の待ち（最大12分余り）に余裕を足して35分にしている。
 - schedulerは稼働中runをcancelせず待機する。100分超ならstalledを通知。送信記録を先にR2へ保存し、応答が失われても15分間は再送しない。slotごと最大2回。
 - 同slotの失敗runはrerun-failed-jobs。成功グループのartifactを再利用する。補助同期が失敗した場合も後段jobだけ再試行する。
 - GitHub自体が停止・runner不足の場合、dispatch成功だけでは収集成功にならない。鮮度監視で別途検知する。
@@ -84,7 +84,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 ## 監視と受け入れ
 
 - Cloudflare側: 公開から90分でstale、120分でcritical、収集開始から150分でsource-stale。statsは15分以内かつ非ゼロ、前回健全値の50%以上。
-- 新公開の10分後にはstats世代/updatedAt、補助同期世代、公開APIの収集日時が一致すること。KVの伝播遅延は猶予内で扱う。
+- 新公開の15分後にはstats世代/updatedAt、補助同期世代、公開APIの収集日時が一致すること。KVの伝播遅延は猶予内で扱う。statsはleaseと重なると1〜2周遅れるため、10分では足りないことがある（2026-09-24の初回世代公開では約10.3分）。
 - 通知は異常分類の変化と回復時。health状態は世代・件数・分類が変わるときのみR2へ書く。毎pollのKVログ書き込みは追加しない。
 - GitHubの3時間監視も補助として残すが、GitHub cron遅延時の主監視にはしない。
 - 7日間: 各slotのdispatch時刻、実開始、収集完了、publish、stats反映を比較する。重複公開ゼロ、未公開世代の露出ゼロ、120分超の未通知停止ゼロを確認する。
