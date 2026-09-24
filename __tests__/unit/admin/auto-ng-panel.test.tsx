@@ -133,7 +133,7 @@ describe('AutoNGPanel', () => {
     await screen.findByText('● 稼働中')
     fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
     for (const button of screen.getAllByText('手動NGに写す')) expect(button).toBeDisabled()
-    fireEvent.click(screen.getAllByText('手動NGに写す')[0]!)
+    fireEvent.click(screen.getAllByText('手動NGに写す')[0])
     expect(copy).not.toHaveBeenCalled()
   })
 

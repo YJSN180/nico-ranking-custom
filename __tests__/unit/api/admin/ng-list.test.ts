@@ -113,7 +113,7 @@ describe('NG List API', () => {
         authorIds: ['12345678'],
         authorNames: { exact: [], partial: ['n'] }
       }
-      ;(setNGListManual as any).mockResolvedValueOnce(undefined)
+      vi.mocked(setNGListManual).mockResolvedValueOnce(undefined)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list', {
         method: 'POST',

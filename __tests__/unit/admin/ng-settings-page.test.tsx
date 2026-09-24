@@ -102,9 +102,9 @@ describe('NG設定ページ（手動NG一覧）', () => {
     render(<NGSettingsPage />)
     await screen.findByText('12345678')
     fireEvent.change(screen.getByPlaceholderText('例: sm12345'), { target: { value: 'sm2' } })
-    fireEvent.click(screen.getAllByRole('button', { name: '追加' })[0]!)
+    fireEvent.click(screen.getAllByRole('button', { name: '追加' })[0])
     await waitFor(() => expect(postCalls()).toHaveLength(1), { timeout: 2000 })
-    const body = JSON.parse(String((postCalls()[0]![1] as RequestInit).body)) as Record<string, unknown>
+    const body = JSON.parse(String((postCalls()[0][1] as RequestInit).body)) as Record<string, unknown>
     expect(Object.keys(body).sort()).toEqual(['authorIds', 'authorNames', 'videoIds', 'videoTitles'])
     expect(body.videoIds).toEqual(['sm1', 'sm2'])
   })

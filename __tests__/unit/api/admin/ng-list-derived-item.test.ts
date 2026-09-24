@@ -35,7 +35,7 @@ describe('DELETE /api/admin/ng-list/derived/[videoId]', () => {
     const res = await del('sm1')
     expect(res.status).toBe(200)
     expect((await res.json()).remainingCount).toBe(1)
-    expect(JSON.parse(String((putCalls()[0]![1] as RequestInit).body))).toEqual(['sm2'])
+    expect(JSON.parse(String((putCalls()[0][1] as RequestInit).body))).toEqual(['sm2'])
   })
 
   it('一覧を読めなければ（429・5xx）空とみなして上書きせず 503', async () => {
