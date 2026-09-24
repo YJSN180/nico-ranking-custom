@@ -150,7 +150,7 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
       <fieldset className={styles.fieldset}>
         <legend>タイトルの照合</legend>
         <p className={styles.fieldHelp}>
-          照合語は文字種を正規化したうえで「この順に文字が現れるか」で判定します（や/じ/ゅ/ま/ん のような分断表記も一致）。
+          照合語は文字種を正規化したうえで「この順に文字が現れるか」で判定します（あ/い/う/え/お のような分断表記も一致）。
           キーワードは連続一致で、投稿頻度またはロックタグ群と同時に該当したときだけ NG にします。
         </p>
         <div className={styles.fieldRow}>

@@ -23,8 +23,8 @@ describe('sanitizeUserIds / sanitizeChannelVideoIds', () => {
 
 describe('parseUserInfo / parseChannelInfo', () => {
   it('nvapi /v1/users の nickname と icons.small を取り出す', () => {
-    expect(parseUserInfo({ data: { user: { nickname: '海老ルーミア', icons: { small: 'https://icon/s.jpg', large: 'https://icon/l.jpg' } } } })).toEqual({
-      name: '海老ルーミア',
+    expect(parseUserInfo({ data: { user: { nickname: 'テストユーザー', icons: { small: 'https://icon/s.jpg', large: 'https://icon/l.jpg' } } } })).toEqual({
+      name: 'テストユーザー',
       icon: 'https://icon/s.jpg',
     })
     expect(parseUserInfo({ data: { user: { nickname: 'x' } } })).toEqual({ name: 'x', icon: undefined })
@@ -34,8 +34,8 @@ describe('parseUserInfo / parseChannelInfo', () => {
 
   it('v3_guest の data.channel から id/name/thumbnail を取り出し、ユーザー動画(channel null)は null', () => {
     expect(
-      parseChannelInfo({ data: { channel: { id: 'ch2610989', name: 'がっこうぐらし！', thumbnail: { url: 'https://c/128.jpg', smallUrl: 'https://c/64.jpg' } } } })
-    ).toEqual({ id: 'ch2610989', info: { name: 'がっこうぐらし！', icon: 'https://c/64.jpg' } })
+      parseChannelInfo({ data: { channel: { id: 'ch1234567', name: 'テストチャンネル', thumbnail: { url: 'https://c/128.jpg', smallUrl: 'https://c/64.jpg' } } } })
+    ).toEqual({ id: 'ch1234567', info: { name: 'テストチャンネル', icon: 'https://c/64.jpg' } })
     expect(parseChannelInfo({ data: { channel: null, owner: { nickname: 'u' } } })).toBeNull()
     expect(parseChannelInfo(undefined)).toBeNull()
   })
