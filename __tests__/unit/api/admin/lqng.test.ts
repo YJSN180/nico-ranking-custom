@@ -59,7 +59,8 @@ describe('admin lqng API', () => {
   })
 
   it('config PUT は正規化して保存し、不正な形は 400', async () => {
-    const res = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ enabled: true, tagGroups: [['a', 'a'], []], freq: { dayCount: 0 } }) }))
+    // 未設定（404）の版番号は既定値の updatedAt
+    const res = await putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify({ enabled: true, tagGroups: [['a', 'a'], []], freq: { dayCount: 0 }, updatedAt: '1970-01-01T00:00:00.000Z' }) }))
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body.config.tagGroups).toEqual([['a']])
@@ -135,5 +136,53 @@ describe('admin lqng API', () => {
     const res = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
     expect(res.status).toBe(500)
     expect(await res.json()).not.toHaveProperty('success')
+  })
+  describe('config PUT の版番号と許可リスト', () => {
+    const current = { enabled: true, pollTags: ['t1'], titleNeedles: ['てすとまん'], allowlist: { authorIds: ['1'], videoIds: ['sm9'], notes: { '1': 'メモ' } }, updatedAt: '2026-01-01T00:00:00.000Z' }
+    const put = (body: unknown) => putConfig(authed('/api/admin/lqng/config', { method: 'PUT', body: JSON.stringify(body) }))
+
+    it('版番号が一致すれば保存し、許可リストは PUT の内容を無視して KV の値を保つ', async () => {
+      store.set(LQNG_KV_KEYS.config, current)
+      const res = await put({ ...current, holdHours: 12, allowlist: { authorIds: [], videoIds: [] } })
+      expect(res.status).toBe(200)
+      const body = await res.json()
+      expect(body.config.holdHours).toBe(12)
+      expect(body.config.allowlist).toEqual(current.allowlist)
+      expect(body.config.updatedAt).not.toBe(current.updatedAt)
+      expect(store.get(LQNG_KV_KEYS.config)).toMatchObject({ holdHours: 12, allowlist: current.allowlist, updatedAt: body.config.updatedAt })
+    })
+
+    it('版番号が違えば 409 で書き込まない', async () => {
+      store.set(LQNG_KV_KEYS.config, current)
+      const res = await put({ ...current, holdHours: 12, updatedAt: '2025-12-31T00:00:00.000Z' })
+      expect(res.status).toBe(409)
+      expect(kvSet).not.toHaveBeenCalled()
+      expect(store.get(LQNG_KV_KEYS.config)).toEqual(current)
+    })
+
+    it('許可リストの更新で版番号が進むので、古い版からの保存は 409 になる', async () => {
+      store.set(LQNG_KV_KEYS.config, current)
+      const add = await postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify({ action: 'add', kind: 'author', id: '22' }) }))
+      const addedConfig = (await add.json()).config
+      expect((await put({ ...current, holdHours: 12 })).status).toBe(409)
+      // 応答の最新の版からなら保存でき、追加した許可リストも消えない
+      const res = await put({ ...addedConfig, holdHours: 12 })
+      expect(res.status).toBe(200)
+      expect((await res.json()).config.allowlist.authorIds).toEqual(['1', '22'])
+    })
+
+    it('版番号が無ければ 400', async () => {
+      store.set(LQNG_KV_KEYS.config, current)
+      const { updatedAt: _omit, ...withoutVersion } = current
+      expect((await put(withoutVersion)).status).toBe(400)
+      expect(kvSet).not.toHaveBeenCalled()
+    })
+
+    it('現在の設定を読めなければ 503 で書き込まない', async () => {
+      store.set(LQNG_KV_KEYS.config, current)
+      failing.add(LQNG_KV_KEYS.config)
+      expect((await put({ ...current, holdHours: 12 })).status).toBe(503)
+      expect(kvSet).not.toHaveBeenCalled()
+    })
   })
 })

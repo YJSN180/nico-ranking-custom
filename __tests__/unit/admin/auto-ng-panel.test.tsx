@@ -132,8 +132,45 @@ describe('AutoNGPanel', () => {
     fireEvent.click(save)
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/lqng/config', expect.objectContaining({ method: 'PUT' })))
     const call = fetchMock.mock.calls.find((c) => c[0] === '/api/admin/lqng/config')!
-    expect(JSON.parse(String((call[1] as RequestInit).body))).toMatchObject({ holdHours: 12, tagGroups: [['a'], ['b'], ['c']] })
+    const sent = JSON.parse(String((call[1] as RequestInit).body)) as Record<string, unknown>
+    expect(sent).toMatchObject({ holdHours: 12, tagGroups: [['a'], ['b'], ['c']] })
+    // 版番号（読み込んだ設定の updatedAt）を付け、許可リストは送らない（差分 API だけで変える）
+    expect(sent.updatedAt).toBe('2026-01-01T00:00:00.000Z')
+    expect(sent).not.toHaveProperty('allowlist')
     expect(await screen.findByText(/保存しました/)).toBeInTheDocument()
+  })
+
+  it('設定の保存が 409 なら、最新の設定を読み直すよう案内する', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/config') return jsonResponse({ error: 'Config version conflict' }, 409)
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+    fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+    expect(await screen.findByText(/他の画面で設定が更新されています/)).toHaveTextContent('再読み込み')
+  })
+
+  it('許可リストの操作中は、他の行の許可リストボタンも無効にする', async () => {
+    let finish: (value: Response) => void = () => {}
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/allowlist') return new Promise<Response>((resolve) => (finish = resolve))
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    fireEvent.click(screen.getByText('許可リストへ'))
+    // 押した行（1001）だけでなく、別の行（9001 の「許可を解除」）も止まる
+    await waitFor(() => expect(screen.getByText('許可を解除')).toBeDisabled())
+    expect(screen.getByText('許可リストへ')).toBeDisabled()
+    finish(jsonResponse({ success: true, config: { ...overview.config, allowlist: { authorIds: ['9001', '1001'], videoIds: [] }, updatedAt: '2026-01-03T00:00:00.000Z' } }))
+    await waitFor(() => expect(screen.getAllByText('許可を解除')).toHaveLength(2))
+    for (const button of screen.getAllByText('許可を解除')) expect(button).toBeEnabled()
   })
 
   it('読み込み失敗はエラー表示になる', async () => {

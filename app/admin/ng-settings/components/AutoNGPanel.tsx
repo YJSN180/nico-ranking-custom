@@ -190,16 +190,21 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
     []
   )
 
-  const saveConfig = useCallback(async (next: LqngConfig) => {
+  const saveConfig = useCallback(async (next: LqngConfig): Promise<LqngConfig> => {
     const res = await fetch('/api/admin/lqng/config', {
       method: 'PUT',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(next),
+      // updatedAt は読み込んだ版番号（サーバーが現在の版と照合する）。許可リストは差分 API だけで変えるので送らない
+      body: JSON.stringify({ ...next, allowlist: undefined }),
     })
-    if (!res.ok) throw new Error(`設定の保存に失敗しました (${res.status})`)
+    if (res.status === 409) {
+      throw new Error('他の画面で設定が更新されています。「再読み込み」で最新の設定を読み直してから、もう一度保存してください。')
+    }
+    if (!res.ok) throw new Error(`設定の保存に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
     const body = (await res.json()) as { config: LqngConfig }
     setOverview((prev) => (prev ? { ...prev, config: body.config } : prev))
+    return body.config
   }, [])
 
   const authors = useMemo(
@@ -221,7 +226,8 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
   const holdsPaged = usePaged(holds, query, matchVideo)
 
   const effectiveEnabled = Boolean(overview?.envEnabled && overview?.config.enabled)
-  const allowlistDisabled = (id: string): boolean => !writable || busyId === id
+  // 許可リストの操作は 1 件ずつ（応答の設定全体で置き換えるため、操作中は他の行も止める）
+  const allowlistDisabled = !writable || busyId !== null
 
   return (
     <section className={styles.panel} aria-labelledby="auto-ng-title">
@@ -383,11 +389,11 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
                         <td>
                           <div className={styles.actions}>
                             {allowed ? (
-                              <button type="button" className={styles.button} disabled={allowlistDisabled(a.id)} onClick={() => void updateAllowlist('remove', 'author', a.id)}>
+                              <button type="button" className={styles.button} disabled={allowlistDisabled} onClick={() => void updateAllowlist('remove', 'author', a.id)}>
                                 許可を解除
                               </button>
                             ) : (
-                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={allowlistDisabled(a.id)} onClick={() => void updateAllowlist('add', 'author', a.id, '管理画面で解除')}>
+                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={allowlistDisabled} onClick={() => void updateAllowlist('add', 'author', a.id, '管理画面で解除')}>
                                 許可リストへ
                               </button>
                             )}
@@ -463,11 +469,11 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
                         <td>
                           <div className={styles.actions}>
                             {allowed ? (
-                              <button type="button" className={styles.button} disabled={allowlistDisabled(v.id)} onClick={() => void updateAllowlist('remove', 'video', v.id)}>
+                              <button type="button" className={styles.button} disabled={allowlistDisabled} onClick={() => void updateAllowlist('remove', 'video', v.id)}>
                                 許可を解除
                               </button>
                             ) : (
-                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={allowlistDisabled(v.id)} onClick={() => void updateAllowlist('add', 'video', v.id, '管理画面で解除')}>
+                              <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={allowlistDisabled} onClick={() => void updateAllowlist('add', 'video', v.id, '管理画面で解除')}>
                                 許可リストへ
                               </button>
                             )}
@@ -573,7 +579,7 @@ function AllowlistEditor({
                 </td>
                 <td>{notes[x] ?? ''}</td>
                 <td>
-                  <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={disabled || busyId === x} onClick={() => void onChange('remove', k, x)}>
+                  <button type="button" className={`${styles.button} ${styles.buttonDanger}`} disabled={disabled || busyId !== null} onClick={() => void onChange('remove', k, x)}>
                     削除
                   </button>
                 </td>

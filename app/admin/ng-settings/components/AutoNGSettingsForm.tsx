@@ -6,7 +6,8 @@ import styles from './auto-ng.module.css'
 
 interface AutoNGSettingsFormProps {
   config: LqngConfig
-  onSave: (next: LqngConfig) => Promise<void>
+  /** 保存して、保存後の設定（新しい版番号つき）を返す */
+  onSave: (next: LqngConfig) => Promise<LqngConfig>
   /** 最新の設定を読めていないとき true（保存させない） */
   readOnly?: boolean
 }
