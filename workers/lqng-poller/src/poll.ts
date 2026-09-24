@@ -55,6 +55,8 @@ export const LIMITS = {
   pendingMaxAttempts: 3,
   /** getthumbinfo の一時的な不調がこの回数続いたら、上流の障害とみなしてその回の補完を打ち切る */
   thumbUnavailableAbort: 3,
+  /** 一時的な不調で補完できなかった回数の上限（待ち行列の後ろに回しながら数え、上限で諦める） */
+  pendingMaxTransient: 8,
   /**
    * 差分取得の重なり。nvapi の検索インデックスには投稿から数十分以上の反映遅れがあり、
    * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は isKnownVideo で
@@ -387,13 +389,18 @@ class Session {
     return !!author && isFrequent(author.posts, this.config.freq)
   }
 
-  /** getthumbinfo でロック状態を補完し、再判定する。連投中の投稿者の動画を先に処理する */
+  /**
+   * getthumbinfo でロック状態を補完し、再判定する。連投中の投稿者の動画を先に、一時的な不調で
+   * 補完できなかった動画を後に処理する（同じ動画が失敗し続けて待ち行列の先頭に居座らないように）
+   */
   async enrichPending(): Promise<void> {
     const pending = this.state.tracking.pending
       .map((item, index) => ({ item, index, priority: this.isFrequentAuthor(item.authorId) ? 0 : 1 }))
-      .sort((a, b) => a.priority - b.priority || a.index - b.index)
+      .sort((a, b) => a.priority - b.priority || (a.item.transient ?? 0) - (b.item.transient ?? 0) || a.index - b.index)
       .map((x) => x.item)
     const keep: typeof pending = []
+    /** 一時的な不調で補完できなかった動画（待ち行列の末尾に回す） */
+    const retryLater: typeof pending = []
     let processed = 0
     let unavailableInRow = 0
     for (let i = 0; i < pending.length; i++) {
@@ -419,8 +426,10 @@ class Session {
         result = { ok: false, reason: 'unavailable' } // 通信失敗・タイムアウト
       }
       if (!result.ok && result.reason === 'unavailable') {
-        // 上流の一時的な不調は試行回数に数えずに持ち越す。続くようなら障害とみなして打ち切る
-        keep.push(item)
+        // 上流の一時的な不調は試行回数に数えず、末尾に回して持ち越す（上限を超えたら諦める）。
+        // 続くようなら障害とみなして打ち切る
+        const transient = (item.transient ?? 0) + 1
+        if (transient < LIMITS.pendingMaxTransient) retryLater.push({ ...item, transient })
         if (++unavailableInRow >= LIMITS.thumbUnavailableAbort) {
           keep.push(...pending.slice(i + 1))
           this.addNote('getthumbinfo_unavailable')
@@ -441,7 +450,7 @@ class Session {
       if (result.reason === 'deleted') continue // 動画自体が消えた
       if (item.attempts + 1 < LIMITS.pendingMaxAttempts) keep.push({ ...item, attempts: item.attempts + 1 })
     }
-    this.state.tracking.pending = keep
+    this.state.tracking.pending = [...keep, ...retryLater]
   }
 
   /** 確認の順番（小さいほど先）。確認しない投稿者は null */

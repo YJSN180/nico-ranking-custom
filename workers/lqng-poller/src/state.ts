@@ -41,7 +41,10 @@ export interface TrackedAuthor {
 export interface PendingVideo {
   id: string
   authorId: string | null
+  /** 確かな失敗（error）の回数。上限で諦める */
   attempts: number
+  /** 一時的な失敗（5xx・通信失敗など）の回数。待ち行列の後ろに回し、上限で諦める */
+  transient?: number
 }
 
 export interface UnattributedVideo {

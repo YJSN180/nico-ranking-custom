@@ -918,7 +918,8 @@ describe('lqng-poller getthumbinfo の失敗の扱い', () => {
       await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => { throw new Error('network') }) }, later(i)), 'poll')
     }
     for (let i = 3; i <= 5; i++) await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => unavailable) }, later(i)), 'poll')
-    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([{ id: 'sm500', authorId: '1001', attempts: 0 }])
+    // 試行回数（attempts）は増えず、一時的な失敗の回数だけを数える
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([{ id: 'sm500', authorId: '1001', attempts: 0, transient: 6 }])
   })
 
   it('確かな失敗（error）は試行回数に数え、上限で諦める', async () => {
@@ -927,6 +928,27 @@ describe('lqng-poller getthumbinfo の失敗の扱い', () => {
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm501' })])), fetchThumbInfo: failing }), 'poll')
     for (let i = 1; i < LIMITS.pendingMaxAttempts; i++) await runPoll(m.kv, deps({ fetchThumbInfo: failing }, later(i)), 'poll')
     expect(failing).toHaveBeenCalledTimes(LIMITS.pendingMaxAttempts)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([])
+  })
+
+  it('一時的に取れなかった動画は待ち行列の末尾に回し、次の回はほかの動画を先に補完する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const uploads = Array.from({ length: 5 }, (_, i) => video({ id: `sm${520 + i}`, authorId: String(5200 + i), registeredAt: at(-10 + i) }))
+    // 1 回目: 先頭 3 本が一時的に失敗して打ち切り（残り 2 本は手を付けない）
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: vi.fn(async () => unavailable) }), 'poll')
+    const pending = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.pending
+    expect(pending.map((p) => p.id)).toEqual(['sm523', 'sm524', 'sm520', 'sm521', 'sm522'])
+    expect(pending.map((p) => p.transient ?? 0)).toEqual([0, 0, 1, 1, 1])
+    // 2 回目: 手を付けていなかった動画から補完する
+    const thumb = vi.fn(async () => okThumb())
+    await runPoll(m.kv, deps({ fetchThumbInfo: thumb }, later(1)), 'poll')
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm523', 'sm524', 'sm520', 'sm521', 'sm522'])
+  })
+
+  it('一時的な失敗が上限回数に達した動画は諦める', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm530' })])), fetchThumbInfo: vi.fn(async () => unavailable) }), 'poll')
+    for (let i = 1; i < LIMITS.pendingMaxTransient; i++) await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => unavailable) }, later(i)), 'poll')
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([])
   })
 
