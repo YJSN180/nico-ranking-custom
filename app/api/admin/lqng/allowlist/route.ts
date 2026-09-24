@@ -19,11 +19,12 @@ interface AllowlistRequest {
 }
 
 // 種別ごとの ID 形式。投稿者はユーザー ID（数字）かチャンネル（channel/chNNN）、
-// 動画は通常動画（sm/so/nm）とショート（ss）
+// 動画は通常動画（sm/so/nm）とショート（ss）。追加はこの形式に限る
 const ID_PATTERNS: Record<AllowlistRequest['kind'], RegExp> = {
   author: /^(\d{1,12}|channel\/ch\d{1,12})$/,
   video: /^(sm|so|nm|ss)\d{1,12}$/,
 }
+const MAX_ID_LENGTH = 64
 
 function parseBody(body: unknown): AllowlistRequest | null {
   if (typeof body !== 'object' || body === null) return null
@@ -31,7 +32,9 @@ function parseBody(body: unknown): AllowlistRequest | null {
   const action = b.action === 'add' || b.action === 'remove' ? b.action : null
   const kind = b.kind === 'author' || b.kind === 'video' ? b.kind : null
   const id = typeof b.id === 'string' ? b.id.trim() : ''
-  if (!action || !kind || !ID_PATTERNS[kind].test(id)) return null
+  if (!action || !kind || id.length === 0 || id.length > MAX_ID_LENGTH) return null
+  // 削除の形式は一覧を読んでから確かめる（以前の形式で入った項目も消せるように）
+  if (action === 'add' && !ID_PATTERNS[kind].test(id)) return null
   const note = typeof b.note === 'string' ? b.note.trim().slice(0, 200) : undefined
   const baseVersion = typeof b.updatedAt === 'string' ? b.updatedAt : null
   return { action, kind, id, ...(note ? { note } : {}), baseVersion }
@@ -54,8 +57,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (config.updatedAt !== req.baseVersion) {
     return withNoStore(NextResponse.json({ error: 'Config version conflict' }, { status: 409 }))
   }
+  const key = req.kind === 'author' ? 'authorIds' : 'videoIds'
+  // 削除は、今の一覧にある ID なら形式を問わない。一覧に無く形式も合わない ID は 400
+  if (req.action === 'remove' && !ID_PATTERNS[req.kind].test(req.id) && !config.allowlist[key].includes(req.id)) {
+    return withNoStore(NextResponse.json({ error: 'Invalid allowlist request' }, { status: 400 }))
+  }
   try {
-    const key = req.kind === 'author' ? 'authorIds' : 'videoIds'
     const ids = new Set(config.allowlist[key])
     if (req.action === 'add') ids.add(req.id)
     else ids.delete(req.id)

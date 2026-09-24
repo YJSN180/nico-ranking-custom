@@ -154,6 +154,22 @@ describe('admin lqng API', () => {
     for (const id of ['123', 'channel/ch1', 'sx1', 'ss', 'sm1234567890123']) expect((await post({ action: 'add', kind: 'video', id })).status).toBe(400)
   })
 
+  it('allowlist POST の削除は、今の一覧にある ID なら以前の形式で入ったものでも受け付ける', async () => {
+    // 以前は種別を問わず 1 つの形式で検証していたため、動画 ID が投稿者側に入っていることがある（合成値）
+    store.set(LQNG_KV_KEYS.config, { enabled: true, pollTags: ['t1'], allowlist: { authorIds: ['7', 'sm9'], videoIds: ['123'], notes: { sm9: 'メモ' } } })
+    const removeAuthor = await allowlistOp({ action: 'remove', kind: 'author', id: 'sm9' })
+    expect(removeAuthor.status).toBe(200)
+    expect((await removeAuthor.json()).config.allowlist).toMatchObject({ authorIds: ['7'], notes: {} })
+    const removeVideo = await allowlistOp({ action: 'remove', kind: 'video', id: '123' })
+    expect(removeVideo.status).toBe(200)
+    expect((await removeVideo.json()).config.allowlist.videoIds).toEqual([])
+
+    // 一覧に無く、形式も合わない ID は従来どおり 400。追加は常に種別ごとの形式を求める
+    expect((await allowlistOp({ action: 'remove', kind: 'author', id: 'sm10' })).status).toBe(400)
+    expect((await allowlistOp({ action: 'add', kind: 'author', id: 'sm9' })).status).toBe(400)
+    expect((await allowlistOp({ action: 'remove', kind: 'author', id: 'x'.repeat(65) })).status).toBe(400)
+  })
+
   it('allowlist POST は読み込んだ版（updatedAt）を必須にし、現在の版と違えば 409 で書き込まない', async () => {
     const stored = { enabled: true, pollTags: ['t1'], allowlist: { authorIds: ['1'], videoIds: [] }, updatedAt: '2026-01-01T00:00:00.000Z' }
     store.set(LQNG_KV_KEYS.config, stored)
