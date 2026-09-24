@@ -23,6 +23,21 @@ describe('normalizeText', () => {
     expect(normalizeText('ﾊﾞ')).toBe('ば')
   })
 
+  it('独立した濁点・半濁点（゛ U+309B / ゜ U+309C）も直前の仮名に結合する', () => {
+    expect(normalizeText('か\u309B')).toBe('が')
+    expect(normalizeText('は\u309C')).toBe('ぱ')
+    expect(normalizeText('カ\u309B')).toBe('が')
+    expect(normalizeText('ハ\u309C')).toBe('ぱ')
+    expect(normalizeText('て\u309Bすとまん')).toBe('ですとまん')
+    // 結合できない文字の後ろでは結合用の記号として残る（空白を挟まない）
+    expect(normalizeText('あ\u309B')).toBe('あ\u3099')
+  })
+
+  it('独立した濁点を混ぜた分断表記も、濁音の照合語に一致する', () => {
+    expect(matchesSubsequenceNeedle('て\u309B/す/と/ま/ん', 'ですとまん')).toBe(true)
+    expect(matchesSubsequenceNeedle('ﾃﾞ.す.と.ま.ん', 'ですとまん')).toBe(true)
+  })
+
   it('ゼロ幅文字・結合記号・異体字セレクタを除去する', () => {
     expect(normalizeText('て​す‍と️ま́ん')).toBe('てすとまん')
   })
