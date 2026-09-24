@@ -20,7 +20,8 @@
 /* モバイル対応 */
 @media (max-width: 768px) {
   .browser-recommendation {
-    bottom: 0;
+    /* ボトムナビ（640px 以下）がある幅ではその上に出す（--bottom-nav-offset は globals.css） */
+    bottom: var(--bottom-nav-offset, 0px);
     right: 0;
     left: 0;
     max-width: 100%;

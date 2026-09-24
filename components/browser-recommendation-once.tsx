@@ -1,19 +1,27 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import './browser-recommendation.css'
 
+const DISMISSED_KEY = 'browser-recommendation-dismissed'
+const subscribeNoop = () => () => {}
+
 export function BrowserRecommendationOnce() {
-  // LocalStorageの初期読み込み（useEffectを使わずに実装）
-  const [isDismissed, setIsDismissed] = useState<boolean | null>(() => {
-    if (typeof window === 'undefined') return null // SSR時
-    const dismissed = localStorage.getItem('browser-recommendation-dismissed')
-    return dismissed === 'true'
-  })
+  // LocalStorageの読み込み（useEffectを使わずに実装）。SSR とハイドレーション中は
+  // サーバーの値（null＝確認中）を使い、その後クライアントの値で描き直す。
+  // useState の初期値で読むと SSR と class だけが食い違い、ハイドレーションで直らず
+  // 確認中（非表示）のまま残る
+  const storedDismissed = useSyncExternalStore<boolean | null>(
+    subscribeNoop,
+    () => localStorage.getItem(DISMISSED_KEY) === 'true',
+    () => null
+  )
+  const [dismissedNow, setDismissedNow] = useState(false)
+  const isDismissed = dismissedNow ? true : storedDismissed
 
   const handleDismiss = () => {
-    setIsDismissed(true)
-    localStorage.setItem('browser-recommendation-dismissed', 'true')
+    setDismissedNow(true)
+    localStorage.setItem(DISMISSED_KEY, 'true')
   }
 
 
