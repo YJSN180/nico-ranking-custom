@@ -6,7 +6,7 @@ import { MylistButton } from './mylist-button'
 import { QuickNGButton } from './quick-ng-button'
 import { ItemActionMenu } from './item-action-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
-import { formatNumberMobile, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
+import { formatNumberMobile, formatNumberCompact, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import { useTagDisplay } from '@/contexts/tag-display-context'
 import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
@@ -23,6 +23,20 @@ interface RankingItemProps {
   hideRank?: boolean
   /** 検索ページなど、PC幅でも仕切り線のみのフラットリストで表示する（PC版ランキングはカードデザインを維持） */
   flat?: boolean
+}
+
+// 統計の数値。PC は main と同じ書式（12.3万）、モバイル（幅 640px 以下）は 1 行に収める
+// 圧縮表記（12万・1.2億）。書式が違うときだけ両方を出し、CSS で幅に応じて片方を表示する
+function StatValue({ value }: { value: number }) {
+  const desktop = formatNumberMobile(value)
+  const compact = formatNumberCompact(value)
+  if (desktop === compact) return <>{desktop}</>
+  return (
+    <>
+      <span className="ranking-item-responsive__stat-value--desktop">{desktop}</span>
+      <span className="ranking-item-responsive__stat-value--mobile">{compact}</span>
+    </>
+  )
 }
 
 // CSS-only レスポンシブ対応版ランキングアイテム
@@ -374,20 +388,20 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             data-testid="video-stats"
           >
             <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">▶️</span>
-              {formatNumberMobile(item.views)}
+              <span aria-hidden="true">▶️</span>{' '}
+              <StatValue value={item.views} />
             </span>
             <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">💬</span>
-              {formatNumberMobile(item.comments || 0)}
+              <span aria-hidden="true">💬</span>{' '}
+              <StatValue value={item.comments || 0} />
             </span>
             <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">❤️</span>
-              {formatNumberMobile(item.likes || 0)}
+              <span aria-hidden="true">❤️</span>{' '}
+              <StatValue value={item.likes || 0} />
             </span>
             <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">📁</span>
-              {formatNumberMobile(item.mylists || 0)}
+              <span aria-hidden="true">📁</span>{' '}
+              <StatValue value={item.mylists || 0} />
             </span>
           </div>
           

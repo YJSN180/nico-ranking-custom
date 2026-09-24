@@ -1123,13 +1123,18 @@ ch2625894`}
               </>
             )}
           </div>
-          {/* 閉じる操作は右上の×に一本化（HIG: 単一の明確なdismiss。
-              プライマリの視覚的重みは実操作（適用/追加）にだけ使う） */}
-          {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
-            <button className={styles.applyButton} onClick={handleApply}>
-              適用
+          {/* PC は main と同じく「適用」＋「閉じる」。モバイル（≤640px）は閉じる操作を右上の×に
+              一本化し、フッターの「閉じる」は CSS で隠す（HIG: 単一の明確な dismiss） */}
+          <div className={styles.footerActions}>
+            {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
+              <button className={styles.applyButton} onClick={handleApply}>
+                適用
+              </button>
+            )}
+            <button className={styles.closeButton} onClick={handleClose}>
+              閉じる
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>

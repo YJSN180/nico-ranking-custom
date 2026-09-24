@@ -83,9 +83,14 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
   const mobileMenuRef = useRef<HTMLElement>(null)
   const mobileButtonRef = useRef<HTMLButtonElement>(null)
   
-  // 退場アニメーション付きでメニューを閉じる
+  // メニューを閉じる。モバイルのドロワーは退場アニメーション付き。
+  // PC（769px 以上）のドロップダウンは main と同じく即座に閉じる
   const closeMenu = useCallback(() => {
     if (!isOpen || isClosing) return
+    if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(max-width: 768px)').matches) {
+      setIsOpen(false)
+      return
+    }
     setIsClosing(true)
     setTimeout(() => {
       setIsOpen(false)
@@ -410,14 +415,14 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
         </span>
       </button>
 
-      {/* ドロップダウンメニュー */}
-      {(isOpen || isClosing) && (
+      {/* ドロップダウンメニュー（PC は main と同じく退場アニメーションなしで閉じる） */}
+      {isOpen && (
         <nav
           ref={menuRef}
           id="navigation-dropdown"
           role="navigation"
           aria-label="メインナビゲーション"
-          className={`${styles.dropdown}${isClosing ? ` ${styles.dropdownClosing}` : ''}`}
+          className={styles.dropdown}
         >
           <div className={styles.menuContent}>
             {/* メインセクション */}
