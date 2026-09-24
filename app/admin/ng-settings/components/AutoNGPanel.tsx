@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AuthorVerdict, LqngConfig, LqngRuleId, LqngVerdicts, VideoVerdict } from '@/lib/lqng/types'
-import { LQNG_EVENT_KIND_LABELS, LQNG_HOLD_SIGNAL_LABELS, LQNG_RULE_LABELS } from '@/lib/lqng/labels'
+import { LQNG_CONTROL_MISSING_WARNING, LQNG_EVENT_KIND_LABELS, LQNG_HOLD_SIGNAL_LABELS, LQNG_RULE_LABELS } from '@/lib/lqng/labels'
 import { AutoNGSettingsForm } from './AutoNGSettingsForm'
 import styles from './auto-ng.module.css'
 
@@ -335,6 +335,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
             </p>
           )}
           {!effectiveEnabled && <p className={styles.warning}>現在は無効です。{overview.envEnabled ? '「設定」タブで有効にしてください。' : 'Vercel の環境変数 LQNG_ENABLED が false になっています。'}</p>}
+          {overview.config.enabled && !overview.config.controlUserId && <p className={styles.warning}>{LQNG_CONTROL_MISSING_WARNING}「設定」タブの「退会の判定」で設定してください。</p>}
           <p className={styles.note}>NG や許可リストの変更が検索・ランキングに反映されるまで、CDN キャッシュの都合で最大 3 分かかります。</p>
           <h3 style={{ fontSize: 15, margin: '18px 0 8px' }}>最近のイベント</h3>
           <EventList items={overview.events.items.slice(0, 15)} />

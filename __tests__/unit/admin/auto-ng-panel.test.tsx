@@ -386,6 +386,74 @@ describe('AutoNGPanel', () => {
     expect(await screen.findByText(/読み込みに失敗しました/)).toBeInTheDocument()
   })
 
+  describe('退会確認の対照（controlUserId）', () => {
+    const withConfig = (config: Record<string, unknown>) => {
+      fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+        if (url === '/api/admin/lqng/overview') return jsonResponse({ ...overview, config: { ...overview.config, ...config } })
+        if (url === '/api/admin/lqng/config') {
+          const sent = JSON.parse(String(init?.body)) as Record<string, unknown>
+          return jsonResponse({ success: true, config: { ...sent, allowlist: overview.config.allowlist, updatedAt: '2026-01-03T00:00:00.000Z' } })
+        }
+        return jsonResponse({ error: 'not found' }, 404)
+      })
+    }
+    const missingWarning = /対照の投稿者 ID が未設定です/
+
+    it('自動NG が有効なのに未設定なら、概要と設定フォームに警告を出す', async () => {
+      render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      expect(screen.getByText(missingWarning)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+      expect(screen.getByText(missingWarning)).toBeInTheDocument()
+      // 説明つきの入力欄がある
+      expect(screen.getByText(/存在が確実な投稿者の ID/)).toHaveTextContent('ニコニコの API の異常を見分ける')
+      fireEvent.change(screen.getByLabelText('対照の投稿者 ID'), { target: { value: '12345' } })
+      expect(screen.queryByText(missingWarning)).not.toBeInTheDocument()
+    })
+
+    it('設定済み、または自動NG が無効なら警告を出さない', async () => {
+      withConfig({ controlUserId: '12345' })
+      const { unmount } = render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      expect(screen.queryByText(missingWarning)).not.toBeInTheDocument()
+      unmount()
+      withConfig({ enabled: false })
+      render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText(/設定で無効/)
+      expect(screen.queryByText(missingWarning)).not.toBeInTheDocument()
+    })
+
+    it('設定タブで入力して保存でき、空にすると設定を外す（読み込んだだけでは未保存にならない）', async () => {
+      withConfig({})
+      render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+      const save = screen.getByRole('button', { name: '設定を保存' })
+      expect(save).toBeDisabled()
+      fireEvent.change(screen.getByLabelText('対照の投稿者 ID'), { target: { value: ' 12345 ' } })
+      fireEvent.click(save)
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/admin/lqng/config', expect.objectContaining({ method: 'PUT' })))
+      const first = fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/config')
+      expect(JSON.parse(String((first[0]![1] as RequestInit).body))).toMatchObject({ controlUserId: '12345' })
+      expect(await screen.findByText(/保存しました/)).toBeInTheDocument()
+
+      fireEvent.change(screen.getByLabelText('対照の投稿者 ID'), { target: { value: '' } })
+      fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+      await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/config')).toHaveLength(2))
+      const second = fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/config')[1]!
+      expect(JSON.parse(String((second[1] as RequestInit).body))).not.toHaveProperty('controlUserId')
+    })
+
+    it('数字でなければ理由を出して保存させない', async () => {
+      render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+      fireEvent.change(screen.getByLabelText('対照の投稿者 ID'), { target: { value: 'user12' } })
+      expect(screen.getByText('退会確認の対照のユーザー ID は数字 1〜12 桁にしてください')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '設定を保存' })).toBeDisabled()
+    })
+  })
+
   it('再読み込みに失敗したら、保存・許可リストの操作を無効にして理由を表示する', async () => {
     render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
     await screen.findByText('● 稼働中')

@@ -28,3 +28,6 @@ export const LQNG_EVENT_KIND_LABELS: Record<string, string> = {
   backfill: 'バックフィル（過去分の取り込み）',
   error: 'エラー',
 }
+
+/** 自動NG が有効なのに退会確認の対照（controlUserId）が未設定のときの警告（設定フォームと概要で共用） */
+export const LQNG_CONTROL_MISSING_WARNING = '対照の投稿者 ID が未設定です。追跡中の投稿者から対照を選べないと、退会を確定できません。'

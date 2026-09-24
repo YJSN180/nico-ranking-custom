@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { validateLqngConfigInput } from '@/lib/lqng/config'
+import { LQNG_CONTROL_MISSING_WARNING } from '@/lib/lqng/labels'
 import type { LqngConfig } from '@/lib/lqng/types'
 import styles from './auto-ng.module.css'
 
@@ -39,6 +40,7 @@ interface Draft {
   holdHours: number
   trackDays: number
   deletionWindowDays: number
+  controlUserId: string
 }
 
 function toDraft(config: LqngConfig): Draft {
@@ -57,12 +59,13 @@ function toDraft(config: LqngConfig): Draft {
     holdHours: config.holdHours,
     trackDays: config.trackDays,
     deletionWindowDays: config.deletionWindowDays,
+    controlUserId: config.controlUserId ?? '',
   }
 }
 
 // 数値は丸めずに渡す。範囲外・小数は validateLqngConfigInput で理由を示して保存させない（黙って丸めない）
 function fromDraft(draft: Draft, base: LqngConfig): LqngConfig {
-  return {
+  const next: LqngConfig = {
     ...base,
     enabled: draft.enabled,
     pollTags: linesToArray(draft.pollTags),
@@ -81,6 +84,11 @@ function fromDraft(draft: Draft, base: LqngConfig): LqngConfig {
     trackDays: draft.trackDays,
     deletionWindowDays: draft.deletionWindowDays,
   }
+  // 対照は入力されているときだけ持つ（空なら設定を外す。読み込んだだけで未保存の変更にならないよう、キーごと消す）
+  const control = draft.controlUserId.trim()
+  if (control) next.controlUserId = control
+  else delete next.controlUserId
+  return next
 }
 
 const sameValue = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
@@ -275,6 +283,22 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
             <input id="lqng-deletion-days" type="number" min={1} value={draft.deletionWindowDays} onChange={(e) => update('deletionWindowDays', Number(e.target.value))} />
           </div>
         </div>
+      </fieldset>
+
+      <fieldset className={styles.fieldset}>
+        <legend>退会の判定</legend>
+        <p className={styles.fieldHelp}>存在が確実な投稿者の ID（退会の判定で、ニコニコの API の異常を見分けるために使う）。</p>
+        <div className={styles.fieldRow}>
+          <div className={styles.field} style={{ maxWidth: 260 }}>
+            <label htmlFor="lqng-control-user-id">対照の投稿者 ID</label>
+            <input id="lqng-control-user-id" type="text" inputMode="numeric" value={draft.controlUserId} onChange={(e) => update('controlUserId', e.target.value)} placeholder="例: 12345678" />
+          </div>
+        </div>
+        {draft.enabled && !draft.controlUserId.trim() && (
+          <p className={styles.warning} style={{ margin: '10px 0 0' }}>
+            {LQNG_CONTROL_MISSING_WARNING}
+          </p>
+        )}
       </fieldset>
 
       {validation.length > 0 && (
