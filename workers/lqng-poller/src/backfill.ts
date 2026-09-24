@@ -1,7 +1,8 @@
 // 過去分のバックフィル（Snapshot の全履歴を新しい順に走査して判定する）
 // - 走査ステップ（runBackfillStep）は KV を読むだけで書かない。カーソルと判定差分は呼び出し側
-//   （scripts/lqng-backfill-driver.ts）が持ち回り、まとめて commitBackfill で書き込む。
-//   これで KV の書き込み枠（アカウント共通）をほとんど消費しない。
+//   （scripts/lqng-backfill-driver.ts）が持ち回り、まとめて commitBackfill で確定する。
+// - 確定は判定表を直接書かず、受け箱（lqng:inbox:<runId>:<seq>）に 1 回で置く。判定表へは次の
+//   ポーリングが冪等に合流する（判定表の書き手をポーリング 1 つにして、互いの更新を消し合わない）。
 // - 1 回の呼び出しは Snapshot ページ ≤ pages、ユーザー確認 ≤ usersPerCall、getthumbinfo ≤ thumbsPerCall
 //   に抑え、無料プランのサブリクエスト上限（50/実行）と CPU 時間に収める。
 // - ルール: B（タイトル）と HK（キーワード ∧ 頻度）は取り込み時に即判定。頻度 C に当たる投稿者だけ
@@ -9,10 +10,10 @@
 //   含まれる）に通った候補だけ getthumbinfo で補完して判定する。
 //   過去分は削除時刻が分からないため、A∧C の「投稿から 7 日以内の削除」は「現在削除済み」で代用する
 //   （実データ検証と同じ評価）。
-import { LQNG_KV_KEYS } from '../../../lib/lqng/config'
 import { containsAnyNormalized } from '../../../lib/lqng/normalize'
 import { evaluateVideo } from '../../../lib/lqng/rules'
-import type { AuthorObservation, AuthorVerdict, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation, VideoVerdict } from '../../../lib/lqng/types'
+import type { AuthorObservation, LqngConfig, LqngEvidence, LqngPost, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
+import { emptyDeltas, inboxKey, normalizeDeltas, writeInboxItem, type BackfillDeltas } from './inbox'
 import {
   AccessLimitedError,
   SNAPSHOT_PAGE_SIZE,
@@ -24,8 +25,8 @@ import {
   type ThumbResult,
   type UserInfo,
 } from './sources'
-import { acquireLock, loadState, pushEvent, releaseLock, type KvLike } from './state'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
+import { loadState, type KvLike } from './state'
+import { fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
 import { NICO_PAGE_KINDS } from './sources'
 
 export const BACKFILL_LIMITS = {
@@ -46,7 +47,6 @@ export const BACKFILL_LIMITS = {
   floorDefault: '2007-03-01T00:00:00.000Z',
   /** pages ソースの既定の遡り日数（Snapshot の更新遅れと Worker 停止の隙間を埋める用途） */
   pagesDefaultDays: 2,
-  lockTtlSeconds: 120,
 } as const
 
 const HOUR_MS = 3600_000
@@ -85,8 +85,8 @@ export interface BackfillPendingThumb {
   authorId: string
   title: string
   registeredAt: string
-  /** 投稿頻度の再評価用に、取り込み時点の投稿時刻を写しておく */
-  times: string[]
+  /** 投稿頻度の再評価用に、取り込み時点の投稿（ID と時刻）を写しておく */
+  posts: LqngPost[]
 }
 
 export interface BackfillStats {
@@ -99,9 +99,12 @@ export interface BackfillStats {
   videosNg: number
 }
 
+/** カーソルの形の版。持ち回りの途中で Worker が更新されたら、古い形のカーソルは受け付けない */
+export const BACKFILL_CURSOR_VERSION = 2
+
 /** 呼び出しの間で持ち回る走査状態（KV には置かない） */
 export interface BackfillCursor {
-  version: 1
+  version: typeof BACKFILL_CURSOR_VERSION
   /** 取得元。snapshot は全履歴（30 日窓）、pages は本家タグページ（直近数日の取りこぼし補完） */
   source: BackfillSource
   /** pages 用: 何番目の「タグ×種別」の何ページ目か（種別は動画/ショートの順） */
@@ -113,8 +116,8 @@ export interface BackfillCursor {
   offset: number
   /** これより前は走査しない */
   floor: string
-  /** 直近 carryHours 分の投稿者 → 投稿時刻（C の判定用） */
-  carry: Record<string, string[]>
+  /** 直近 carryHours 分の投稿者 → 投稿（C の判定用。動画 ID で重複を除く） */
+  carry: Record<string, LqngPost[]>
   /** 存在確認済みの投稿者 */
   checked: Record<string, BackfillCheckedAuthor>
   pendingUsers: string[]
@@ -124,10 +127,7 @@ export interface BackfillCursor {
   stats: BackfillStats
 }
 
-export interface BackfillDeltas {
-  authors: Record<string, AuthorVerdict>
-  videos: Record<string, VideoVerdict>
-}
+export { emptyDeltas, type BackfillDeltas }
 
 export interface BackfillStepOptions {
   pages?: number
@@ -146,14 +146,20 @@ export interface BackfillStepResult {
 }
 
 export interface BackfillCommitResult {
+  /** 'empty': 置く差分が無かった */
   skipped: string | null
-  authorsAdded: number
-  videosAdded: number
+  /** 置いた受け箱のキー */
+  key: string | null
+  /** 受け箱に置いた投稿者・動画の数（判定表への反映は次のポーリングが行う） */
+  authors: number
+  videos: number
   kvWrites: number
 }
 
-export function emptyDeltas(): BackfillDeltas {
-  return { authors: {}, videos: {} }
+/** 確定の識別子。runId は駆動スクリプトの実行ごと、seq はその中の確定の連番（再送は同じ値で） */
+export interface BackfillCommitRef {
+  runId: string
+  seq: number
 }
 
 export function createBackfillCursor(now: Date, days: number | null | undefined, source: BackfillSource = 'snapshot'): BackfillCursor {
@@ -162,7 +168,7 @@ export function createBackfillCursor(now: Date, days: number | null | undefined,
   const floorMs = effectiveDays ? end - effectiveDays * DAY_MS : new Date(BACKFILL_LIMITS.floorDefault).getTime()
   const start = Math.max(floorMs, end - BACKFILL_LIMITS.windowDays * DAY_MS)
   return {
-    version: 1,
+    version: BACKFILL_CURSOR_VERSION,
     source,
     tagIndex: 0,
     page: 1,
@@ -237,7 +243,7 @@ class BackfillSession {
     return video.authorId !== null && this.config.allowlist.authorIds.includes(video.authorId)
   }
 
-  authorObservation(authorId: string | null, times: string[]): AuthorObservation | null {
+  authorObservation(authorId: string | null, posts: LqngPost[]): AuthorObservation | null {
     if (authorId === null) return null
     const checked = this.cursor.checked[authorId]
     return {
@@ -245,7 +251,7 @@ class BackfillSession {
       status: checked?.status ?? 'unknown',
       followerCount: checked?.followerCount ?? null,
       visibility: null,
-      postTimes: times,
+      posts,
       deletedObservedAt: checked?.status === 'deleted' ? this.nowIso : null,
     }
   }
@@ -308,15 +314,15 @@ class BackfillSession {
       if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id]) continue
       if (this.isAllowlisted(v)) continue
 
-      let times: string[] = []
+      let posts: LqngPost[] = []
       if (v.authorId) {
         const list = (this.cursor.carry[v.authorId] ??= [])
-        if (!list.includes(v.registeredAt)) list.push(v.registeredAt)
+        if (!list.some((p) => p.id === v.id)) list.push({ id: v.id, at: v.registeredAt })
         if (list.length > BACKFILL_LIMITS.carryPerAuthor) list.splice(0, list.length - BACKFILL_LIMITS.carryPerAuthor)
-        times = list.slice()
+        posts = list.slice()
       }
       const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null }
-      const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, times), this.config)
+      const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, posts), this.config)
       const evidence: LqngEvidence = { videoId: v.id, title: v.title, registeredAt: v.registeredAt, rules: evaluation.reasons }
       if (evaluation.ng) {
         this.addVideoNg(v, evaluation.reasons)
@@ -338,7 +344,7 @@ class BackfillSession {
       const keyword = this.config.keywordNeedles.length > 0 && containsAnyNormalized(v.title, this.config.keywordNeedles)
       const groupsMayMatch = this.cursor.source === 'pages' ? true : this.presentGroups(v.tags) >= this.config.lockGroupsMin
       if ((evaluation.frequent || keyword) && groupsMayMatch && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
-        this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, times })
+        this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, posts })
       }
     }
     if (oldest) this.pruneCarry(oldest)
@@ -347,8 +353,8 @@ class BackfillSession {
   /** 新しい順に進むので、現在位置より carryHours 以上新しい投稿時刻は二度と窓に入らない */
   pruneCarry(oldestIso: string): void {
     const limit = new Date(oldestIso).getTime() + BACKFILL_LIMITS.carryHours * HOUR_MS
-    for (const [authorId, times] of Object.entries(this.cursor.carry)) {
-      const kept = times.filter((t) => new Date(t).getTime() <= limit)
+    for (const [authorId, posts] of Object.entries(this.cursor.carry)) {
+      const kept = posts.filter((p) => new Date(p.at).getTime() <= limit)
       if (kept.length === 0) delete this.cursor.carry[authorId]
       else this.cursor.carry[authorId] = kept
     }
@@ -409,7 +415,7 @@ class BackfillSession {
       this.cursor.stats.thumbs++
       if (!result.ok) continue
       const observation: VideoObservation = { id: item.id, title: item.title, authorId: item.authorId, registeredAt: item.registeredAt, tagDetails: result.info.tagDetails, ownerVisibility: result.info.ownerVisibility }
-      const evaluation = evaluateVideo(observation, this.authorObservation(item.authorId, item.times), this.config)
+      const evaluation = evaluateVideo(observation, this.authorObservation(item.authorId, item.posts), this.config)
       if (!evaluation.ng) continue
       this.addVideoNg(item, evaluation.reasons)
       if (evaluation.escalate) this.addAuthorNg(item.authorId, evaluation.escalateReasons, [{ videoId: item.id, title: item.title, registeredAt: item.registeredAt, rules: evaluation.reasons }])
@@ -425,6 +431,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   const state = await loadState(kv, nowIso)
   const cursor = cursorIn ?? createBackfillCursor(now, options.days ?? null, options.source ?? 'snapshot')
   const empty: BackfillStepResult = { skipped: null, cursor, done: false, deltas: emptyDeltas(), subrequests: 0 }
+  // 走査の途中で Worker が更新された（カーソルの形が変わった）ときは、最初からやり直してもらう
+  if (cursor.version !== BACKFILL_CURSOR_VERSION) return { ...empty, skipped: 'cursor_version' }
   if (!state.config.enabled) return { ...empty, skipped: 'disabled' }
   if (state.config.pollTags.length === 0) return { ...empty, skipped: 'no_poll_tags' }
 
@@ -452,7 +460,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
         inRange.map((v): SnapshotVideo => ({ id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: v.owner === null ? null : v.owner?.visibility === 'hidden' ? 'hidden' : 'visible', tags: [] }))
       )
       const reachedFloor = inRange.length < result.items.length
-      if (reachedFloor || !result.hasNext || result.items.length < NICO_PAGE_SIZE) {
+      // 続きの有無は hasNext で決める（形の崩れた項目を除くと 32 件未満になりうる）。空のページでは次のタグへ
+      if (reachedFloor || !result.hasNext || result.items.length === 0) {
         cursor.tagIndex++
         cursor.page = 1
       } else {
@@ -473,40 +482,16 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   return { skipped: null, cursor, done, deltas: session.deltas, subrequests: session.subrequests, ...(session.note ? { note: session.note } : {}) }
 }
 
-/** 判定差分を KV の判定テーブルへ合流させる（書き込みは verdicts と events の 2 回） */
-export async function commitBackfill(kv: KvLike, now: Date, deltas: BackfillDeltas): Promise<BackfillCommitResult> {
-  const nowIso = now.toISOString()
-  const none: BackfillCommitResult = { skipped: null, authorsAdded: 0, videosAdded: 0, kvWrites: 0 }
-  if (!(await acquireLock(kv, nowIso, BACKFILL_LIMITS.lockTtlSeconds))) return { ...none, skipped: 'locked' }
-  try {
-    const state = await loadState(kv, nowIso)
-    let authorsAdded = 0
-    let videosAdded = 0
-    for (const [authorId, verdict] of Object.entries(deltas.authors)) {
-      if (state.config.allowlist.authorIds.includes(authorId)) continue
-      const current = state.verdicts.authors[authorId]
-      if (!current) {
-        state.verdicts.authors[authorId] = { ...verdict, since: nowIso }
-        authorsAdded++
-        continue
-      }
-      const merged = Array.from(new Set([...current.reasons, ...verdict.reasons]))
-      if (merged.length !== current.reasons.length) current.reasons = merged
-    }
-    for (const [videoId, verdict] of Object.entries(deltas.videos)) {
-      if (state.verdicts.videos[videoId]) continue
-      if (verdict.authorId && state.verdicts.authors[verdict.authorId]) continue
-      if (state.config.allowlist.videoIds.includes(videoId)) continue
-      state.verdicts.videos[videoId] = { ...verdict, since: nowIso }
-      videosAdded++
-    }
-    if (authorsAdded === 0 && videosAdded === 0) return none
-    state.verdicts.updatedAt = nowIso
-    pushEvent(state.events, { at: nowIso, kind: 'backfill', note: `投稿者 +${authorsAdded} / 動画 +${videosAdded}` })
-    await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
-    await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
-    return { skipped: null, authorsAdded, videosAdded, kvWrites: 2 }
-  } finally {
-    await releaseLock(kv)
-  }
+/**
+ * 判定差分を受け箱に置く（書き込みは 1 回）。判定表・履歴は読み書きしない。
+ * 同じ runId・seq の再送は同じキーの上書きになり、合流も冪等なので二重に反映されない。
+ */
+export async function commitBackfill(kv: KvLike, now: Date, deltas: unknown, ref: BackfillCommitRef): Promise<BackfillCommitResult> {
+  const key = inboxKey(ref.runId, ref.seq)
+  const normalized = normalizeDeltas(deltas)
+  const authors = Object.keys(normalized.authors).length
+  const videos = Object.keys(normalized.videos).length
+  if (authors === 0 && videos === 0) return { skipped: 'empty', key: null, authors: 0, videos: 0, kvWrites: 0 }
+  await writeInboxItem(kv, ref.runId, ref.seq, now.toISOString(), normalized)
+  return { skipped: null, key, authors, videos, kvWrites: 1 }
 }

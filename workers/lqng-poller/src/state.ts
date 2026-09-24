@@ -1,14 +1,16 @@
 // ポーリング Worker の状態（KV に保存する追跡情報・イベント）と KV アクセスの薄い層
-// KV の書き込みは 1 回の実行で最大 4 キー（lock / tracking / verdicts / events）に抑える。
+// KV の書き込みは内容（updatedAt を除く）が変わったキーだけ。ロックは使わない。
+// 定常の実行で変わるのは追跡表（lastPollAt と直近の実行の要約）だけなので、書き込みは通常 1 回。
 import { LQNG_KV_KEYS, normalizeLqngConfig, normalizeLqngVerdicts } from '../../../lib/lqng/config'
 import type { AuthorStatus, LqngConfig, LqngRuleId, LqngVerdicts, OwnerVisibility } from '../../../lib/lqng/types'
 import type { TagDetail } from '../../../types/ranking'
 
-/** テスト容易性のため、Cloudflare の KVNamespace のうち使う 3 操作だけを型にする */
+/** テスト容易性のため、Cloudflare の KVNamespace のうち使う 4 操作だけを型にする */
 export interface KvLike {
   get(key: string): Promise<string | null>
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
   delete(key: string): Promise<void>
+  list(options: { prefix: string; limit?: number; cursor?: string }): Promise<{ keys: Array<{ name: string }>; list_complete: boolean; cursor?: string }>
 }
 
 export interface TrackedPost {
@@ -30,13 +32,41 @@ export interface TrackedAuthor {
   followerCount: number | null
   nickname: string | null
   visibility: OwnerVisibility | null
+  /** 退会を確定した投稿者の、最初に 404 を観測した時刻 */
   deletedObservedAt: string | null
+  /** 1 回目の 404 を観測した時刻（退会の疑い）。時間を置いた 2 回目の 404 で確定し、存在が分かれば消す */
+  deletionSuspectedAt?: string | null
 }
 
 export interface PendingVideo {
   id: string
   authorId: string | null
   attempts: number
+}
+
+export interface UnattributedVideo {
+  id: string
+  /** 投稿時刻（刈り込みに使う） */
+  at: string
+}
+
+/** 1 回の実行の要約（管理画面・/status の表示用） */
+export interface LqngRunSummary {
+  at: string
+  mode: 'poll' | 'sweep'
+  newVideos: number
+  enriched: number
+  usersChecked: number
+  subrequests: number
+  /** この実行で行った KV の書き込み（put / delete）の数 */
+  kvWrites: number
+  note?: string
+}
+
+export interface LqngRecentRun {
+  at: string
+  mode: 'poll' | 'sweep'
+  note?: string
 }
 
 export interface LqngTracking {
@@ -46,6 +76,12 @@ export interface LqngTracking {
   authors: Record<string, TrackedAuthor>
   /** getthumbinfo の補完待ち（持ち越し） */
   pending: PendingVideo[]
+  /** 取り込んだ投稿者 ID の無い動画（重なり区間で毎回新着として数え直さないため。追跡期間で消す） */
+  unattributed: UnattributedVideo[]
+  /** 直近の実行の要約。毎回書く追跡表に置き、履歴（events）への毎回の書き込みを避ける */
+  lastRun: LqngRunSummary | null
+  /** 直近の実行の時刻と注記（新しい順、/status の運用確認用） */
+  recentRuns: LqngRecentRun[]
   updatedAt: string
 }
 
@@ -57,6 +93,10 @@ export type LqngEventKind =
   | 'hold'
   | 'released'
   | 'author_deleted'
+  /** 退会扱いの投稿者が再確認で存在した（退会扱いを外す。投稿者 NG は外さない） */
+  | 'author_restored'
+  /** 404 の割合が異常に高く、その回の退会判定を保留した */
+  | 'deletion_held'
   | 'access_limited'
   | 'backfill'
   | 'error'
@@ -73,23 +113,18 @@ export interface LqngEvent {
 export interface LqngEvents {
   version: 1
   items: LqngEvent[]
-  /** 直近の実行サマリ（管理画面のヘッダー表示用） */
-  lastRun: {
-    at: string
-    mode: 'poll' | 'sweep'
-    newVideos: number
-    enriched: number
-    usersChecked: number
-    subrequests: number
-    kvWrites: number
-    note?: string
-  } | null
+  /**
+   * 旧来の置き場所（管理画面の overview API がまだここを読む）。正は tracking.lastRun で、
+   * 履歴を書く回に限り同じ内容をここにも入れる（書き込み回数は増やさない）
+   */
+  lastRun: LqngRunSummary | null
 }
 
 export const EVENTS_MAX = 500
+export const RECENT_RUNS_MAX = 40
 
 export function emptyTracking(now: string): LqngTracking {
-  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], updatedAt: now }
+  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], unattributed: [], lastRun: null, recentRuns: [], updatedAt: now }
 }
 
 export function emptyEvents(): LqngEvents {
@@ -107,6 +142,11 @@ function parseJson<T>(raw: string | null, fallback: T): T {
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
+function normalizeRecentRuns(raw: unknown): LqngRecentRun[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((r): r is LqngRecentRun => isRecord(r) && typeof r.at === 'string' && (r.mode === 'poll' || r.mode === 'sweep')).slice(0, RECENT_RUNS_MAX)
+}
+
 export function normalizeTracking(raw: unknown, now: string): LqngTracking {
   if (!isRecord(raw) || !isRecord(raw.authors)) return emptyTracking(now)
   return {
@@ -115,6 +155,9 @@ export function normalizeTracking(raw: unknown, now: string): LqngTracking {
     lastSweepDate: typeof raw.lastSweepDate === 'string' ? raw.lastSweepDate : null,
     authors: raw.authors as Record<string, TrackedAuthor>,
     pending: Array.isArray(raw.pending) ? (raw.pending as PendingVideo[]) : [],
+    unattributed: Array.isArray(raw.unattributed) ? raw.unattributed.filter((u): u is UnattributedVideo => isRecord(u) && typeof u.id === 'string' && typeof u.at === 'string') : [],
+    lastRun: isRecord(raw.lastRun) ? (raw.lastRun as unknown as LqngRunSummary) : null,
+    recentRuns: normalizeRecentRuns(raw.recentRuns),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   }
 }
@@ -124,7 +167,7 @@ export function normalizeEvents(raw: unknown): LqngEvents {
   return {
     version: 1,
     items: raw.items as LqngEvent[],
-    lastRun: isRecord(raw.lastRun) ? (raw.lastRun as LqngEvents['lastRun']) : null,
+    lastRun: isRecord(raw.lastRun) ? (raw.lastRun as unknown as LqngRunSummary) : null,
   }
 }
 
@@ -135,9 +178,14 @@ export interface LoadedState {
   events: LqngEvents
 }
 
-/** 有効フラグだけを読む。無効時にロック取得の KV 書き込み（1 日 96 回）を避けるための軽量読み */
+/** 設定だけを読む（判定表・追跡表など大きいキーを読まずに済ませたいとき用） */
+export async function loadConfig(kv: KvLike): Promise<LqngConfig> {
+  return normalizeLqngConfig(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.config), null))
+}
+
+/** 有効フラグだけを読む。無効時に判定表・追跡表など大きいキーを読まずに抜けるための軽量読み */
 export async function loadEnabled(kv: KvLike): Promise<boolean> {
-  return normalizeLqngConfig(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.config), null)).enabled
+  return (await loadConfig(kv)).enabled
 }
 
 export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
@@ -155,45 +203,53 @@ export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
   }
 }
 
-/** 変更のあったキーだけ書き込み、書き込んだ数を返す */
+/** updatedAt を除いた内容（書き込みの要否の判定に使う） */
+function contentOf(value: { updatedAt: string }): string {
+  return JSON.stringify({ ...value, updatedAt: '' })
+}
+
+/** 読み込み直後の内容。保存時にこれと比べて、変わったキーだけを書く */
+export interface StateBaseline {
+  verdicts: string
+  tracking: string
+  events: string
+}
+
+export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>): StateBaseline {
+  return { verdicts: contentOf(state.verdicts), tracking: contentOf(state.tracking), events: JSON.stringify(state.events.items) }
+}
+
+/**
+ * 内容（updatedAt を除く）が変わったキーだけを書き、updatedAt もそのときだけ進める。
+ * 順番は 判定表 → 履歴 → 受け箱の削除 → 追跡表。追跡表（取り込み済みの動画・最終取得時刻）を
+ * 最後にするので、途中で失敗しても次回は同じ新着と受け箱を取り直して冪等に判定し直せる。
+ * 直近の実行の要約（書き込み数を含む）は書く前に数えて追跡表に入れ、同じ数を返す。
+ */
 export async function saveState(
   kv: KvLike,
-  before: { verdicts: string; events: string },
-  state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>
+  baseline: StateBaseline,
+  state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>,
+  run: Omit<LqngRunSummary, 'kvWrites'>,
+  inboxKeys: readonly string[] = []
 ): Promise<number> {
-  let writes = 0
-  await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
-  writes++
-  const verdicts = JSON.stringify(state.verdicts)
-  if (verdicts !== before.verdicts) {
-    await kv.put(LQNG_KV_KEYS.verdicts, verdicts)
-    writes++
-  }
-  const events = JSON.stringify(state.events)
-  if (events !== before.events) {
-    await kv.put(LQNG_KV_KEYS.events, events)
-    writes++
-  }
-  return writes
+  const verdictsChanged = contentOf(state.verdicts) !== baseline.verdicts
+  const eventsChanged = JSON.stringify(state.events.items) !== baseline.events
+  const summary: LqngRunSummary = { ...run, kvWrites: 0 }
+  state.tracking.lastRun = summary
+  state.tracking.recentRuns = [{ at: run.at, mode: run.mode, ...(run.note ? { note: run.note } : {}) }, ...state.tracking.recentRuns].slice(0, RECENT_RUNS_MAX)
+  const trackingChanged = contentOf(state.tracking) !== baseline.tracking
+  summary.kvWrites = (verdictsChanged ? 1 : 0) + (eventsChanged ? 1 : 0) + inboxKeys.length + (trackingChanged ? 1 : 0)
+  if (verdictsChanged) state.verdicts.updatedAt = run.at
+  if (trackingChanged) state.tracking.updatedAt = run.at
+  if (eventsChanged) state.events.lastRun = summary
+  if (verdictsChanged) await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
+  if (eventsChanged) await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
+  for (const key of inboxKeys) await kv.delete(key)
+  if (trackingChanged) await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
+  return summary.kvWrites
 }
 
 export function pushEvent(events: LqngEvents, event: LqngEvent): void {
   events.items.unshift(event)
   if (events.items.length > EVENTS_MAX) events.items.length = EVENTS_MAX
-}
-
-/** 実行ロック。取得できなければ false */
-export async function acquireLock(kv: KvLike, now: string, ttlSeconds: number): Promise<boolean> {
-  const existing = await kv.get(LQNG_KV_KEYS.lock)
-  if (existing) return false
-  await kv.put(LQNG_KV_KEYS.lock, now, { expirationTtl: ttlSeconds })
-  return true
-}
-
-export async function releaseLock(kv: KvLike): Promise<void> {
-  try {
-    await kv.delete(LQNG_KV_KEYS.lock)
-  } catch {
-    // ロックは TTL で消えるので握りつぶす
-  }
 }

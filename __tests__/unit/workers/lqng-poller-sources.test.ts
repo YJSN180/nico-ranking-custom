@@ -6,6 +6,7 @@ import {
   fetchThumbInfoFromExt,
   fetchUserInfoFromNvapi,
   fetchNewVideosFromNicoPages,
+  NicoPagesFailedError,
 } from '@/workers/lqng-poller/src/sources'
 
 // 応答の形は実測に基づくが、値はすべて合成
@@ -41,6 +42,23 @@ describe('fetchNewVideosFromNvapi', () => {
     ])
   })
 
+  it('チャンネルの owner.id が ch 付き（"ch78"）で来ても channel/chch78 にしない', async () => {
+    const fetchImpl = vi.fn(async () =>
+      response({
+        meta: { status: 200 },
+        data: {
+          hasNext: false,
+          items: [
+            { id: 'so7', title: 'c', registeredAt: '2026-01-01T00:02:00+09:00', isChannelVideo: true, owner: { id: 'ch78', ownerType: 'channel', name: 'ch' } },
+            { id: 'so8', title: 'c', registeredAt: '2026-01-01T00:03:00+09:00', owner: { id: 'ch79', ownerType: 'channel', name: 'ch' } },
+          ],
+        },
+      })
+    )
+    const videos = await fetchNewVideosFromNvapi(['t1'], '2026-01-01T00:00:00.000Z', fetchImpl as unknown as typeof fetch)
+    expect(videos.map((v) => v.authorId)).toEqual(['channel/ch78', 'channel/ch79'])
+  })
+
   it('403 はアクセス制限として投げる', async () => {
     const fetchImpl = vi.fn(async () => response('', 403, true))
     await expect(fetchNewVideosFromNvapi(['t'], '2026-01-01T00:00:00.000Z', fetchImpl as unknown as typeof fetch)).rejects.toBeInstanceOf(AccessLimitedError)
@@ -56,6 +74,15 @@ describe('fetchThumbInfoFromExt', () => {
     expect(r).toEqual({ ok: true, info: { tagDetails: [{ name: 'A', isLocked: true }, { name: 'B <c>', isLocked: false }, { name: 'C', isLocked: true }], ownerVisibility: 'visible', nickname: "n & m &lt;x&gt; 'q'" } })
   })
 
+  it('5xx と 429 は上流の一時的な不調（unavailable）、それ以外の失敗は error', async () => {
+    for (const status of [500, 502, 503, 429]) {
+      expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response('', status, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'unavailable' })
+    }
+    expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response('', 404, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'error' })
+    const notFound = '<nicovideo_thumb_response status="fail"><error><code>NOT_FOUND</code></error></nicovideo_thumb_response>'
+    expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response(notFound, 200, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'error' })
+  })
+
   it('投稿者が空なら hidden、削除済みは deleted、403 はアクセス制限', async () => {
     const hidden = xml('<tags><tag lock="1">A</tag></tags>')
     const r1 = await fetchThumbInfoFromExt('sm1', vi.fn(async () => response(hidden, 200, true)) as unknown as typeof fetch)
@@ -67,14 +94,27 @@ describe('fetchThumbInfoFromExt', () => {
 })
 
 describe('fetchUserInfoFromNvapi', () => {
-  it('200 は現存（フォロワー数付き）、404 は削除、チャンネルは照会しない', async () => {
+  it('200 は現存（フォロワー数付き）、NOT_FOUND 本文の 404 は削除、チャンネルは照会しない', async () => {
     const ok = vi.fn(async () => response({ data: { user: { nickname: 'n', followerCount: 7 } } }))
     expect(await fetchUserInfoFromNvapi('12', ok as unknown as typeof fetch)).toEqual({ status: 'existing', followerCount: 7, nickname: 'n' })
-    const gone = vi.fn(async () => response({ meta: { status: 404 } }, 404))
+    const gone = vi.fn(async () => response({ meta: { status: 404, errorCode: 'NOT_FOUND' } }, 404))
     expect(await fetchUserInfoFromNvapi('12', gone as unknown as typeof fetch)).toEqual({ status: 'deleted', followerCount: null, nickname: null })
     const never = vi.fn()
     expect(await fetchUserInfoFromNvapi('channel/ch1', never as unknown as typeof fetch)).toEqual({ status: 'existing', followerCount: null, nickname: null })
     expect(never).not.toHaveBeenCalled()
+  })
+
+  it('本文が NOT_FOUND でない 404（HTML・別のエラー・壊れた JSON）は削除扱いにしない', async () => {
+    const bodies = [
+      response('<html>Not Found</html>', 404, true),
+      response({ meta: { status: 404, errorCode: 'SOMETHING_ELSE' } }, 404),
+      response({ meta: { status: 500, errorCode: 'NOT_FOUND' } }, 404),
+      response('{"meta":', 404, true),
+    ]
+    for (const body of bodies) {
+      const fetchImpl = vi.fn(async () => body)
+      expect((await fetchUserInfoFromNvapi('12', fetchImpl as unknown as typeof fetch)).status).toBe('error')
+    }
   })
 })
 
@@ -118,11 +158,13 @@ describe('fetchNewVideosFromNicoPages', () => {
           : pageHtml([item('sm2', 20), item('sm9', 30, { owner: { ownerType: 'channel', id: '77' }, isChannelVideo: true })], false)
       return { ok: true, text: async () => body } as unknown as Response
     })
-    const videos = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
+    const { videos, failures, requests } = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
     expect(calls).toHaveLength(4) // 2 タグ × 2 種別 × 1 ページ（tagA の動画は since より古い動画で打ち切り）
+    expect(requests).toBe(4)
     expect(calls.some((u) => u.includes('/tag_shorts/') && u.includes('sort=registeredAt'))).toBe(true)
     expect(videos.map((v) => v.id)).toEqual(['ss5', 'sm1', 'sm2', 'sm9'])
     expect(videos.find((v) => v.id === 'sm9')?.authorId).toBe('channel/ch77')
+    expect(failures).toEqual([])
   })
 
   it('ページ末尾まで since より新しい動画が続くときだけ 2 ページ目を読む', async () => {
@@ -133,13 +175,55 @@ describe('fetchNewVideosFromNicoPages', () => {
       const page = u.searchParams.get('page') ?? '1'
       return { ok: true, text: async () => (page === '1' ? pageHtml(full, true) : pageHtml([item('q1', 40), item('q2', 500)], true)) } as unknown as Response
     })
-    const videos = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
+    const { videos } = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
     expect(fetchImpl).toHaveBeenCalledTimes(3) // 動画 2 ページ + ショート 1 ページ（同じ内容が返るが重複除外）
     expect(videos).toHaveLength(33)
   })
 
-  it('構造が変わっていれば投げる（呼び出し側で nvapi に縮退する）', async () => {
+  it('ページ送りは件数でなく hasNext で決める（32 件未満でも続きがあれば読む・空のページで止める）', async () => {
+    // 形の崩れた項目が除かれて 30 件になったページ（続きあり）
+    const short = Array.from({ length: 30 }, (_, i) => item(`p${i}`, i))
+    const fetchImpl = vi.fn(async (url: string) => {
+      const u = new URL(url)
+      if (u.pathname.startsWith('/tag_shorts/')) return { ok: true, text: async () => pageHtml([], true) } as unknown as Response
+      const page = u.searchParams.get('page') ?? '1'
+      return { ok: true, text: async () => (page === '1' ? pageHtml(short, true) : pageHtml([item('q1', 40)], false)) } as unknown as Response
+    })
+    const { videos, requests } = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(videos).toHaveLength(31)
+    expect(requests).toBe(3) // 動画 2 ページ + ショート 1 ページ（空なので hasNext でも止める）
+  })
+
+  it('ショートのページだけ失敗しても投げず、取れたページの動画を返して失敗したページを記録する', async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      const u = new URL(url)
+      if (u.pathname.startsWith('/tag_shorts/')) return { ok: false, status: 503, text: async () => '' } as unknown as Response
+      return { ok: true, text: async () => pageHtml([item('sm1', 5)], false) } as unknown as Response
+    })
+    const r = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(r.videos.map((v) => v.id)).toEqual(['sm1'])
+    // タグ名は出さず、設定の並び順の番号で記録する
+    expect(r.failures).toEqual(['t0:tag_shorts:p1 nico_page_http_503', 't1:tag_shorts:p1 nico_page_http_503'])
+  })
+
+  it('403 のページがあれば、残りのページは読まずに打ち切る', async () => {
+    const calls: string[] = []
+    const fetchImpl = vi.fn(async (url: string) => {
+      calls.push(url)
+      if (new URL(url).pathname.startsWith('/tag_shorts/')) return { ok: false, status: 403, text: async () => '' } as unknown as Response
+      return { ok: true, text: async () => pageHtml([item('sm1', 5)], false) } as unknown as Response
+    })
+    const r = await fetchNewVideosFromNicoPages(['tagA', 'tagB'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(calls).toHaveLength(2) // tagA の動画・ショートまで。tagB は読まない
+    expect(r.videos.map((v) => v.id)).toEqual(['sm1'])
+    expect(r.failures).toEqual(['t0:tag_shorts:p1 nico_page_http_403'])
+  })
+
+  it('全部のページが取れないときだけ投げる（構造の変化など。呼び出し側で nvapi に縮退する）', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => '<html></html>' }) as unknown as Response)
-    await expect(fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)).rejects.toThrow('server-response')
+    const error = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(NicoPagesFailedError)
+    expect((error as NicoPagesFailedError).message).toContain('server-response')
+    expect((error as NicoPagesFailedError).requests).toBe(2) // 動画・ショートとも 1 ページ目で失敗
   })
 })

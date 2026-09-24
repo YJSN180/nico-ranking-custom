@@ -98,14 +98,21 @@ export interface VideoObservation {
 
 export type AuthorStatus = 'existing' | 'deleted' | 'unknown'
 
+/** 投稿頻度の判定に使う投稿 1 件（動画 ID で重複を除くので、同じ秒の別動画も別々に数える） */
+export interface LqngPost {
+  id: string
+  /** 投稿時刻（ISO 8601） */
+  at: string
+}
+
 /** 判定に渡す投稿者の観測値（ポーリングの追跡情報から組み立てる） */
 export interface AuthorObservation {
   authorId: string
   status: AuthorStatus
   followerCount?: number | null
   visibility?: OwnerVisibility | null
-  /** 追跡期間内に観測した投稿時刻（ISO 8601）。評価対象の動画自身も含めてよい */
-  postTimes: string[]
+  /** 追跡期間内に観測した投稿。評価対象の動画自身も含めてよい（同じ ID は 1 本に数える） */
+  posts: LqngPost[]
   /** 404 を初めて観測した時刻（ISO 8601）。削除済みでなければ null */
   deletedObservedAt?: string | null
 }

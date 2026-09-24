@@ -10,6 +10,7 @@ import type {
   HoldSignal,
   LqngConfig,
   LqngFrequencyConfig,
+  LqngPost,
   LqngRuleId,
   VideoEvaluation,
   VideoObservation,
@@ -42,9 +43,18 @@ function hasWindowWithCount(sortedMs: readonly number[], windowMs: number, count
   return false
 }
 
-/** 投稿頻度 C: 24 時間以内に dayCount 本以上、または burstMinutes 以内に burstCount 本以上 */
-export function isFrequent(postTimes: readonly string[], freq: LqngFrequencyConfig): boolean {
-  const sorted = Array.from(new Set(postTimes.map(toMs).filter((t) => Number.isFinite(t)))).sort((a, b) => a - b)
+/**
+ * 投稿頻度 C: 24 時間以内に dayCount 本以上、または burstMinutes 以内に burstCount 本以上。
+ * 動画 ID で重複を除く（同じ動画を二重に数えず、同じ秒に公開された別々の動画は別々に数える）
+ */
+export function isFrequent(posts: readonly LqngPost[], freq: LqngFrequencyConfig): boolean {
+  const byId = new Map<string, number>()
+  for (const post of posts) {
+    if (byId.has(post.id)) continue
+    const t = toMs(post.at)
+    if (Number.isFinite(t)) byId.set(post.id, t)
+  }
+  const sorted = Array.from(byId.values()).sort((a, b) => a - b)
   return hasWindowWithCount(sorted, DAY_MS, freq.dayCount) || hasWindowWithCount(sorted, freq.burstMinutes * 60 * 1000, freq.burstCount)
 }
 
@@ -77,8 +87,8 @@ function followerAllowsEscalation(author: AuthorObservation | null, config: Lqng
  */
 export function evaluateVideo(video: VideoObservation, author: AuthorObservation | null, config: LqngConfig): VideoEvaluation {
   const lockedGroups = countLockedGroups(video.tagDetails, config.tagGroups)
-  const postTimes = author ? [...author.postTimes, video.registeredAt] : [video.registeredAt]
-  const frequent = isFrequent(postTimes, config.freq)
+  const self: LqngPost = { id: video.id, at: video.registeredAt }
+  const frequent = isFrequent(author ? [...author.posts, self] : [self], config.freq)
   const empty: VideoEvaluation = { ng: false, reasons: [], escalate: false, escalateReasons: [], lockedGroups, frequent }
   if (!config.enabled || isAllowlisted(video, config)) return empty
 
@@ -124,12 +134,12 @@ export function evaluateDeletion(author: AuthorObservation, config: LqngConfig):
   const deletedAt = toMs(author.deletedObservedAt)
   if (!Number.isFinite(deletedAt)) return none
   const windowMs = config.deletionWindowDays * DAY_MS
-  const recentPost = author.postTimes.some((t) => {
-    const ms = toMs(t)
+  const recentPost = author.posts.some((post) => {
+    const ms = toMs(post.at)
     return Number.isFinite(ms) && deletedAt >= ms && deletedAt - ms <= windowMs
   })
   if (!recentPost) return none
-  if (!isFrequent(author.postTimes, config.freq)) return none
+  if (!isFrequent(author.posts, config.freq)) return none
   return { ng: true, reason: 'A_C' }
 }
 

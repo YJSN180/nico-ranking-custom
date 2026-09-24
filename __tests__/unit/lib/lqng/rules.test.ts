@@ -36,10 +36,13 @@ const author = (over: Partial<AuthorObservation> = {}): AuthorObservation => ({
   status: 'existing',
   followerCount: 100,
   visibility: 'visible',
-  postTimes: [],
+  posts: [],
   deletedObservedAt: null,
   ...over,
 })
+
+/** 投稿（分オフセット → 別々の動画 ID）。ID は並び順から合成する */
+const posts = (...offsetsMin: number[]) => offsetsMin.map((m, i) => ({ id: `sm${7000 + i}`, at: iso(m) }))
 
 const locked = (...names: string[]) => names.map((name) => ({ name, isLocked: true }))
 const unlocked = (...names: string[]) => names.map((name) => ({ name, isLocked: false }))
@@ -56,13 +59,22 @@ describe('countLockedGroups', () => {
 
 describe('isFrequent', () => {
   it('24 時間に 5 本以上、または 30 分に 3 本以上で該当', () => {
-    expect(isFrequent([0, 60, 120, 180].map(iso), config.freq)).toBe(false) // 1 時間おきに 4 本
-    expect(isFrequent([0, 1, 2].map(iso), config.freq)).toBe(true) // 3 分間に 3 本は連投
-    expect(isFrequent([0, 300, 600, 900, 1200].map(iso), config.freq)).toBe(true) // 20 時間に 5 本
-    expect(isFrequent([0, 400, 800, 1200, 1500].map(iso), config.freq)).toBe(false) // 25 時間に 5 本
-    expect(isFrequent([0, 10, 29].map(iso), config.freq)).toBe(true) // 29 分に 3 本
-    expect(isFrequent([0, 10, 31].map(iso), config.freq)).toBe(false)
-    expect(isFrequent([0, 0, 0].map(iso), config.freq)).toBe(false) // 重複時刻は 1 本扱い
+    expect(isFrequent(posts(0, 60, 120, 180), config.freq)).toBe(false) // 1 時間おきに 4 本
+    expect(isFrequent(posts(0, 1, 2), config.freq)).toBe(true) // 3 分間に 3 本は連投
+    expect(isFrequent(posts(0, 300, 600, 900, 1200), config.freq)).toBe(true) // 20 時間に 5 本
+    expect(isFrequent(posts(0, 400, 800, 1200, 1500), config.freq)).toBe(false) // 25 時間に 5 本
+    expect(isFrequent(posts(0, 10, 29), config.freq)).toBe(true) // 29 分に 3 本
+    expect(isFrequent(posts(0, 10, 31), config.freq)).toBe(false)
+  })
+
+  it('同じ秒に公開された別々の動画 3 本は連投として数える', () => {
+    expect(isFrequent(posts(0, 0, 0), config.freq)).toBe(true)
+  })
+
+  it('同じ動画が 2 回渡されても 1 本として数える', () => {
+    const one = { id: 'sm8000', at: iso(0) }
+    expect(isFrequent([one, one, { id: 'sm8001', at: iso(1) }], config.freq)).toBe(false)
+    expect(isFrequent([one, { id: 'sm8000', at: iso(5) }, { id: 'sm8001', at: iso(1) }], config.freq)).toBe(false)
   })
 })
 
@@ -110,7 +122,7 @@ describe('evaluateVideo', () => {
   it('C∧D: 投稿頻度 ∧ D で昇格（フォロワー条件なし）', () => {
     const r = evaluateVideo(
       video({ tagDetails: locked('g1', 'g2', 'g4') }),
-      author({ followerCount: 5000, postTimes: [-5, -10].map(iso) }),
+      author({ followerCount: 5000, posts: posts(-5, -10) }),
       config
     )
     expect(r.frequent).toBe(true)
@@ -122,7 +134,7 @@ describe('evaluateVideo', () => {
     const alone = evaluateVideo(video({ title: 'ホモと見る何か' }), author(), config)
     expect(alone.ng).toBe(false)
 
-    const withC = evaluateVideo(video({ title: 'ホモと見る何か' }), author({ postTimes: [-5, -10].map(iso), followerCount: 5000 }), config)
+    const withC = evaluateVideo(video({ title: 'ホモと見る何か' }), author({ posts: posts(-5, -10), followerCount: 5000 }), config)
     expect(withC.reasons).toEqual(['HK'])
     expect(withC.escalate).toBe(true)
 
@@ -131,8 +143,18 @@ describe('evaluateVideo', () => {
     expect(withD.escalateReasons).toEqual(['HK'])
   })
 
+  it('同じ秒に公開された別々の動画でも投稿頻度に数え、評価中の動画自身は二重に数えない', () => {
+    // 投稿者の追跡に評価中の動画（sm1）も入っている。sm1 を二重に数えると 3 本になってしまう
+    const withSelf = author({ posts: [{ id: 'sm1', at: iso(0) }, { id: 'sm7001', at: iso(0) }] })
+    expect(evaluateVideo(video({ title: 'ホモと見る何か' }), withSelf, config).frequent).toBe(false)
+    const threeAtOnce = author({ posts: [{ id: 'sm7001', at: iso(0) }, { id: 'sm7002', at: iso(0) }] })
+    const r = evaluateVideo(video({ title: 'ホモと見る何か' }), threeAtOnce, config)
+    expect(r.frequent).toBe(true)
+    expect(r.reasons).toEqual(['HK'])
+  })
+
   it('C 単独では NG にしない', () => {
-    const r = evaluateVideo(video(), author({ postTimes: [-5, -10, -15, -20].map(iso) }), config)
+    const r = evaluateVideo(video(), author({ posts: posts(-5, -10, -15, -20) }), config)
     expect(r.frequent).toBe(true)
     expect(r.ng).toBe(false)
   })
@@ -151,23 +173,23 @@ describe('evaluateVideo', () => {
 
 describe('evaluateDeletion (A∧C)', () => {
   it('投稿から 7 日以内に削除を観測し、投稿頻度に該当すれば投稿者 NG', () => {
-    const a = author({ status: 'deleted', followerCount: null, postTimes: [0, 5, 10, 15, 20].map(iso), deletedObservedAt: iso(2 * 24 * 60) })
+    const a = author({ status: 'deleted', followerCount: null, posts: posts(0, 5, 10, 15, 20), deletedObservedAt: iso(2 * 24 * 60) })
     expect(evaluateDeletion(a, config)).toEqual({ ng: true, reason: 'A_C' })
   })
 
   it('投稿頻度に該当しない削除（1〜2 本で退会）は非該当', () => {
-    const a = author({ status: 'deleted', followerCount: null, postTimes: [0, 60].map(iso), deletedObservedAt: iso(60 * 24) })
+    const a = author({ status: 'deleted', followerCount: null, posts: posts(0, 60), deletedObservedAt: iso(60 * 24) })
     expect(evaluateDeletion(a, config).ng).toBe(false)
   })
 
   it('最後の投稿から 7 日より後の削除は非該当', () => {
-    const a = author({ status: 'deleted', followerCount: null, postTimes: [0, 5, 10, 15, 20].map(iso), deletedObservedAt: iso(8 * 24 * 60) })
+    const a = author({ status: 'deleted', followerCount: null, posts: posts(0, 5, 10, 15, 20), deletedObservedAt: iso(8 * 24 * 60) })
     expect(evaluateDeletion(a, config).ng).toBe(false)
   })
 
   it('現存投稿者や許可リストは非該当', () => {
-    expect(evaluateDeletion(author({ postTimes: [0, 5, 10].map(iso) }), config).ng).toBe(false)
-    const allowed = author({ authorId: '9001', status: 'deleted', postTimes: [0, 5, 10].map(iso), deletedObservedAt: iso(60) })
+    expect(evaluateDeletion(author({ posts: posts(0, 5, 10) }), config).ng).toBe(false)
+    const allowed = author({ authorId: '9001', status: 'deleted', posts: posts(0, 5, 10), deletedObservedAt: iso(60) })
     expect(evaluateDeletion(allowed, config).ng).toBe(false)
   })
 })

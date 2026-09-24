@@ -1,33 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { BACKFILL_LIMITS, commitBackfill, createBackfillCursor, emptyDeltas, mergeDeltas, runBackfillStep, type BackfillDeps } from '@/workers/lqng-poller/src/backfill'
+import { InvalidInboxRefError, normalizeDeltas } from '@/workers/lqng-poller/src/inbox'
 import type { SnapshotVideo, ThumbResult, UserInfo } from '@/workers/lqng-poller/src/sources'
-import type { KvLike } from '@/workers/lqng-poller/src/state'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
-import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
-import type { LqngEvents } from '@/workers/lqng-poller/src/state'
+import type { LqngConfig } from '@/lib/lqng/types'
+import { memoryKv } from './helpers/lqng-memory-kv'
 
 // 合成データのみ。実在の ID・名前・タグは使わない
-
-function memoryKv(initial: Record<string, unknown> = {}) {
-  const store = new Map<string, string>()
-  for (const [k, v] of Object.entries(initial)) store.set(k, JSON.stringify(v))
-  const puts: string[] = []
-  const kv: KvLike = {
-    get: async (key) => store.get(key) ?? null,
-    put: async (key, value) => {
-      store.set(key, value)
-      puts.push(key)
-    },
-    delete: async (key) => {
-      store.delete(key)
-    },
-  }
-  const read = <T,>(key: string): T | null => {
-    const raw = store.get(key)
-    return raw ? (JSON.parse(raw) as T) : null
-  }
-  return { kv, puts, read, store }
-}
 
 const config: Partial<LqngConfig> = {
   enabled: true,
@@ -119,9 +98,23 @@ describe('runBackfillStep', () => {
     expect(r.cursor.pendingUsers).toEqual([])
   })
 
+  it('同じ秒に公開された別々の動画 3 本も連投として数える（キーワード ∧ 連投 = HK）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const sameSecond = ['a', 'b', 'c'].map((suffix) => video({ id: `sm2010${suffix === 'a' ? 1 : suffix === 'b' ? 2 : 3}`, authorId: '2010', title: 'ほもと見る何か', registeredAt: at(1) }))
+    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(sameSecond) }), null, { days: 1 })
+    expect(r.deltas.authors['2010']?.reasons).toContain('HK')
+  })
+
+  it('古い形式（version 1）のカーソルは受け付けない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const legacy = { ...createBackfillCursor(T0, 1), version: 1 } as unknown as Parameters<typeof runBackfillStep>[2]
+    const r = await runBackfillStep(m.kv, deps(), legacy, { days: 1 })
+    expect(r.skipped).toBe('cursor_version')
+  })
+
   it('連投 ∧ ロックタグ群（C∧D）は該当群のタグを持つ動画だけ補完して判定する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const fetchThumbInfo = vi.fn(async (): Promise<ThumbResult> => ({ ok: true, info: { tagDetails: locked('g1', 'g2', 'g3'), ownerVisibility: 'visible', nickname: 'n' } }))
+    const fetchThumbInfo = vi.fn(async (_id: string): Promise<ThumbResult> => ({ ok: true, info: { tagDetails: locked('g1', 'g2', 'g3'), ownerVisibility: 'visible', nickname: 'n' } }))
     const videos = [...burst('2005', 4, { tags: ['g1', 'g2', 'g3'] }), video({ id: 'plain', authorId: '2005', registeredAt: at(9), tags: ['g1'] })]
     const d = deps({ fetchWindowPage: pager(videos), fetchThumbInfo })
     const r = await runBackfillStep(m.kv, d, null, { days: 1 })
@@ -191,6 +184,18 @@ describe('runBackfillStep（pages ソース: 本家タグページで直近を�
     expect(r.cursor.stats.videos).toBe(34) // 32 + 2（floor より古い 1 件は数えない）
   })
 
+  it('ページ送りは件数でなく hasNext で決める（32 件未満でも続きがあれば同じタグの次のページへ）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const fetchTagPage = vi.fn(async (tag: string, page: number, kind: string) => {
+      if (kind === 'tag_shorts' || tag !== 'tagA') return { items: [], totalCount: 0, hasNext: false }
+      if (page === 1) return { items: Array.from({ length: 30 }, (_, i) => pageItem(`h${i}`, `${6100 + i}`, 1 + i)), totalCount: 100, hasNext: true }
+      return { items: [pageItem('h-last', '6199', 40)], totalCount: 100, hasNext: false }
+    })
+    const r = await runBackfillStep(m.kv, deps({ fetchTagPage }), null, { pages: 8, source: 'pages' })
+    expect(vi.mocked(fetchTagPage).mock.calls.map((c) => `${c[0]}:${c[2]}:${c[1]}`).slice(0, 2)).toEqual(['tagA:tag:1', 'tagA:tag:2'])
+    expect(r.cursor.stats.videos).toBe(31)
+  })
+
   it('pages ソースの既定の遡りは 2 日', () => {
     const c = createBackfillCursor(T0, null, 'pages')
     expect(new Date(c.floor).getTime()).toBe(T0.getTime() - 2 * 24 * 3600_000)
@@ -200,6 +205,7 @@ describe('runBackfillStep（pages ソース: 本家タグページで直近を�
 
 describe('mergeDeltas / commitBackfill', () => {
   const authorVerdict = (reasons: string[]) => ({ status: 'ng' as const, reasons: reasons as never, since: 's', evidence: [] })
+  const videoVerdict = (authorId: string) => ({ status: 'ng' as const, reasons: ['D'] as never, authorId, title: 't', registeredAt: '2026-01-01T00:00:00.000Z', since: 's' })
 
   it('mergeDeltas は投稿者の理由を和集合にし、投稿者 NG の動画は落とす', () => {
     const into = emptyDeltas()
@@ -209,27 +215,62 @@ describe('mergeDeltas / commitBackfill', () => {
     expect(Object.keys(into.videos)).toEqual(['sm1']) // sm2 は投稿者 2 が NG なので不要
   })
 
-  it('commit は未登録の判定だけ足し、許可リストを除き、verdicts と events の 2 回だけ書く', async () => {
+  it('commit は判定表・履歴を書かず、受け箱の一意なキーに差分を 1 回だけ置く', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const deltas = { authors: { '3001': authorVerdict(['A_C']), '9001': authorVerdict(['A_C']) }, videos: { sm9: { status: 'ng' as const, reasons: ['D'] as never, authorId: '3002', title: 't', registeredAt: 'r', since: 's' } } }
-    const r = await commitBackfill(m.kv, T0, deltas)
-    expect(r).toEqual({ skipped: null, authorsAdded: 1, videosAdded: 1, kvWrites: 2 })
-    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
-    expect(Object.keys(verdicts.authors)).toEqual(['3001'])
-    expect(verdicts.authors['3001']?.since).toBe(T0.toISOString())
-    expect(Object.keys(verdicts.videos)).toEqual(['sm9'])
-    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items[0]?.kind).toBe('backfill')
-    expect(m.puts.filter((k) => k !== LQNG_KV_KEYS.lock)).toEqual([LQNG_KV_KEYS.verdicts, LQNG_KV_KEYS.events])
-    expect(m.store.has(LQNG_KV_KEYS.lock)).toBe(false)
+    const deltas = { authors: { '3001': authorVerdict(['A_C']), '3003': authorVerdict(['B']) }, videos: { sm9: videoVerdict('3002') } }
+    const r = await commitBackfill(m.kv, T0, deltas, { runId: 'gh-100-1', seq: 3 })
+    expect(r).toEqual({ skipped: null, key: 'lqng:inbox:gh-100-1:000003', authors: 2, videos: 1, kvWrites: 1 })
+    expect(m.puts).toEqual(['lqng:inbox:gh-100-1:000003'])
+    expect(m.store.has(LQNG_KV_KEYS.verdicts)).toBe(false)
+    expect(m.store.has(LQNG_KV_KEYS.events)).toBe(false)
+    const item = m.read<{ runId: string; seq: number; at: string; deltas: { authors: Record<string, unknown> } }>('lqng:inbox:gh-100-1:000003')!
+    expect(item.runId).toBe('gh-100-1')
+    expect(item.seq).toBe(3)
+    expect(item.at).toBe(T0.toISOString())
+    expect(Object.keys(item.deltas.authors).sort()).toEqual(['3001', '3003'])
 
-    const again = await commitBackfill(m.kv, T0, deltas)
-    expect(again.kvWrites).toBe(0)
+    // 同じ runId・連番の再送は同じキーを上書きするだけ（受け箱は増えない）
+    await commitBackfill(m.kv, T0, deltas, { runId: 'gh-100-1', seq: 3 })
+    expect(Array.from(m.store.keys()).filter((k) => k.startsWith('lqng:inbox:'))).toEqual(['lqng:inbox:gh-100-1:000003'])
   })
 
-  it('ロックが取れなければ commit をスキップする', async () => {
+  it('空の差分は書かない', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    m.store.set(LQNG_KV_KEYS.lock, 'busy')
-    const r = await commitBackfill(m.kv, T0, { authors: { '1': authorVerdict(['B']) }, videos: {} })
-    expect(r.skipped).toBe('locked')
+    const r = await commitBackfill(m.kv, T0, emptyDeltas(), { runId: 'r1', seq: 1 })
+    expect(r.skipped).toBe('empty')
+    expect(r.kvWrites).toBe(0)
+    expect(m.puts).toEqual([])
+  })
+
+  it('不正な runId・連番は受け付けない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const deltas = { authors: { '1': authorVerdict(['B']) }, videos: {} }
+    await expect(commitBackfill(m.kv, T0, deltas, { runId: 'a:b', seq: 1 })).rejects.toBeInstanceOf(InvalidInboxRefError)
+    await expect(commitBackfill(m.kv, T0, deltas, { runId: 'ok', seq: -1 })).rejects.toBeInstanceOf(InvalidInboxRefError)
+    await expect(commitBackfill(m.kv, T0, deltas, { runId: 'ok', seq: 1.5 })).rejects.toBeInstanceOf(InvalidInboxRefError)
+    expect(m.puts).toEqual([])
+  })
+
+  it('normalizeDeltas は形の崩れた判定・不正な ID を落とす', () => {
+    const d = normalizeDeltas({
+      authors: {
+        '1001': { status: 'ng', reasons: ['B', 'X'], since: 's', evidence: [{ videoId: 'sm1', title: 't', registeredAt: 'r', rules: ['B'] }, { bad: true }] },
+        'channel/ch7': { status: 'ng', reasons: ['A_C'], since: 's', evidence: [] },
+        constructor: { status: 'ng', reasons: ['B'], since: 's', evidence: [] },
+        '1002': { status: 'ng', reasons: [], since: 's', evidence: [] },
+        '1003': { status: 'hold', reasons: ['B'], since: 's', evidence: [] },
+      },
+      videos: {
+        sm5: { status: 'ng', reasons: ['D'], authorId: '1001', title: 't', registeredAt: 'r', since: 's' },
+        so6: { status: 'ng', reasons: ['B'], authorId: null, title: 't', registeredAt: 'r', since: 's' },
+        'x/1': { status: 'ng', reasons: ['D'], authorId: null, title: 't', registeredAt: 'r', since: 's' },
+        sm7: { status: 'hold', reasons: [], authorId: null, title: 't', registeredAt: 'r', since: 's' },
+      },
+    })
+    expect(Object.keys(d.authors).sort()).toEqual(['1001', 'channel/ch7'])
+    expect(d.authors['1001']?.reasons).toEqual(['B'])
+    expect(d.authors['1001']?.evidence).toEqual([{ videoId: 'sm1', title: 't', registeredAt: 'r', rules: ['B'] }])
+    expect(Object.keys(d.videos).sort()).toEqual(['sm5', 'so6'])
+    expect(normalizeDeltas(null)).toEqual(emptyDeltas())
   })
 })

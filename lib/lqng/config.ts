@@ -8,7 +8,8 @@ export const LQNG_KV_KEYS = {
   verdicts: 'lqng:verdicts',
   tracking: 'lqng:tracking',
   events: 'lqng:events',
-  lock: 'lqng:lock',
+  /** バックフィルの判定差分の受け箱（lqng:inbox:<runId>:<seq>）。判定表へはポーリングが合流する */
+  inboxPrefix: 'lqng:inbox:',
 } as const
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)

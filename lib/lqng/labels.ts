@@ -22,6 +22,8 @@ export const LQNG_EVENT_KIND_LABELS: Record<string, string> = {
   hold: '保留',
   released: '解放',
   author_deleted: '投稿者の削除を観測',
+  author_restored: '退会扱いの投稿者の存在を再確認（投稿者 NG は維持）',
+  deletion_held: '404 が多すぎるため退会判定を保留',
   access_limited: 'アクセス制限を検知',
   backfill: 'バックフィル（過去分の取り込み）',
   error: 'エラー',

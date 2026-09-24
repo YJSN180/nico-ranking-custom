@@ -1,7 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageVideo } from '../../../lib/search/nico-page-search'
+import { fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -19,7 +19,11 @@ export interface ThumbInfo {
   nickname: string | null
 }
 
-export type ThumbResult = { ok: true; info: ThumbInfo } | { ok: false; reason: 'deleted' | 'error' }
+/**
+ * 失敗の種類: deleted = 動画が削除済み、error = その動画について確かな失敗（試行回数に数える）、
+ * unavailable = 5xx・429・通信失敗など上流の一時的な不調（試行回数に数えない）
+ */
+export type ThumbResult = { ok: true; info: ThumbInfo } | { ok: false; reason: 'deleted' | 'error' | 'unavailable' }
 
 export interface UserInfo {
   status: 'existing' | 'deleted' | 'error'
@@ -35,14 +39,37 @@ export class AccessLimitedError extends Error {
   }
 }
 
+/** 新着の主経路（本家タグページ）の結果。取れたページの動画と、取れなかったページ */
+export interface NewVideosResult {
+  videos: SourceVideo[]
+  /** 取れなかったページ（タグは名前でなく設定の並び順の番号で表す。例: t0:tag_shorts:p1 nico_page_http_503） */
+  failures: string[]
+  /** 実際に送ったリクエスト数（失敗したページも含む。サブリクエスト予算の消費に使う） */
+  requests: number
+}
+
+/** 本家タグページが 1 ページも取れなかった（呼び出し側で予備の nvapi に縮退する） */
+export class NicoPagesFailedError extends Error {
+  constructor(
+    readonly failures: string[],
+    /** 実際に送ったリクエスト数 */
+    readonly requests: number
+  ) {
+    super(`nico_pages_failed: ${failures.join('; ')}`)
+    this.name = 'NicoPagesFailedError'
+  }
+}
+
 export interface PollDeps {
   now: () => Date
-  /** 新着の主経路（本家のタグページ）。失敗時は fetchNewVideosFallback（nvapi）へ */
-  fetchNewVideos: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
+  /** 新着の主経路（本家のタグページ）。全ページ失敗したときだけ投げ、fetchNewVideosFallback（nvapi）へ */
+  fetchNewVideos: (tags: string[], sinceIso: string) => Promise<NewVideosResult>
   fetchNewVideosFallback?: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
   fetchSweepVideos: (genre: string, dateJst: string) => Promise<SourceVideo[]>
+  /** 実行は続けるが監視に上げたい失敗（主経路と予備の両方で新着を取れなかったなど） */
+  reportError?: (error: unknown, context: string) => void
 }
 
 const NVAPI_HEADERS: Record<string, string> = {
@@ -60,7 +87,8 @@ const THUMB_URL = 'https://ext.nicovideo.jp/api/getthumbinfo/'
 const SNAPSHOT_URL = 'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
 const PAGE_SIZE = 100
 export const SNAPSHOT_PAGE_SIZE = PAGE_SIZE
-const MAX_PAGES = 3
+/** nvapi 新着検索・日次スイープ（Snapshot）で読む最大ページ数 */
+export const MAX_PAGES = 3
 const TIMEOUT_MS = 8000
 
 interface NvapiItem {
@@ -74,9 +102,9 @@ interface NvapiItem {
 function mapNvapiItem(item: NvapiItem): SourceVideo | null {
   if (typeof item.id !== 'string' || typeof item.title !== 'string' || typeof item.registeredAt !== 'string') return null
   const owner = item.owner ?? null
-  const rawId = owner?.id !== undefined && owner?.id !== null ? String(owner.id) : null
   const isChannel = item.isChannelVideo === true || owner?.ownerType === 'channel'
-  const authorId = rawId ? (isChannel ? `channel/ch${rawId}` : rawId) : null
+  // チャンネルの owner.id は "123" でも "ch123" でも来るので、本家ページと同じ規則で channel/chNNN にそろえる
+  const authorId = nicoPageOwnerId({ id: item.id, title: item.title, registeredAt: item.registeredAt, owner, isChannelVideo: item.isChannelVideo })
   const hidden = owner?.visibility === 'hidden' || (owner !== null && !owner.name && !isChannel)
   return { id: item.id, title: item.title, authorId, registeredAt: item.registeredAt, ownerVisibility: owner === null ? null : hidden ? 'hidden' : 'visible' }
 }
@@ -96,29 +124,49 @@ export const NICO_PAGE_KINDS: readonly NicoPageKind[] = ['tag', 'tag_shorts']
  * 本家のタグページ（投稿日時が新しい順）から since 以降の新着を集める。nvapi の検索索引より反映が早く、
  * nvapi の動画検索には無いショート（ss）も /tag_shorts から拾える。
  * タグ×種別ごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 2 ページ目まで読む。
- * 同じ動画が複数タグに出ても 1 回だけ返す。HTTP エラー・構造変化は throw（呼び出し側で nvapi に縮退）。
+ * 同じ動画が複数タグに出ても 1 回だけ返す。
+ * 失敗はタグ×種別ごとに扱い、取れたページの分は返す（ショートだけ失敗しても nvapi には縮退しない）。
+ * 403（アクセス制限）に当たったら残りのページは読まない。全ページ失敗したときだけ throw（呼び出し側で nvapi に縮退）。
  */
-export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<SourceVideo[]> {
+export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<NewVideosResult> {
   const sinceMs = new Date(sinceIso).getTime()
   const seen = new Set<string>()
   const out: SourceVideo[] = []
-  for (const tag of tags) {
-    for (const kind of NICO_PAGE_KINDS) for (let page = 1; page <= NICO_PAGES_PER_TAG; page++) {
-      const result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
-      let reachedSince = false
-      for (const item of result.items) {
-        if (new Date(item.registeredAt).getTime() < sinceMs) {
-          reachedSince = true
+  const failures: string[] = []
+  let succeeded = 0
+  let requests = 0
+  let limited = false
+  for (const [tagIndex, tag] of tags.entries()) {
+    for (const kind of NICO_PAGE_KINDS) {
+      for (let page = 1; page <= NICO_PAGES_PER_TAG && !limited; page++) {
+        let result: NicoPageResult
+        requests++
+        try {
+          result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'error'
+          failures.push(`t${tagIndex}:${kind}:p${page} ${reason}`)
+          limited = reason === 'nico_page_http_403'
           break
         }
-        if (seen.has(item.id)) continue
-        seen.add(item.id)
-        out.push(mapNicoPageVideo(item))
+        succeeded++
+        let reachedSince = false
+        for (const item of result.items) {
+          if (new Date(item.registeredAt).getTime() < sinceMs) {
+            reachedSince = true
+            break
+          }
+          if (seen.has(item.id)) continue
+          seen.add(item.id)
+          out.push(mapNicoPageVideo(item))
+        }
+        // 続きの有無は hasNext で決める（形の崩れた項目を除くと 32 件未満になりうる）。空のページでは止める
+        if (reachedSince || !result.hasNext || result.items.length === 0) break
       }
-      if (reachedSince || !result.hasNext || result.items.length < NICO_PAGE_SIZE) break
     }
   }
-  return out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))
+  if (succeeded === 0 && failures.length > 0) throw new NicoPagesFailedError(failures, requests)
+  return { videos: out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt)), failures, requests }
 }
 
 /** nvapi 新着検索: タグ OR、投稿日時の新しい順、since 以降を最大 3 ページ（本家ページが使えないときの予備） */
@@ -170,6 +218,7 @@ function pickXml(xml: string, tag: string): string | undefined {
 export async function fetchThumbInfoFromExt(videoId: string, fetchImpl: typeof fetch = fetch): Promise<ThumbResult> {
   const res = await fetchImpl(`${THUMB_URL}${videoId}`, { headers: { 'User-Agent': 'nico-rank.com lqng-poller' }, signal: AbortSignal.timeout(TIMEOUT_MS) })
   if (res.status === 403) throw new AccessLimitedError('getthumbinfo')
+  if (res.status >= 500 || res.status === 429) return { ok: false, reason: 'unavailable' }
   if (!res.ok) return { ok: false, reason: 'error' }
   const xml = await res.text()
   const status = xml.match(/<nicovideo_thumb_response status="(\w+)"/)?.[1]
@@ -190,11 +239,29 @@ export async function fetchThumbInfoFromExt(videoId: string, fetchImpl: typeof f
   }
 }
 
-/** ユーザー情報 API: 404 が削除済み。channel/ 形式は対象外（存在扱い） */
+/**
+ * nvapi の 404 本文が「見つからない」（{"meta":{"status":404,"errorCode":"NOT_FOUND"}}）か。
+ * CDN・プロキシのエラーページなど別の 404 を退会と取り違えないために確かめる。
+ * なお存在しない API パスも同じ本文を返す（2026-09-25 実測）ので、API 変更で全員が 404 になる事態は
+ * 呼び出し側の「404 の割合」の検査で止める。
+ */
+async function isNvapiNotFound(res: Response): Promise<boolean> {
+  try {
+    const json = JSON.parse(await res.text()) as { meta?: { status?: unknown; errorCode?: unknown } }
+    return json.meta?.status === 404 && json.meta.errorCode === 'NOT_FOUND'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * ユーザー情報 API: 本文まで NOT_FOUND の 404 を deleted（退会の観測）として返す。
+ * 退会の確定（時間を置いた 2 回目）は呼び出し側が行う。channel/ 形式は対象外（存在扱い）
+ */
 export async function fetchUserInfoFromNvapi(userId: string, fetchImpl: typeof fetch = fetch): Promise<UserInfo> {
   if (!/^\d{1,12}$/.test(userId)) return { status: 'existing', followerCount: null, nickname: null }
   const res = await fetchImpl(`${NVAPI_USER_URL}${userId}`, { headers: NVAPI_HEADERS, signal: AbortSignal.timeout(TIMEOUT_MS) })
-  if (res.status === 404) return { status: 'deleted', followerCount: null, nickname: null }
+  if (res.status === 404) return { status: (await isNvapiNotFound(res)) ? 'deleted' : 'error', followerCount: null, nickname: null }
   if (res.status === 403) throw new AccessLimitedError('nvapi-user')
   if (!res.ok) return { status: 'error', followerCount: null, nickname: null }
   const json = (await res.json()) as { data?: { user?: { nickname?: string; followerCount?: number } } }
