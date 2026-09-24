@@ -7,11 +7,11 @@ global.fetch = vi.fn()
 
 // Mock the ng-list-server module
 vi.mock('@/lib/ng-list-server', () => ({
-  getNGListManual: vi.fn(),
+  getAdminNGList: vi.fn(),
   setNGListManual: vi.fn()
 }))
 
-import { getNGListManual, setNGListManual } from '@/lib/ng-list-server'
+import { getAdminNGList, setNGListManual } from '@/lib/ng-list-server'
 
 describe('NG List API', () => {
   beforeEach(() => {
@@ -28,10 +28,7 @@ describe('NG List API', () => {
         derivedVideoIds: ['sm456', 'sm789']
       }
 
-      // Mock dynamic import
-      vi.doMock('@/lib/ng-list-server', () => ({
-        getServerNGList: vi.fn().mockResolvedValue(mockNGList)
-      }))
+      vi.mocked(getAdminNGList).mockResolvedValueOnce(mockNGList)
 
       const request = new NextRequest('http://localhost/api/admin/ng-list', {
         headers: {
@@ -57,10 +54,8 @@ describe('NG List API', () => {
     })
 
     it('should handle errors gracefully', async () => {
-      // Mock dynamic import to throw error
-      vi.doMock('@/lib/ng-list-server', () => ({
-        getServerNGList: vi.fn().mockRejectedValue(new Error('KV error'))
-      }))
+      // KV を読めなければ空の一覧を返さず 503（画面は編集できない状態で表示する）
+      vi.mocked(getAdminNGList).mockRejectedValueOnce(new Error('KV get failed: 429'))
 
       const request = new NextRequest('http://localhost/api/admin/ng-list', {
         headers: {
@@ -71,8 +66,9 @@ describe('NG List API', () => {
       const response = await GET(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500)
+      expect(response.status).toBe(503)
       expect(data).toEqual({ error: 'Failed to fetch NG list' })
+      expect(response.headers.get('cache-control')).toContain('no-store')
     })
   })
 

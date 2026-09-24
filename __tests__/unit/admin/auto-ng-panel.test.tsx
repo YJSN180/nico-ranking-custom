@@ -112,6 +112,16 @@ describe('AutoNGPanel', () => {
     expect(copy).toHaveBeenCalledWith('1001')
   })
 
+  it('手動NG一覧を読めていないときは「手動NGに写す」を押せない', async () => {
+    const copy = vi.fn()
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={copy} canCopyToManualNG={false} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /投稿者NG/ }))
+    for (const button of screen.getAllByText('手動NGに写す')) expect(button).toBeDisabled()
+    fireEvent.click(screen.getAllByText('手動NGに写す')[0]!)
+    expect(copy).not.toHaveBeenCalled()
+  })
+
   it('保留タブは信号と期限を表示する', async () => {
     render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
     await screen.findByText('● 稼働中')

@@ -41,6 +41,8 @@ interface AutoNGPanelProps {
   onCopyToManualNG: (authorId: string) => void
   /** 既に手動NGに入っている投稿者 ID（ボタンの状態表示用） */
   manualAuthorIds: readonly string[]
+  /** 手動NG一覧を読み込めていないとき false（空の一覧に写して保存させない） */
+  canCopyToManualNG?: boolean
 }
 
 const PAGE_SIZE = 50
@@ -123,7 +125,7 @@ function Pager({ page, totalPages, setPage }: { page: number; totalPages: number
 /** 503 は KV を読めなかった（既定値を土台に保存しないよう、サーバーが書き込みを止めた） */
 const KV_UNAVAILABLE_NOTE = 'KV から設定を読み取れませんでした。'
 
-export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelProps) {
+export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManualNG = true }: AutoNGPanelProps) {
   const [overview, setOverview] = useState<Overview | null>(null)
   const [loading, setLoading] = useState(true)
   /** 概要の読み込み失敗。表示中の内容が最新と限らないので、保存系の操作を止める */
@@ -397,7 +399,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds }: AutoNGPanelPr
                                 許可リストへ
                               </button>
                             )}
-                            <button type="button" className={styles.button} disabled={inManual} onClick={() => onCopyToManualNG(a.id)}>
+                            <button type="button" className={styles.button} disabled={inManual || !canCopyToManualNG} onClick={() => onCopyToManualNG(a.id)}>
                               {inManual ? '手動NG済み' : '手動NGに写す'}
                             </button>
                           </div>
