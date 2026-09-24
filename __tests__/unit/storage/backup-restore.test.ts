@@ -180,7 +180,9 @@ describe('Export Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await exportMylistData()
     
@@ -203,7 +205,9 @@ describe('Export Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(null)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     await expect(exportMylistData()).rejects.toThrow('Database not initialized')
   })
@@ -220,7 +224,9 @@ describe('Export Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     await expect(exportMylistData()).rejects.toThrow('Transaction failed')
   })
@@ -382,7 +388,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     
@@ -440,7 +448,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     // smart_mergeモードで実行（既存データを上書き）
     const result = await importMylistData(validBackupData, 'smart_merge')
@@ -499,7 +509,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     
@@ -519,7 +531,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(null)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     
@@ -538,7 +552,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn()
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     

@@ -637,14 +637,11 @@ jobs:
             exit 1
           fi
 
-      - name: Start application
-        run: |
-          npm start &
-          sleep 30  # Wait for app to start
-
+      # アプリの起動は lighthouserc.cjs の startServerCommand が行う
+      # （固定のランキングデータで next start を起動し、終了後に止める）
       - name: Run Lighthouse CI
         run: |
-          npm install -g @lhci/cli
+          npm install -g @lhci/cli@0.15.1
           lhci autorun
         env:
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}

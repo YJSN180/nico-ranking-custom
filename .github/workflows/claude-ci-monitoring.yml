@@ -4,8 +4,8 @@ name: Claude CI Monitoring
 #
 # 動作:
 # 1. 定期実行（毎日JST 10:00）でunified-ci.ymlをトリガー
-# 2. unified-ci.ymlの結果を監視
-# 3. 失敗を検知したら自動修正用のブランチを作成
+# 2. unified-ci.ymlの結果を監視（起動した実行だけを見る。古い実行の失敗では PR を作らない）
+# 3. 失敗を検知したら自動修正用のブランチを作成（自動修正 PR が開いていれば作らない）
 # 4. Claudeが問題を分析・修正
 # 5. PRがマージされるまで監視・追加修正
 #
@@ -46,13 +46,31 @@ jobs:
         run: |
           echo "Triggering unified-ci.yml workflow..."
 
+          # 起動した実行だけを待つ。「main の最新の実行」を取ると、起動した実行が一覧に
+          # まだ出ていないときに古い失敗を拾い、その失敗で修正 PR を作ってしまう。
+          # runner と GitHub の時計のずれを見込み、起動の 1 分前以降の workflow_dispatch に絞る。
+          SINCE=$(date -u -d '1 minute ago' +%Y-%m-%dT%H:%M:%SZ)
+
           # unified-ci.ymlをトリガー
           gh workflow run unified-ci.yml --repo "$REPO" --ref main -f run_level=full
 
-          # 少し待ってから実行IDを取得
-          sleep 10
+          RUN_ID=""
+          for _ in $(seq 1 30); do
+            sleep 10
+            # 一時的な API エラーでは止めず、次の問い合わせで再確認する
+            RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch=main --event=workflow_dispatch --limit=10 \
+              --json databaseId,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$SINCE\")] | sort_by(.createdAt) | last | .databaseId // empty") || RUN_ID=""
+            if [ -n "$RUN_ID" ]; then
+              break
+            fi
+          done
 
-          RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch=main --limit=1 --json databaseId -q '.[0].databaseId')
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::The dispatched unified-ci run did not appear within 5 minutes"
+            exit 1
+          fi
+
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
           echo "Triggered workflow run: $RUN_ID"
 
@@ -76,11 +94,15 @@ jobs:
           TRIGGERED_RUN_ID: ${{ needs.trigger-unified-ci.outputs.run_id }}
           SKIP_TRIGGER: ${{ github.event.inputs.skip_ci_trigger }}
         run: |
-          # トリガーをスキップした場合は最新の実行を取得
-          if [ "$SKIP_TRIGGER" == "true" ] || [ -z "$TRIGGERED_RUN_ID" ]; then
+          # トリガーをスキップした場合だけ最新の実行を取得する。
+          # 起動した実行が分からないときに古い実行を評価しない。
+          if [ "$SKIP_TRIGGER" == "true" ]; then
             RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch=main --limit=1 --json databaseId -q '.[0].databaseId')
-          else
+          elif [ -n "$TRIGGERED_RUN_ID" ]; then
             RUN_ID="$TRIGGERED_RUN_ID"
+          else
+            echo "::error::The dispatched unified-ci run is unknown; not evaluating an older run"
+            exit 1
           fi
 
           echo "Waiting for workflow run $RUN_ID to complete..."
@@ -109,12 +131,49 @@ jobs:
           echo "Timeout waiting for workflow"
           echo "conclusion=timeout" >> $GITHUB_OUTPUT
 
-  # Job 3: 失敗時にPR作成
-  create-fix-pr:
-    name: Create Fix PR
+  # Job 3: 開いている自動修正 PR を探す（同じ目的の PR を毎日作らない）
+  find-open-fix-pr:
+    name: Find Open Auto-Fix PR
     runs-on: ubuntu-latest
     needs: wait-for-ci
     if: needs.wait-for-ci.outputs.conclusion == 'failure'
+
+    permissions:
+      contents: read
+      pull-requests: read
+
+    outputs:
+      pr_number: ${{ steps.find.outputs.pr_number }}
+
+    steps:
+      - name: Find an open auto-fix PR
+        id: find
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ needs.wait-for-ci.outputs.run_id }}
+        run: |
+          PR_NUMBER=$(gh pr list --repo "$REPO" --state open --base main --limit 1000 \
+            --json number,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("fix/ci-auto-fix-")) | .number] | max // empty')
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "::notice::Auto-fix PR #$PR_NUMBER is still open; no new PR for run $RUN_ID"
+            {
+              echo "### unified-ci failed on main"
+              echo ""
+              echo "- Failed run: https://github.com/$REPO/actions/runs/$RUN_ID"
+              echo "- Auto-fix PR #$PR_NUMBER is still open, so no new PR was created."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Job 4: 失敗時にPR作成（自動修正 PR が開いていない場合だけ）
+  create-fix-pr:
+    name: Create Fix PR
+    runs-on: ubuntu-latest
+    needs: [wait-for-ci, find-open-fix-pr]
+    if: needs.wait-for-ci.outputs.conclusion == 'failure' && needs.find-open-fix-pr.outputs.pr_number == ''
 
     outputs:
       pr_number: ${{ steps.create-pr.outputs.pr_number }}
@@ -260,12 +319,12 @@ jobs:
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "Created PR #$PR_NUMBER"
 
-  # Job 4: Claude Code Actionをトリガー
+  # Job 5: Claude Code Actionをトリガー（新しく作った PR だけ）
   trigger-claude-fix:
     name: Trigger Claude Fix
     runs-on: ubuntu-latest
     needs: [wait-for-ci, create-fix-pr]
-    if: needs.wait-for-ci.outputs.conclusion == 'failure'
+    if: needs.wait-for-ci.outputs.conclusion == 'failure' && needs.create-fix-pr.outputs.pr_number != ''
 
     permissions:
       contents: read
@@ -414,7 +473,7 @@ jobs:
 
   # Note: 自動マージはauto-merge-ci-fix.ymlで処理（GitHub標準機能使用）
 
-  # Job 5: 成功時の通知（CI失敗なし）
+  # Job 6: 成功時の通知（CI失敗なし）
   report-success:
     name: Report Success
     runs-on: ubuntu-latest
@@ -433,7 +492,7 @@ jobs:
           echo ""
           echo "No auto-fix needed."
 
-  # Job 6: タイムアウト時の通知
+  # Job 7: タイムアウト時の通知
   report-timeout:
     name: Report Timeout
     runs-on: ubuntu-latest
