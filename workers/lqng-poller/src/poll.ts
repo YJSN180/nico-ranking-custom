@@ -76,6 +76,10 @@ export const LIMITS = {
   evidenceMax: 10,
   /** 1 回の実行で合流するバックフィルの受け箱の上限（残りは次回） */
   inboxPerRun: 20,
+  /** 続いている問題を解消とみなすまでの、続けて問題なく終わった回数 */
+  issueResolveAfterOk: 3,
+  /** 同じ問題を監視（reportError）へ出す間隔 */
+  issueReportIntervalHours: 6,
 } as const
 
 export type RunMode = 'poll' | 'sweep'
@@ -161,21 +165,27 @@ class Session {
   }
 
   /**
-   * 続きうる問題を記録する。注記と監視（reportError）には毎回出し、履歴には内容（signature）が
-   * 前回と変わったときだけ積む（同じ失敗が何日も続いても履歴 500 件を埋めない）
+   * 続きうる問題を記録する。注記には毎回出す。履歴には内容（signature）が前回と変わったとき
+   * （解消後の再発を含む）だけ積み、監視（reportError）へは内容が変わったときと、同じ内容なら
+   * issueReportIntervalHours に 1 回だけ出す（同じ失敗や出たり消えたりが続いても履歴と監視を埋めない）
    */
   recordIssue(category: string, signature: string, note: string, kind: LqngEventKind, error?: unknown): void {
     this.addNote(note)
-    if (this.state.tracking.issues[category] !== signature) {
-      pushEvent(this.state.events, { at: this.nowIso, kind, note })
-      this.state.tracking.issues[category] = signature
-    }
-    if (error !== undefined) this.deps.reportError?.(error, category)
+    const current = Object.hasOwn(this.state.tracking.issues, category) ? this.state.tracking.issues[category] : undefined
+    const changed = current?.signature !== signature
+    if (changed) pushEvent(this.state.events, { at: this.nowIso, kind, note })
+    const lastReportMs = current?.reportedAt ? new Date(current.reportedAt).getTime() : Number.NEGATIVE_INFINITY
+    const reportDue = error !== undefined && (changed || this.now.getTime() - lastReportMs >= LIMITS.issueReportIntervalHours * HOUR_MS)
+    this.state.tracking.issues[category] = { signature, okStreak: 0, reportedAt: reportDue ? this.nowIso : (current?.reportedAt ?? null) }
+    if (reportDue) this.deps.reportError?.(error, category)
   }
 
-  /** 問題が解消した（次に起きたらまた履歴に積む） */
+  /** 問題が起きずに終わった。issueResolveAfterOk 回続いたら解消とみなす（次に起きたらまた履歴に積む） */
   resolveIssue(category: string): void {
-    delete this.state.tracking.issues[category]
+    const current = Object.hasOwn(this.state.tracking.issues, category) ? this.state.tracking.issues[category] : undefined
+    if (!current) return
+    if (current.okStreak + 1 >= LIMITS.issueResolveAfterOk) delete this.state.tracking.issues[category]
+    else this.state.tracking.issues[category] = { ...current, okStreak: current.okStreak + 1 }
   }
 
   budgetLeft(cost = 1): boolean {
@@ -689,8 +699,10 @@ class Session {
  * 同じエラーが続く間は履歴に積み直さない（書き込みなし）
  */
 async function refuseSave(kv: KvLike, deps: PollDeps, loadedEvents: readonly LqngEvent[], lastRun: LoadedState['events']['lastRun'], at: string, note: string): Promise<number> {
+  // 同じエラーを積んでから間もなければ、履歴にも監視にも出し直さない（追跡表を書かないので、履歴の時刻で間引く）
+  const top = loadedEvents[0]
+  if (top?.kind === 'error' && top.note === note && new Date(at).getTime() - new Date(top.at).getTime() < LIMITS.issueReportIntervalHours * HOUR_MS) return 0
   deps.reportError?.(new Error(note), 'verdicts')
-  if (loadedEvents[0]?.kind === 'error' && loadedEvents[0].note === note) return 0
   const event: LqngEvent = { at, kind: 'error', note }
   const items = [event, ...loadedEvents].slice(0, EVENTS_MAX)
   await kv.put(LQNG_KV_KEYS.events, JSON.stringify({ version: 1, items, lastRun }))

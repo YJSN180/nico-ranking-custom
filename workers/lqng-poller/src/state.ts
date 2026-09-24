@@ -86,11 +86,20 @@ export interface LqngTracking {
   /** 直近の実行の時刻と注記（新しい順、/status の運用確認用） */
   recentRuns: LqngRecentRun[]
   /**
-   * 続いている問題（種類 → 内容の要約）。同じ問題が続く間は履歴に積み直さず、内容が変わったときと
-   * 解消後に再発したときだけ積む（注記と監視には毎回出す）
+   * 続いている問題（種類 → 状態）。同じ問題が続く間は履歴に積み直さず、内容が変わったときと
+   * 解消後に再発したときだけ積む。解消は何回か続けて成功してから（出たり消えたりで増やさない）
    */
-  issues: Record<string, string>
+  issues: Record<string, LqngIssue>
   updatedAt: string
+}
+
+export interface LqngIssue {
+  /** 問題の内容の要約（変われば別の問題として履歴に積み、監視にもすぐ出す） */
+  signature: string
+  /** 続けて問題なく終わった回数（一定回数で解消とみなす） */
+  okStreak: number
+  /** 最後に監視（reportError）へ出した時刻 */
+  reportedAt: string | null
 }
 
 export type LqngEventKind =
@@ -155,6 +164,23 @@ function normalizeRecentRuns(raw: unknown): LqngRecentRun[] {
   return raw.filter((r): r is LqngRecentRun => isRecord(r) && typeof r.at === 'string' && (r.mode === 'poll' || r.mode === 'sweep')).slice(0, RECENT_RUNS_MAX)
 }
 
+function normalizeIssues(raw: unknown): Record<string, LqngIssue> {
+  if (!isRecord(raw)) return {}
+  const out: Record<string, LqngIssue> = {}
+  for (const [category, value] of Object.entries(raw)) {
+    // 以前の形（内容の要約の文字列だけ）も読む
+    if (typeof value === 'string') out[category] = { signature: value, okStreak: 0, reportedAt: null }
+    else if (isRecord(value) && typeof value.signature === 'string') {
+      out[category] = {
+        signature: value.signature,
+        okStreak: typeof value.okStreak === 'number' && Number.isFinite(value.okStreak) ? value.okStreak : 0,
+        reportedAt: typeof value.reportedAt === 'string' ? value.reportedAt : null,
+      }
+    }
+  }
+  return out
+}
+
 export function normalizeTracking(raw: unknown, now: string): LqngTracking {
   if (!isRecord(raw) || !isRecord(raw.authors)) return emptyTracking(now)
   return {
@@ -166,7 +192,7 @@ export function normalizeTracking(raw: unknown, now: string): LqngTracking {
     unattributed: Array.isArray(raw.unattributed) ? raw.unattributed.filter((u): u is UnattributedVideo => isRecord(u) && typeof u.id === 'string' && typeof u.at === 'string') : [],
     lastRun: isRecord(raw.lastRun) ? (raw.lastRun as unknown as LqngRunSummary) : null,
     recentRuns: normalizeRecentRuns(raw.recentRuns),
-    issues: isRecord(raw.issues) ? Object.fromEntries(Object.entries(raw.issues).filter((e): e is [string, string] => typeof e[1] === 'string')) : {},
+    issues: normalizeIssues(raw.issues),
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   }
 }

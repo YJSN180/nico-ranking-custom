@@ -557,19 +557,49 @@ describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
   })
 
-  it('同じ失敗が続く間、履歴には最初の 1 回だけ積み、注記と監視には毎回出す（直ったあとの失敗はまた積む）', async () => {
+  it('同じ失敗が続く間、履歴には最初の 1 回だけ積み、注記には毎回出す（3 回続けて直ってからの失敗はまた積む）', async () => {
     const m = await afterFirstPoll()
     const reportError = vi.fn()
     const failing = deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag_shorts')])), reportError }, later)
     const errorsIn = (): number => m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.filter((e) => e.kind === 'error' && e.note?.includes('tag_shorts')).length ?? 0
+    const minutes = (n: number): Date => new Date(later.getTime() + n * 60_000)
     await runPoll(m.kv, failing, 'poll')
-    const r2 = await runPoll(m.kv, { ...failing, now: () => new Date(later.getTime() + 15 * 60_000) }, 'poll')
+    const r2 = await runPoll(m.kv, { ...failing, now: () => minutes(15) }, 'poll')
     expect(errorsIn()).toBe(1)
     expect(r2.note).toContain('new_videos_failed')
-    expect(reportError).toHaveBeenCalledTimes(2)
-    await runPoll(m.kv, deps({}, new Date(later.getTime() + 30 * 60_000)), 'poll')
-    await runPoll(m.kv, { ...failing, now: () => new Date(later.getTime() + 45 * 60_000) }, 'poll')
+    // 1 回直っただけでは解除しない
+    await runPoll(m.kv, deps({}, minutes(30)), 'poll')
+    await runPoll(m.kv, { ...failing, now: () => minutes(45) }, 'poll')
+    expect(errorsIn()).toBe(1)
+    // 3 回続けて直ったら解除し、次の失敗はまた積む
+    for (const n of [60, 75, 90]) await runPoll(m.kv, deps({}, minutes(n)), 'poll')
+    await runPoll(m.kv, { ...failing, now: () => minutes(105) }, 'poll')
     expect(errorsIn()).toBe(2)
+    expect(reportError).toHaveBeenCalledTimes(2)
+  })
+
+  it('失敗と成功が交互に続いても、履歴には 1 回、監視への報告は 6 時間に 1 回に抑える', async () => {
+    const m = await afterFirstPoll()
+    const reportError = vi.fn()
+    for (let i = 1; i <= 96; i++) {
+      const fail = i % 2 === 1
+      await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], fail ? [failed(0, 'tag_shorts')] : [])), reportError }, new Date(T0.getTime() + i * 15 * 60_000)), 'poll')
+    }
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.filter((e) => e.kind === 'error').length).toBe(1)
+    expect(reportError).toHaveBeenCalledTimes(4)
+  })
+
+  it('同じ問題の監視への報告は 6 時間に 1 回に間引き、内容が変われば間を置かずに出す', async () => {
+    const m = await afterFirstPoll()
+    const reportError = vi.fn()
+    const run = (i: number, failures: PageFailure[]) =>
+      runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], failures)), reportError }, new Date(T0.getTime() + i * 15 * 60_000)), 'poll')
+    for (let i = 1; i <= 24; i++) await run(i, [failed(0, 'tag_shorts')]) // 6 時間続く
+    expect(reportError).toHaveBeenCalledTimes(1)
+    await run(25, [failed(0, 'tag_shorts')]) // 最初の報告から 6 時間
+    expect(reportError).toHaveBeenCalledTimes(2)
+    await run(26, [failed(0, 'tag_shorts'), failed(1, 'tag_shorts')]) // 内容が変わった
+    expect(reportError).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -1066,11 +1096,14 @@ describe('lqng-poller 判定表を壊さない', () => {
     expect(m.puts).toEqual([LQNG_KV_KEYS.events])
     expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items[0]).toMatchObject({ kind: 'error', note: 'verdicts_unreadable' })
     expect(reportError).toHaveBeenCalledTimes(1)
-    // 続く回は同じエラーを積み直さない（書き込みなし）
+    // 続く回は同じエラーを積み直さず（書き込みなし）、監視への報告も 6 時間に 1 回にする
     m.reset()
     await runPoll(m.kv, deps({ reportError }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
     expect(m.puts).toEqual([])
+    expect(reportError).toHaveBeenCalledTimes(1)
+    await runPoll(m.kv, deps({ reportError }, new Date(T0.getTime() + 6 * 3600_000)), 'poll')
     expect(reportError).toHaveBeenCalledTimes(2)
+    expect(m.puts).toEqual([LQNG_KV_KEYS.events])
   })
 
   it('投稿者 NG の数が読み込み時より減る書き込みは問題として返す', () => {
