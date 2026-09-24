@@ -8,6 +8,11 @@ const nextConfig = {
   turbopack: false,
   // 本番でのソースマップ無効化（セキュリティ・パフォーマンス向上）
   productionBrowserSourceMaps: false,
+  // Sentry の環境名をビルド時に埋め込む（クライアントのバンドルは VERCEL_ENV を読めないため）。
+  // Vercel 以外のビルド（ローカルの next build など）は local になり、送信されない（lib/sentry/shared.ts）
+  env: {
+    NEXT_PUBLIC_SENTRY_ENVIRONMENT: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT || process.env.VERCEL_ENV || 'local',
+  },
   images: {
     // ローカル画像（ロゴ等）は最適化を有効にしてWebP/AVIF変換
     // 外部画像（ニコニコ動画サムネイル）のみ最適化を無効化
@@ -54,7 +59,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com https://nico-rank.com https://*.ingest.sentry.io",
+              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com https://nico-rank.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
               "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
               "object-src 'none'",
               "base-uri 'self'",
@@ -70,7 +75,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'", // CSS-in-JSのため一時的に必要
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com https://nico-rank.com https://*.ingest.sentry.io",
+              "connect-src 'self' https://*.niconico.jp https://*.nicovideo.jp https://vitals.vercel-analytics.com https://va.vercel-scripts.com https://nico-rank.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io",
               "media-src 'self' https://*.niconico.jp https://*.nicovideo.jp",
               "object-src 'none'",
               "base-uri 'self'",

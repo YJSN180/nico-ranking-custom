@@ -9,9 +9,12 @@ import type * as SentryModule from '@sentry/nextjs'
 import {
   getSentryEnvironment,
   isProductionSentryEnvironment,
+  isSentryEnabled,
   normalizeTransactionName,
   scrubBreadcrumb,
+  scrubDynamicSamplingContext,
   scrubEvent,
+  scrubSpan,
 } from '@/lib/sentry/shared'
 
 export type SentryClientModule = typeof SentryModule
@@ -25,7 +28,7 @@ function initClient(Sentry: SentryClientModule): void {
   const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN
   Sentry.init({
     dsn,
-    enabled: Boolean(dsn),
+    enabled: isSentryEnabled(dsn, environment),
     environment,
     sendDefaultPii: false,
     replaysOnErrorSampleRate: 0,
@@ -46,8 +49,11 @@ function initClient(Sentry: SentryClientModule): void {
     tracesSampler: () => (isProductionSentryEnvironment(environment) ? 0.05 : 1),
     beforeSend: (event) => scrubEvent(event),
     beforeSendTransaction: (event) => scrubEvent(event),
+    beforeSendSpan: scrubSpan,
     beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
   })
+  // trace ヘッダー（baggage）の transaction 名は beforeSend を通らないので、ここで伏せる
+  Sentry.getClient()?.on('createDsc', scrubDynamicSamplingContext)
 }
 
 /** SDK を読み込み、未初期化なら初期化して返す（多重呼び出しは同じ Promise を共有） */
