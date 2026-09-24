@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
@@ -59,9 +60,18 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/changelog', label: '更新履歴', icon: <HistoryIcon />, section: 'info' },
 ]
 
-export function Navigation() {
-  const [isOpen, setIsOpen] = useState(false)
+interface NavigationProps {
+  /** メニューの開閉を親（ヘッダー）へ知らせる。ドロワーを開いている間はヘッダーを隠さないため */
+  onOpenChange?: (open: boolean) => void
+}
+
+export function Navigation({ onOpenChange }: NavigationProps = {}) {
+  const [isOpen, setIsOpenState] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
+  const setIsOpen = useCallback((open: boolean) => {
+    setIsOpenState(open)
+    onOpenChange?.(open)
+  }, [onOpenChange])
   const [isTouching, setIsTouching] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -80,7 +90,7 @@ export function Navigation() {
       setIsOpen(false)
       setIsClosing(false)
     }, 180)
-  }, [isOpen, isClosing])
+  }, [isOpen, isClosing, setIsOpen])
 
   // 設定モーダルを開く関数
   const openSettings = () => {
@@ -170,9 +180,12 @@ export function Navigation() {
           </span>
         </button>
 
-        {/* モバイルメニュー（サイドドロワー） */}
-        {(isOpen || isClosing) && (
-          <>
+        {/* モバイルメニュー（サイドドロワー）。オーバーレイとドロワーは body 直下に描画する。
+            ヘッダーの中だと sticky ヘッダーの重なり（z-index 20）に閉じ込められてボトムナビ（25）より
+            下になり、ヘッダーを隠す transform がドロワーの位置の基準になってヘッダーごと消えるため。
+            portal 先でもモバイル幅（768px 以下）だけ表示するよう mobileOnly で包む */}
+        {(isOpen || isClosing) && createPortal(
+          <div className={styles.mobileOnly}>
             {/* 背景オーバーレイ */}
             <div
               onClick={() => closeMenu()}
@@ -384,7 +397,8 @@ export function Navigation() {
                 </div>
               </div>
             </nav>
-          </>
+          </div>,
+          document.body
         )}
       </div>
 
