@@ -2,7 +2,7 @@
 // next/navigation は URL を外部ストアとして持つモックに置き換え、/api/search 系は合成した応答を返す。
 // 動画 ID・投稿者 ID・名前はすべて合成値。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import type { RankingItem } from '@/types/ranking'
 
 // URL（searchParams）を外部ストアとして持つ。router.replace とテストの「戻る・進む」がこれを書き換える
@@ -107,9 +107,14 @@ const searchBody = (url: URL, items: Array<Partial<RankingItem> & { id: string }
 })
 
 const shownIds = (): string[] => screen.queryAllByTestId('result-item').map((el) => el.getAttribute('data-id') ?? '')
+const searchRequests = (): URL[] => requests.filter((u) => u.pathname === '/api/search')
+const clickNextPage = (): void => {
+  fireEvent.click(screen.getAllByRole('button', { name: '次のページへ' })[0])
+}
 
 describe('SearchClient', () => {
   beforeEach(() => {
+    localStorage.clear()
     requests.length = 0
     fetchMock.mockClear()
     nav.router.replace.mockClear()
@@ -125,6 +130,48 @@ describe('SearchClient', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+  })
+
+  describe('ページ送り（U-a）', () => {
+    it('実行済みの条件で送り、編集中の入力は使わない', async () => {
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'edited' } })
+      clickNextPage()
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      expect(searchRequests()[1]?.searchParams.get('q')).toBe('x')
+      expect(searchRequests()[1]?.searchParams.get('page')).toBe('2')
+    })
+
+    it('同じ条件のページ送りでは、直前の応答の境界と新着件数を渡す', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { source: 'merged', realtimeCount: 7 })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      clickNextPage()
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      expect(searchRequests()[1]?.searchParams.get('boundary')).toBe('2026-09-22T04:00:01+09:00')
+      expect(searchRequests()[1]?.searchParams.get('rtCount')).toBe('7')
+    })
+
+    it('別の条件の 2 ページ目には、前の結果の境界と新着件数を持ち越さない', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { source: 'merged', realtimeCount: 7 })
+      localStorage.setItem(
+        'saved-searches',
+        JSON.stringify({ version: 1, searches: [{ id: 's1', name: '保存した条件', query: 'q=z&sort=-startTime&page=2', createdAt: 't', updatedAt: 't' }] })
+      )
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      fireEvent.click(screen.getByRole('button', { name: '保存した条件' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      const other = searchRequests()[1]
+      expect(other?.searchParams.get('q')).toBe('z')
+      expect(other?.searchParams.get('page')).toBe('2')
+      expect(other?.searchParams.has('boundary')).toBe(false)
+      expect(other?.searchParams.has('rtCount')).toBe(false)
+    })
   })
 
   describe('サーバー側の NG を後から当てる（S-f）', () => {

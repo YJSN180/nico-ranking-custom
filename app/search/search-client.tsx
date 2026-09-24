@@ -294,11 +294,13 @@ export function SearchClient() {
   const [form, setForm] = useState<FormState>(initial.form)
   const [page, setPage] = useState(initial.page)
   const [items, setItems] = useState<RankingItem[] | null>(null)
-  // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数（次ページ要求のヒント）
+  // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数
   const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
-  const realtimeCountRef = useRef(0)
-  /** 前回応答の境界（2 ページ目以降に返してページ間で一貫させる） */
-  const boundaryRef = useRef<string | null>(null)
+  /**
+   * 直前に表示した結果の条件（ページを除く URL クエリ）と、そのときの境界・新着件数。
+   * 同じ条件の 2 ページ目以降にだけ返して、ページ間で区間を一貫させる（別の条件へは持ち越さない）
+   */
+  const pagingHintRef = useRef<{ conditionKey: string; boundary: string | null; realtimeCount: number } | null>(null)
   // リアルタイム区間のタグ補完（S4）: 応答表示後に非同期で取得し、古い検索の結果は捨てる
   const tagsRequestIdRef = useRef(0)
   const ownersRequestIdRef = useRef(0)
@@ -450,15 +452,16 @@ export function SearchClient() {
 
       const params = buildQueryParams(searchForm, searchPage)
       const queryString = params.toString()
+      const conditionKey = buildQueryParams(searchForm, 1).toString()
       router.replace(queryString ? `/search?${queryString}` : '/search', { scroll: false })
 
-      // 2ページ目以降はリアルタイム件数のヒントを渡し、サーバーが Snapshot を並列取得できるようにする
+      // 2ページ目以降は、直前に表示した結果と同じ条件のときだけ境界とリアルタイム件数のヒントを渡す
+      // （件数のヒントでサーバーが Snapshot を並列取得できる）
       const apiParams = new URLSearchParams(params)
-      if (searchPage > 1 && realtimeCountRef.current > 0) {
-        apiParams.set('rtCount', String(realtimeCountRef.current))
-      }
-      if (searchPage > 1 && boundaryRef.current) {
-        apiParams.set('boundary', boundaryRef.current)
+      const hint = pagingHintRef.current
+      if (searchPage > 1 && hint && hint.conditionKey === conditionKey) {
+        if (hint.realtimeCount > 0) apiParams.set('rtCount', String(hint.realtimeCount))
+        if (hint.boundary) apiParams.set('boundary', hint.boundary)
       }
 
       try {
@@ -478,8 +481,11 @@ export function SearchClient() {
         setItems(data.items)
         setTotalCount(data.totalCount)
         setPage(data.page)
-        realtimeCountRef.current = data.realtimeCount ?? 0
-        boundaryRef.current = data.source === 'merged' && data.boundary ? data.boundary : null
+        pagingHintRef.current = {
+          conditionKey,
+          boundary: data.source === 'merged' && data.boundary ? data.boundary : null,
+          realtimeCount: data.realtimeCount ?? 0,
+        }
         setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
         void enrichRealtimeTags(data, controller.signal)
         void enrichOwners(data, controller.signal)
@@ -518,21 +524,23 @@ export function SearchClient() {
     [form, runSearch]
   )
 
-  // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す
+  // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す。
+  // 送るのは実行済みの条件（lastForm）。入力欄で編集中の、まだ送信していない条件は使わない
   const handlePageChangeTop = useCallback(
     (nextPage: number) => {
-      void runSearch(form, nextPage)
+      if (lastForm) void runSearch(lastForm, nextPage)
     },
-    [form, runSearch]
+    [lastForm, runSearch]
   )
 
   const handlePageChangeBottom = useCallback(
     (nextPage: number) => {
-      void runSearch(form, nextPage)
+      if (!lastForm) return
+      void runSearch(lastForm, nextPage)
       // スティッキーヘッダ分は .search-results の scroll-margin-top で吸収する
       resultsRef.current?.scrollIntoView({ block: 'start' })
     },
-    [form, runSearch]
+    [lastForm, runSearch]
   )
 
   // ユーザーNGリストを自動適用
