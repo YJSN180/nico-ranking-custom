@@ -521,7 +521,8 @@ class Session {
     const notFound = results.filter((r) => r.author.status !== 'deleted' && r.info.status === 'deleted').length
     const hold = notFound > 0 ? await this.verifyUserApi(results) : null
     if (hold !== null) {
-      this.recordIssue('deletion_held', hold, `deletion_held: ${hold} (404 ${notFound}/${results.length})`, 'deletion_held', hold === 'control_404' ? new Error('deletion_held: control_404') : undefined)
+      // 対照が見つからない・確かめられない状態が続くと退会を確定できないので、理由を問わず監視に出す（間引きは recordIssue）
+      this.recordIssue('deletion_held', hold, `deletion_held: ${hold} (404 ${notFound}/${results.length})`, 'deletion_held', new Error(`deletion_held: ${hold}`))
     } else if (notFound > 0) {
       this.resolveIssue('deletion_held')
     }

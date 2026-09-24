@@ -739,6 +739,20 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
       expect(without.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')?.note).toContain('no_control')
     })
 
+    it('対照が見つからない・確かめられない状態が続くときも監視に出す（6 時間に 1 回）', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig })
+      const reportError = vi.fn()
+      const info = vi.fn(async (): Promise<UserInfo> => deleted)
+      await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3700))), fetchUserInfo: info, reportError }), 'poll')
+      expect(reportError).toHaveBeenCalledTimes(1)
+      expect(reportError.mock.calls[0]?.[1]).toBe('deletion_held')
+      expect(String(reportError.mock.calls[0]?.[0])).toContain('no_control')
+      for (let i = 1; i < 24; i++) await runPoll(m.kv, deps({ fetchUserInfo: info, reportError }, new Date(T0.getTime() + i * 15 * 60_000)), 'poll')
+      expect(reportError).toHaveBeenCalledTimes(1)
+      await runPoll(m.kv, deps({ fetchUserInfo: info, reportError }, new Date(T0.getTime() + 6 * 3600_000)), 'poll')
+      expect(reportError).toHaveBeenCalledTimes(2)
+    })
+
     it('設定の controlUserId があれば、追跡中の投稿者より先に対照にする', async () => {
       const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith([controlAuthor('1900', 5000)]) })
       const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '1999' || id === '1900' ? existing(5000) : deleted))
