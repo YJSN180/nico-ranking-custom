@@ -179,6 +179,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, kind, id, note }),
         })
+        if (res.status === 400) throw new Error('許可リストの更新に失敗しました (400)。ID の形式を確認してください（投稿者: 数字か channel/ch＋数字、動画: sm・so・nm・ss＋数字）。')
         if (!res.ok) throw new Error(`許可リストの更新に失敗しました (${res.status})${res.status === 503 ? `。${KV_UNAVAILABLE_NOTE}変更は保存していません。` : ''}`)
         const body = (await res.json()) as { config: LqngConfig }
         // 許可リストだけを差し込まず、保存後の設定全体（版番号を含む）で置き換える

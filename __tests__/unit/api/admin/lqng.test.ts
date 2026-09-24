@@ -116,6 +116,18 @@ describe('admin lqng API', () => {
     expect((await getConfig(authed('/api/admin/lqng/config'))).status).toBe(503)
   })
 
+  it('allowlist POST は種別ごとに ID 形式を検証し、ショート（ss）の動画 ID も受け付ける', async () => {
+    const post = (body: Record<string, string>) => postAllowlist(authed('/api/admin/lqng/allowlist', { method: 'POST', body: JSON.stringify(body) }))
+    for (const id of ['sm1', 'so2', 'nm3', 'ss4']) expect((await post({ action: 'add', kind: 'video', id })).status).toBe(200)
+    for (const id of ['1', '123456789012', 'channel/ch12']) expect((await post({ action: 'add', kind: 'author', id })).status).toBe(200)
+    expect((store.get(LQNG_KV_KEYS.config) as { allowlist: { videoIds: string[] } }).allowlist.videoIds).toEqual(['sm1', 'so2', 'nm3', 'ss4'])
+    expect((await post({ action: 'remove', kind: 'video', id: 'ss4' })).status).toBe(200)
+
+    // 種別と形式が合わない ID は 400（動画 ID を投稿者として、投稿者 ID を動画として登録しない）
+    for (const id of ['sm9', 'ss9', 'ch12', 'channel/12', '1234567890123']) expect((await post({ action: 'add', kind: 'author', id })).status).toBe(400)
+    for (const id of ['123', 'channel/ch1', 'sx1', 'ss', 'sm1234567890123']) expect((await post({ action: 'add', kind: 'video', id })).status).toBe(400)
+  })
+
   it('allowlist POST は設定を読めなければ 503 を返し、既定値を土台に書き込まない', async () => {
     store.set(LQNG_KV_KEYS.config, { enabled: true, titleNeedles: ['てすとまん'], allowlist: { authorIds: ['1'], videoIds: [] } })
     failing.add(LQNG_KV_KEYS.config)

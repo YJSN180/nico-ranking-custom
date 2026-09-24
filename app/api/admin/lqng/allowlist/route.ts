@@ -15,7 +15,12 @@ interface AllowlistRequest {
   note?: string
 }
 
-const ID_PATTERN = /^(\d{1,12}|channel\/ch\d{1,12}|(sm|so|nm)\d{1,12})$/
+// 種別ごとの ID 形式。投稿者はユーザー ID（数字）かチャンネル（channel/chNNN）、
+// 動画は通常動画（sm/so/nm）とショート（ss）
+const ID_PATTERNS: Record<AllowlistRequest['kind'], RegExp> = {
+  author: /^(\d{1,12}|channel\/ch\d{1,12})$/,
+  video: /^(sm|so|nm|ss)\d{1,12}$/,
+}
 
 function parseBody(body: unknown): AllowlistRequest | null {
   if (typeof body !== 'object' || body === null) return null
@@ -23,7 +28,7 @@ function parseBody(body: unknown): AllowlistRequest | null {
   const action = b.action === 'add' || b.action === 'remove' ? b.action : null
   const kind = b.kind === 'author' || b.kind === 'video' ? b.kind : null
   const id = typeof b.id === 'string' ? b.id.trim() : ''
-  if (!action || !kind || !ID_PATTERN.test(id)) return null
+  if (!action || !kind || !ID_PATTERNS[kind].test(id)) return null
   const note = typeof b.note === 'string' ? b.note.trim().slice(0, 200) : undefined
   return { action, kind, id, ...(note ? { note } : {}) }
 }

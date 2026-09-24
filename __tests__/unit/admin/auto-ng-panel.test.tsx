@@ -103,6 +103,21 @@ describe('AutoNGPanel', () => {
     expect(screen.getByText('ジャンル: べつのジャンル')).toBeInTheDocument()
   })
 
+  it('許可リストへの追加が 400 なら ID の形式を案内する', async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+      if (url === '/api/admin/lqng/allowlist') return jsonResponse({ error: 'Invalid allowlist request' }, 400)
+      return jsonResponse({ error: 'not found' }, 404)
+    })
+    render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+    await screen.findByText('● 稼働中')
+    fireEvent.click(screen.getByRole('tab', { name: /許可リスト/ }))
+    fireEvent.change(screen.getByLabelText('種別'), { target: { value: 'video' } })
+    fireEvent.change(screen.getByLabelText('ID'), { target: { value: '12345' } })
+    fireEvent.click(screen.getByRole('button', { name: '追加' }))
+    expect(await screen.findByText(/ID の形式を確認してください/)).toHaveTextContent('ss')
+  })
+
   it('「手動NGに写す」はコールバックに投稿者 ID を渡す', async () => {
     const copy = vi.fn()
     render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={copy} />)
