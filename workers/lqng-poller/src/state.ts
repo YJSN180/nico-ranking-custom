@@ -114,6 +114,8 @@ export type LqngEventKind =
   | 'author_restored'
   /** 404 の割合が異常に高く、その回の退会判定を保留した */
   | 'deletion_held'
+  /** 設定の対照（controlUserId）がユーザー情報 API で 404 だった（打ち間違い・退会。追跡中の投稿者で確かめ直す） */
+  | 'control_not_found'
   | 'access_limited'
   | 'backfill'
   | 'error'

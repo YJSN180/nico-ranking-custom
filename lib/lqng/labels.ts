@@ -24,6 +24,7 @@ export const LQNG_EVENT_KIND_LABELS: Record<string, string> = {
   author_deleted: '投稿者の削除を観測',
   author_restored: '退会扱いの投稿者の存在を再確認（投稿者 NG は維持）',
   deletion_held: '404 が多すぎるため退会判定を保留',
+  control_not_found: '設定した対照の投稿者 ID が見つからない（404）',
   access_limited: 'アクセス制限を検知',
   backfill: 'バックフィル（過去分の取り込み）',
   error: 'エラー',
@@ -31,3 +32,6 @@ export const LQNG_EVENT_KIND_LABELS: Record<string, string> = {
 
 /** 自動NG が有効なのに退会確認の対照（controlUserId）が未設定のときの警告（設定フォームと概要で共用） */
 export const LQNG_CONTROL_MISSING_WARNING = '対照の投稿者 ID が未設定です。追跡中の投稿者から対照を選べないと、退会を確定できません。'
+
+/** 設定した対照（controlUserId）が直近の確認で 404 だったときの警告（概要に出す） */
+export const LQNG_CONTROL_NOT_FOUND_WARNING = '設定した対照の投稿者 ID が見つかりません（直近の確認で 404）。打ち間違いか退会の可能性があります。直るまでは追跡中の投稿者を対照に使います。'

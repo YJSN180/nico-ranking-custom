@@ -1,7 +1,7 @@
 // 自動NG（粗悪コンテンツ）の管理画面用スナップショット: 設定・判定テーブル・イベント・追跡の要約
 import { NextResponse, type NextRequest } from 'next/server'
 import { kv } from '@/lib/simple-kv'
-import { LQNG_KV_KEYS } from '@/lib/lqng/config'
+import { LQNG_KV_KEYS, isLqngControlNotFound } from '@/lib/lqng/config'
 import { isLqngEnabled, readLqngConfigStrict, readLqngVerdictsStrict } from '@/lib/lqng/server'
 import { isAdminAuthenticated, kvUnavailable, unauthorized, withNoStore } from '../_shared'
 
@@ -12,6 +12,8 @@ interface TrackingSummary {
   lastSweepDate: string | null
   trackedAuthors: number
   pendingVideos: number
+  /** 設定の対照（controlUserId）が直近の確認で見つからなかった（404）。設定を直せば消える */
+  controlNotFound: boolean
 }
 
 interface EventsPayload {
@@ -27,7 +29,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const [config, verdicts, trackingRaw, eventsRaw] = await Promise.all([
       readLqngConfigStrict(),
       readLqngVerdictsStrict(),
-      kv.get<{ lastPollAt?: string | null; lastSweepDate?: string | null; authors?: Record<string, unknown>; pending?: unknown[]; lastRun?: unknown }>(LQNG_KV_KEYS.tracking).catch(() => null),
+      kv.get<{ lastPollAt?: string | null; lastSweepDate?: string | null; authors?: Record<string, unknown>; pending?: unknown[]; lastRun?: unknown; issues?: unknown }>(LQNG_KV_KEYS.tracking).catch(() => null),
       kv.get<EventsPayload>(LQNG_KV_KEYS.events).catch(() => null),
     ])
     const tracking: TrackingSummary = {
@@ -35,6 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       lastSweepDate: trackingRaw?.lastSweepDate ?? null,
       trackedAuthors: trackingRaw?.authors ? Object.keys(trackingRaw.authors).length : 0,
       pendingVideos: Array.isArray(trackingRaw?.pending) ? trackingRaw.pending.length : 0,
+      controlNotFound: isLqngControlNotFound(config.controlUserId, trackingRaw?.issues),
     }
     return withNoStore(
       NextResponse.json({

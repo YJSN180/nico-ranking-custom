@@ -275,8 +275,8 @@ describe('AutoNGPanel', () => {
     expect(screen.getByText(/保留時間は 0〜168 の整数にしてください/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
 
-    fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '0' } })
-    expect(screen.getByText(/投稿者の追跡日数は 1〜30 の整数にしてください/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '1' } })
+    expect(screen.getByText(/投稿者の追跡日数は 2〜30 の整数にしてください/)).toBeInTheDocument()
     expect(save).toBeDisabled()
     fireEvent.change(screen.getByLabelText('投稿者の追跡日数'), { target: { value: '7' } })
     expect(save).toBeEnabled()
@@ -442,6 +442,31 @@ describe('AutoNGPanel', () => {
       await waitFor(() => expect(fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/config')).toHaveLength(2))
       const second = fetchMock.mock.calls.filter((c) => c[0] === '/api/admin/lqng/config')[1]!
       expect(JSON.parse(String((second[1] as RequestInit).body))).not.toHaveProperty('controlUserId')
+    })
+
+    it('設定した対照が直近の確認で見つからなければ（404）、概要に警告を出す', async () => {
+      const notFoundWarning = /設定した対照の投稿者 ID が見つかりません/
+      const withOverview = (over: Record<string, unknown>, tracking: Record<string, unknown>) => {
+        fetchMock.mockImplementation(async (url: string) =>
+          url === '/api/admin/lqng/overview' ? jsonResponse({ ...overview, config: { ...overview.config, ...over }, tracking: { ...overview.tracking, ...tracking } }) : jsonResponse({ error: 'not found' }, 404)
+        )
+      }
+      withOverview({ controlUserId: '12345' }, { controlNotFound: true })
+      const { unmount } = render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      expect(screen.getByText(notFoundWarning)).toHaveTextContent('「設定」タブの「退会の判定」')
+      expect(screen.queryByText(missingWarning)).not.toBeInTheDocument()
+      unmount()
+      // 見つかっている、または自動NG が無効なら出さない
+      withOverview({ controlUserId: '12345' }, { controlNotFound: false })
+      const second = render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      expect(screen.queryByText(notFoundWarning)).not.toBeInTheDocument()
+      second.unmount()
+      withOverview({ controlUserId: '12345', enabled: false }, { controlNotFound: true })
+      render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText(/設定で無効/)
+      expect(screen.queryByText(notFoundWarning)).not.toBeInTheDocument()
     })
 
     it('数字でなければ理由を出して保存させない', async () => {

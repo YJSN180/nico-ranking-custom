@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { runPoll, LIMITS } from '@/workers/lqng-poller/src/poll'
 import { commitBackfill } from '@/workers/lqng-poller/src/backfill'
 import { AccessLimitedError, type NewVideosResult, type PageFailure, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
-import { LQNG_KV_KEYS } from '@/lib/lqng/config'
+import { LQNG_ISSUE_CONTROL_NOT_FOUND, LQNG_KV_KEYS, isLqngControlNotFound } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
 import { captureBaseline, emptyEvents, emptyTracking, verdictsWriteProblem, type LqngEvents, type LqngTracking, type TrackedAuthor } from '@/workers/lqng-poller/src/state'
 import { memoryKv } from './helpers/lqng-memory-kv'
@@ -421,6 +421,23 @@ describe('lqng-poller 受け箱（バックフィルの確定）の合流', () =
     expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'backfill')?.note).toBe('投稿者 +0 / 動画 +2')
   })
 
+  it('投稿者 ID の無い NG 差分で保留を上書きするときも投稿者 ID を引き継ぎ、許可リストの投稿者の動画は NG にしない', async () => {
+    const at0 = '2026-01-31T00:00:00.000Z'
+    const hold = (authorId: string) => ({ status: 'hold', reasons: [], holdSignals: ['hidden_owner'], authorId, title: 't', registeredAt: at0, since: at0, holdUntil: '2026-02-01T09:00:00.000Z' })
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: { version: 1, authors: {}, videos: { sm811: hold('9001'), sm812: hold('7601') }, updatedAt: at0 },
+      'lqng:inbox:run1:000001': inboxItem(1, { authors: {}, videos: { sm811: videoVerdict(null), sm812: videoVerdict(null) } }),
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    // 許可リストの投稿者（9001）の動画は NG にせず、投稿者 ID も残る（保留は許可リストなので通常どおり解放される）
+    expect(verdicts.videos.sm811?.status).not.toBe('ng')
+    expect(verdicts.videos.sm811?.authorId).toBe('9001')
+    // それ以外は NG になるが、投稿者 ID は既存の判定から引き継ぐ
+    expect(verdicts.videos.sm812).toMatchObject({ status: 'ng', authorId: '7601' })
+  })
+
   it('許可リストの投稿者・動画と、投稿者 NG の動画は合流しない', async () => {
     const m = memoryKv({
       [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['9001'], videoIds: ['sm732'] } },
@@ -782,6 +799,93 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
       const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '1999' || id === '1900' ? existing(5000) : deleted))
       await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3500))), fetchUserInfo: info }), 'poll')
       expect(info.mock.calls.map((c) => c[0])).toEqual(['3500', '1999'])
+    })
+
+    describe('設定の対照が見つからない・確かめられないとき', () => {
+      /** 設定の対照 1999 は 404（打ち間違い・退会）、追跡中の候補 1912 は存在、ほかは 404 */
+      const configuredGone = () => vi.fn(async (id: string): Promise<UserInfo> => (id === '1912' ? existing(50) : deleted))
+      /** 設定の対照が前の回に 404 だった追跡表 */
+      const knownNotFound = (authors: TrackedAuthor[]): LqngTracking => ({
+        ...trackingWith(authors),
+        issues: { [LQNG_ISSUE_CONTROL_NOT_FOUND]: { signature: '1999', okStreak: 0, reportedAt: recent } },
+      })
+
+      it('設定の対照が 404 なら追跡中の候補で確かめ直して退会を確定でき、見つからないことを概要と監視に出す', async () => {
+        const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith([controlAuthor('1912', 50)]) })
+        const info = configuredGone()
+        const reportError = vi.fn()
+        await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3800))), fetchUserInfo: info, reportError }), 'poll')
+        expect(info.mock.calls.map((c) => c[0])).toEqual(['3800', '1999', '1912'])
+        let tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+        expect(tracking.authors['3800']?.deletionSuspectedAt).toBe(T0.toISOString())
+        // 管理画面の概要は、記録の ID が今の設定と同じときだけ警告する
+        expect(isLqngControlNotFound('1999', tracking.issues)).toBe(true)
+        expect(isLqngControlNotFound('1998', tracking.issues)).toBe(false)
+        let events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!.items
+        expect(events.some((e) => e.kind === 'deletion_held')).toBe(false)
+        expect(events.filter((e) => e.kind === 'control_not_found')).toHaveLength(1)
+        expect(reportError).toHaveBeenCalledTimes(1)
+        expect(reportError.mock.calls[0]?.[1]).toBe(LQNG_ISSUE_CONTROL_NOT_FOUND)
+        // 対照の ID は履歴・監視に出さない
+        expect(JSON.stringify(events)).not.toContain('1999')
+        expect(String(reportError.mock.calls[0]?.[0])).not.toContain('1999')
+
+        // 1 時間後の 2 回目の 404 も追跡中の候補で確かめて確定する。同じ問題なので履歴・監視には積み直さない（監視は 6 時間に 1 回）
+        await runPoll(m.kv, deps({ fetchUserInfo: info, reportError }, new Date(T0.getTime() + 61 * 60_000)), 'poll')
+        tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+        expect(tracking.authors['3800']?.status).toBe('deleted')
+        events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!.items
+        expect(events.filter((e) => e.kind === 'control_not_found')).toHaveLength(1)
+        expect(reportError).toHaveBeenCalledTimes(1)
+      })
+
+      it('設定の対照を確かめられない（通信の失敗）ときも追跡中の候補で確かめ直す。失敗は「見つからない」にしない', async () => {
+        const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith([controlAuthor('1912', 50)]) })
+        const info = vi.fn(async (id: string): Promise<UserInfo> => {
+          if (id === '1999') throw new Error('network')
+          return id === '1912' ? existing(50) : deleted
+        })
+        const reportError = vi.fn()
+        await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3810))), fetchUserInfo: info, reportError }), 'poll')
+        expect(info.mock.calls.map((c) => c[0])).toEqual(['3810', '1999', '1912'])
+        const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+        expect(tracking.authors['3810']?.deletionSuspectedAt).toBe(T0.toISOString())
+        expect(isLqngControlNotFound('1999', tracking.issues)).toBe(false)
+        expect(reportError).not.toHaveBeenCalled()
+      })
+
+      it('追跡中にも候補が無ければ、その回の 404 は保留する（見つからないことは記録する）', async () => {
+        const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+        const info = configuredGone()
+        await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3820))), fetchUserInfo: info }), 'poll')
+        expect(info.mock.calls.map((c) => c[0])).toEqual(['3820', '1999'])
+        const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+        expect(tracking.authors['3820']?.deletionSuspectedAt ?? null).toBeNull()
+        expect(isLqngControlNotFound('1999', tracking.issues)).toBe(true)
+        expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')?.note).toContain('control_404')
+      })
+
+      it('設定の対照の存在を確かめられたら、見つからない警告を下ろす', async () => {
+        const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: knownNotFound([]) })
+        await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3830))), fetchUserInfo: goneExceptControl() }), 'poll')
+        const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+        expect(tracking.authors['3830']?.deletionSuspectedAt).toBe(T0.toISOString())
+        expect(isLqngControlNotFound('1999', tracking.issues)).toBe(false)
+      })
+
+      it('設定の対照が見つからないと分かっている間は、存在確認の予算に追跡中の候補で確かめ直す分も残す', async () => {
+        // まだ存在を確かめていない追跡中の投稿者 6 人（全員 404）
+        const unchecked = Array.from({ length: 6 }, (_, i): TrackedAuthor => ({ ...controlAuthor(String(3840 + i), 0), status: 'unknown', lastCheckedAt: null, followerCount: null }))
+        const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: knownNotFound([controlAuthor('1912', 50), ...unchecked]) })
+        const info = configuredGone()
+        // 新着の取得で予算の大半を使った回（残り 6 回）
+        const newVideos = vi.fn(async () => pages([], [], LIMITS.subrequestBudget - 6))
+        const r = await runPoll(m.kv, deps({ fetchNewVideos: newVideos, fetchUserInfo: info }), 'poll')
+        expect(r.subrequests).toBeLessThanOrEqual(LIMITS.subrequestBudget)
+        expect(info.mock.calls.slice(-2).map((c) => c[0])).toEqual(['1999', '1912'])
+        const suspected = Object.values(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors).filter((a) => a.deletionSuspectedAt === T0.toISOString())
+        expect(suspected.length).toBeGreaterThan(0)
+      })
     })
 
     it('追跡中から選ぶときは、連投している投稿者とフォロワーが followerMax 以下の投稿者を対照にしない', async () => {

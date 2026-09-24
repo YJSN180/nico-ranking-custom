@@ -2,7 +2,7 @@
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
 // 1 回の実行で: 外部呼び出し ≤ subrequestBudget。KV は内容が変わったキーだけ書く（定常は追跡表の 1 回）。
 // ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
-import { LQNG_KV_KEYS, LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
+import { LQNG_ISSUE_CONTROL_NOT_FOUND, LQNG_KV_KEYS, LQNG_POLL_TAGS_MAX, isLqngControlNotFound } from '../../../lib/lqng/config'
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
@@ -503,9 +503,11 @@ class Session {
       .map((x) => x.a)
       .slice(0, LIMITS.usersPerRun)
     const results: Array<{ author: TrackedAuthor; info: UserInfo }> = []
+    // 404 が出たときの対照の確認に 1 回分を残す。設定の対照が見つからないと分かっている間は、
+    // 追跡中の候補で確かめ直す分も残す
+    const controlReserve = isLqngControlNotFound(this.config.controlUserId, this.state.tracking.issues) ? 2 : 1
     for (const author of candidates) {
-      // 404 が出たときの対照の確認に 1 回分を残す
-      if (!this.budgetLeft(2)) break
+      if (!this.budgetLeft(1 + controlReserve)) break
       this.spend()
       try {
         results.push({ author, info: await this.deps.fetchUserInfo(author.authorId) })
@@ -542,14 +544,38 @@ class Session {
 
   /**
    * 404 が出た回に、ユーザー情報 API が存在するユーザーに 200 を返しているかを確かめる。
-   * 同じ回に存在の確認が取れていればそれで足りる。無ければ存在が分かっている対照を 1 件確かめる
+   * 同じ回に存在の確認が取れていればそれで足りる。無ければ存在が分かっている対照を確かめる
    * （API の変更で全員が 404 になったときに、実在の連投者を A∧C で恒久 NG にしないため）。
-   * 問題が無ければ null、保留するならその理由を返す。
+   * 設定の対照を先に使い、それが 404・失敗なら追跡中の候補で確かめ直す（打ち間違いや退会した ID の
+   * せいで、退会をずっと確定できなくならないように）。設定の対照が 404 だったことは続く問題として
+   * 記録し、管理画面の概要と監視に出す。問題が無ければ null、保留するならその理由を返す。
    */
   private async verifyUserApi(results: ReadonlyArray<{ author: TrackedAuthor; info: UserInfo }>): Promise<string | null> {
     if (results.some((r) => r.info.status === 'existing')) return null
-    const control = this.pickControl(new Set(results.map((r) => r.author.authorId)))
-    if (control === null) return 'no_control'
+    const exclude = new Set(results.map((r) => r.author.authorId))
+    const configured = this.config.controlUserId
+    if (!configured) {
+      const control = this.pickControl(exclude)
+      return control === null ? 'no_control' : this.checkControl(control)
+    }
+    const hold = await this.checkControl(configured)
+    if (hold === null) {
+      this.resolveIssue(LQNG_ISSUE_CONTROL_NOT_FOUND)
+      return null
+    }
+    if (hold === 'control_404') {
+      // 対照の ID は記録の signature にだけ置き、履歴の注記と監視には出さない
+      this.recordIssue(LQNG_ISSUE_CONTROL_NOT_FOUND, configured, LQNG_ISSUE_CONTROL_NOT_FOUND, 'control_not_found', new Error('control_not_found: the configured control user returned 404'))
+    }
+    // アクセス制限なら同じ回にほかの対照を確かめても通らない。予算切れも次の回に回す
+    if (hold === 'control_access_limited' || hold === 'no_budget') return hold
+    exclude.add(configured)
+    const fallback = this.pickControl(exclude)
+    return fallback === null ? hold : this.checkControl(fallback)
+  }
+
+  /** 対照を 1 件確かめる。存在すれば null、そうでなければ保留の理由を返す */
+  private async checkControl(control: string): Promise<string | null> {
     if (!this.budgetLeft()) return 'no_budget'
     this.spend()
     let info: UserInfo
@@ -573,12 +599,11 @@ class Session {
   }
 
   /**
-   * 対照: 設定の controlUserId（存在が確実な投稿者）を先に使う。無ければ、最近存在を確認した追跡中の
-   * 投稿者のうち、連投しておらず、フォロワーが followerMax より多い人（フォロワーの多い順）。
-   * 同じ波で退会しうる連投アカウントや、捨てアカウントらしい投稿者を対照にしないため
+   * 追跡中の対照の候補: 最近存在を確認した投稿者のうち、連投しておらず、フォロワーが followerMax より
+   * 多い人（フォロワーの多い順）。同じ波で退会しうる連投アカウントや、捨てアカウントらしい投稿者を
+   * 対照にしないため。設定の対照が無いとき、または設定の対照が 404・失敗だったときに使う
    */
   private pickControl(exclude: ReadonlySet<string>): string | null {
-    if (this.config.controlUserId) return this.config.controlUserId
     const nowMs = this.now.getTime()
     const checkedMs = (a: TrackedAuthor): number => (a.lastCheckedAt ? new Date(a.lastCheckedAt).getTime() : Number.NEGATIVE_INFINITY)
     const tracked = Object.values(this.state.tracking.authors)

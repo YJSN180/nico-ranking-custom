@@ -140,6 +140,33 @@ describe('runBackfillStep', () => {
       expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2032', '2030', '2032', '2031'])
       expect(r.deltas.authors['2032']?.reasons).toEqual(['A_C'])
     })
+
+    it('設定の対照が 404 なら、走査中の候補で確かめ直す（見つからないことを注記に出し、ID は出さない）', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const cursor = createBackfillCursor(T0, 1)
+      cursor.checked['2040'] = { status: 'existing', followerCount: 900, nickname: 'n', checkedAt: fresh }
+      const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => (id === '2040' ? existing(900) : deleted))
+      const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2041', 6)), fetchUserInfo }), cursor, { days: 1 })
+      expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2041', '1999', '2040'])
+      expect(r.deltas.authors['2041']?.reasons).toEqual(['A_C'])
+      expect(r.note).toContain('control_not_found')
+      expect(r.note).not.toContain('1999')
+      expect(r.note).not.toContain('deletion_held')
+    })
+
+    it('設定の対照を確かめられない（通信の失敗）ときも、走査中の候補で確かめ直す（見つからない扱いにしない）', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const cursor = createBackfillCursor(T0, 1)
+      cursor.checked['2040'] = { status: 'existing', followerCount: 900, nickname: 'n', checkedAt: fresh }
+      const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => {
+        if (id === '1999') throw new Error('network')
+        return id === '2040' ? existing(900) : deleted
+      })
+      const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2042', 6)), fetchUserInfo }), cursor, { days: 1 })
+      expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2042', '1999', '2040'])
+      expect(r.deltas.authors['2042']?.reasons).toEqual(['A_C'])
+      expect(r.note ?? '').not.toContain('control_not_found')
+    })
   })
 
   it('連投でも現存なら A∧C にせず、存在確認の結果を持ち回る', async () => {

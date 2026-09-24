@@ -28,6 +28,9 @@ function positiveInt(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback
 }
 
+/** 投稿者の追跡日数の下限。日次スイープ（05:10 JST に前日分）が取り込む動画は投稿から最大 1 日余り経っているので 2 日 */
+export const LQNG_TRACK_DAYS_MIN = 2
+
 /** ユーザー ID（数字 1〜12 桁） */
 const USER_ID_PATTERN = /^\d{1,12}$/
 
@@ -56,7 +59,8 @@ export function normalizeLqngConfig(raw: unknown): LqngConfig {
     },
     followerMax: positiveInt(raw.followerMax, d.followerMax),
     holdHours: positiveInt(raw.holdHours, d.holdHours),
-    trackDays: Math.max(1, positiveInt(raw.trackDays, d.trackDays)),
+    // 追跡日数は 2 日以上（日次スイープが取り込む前日分は投稿から最大 1 日余り経っている）
+    trackDays: Math.max(LQNG_TRACK_DAYS_MIN, positiveInt(raw.trackDays, d.trackDays)),
     deletionWindowDays: Math.max(1, positiveInt(raw.deletionWindowDays, d.deletionWindowDays)),
     // 対照は設定されているときだけ持つ（無い設定の形は変えない）
     ...(typeof raw.controlUserId === 'string' && USER_ID_PATTERN.test(raw.controlUserId.trim()) ? { controlUserId: raw.controlUserId.trim() } : {}),
@@ -74,6 +78,23 @@ export const LQNG_TITLE_NEEDLE_MIN_LENGTH = 3
 
 /** 新着取得に使うタグの上限（Worker の外部呼び出しの予算から決まる。4 つ目からは取得しない） */
 export const LQNG_POLL_TAGS_MAX = 3
+
+/**
+ * 追跡表の「続いている問題」（issues）のうち、設定の対照（controlUserId）がユーザー情報 API で
+ * 404 だったことを表す種類。Worker が記録し（signature に対照の ID）、管理画面の概要が読む
+ */
+export const LQNG_ISSUE_CONTROL_NOT_FOUND = 'control_not_found'
+
+/**
+ * 設定の対照が直近の確認で見つからなかった（404）か。追跡表の issues（KV の生の値）から読む。
+ * 記録の ID が今の設定と違えば（設定を直した後）見つからない扱いにしない。記録が残っていても、
+ * その後に存在を確かめられていれば（okStreak が 1 以上）同じく扱わない
+ */
+export function isLqngControlNotFound(controlUserId: string | null | undefined, issues: unknown): boolean {
+  if (!controlUserId || !isRecord(issues)) return false
+  const issue = Object.hasOwn(issues, LQNG_ISSUE_CONTROL_NOT_FOUND) ? issues[LQNG_ISSUE_CONTROL_NOT_FOUND] : undefined
+  return isRecord(issue) && issue.signature === controlUserId && (issue.okStreak ?? 0) === 0
+}
 
 interface NumberLimit {
   label: string
@@ -93,7 +114,7 @@ const NUMBER_LIMITS: readonly NumberLimit[] = [
   { label: '短時間の幅', min: 1, max: 1440, read: (raw) => readFreq(raw, 'burstMinutes') },
   { label: 'フォロワー上限', min: 0, max: 1000, read: (raw) => raw.followerMax },
   { label: '保留時間', min: 0, max: 168, read: (raw) => raw.holdHours },
-  { label: '投稿者の追跡日数', min: 1, max: 30, read: (raw) => raw.trackDays },
+  { label: '投稿者の追跡日数', min: LQNG_TRACK_DAYS_MIN, max: 30, read: (raw) => raw.trackDays },
   { label: '削除とみなす日数', min: 1, max: 30, read: (raw) => raw.deletionWindowDays },
 ]
 
