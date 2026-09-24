@@ -138,7 +138,7 @@ export async function readInbox(kv: KvLike, limit: number): Promise<InboxItem[]>
 /**
  * 差分を判定表へ冪等に合流する（何度呼んでも同じ結果）。
  * - 投稿者: 許可リストは除外。未登録なら追加（since は合流時刻）、登録済みなら理由と根拠の和集合
- * - 動画: 未登録で、許可リスト（動画・投稿者）に無く、投稿者が NG でないものだけ追加
+ * - 動画: まだ NG でなく（未登録・保留・解放済み）、許可リスト（動画・投稿者）に無く、投稿者が NG でないものを NG にする
  */
 export function mergeDeltasIntoVerdicts(verdicts: LqngVerdicts, deltas: BackfillDeltas, config: LqngConfig, nowIso: string): InboxMergeResult {
   const result: InboxMergeResult = { authorsAdded: 0, reasonsAdded: 0, videosAdded: 0 }
@@ -163,7 +163,10 @@ export function mergeDeltasIntoVerdicts(verdicts: LqngVerdicts, deltas: Backfill
     }
   }
   for (const [videoId, verdict] of Object.entries(deltas.videos)) {
-    if (Object.hasOwn(verdicts.videos, videoId) || allowVideos.has(videoId)) continue
+    // 既に NG の動画は変えない。保留・解放済みは NG にする（ポーリングの判定と同じく、ルールに当たった NG は
+    // 一時的な保留や、保留が明けて当時の情報では当たらなかった「解放」より強い）
+    const current = Object.hasOwn(verdicts.videos, videoId) ? verdicts.videos[videoId] : undefined
+    if (current?.status === 'ng' || allowVideos.has(videoId)) continue
     if (verdict.authorId !== null && (allowAuthors.has(verdict.authorId) || Object.hasOwn(verdicts.authors, verdict.authorId))) continue
     verdicts.videos[videoId] = { ...verdict, since: nowIso }
     result.videosAdded++

@@ -397,6 +397,30 @@ describe('lqng-poller 受け箱（バックフィルの確定）の合流', () =
     expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'backfill')?.note).toBe('投稿者 +0 / 動画 +0 / 理由追加 1')
   })
 
+  it('保留中・解放済みの動画にも、受け箱の動画 NG を反映する（NG は保留・解放より強い。既に NG なら変えない）', async () => {
+    const at0 = '2026-01-31T00:00:00.000Z'
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: {
+        version: 1,
+        authors: {},
+        videos: {
+          sm801: { status: 'hold', reasons: [], holdSignals: ['hidden_owner'], authorId: '7501', title: 't', registeredAt: at0, since: at0, holdUntil: '2026-02-01T09:00:00.000Z' },
+          sm802: { status: 'released', reasons: [], authorId: '7502', title: 't', registeredAt: at0, since: at0, holdUntil: null },
+          sm803: { status: 'ng', reasons: ['B'], authorId: '7503', title: 't', registeredAt: at0, since: at0 },
+        },
+        updatedAt: at0,
+      },
+      'lqng:inbox:run1:000001': inboxItem(1, { authors: {}, videos: { sm801: videoVerdict('7501'), sm802: videoVerdict('7502'), sm803: videoVerdict('7503') } }),
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(verdicts.videos.sm801).toMatchObject({ status: 'ng', reasons: ['D'], since: T0.toISOString() })
+    expect(verdicts.videos.sm802).toMatchObject({ status: 'ng', reasons: ['D'], since: T0.toISOString() })
+    expect(verdicts.videos.sm803).toMatchObject({ status: 'ng', reasons: ['B'], since: at0 })
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'backfill')?.note).toBe('投稿者 +0 / 動画 +2')
+  })
+
   it('許可リストの投稿者・動画と、投稿者 NG の動画は合流しない', async () => {
     const m = memoryKv({
       [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['9001'], videoIds: ['sm732'] } },
