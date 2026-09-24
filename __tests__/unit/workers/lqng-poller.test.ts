@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runPoll, LIMITS } from '@/workers/lqng-poller/src/poll'
 import { commitBackfill } from '@/workers/lqng-poller/src/backfill'
-import { AccessLimitedError, NicoPagesFailedError, type NewVideosResult, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
+import { AccessLimitedError, type NewVideosResult, type PageFailure, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
-import type { LqngEvents, LqngTracking } from '@/workers/lqng-poller/src/state'
+import { captureBaseline, emptyEvents, emptyTracking, verdictsWriteProblem, type LqngEvents, type LqngTracking, type TrackedAuthor } from '@/workers/lqng-poller/src/state'
 import { memoryKv } from './helpers/lqng-memory-kv'
 
 // 合成データのみ。実在の ID・名前・タグは使わない
@@ -23,6 +23,8 @@ const config: Partial<LqngConfig> = {
   trackDays: 7,
   deletionWindowDays: 7,
   allowlist: { authorIds: ['9001'], videoIds: [] },
+  // 追跡中に存在確認済みの投稿者がいないときに使う対照（合成値）
+  controlUserId: '1999',
 }
 
 const T0 = new Date('2026-02-01T12:00:00+09:00')
@@ -30,10 +32,17 @@ const at = (min: number): string => new Date(T0.getTime() + min * 60_000).toISOS
 
 const video = (over: Partial<SourceVideo>): SourceVideo => ({ id: 'sm1', title: '通常', authorId: '1001', registeredAt: at(-1), ownerVisibility: 'visible', ...over })
 /** 主経路（本家タグページ）の取得結果（既定は 2 タグ × 2 種別 × 1 ページ = 4 リクエスト） */
-const pages = (videos: SourceVideo[], failures: string[] = [], requests = 4): NewVideosResult => ({ videos, failures, requests })
+const pages = (videos: SourceVideo[], failures: PageFailure[] = [], requests = 4): NewVideosResult => ({ videos, failures, requests })
+/** 取れなかったページ（tagIndex は設定の pollTags の並び順） */
+const failed = (tagIndex: number, kind: PageFailure['kind'], reason = 'nico_page_http_503'): PageFailure => ({ tagIndex, kind, page: 1, reason })
+/** 設定の 2 タグ × 2 種別がすべて取れなかった結果 */
+const allFailed = (reason: string): NewVideosResult => pages([], [failed(0, 'tag', reason), failed(0, 'tag_shorts', reason), failed(1, 'tag', reason), failed(1, 'tag_shorts', reason)])
 const locked = (...names: string[]) => names.map((name) => ({ name, isLocked: true }))
 const okThumb = (tags = locked('x')): ThumbResult => ({ ok: true, info: { tagDetails: tags, ownerVisibility: 'visible', nickname: 'n' } })
 const existing = (followerCount: number): UserInfo => ({ status: 'existing', followerCount, nickname: 'n' })
+const deletedInfo: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
+/** 対照（controlUserId）だけは存在し、ほかは退会（NOT_FOUND の 404）と答えるユーザー情報 API */
+const goneExceptControl = () => vi.fn(async (id: string): Promise<UserInfo> => (id === '1999' ? existing(1000) : deletedInfo))
 
 function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
   return {
@@ -49,17 +58,15 @@ function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
 describe('lqng-poller runPoll', () => {
   it('主経路の新着取得が壊れたら予備（nvapi）で取り込み、履歴に理由を残す', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const primary = vi.fn(async () => {
-      throw new Error('server-response meta not found')
-    })
+    const primary = vi.fn(async () => allFailed('server-response meta not found'))
     const fallback = vi.fn(async () => [video({ id: 'sm70', authorId: '7001' })])
     const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }), 'poll')
     expect(r.skipped).toBeNull()
-    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(fallback).toHaveBeenCalledWith(['tagA', 'tagB'], expect.any(String))
     expect(r.newVideos).toBe(1)
-    expect(r.note).toContain('fallback')
+    expect(r.note).toContain('fallback(t0,t1): ok')
     const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
-    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('new_videos_primary_failed'))).toBe(true)
+    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('server-response meta not found'))).toBe(true)
   })
 
   it('連投中の投稿者は待ち行列が長くても先に存在確認・補完される', async () => {
@@ -205,12 +212,11 @@ describe('lqng-poller runPoll', () => {
     expect(verdicts.authors['1001']).toBeUndefined() // C 単独では NG にしない
 
     const later = new Date(T0.getTime() + 7 * 3600_000)
-    const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
-    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, later), 'poll')
+    await runPoll(m.kv, deps({ fetchUserInfo: goneExceptControl() }, later), 'poll')
     // 1 回目の 404 は疑いだけ（まだ NG にしない）
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
     const confirmAt = new Date(later.getTime() + 60 * 60_000)
-    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, confirmAt), 'poll')
+    await runPoll(m.kv, deps({ fetchUserInfo: goneExceptControl() }, confirmAt), 'poll')
     verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
     expect(verdicts.authors['1001']?.reasons).toEqual(['A_C'])
     // 削除の観測時刻は最初に 404 を見た時刻
@@ -229,8 +235,9 @@ describe('lqng-poller runPoll', () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm20' })])) }), 'poll')
     const later = new Date(T0.getTime() + 7 * 3600_000)
-    const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
-    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, later), 'poll')
+    await runPoll(m.kv, deps({ fetchUserInfo: goneExceptControl() }, later), 'poll')
+    await runPoll(m.kv, deps({ fetchUserInfo: goneExceptControl() }, new Date(later.getTime() + 60 * 60_000)), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.status).toBe('deleted')
     // 判定が変わらなければ判定表は書かれない
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
   })
@@ -404,6 +411,19 @@ describe('lqng-poller 受け箱（バックフィルの確定）の合流', () =
     expect(verdicts.videos).toEqual({})
   })
 
+  it('一覧に出ても読むと無くなっていた受け箱（結果整合のずれ）は、合流も削除もせずに飛ばす', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const kv = {
+      ...m.kv,
+      list: async () => ({ keys: [{ name: 'lqng:inbox:run1:000001' }], list_complete: true }),
+    }
+    const r = await runPoll(kv, deps(), 'poll')
+    expect(r.skipped).toBeNull()
+    expect(m.deletes).toEqual([])
+    expect(m.store.has(LQNG_KV_KEYS.verdicts)).toBe(false)
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error') ?? false).toBe(false)
+  })
+
   it('壊れた受け箱は消して、履歴に記録する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     m.store.set('lqng:inbox:run1:000001', '{not json')
@@ -432,38 +452,69 @@ describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
     return m
   }
 
-  it('主経路がアクセス制限なら最終取得時刻を進めず、次回は前回の時刻から重なり分を取り直す', async () => {
+  it('通常動画のページだけ形が変わっても、そのタグは予備（nvapi）で補い、ショートは本家から取り込む', async () => {
     const m = await afterFirstPoll()
-    const limited = vi.fn(async () => {
-      throw new AccessLimitedError('nico-page')
-    })
-    const r = await runPoll(m.kv, deps({ fetchNewVideos: limited }, later), 'poll')
-    expect(r.skipped).toBeNull()
-    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
-    const next = vi.fn(async () => pages([]))
-    await runPoll(m.kv, deps({ fetchNewVideos: next }, new Date(later.getTime() + 15 * 60_000)), 'poll')
-    const since = (next.mock.calls[0] as unknown as [string[], string])[1]
-    expect(since).toBe(new Date(T0.getTime() - LIMITS.sinceOverlapMinutes * 60_000).toISOString())
+    const primary = vi.fn(async () =>
+      pages([video({ id: 'ss80', authorId: '8001' })], [failed(0, 'tag', 'server-response meta not found'), failed(1, 'tag', 'server-response meta not found')])
+    )
+    const fallback = vi.fn(async () => [video({ id: 'sm81', authorId: '8002' })])
+    const reportError = vi.fn()
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback, reportError }, later), 'poll')
+    expect(fallback).toHaveBeenCalledWith(['tagA', 'tagB'], expect.any(String))
+    expect(r.newVideos).toBe(2)
+    // ショートは取れ、通常動画は予備で補えたので、最終取得時刻は進める
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.lastPollAt).toBe(later.toISOString())
+    // 本家ページの失敗は履歴と監視に出す
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note?.includes('t0:tag:p1 server-response meta not found'))).toBe(true)
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(r.note).toContain('fallback(t0,t1): ok')
   })
 
-  it('主経路が壊れて予備もアクセス制限なら最終取得時刻を進めない', async () => {
+  it('一部のタグの通常動画だけ取れなければ、そのタグだけ予備で補う', async () => {
     const m = await afterFirstPoll()
-    const primary = vi.fn(async () => {
-      throw new Error('server-response meta not found')
-    })
+    const fallback = vi.fn(async () => [])
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(1, 'tag')])), fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledWith(['tagB'], expect.any(String))
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(later.toISOString())
+  })
+
+  it('ショートが取れなかった回は予備では補えないので最終取得時刻を進めず、次の回に同じ区間を取り直す', async () => {
+    const m = await afterFirstPoll()
+    const fallback = vi.fn(async () => [])
+    const reportError = vi.fn()
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag_shorts')])), fetchNewVideosFallback: fallback, reportError }, later), 'poll')
+    expect(fallback).not.toHaveBeenCalled()
+    expect(r.note).toContain('new_videos_failed: t0:tag_shorts:p1 nico_page_http_503')
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+    // 次の回: 前回の最終取得時刻から重なり分を取り直し、取れなかったショートを取り込む
+    const missed = video({ id: 'ss82', authorId: '8003', registeredAt: at(5) })
+    const next = vi.fn(async () => pages([missed]))
+    const nextAt = new Date(later.getTime() + 15 * 60_000)
+    const r2 = await runPoll(m.kv, deps({ fetchNewVideos: next }, nextAt), 'poll')
+    const since = (next.mock.calls[0] as unknown as [string[], string])[1]
+    expect(since).toBe(new Date(T0.getTime() - LIMITS.sinceOverlapMinutes * 60_000).toISOString())
+    expect(r2.newVideos).toBe(1)
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.authors['8003']?.posts.map((p) => p.id)).toEqual(['ss82'])
+    expect(tracking.lastPollAt).toBe(nextAt.toISOString())
+  })
+
+  it('予備もアクセス制限なら最終取得時刻を進めない', async () => {
+    const m = await afterFirstPoll()
     const fallback = vi.fn(async () => {
       throw new AccessLimitedError('nvapi')
     })
-    await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag', 'nico_page_http_403')])), fetchNewVideosFallback: fallback }, later), 'poll')
     expect(fallback).toHaveBeenCalledTimes(1)
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'access_limited' && e.note === 'access limited: nvapi')).toBe(true)
   })
 
   it('主経路も予備も壊れていれば、記録して他の処理は続け、最終取得時刻は進めない', async () => {
     const m = await afterFirstPoll()
-    const primary = vi.fn(async () => {
-      throw new Error('nico_page_http_500')
-    })
+    const primary = vi.fn(async () => allFailed('nico_page_http_500'))
     const fallback = vi.fn(async () => {
       throw new Error('nvapi_http_503')
     })
@@ -482,37 +533,48 @@ describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
     expect(saved.pending).toEqual([])
     expect(saved.lastRun?.note).toContain('new_videos_failed')
     const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
-    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('nvapi_http_503'))).toBe(true)
+    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('fallback(t0,t1): nvapi_http_503'))).toBe(true)
     expect(reportError).toHaveBeenCalledTimes(1)
   })
 
-  it('主経路の一部（ショートなど）だけ失敗しても予備には縮退せず、取れた分を取り込んで注記する', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const primary = vi.fn(async () => pages([video({ id: 'sm92' })], ['t0:tag_shorts:p1 nico_page_http_503']))
-    const fallback = vi.fn(async () => [video({ id: 'sm93' })])
-    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }), 'poll')
-    expect(fallback).not.toHaveBeenCalled()
-    expect(r.newVideos).toBe(1)
-    expect(r.note).toContain('new_videos_partial: t0:tag_shorts:p1 nico_page_http_503')
-    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
-    expect(tracking.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm92'])
-    // 取れなかったページは次回の重なり（6 時間）で取り直すので、最終取得時刻は進める
-    expect(tracking.lastPollAt).toBe(T0.toISOString())
+  it('通常動画を予備で補えても、ショートが取れていない回は最終取得時刻を進めない', async () => {
+    const m = await afterFirstPoll()
+    const fallback = vi.fn(async () => [video({ id: 'sm91' })])
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => allFailed('server-response meta not found')), fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
   })
 
-  it('予備で取れた回は最終取得時刻を進める', async () => {
+  it('想定外の例外で新着を取れなかった回も、全ページ失敗として予備で補い、最終取得時刻は進めない', async () => {
     const m = await afterFirstPoll()
-    const primary = vi.fn(async () => {
-      throw new Error('server-response meta not found')
+    const primary = vi.fn(async (): Promise<NewVideosResult> => {
+      throw new Error('unexpected')
     })
-    const fallback = vi.fn(async () => [video({ id: 'sm91' })])
-    await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
-    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(later.toISOString())
+    const fallback = vi.fn(async () => [video({ id: 'sm92' })])
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledWith(['tagA', 'tagB'], expect.any(String))
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+  })
+
+  it('同じ失敗が続く間、履歴には最初の 1 回だけ積み、注記と監視には毎回出す（直ったあとの失敗はまた積む）', async () => {
+    const m = await afterFirstPoll()
+    const reportError = vi.fn()
+    const failing = deps({ fetchNewVideos: vi.fn(async () => pages([], [failed(0, 'tag_shorts')])), reportError }, later)
+    const errorsIn = (): number => m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.filter((e) => e.kind === 'error' && e.note?.includes('tag_shorts')).length ?? 0
+    await runPoll(m.kv, failing, 'poll')
+    const r2 = await runPoll(m.kv, { ...failing, now: () => new Date(later.getTime() + 15 * 60_000) }, 'poll')
+    expect(errorsIn()).toBe(1)
+    expect(r2.note).toContain('new_videos_failed')
+    expect(reportError).toHaveBeenCalledTimes(2)
+    await runPoll(m.kv, deps({}, new Date(later.getTime() + 30 * 60_000)), 'poll')
+    await runPoll(m.kv, { ...failing, now: () => new Date(later.getTime() + 45 * 60_000) }, 'poll')
+    expect(errorsIn()).toBe(2)
   })
 })
 
 describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () => {
-  const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
+  const deleted = deletedInfo
   const hours = (h: number): Date => new Date(T0.getTime() + h * 3600_000)
 
   it('1 回目の 404 は疑いにとどめ、1 時間以上あけた 2 回目の 404 で確定する（1 時間未満では再確認しない）', async () => {
@@ -520,7 +582,7 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
     const burst = [video({ id: 'sm10', registeredAt: at(-3) }), video({ id: 'sm11', registeredAt: at(-2) }), video({ id: 'sm12', registeredAt: at(-1) })]
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(burst)), fetchUserInfo: vi.fn(async () => existing(0)) }), 'poll')
 
-    const gone = vi.fn(async () => deleted)
+    const gone = goneExceptControl()
     await runPoll(m.kv, deps({ fetchUserInfo: gone }, hours(7)), 'poll')
     let author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
     expect(author.status).toBe('existing')
@@ -543,7 +605,7 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
   it('404 の後に存在が確認できれば疑いを外す', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
     const burst = [video({ id: 'sm10', registeredAt: at(-3) }), video({ id: 'sm11', registeredAt: at(-2) }), video({ id: 'sm12', registeredAt: at(-1) })]
-    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(burst)), fetchUserInfo: vi.fn(async () => deleted) }), 'poll')
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(burst)), fetchUserInfo: goneExceptControl() }), 'poll')
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']?.deletionSuspectedAt).toBe(T0.toISOString())
     await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => existing(4)) }, hours(1)), 'poll')
     const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
@@ -551,34 +613,109 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
     expect(author.status).toBe('existing')
     expect(author.followerCount).toBe(4)
     // さらに 1 時間後に 404 が来ても、それは新しい疑いであって確定ではない
-    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, hours(7)), 'poll')
+    await runPoll(m.kv, deps({ fetchUserInfo: goneExceptControl() }, hours(7)), 'poll')
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']?.status).toBe('existing')
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
   })
 
-  it('確認した人数の 80% 以上が 404 なら、その回の退会判定をすべて保留して記録する', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const uploads = Array.from({ length: 6 }, (_, i) => video({ id: `sm${300 + i}`, authorId: String(3100 + i) }))
-    const info = vi.fn(async (id: string) => (id === '3105' ? existing(7) : deleted))
-    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchUserInfo: info }), 'poll')
-    expect(info).toHaveBeenCalledTimes(6)
-    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
-    for (let i = 0; i < 5; i++) expect(tracking.authors[String(3100 + i)]?.deletionSuspectedAt ?? null).toBeNull()
-    // 404 以外の結果はそのまま反映する
-    expect(tracking.authors['3105']?.followerCount).toBe(7)
-    const held = m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')
-    expect(held?.note).toBe('404 5/6')
-    expect(tracking.lastRun?.note).toContain('deletion_held')
-  })
+  describe('404 が出た回の対照（存在が分かっている ID）の確認', () => {
+    const recent = new Date(T0.getTime() - 60 * 60_000).toISOString()
+    /** 追跡中で、少し前に存在を確認した投稿者（対照の候補）を置く */
+    const controlAuthor = (id: string, followerCount: number, lastCheckedAt = recent): TrackedAuthor => ({
+      authorId: id,
+      firstSeenAt: recent,
+      lastPostAt: recent,
+      posts: [{ id: `sm${id}`, title: 't', at: recent, tagDetails: [], ownerVisibility: 'visible' }],
+      status: 'existing',
+      lastCheckedAt,
+      followerCount,
+      nickname: 'n',
+      visibility: 'visible',
+      deletedObservedAt: null,
+      deletionSuspectedAt: null,
+    })
+    const trackingWith = (authors: TrackedAuthor[]): LqngTracking => ({
+      version: 1,
+      lastPollAt: null,
+      lastSweepDate: null,
+      authors: Object.fromEntries(authors.map((a) => [a.authorId, a])),
+      pending: [],
+      unattributed: [],
+      lastRun: null,
+      recentRuns: [],
+      issues: {},
+      updatedAt: recent,
+    })
+    const uploads = (n: number, base: number) => Array.from({ length: n }, (_, i) => video({ id: `sm${base + i}`, authorId: String(base + i) }))
+    const noControlConfig = { ...config, controlUserId: null }
 
-  it('404 が 80% 未満なら通常どおり疑いを記録する', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const uploads = Array.from({ length: 5 }, (_, i) => video({ id: `sm${310 + i}`, authorId: String(3200 + i) }))
-    const info = vi.fn(async (id: string) => (id === '3203' || id === '3204' ? existing(7) : deleted))
-    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchUserInfo: info }), 'poll')
-    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
-    expect(['3200', '3201', '3202'].map((id) => tracking.authors[id]?.deletionSuspectedAt)).toEqual([T0.toISOString(), T0.toISOString(), T0.toISOString()])
-    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'deletion_held') ?? false).toBe(false)
+    it('対照が存在すれば、404 の割合に関係なく進める（確認した全員が 404 でも疑いを記録する）', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig, [LQNG_KV_KEYS.tracking]: trackingWith([controlAuthor('1900', 5000), controlAuthor('1901', 50)]) })
+      const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '1900' || id === '1901' ? existing(5000) : deleted))
+      await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(6, 3100))), fetchUserInfo: info }), 'poll')
+      // 対照はフォロワーの多い順に選ぶ
+      expect(info).toHaveBeenCalledWith('1900')
+      expect(info).not.toHaveBeenCalledWith('1901')
+      const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+      for (let i = 0; i < 6; i++) expect(tracking.authors[String(3100 + i)]?.deletionSuspectedAt).toBe(T0.toISOString())
+      expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'deletion_held') ?? false).toBe(false)
+    })
+
+    it('対照も 404 なら退会判定をすべて保留し、保留した 404 の lastCheckedAt は進めずに次の回で確かめ直す', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig, [LQNG_KV_KEYS.tracking]: trackingWith([controlAuthor('1900', 5000)]) })
+      const allGone = vi.fn(async (): Promise<UserInfo> => deleted)
+      const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(2, 3200))), fetchUserInfo: allGone }), 'poll')
+      expect(allGone).toHaveBeenCalledWith('1900')
+      const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+      for (const id of ['3200', '3201']) {
+        expect(tracking.authors[id]?.deletionSuspectedAt ?? null).toBeNull()
+        expect(tracking.authors[id]?.lastCheckedAt).toBeNull()
+      }
+      expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')?.note).toContain('control_404')
+      expect(r.note).toContain('deletion_held')
+      // API が戻れば、次の回に確かめ直して疑いを記録する
+      const recovered = vi.fn(async (id: string): Promise<UserInfo> => (id === '1900' ? existing(5000) : deleted))
+      await runPoll(m.kv, deps({ fetchUserInfo: recovered }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+      expect(recovered).toHaveBeenCalledWith('3200')
+      expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['3200']?.deletionSuspectedAt).toBe(new Date(T0.getTime() + 15 * 60_000).toISOString())
+    })
+
+    it('確認が 1 人（5 人未満）でも対照を確かめ、対照も 404 なら退会を確定しない', async () => {
+      const suspectedAt = new Date(T0.getTime() - 2 * 3600_000).toISOString()
+      const suspect: TrackedAuthor = {
+        ...controlAuthor('1001', 0, suspectedAt),
+        posts: [0, 1, 2].map((i) => ({ id: `sm${20 + i}`, title: 't', at: at(-10 - i), tagDetails: [], ownerVisibility: 'visible' as const })),
+        deletionSuspectedAt: suspectedAt,
+      }
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig, [LQNG_KV_KEYS.tracking]: trackingWith([suspect, controlAuthor('1900', 5000)]) })
+      await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async (): Promise<UserInfo> => deleted) }), 'poll')
+      const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
+      expect(author.status).toBe('existing')
+      expect(author.deletionSuspectedAt).toBe(suspectedAt)
+      expect(author.lastCheckedAt).toBe(suspectedAt)
+      expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+    })
+
+    it('追跡中に対照が無ければ設定の controlUserId を確かめ、どちらも無ければ保留する', async () => {
+      const withSetting = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const info = goneExceptControl()
+      await runPoll(withSetting.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3300))), fetchUserInfo: info }), 'poll')
+      expect(info).toHaveBeenCalledWith('1999')
+      expect(withSetting.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['3300']?.deletionSuspectedAt).toBe(T0.toISOString())
+
+      const without = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig })
+      await runPoll(without.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3300))), fetchUserInfo: goneExceptControl() }), 'poll')
+      expect(without.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['3300']?.deletionSuspectedAt ?? null).toBeNull()
+      expect(without.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')?.note).toContain('no_control')
+    })
+
+    it('同じ回に存在の確認が取れていれば、対照を別に確かめない', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '3401' ? existing(7) : deleted))
+      await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(2, 3400))), fetchUserInfo: info }), 'poll')
+      expect(info).toHaveBeenCalledTimes(2)
+      expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['3400']?.deletionSuspectedAt).toBe(T0.toISOString())
+    })
   })
 
   describe('退会扱いの投稿者の再確認', () => {
@@ -596,6 +733,7 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
         unattributed: [],
         lastRun: null,
         recentRuns: [],
+        issues: {},
         updatedAt: deletedAt,
       }
       const verdicts: LqngVerdicts = {
@@ -623,17 +761,19 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
       const info = vi.fn(async () => existing(5))
       await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 1)), 'poll')
       expect(info).toHaveBeenCalledWith('1001')
-      // 追跡中の投稿はもう無いので追跡からは外れうるが、残っていれば退会扱いは外れている
+      // 刈り込みは確認より前なので、再確認した回の終わりには追跡に残っていて、退会扱いが外れている
       const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']
-      if (author) {
-        expect(author.status).toBe('existing')
-        expect(author.deletedObservedAt).toBeNull()
-      }
+      expect(author?.status).toBe('existing')
+      expect(author?.deletedObservedAt).toBeNull()
       const verdict = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']
       expect(verdict?.status).toBe('ng')
       expect(verdict?.reasons).toEqual(['A_C'])
       expect(verdict?.deletedObservedAt).toBeNull()
       expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_restored' && e.authorId === '1001')).toBe(true)
+      // 追跡中の投稿はもう無いので、次の回に追跡から外れる（投稿者 NG は残る）
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 2)), 'poll')
+      expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']).toBeUndefined()
+      expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']?.status).toBe('ng')
     })
 
     it('確認待ちの投稿者が多くても、7 日前に確かめた退会扱いの再確認は後回しにし続けない', async () => {
@@ -678,6 +818,45 @@ describe('lqng-poller 保存の順番', () => {
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm95', title: 'て/す/と/ま/ん' })])) }), 'poll')
     const writes = m.ops.filter((op) => op.startsWith('put ') || op.startsWith('delete '))
     expect(writes).toEqual([`put ${LQNG_KV_KEYS.verdicts}`, `put ${LQNG_KV_KEYS.events}`, 'delete lqng:inbox:run1:000001', `put ${LQNG_KV_KEYS.tracking}`])
+  })
+
+  it('判定表は書けて追跡表の前で落ちた回の動画も、次の回に追跡と補完待ちへ戻して補完する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const failingTracking = { ...m.kv, put: async (key: string, value: string) => {
+      if (key === LQNG_KV_KEYS.tracking) throw new Error('kv put failed')
+      await m.kv.put(key, value)
+    } }
+    const uploads = [video({ id: 'sm97', title: 'て/す/と/ま/ん' }), video({ id: 'sm98', authorId: '1002', ownerVisibility: 'hidden' })]
+    // この回は getthumbinfo が一時的に使えず、補完できないまま追跡表の保存で落ちる
+    const noThumb = vi.fn(async (): Promise<ThumbResult> => ({ ok: false, reason: 'unavailable' }))
+    await expect(runPoll(failingTracking, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: noThumb }), 'poll')).rejects.toThrow('kv put failed')
+    // 判定表には残ったが、追跡表は書けていない
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm98?.status).toBe('hold')
+    expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
+
+    // 次の回は新着に出なくても、判定表の動画を追跡と補完待ちに戻して補完する（ロックタグ群で D）
+    const thumb = vi.fn(async (id: string) => (id === 'sm98' ? okThumb(locked('g1', 'g2', 'g3')) : okThumb()))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([])), fetchThumbInfo: thumb }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(thumb.mock.calls.map((c) => c[0]).sort()).toEqual(['sm97', 'sm98'])
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm97'])
+    expect(tracking.authors['1002']?.posts.map((p) => p.id)).toEqual(['sm98'])
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm98?.reasons).toEqual(['D'])
+  })
+
+  it('既知かどうかは追跡だけで見る（判定だけある動画も新着に出れば追跡に入れる）', async () => {
+    const old = new Date(T0.getTime() - 8 * 24 * 3600_000).toISOString() // 追跡期間（7 日）より前
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: { version: 1, authors: {}, videos: { sm99: { status: 'ng', reasons: ['B'], authorId: '1001', title: 't', registeredAt: old, since: old } }, updatedAt: old },
+    })
+    // 追跡期間より古い判定は戻さない
+    await runPoll(m.kv, deps({}), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']).toBeUndefined()
+    // 新着として出てきたら（重なり区間など）、判定があっても追跡に入れる
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm99', registeredAt: at(-1) })])) }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm99'])
   })
 
   it('判定表の保存に失敗したら追跡表は書かず、次回に同じ新着を取り直して判定する', async () => {
@@ -728,10 +907,11 @@ describe('lqng-poller 追跡の刈り込みの順番', () => {
       unattributed: [],
       lastRun: null,
       recentRuns: [],
+      issues: {},
       updatedAt: days(8),
     }
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
-    const info = vi.fn(async (): Promise<UserInfo> => ({ status: 'deleted', followerCount: null, nickname: null }))
+    const info = goneExceptControl()
     await runPoll(m.kv, deps({ fetchUserInfo: info }), 'poll')
     expect(info).toHaveBeenCalledWith('1001')
     const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
@@ -753,7 +933,8 @@ describe('lqng-poller getthumbinfo の失敗の扱い', () => {
       await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => { throw new Error('network') }) }, later(i)), 'poll')
     }
     for (let i = 3; i <= 5; i++) await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => unavailable) }, later(i)), 'poll')
-    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([{ id: 'sm500', authorId: '1001', attempts: 0 }])
+    // 試行回数（attempts）は増えず、一時的な失敗の回数だけを数える
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([{ id: 'sm500', authorId: '1001', attempts: 0, transient: 6 }])
   })
 
   it('確かな失敗（error）は試行回数に数え、上限で諦める', async () => {
@@ -762,6 +943,27 @@ describe('lqng-poller getthumbinfo の失敗の扱い', () => {
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm501' })])), fetchThumbInfo: failing }), 'poll')
     for (let i = 1; i < LIMITS.pendingMaxAttempts; i++) await runPoll(m.kv, deps({ fetchThumbInfo: failing }, later(i)), 'poll')
     expect(failing).toHaveBeenCalledTimes(LIMITS.pendingMaxAttempts)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([])
+  })
+
+  it('一時的に取れなかった動画は待ち行列の末尾に回し、次の回はほかの動画を先に補完する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const uploads = Array.from({ length: 5 }, (_, i) => video({ id: `sm${520 + i}`, authorId: String(5200 + i), registeredAt: at(-10 + i) }))
+    // 1 回目: 先頭 3 本が一時的に失敗して打ち切り（残り 2 本は手を付けない）
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: vi.fn(async () => unavailable) }), 'poll')
+    const pending = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.pending
+    expect(pending.map((p) => p.id)).toEqual(['sm523', 'sm524', 'sm520', 'sm521', 'sm522'])
+    expect(pending.map((p) => p.transient ?? 0)).toEqual([0, 0, 1, 1, 1])
+    // 2 回目: 手を付けていなかった動画から補完する
+    const thumb = vi.fn(async (_id: string) => okThumb())
+    await runPoll(m.kv, deps({ fetchThumbInfo: thumb }, later(1)), 'poll')
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm523', 'sm524', 'sm520', 'sm521', 'sm522'])
+  })
+
+  it('一時的な失敗が上限回数に達した動画は諦める', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm530' })])), fetchThumbInfo: vi.fn(async () => unavailable) }), 'poll')
+    for (let i = 1; i < LIMITS.pendingMaxTransient; i++) await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => unavailable) }, later(i)), 'poll')
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([])
   })
 
@@ -787,10 +989,7 @@ describe('lqng-poller 外部呼び出しの予算', () => {
 
   it('本家ページが全部失敗した回も、送ったページ数を使ったうえで予備の分を足す', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const primary = vi.fn(async () => {
-      throw new NicoPagesFailedError(['t0:tag:p1 nico_page_http_500'], 4)
-    })
-    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: vi.fn(async () => []) }), 'poll')
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => allFailed('nico_page_http_500')), fetchNewVideosFallback: vi.fn(async () => []) }), 'poll')
     expect(r.subrequests).toBe(4 + LIMITS.fallbackCost)
   })
 
@@ -800,5 +999,91 @@ describe('lqng-poller 外部呼び出しの予算', () => {
     const r = await runPoll(m.kv, deps({ fetchNewVideos: fetchNew }), 'poll')
     expect((fetchNew.mock.calls[0] as unknown as [string[], string])[0]).toEqual(['t1', 't2', 't3'])
     expect(r.note).toContain(`poll_tags_capped: 5>${LIMITS.pollTagsMax}`)
+  })
+})
+
+describe('lqng-poller 退会扱いの投稿者の A∧C の付け直し', () => {
+  const observedAt = new Date(T0.getTime() - 60 * 60_000).toISOString()
+  const deletedAuthor = (posts: string[]): TrackedAuthor => ({
+    authorId: '1001',
+    firstSeenAt: observedAt,
+    lastPostAt: posts[posts.length - 1] ?? observedAt,
+    posts: posts.map((postAt, i) => ({ id: `sm${40 + i}`, title: 't', at: postAt, tagDetails: [], ownerVisibility: 'visible' })),
+    status: 'deleted',
+    lastCheckedAt: observedAt,
+    followerCount: null,
+    nickname: 'n',
+    visibility: 'visible',
+    deletedObservedAt: observedAt,
+    deletionSuspectedAt: null,
+  })
+  const tracking = (author: TrackedAuthor): LqngTracking => ({
+    version: 1,
+    lastPollAt: observedAt,
+    lastSweepDate: null,
+    authors: { [author.authorId]: author },
+    pending: [],
+    unattributed: [],
+    lastRun: null,
+    recentRuns: [],
+    issues: {},
+    updatedAt: observedAt,
+  })
+
+  it('判定表から A∧C が消えていても（同時実行の上書きなど）、外部呼び出しなしで付け直す', async () => {
+    const burst = [at(-180), at(-175), at(-170)]
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking(deletedAuthor(burst)) })
+    const info = vi.fn(async () => existing(5))
+    await runPoll(m.kv, deps({ fetchUserInfo: info }), 'poll')
+    expect(info).not.toHaveBeenCalled()
+    const verdict = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']
+    expect(verdict?.reasons).toEqual(['A_C'])
+    expect(verdict?.deletedObservedAt).toBe(observedAt)
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_ng' && e.authorId === '1001')).toBe(true)
+  })
+
+  it('連投でない退会扱いの投稿者には付けない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking(deletedAuthor([at(-600), at(-60)])) })
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})
+
+describe('lqng-poller 判定表を壊さない', () => {
+  it.each([
+    ['形が違う', '{"version":1,"authors":"x","videos":{}}'],
+    ['JSON でない', '{"authors":'],
+  ])('判定表が読めない（%s）ときは上書きせず、追跡表も進めずにエラーを記録する', async (_label, raw) => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    m.store.set(LQNG_KV_KEYS.verdicts, raw)
+    const reportError = vi.fn()
+    const fetchNew = vi.fn(async () => pages([video({ id: 'sm600', title: 'て/す/と/ま/ん' })]))
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: fetchNew, reportError }), 'poll')
+    expect(r.skipped).toBe('verdicts_unreadable')
+    expect(fetchNew).not.toHaveBeenCalled()
+    expect(m.store.get(LQNG_KV_KEYS.verdicts)).toBe(raw)
+    expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
+    expect(m.puts).toEqual([LQNG_KV_KEYS.events])
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items[0]).toMatchObject({ kind: 'error', note: 'verdicts_unreadable' })
+    expect(reportError).toHaveBeenCalledTimes(1)
+    // 続く回は同じエラーを積み直さない（書き込みなし）
+    m.reset()
+    await runPoll(m.kv, deps({ reportError }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(m.puts).toEqual([])
+    expect(reportError).toHaveBeenCalledTimes(2)
+  })
+
+  it('投稿者 NG の数が読み込み時より減る書き込みは問題として返す', () => {
+    const verdicts = (ids: string[]): LqngVerdicts => ({
+      version: 1,
+      authors: Object.fromEntries(ids.map((id) => [id, { status: 'ng' as const, reasons: ['B' as const], since: 's', evidence: [] }])),
+      videos: {},
+      updatedAt: 's',
+    })
+    const tracking = emptyTracking(T0.toISOString())
+    const baseline = captureBaseline({ verdicts: verdicts(['1', '2']), tracking, events: emptyEvents() })
+    expect(verdictsWriteProblem(baseline, verdicts(['1']))).toBe('verdicts_shrank: 2>1')
+    expect(verdictsWriteProblem(baseline, verdicts(['1', '2']))).toBeNull()
+    expect(verdictsWriteProblem(baseline, verdicts(['1', '2', '3']))).toBeNull()
   })
 })

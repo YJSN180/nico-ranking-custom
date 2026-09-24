@@ -2,19 +2,34 @@
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
 // 1 回の実行で: 外部呼び出し ≤ subrequestBudget。KV は内容が変わったキーだけ書く（定常は追跡表の 1 回）。
 // ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
-import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
+import { LQNG_KV_KEYS, LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
-import { AccessLimitedError, MAX_PAGES, NicoPagesFailedError, NICO_PAGE_KINDS, NICO_PAGES_PER_TAG, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from './sources'
+import {
+  AccessLimitedError,
+  formatPageFailure,
+  MAX_PAGES,
+  NICO_PAGE_KINDS,
+  NICO_PAGES_PER_TAG,
+  type NewVideosResult,
+  type PollDeps,
+  type SourceVideo,
+  type ThumbResult,
+  type UserInfo,
+} from './sources'
 import {
   captureBaseline,
+  EVENTS_MAX,
   loadEnabled,
   loadState,
   pushEvent,
   saveState,
+  verdictsWriteProblem,
   type KvLike,
   type LoadedState,
+  type LqngEvent,
+  type LqngEventKind,
   type TrackedAuthor,
   type TrackedPost,
 } from './state'
@@ -35,15 +50,16 @@ export const LIMITS = {
   userRecheckHours: 6,
   /** 退会の確定に要る、1 回目の 404 から 2 回目の確認までの間隔 */
   deletionConfirmMinutes: 60,
-  /** 1 回の確認でこの人数以上を見て、404 がこの割合以上なら退会判定をすべて保留する（API 側の異常対策） */
-  deletionAnomalyMinChecks: 5,
-  deletionAnomalyRatio: 0.8,
+  /** 404 が出た回の対照に使う「最近存在を確認した投稿者」の範囲（時間） */
+  controlFreshHours: 24,
   /** 退会扱いの投稿者を再確認するまでの日数（存在すれば退会扱いを外す） */
   deletedRecheckDays: 7,
   /** 補完に失敗した動画を諦めるまでの試行回数（5xx・通信失敗などの一時的な不調は数えない） */
   pendingMaxAttempts: 3,
   /** getthumbinfo の一時的な不調がこの回数続いたら、上流の障害とみなしてその回の補完を打ち切る */
   thumbUnavailableAbort: 3,
+  /** 一時的な不調で補完できなかった回数の上限（待ち行列の後ろに回しながら数え、上限で諦める） */
+  pendingMaxTransient: 8,
   /**
    * 差分取得の重なり。nvapi の検索インデックスには投稿から数十分以上の反映遅れがあり、
    * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は isKnownVideo で
@@ -144,6 +160,24 @@ class Session {
     this.addNote(error.message)
   }
 
+  /**
+   * 続きうる問題を記録する。注記と監視（reportError）には毎回出し、履歴には内容（signature）が
+   * 前回と変わったときだけ積む（同じ失敗が何日も続いても履歴 500 件を埋めない）
+   */
+  recordIssue(category: string, signature: string, note: string, kind: LqngEventKind, error?: unknown): void {
+    this.addNote(note)
+    if (this.state.tracking.issues[category] !== signature) {
+      pushEvent(this.state.events, { at: this.nowIso, kind, note })
+      this.state.tracking.issues[category] = signature
+    }
+    if (error !== undefined) this.deps.reportError?.(error, category)
+  }
+
+  /** 問題が解消した（次に起きたらまた履歴に積む） */
+  resolveIssue(category: string): void {
+    delete this.state.tracking.issues[category]
+  }
+
   budgetLeft(cost = 1): boolean {
     return this.subrequests + cost <= LIMITS.subrequestBudget
   }
@@ -152,8 +186,11 @@ class Session {
     this.subrequests += cost
   }
 
+  /**
+   * 追跡している動画か（投稿・補完待ち・投稿者 ID の無い動画）。判定表は見ない: 判定表を書けて追跡表の前で
+   * 落ちた回の動画や、バックフィルで判定だけ入った動画を、新着に出たときに追跡へ戻すため
+   */
   isKnownVideo(id: string): boolean {
-    if (Object.hasOwn(this.state.verdicts.videos, id)) return true
     if (this.state.tracking.pending.some((p) => p.id === id)) return true
     if (this.state.tracking.unattributed.some((u) => u.id === id)) return true
     for (const author of Object.values(this.state.tracking.authors)) if (author.posts.some((p) => p.id === id)) return true
@@ -271,60 +308,63 @@ class Session {
   }
 
   /**
-   * 新着を取得して取り込む。主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。
-   * 取得できたときだけ true（false の回は最終取得時刻を進めず、次回に同じ区間を取り直す）
+   * 新着を取得して取り込む。本家タグページの失敗はタグ×種別ごとに扱い、通常動画のページが取れなかった
+   * タグは予備（nvapi）で補う。ショートは nvapi に無いので補えない。
+   * 全タグ×種別を取れた（通常動画は予備で補えた）ときだけ true。false の回は最終取得時刻を進めず、
+   * 次の回に同じ区間を取り直す。取れなかったページは履歴（内容が変わったとき）・注記・監視に出す。
    */
   async ingestNewVideos(sinceIso: string): Promise<boolean> {
     if (this.config.pollTags.length === 0) return true
     // タグ数を抑えて、新着取得のリクエスト数（予算）に上限を設ける
     const tags = this.config.pollTags.slice(0, LIMITS.pollTagsMax)
     if (this.config.pollTags.length > tags.length) this.addNote(`poll_tags_capped: ${this.config.pollTags.length}>${LIMITS.pollTagsMax}`)
-    let primaryError: unknown
+    let result: NewVideosResult
     try {
-      const result = await this.deps.fetchNewVideos(tags, sinceIso)
-      this.spend(result.requests)
-      this.ingest(result.videos)
-      // 一部のページだけ取れなかった回は、取れた分を使う（予備には縮退しない）。
-      // 取れなかったページの動画は次回以降の重なり（sinceOverlapMinutes）で取り直す
-      if (result.failures.length > 0) this.addNote(`new_videos_partial: ${result.failures.join('; ')}`)
-      return true
+      result = await this.deps.fetchNewVideos(tags, sinceIso)
     } catch (error) {
-      // 送ったページ数が分からない失敗は最大で見積もる
-      this.spend(error instanceof NicoPagesFailedError ? error.requests : tags.length * NICO_PAGE_KINDS.length * NICO_PAGES_PER_TAG)
-      if (error instanceof AccessLimitedError) {
-        this.recordAccessLimited(error)
-        return false
+      // 想定外の例外は、全タグ×種別が取れなかったものとして扱う（送ったページ数は最大で見積もる）
+      const reason = messageOf(error)
+      result = {
+        videos: [],
+        failures: tags.flatMap((_, tagIndex) => NICO_PAGE_KINDS.map((kind) => ({ tagIndex, kind, page: 1, reason }))),
+        requests: tags.length * NICO_PAGE_KINDS.length * NICO_PAGES_PER_TAG,
       }
-      primaryError = error
     }
-    const reason = messageOf(primaryError)
-    const fallback = this.deps.fetchNewVideosFallback
-    if (fallback) {
-      // 原因は履歴に残す
-      pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
-      this.addNote(`fallback: ${reason}`)
-      this.spend(LIMITS.fallbackCost)
-      try {
-        this.ingest(await fallback(tags, sinceIso))
-        return true
-      } catch (fallbackError) {
-        if (fallbackError instanceof AccessLimitedError) {
-          this.recordAccessLimited(fallbackError)
-          return false
+    this.spend(result.requests)
+    this.ingest(result.videos)
+    if (result.failures.length === 0) {
+      this.resolveIssue('new_videos')
+      return true
+    }
+    let complete = !result.failures.some((f) => f.kind !== 'tag')
+    const parts = result.failures.map(formatPageFailure)
+    let fallbackFailure: unknown
+    // 通常動画のページが取れなかったタグは予備（nvapi）で補う
+    const regularFailed = Array.from(new Set(result.failures.filter((f) => f.kind === 'tag').map((f) => f.tagIndex))).sort((a, b) => a - b)
+    if (regularFailed.length > 0) {
+      const label = `fallback(${regularFailed.map((i) => `t${i}`).join(',')})`
+      const fallback = this.deps.fetchNewVideosFallback
+      if (!fallback) {
+        complete = false
+        parts.push(`${label}: unavailable`)
+      } else {
+        this.spend(LIMITS.fallbackCost)
+        try {
+          this.ingest(await fallback(regularFailed.map((i) => tags[i]).filter((t): t is string => t !== undefined), sinceIso))
+          parts.push(`${label}: ok`)
+        } catch (error) {
+          complete = false
+          fallbackFailure = error
+          if (error instanceof AccessLimitedError) this.recordAccessLimited(error)
+          parts.push(`${label}: ${messageOf(error)}`)
         }
-        this.failNewVideos(`fallback: ${messageOf(fallbackError)}`, fallbackError)
-        return false
       }
     }
-    this.failNewVideos(reason, primaryError)
-    return false
-  }
-
-  /** 新着を取れなかった回の記録（実行は止めずに補完・投稿者確認・受け箱の合流を続ける） */
-  private failNewVideos(reason: string, error: unknown): void {
-    pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_failed: ${reason}` })
-    this.addNote(`new_videos_failed: ${reason}`)
-    this.deps.reportError?.(error, 'new_videos')
+    // 同じ失敗かどうかは、失敗したタグ×種別と予備の成否で見る（理由の細かな違いでは履歴に積み直さない）
+    const signature = [...new Set(result.failures.map((f) => `t${f.tagIndex}:${f.kind}`))].sort().join(',') + (fallbackFailure === undefined ? '' : '|fallback')
+    const note = `new_videos_failed: ${parts.join('; ')}`
+    this.recordIssue('new_videos', signature, note, 'error', fallbackFailure instanceof Error ? fallbackFailure : new Error(`new_videos_failed: ${signature}`))
+    return complete
   }
 
   /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */
@@ -352,13 +392,18 @@ class Session {
     return !!author && isFrequent(author.posts, this.config.freq)
   }
 
-  /** getthumbinfo でロック状態を補完し、再判定する。連投中の投稿者の動画を先に処理する */
+  /**
+   * getthumbinfo でロック状態を補完し、再判定する。連投中の投稿者の動画を先に、一時的な不調で
+   * 補完できなかった動画を後に処理する（同じ動画が失敗し続けて待ち行列の先頭に居座らないように）
+   */
   async enrichPending(): Promise<void> {
     const pending = this.state.tracking.pending
       .map((item, index) => ({ item, index, priority: this.isFrequentAuthor(item.authorId) ? 0 : 1 }))
-      .sort((a, b) => a.priority - b.priority || a.index - b.index)
+      .sort((a, b) => a.priority - b.priority || (a.item.transient ?? 0) - (b.item.transient ?? 0) || a.index - b.index)
       .map((x) => x.item)
     const keep: typeof pending = []
+    /** 一時的な不調で補完できなかった動画（待ち行列の末尾に回す） */
+    const retryLater: typeof pending = []
     let processed = 0
     let unavailableInRow = 0
     for (let i = 0; i < pending.length; i++) {
@@ -384,8 +429,10 @@ class Session {
         result = { ok: false, reason: 'unavailable' } // 通信失敗・タイムアウト
       }
       if (!result.ok && result.reason === 'unavailable') {
-        // 上流の一時的な不調は試行回数に数えずに持ち越す。続くようなら障害とみなして打ち切る
-        keep.push(item)
+        // 上流の一時的な不調は試行回数に数えず、末尾に回して持ち越す（上限を超えたら諦める）。
+        // 続くようなら障害とみなして打ち切る
+        const transient = (item.transient ?? 0) + 1
+        if (transient < LIMITS.pendingMaxTransient) retryLater.push({ ...item, transient })
         if (++unavailableInRow >= LIMITS.thumbUnavailableAbort) {
           keep.push(...pending.slice(i + 1))
           this.addNote('getthumbinfo_unavailable')
@@ -406,7 +453,7 @@ class Session {
       if (result.reason === 'deleted') continue // 動画自体が消えた
       if (item.attempts + 1 < LIMITS.pendingMaxAttempts) keep.push({ ...item, attempts: item.attempts + 1 })
     }
-    this.state.tracking.pending = keep
+    this.state.tracking.pending = [...keep, ...retryLater]
   }
 
   /** 確認の順番（小さいほど先）。確認しない投稿者は null */
@@ -429,8 +476,8 @@ class Session {
 
   /**
    * ユーザー情報 API で存在・フォロワー数を確認する。退会（NOT_FOUND の 404）は 1 回目を疑いとし、
-   * 時間を置いた 2 回目で確定して A∧C を判定する。1 回の確認で 404 の割合が異常に高いときは、
-   * その回の退会判定をすべて保留して記録する。
+   * 時間を置いた 2 回目で確定して A∧C を判定する。404 が出た回は、API が存在するユーザーに 200 を
+   * 返しているかを対照で確かめ、確かめられなければその回の 404 をすべて保留する（次の回に確かめ直す）。
    */
   async checkAuthors(): Promise<void> {
     const nowMs = this.now.getTime()
@@ -442,7 +489,8 @@ class Session {
       .slice(0, LIMITS.usersPerRun)
     const results: Array<{ author: TrackedAuthor; info: UserInfo }> = []
     for (const author of candidates) {
-      if (!this.budgetLeft()) break
+      // 404 が出たときの対照の確認に 1 回分を残す
+      if (!this.budgetLeft(2)) break
       this.spend()
       try {
         results.push({ author, info: await this.deps.fetchUserInfo(author.authorId) })
@@ -454,23 +502,68 @@ class Session {
         // 通信の失敗などは次回に確かめ直す
       }
     }
-    // 退会扱いの再確認は 404 が当然なので割合に数えない
-    const judged = results.filter((r) => r.author.status !== 'deleted' && r.info.status !== 'error')
-    const notFound = judged.filter((r) => r.info.status === 'deleted').length
-    const holdDeletions = judged.length >= LIMITS.deletionAnomalyMinChecks && notFound >= judged.length * LIMITS.deletionAnomalyRatio
-    if (holdDeletions) {
-      pushEvent(this.state.events, { at: this.nowIso, kind: 'deletion_held', note: `404 ${notFound}/${judged.length}` })
-      this.addNote(`deletion_held: 404 ${notFound}/${judged.length}`)
+    // 退会扱いの再確認は 404 が当然なので、対照の確認の対象にしない
+    const notFound = results.filter((r) => r.author.status !== 'deleted' && r.info.status === 'deleted').length
+    const hold = notFound > 0 ? await this.verifyUserApi(results) : null
+    if (hold !== null) {
+      this.recordIssue('deletion_held', hold, `deletion_held: ${hold} (404 ${notFound}/${results.length})`, 'deletion_held', hold === 'control_404' ? new Error('deletion_held: control_404') : undefined)
+    } else if (notFound > 0) {
+      this.resolveIssue('deletion_held')
     }
     for (const { author, info } of results) {
       this.usersChecked++
+      // 保留した 404 は確かめなかったものとして扱い、lastCheckedAt を進めずに次の回に確かめ直す
+      const held = hold !== null && info.status === 'deleted' && author.status !== 'deleted'
+      if (held) continue
       author.lastCheckedAt = this.nowIso
       if (info.status === 'error') continue
       if (info.status === 'existing') this.markExisting(author, info)
-      else if (!holdDeletions) this.markNotFound(author, nowMs)
+      else this.markNotFound(author, nowMs)
       // フォロワー数・状態が分かったので、この投稿者の動画を判定し直す（昇格条件・保留信号）
       for (const post of author.posts) this.applyVideo(postToVideo(post, author.authorId))
     }
+  }
+
+  /**
+   * 404 が出た回に、ユーザー情報 API が存在するユーザーに 200 を返しているかを確かめる。
+   * 同じ回に存在の確認が取れていればそれで足りる。無ければ存在が分かっている対照を 1 件確かめる
+   * （API の変更で全員が 404 になったときに、実在の連投者を A∧C で恒久 NG にしないため）。
+   * 問題が無ければ null、保留するならその理由を返す。
+   */
+  private async verifyUserApi(results: ReadonlyArray<{ author: TrackedAuthor; info: UserInfo }>): Promise<string | null> {
+    if (results.some((r) => r.info.status === 'existing')) return null
+    const control = this.pickControl(new Set(results.map((r) => r.author.authorId)))
+    if (control === null) return 'no_control'
+    if (!this.budgetLeft()) return 'no_budget'
+    this.spend()
+    let info: UserInfo
+    try {
+      info = await this.deps.fetchUserInfo(control)
+    } catch (error) {
+      if (error instanceof AccessLimitedError) {
+        this.recordAccessLimited(error)
+        return 'control_access_limited'
+      }
+      return 'control_error'
+    }
+    this.usersChecked++
+    if (info.status !== 'existing') return info.status === 'deleted' ? 'control_404' : 'control_error'
+    const tracked = Object.hasOwn(this.state.tracking.authors, control) ? this.state.tracking.authors[control] : undefined
+    if (tracked) {
+      tracked.lastCheckedAt = this.nowIso
+      tracked.followerCount = info.followerCount
+    }
+    return null
+  }
+
+  /** 対照: 最近存在を確認した追跡中の投稿者（フォロワーの多い順）。いなければ設定の controlUserId */
+  private pickControl(exclude: ReadonlySet<string>): string | null {
+    const nowMs = this.now.getTime()
+    const checkedMs = (a: TrackedAuthor): number => (a.lastCheckedAt ? new Date(a.lastCheckedAt).getTime() : Number.NEGATIVE_INFINITY)
+    const tracked = Object.values(this.state.tracking.authors)
+      .filter((a) => a.status === 'existing' && !a.deletionSuspectedAt && isUserId(a.authorId) && !exclude.has(a.authorId) && nowMs - checkedMs(a) <= LIMITS.controlFreshHours * HOUR_MS)
+      .sort((x, y) => (y.followerCount ?? -1) - (x.followerCount ?? -1) || checkedMs(y) - checkedMs(x))
+    return tracked[0]?.authorId ?? this.config.controlUserId ?? null
   }
 
   private markExisting(author: TrackedAuthor, info: UserInfo): void {
@@ -506,11 +599,49 @@ class Session {
     if (observation && evaluateDeletion(observation, this.config).ng) this.setAuthorNg(author.authorId, ['A_C'], null)
   }
 
+  /**
+   * 退会扱いなのに投稿者 NG が無い追跡中の投稿者に、A∧C の評価をかけ直す（外部呼び出しなし）。
+   * 退会を確定した回の判定表の書き込みが、同時に走った別の実行に上書きされても、A∧C を失わないため。
+   */
+  reevaluateDeletedAuthors(): void {
+    for (const author of Object.values(this.state.tracking.authors)) {
+      if (author.status !== 'deleted' || Object.hasOwn(this.state.verdicts.authors, author.authorId)) continue
+      const observation = toObservation(author)
+      if (observation && evaluateDeletion(observation, this.config).ng) this.setAuthorNg(author.authorId, ['A_C'], null)
+    }
+  }
+
   /** 退会扱いのまま、まだ再確認していない（投稿が古くなっても追跡から外さない） */
   private awaitingDeletedRecheck(author: TrackedAuthor): boolean {
     if (author.status !== 'deleted' || !author.deletedObservedAt) return false
     if (!author.lastCheckedAt) return true
     return new Date(author.lastCheckedAt).getTime() - new Date(author.deletedObservedAt).getTime() < LIMITS.deletedRecheckDays * DAY_MS
+  }
+
+  /**
+   * 判定表にあって追跡に無い動画（NG・保留）のうち追跡期間内のものを、追跡と補完待ちに戻す。
+   * 判定表を書けて追跡表の前で落ちた回の動画が、投稿頻度にも補完（ロックタグ群）にも数えられなくなるのを防ぐ。
+   */
+  restoreUntrackedVerdicts(): void {
+    const nowMs = this.now.getTime()
+    const trackMs = this.config.trackDays * DAY_MS
+    const tracked = new Set<string>()
+    for (const author of Object.values(this.state.tracking.authors)) for (const post of author.posts) tracked.add(post.id)
+    for (const item of this.state.tracking.pending) tracked.add(item.id)
+    for (const item of this.state.tracking.unattributed) tracked.add(item.id)
+    for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
+      if (tracked.has(id) || verdict.status === 'released') continue
+      const atMs = new Date(verdict.registeredAt).getTime()
+      if (!Number.isFinite(atMs) || nowMs - atMs > trackMs) continue
+      if (verdict.authorId === null) {
+        this.state.tracking.unattributed.push({ id, at: verdict.registeredAt })
+        continue
+      }
+      const author = this.ensureAuthor(verdict.authorId)
+      author.posts.push({ id, title: verdict.title, at: verdict.registeredAt, tagDetails: null, ownerVisibility: null })
+      if (verdict.registeredAt > author.lastPostAt) author.lastPostAt = verdict.registeredAt
+      this.state.tracking.pending.push({ id, authorId: verdict.authorId, attempts: 0 })
+    }
   }
 
   /**
@@ -547,6 +678,20 @@ class Session {
   }
 }
 
+/**
+ * 判定表を書けない回（読めない・投稿者 NG が減る）: 判定表・追跡表・受け箱には触れず、エラーだけを
+ * 履歴に残して監視に出す。追跡表を進めないので、直ったあとの回が同じ区間と受け箱を取り直す。
+ * 同じエラーが続く間は履歴に積み直さない（書き込みなし）
+ */
+async function refuseSave(kv: KvLike, deps: PollDeps, loadedEvents: readonly LqngEvent[], lastRun: LoadedState['events']['lastRun'], at: string, note: string): Promise<number> {
+  deps.reportError?.(new Error(note), 'verdicts')
+  if (loadedEvents[0]?.kind === 'error' && loadedEvents[0].note === note) return 0
+  const event: LqngEvent = { at, kind: 'error', note }
+  const items = [event, ...loadedEvents].slice(0, EVENTS_MAX)
+  await kv.put(LQNG_KV_KEYS.events, JSON.stringify({ version: 1, items, lastRun }))
+  return 1
+}
+
 function yesterdayJst(now: Date): string {
   const jst = new Date(now.getTime() + 9 * HOUR_MS)
   jst.setUTCDate(jst.getUTCDate() - 1)
@@ -561,18 +706,28 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   if (!(await loadEnabled(kv))) return { ...base, skipped: 'disabled' }
   const state = await loadState(kv, nowIso)
   if (!state.config.enabled) return { ...base, skipped: 'disabled' }
+  // 判定表が読めないときは空として扱わない（空で上書きすると投稿者 NG をすべて失う）
+  if (!state.verdictsReadable) {
+    const kvWrites = await refuseSave(kv, deps, state.events.items, state.events.lastRun, nowIso, 'verdicts_unreadable')
+    return { ...base, skipped: 'verdicts_unreadable', kvWrites, note: 'verdicts_unreadable' }
+  }
   const sweepDate = yesterdayJst(now)
   if (mode === 'sweep') {
     if (!state.config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
     if (state.tracking.lastSweepDate === sweepDate) return { ...base, skipped: 'already_swept' }
   }
   const baseline = captureBaseline(state)
+  /** 読み込み時の履歴（判定表を書けない回は、この回に積んだ出来事を捨ててエラーだけを残す） */
+  const loadedEvents = state.events.items.slice()
   const session = new Session(state, deps, now)
   // バックフィルの確定分を先に合流する（以降の判定は合流後の判定表を見る）
   const inbox = await readInbox(kv, LIMITS.inboxPerRun)
   session.mergeInbox(inbox)
-  // 判定に使う前に、追跡期間を過ぎた投稿を刈り込む（停止明けに古い連投で C / A∧C を成立させない）
+  // 判定表にだけある動画を追跡に戻し、判定に使う前に追跡期間を過ぎた投稿を刈り込む
+  // （停止明けに古い連投で C / A∧C を成立させない）
+  session.restoreUntrackedVerdicts()
   session.expireAndPrune()
+  session.reevaluateDeletedAuthors()
 
   if (mode === 'sweep' && state.config.sweepGenre) {
     session.spend(LIMITS.sweepCost)
@@ -602,6 +757,11 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     usersChecked: session.usersChecked,
     subrequests: session.subrequests,
     ...(session.note ? { note: session.note } : {}),
+  }
+  const problem = verdictsWriteProblem(baseline, state.verdicts)
+  if (problem !== null) {
+    const kvWrites = await refuseSave(kv, deps, loadedEvents, state.events.lastRun, nowIso, problem)
+    return { ...base, ...summary, skipped: 'verdicts_shrank', kvWrites, note: problem }
   }
   const kvWrites = await saveState(
     kv,

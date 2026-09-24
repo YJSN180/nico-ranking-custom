@@ -61,6 +61,15 @@ class FoundCounter {
 }
 
 const countOf = (deltas: BackfillDeltas): { authors: number; videos: number } => ({ authors: Object.keys(deltas.authors).length, videos: Object.keys(deltas.videos).length })
+
+/**
+ * 確定の応答。旧い Worker（ロック方式の確定）は authorsAdded / videosAdded を返し、
+ * ポーリングとロックが重なると skipped: 'locked' を返す
+ */
+type CommitResponse = Pick<BackfillCommitResult, 'skipped'> & Partial<Pick<BackfillCommitResult, 'authors' | 'videos'>> & { authorsAdded?: number; videosAdded?: number }
+
+/** 旧い Worker がロック中と答えたときに送り直す回数（間は 5 秒ずつ延ばす） */
+const COMMIT_LOCKED_RETRIES = 6
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 export async function runBackfillDriver(options: BackfillDriverOptions, io: BackfillDriverIo): Promise<BackfillDriverResult> {
@@ -77,13 +86,22 @@ export async function runBackfillDriver(options: BackfillDriverOptions, io: Back
   const commitPending = async (): Promise<void> => {
     const { authors, videos } = countOf(pending)
     if (authors === 0 && videos === 0) return
-    const r = await io.call<BackfillCommitResult>('backfill-commit', { runId: options.runId, seq: seq + 1, deltas: pending })
+    const body = { runId: options.runId, seq: seq + 1, deltas: pending }
+    let r = await io.call<CommitResponse>('backfill-commit', body)
+    // 旧い Worker（ロック方式の確定）がポーリングと重なった: 少し待って同じ連番で送り直す
+    for (let attempt = 1; r.skipped === 'locked' && attempt <= COMMIT_LOCKED_RETRIES; attempt++) {
+      await io.sleep(5_000 * attempt)
+      r = await io.call<CommitResponse>('backfill-commit', body)
+    }
+    if (r.skipped === 'locked') {
+      throw new Error('commit skipped: locked. The Worker still uses the old lock-based commit and stayed locked; deploy the current lqng-poller before re-running the backfill')
+    }
     if (r.skipped && r.skipped !== 'empty') throw new Error(`commit skipped: ${r.skipped}`)
     seq++
     commits++
     pending = emptyDeltas()
     sinceCommit = 0
-    io.log(`commit #${seq}: queued authors ${r.authors} videos ${r.videos} (sent ${authors}/${videos}; merged into the verdict table by the next poll)`)
+    io.log(`commit #${seq}: queued authors ${r.authors ?? r.authorsAdded ?? '?'} videos ${r.videos ?? r.videosAdded ?? '?'} (sent ${authors}/${videos}; merged into the verdict table by the next poll)`)
   }
 
   io.log(
@@ -113,8 +131,8 @@ export async function runBackfillDriver(options: BackfillDriverOptions, io: Back
         break
       }
       if (sinceCommit >= options.commitEvery) await commitPending()
-      // アクセス制限を検知したら十分に間を空ける
-      await io.sleep(r.note?.includes('access limited') ? 60_000 : options.sleepMs)
+      // アクセス制限や退会判定の保留（ユーザー情報 API の異常の疑い）を検知したら十分に間を空ける
+      await io.sleep(r.note?.includes('access limited') || r.note?.includes('deletion_held') ? 60_000 : options.sleepMs)
     }
   } catch (error) {
     scanFailed = true

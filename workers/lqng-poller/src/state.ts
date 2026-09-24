@@ -41,7 +41,10 @@ export interface TrackedAuthor {
 export interface PendingVideo {
   id: string
   authorId: string | null
+  /** 確かな失敗（error）の回数。上限で諦める */
   attempts: number
+  /** 一時的な失敗（5xx・通信失敗など）の回数。待ち行列の後ろに回し、上限で諦める */
+  transient?: number
 }
 
 export interface UnattributedVideo {
@@ -82,6 +85,11 @@ export interface LqngTracking {
   lastRun: LqngRunSummary | null
   /** 直近の実行の時刻と注記（新しい順、/status の運用確認用） */
   recentRuns: LqngRecentRun[]
+  /**
+   * 続いている問題（種類 → 内容の要約）。同じ問題が続く間は履歴に積み直さず、内容が変わったときと
+   * 解消後に再発したときだけ積む（注記と監視には毎回出す）
+   */
+  issues: Record<string, string>
   updatedAt: string
 }
 
@@ -124,7 +132,7 @@ export const EVENTS_MAX = 500
 export const RECENT_RUNS_MAX = 40
 
 export function emptyTracking(now: string): LqngTracking {
-  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], unattributed: [], lastRun: null, recentRuns: [], updatedAt: now }
+  return { version: 1, lastPollAt: null, lastSweepDate: null, authors: {}, pending: [], unattributed: [], lastRun: null, recentRuns: [], issues: {}, updatedAt: now }
 }
 
 export function emptyEvents(): LqngEvents {
@@ -158,6 +166,7 @@ export function normalizeTracking(raw: unknown, now: string): LqngTracking {
     unattributed: Array.isArray(raw.unattributed) ? raw.unattributed.filter((u): u is UnattributedVideo => isRecord(u) && typeof u.id === 'string' && typeof u.at === 'string') : [],
     lastRun: isRecord(raw.lastRun) ? (raw.lastRun as unknown as LqngRunSummary) : null,
     recentRuns: normalizeRecentRuns(raw.recentRuns),
+    issues: isRecord(raw.issues) ? Object.fromEntries(Object.entries(raw.issues).filter((e): e is [string, string] => typeof e[1] === 'string')) : {},
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   }
 }
@@ -174,8 +183,17 @@ export function normalizeEvents(raw: unknown): LqngEvents {
 export interface LoadedState {
   config: LqngConfig
   verdicts: LqngVerdicts
+  /** false: 判定表のキーはあるが JSON として読めない・形が違う（空として扱ってはいけない） */
+  verdictsReadable: boolean
   tracking: LqngTracking
   events: LqngEvents
+}
+
+/** 判定表の生の値が読めるか（無いのは初回として読める扱い） */
+function isReadableVerdicts(raw: string | null): boolean {
+  if (raw === null) return true
+  const parsed = parseJson<unknown>(raw, undefined)
+  return isRecord(parsed) && isRecord(parsed.authors) && isRecord(parsed.videos)
 }
 
 /** 設定だけを読む（判定表・追跡表など大きいキーを読まずに済ませたいとき用） */
@@ -198,6 +216,7 @@ export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
   return {
     config: normalizeLqngConfig(parseJson<unknown>(config, null)),
     verdicts: normalizeLqngVerdicts(parseJson<unknown>(verdicts, null)),
+    verdictsReadable: isReadableVerdicts(verdicts),
     tracking: normalizeTracking(parseJson<unknown>(tracking, null), now),
     events: normalizeEvents(parseJson<unknown>(events, null)),
   }
@@ -213,10 +232,26 @@ export interface StateBaseline {
   verdicts: string
   tracking: string
   events: string
+  /** 読み込み時の投稿者 NG の数（書き込みで減らさない） */
+  authorCount: number
 }
 
 export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>): StateBaseline {
-  return { verdicts: contentOf(state.verdicts), tracking: contentOf(state.tracking), events: JSON.stringify(state.events.items) }
+  return {
+    verdicts: contentOf(state.verdicts),
+    tracking: contentOf(state.tracking),
+    events: JSON.stringify(state.events.items),
+    authorCount: Object.keys(state.verdicts.authors).length,
+  }
+}
+
+/**
+ * 判定表を書いてよいか。投稿者 NG は恒久で、この Worker が減らすことは無いので、読み込み時より減る
+ * 書き込みは壊れた判定表・同時実行などの異常として拒否する。問題が無ければ null
+ */
+export function verdictsWriteProblem(baseline: StateBaseline, verdicts: LqngVerdicts): string | null {
+  const count = Object.keys(verdicts.authors).length
+  return count < baseline.authorCount ? `verdicts_shrank: ${baseline.authorCount}>${count}` : null
 }
 
 /**

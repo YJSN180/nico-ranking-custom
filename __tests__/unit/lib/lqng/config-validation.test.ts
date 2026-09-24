@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LQNG_POLL_TAGS_MAX, LQNG_TITLE_NEEDLE_MIN_LENGTH, validateLqngConfigInput } from '@/lib/lqng/config'
+import { LQNG_POLL_TAGS_MAX, LQNG_TITLE_NEEDLE_MIN_LENGTH, normalizeLqngConfig, validateLqngConfigInput } from '@/lib/lqng/config'
 
 // 合成値のみ
 const valid = {
@@ -64,6 +64,16 @@ describe('validateLqngConfigInput', () => {
     expect(validateLqngConfigInput({ ...valid, pollTags: [] })).toEqual(['有効にするにはポーリング対象タグが 1 つ以上必要です'])
     expect(validateLqngConfigInput({ ...valid, enabled: false, pollTags: [] })).toEqual([])
     expect(validateLqngConfigInput({ ...valid, tagGroups: [['a']], lockGroupsMin: 2 })).toEqual(['ロック群の閾値がグループ数を超えています'])
+  })
+
+  it('退会確認の対照（controlUserId）は数字 1〜12 桁だけ受け付け、設定されているときだけ持つ', () => {
+    expect(validateLqngConfigInput({ ...valid, controlUserId: '12345' })).toEqual([])
+    expect(validateLqngConfigInput({ ...valid, controlUserId: null })).toEqual([])
+    expect(validateLqngConfigInput({ ...valid, controlUserId: 'abc' })).toEqual(['退会確認の対照のユーザー ID は数字 1〜12 桁にしてください'])
+    expect(validateLqngConfigInput({ ...valid, controlUserId: 12345 })).toEqual(['退会確認の対照のユーザー ID は数字 1〜12 桁にしてください'])
+    expect(normalizeLqngConfig({ ...valid, controlUserId: ' 12345 ' }).controlUserId).toBe('12345')
+    expect('controlUserId' in normalizeLqngConfig(valid)).toBe(false)
+    expect('controlUserId' in normalizeLqngConfig({ ...valid, controlUserId: 'channel/ch1' })).toBe(false)
   })
 
   it('オブジェクトでなければ形式の問題として返す', () => {

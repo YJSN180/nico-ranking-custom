@@ -46,6 +46,7 @@ function setup() {
     unattributed: [],
     lastRun: null,
     recentRuns: [],
+    issues: {},
     updatedAt: '2026-02-01T00:00:00.000Z',
   }
   const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
@@ -76,18 +77,30 @@ describe('lqng-poller /status', () => {
     expect(upstream).not.toHaveBeenCalled()
   })
 
+  const authed = (url: string) => new Request(url, { headers: { Authorization: `Bearer ${AUTH_KEY}` } })
+
+  it('投稿者を指定した問い合わせは /trigger と同じ認証が必要（無い・違えば 401。ID の形式より先に見る）', async () => {
+    const { env } = setup()
+    expect((await fetchWorker(new Request('https://w.test/status?author=1001'), env)).status).toBe(401)
+    expect((await fetchWorker(new Request('https://w.test/status?author=1001', { headers: { Authorization: 'Bearer wrong' } }), env)).status).toBe(401)
+    expect((await fetchWorker(new Request('https://w.test/status?author=constructor'), env)).status).toBe(401)
+    expect((await fetchWorker(new Request('https://w.test/status?author=1001'), { LQNG_KV: env.LQNG_KV })).status).toBe(401)
+    // 投稿者を指定しない件数だけの問い合わせは認証なしのまま
+    expect((await fetchWorker(new Request('https://w.test/status'), env)).status).toBe(200)
+  })
+
   it.each(['constructor', '__proto__', 'toString', 'abc', '1234567890123', 'channel/ch', 'channel/chx1', 'ch55', '12 34', ''])(
     'author=%s は 400 を返す',
     async (author) => {
       const { env } = setup()
-      const res = await fetchWorker(new Request(`https://w.test/status?author=${encodeURIComponent(author)}`), env)
+      const res = await fetchWorker(authed(`https://w.test/status?author=${encodeURIComponent(author)}`), env)
       expect(res.status).toBe(400)
     }
   )
 
   it('数字の ID と channel/ch＋数字は受け付け、追跡・判定の件数だけを返す', async () => {
     const { env } = setup()
-    const user = await fetchWorker(new Request('https://w.test/status?author=1001'), env)
+    const user = await fetchWorker(authed('https://w.test/status?author=1001'), env)
     expect(user.status).toBe(200)
     const userBody = (await user.json()) as { author: { id: string; tracked: { posts: number; lockedGroupsMax: number } | null; verdict: unknown } }
     expect(userBody.author.id).toBe('1001')
@@ -95,12 +108,12 @@ describe('lqng-poller /status', () => {
     expect(userBody.author.tracked?.lockedGroupsMax).toBe(1)
     expect(userBody.author.verdict).toBeNull()
 
-    const channel = await fetchWorker(new Request(`https://w.test/status?author=${encodeURIComponent('channel/ch55')}`), env)
+    const channel = await fetchWorker(authed(`https://w.test/status?author=${encodeURIComponent('channel/ch55')}`), env)
     expect(channel.status).toBe(200)
     const channelBody = (await channel.json()) as { author: { id: string; tracked: unknown } }
     expect(channelBody.author.tracked).not.toBeNull()
 
-    const unknown = await fetchWorker(new Request('https://w.test/status?author=2002'), env)
+    const unknown = await fetchWorker(authed('https://w.test/status?author=2002'), env)
     const unknownBody = (await unknown.json()) as { author: { tracked: unknown; verdict: unknown } }
     expect(unknownBody.author.tracked).toBeNull()
     expect(unknownBody.author.verdict).toBeNull()
@@ -122,6 +135,7 @@ describe('lqng-poller /status（直近の実行）', () => {
         { at: '2026-02-01T00:15:00.000Z', mode: 'poll' },
         { at: '2026-02-01T00:00:00.000Z', mode: 'poll', note: 'fallback: x' },
       ],
+      issues: {},
       updatedAt: '2026-02-01T00:15:00.000Z',
     }
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking, [LQNG_KV_KEYS.events]: { version: 1, items: [], lastRun: null } })
@@ -134,6 +148,43 @@ describe('lqng-poller /status（直近の実行）', () => {
       { at: '2026-02-01T00:00:00.000Z', kind: 'poll', note: 'fallback: x' },
     ])
     expect(body.lockHeld).toBeUndefined()
+  })
+})
+
+describe('lqng-poller /trigger?mode=backfill-commit', () => {
+  const commit = (body: unknown) =>
+    new Request('https://w.test/trigger?mode=backfill-commit', { method: 'POST', headers: { Authorization: `Bearer ${AUTH_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const deltas = { authors: { '7001': { status: 'ng', reasons: ['A_C'], since: 's', evidence: [] } }, videos: {} }
+
+  it('runId・連番を送らない旧い駆動スクリプトの確定も、受け箱の別々のキーに置く', async () => {
+    const { m, env } = setup()
+    const first = await fetchWorker(commit({ deltas }), env)
+    const second = await fetchWorker(commit({ deltas }), env)
+    expect(first.status).toBe(200)
+    const keys = [(await first.json()) as { key: string }, (await second.json()) as { key: string }].map((b) => b.key)
+    expect(keys.every((k) => /^lqng:inbox:legacy-[0-9a-z]+-[0-9a-f]{8}:000000$/.test(k))).toBe(true)
+    expect(new Set(keys).size).toBe(2)
+    expect(m.puts.filter((k) => k.startsWith('lqng:inbox:'))).toEqual(keys)
+    expect(m.store.has(LQNG_KV_KEYS.verdicts)).toBe(false)
+  })
+
+  it('不正な runId・連番は 400 で、何も書かない', async () => {
+    const { m, env } = setup()
+    const res = await fetchWorker(commit({ deltas, runId: 'a:b', seq: 1 }), env)
+    expect(res.status).toBe(400)
+    expect(m.puts).toEqual([])
+  })
+})
+
+describe('lqng-poller /trigger?mode=probe（対象タグの上限）', () => {
+  it('対象タグはポーリングと同じ上限（3 つ）までしか取りに行かない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, pollTags: ['t1', 't2', 't3', 't4', 't5'] } })
+    const upstream = vi.fn(async (_url: string) => new Response(pageHtml([]), { status: 200 }))
+    vi.stubGlobal('fetch', upstream)
+    const res = await fetchWorker(new Request('https://w.test/trigger?mode=probe&source=pages', { method: 'POST', headers: { Authorization: `Bearer ${AUTH_KEY}` } }), { LQNG_KV: m.kv, WORKER_AUTH_KEY: AUTH_KEY })
+    expect(res.status).toBe(200)
+    const tags = new Set(upstream.mock.calls.map((c) => decodeURIComponent(new URL(c[0]).pathname.split('/').pop() ?? '')))
+    expect(Array.from(tags)).toEqual(['t1', 't2', 't3'])
   })
 })
 

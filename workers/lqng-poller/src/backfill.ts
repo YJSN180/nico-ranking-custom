@@ -10,6 +10,7 @@
 //   含まれる）に通った候補だけ getthumbinfo で補完して判定する。
 //   過去分は削除時刻が分からないため、A∧C の「投稿から 7 日以内の削除」は「現在削除済み」で代用する
 //   （実データ検証と同じ評価）。
+import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { containsAnyNormalized } from '../../../lib/lqng/normalize'
 import { evaluateVideo } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngPost, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
@@ -230,8 +231,8 @@ class BackfillSession {
     readonly nowIso: string
   ) {}
 
-  budgetLeft(): boolean {
-    return this.subrequests < BACKFILL_LIMITS.subrequestBudget
+  budgetLeft(cost = 1): boolean {
+    return this.subrequests + cost <= BACKFILL_LIMITS.subrequestBudget
   }
 
   isAuthorNg(authorId: string | null): boolean {
@@ -360,32 +361,69 @@ class BackfillSession {
     }
   }
 
+  /**
+   * 連投の投稿者の存在を確かめ、退会（NOT_FOUND の 404）なら A∧C にする。404 が出た呼び出しでは、
+   * ポーリングと同じく API が存在するユーザーに 200 を返しているかを対照で確かめ、確かめられなければ
+   * その呼び出しの 404 は確定せず、待ち行列に戻して次の呼び出しで確かめ直す。
+   */
   async checkUsers(deps: BackfillDeps): Promise<void> {
+    const batch: Array<{ authorId: string; info: UserInfo }> = []
     let checked = 0
-    while (this.cursor.pendingUsers.length > 0 && checked < BACKFILL_LIMITS.usersPerCall && this.budgetLeft()) {
-      const authorId = this.cursor.pendingUsers.shift()!
+    // 404 が出たときの対照の確認に 1 回分を残す
+    while (checked < BACKFILL_LIMITS.usersPerCall && this.budgetLeft(2)) {
+      const authorId = this.cursor.pendingUsers.shift()
+      if (authorId === undefined) break
       if (this.isAuthorNg(authorId) || this.cursor.checked[authorId]) continue
       this.subrequests++
       checked++
-      let info: UserInfo
       try {
-        info = await deps.fetchUserInfo(authorId)
+        batch.push({ authorId, info: await deps.fetchUserInfo(authorId) })
       } catch (error) {
         if (error instanceof AccessLimitedError) {
           this.cursor.pendingUsers.unshift(authorId)
           this.note = error.message
-          return
+          break
         }
+      }
+    }
+    const hold = batch.some((b) => b.info.status === 'deleted') ? await this.verifyUserApi(deps, batch) : null
+    if (hold !== null) this.note = this.note ? `${this.note}; deletion_held: ${hold}` : `deletion_held: ${hold}`
+    for (const { authorId, info } of batch) {
+      const status = info.status
+      if (status === 'error') continue
+      if (status === 'deleted' && hold !== null) {
+        this.cursor.pendingUsers.push(authorId)
         continue
       }
-      if (info.status === 'error') continue
       this.cursor.stats.usersChecked++
-      this.cursor.checked[authorId] = { status: info.status, followerCount: info.followerCount, nickname: info.nickname }
-      if (info.status === 'deleted') {
-        this.addAuthorNg(authorId, ['A_C'], this.cursor.evidence[authorId] ?? [])
-      }
+      this.cursor.checked[authorId] = { status, followerCount: info.followerCount, nickname: info.nickname }
+      if (status === 'deleted') this.addAuthorNg(authorId, ['A_C'], this.cursor.evidence[authorId] ?? [])
       delete this.cursor.evidence[authorId]
     }
+  }
+
+  /** 404 が出た呼び出しで、API が存在するユーザーに 200 を返しているか確かめる。問題なければ null、保留ならその理由 */
+  private async verifyUserApi(deps: BackfillDeps, batch: ReadonlyArray<{ authorId: string; info: UserInfo }>): Promise<string | null> {
+    if (batch.some((b) => b.info.status === 'existing')) return null
+    const control = this.pickControl(new Set(batch.map((b) => b.authorId)))
+    if (control === null) return 'no_control'
+    if (!this.budgetLeft()) return 'no_budget'
+    this.subrequests++
+    try {
+      const info = await deps.fetchUserInfo(control)
+      if (info.status === 'existing') return null
+      return info.status === 'deleted' ? 'control_404' : 'control_error'
+    } catch (error) {
+      return error instanceof AccessLimitedError ? 'control_access_limited' : 'control_error'
+    }
+  }
+
+  /** 対照: 走査中に存在を確認した投稿者（フォロワーの多い順）。いなければ設定の controlUserId */
+  private pickControl(exclude: ReadonlySet<string>): string | null {
+    const known = Object.entries(this.cursor.checked)
+      .filter(([id, c]) => c.status === 'existing' && isUserId(id) && !exclude.has(id))
+      .sort((x, y) => (y[1].followerCount ?? -1) - (x[1].followerCount ?? -1))
+    return known[0]?.[0] ?? this.config.controlUserId ?? null
   }
 
   async enrichThumbs(deps: BackfillDeps): Promise<void> {
@@ -444,7 +482,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
     nowIso
   )
   cursor.stats.calls++
-  const tags = state.config.pollTags
+  // ポーリングと同じく、対象タグは上限までにする（Snapshot の OR 条件と本家ページの巡回の両方）
+  const tags = state.config.pollTags.slice(0, LQNG_POLL_TAGS_MAX)
   const pages = Math.max(1, Math.min(BACKFILL_LIMITS.pagesMax, Math.floor(options.pages ?? BACKFILL_LIMITS.pagesDefault)))
   for (let i = 0; i < pages && !windowsExhausted(cursor, tags.length) && session.budgetLeft(); i++) {
     session.subrequests++
