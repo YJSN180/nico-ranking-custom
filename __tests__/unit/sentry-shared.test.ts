@@ -455,6 +455,83 @@ describe('scrubEvent: nothing typed by the user reaches Sentry', () => {
   })
 })
 
+describe('browser-only places where typed text can appear', () => {
+  const base = { span_id: 's', trace_id: 't', start_timestamp: 0, data: {} }
+
+  it('redacts the page URL that the SDK rewrites to app:/// in stack frames and keeps script files', () => {
+    const event = scrubEvent({
+      exception: {
+        values: [
+          {
+            type: 'Error',
+            value: 'boom',
+            stacktrace: {
+              frames: [
+                { filename: `app:///?genre=all&tag=${enc(MARKER_JA)}`, abs_path: `app:///search?q=${MARKER}&sort=f`, lineno: 1 },
+                { filename: `app:///tag/${enc(MARKER_WITH_JA)}`, lineno: 2 },
+                { filename: 'app:///_next/static/chunks/app/page-abc.js?dpl=dpl_1', lineno: 3 },
+              ],
+            },
+          },
+        ],
+      },
+    })
+
+    expectNoLeak(event)
+    const frames = event.exception?.values?.[0]?.stacktrace?.frames
+    expect(frames?.[0]?.filename).toBe('app:///?genre=all&tag=%5Bredacted%5D')
+    expect(frames?.[0]?.abs_path).toBe('app:///search?q=%5Bredacted%5D&sort=f')
+    expect(frames?.[1]?.filename).toBe('app:///tag/:query')
+    expect(frames?.[2]?.filename).toBe('app:///_next/static/chunks/app/page-abc.js?dpl=dpl_1')
+  })
+
+  it('redacts aria-label, title and alt values in click breadcrumbs and keeps type and name', () => {
+    const breadcrumb = scrubBreadcrumb({
+      category: 'ui.click',
+      message: `div.modal > button.item[type="button"][aria-label="${MARKER_JA}"] > img[alt="${MARKER}"][title="${MARKER}"]`,
+    })
+
+    expectNoLeak(breadcrumb)
+    expect(breadcrumb?.message).toBe(
+      'div.modal > button.item[type="button"][aria-label="[redacted]"] > img[alt="[redacted]"][title="[redacted]"]',
+    )
+    expect(scrubBreadcrumb({ category: 'ui.input', message: 'form > input[name="q"][type="search"]' })?.message).toBe(
+      'form > input[name="q"][type="search"]',
+    )
+  })
+
+  it('redacts element text in INP span names', () => {
+    const span = scrubSpan({
+      ...base,
+      op: 'ui.interaction.click',
+      description: `div.chips > button.chip[aria-label="条件「キーワード: ${MARKER}」を解除"]`,
+      data: { transaction: `/search?q=${MARKER}` },
+    })
+
+    expectNoLeak(span)
+    expect(span.description).toBe('div.chips > button.chip[aria-label="[redacted]"]')
+  })
+
+  it('treats the long animation frame script attributes as URLs', () => {
+    const span = scrubSpan({
+      ...base,
+      op: 'ui.long-animation-frame',
+      description: 'Main UI thread blocked',
+      data: {
+        'code.filepath': `https://nico-rank.com/search?q=${MARKER}`,
+        'browser.script.invoker': `https://nico-rank.com/?tag=${enc(MARKER_JA)}`,
+        'browser.script.invoker_type': 'classic-script',
+      },
+    })
+
+    expectNoLeak(span)
+    expect(span.data?.['code.filepath']).toBe('https://nico-rank.com/search?q=%5Bredacted%5D')
+    expect(scrubSpan({ ...base, data: { 'browser.script.invoker': 'BUTTON#save.onclick' } }).data?.['browser.script.invoker']).toBe(
+      'BUTTON#save.onclick',
+    )
+  })
+})
+
 describe('scrubDynamicSamplingContext', () => {
   it('normalizes the transaction name carried in envelope headers and baggage', () => {
     const dsc = { trace_id: 't', public_key: 'k', transaction: `GET /tag/${enc(MARKER_JA)}?q=${MARKER}` }

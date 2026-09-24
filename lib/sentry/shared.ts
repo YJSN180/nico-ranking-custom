@@ -42,6 +42,8 @@ const PATH_TEMPLATES: Array<[RegExp, string]> = [
 const USER_TEXT = /%|[^\x21-\x7e]/
 const URL_SCHEME = /^([a-z][a-z\d+.-]*):/i
 const HTTP_URL = /^https?:\/\//i
+// ブラウザの SDK はスタックフレームの URL を app:///<パス>?<クエリ> に書き換える
+const APP_URL = /^app:\/\//i
 const HTTP_ORIGIN = /^https?:\/\/[^/?#]*/i
 const PLACEHOLDER_BASE = 'https://placeholder.invalid'
 
@@ -51,6 +53,9 @@ const URL_TEXT = /^((?:[A-Za-z]+\s+)*)((?:\/|https?:\/\/)[\s\S]*)$/i
 const EMBEDDED_URL = /(https?:\/\/[^\s"'<>`]+)|(^|[\s("'=,:;[{])(\/(?!\/)[^\s"'<>`]*)/gi
 const SCRIPT_FILE = /\.(?:[cm]?js|jsx|tsx?)$/i
 const SENSITIVE_MESSAGE = /authorization|cookie|password|token/i
+// クリックの breadcrumb や INP スパンの名前（SDK の htmlTreeAsString）には、要素の aria-label・title・alt の値が入る。
+// マイリスト名や検索語を含みうるので値を伏せる。type と name は開発側が決める値なので残す
+const ELEMENT_TEXT_ATTRIBUTE = /\[(aria-label|title|alt)="[\s\S]*?"\]/g
 
 const DROPPED_SPAN_ATTRIBUTES = new Set([
   'url.query',
@@ -62,8 +67,9 @@ const DROPPED_SPAN_ATTRIBUTES = new Set([
 // ヘッダー（referer・next-url・next-router-state-tree など）にはページの URL や検索語が入るので送らない
 const DROPPED_SPAN_ATTRIBUTE_PREFIXES = ['http.request.header.', 'http.response.header.']
 const URL_SPAN_ATTRIBUTES = new Set(['url', 'url.full', 'http.url', 'http.target', 'url.path'])
-// ルート名やスパン名。INP などの単独スパンは transaction 属性にページのパスを持つ
-const URL_TEXT_SPAN_ATTRIBUTES = new Set(['next.span_name', 'http.route', 'transaction'])
+// ルート名やスパン名。INP などの単独スパンは transaction 属性にページのパスを持つ。
+// 長いアニメーションフレームのスパンは、インラインスクリプトのときにページの URL をスクリプトの場所として持つ
+const URL_TEXT_SPAN_ATTRIBUTES = new Set(['next.span_name', 'http.route', 'transaction', 'code.filepath', 'browser.script.invoker'])
 const BREADCRUMB_URL_KEYS = ['url', 'to', 'from']
 
 const SENDING_ENVIRONMENTS = new Set(['production', 'preview'])
@@ -133,6 +139,10 @@ function rewriteUrlText(text: string, rewriteUrl: (url: string) => string): stri
   return match ? `${match[1]}${rewriteUrl(match[2])}` : text
 }
 
+function scrubElementText(text: string): string {
+  return text.replace(ELEMENT_TEXT_ATTRIBUTE, `[$1="${REDACTED}"]`)
+}
+
 function scrubUrlsInText(text: string): string {
   return text.replace(
     EMBEDDED_URL,
@@ -173,7 +183,7 @@ export function scrubSpan(span: SpanJSON): SpanJSON {
   const nextSpan: SpanJSON = { ...span, data: scrubSpanData(span.data) }
 
   if (typeof nextSpan.description === 'string') {
-    nextSpan.description = rewriteUrlText(nextSpan.description, scrubUrl)
+    nextSpan.description = rewriteUrlText(scrubElementText(nextSpan.description), scrubUrl)
   }
 
   return nextSpan
@@ -216,11 +226,15 @@ function scrubContexts(contexts: Contexts): Contexts {
 }
 
 function scrubFrameLocation(location: string): string {
-  // インラインスクリプトのフレームにはページの URL が入る。スクリプトファイルはソースマップ解決のため触らない
-  if (!HTTP_URL.test(location)) return location
+  // インラインスクリプトやスタックの無い onerror のフレームにはページの URL が入る。
+  // スクリプトファイルはソースマップ解決のため触らない
+  const isAppUrl = APP_URL.test(location)
+  if (!isAppUrl && !HTTP_URL.test(location)) return location
 
   const [path] = location.split(/[?#]/)
-  return SCRIPT_FILE.test(path) ? location : scrubUrl(location)
+  if (SCRIPT_FILE.test(path)) return location
+
+  return isAppUrl ? `app://${scrubUrl(location.replace(APP_URL, ''))}` : scrubUrl(location)
 }
 
 function scrubFrame(frame: StackFrame): StackFrame {
@@ -260,7 +274,7 @@ export function scrubBreadcrumb(breadcrumb: Breadcrumb | null): Breadcrumb | nul
   if (typeof nextBreadcrumb.message === 'string') {
     nextBreadcrumb.message = SENSITIVE_MESSAGE.test(nextBreadcrumb.message)
       ? REDACTED
-      : scrubUrlsInText(nextBreadcrumb.message)
+      : scrubUrlsInText(scrubElementText(nextBreadcrumb.message))
   }
 
   if (nextBreadcrumb.data && typeof nextBreadcrumb.data === 'object') {
