@@ -118,7 +118,13 @@ export async function writeTagCacheDeltaArtifact(
   return true
 }
 
-function createR2Client(): S3Client | null {
+const R2_REQUEST_TIMEOUT_MS = 20_000
+// Also bounds waits the request abort cannot reach, such as body collection and gunzip.
+const R2_SHARD_READ_DEADLINE_MS = 30_000
+
+let sharedR2Client: S3Client | null = null
+
+function getR2Client(): S3Client | null {
   if (
     !process.env.R2_ACCESS_KEY_ID ||
     !process.env.R2_SECRET_ACCESS_KEY ||
@@ -127,14 +133,66 @@ function createR2Client(): S3Client | null {
     return null
   }
 
-  return new S3Client({
+  sharedR2Client ??= new S3Client({
     region: 'auto',
     endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     credentials: {
       accessKeyId: process.env.R2_ACCESS_KEY_ID,
       secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
     },
+    // With response checksum validation the SDK pipes the body through a stream that
+    // never ends when the connection is aborted or reset, so a read could hang forever.
+    // gzip's own CRC and JSON parsing still reject corrupted shards.
+    responseChecksumValidation: 'WHEN_REQUIRED',
   })
+  return sharedR2Client
+}
+
+export function closeTagCacheR2Client(): void {
+  sharedR2Client?.destroy()
+  sharedR2Client = null
+}
+
+function readProperty(value: unknown, key: string): unknown {
+  return typeof value === 'object' && value !== null ? Reflect.get(value, key) : undefined
+}
+
+function getHttpStatus(error: unknown): number | undefined {
+  const status = readProperty(readProperty(error, '$metadata'), 'httpStatusCode')
+  return typeof status === 'number' ? status : undefined
+}
+
+function isMissingObject(error: unknown): boolean {
+  return readProperty(error, 'Code') === 'NoSuchKey' ||
+    readProperty(error, 'name') === 'NoSuchKey' ||
+    getHttpStatus(error) === 404
+}
+
+/** Short, secret-free description of a storage failure for logs. */
+export function describeStorageError(error: unknown): string {
+  if (!(error instanceof Error)) return typeof error
+  const status = getHttpStatus(error)
+  const code = readProperty(error, 'code')
+  const parts = [error.name]
+  if (status !== undefined) parts.push(`http_${status}`)
+  if (typeof code === 'string') parts.push(code)
+  return `${parts.join(' ')}: ${error.message.slice(0, 200)}`
+}
+
+function withDeadline<T>(operation: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message)
+      error.name = 'TimeoutError'
+      reject(error)
+    }, ms)
+  })
+  return Promise.race([operation, deadline]).finally(() => clearTimeout(timer))
+}
+
+function isShard(value: unknown): value is TagCacheShard {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function bodyToArrayBuffer(body: unknown): Promise<ArrayBuffer | null> {
@@ -160,34 +218,45 @@ async function bodyToArrayBuffer(body: unknown): Promise<ArrayBuffer | null> {
   return null
 }
 
+/**
+ * Reads one shard from R2. Resolves null only when R2 is not configured or the shard
+ * does not exist; any other failure (including a timeout) rejects, so callers never
+ * mistake an unreadable shard for an empty one and overwrite it.
+ */
 export async function readTagCacheShardFromR2(shardIdOrKey: string | number): Promise<TagCacheShard | null> {
-  const client = createR2Client()
+  const client = getR2Client()
   if (!client) return null
 
-  try {
-    const response = await client.send(
-      new GetObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking',
-        Key: getR2ShardKey(shardIdOrKey),
-      }),
-      { abortSignal: AbortSignal.timeout(20_000) },
-    )
-    const buffer = await bodyToArrayBuffer(response.Body)
-    if (!buffer) return null
-    return await parseBufferAsJSON<TagCacheShard>(buffer)
-  } catch (error: any) {
-    if (error?.Code === 'NoSuchKey' || error?.$metadata?.httpStatusCode === 404) {
-      return null
+  const read = async (): Promise<TagCacheShard | null> => {
+    try {
+      const response = await client.send(
+        new GetObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking',
+          Key: getR2ShardKey(shardIdOrKey),
+        }),
+        { abortSignal: AbortSignal.timeout(R2_REQUEST_TIMEOUT_MS) },
+      )
+      const buffer = await bodyToArrayBuffer(response.Body)
+      const shard = buffer ? await parseBufferAsJSON<unknown>(buffer) : null
+      if (!isShard(shard)) {
+        throw new Error(`Invalid tag cache shard in R2: ${getShardIdFromKey(String(shardIdOrKey))}`)
+      }
+      return shard
+    } catch (error: unknown) {
+      if (isMissingObject(error)) return null
+      throw error
     }
-    console.warn('[Tag Cache R2] Failed to read shard:', error)
-    return null
-  } finally {
-    client.destroy()
   }
+
+  return withDeadline(
+    read(),
+    R2_SHARD_READ_DEADLINE_MS,
+    `Tag cache shard read exceeded ${R2_SHARD_READ_DEADLINE_MS / 1000}s`,
+  )
 }
 
 export async function writeTagCacheShardToR2(shardIdOrKey: string | number, shard: TagCacheShard): Promise<void> {
-  const client = createR2Client()
+  const client = getR2Client()
   if (!client) {
     throw new Error('R2 credentials not configured')
   }
@@ -219,7 +288,14 @@ export async function readTagCacheShardFromKV(shardIdOrKey: string | number): Pr
 
 export async function readTagCacheShard(shardKey: string): Promise<TagCacheShard | null> {
   if (getTagCacheBackend() === 'r2-aggregate') {
-    const r2Shard = await readTagCacheShardFromR2(shardKey)
+    let r2Shard: TagCacheShard | null = null
+    try {
+      r2Shard = await readTagCacheShardFromR2(shardKey)
+    } catch (error: unknown) {
+      console.warn(
+        `[Tag Cache R2] Failed to read shard ${getShardIdFromKey(shardKey)} (${describeStorageError(error)}); trying KV`,
+      )
+    }
     if (r2Shard) return r2Shard
     return readTagCacheShardFromKV(shardKey)
   }
