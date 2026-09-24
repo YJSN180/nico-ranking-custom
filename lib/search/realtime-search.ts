@@ -166,7 +166,7 @@ export function resolveRealtimeBoundary(input: { requested?: string | null; newe
  * この条件でリアルタイム区間をマージできるか。
  * - ソートが「投稿日時が新しい順」のときだけ（境界とソートキーが一致し、区間を先頭に置ける）
  * - タグの OR / NOT は nvapi 応答にタグが無く後付け判定できないため不可
- * - 投稿日範囲の上限が境界より前なら区間は空なので不要
+ * - 投稿日範囲の上限が境界より前（＝索引の最新以前）なら区間は空で、索引だけで足りるので不要
  */
 export function isRealtimeMergeable(conditions: SearchConditions, boundary: string): boolean {
   if (!isRealtimeCandidate(conditions)) return false

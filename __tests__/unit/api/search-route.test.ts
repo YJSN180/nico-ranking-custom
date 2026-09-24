@@ -244,3 +244,39 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     })
   })
 })
+
+describe('/api/search: 投稿日時の範囲（S-c）', () => {
+  beforeEach(() => {
+    seedWorld()
+    nvapiStatus = 200
+    pageStatus = 200
+    calls = []
+    fakeFetch.mockClear()
+    clearFreshCache()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('上限が索引の最新より前（過去の範囲）なら合成せず、索引だけを 2 回の問い合わせで返す', async () => {
+    const dateFrom = encodeURIComponent('2026-09-20T00:00:00+09:00')
+    const dateTo = encodeURIComponent('2026-09-21T23:59:59+09:00')
+    const { body } = await search(`q=x&sort=-startTime&dateFrom=${dateFrom}&dateTo=${dateTo}`)
+    expect(body.source).toBe('snapshot')
+    expect(callsTo('nvapi.nicovideo.jp')).toHaveLength(0)
+    expect(callsTo('www.nicovideo.jp')).toHaveLength(0)
+    expect(calls).toHaveLength(2)
+    // 範囲内の最新（09-21 23:45 のショート、23:00 の長尺）から並ぶ
+    expect(ids(body).slice(0, 2)).toEqual(['ss2003', 'sm1055'])
+  })
+
+  it('上限が索引の最新以降なら、これまでどおり新着と合成する', async () => {
+    const dateFrom = encodeURIComponent('2026-09-22T00:00:00+09:00')
+    const dateTo = encodeURIComponent('2026-09-22T23:59:59+09:00')
+    const { body } = await search(`q=x&sort=-startTime&dateFrom=${dateFrom}&dateTo=${dateTo}`)
+    expect(body.source).toBe('merged')
+    expect(ids(body)).toEqual(['sm9103', 'sm9102', 'ss9101', 'sm9101', 'sm1060', 'ss2001', 'sm1059', 'sm1058', 'ss2002', 'sm1057', 'sm1056'])
+  })
+})

@@ -313,6 +313,8 @@ export function buildSnapshotSearchUrl(conditions: SearchConditions, window: Sna
 
 /**
  * 同じ条件で Snapshot が持つ最新の投稿時刻を 1 件だけ取る（リアルタイム区間の境界の決定用）。
+ * 投稿日時の範囲は外す: 索引の最新は日付の条件によらず、上限が過去の範囲では、上限がこの最新より前になって
+ * 合成しない判断ができる（範囲内の最新を境界にすると、過去の範囲でも毎回合成に入る）。
  * 該当なしなら null。上流エラーは throw（呼び出し側で従来の境界に縮退する）。
  */
 export async function fetchSnapshotNewestStartTime(
@@ -320,7 +322,10 @@ export async function fetchSnapshotNewestStartTime(
   fetchImpl: typeof fetch = fetch,
   timeoutMs = 3000
 ): Promise<string | null> {
-  const url = buildSnapshotSearchUrl({ ...conditions, sort: '-startTime', page: 1 }, { offset: 0, limit: 1 })
+  const url = buildSnapshotSearchUrl(
+    { ...conditions, sort: '-startTime', page: 1, dateFrom: undefined, dateTo: undefined },
+    { offset: 0, limit: 1 }
+  )
   const res = await fetchImpl(url, {
     headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
     cache: 'no-store',

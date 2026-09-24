@@ -265,6 +265,17 @@ describe('fetchSnapshotNewestStartTime', () => {
     expect(new URL(String(vi.mocked(fetchImpl).mock.calls[0]?.[0])).searchParams.get('filters[contentType][0]')).toBe('short')
   })
 
+  it('投稿日時の範囲は外して問い合わせる（索引の最新は日付の条件によらない。過去の範囲を合成に回さない）', async () => {
+    const fetchImpl = vi.fn(async (_url: string | URL | Request) => ({ ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) }) as unknown as Response)
+    const dated = parseSearchConditions(new URLSearchParams({ q: 'x', dateFrom: '2025-01-01T00:00:00+09:00', dateTo: '2025-01-31T23:59:59+09:00' }))
+    await fetchSnapshotNewestStartTime(dated, fetchImpl as unknown as typeof fetch)
+    const url = new URL(String(vi.mocked(fetchImpl).mock.calls[0]?.[0]))
+    expect(url.searchParams.get('q')).toBe('x')
+    expect(url.searchParams.get('filters[startTime][gte]')).toBeNull()
+    expect(url.searchParams.get('filters[startTime][lte]')).toBeNull()
+    expect(url.searchParams.get('filters[startTime][lt]')).toBeNull()
+  })
+
   it('該当なしは null、上流エラーは throw', async () => {
     const empty = vi.fn(async () => ({ ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) }) as unknown as Response)
     await expect(fetchSnapshotNewestStartTime(conditions, empty as unknown as typeof fetch)).resolves.toBeNull()
