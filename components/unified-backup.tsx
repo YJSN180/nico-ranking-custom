@@ -51,7 +51,8 @@ export function UnifiedBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  // needsReload: 一部だけ取り込めた（反映には再読み込みが要る）ときに「再読み込み」ボタンを出す
+  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string, needsReload?: boolean } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<UnifiedBackupData | null>(null)
   const [availableDataTypes, setAvailableDataTypes] = useState<string[]>([])
 
@@ -339,7 +340,8 @@ export function UnifiedBackup() {
       } else if (results.length > 0) {
         setImportMessage({ 
           type: 'error', 
-          text: `一部インポート完了:\n${results.join('\n')}\n\nエラー:\n${errors.join('\n')}` 
+          text: `一部インポート完了:\n${results.join('\n')}\n\nエラー:\n${errors.join('\n')}`,
+          needsReload: true
         })
       } else {
         setImportMessage({ 
@@ -351,9 +353,9 @@ export function UnifiedBackup() {
       setImportConfirmOpen(false)
       setPendingImportData(null)
       
-      // リロード確認
-      if (results.length > 0) {
-        // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+      // 全部成功したときだけ自動で再読み込みする（トースト+自動リロード、フェーズ5-4）。
+      // 一部が失敗したときは内容を読めるよう自動では再読み込みせず、「再読み込み」ボタンを出す
+      if (results.length > 0 && errors.length === 0) {
         showToast('インポートしました。反映のため再読み込みします…', 'success')
         setTimeout(() => {
           window.location.reload()
@@ -520,6 +522,17 @@ export function UnifiedBackup() {
           style={{ whiteSpace: 'pre-line' }}
         >
           {importMessage.text}
+          {importMessage.needsReload && (
+            <div style={{ marginTop: '12px' }}>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className={`${styles.dialogButton} ${styles.confirmButton}`}
+              >
+                再読み込み
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
