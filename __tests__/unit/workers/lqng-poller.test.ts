@@ -1087,3 +1087,60 @@ describe('lqng-poller 判定表を壊さない', () => {
     expect(verdictsWriteProblem(baseline, verdicts(['1', '2', '3']))).toBeNull()
   })
 })
+
+describe('lqng-poller 追跡期間より古い動画', () => {
+  const days = (d: number): string => new Date(T0.getTime() - d * 24 * 3600_000).toISOString()
+  const trackingAt = (lastPollAt: string, authors: TrackedAuthor[] = []): LqngTracking => ({
+    version: 1,
+    lastPollAt,
+    lastSweepDate: null,
+    authors: Object.fromEntries(authors.map((a) => [a.authorId, a])),
+    pending: [],
+    unattributed: [],
+    lastRun: null,
+    recentRuns: [],
+    issues: {},
+    updatedAt: lastPollAt,
+  })
+
+  it('最終取得時刻が止まっていても、取得範囲の起点は追跡期間（trackDays）より前にしない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingAt(days(10)) })
+    const fetchNew = vi.fn(async () => pages([]))
+    await runPoll(m.kv, deps({ fetchNewVideos: fetchNew }), 'poll')
+    expect((fetchNew.mock.calls[0] as unknown as [string[], string])[1]).toBe(days(7))
+  })
+
+  it('追跡期間より古い動画は取り込まない（新着に数えず、補完もしない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const thumb = vi.fn(async (_id: string) => okThumb())
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm700', registeredAt: days(8) })])), fetchThumbInfo: thumb }), 'poll')
+    expect(r.newVideos).toBe(0)
+    expect(thumb).not.toHaveBeenCalled()
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']).toBeUndefined()
+  })
+
+  it('ショートが取れない状態が続いて古い連投が取得範囲に残っても、それで A∧C にしない', async () => {
+    const suspectedAt = new Date(T0.getTime() - 2 * 3600_000).toISOString()
+    const author: TrackedAuthor = {
+      authorId: '1001',
+      firstSeenAt: days(1),
+      lastPostAt: days(1),
+      posts: [{ id: 'sm710', title: 't', at: days(1), tagDetails: [], ownerVisibility: 'visible' }],
+      status: 'existing',
+      lastCheckedAt: suspectedAt,
+      followerCount: 0,
+      nickname: 'n',
+      visibility: 'visible',
+      deletedObservedAt: null,
+      deletionSuspectedAt: suspectedAt,
+    }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingAt(days(8.5), [author]) })
+    // 8 日前の連投（追跡期間外）が、止まった取得範囲からまた返ってくる
+    const oldBurst = [0, 5, 10].map((min, i) => video({ id: `sm${720 + i}`, registeredAt: new Date(new Date(days(8)).getTime() + min * 60_000).toISOString() }))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(oldBurst, [failed(0, 'tag_shorts')])), fetchUserInfo: goneExceptControl() }), 'poll')
+    const tracked = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
+    expect(tracked.status).toBe('deleted')
+    expect(tracked.posts.map((p) => p.id)).toEqual(['sm710'])
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})

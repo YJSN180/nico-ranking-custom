@@ -369,7 +369,12 @@ class Session {
 
   /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */
   ingest(videos: SourceVideo[]): void {
+    const nowMs = this.now.getTime()
+    const trackMs = this.config.trackDays * DAY_MS
     for (const v of videos) {
+      // 追跡期間より古い動画は取り込まない（取り込んでも次の刈り込みで消え、取り込み直すたびに
+      // 古い連投を投稿頻度に数えてしまう）
+      if (nowMs - new Date(v.registeredAt).getTime() > trackMs) continue
       if (this.isKnownVideo(v.id)) continue
       this.newVideos++
       const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility }
@@ -739,9 +744,11 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     await session.checkAuthors()
     state.tracking.lastSweepDate = sweepDate
   } else {
-    const since = state.tracking.lastPollAt
-      ? new Date(new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS)
-      : new Date(now.getTime() - LIMITS.firstPollLookbackMinutes * MINUTE_MS)
+    const fromLastPoll = state.tracking.lastPollAt
+      ? new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS
+      : now.getTime() - LIMITS.firstPollLookbackMinutes * MINUTE_MS
+    // 最終取得時刻が止まったままでも（ショートが取れない状態が続くなど）、追跡期間より前は取りに行かない
+    const since = new Date(Math.max(fromLastPoll, now.getTime() - state.config.trackDays * DAY_MS))
     const fetched = await session.ingestNewVideos(since.toISOString())
     await session.enrichPending()
     await session.checkAuthors()
