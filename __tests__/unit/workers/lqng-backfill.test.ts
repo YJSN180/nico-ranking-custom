@@ -21,6 +21,8 @@ const config: Partial<LqngConfig> = {
   trackDays: 7,
   deletionWindowDays: 7,
   allowlist: { authorIds: ['9001'], videoIds: [] },
+  // 走査中に存在を確認した投稿者がいないときに使う対照（合成値）
+  controlUserId: '1999',
 }
 
 const T0 = new Date('2026-02-01T12:00:00Z')
@@ -31,6 +33,8 @@ const burst = (authorId: string, n: number, over: Partial<SnapshotVideo> = {}): 
 const locked = (...names: string[]) => names.map((name) => ({ name, isLocked: true }))
 const existing = (followerCount: number): UserInfo => ({ status: 'existing', followerCount, nickname: 'n' })
 const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
+/** 対照（controlUserId）だけは存在し、ほかは退会と答えるユーザー情報 API */
+const goneExceptControl = () => vi.fn(async (id: string): Promise<UserInfo> => (id === '1999' ? existing(1000) : deleted))
 
 /** 窓の境界を無視して、与えた一覧を新しい順に 100 件ずつ返す */
 function pager(videos: SnapshotVideo[]) {
@@ -56,14 +60,14 @@ describe('runBackfillStep', () => {
     expect(m.puts).toEqual([])
   })
 
-  it('連投の投稿者は存在確認し、削除済みなら A∧C で投稿者 NG（根拠は 3 件まで）', async () => {
+  it('連投の投稿者は存在確認し、削除済みなら（対照が存在すれば）A∧C で投稿者 NG（根拠は 3 件まで）', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const fetchUserInfo = vi.fn(async () => deleted)
+    const fetchUserInfo = goneExceptControl()
     const d = deps({ fetchWindowPage: pager(burst('2001', 6)), fetchUserInfo })
     const r = await runBackfillStep(m.kv, d, null, { days: 1 })
     expect(r.skipped).toBeNull()
-    expect(fetchUserInfo).toHaveBeenCalledTimes(1)
-    expect(fetchUserInfo).toHaveBeenCalledWith('2001')
+    // 投稿者と対照の 2 回
+    expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2001', '1999'])
     expect(r.deltas.authors['2001']?.reasons).toEqual(['A_C'])
     expect(r.deltas.authors['2001']?.evidence).toHaveLength(BACKFILL_LIMITS.evidencePerAuthor)
     expect(r.deltas.authors['2001']?.deletedObservedAt).toBe(T0.toISOString())
@@ -71,6 +75,39 @@ describe('runBackfillStep', () => {
     expect(r.done).toBe(true) // 1 日分の 1 窓だけなので走査完了
     expect(r.cursor.stats.videos).toBe(6)
     expect(m.puts).toEqual([]) // 走査は KV に書かない
+  })
+
+  it('404 が出た呼び出しで対照も 404 なら A∧C にせず、確かめ直すまで待ち行列に残す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2011', 6)), fetchUserInfo: vi.fn(async () => deleted) }), null, { days: 1 })
+    expect(r.deltas.authors).toEqual({})
+    expect(r.cursor.checked['2011']).toBeUndefined()
+    expect(r.cursor.pendingUsers).toEqual(['2011'])
+    expect(r.done).toBe(false)
+    expect(r.note).toContain('deletion_held: control_404')
+    // 次の呼び出しで API が戻っていれば確かめ直して A∧C にする
+    const r2 = await runBackfillStep(m.kv, deps({ fetchUserInfo: goneExceptControl() }), r.cursor, { days: 1 })
+    expect(r2.deltas.authors['2011']?.reasons).toEqual(['A_C'])
+    expect(r2.done).toBe(true)
+  })
+
+  it('同じ呼び出しで存在の確認が取れていれば、対照を別に確かめない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => (id === '2013' ? existing(3) : deleted))
+    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager([...burst('2012', 6), ...burst('2013', 6)]), fetchUserInfo }), null, { days: 1 })
+    expect(fetchUserInfo).toHaveBeenCalledTimes(2)
+    expect(r.deltas.authors['2012']?.reasons).toEqual(['A_C'])
+  })
+
+  it('対照は走査中に存在を確認した投稿者（フォロワーの多い順）を先に使い、いなければ設定の controlUserId', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const cursor = createBackfillCursor(T0, 1)
+    cursor.checked['2014'] = { status: 'existing', followerCount: 50, nickname: 'n' }
+    cursor.checked['2015'] = { status: 'existing', followerCount: 900, nickname: 'n' }
+    const fetchUserInfo = vi.fn(async (id: string): Promise<UserInfo> => (id === '2015' ? existing(900) : deleted))
+    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(burst('2016', 6)), fetchUserInfo }), cursor, { days: 1 })
+    expect(fetchUserInfo.mock.calls.map((c) => c[0])).toEqual(['2016', '2015'])
+    expect(r.deltas.authors['2016']?.reasons).toEqual(['A_C'])
   })
 
   it('連投でも現存なら A∧C にせず、存在確認の結果を持ち回る', async () => {

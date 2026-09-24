@@ -60,6 +60,19 @@ describe('runBackfillDriver', () => {
     expect(r.commits).toBe(1)
   })
 
+  it('退会判定の保留（ユーザー情報 API の異常の疑い）を受けたら、次の呼び出しまで十分に間を空ける', async () => {
+    const cursor = createBackfillCursor(T0, 1)
+    let calls = 0
+    const call = vi.fn(async (): Promise<unknown> => {
+      calls++
+      const result: BackfillStepResult = { skipped: null, cursor, done: calls === 2, deltas: emptyDeltas(), subrequests: 1, ...(calls === 1 ? { note: 'deletion_held: control_404' } : {}) }
+      return result
+    })
+    const sleep = vi.fn(async () => {})
+    await runBackfillDriver(options, { call: call as unknown as BackfillDriverIo['call'], sleep, log: () => {} })
+    expect(sleep).toHaveBeenCalledWith(60_000)
+  })
+
   it('何も見つからなければ確定しない', async () => {
     const { io, commits } = scripted([emptyDeltas()])
     const r = await runBackfillDriver(options, io)

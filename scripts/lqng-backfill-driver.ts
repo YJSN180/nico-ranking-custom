@@ -113,8 +113,8 @@ export async function runBackfillDriver(options: BackfillDriverOptions, io: Back
         break
       }
       if (sinceCommit >= options.commitEvery) await commitPending()
-      // アクセス制限を検知したら十分に間を空ける
-      await io.sleep(r.note?.includes('access limited') ? 60_000 : options.sleepMs)
+      // アクセス制限や退会判定の保留（ユーザー情報 API の異常の疑い）を検知したら十分に間を空ける
+      await io.sleep(r.note?.includes('access limited') || r.note?.includes('deletion_held') ? 60_000 : options.sleepMs)
     }
   } catch (error) {
     scanFailed = true
