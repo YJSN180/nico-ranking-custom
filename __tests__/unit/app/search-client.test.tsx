@@ -222,6 +222,48 @@ describe('SearchClient', () => {
     })
   })
 
+  describe('新着区間の打ち切りと取得失敗の表示（S-b）', () => {
+    const notices = (): string[] => Array.from(document.querySelectorAll('.search-results__notice')).map((el) => el.textContent ?? '')
+
+    it('新着を打ち切ったら、欠けうる投稿時刻の範囲を知らせる', async () => {
+      handlers.search = (url) =>
+        searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], {
+          source: 'merged',
+          realtimeCount: 300,
+          realtimeTruncated: true,
+          realtimeGap: { from: '2026-09-22T04:00:01+09:00', to: '2026-09-22T10:05:00+09:00' },
+        })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(notices()).toEqual(['新着が多いため、9/22 04:00〜9/22 10:05 に投稿された動画の一部を表示できていません。']))
+    })
+
+    it('新着を取得できずに索引だけの結果になったら知らせる', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { source: 'snapshot', realtimeError: 'nvapi_http_503' })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() =>
+        expect(notices()).toEqual(['新着動画を取得できなかったため、検索インデックスの時点までの結果を表示しています。時間をおいて再度検索してください。'])
+      )
+    })
+
+    it('最新の投稿（本家の検索ページ）を取得できなかったら知らせる', async () => {
+      handlers.search = (url) =>
+        searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { source: 'merged', realtimeCount: 3, freshError: 'nico_page_http_503' })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(notices()).toEqual(['最新の投稿の一部を取得できませんでした。時間をおいて再度検索してください。']))
+    })
+
+    it('打ち切りも失敗も無ければ何も表示しない', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { source: 'merged', realtimeCount: 3 })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      expect(notices()).toEqual([])
+    })
+  })
+
   describe('サーバー側の NG を後から当てる（S-f）', () => {
     it('投稿者名の管理者 NG に当たる投稿者（owners の hiddenAuthorIds）の動画を隠す', async () => {
       handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001' }, { id: 'sm2', authorId: '1002' }, { id: 'so3', authorId: 'channel/ch3003' }])

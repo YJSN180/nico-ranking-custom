@@ -254,6 +254,8 @@ export interface RealtimeSegment {
   upstreamTotal: number
   /** REALTIME_MAX_PAGES で打ち切った場合 true */
   truncated: boolean
+  /** 打ち切ったとき、取れた中で最も古い投稿時刻（後付けフィルタ前）。境界からこの時刻までの投稿は欠けうる */
+  floor?: string
 }
 
 /**
@@ -290,7 +292,9 @@ export async function fetchRealtimeSegment(
     if (page === REALTIME_MAX_PAGES) truncated = true
   }
   const filtered = applyRealtimeRangeFilters(collected, conditions).map((it, i) => ({ ...it, rank: i + 1 }))
-  return { items: filtered, upstreamTotal, truncated }
+  // nvapi は新しい順に返すので、取れた最後の動画が最も古い
+  const floor = truncated ? collected[collected.length - 1]?.registeredAt : undefined
+  return { items: filtered, upstreamTotal, truncated, ...(floor ? { floor } : {}) }
 }
 
 // ===== マージ（S3） =====

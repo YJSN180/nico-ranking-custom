@@ -25,7 +25,7 @@ import {
   type RealtimeSegment,
 } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
-import { fetchFreshItems, mergeFreshIntoRealtime } from '@/lib/search/fresh-segment'
+import { fetchFreshSegment, mergeFreshIntoRealtime, type FreshSegment } from '@/lib/search/fresh-segment'
 import { isRealtimeEnabled } from '@/lib/search/realtime-search'
 import { applyServerNgContext, loadServerNgContext, type ServerNgContext } from '@/lib/ng-filter-server'
 import { anySignal, withTimeout } from '@/lib/abort-signal'
@@ -152,9 +152,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       })
     ),
     fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, deadline, boundary),
-    fetchFreshItems(conditions, boundary, { signal: deadline }).then(
-      (items): { items: RankingItem[]; error?: undefined } => ({ items }),
-      (error: unknown): { items: RankingItem[]; error: string } => ({ items: [], error: error instanceof Error ? error.message : 'fresh_error' })
+    fetchFreshSegment(conditions, boundary, { signal: deadline }).then(
+      (fresh): { fresh: FreshSegment; error?: undefined } => ({ fresh }),
+      (error: unknown): { fresh: FreshSegment; error: string } => ({
+        fresh: { items: [], truncatedAt: {} },
+        error: error instanceof Error ? error.message : 'fresh_error',
+      })
     ),
   ])
 
@@ -181,7 +184,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const segment = realtimeResult.segment
   // 本家ページの最新動画（nvapi 未反映分）をリアルタイム区間に併合してから、ページを組み立てる
-  const withFresh = mergeFreshIntoRealtime(freshResult.items, segment.items)
+  const withFresh = mergeFreshIntoRealtime(freshResult.fresh.items, segment.items)
+  const gapUntil = realtimeGapUntil(conditions, segment, freshResult.fresh)
   const realtimeItems = withFresh.items
   const plan = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, realtimeItems.length)
   let snapshotItems = snapshotResult.items
@@ -205,18 +209,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     source: 'merged',
     boundary,
     realtimeCount: realtimeItems.length,
-    realtimeTruncated: segment.truncated,
+    ...(gapUntil ? { realtimeGap: { from: boundary, to: gapUntil } } : {}),
     freshCount: withFresh.added,
     ...(freshResult.error ? { freshError: freshResult.error } : {}),
     cacheControl: 'public, s-maxage=30, stale-while-revalidate=60',
   })
 }
 
+/**
+ * 新着区間を打ち切ったとき、取れた中で最も古い投稿時刻（境界からこの時刻までの投稿は欠けうる）。打ち切りが無ければ undefined。
+ * 長尺は nvapi（上限 REALTIME_MAX_PAGES）、ショートは本家ページ（上限 FRESH_MAX_PAGES）だけが取得元なので、
+ * 両方を見て遅い方を返す。長尺の本家ページの打ち切りは nvapi が受け持つ範囲なので数えない
+ */
+function realtimeGapUntil(conditions: SearchConditions, segment: RealtimeSegment, fresh: FreshSegment): string | undefined {
+  const floors = [segment.truncated ? segment.floor : undefined, conditions.contentType !== 'long' ? fresh.truncatedAt.short : undefined]
+  return floors
+    .filter((at): at is string => typeof at === 'string' && Number.isFinite(new Date(at).getTime()))
+    .reduce<string | undefined>((latest, at) => (latest === undefined || new Date(at).getTime() > new Date(latest).getTime() ? at : latest), undefined)
+}
+
 interface RespondMeta {
   source: 'merged' | 'snapshot'
   boundary: string
   realtimeCount: number
-  realtimeTruncated?: boolean
+  /** 新着区間を打ち切ったとき、投稿が欠けうる範囲（from = 境界、to = 取れた中で最も古い投稿時刻） */
+  realtimeGap?: { from: string; to: string }
   /** 本家ページから足した最新動画の数（nvapi に未反映だった分） */
   freshCount?: number
   freshError?: string
@@ -248,7 +265,7 @@ async function respond(
       source: meta.source,
       boundary: meta.boundary,
       realtimeCount: meta.realtimeCount,
-      ...(meta.realtimeTruncated ? { realtimeTruncated: true } : {}),
+      ...(meta.realtimeGap ? { realtimeTruncated: true, realtimeGap: meta.realtimeGap } : {}),
       ...(meta.realtimeError ? { realtimeError: meta.realtimeError } : {}),
       ...(meta.freshCount !== undefined ? { freshCount: meta.freshCount } : {}),
       ...(meta.freshError ? { freshError: meta.freshError } : {}),

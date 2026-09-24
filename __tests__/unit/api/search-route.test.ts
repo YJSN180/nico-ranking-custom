@@ -22,6 +22,7 @@ vi.mock('@/lib/simple-kv', () => ({
 
 import { GET } from '@/app/api/search/route'
 import { clearFreshCache } from '@/lib/search/fresh-segment'
+import { formatJstIso } from '@/lib/search/realtime-search'
 import { kv } from '@/lib/simple-kv'
 
 type Kind = 'long' | 'short'
@@ -44,11 +45,13 @@ interface SearchBody {
   realtimeCount: number
   realtimeError?: string
   freshError?: string
+  realtimeGap?: { from: string; to: string }
 }
 
 const ms = (iso: string): number => new Date(iso).getTime()
 const jst = (time: string, day = 22): string => `2026-09-${day}T${time}+09:00`
-const isoAt = (msValue: number): string => new Date(msValue).toISOString()
+// 本家と同じ +09:00 表記にそろえる（新着区間は投稿時刻の文字列で並べ直すため）
+const isoAt = (msValue: number): string => formatJstIso(new Date(msValue))
 
 let videos: FakeVideo[] = []
 let nvapiStatus = 200
@@ -208,6 +211,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     expect(body.source).toBe('merged')
     expect(ids(body).slice(0, 6)).toEqual(['sm9103', 'sm9102', 'ss9101', 'sm9101', 'sm1060', 'ss2001'])
     expect(new Set(ids(body)).size).toBe(body.items.length)
+    expect(body.realtimeGap).toBeUndefined()
   })
 
   it('索引の最新がショートでも、その動画を欠かさない', async () => {
@@ -368,5 +372,53 @@ describe('/api/search: 全体の期限（S-e）', () => {
     for (const call of fakeFetch.mock.calls) {
       expect(call[1]?.signal?.aborted).toBe(true)
     }
+  })
+})
+
+describe('/api/search: 新着区間の打ち切り（S-b）', () => {
+  beforeEach(() => {
+    seedWorld()
+    nvapiStatus = 200
+    pageStatus = 200
+    calls = []
+    fakeFetch.mockClear()
+    clearFreshCache()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  /** 07:10 から 1 分おきに count 本の新着を足す */
+  const addNewUploads = (kind: Kind, count: number): void => {
+    for (let i = 0; i < count; i++) {
+      videos.push({ id: `${kind === 'long' ? 'sm' : 'ss'}${60000 + i}`, at: isoAt(ms(jst('07:10:00')) + i * 60_000), kind, indexed: false, nvapi: kind === 'long' })
+    }
+  }
+
+  it('nvapi の新着が上限（300 件）を超えたら、境界から取れた中で最も古い投稿までを realtimeGap で返す', async () => {
+    addNewUploads('long', 310)
+    const { body } = await search('q=x&sort=-startTime')
+    expect(body.source).toBe('merged')
+    expect(body.realtimeGap?.from).toBe('2026-09-22T04:00:01+09:00')
+    // 新しい順に 300 件目は 07:20 の投稿
+    expect(ms(body.realtimeGap?.to ?? '')).toBe(ms(jst('07:20:00')))
+  })
+
+  it('ショートだけの検索で本家ページの読み足しが上限に達したら、realtimeGap で返す', async () => {
+    addNewUploads('short', 100)
+    const { body } = await search('q=x&sort=-startTime&contentType=short')
+    expect(body.source).toBe('merged')
+    expect(body.realtimeGap?.from).toBe('2026-09-22T03:45:01+09:00')
+    // 本家ページ 3 ページ（96 件）で打ち切り。96 件目は 07:14 の投稿
+    expect(ms(body.realtimeGap?.to ?? '')).toBe(ms(jst('07:14:00')))
+  })
+
+  it('動画だけの検索では、本家ページの読み足しの上限は打ち切りにしない（長尺は nvapi が受け持つ）', async () => {
+    addNewUploads('long', 100)
+    const { body } = await search('q=x&sort=-startTime&contentType=long')
+    expect(body.source).toBe('merged')
+    expect(body.realtimeGap).toBeUndefined()
   })
 })

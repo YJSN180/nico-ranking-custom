@@ -57,7 +57,33 @@ interface SearchApiResponse {
   boundary?: string
   realtimeCount?: number
   realtimeTruncated?: boolean
+  /** 新着区間を打ち切ったとき、投稿が欠けうる範囲 */
+  realtimeGap?: { from: string; to: string }
+  /** 新着の取得に失敗して索引だけの結果にしたとき */
   realtimeError?: string
+  /** 本家の検索ページ（最新の投稿）の取得に失敗したとき（nvapi の新着は含む） */
+  freshError?: string
+}
+
+type ResultMeta = Pick<SearchApiResponse, 'boundary' | 'realtimeGap' | 'realtimeError' | 'freshError'> & {
+  source: 'merged' | 'snapshot'
+  realtimeCount: number
+}
+
+/** 新着区間について利用者に知らせること（打ち切りと取得の失敗） */
+function realtimeNotices(meta: ResultMeta | null): string[] {
+  if (!meta) return []
+  const notices: string[] = []
+  if (meta.source === 'snapshot' && meta.realtimeError) {
+    notices.push('新着動画を取得できなかったため、検索インデックスの時点までの結果を表示しています。時間をおいて再度検索してください。')
+  }
+  if (meta.source === 'merged') {
+    const from = formatCutoff(meta.realtimeGap?.from)
+    const to = formatCutoff(meta.realtimeGap?.to)
+    if (from && to) notices.push(`新着が多いため、${from}〜${to} に投稿された動画の一部を表示できていません。`)
+    if (meta.freshError) notices.push('最新の投稿の一部を取得できませんでした。時間をおいて再度検索してください。')
+  }
+  return notices
 }
 
 interface FormState {
@@ -301,7 +327,7 @@ export function SearchClient() {
   const [page, setPage] = useState(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())).page)
   const [items, setItems] = useState<RankingItem[] | null>(null)
   // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数
-  const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
+  const [resultMeta, setResultMeta] = useState<ResultMeta | null>(null)
   /**
    * 直前に表示した結果の条件（ページを除く URL クエリ）と、そのときの境界・新着件数。
    * 同じ条件の 2 ページ目以降にだけ返して、ページ間で区間を一貫させる（別の条件へは持ち越さない）
@@ -500,7 +526,14 @@ export function SearchClient() {
           boundary: data.source === 'merged' && data.boundary ? data.boundary : null,
           realtimeCount: data.realtimeCount ?? 0,
         }
-        setResultMeta({ source: data.source ?? 'snapshot', boundary: data.boundary, realtimeCount: data.realtimeCount ?? 0 })
+        setResultMeta({
+          source: data.source ?? 'snapshot',
+          boundary: data.boundary,
+          realtimeCount: data.realtimeCount ?? 0,
+          realtimeGap: data.realtimeGap,
+          realtimeError: data.realtimeError,
+          freshError: data.freshError,
+        })
         void enrichRealtimeTags(data, controller.signal)
         void enrichOwners(data, controller.signal)
       } catch (err) {
@@ -705,6 +738,7 @@ export function SearchClient() {
   }, [form])
 
   const activeChips = useMemo(() => (lastForm ? buildActiveChips(lastForm) : []), [lastForm])
+  const notices = realtimeNotices(resultMeta)
 
   return (
     <TagDisplayProvider>
@@ -1097,6 +1131,16 @@ export function SearchClient() {
             </span>
             <TagToggleButton />
           </div>
+
+          {notices.length > 0 && (
+            <div className="search-results__notices" role="status">
+              {notices.map((notice) => (
+                <p key={notice} className="search-results__notice">
+                  {notice}
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* 上部ページネーション（ランキング画面と同じ配置） */}
           <Pagination

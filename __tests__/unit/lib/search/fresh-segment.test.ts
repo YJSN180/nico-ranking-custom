@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { clearFreshCache, fetchFreshItems, mergeFreshIntoRealtime, FRESH_MAX_PAGES } from '@/lib/search/fresh-segment'
+import { clearFreshCache, fetchFreshSegment, mergeFreshIntoRealtime, FRESH_MAX_PAGES } from '@/lib/search/fresh-segment'
 import type { SearchConditions } from '@/lib/search/snapshot-search'
 import type { RankingItem } from '@/types/ranking'
 
@@ -11,49 +11,50 @@ const pageHtml = (items: Array<Record<string, unknown>>, hasNext = false) => {
 }
 const item = (id: string, registeredAt: string, view = 10) => ({ id, title: `t-${id}`, registeredAt, duration: 30, count: { view, comment: 0, mylist: 0, like: 0 }, owner: { ownerType: 'user', id: '1001', name: 'n', iconUrl: 'https://i/1.jpg' } })
 const ri = (id: string, registeredAt: string): RankingItem => ({ rank: 0, id, title: id, thumbURL: '', views: 0, registeredAt })
+const freshItems = async (...args: Parameters<typeof fetchFreshSegment>): Promise<RankingItem[]> => (await fetchFreshSegment(...args)).items
 
-describe('fetchFreshItems', () => {
+describe('fetchFreshSegment', () => {
   beforeEach(() => clearFreshCache())
 
   it('境界より新しい動画だけを返し、60 秒はキャッシュから返す', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('new1', '2026-09-22T06:42:18+09:00'), item('old1', '2026-09-21T04:00:00+09:00')]) }) as unknown as Response)
     const boundary = '2026-09-21T04:28:31+09:00'
-    const first = await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    const first = await freshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(first.map((it) => it.id)).toEqual(['new1'])
     expect(first[0]?.authorName).toBe('n')
     // 動画とショートの 2 ページを取る（同じ内容でも ID で重複除外）
     expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(vi.mocked(fetchImpl).mock.calls.map((c) => new URL(String(c[0])).pathname.split('/')[1]).sort()).toEqual(['search', 'search_shorts'])
-    const second = await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 30_000 })
+    const second = await freshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 30_000 })
     expect(second).toHaveLength(1)
     expect(fetchImpl).toHaveBeenCalledTimes(2)
-    await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 70_000 })
+    await freshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 70_000 })
     expect(fetchImpl).toHaveBeenCalledTimes(4)
   })
 
   it('範囲・日付フィルタを後付けし、対象外の条件では取得しない', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('a', '2026-09-22T06:00:00+09:00', 5), item('b', '2026-09-22T05:00:00+09:00', 500)]) }) as unknown as Response)
     const boundary = '2026-09-21T04:28:31+09:00'
-    const filtered = await fetchFreshItems(base({ viewsMin: 100 }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })
+    const filtered = await freshItems(base({ viewsMin: 100 }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })
     expect(filtered.map((it) => it.id)).toEqual(['b'])
-    const dated = await fetchFreshItems(base({ dateTo: '2026-09-22T05:30:00+09:00' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })
+    const dated = await freshItems(base({ dateTo: '2026-09-22T05:30:00+09:00' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })
     expect(dated.map((it) => it.id)).toEqual(['b'])
-    expect(await fetchFreshItems(base({ genres: ['ゲーム'] }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })).toEqual([])
+    expect(await freshItems(base({ genres: ['ゲーム'] }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch })).toEqual([])
   })
 
   it('動画の種類で絞る検索では該当する種別のページだけを取り、種類ごとに別キャッシュにする', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('n1', '2026-09-22T06:42:18+09:00')]) }) as unknown as Response)
     const boundary = '2026-09-21T04:28:31+09:00'
     const paths = () => vi.mocked(fetchImpl).mock.calls.map((c) => new URL(String(c[0])).pathname.split('/')[1])
-    await fetchFreshItems(base({ contentType: 'long' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    await freshItems(base({ contentType: 'long' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(paths()).toEqual(['search'])
-    await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    await freshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(paths()).toEqual(['search', 'search_shorts'])
     // タグ検索のショートは /tag_shorts
-    await fetchFreshItems(base({ targets: 'tag', contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    await freshItems(base({ targets: 'tag', contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(paths()).toEqual(['search', 'search_shorts', 'tag_shorts'])
     // すべて は long のキャッシュを流用せず、動画+ショートの 2 ページを取り直す
-    await fetchFreshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    await freshItems(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(paths().slice(3).sort()).toEqual(['search', 'search_shorts'])
   })
 
@@ -66,19 +67,19 @@ describe('fetchFreshItems', () => {
       if (page === '2') return { ok: true, text: async () => pageHtml([newer('p2a'), item('old', '2026-09-20T00:00:00+09:00')], true) } as unknown as Response
       return { ok: false, status: 503 } as unknown as Response
     })
-    const items = await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    const items = await freshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(items.map((it) => it.id)).toEqual(['p1a', 'p1b', 'p2a'])
     expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES)
     // 1 ページ目に境界より古い動画が混じれば読み足さない
     const single = vi.fn(async () => ({ ok: true, text: async () => pageHtml([newer('a'), item('old', '2026-09-20T00:00:00+09:00')], true) }) as unknown as Response)
-    await fetchFreshItems(base({ contentType: 'short', q: 'other' }), boundary, { fetchImpl: single as unknown as typeof fetch, now: 1_000 })
+    await freshItems(base({ contentType: 'short', q: 'other' }), boundary, { fetchImpl: single as unknown as typeof fetch, now: 1_000 })
     expect(single).toHaveBeenCalledTimes(1)
   })
 
   it('境界ちょうどの動画も含める（境界以降。索引側は境界より前なので重ならない）', async () => {
     const boundary = '2026-09-21T04:28:32+09:00'
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('after', '2026-09-21T05:00:00+09:00'), item('at', boundary), item('before', '2026-09-21T04:28:31+09:00')]) }) as unknown as Response)
-    const items = await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    const items = await freshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(items.map((it) => it.id)).toEqual(['after', 'at'])
   })
 
@@ -89,7 +90,7 @@ describe('fetchFreshItems', () => {
       if (page === '1') return { ok: true, text: async () => pageHtml([item('p1', '2026-09-21T05:00:00+09:00'), item('p1-at', boundary)], true) } as unknown as Response
       return { ok: true, text: async () => pageHtml([item(`p${page}-old`, '2026-09-20T00:00:00+09:00')], false) } as unknown as Response
     })
-    const items = await fetchFreshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    const items = await freshItems(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES)
     expect(items.map((it) => it.id)).toEqual(['p1', 'p1-at'])
   })
@@ -97,7 +98,7 @@ describe('fetchFreshItems', () => {
   it('本家ページのチャンネル動画（owner.id が ch 付き）の投稿者 ID を channel/chNNN にそろえる', async () => {
     const channelItem = { ...item('so9', '2026-09-22T06:00:00+09:00'), isChannelVideo: true, owner: { ownerType: 'channel', id: 'ch100300', name: 'c' } }
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([channelItem]) }) as unknown as Response)
-    const items = await fetchFreshItems(base({ contentType: 'long' }), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    const items = await freshItems(base({ contentType: 'long' }), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
     expect(items.map((it) => it.authorId)).toEqual(['channel/ch100300'])
   })
 
@@ -109,16 +110,55 @@ describe('fetchFreshItems', () => {
       signals.push(init?.signal)
       return { ok: true, text: async () => pageHtml([item('n1', '2026-09-22T06:42:18+09:00')]) } as unknown as Response
     })
-    await fetchFreshItems(base(), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000, signal: deadline.signal })
+    await freshItems(base(), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000, signal: deadline.signal })
     expect(signals).toHaveLength(2)
     expect(signals.every((signal) => signal?.aborted === true)).toBe(true)
   })
 
+  describe('読み足しの打ち切り（新着が多いとき）', () => {
+    const boundary = '2026-09-21T04:28:32+09:00'
+    const minute = (n: number) => new Date(Date.parse('2026-09-22T06:00:00+09:00') - n * 60_000).toISOString()
+    // page ページ目は投稿時刻が新しい順に 32 件（全件が境界以降）
+    const fullPage = (page: number) => Array.from({ length: 32 }, (_, i) => item(`s${page}-${i}`, minute((page - 1) * 32 + i)))
+
+    it('上限のページまで全件が境界以降なら、種類ごとに取れた中で最も古い投稿時刻を返す', async () => {
+      const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+        const page = Number(new URL(String(url)).searchParams.get('page') ?? '1')
+        return { ok: true, text: async () => pageHtml(fullPage(page), true) } as unknown as Response
+      })
+      const segment = await fetchFreshSegment(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+      expect(segment.items).toHaveLength(32 * FRESH_MAX_PAGES)
+      expect(segment.truncatedAt).toEqual({ short: minute(32 * FRESH_MAX_PAGES - 1) })
+    })
+
+    it('途中のページが取れなければ、その先のページは使わず、取れたところまでで打ち切る', async () => {
+      const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+        const page = Number(new URL(String(url)).searchParams.get('page') ?? '1')
+        if (page === 2) return { ok: false, status: 503 } as unknown as Response
+        return { ok: true, text: async () => pageHtml(fullPage(page), true) } as unknown as Response
+      })
+      const segment = await fetchFreshSegment(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+      expect(segment.items.map((it) => it.id)).toEqual(fullPage(1).map((v) => v.id))
+      expect(segment.truncatedAt).toEqual({ short: minute(31) })
+    })
+
+    it('境界まで届いていれば打ち切りなし（動画とショートを別々に判定する）', async () => {
+      const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+        const u = new URL(String(url))
+        const page = Number(u.searchParams.get('page') ?? '1')
+        if (u.pathname.startsWith('/search_shorts')) return { ok: true, text: async () => pageHtml(fullPage(page), true) } as unknown as Response
+        return { ok: true, text: async () => pageHtml([item('long-new', minute(1)), item('long-old', '2026-09-20T00:00:00+09:00')], true) } as unknown as Response
+      })
+      const segment = await fetchFreshSegment(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+      expect(segment.truncatedAt).toEqual({ short: minute(32 * FRESH_MAX_PAGES - 1) })
+    })
+  })
+
   it('HTTP エラー・構造変化は投げる', async () => {
     const down = vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response)
-    await expect(fetchFreshItems(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: down as unknown as typeof fetch })).rejects.toThrow('nico_page_http_503')
+    await expect(freshItems(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: down as unknown as typeof fetch })).rejects.toThrow('nico_page_http_503')
     const broken = vi.fn(async () => ({ ok: true, text: async () => '<html></html>' }) as unknown as Response)
-    await expect(fetchFreshItems(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: broken as unknown as typeof fetch })).rejects.toThrow('server-response')
+    await expect(freshItems(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: broken as unknown as typeof fetch })).rejects.toThrow('server-response')
   })
 })
 

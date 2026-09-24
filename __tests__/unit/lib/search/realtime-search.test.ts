@@ -215,6 +215,19 @@ describe('fetchRealtimeSegment', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(REALTIME_MAX_PAGES)
     expect(seg.truncated).toBe(true)
   })
+  it('打ち切ったときは、取れた中で最も古い投稿時刻（後付けフィルタの前）を floor に返す', async () => {
+    const at = (n: number) => `2026-09-02T${String(20 - n).padStart(2, '0')}:00:00+09:00`
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(mkResponse([{ id: 'a', title: 'a', registeredAt: at(1), count: { view: 1 } }], true, 999))
+      .mockResolvedValueOnce(mkResponse([{ id: 'b', title: 'b', registeredAt: at(2), count: { view: 1 } }], true, 999))
+      .mockResolvedValueOnce(mkResponse([{ id: 'c', title: 'c', registeredAt: at(3), count: { view: 1 } }], true, 999))
+    const seg = await fetchRealtimeSegment(base({ viewsMin: 100 }), T, fetchImpl as unknown as typeof fetch)
+    expect(seg.items).toEqual([])
+    expect(seg.floor).toBe(at(3))
+    const complete = vi.fn().mockResolvedValue(mkResponse([{ id: 'a', title: 'a', registeredAt: at(1), count: {} }], false, 1))
+    expect((await fetchRealtimeSegment(base(), T, complete as unknown as typeof fetch)).floor).toBeUndefined()
+  })
   it('上流エラーは throw する（呼び出し側で Snapshot 単独に縮退）', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 403 } as unknown as Response)
     await expect(fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)).rejects.toThrow('nvapi_http_403')
