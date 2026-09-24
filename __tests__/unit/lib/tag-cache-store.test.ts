@@ -89,8 +89,13 @@ describe('R2 shard reads', () => {
     vi.useFakeTimers()
     stubR2Credentials()
     const signals: unknown[] = []
+    let markSent: () => void = () => undefined
+    const sent = new Promise<void>((resolve) => {
+      markSent = resolve
+    })
     vi.spyOn(S3Client.prototype, 'send').mockImplementation((_command: unknown, options?: { abortSignal?: unknown }) => {
       signals.push(options?.abortSignal)
+      markSent()
       return new Promise(() => {})
     })
 
@@ -98,6 +103,8 @@ describe('R2 shard reads', () => {
       () => 'resolved',
       (error: Error) => `rejected:${error.name}`,
     )
+    // gzip は実際の非同期 I/O で偽の時計では進まないので、PUT が始まるまで実時間で待ってから時計を進める
+    await sent
     await vi.advanceTimersByTimeAsync(29_000)
     expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('pending')
     await vi.advanceTimersByTimeAsync(1_000)
