@@ -43,6 +43,8 @@ export interface PollDeps {
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
   fetchSweepVideos: (genre: string, dateJst: string) => Promise<SourceVideo[]>
+  /** 実行は続けるが監視に上げたい失敗（主経路と予備の両方で新着を取れなかったなど） */
+  reportError?: (error: unknown, context: string) => void
 }
 
 const NVAPI_HEADERS: Record<string, string> = {

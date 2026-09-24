@@ -51,13 +51,15 @@ async function probeNewVideos(request: Request, env: Env, url: URL): Promise<Res
 }
 
 async function run(env: Env, mode: RunMode): Promise<RunResult> {
+  const tags = { runtime: 'cloudflare-worker', surface: 'lqng-poller', endpoint_family: 'scheduled', worker_version: 'lqng-poller', mode }
+  // 実行を止めない失敗（新着を主経路・予備とも取れなかったなど）も監視に上げる
+  const reportError = (error: unknown, context: string): void => {
+    captureWorkerException(error, { tags: { ...tags, operation: context } })
+  }
   try {
-    const result = await runPoll(env.LQNG_KV, createLiveDeps(), mode)
-    return result
+    return await runPoll(env.LQNG_KV, { ...createLiveDeps(), reportError }, mode)
   } catch (error) {
-    captureWorkerException(error, {
-      tags: { runtime: 'cloudflare-worker', surface: 'lqng-poller', endpoint_family: 'scheduled', worker_version: 'lqng-poller', mode },
-    })
+    captureWorkerException(error, { tags })
     throw error
   }
 }

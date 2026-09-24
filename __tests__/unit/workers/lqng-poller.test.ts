@@ -386,3 +386,78 @@ describe('lqng-poller 受け箱（バックフィルの確定）の合流', () =
     expect(Array.from(m.store.keys()).filter((k) => k.startsWith('lqng:inbox:'))).toHaveLength(2)
   })
 })
+
+describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
+  const later = new Date(T0.getTime() + 15 * 60_000)
+
+  async function afterFirstPoll() {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+    return m
+  }
+
+  it('主経路がアクセス制限なら最終取得時刻を進めず、次回は前回の時刻から重なり分を取り直す', async () => {
+    const m = await afterFirstPoll()
+    const limited = vi.fn(async () => {
+      throw new AccessLimitedError('nico-page')
+    })
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: limited }, later), 'poll')
+    expect(r.skipped).toBeNull()
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+    const next = vi.fn(async () => [])
+    await runPoll(m.kv, deps({ fetchNewVideos: next }, new Date(later.getTime() + 15 * 60_000)), 'poll')
+    const since = (next.mock.calls[0] as unknown as [string[], string])[1]
+    expect(since).toBe(new Date(T0.getTime() - LIMITS.sinceOverlapMinutes * 60_000).toISOString())
+  })
+
+  it('主経路が壊れて予備もアクセス制限なら最終取得時刻を進めない', async () => {
+    const m = await afterFirstPoll()
+    const primary = vi.fn(async () => {
+      throw new Error('server-response meta not found')
+    })
+    const fallback = vi.fn(async () => {
+      throw new AccessLimitedError('nvapi')
+    })
+    await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(T0.toISOString())
+  })
+
+  it('主経路も予備も壊れていれば、記録して他の処理は続け、最終取得時刻は進めない', async () => {
+    const m = await afterFirstPoll()
+    const primary = vi.fn(async () => {
+      throw new Error('nico_page_http_500')
+    })
+    const fallback = vi.fn(async () => {
+      throw new Error('nvapi_http_503')
+    })
+    const reportError = vi.fn()
+    // 補完待ちが 1 件あり、新着取得が失敗してもこの回で補完される
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    tracking.authors['1001'] = { authorId: '1001', firstSeenAt: T0.toISOString(), lastPostAt: at(-1), posts: [{ id: 'sm90', title: '通常', at: at(-1), tagDetails: null, ownerVisibility: 'visible' }], status: 'unknown', lastCheckedAt: null, followerCount: null, nickname: null, visibility: null, deletedObservedAt: null }
+    tracking.pending = [{ id: 'sm90', authorId: '1001', attempts: 0 }]
+    m.store.set(LQNG_KV_KEYS.tracking, JSON.stringify(tracking))
+    const thumb = vi.fn(async () => okThumb())
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback, fetchThumbInfo: thumb, reportError }, later), 'poll')
+    expect(r.skipped).toBeNull()
+    expect(thumb).toHaveBeenCalledWith('sm90')
+    const saved = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(saved.lastPollAt).toBe(T0.toISOString())
+    expect(saved.pending).toEqual([])
+    expect(saved.lastRun?.note).toContain('new_videos_failed')
+    const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
+    expect(events.items.some((e) => e.kind === 'error' && e.note?.includes('nvapi_http_503'))).toBe(true)
+    expect(reportError).toHaveBeenCalledTimes(1)
+  })
+
+  it('予備で取れた回は最終取得時刻を進める', async () => {
+    const m = await afterFirstPoll()
+    const primary = vi.fn(async () => {
+      throw new Error('server-response meta not found')
+    })
+    const fallback = vi.fn(async () => [video({ id: 'sm91' })])
+    await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(later.toISOString())
+  })
+})

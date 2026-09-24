@@ -67,6 +67,7 @@ const DAY_MS = 24 * HOUR_MS
 const MINUTE_MS = 60_000
 
 const isUserId = (authorId: string): boolean => /^\d{1,12}$/.test(authorId)
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : 'error')
 
 function toObservation(author: TrackedAuthor | undefined): AuthorObservation | null {
   if (!author) return null
@@ -100,7 +101,7 @@ class Session {
   newVideos = 0
   enriched = 0
   usersChecked = 0
-  note: string | undefined
+  private readonly notes: string[] = []
 
   constructor(
     readonly state: LoadedState,
@@ -114,6 +115,20 @@ class Session {
 
   get config(): LqngConfig {
     return this.state.config
+  }
+
+  /** 直近の実行の要約に残す注記（アクセス制限・縮退・失敗など） */
+  get note(): string | undefined {
+    return this.notes.length > 0 ? this.notes.join('; ') : undefined
+  }
+
+  addNote(note: string): void {
+    if (!this.notes.includes(note)) this.notes.push(note)
+  }
+
+  recordAccessLimited(error: AccessLimitedError): void {
+    pushEvent(this.state.events, { at: this.nowIso, kind: 'access_limited', note: error.message })
+    this.addNote(error.message)
   }
 
   budgetLeft(cost = 1): boolean {
@@ -241,6 +256,54 @@ class Session {
     }
   }
 
+  /**
+   * 新着を取得して取り込む。主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。
+   * 取得できたときだけ true（false の回は最終取得時刻を進めず、次回に同じ区間を取り直す）
+   */
+  async ingestNewVideos(sinceIso: string): Promise<boolean> {
+    const tags = this.config.pollTags
+    if (tags.length === 0) return true
+    this.spend(LIMITS.nvapiCost)
+    let primaryError: unknown
+    try {
+      this.ingest(await this.deps.fetchNewVideos(tags, sinceIso))
+      return true
+    } catch (error) {
+      if (error instanceof AccessLimitedError) {
+        this.recordAccessLimited(error)
+        return false
+      }
+      primaryError = error
+    }
+    const reason = messageOf(primaryError)
+    const fallback = this.deps.fetchNewVideosFallback
+    if (fallback) {
+      // 原因は履歴に残す
+      pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
+      this.addNote(`fallback: ${reason}`)
+      try {
+        this.ingest(await fallback(tags, sinceIso))
+        return true
+      } catch (fallbackError) {
+        if (fallbackError instanceof AccessLimitedError) {
+          this.recordAccessLimited(fallbackError)
+          return false
+        }
+        this.failNewVideos(`fallback: ${messageOf(fallbackError)}`, fallbackError)
+        return false
+      }
+    }
+    this.failNewVideos(reason, primaryError)
+    return false
+  }
+
+  /** 新着を取れなかった回の記録（実行は止めずに補完・投稿者確認・受け箱の合流を続ける） */
+  private failNewVideos(reason: string, error: unknown): void {
+    pushEvent(this.state.events, { at: this.nowIso, kind: 'error', note: `new_videos_failed: ${reason}` })
+    this.addNote(`new_videos_failed: ${reason}`)
+    this.deps.reportError?.(error, 'new_videos')
+  }
+
   /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */
   ingest(videos: SourceVideo[]): void {
     for (const v of videos) {
@@ -288,8 +351,7 @@ class Session {
         result = await this.deps.fetchThumbInfo(item.id)
       } catch (error) {
         if (error instanceof AccessLimitedError) {
-          pushEvent(this.state.events, { at: this.nowIso, kind: 'access_limited', note: error.message })
-          this.note = error.message
+          this.recordAccessLimited(error)
           keep.push(...pending.slice(i))
           break
         }
@@ -330,8 +392,7 @@ class Session {
         info = await this.deps.fetchUserInfo(author.authorId)
       } catch (error) {
         if (error instanceof AccessLimitedError) {
-          pushEvent(this.state.events, { at: this.nowIso, kind: 'access_limited', note: error.message })
-          this.note = error.message
+          this.recordAccessLimited(error)
           break
         }
         continue
@@ -424,35 +485,12 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     const since = state.tracking.lastPollAt
       ? new Date(new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS)
       : new Date(now.getTime() - LIMITS.firstPollLookbackMinutes * MINUTE_MS)
-    if (state.config.pollTags.length > 0) {
-      session.spend(LIMITS.nvapiCost)
-      try {
-        session.ingest(await deps.fetchNewVideos(state.config.pollTags, since.toISOString()))
-      } catch (error) {
-        if (error instanceof AccessLimitedError) {
-          pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: error.message })
-          session.note = error.message
-        } else if (deps.fetchNewVideosFallback) {
-          // 主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。原因は履歴に残す
-          const reason = error instanceof Error ? error.message : 'error'
-          pushEvent(state.events, { at: nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
-          session.note = `fallback: ${reason}`
-          try {
-            session.ingest(await deps.fetchNewVideosFallback(state.config.pollTags, since.toISOString()))
-          } catch (fallbackError) {
-            if (!(fallbackError instanceof AccessLimitedError)) throw fallbackError
-            pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: fallbackError.message })
-            session.note = fallbackError.message
-          }
-        } else {
-          throw error
-        }
-      }
-    }
+    const fetched = await session.ingestNewVideos(since.toISOString())
     await session.enrichPending()
     await session.checkAuthors()
     session.expireAndPrune()
-    state.tracking.lastPollAt = nowIso
+    // 新着を取れなかった回は進めない（取れなかった区間を次回の重なりで取り直す）
+    if (fetched) state.tracking.lastPollAt = nowIso
   }
 
   // 定常の poll の要約は履歴に積まない（追跡表の lastRun に置く）。日次スイープは 1 日 1 件だけ残す
