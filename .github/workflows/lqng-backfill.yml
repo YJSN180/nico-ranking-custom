@@ -79,6 +79,8 @@ jobs:
           BACKFILL_COMMIT_EVERY: ${{ inputs.commit_every }}
           BACKFILL_END: ${{ inputs.end }}
           BACKFILL_SOURCE: ${{ inputs.source }}
+          # 下の 2 つは、この版の YAML から起動したときだけ渡る。main の YAML が古い間は「Use workflow from」でこの版のあるブランチを選ぶ
+          # （main の YAML から起動すると 165 分の期限が効かず、runId は駆動スクリプトが local-… で作る）
           # 受け箱のキー（lqng:inbox:<runId>:<seq>）に使う。再実行（attempt）ごとに別のキーになる
           LQNG_BACKFILL_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
           # ジョブの上限（timeout-minutes: 180）で打ち切られる前に、見つけた差分を確定して終える
