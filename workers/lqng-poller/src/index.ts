@@ -42,9 +42,9 @@ async function probeNewVideos(request: Request, env: Env, url: URL): Promise<Res
   const where = { colo: cf?.colo ?? null, country: cf?.country ?? null }
   const { pollTags } = await loadConfig(env.LQNG_KV)
   try {
-    const videos = source === 'pages' ? await fetchNewVideosFromNicoPages(pollTags, since) : await fetchNewVideosFromNvapi(pollTags, since)
+    const { videos, failures } = source === 'pages' ? await fetchNewVideosFromNicoPages(pollTags, since) : { videos: await fetchNewVideosFromNvapi(pollTags, since), failures: [] }
     const times = videos.map((v) => v.registeredAt).sort()
-    return Response.json({ probe: { source, ok: true, since, count: videos.length, first: times[0] ?? null, last: times[times.length - 1] ?? null, ...where } }, { headers: NO_STORE })
+    return Response.json({ probe: { source, ok: true, since, count: videos.length, first: times[0] ?? null, last: times[times.length - 1] ?? null, failures, ...where } }, { headers: NO_STORE })
   } catch (error) {
     return Response.json({ probe: { source, ok: false, since, error: error instanceof Error ? error.message : 'error', ...where } }, { headers: NO_STORE })
   }

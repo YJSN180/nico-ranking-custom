@@ -1,7 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageVideo } from '../../../lib/search/nico-page-search'
+import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -35,10 +35,17 @@ export class AccessLimitedError extends Error {
   }
 }
 
+/** 新着の主経路（本家タグページ）の結果。取れたページの動画と、取れなかったページ */
+export interface NewVideosResult {
+  videos: SourceVideo[]
+  /** 取れなかったページ（タグは名前でなく設定の並び順の番号で表す。例: t0:tag_shorts:p1 nico_page_http_503） */
+  failures: string[]
+}
+
 export interface PollDeps {
   now: () => Date
-  /** 新着の主経路（本家のタグページ）。失敗時は fetchNewVideosFallback（nvapi）へ */
-  fetchNewVideos: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
+  /** 新着の主経路（本家のタグページ）。全ページ失敗したときだけ投げ、fetchNewVideosFallback（nvapi）へ */
+  fetchNewVideos: (tags: string[], sinceIso: string) => Promise<NewVideosResult>
   fetchNewVideosFallback?: (tags: string[], sinceIso: string) => Promise<SourceVideo[]>
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
@@ -98,29 +105,46 @@ export const NICO_PAGE_KINDS: readonly NicoPageKind[] = ['tag', 'tag_shorts']
  * 本家のタグページ（投稿日時が新しい順）から since 以降の新着を集める。nvapi の検索索引より反映が早く、
  * nvapi の動画検索には無いショート（ss）も /tag_shorts から拾える。
  * タグ×種別ごとに 1 ページ、ページ末尾まで since より新しい動画が続くときだけ 2 ページ目まで読む。
- * 同じ動画が複数タグに出ても 1 回だけ返す。HTTP エラー・構造変化は throw（呼び出し側で nvapi に縮退）。
+ * 同じ動画が複数タグに出ても 1 回だけ返す。
+ * 失敗はタグ×種別ごとに扱い、取れたページの分は返す（ショートだけ失敗しても nvapi には縮退しない）。
+ * 403（アクセス制限）に当たったら残りのページは読まない。全ページ失敗したときだけ throw（呼び出し側で nvapi に縮退）。
  */
-export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<SourceVideo[]> {
+export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: string, fetchImpl: typeof fetch = fetch): Promise<NewVideosResult> {
   const sinceMs = new Date(sinceIso).getTime()
   const seen = new Set<string>()
   const out: SourceVideo[] = []
-  for (const tag of tags) {
-    for (const kind of NICO_PAGE_KINDS) for (let page = 1; page <= NICO_PAGES_PER_TAG; page++) {
-      const result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
-      let reachedSince = false
-      for (const item of result.items) {
-        if (new Date(item.registeredAt).getTime() < sinceMs) {
-          reachedSince = true
+  const failures: string[] = []
+  let succeeded = 0
+  let limited = false
+  for (const [tagIndex, tag] of tags.entries()) {
+    for (const kind of NICO_PAGE_KINDS) {
+      for (let page = 1; page <= NICO_PAGES_PER_TAG && !limited; page++) {
+        let result: NicoPageResult
+        try {
+          result = await fetchNicoSearchPage(kind, tag, page, fetchImpl, TIMEOUT_MS)
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'error'
+          failures.push(`t${tagIndex}:${kind}:p${page} ${reason}`)
+          limited = reason === 'nico_page_http_403'
           break
         }
-        if (seen.has(item.id)) continue
-        seen.add(item.id)
-        out.push(mapNicoPageVideo(item))
+        succeeded++
+        let reachedSince = false
+        for (const item of result.items) {
+          if (new Date(item.registeredAt).getTime() < sinceMs) {
+            reachedSince = true
+            break
+          }
+          if (seen.has(item.id)) continue
+          seen.add(item.id)
+          out.push(mapNicoPageVideo(item))
+        }
+        if (reachedSince || !result.hasNext || result.items.length < NICO_PAGE_SIZE) break
       }
-      if (reachedSince || !result.hasNext || result.items.length < NICO_PAGE_SIZE) break
     }
   }
-  return out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt))
+  if (succeeded === 0 && failures.length > 0) throw new Error(`nico_pages_failed: ${failures.join('; ')}`)
+  return { videos: out.sort((a, b) => b.registeredAt.localeCompare(a.registeredAt)), failures }
 }
 
 /** nvapi 新着検索: タグ OR、投稿日時の新しい順、since 以降を最大 3 ページ（本家ページが使えないときの予備） */

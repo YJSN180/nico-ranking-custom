@@ -273,7 +273,11 @@ class Session {
     this.spend(LIMITS.nvapiCost)
     let primaryError: unknown
     try {
-      this.ingest(await this.deps.fetchNewVideos(tags, sinceIso))
+      const result = await this.deps.fetchNewVideos(tags, sinceIso)
+      this.ingest(result.videos)
+      // 一部のページだけ取れなかった回は、取れた分を使う（予備には縮退しない）。
+      // 取れなかったページの動画は次回以降の重なり（sinceOverlapMinutes）で取り直す
+      if (result.failures.length > 0) this.addNote(`new_videos_partial: ${result.failures.join('; ')}`)
       return true
     } catch (error) {
       if (error instanceof AccessLimitedError) {
