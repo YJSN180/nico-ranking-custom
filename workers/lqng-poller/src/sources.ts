@@ -1,7 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
+import { fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -160,7 +160,8 @@ export async function fetchNewVideosFromNicoPages(tags: string[], sinceIso: stri
           seen.add(item.id)
           out.push(mapNicoPageVideo(item))
         }
-        if (reachedSince || !result.hasNext || result.items.length < NICO_PAGE_SIZE) break
+        // 続きの有無は hasNext で決める（形の崩れた項目を除くと 32 件未満になりうる）。空のページでは止める
+        if (reachedSince || !result.hasNext || result.items.length === 0) break
       }
     }
   }

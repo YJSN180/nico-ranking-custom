@@ -26,7 +26,7 @@ import {
   type UserInfo,
 } from './sources'
 import { loadState, type KvLike } from './state'
-import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
+import { fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
 import { NICO_PAGE_KINDS } from './sources'
 
 export const BACKFILL_LIMITS = {
@@ -460,7 +460,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
         inRange.map((v): SnapshotVideo => ({ id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: v.owner === null ? null : v.owner?.visibility === 'hidden' ? 'hidden' : 'visible', tags: [] }))
       )
       const reachedFloor = inRange.length < result.items.length
-      if (reachedFloor || !result.hasNext || result.items.length < NICO_PAGE_SIZE) {
+      // 続きの有無は hasNext で決める（形の崩れた項目を除くと 32 件未満になりうる）。空のページでは次のタグへ
+      if (reachedFloor || !result.hasNext || result.items.length === 0) {
         cursor.tagIndex++
         cursor.page = 1
       } else {

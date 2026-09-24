@@ -180,6 +180,20 @@ describe('fetchNewVideosFromNicoPages', () => {
     expect(videos).toHaveLength(33)
   })
 
+  it('ページ送りは件数でなく hasNext で決める（32 件未満でも続きがあれば読む・空のページで止める）', async () => {
+    // 形の崩れた項目が除かれて 30 件になったページ（続きあり）
+    const short = Array.from({ length: 30 }, (_, i) => item(`p${i}`, i))
+    const fetchImpl = vi.fn(async (url: string) => {
+      const u = new URL(url)
+      if (u.pathname.startsWith('/tag_shorts/')) return { ok: true, text: async () => pageHtml([], true) } as unknown as Response
+      const page = u.searchParams.get('page') ?? '1'
+      return { ok: true, text: async () => (page === '1' ? pageHtml(short, true) : pageHtml([item('q1', 40)], false)) } as unknown as Response
+    })
+    const { videos, requests } = await fetchNewVideosFromNicoPages(['tagA'], T(120), fetchImpl as unknown as typeof fetch)
+    expect(videos).toHaveLength(31)
+    expect(requests).toBe(3) // 動画 2 ページ + ショート 1 ページ（空なので hasNext でも止める）
+  })
+
   it('ショートのページだけ失敗しても投げず、取れたページの動画を返して失敗したページを記録する', async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       const u = new URL(url)

@@ -184,6 +184,18 @@ describe('runBackfillStep（pages ソース: 本家タグページで直近を�
     expect(r.cursor.stats.videos).toBe(34) // 32 + 2（floor より古い 1 件は数えない）
   })
 
+  it('ページ送りは件数でなく hasNext で決める（32 件未満でも続きがあれば同じタグの次のページへ）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const fetchTagPage = vi.fn(async (tag: string, page: number, kind: string) => {
+      if (kind === 'tag_shorts' || tag !== 'tagA') return { items: [], totalCount: 0, hasNext: false }
+      if (page === 1) return { items: Array.from({ length: 30 }, (_, i) => pageItem(`h${i}`, `${6100 + i}`, 1 + i)), totalCount: 100, hasNext: true }
+      return { items: [pageItem('h-last', '6199', 40)], totalCount: 100, hasNext: false }
+    })
+    const r = await runBackfillStep(m.kv, deps({ fetchTagPage }), null, { pages: 8, source: 'pages' })
+    expect(vi.mocked(fetchTagPage).mock.calls.map((c) => `${c[0]}:${c[2]}:${c[1]}`).slice(0, 2)).toEqual(['tagA:tag:1', 'tagA:tag:2'])
+    expect(r.cursor.stats.videos).toBe(31)
+  })
+
   it('pages ソースの既定の遡りは 2 日', () => {
     const c = createBackfillCursor(T0, null, 'pages')
     expect(new Date(c.floor).getTime()).toBe(T0.getTime() - 2 * 24 * 3600_000)
