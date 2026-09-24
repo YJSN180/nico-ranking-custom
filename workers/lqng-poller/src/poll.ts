@@ -571,14 +571,20 @@ class Session {
     return null
   }
 
-  /** 対照: 最近存在を確認した追跡中の投稿者（フォロワーの多い順）。いなければ設定の controlUserId */
+  /**
+   * 対照: 設定の controlUserId（存在が確実な投稿者）を先に使う。無ければ、最近存在を確認した追跡中の
+   * 投稿者のうち、連投しておらず、フォロワーが followerMax より多い人（フォロワーの多い順）。
+   * 同じ波で退会しうる連投アカウントや、捨てアカウントらしい投稿者を対照にしないため
+   */
   private pickControl(exclude: ReadonlySet<string>): string | null {
+    if (this.config.controlUserId) return this.config.controlUserId
     const nowMs = this.now.getTime()
     const checkedMs = (a: TrackedAuthor): number => (a.lastCheckedAt ? new Date(a.lastCheckedAt).getTime() : Number.NEGATIVE_INFINITY)
     const tracked = Object.values(this.state.tracking.authors)
-      .filter((a) => a.status === 'existing' && !a.deletionSuspectedAt && isUserId(a.authorId) && !exclude.has(a.authorId) && nowMs - checkedMs(a) <= LIMITS.controlFreshHours * HOUR_MS)
+      .filter((a) => a.status === 'existing' && !a.deletionSuspectedAt && isUserId(a.authorId) && !exclude.has(a.authorId))
+      .filter((a) => nowMs - checkedMs(a) <= LIMITS.controlFreshHours * HOUR_MS && (a.followerCount ?? 0) > this.config.followerMax && !this.isFrequentAuthor(a.authorId))
       .sort((x, y) => (y.followerCount ?? -1) - (x.followerCount ?? -1) || checkedMs(y) - checkedMs(x))
-    return tracked[0]?.authorId ?? this.config.controlUserId ?? null
+    return tracked[0]?.authorId ?? null
   }
 
   private markExisting(author: TrackedAuthor, info: UserInfo): void {

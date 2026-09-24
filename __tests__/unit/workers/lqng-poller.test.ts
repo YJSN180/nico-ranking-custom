@@ -739,6 +739,26 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
       expect(without.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')?.note).toContain('no_control')
     })
 
+    it('設定の controlUserId があれば、追跡中の投稿者より先に対照にする', async () => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith([controlAuthor('1900', 5000)]) })
+      const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '1999' || id === '1900' ? existing(5000) : deleted))
+      await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3500))), fetchUserInfo: info }), 'poll')
+      expect(info.mock.calls.map((c) => c[0])).toEqual(['3500', '1999'])
+    })
+
+    it('追跡中から選ぶときは、連投している投稿者とフォロワーが followerMax 以下の投稿者を対照にしない', async () => {
+      // 1910: フォロワーは多いが連投中（同じ波の荒らしかもしれない）、1911: フォロワー 5（followerMax 以下）
+      const frequent: TrackedAuthor = {
+        ...controlAuthor('1910', 9000),
+        posts: [0, 1, 2].map((i) => ({ id: `sm${1910}${i}`, title: 't', at: new Date(T0.getTime() - (60 + i) * 60_000).toISOString(), tagDetails: [], ownerVisibility: 'visible' as const })),
+      }
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: noControlConfig, [LQNG_KV_KEYS.tracking]: trackingWith([frequent, controlAuthor('1911', 5), controlAuthor('1912', 50)]) })
+      const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '1912' ? existing(50) : deleted))
+      await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads(1, 3600))), fetchUserInfo: info }), 'poll')
+      expect(info.mock.calls.map((c) => c[0])).toEqual(['3600', '1912'])
+      expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['3600']?.deletionSuspectedAt).toBe(T0.toISOString())
+    })
+
     it('同じ回に存在の確認が取れていれば、対照を別に確かめない', async () => {
       const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
       const info = vi.fn(async (id: string): Promise<UserInfo> => (id === '3401' ? existing(7) : deleted))
