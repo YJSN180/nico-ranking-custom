@@ -63,13 +63,19 @@
   background-color: var(--surface-hover);
 }
 
-/* タブ列が見切れる場合に「横スクロールできる」ことを示すグラデーション */
+/* タブ列が見切れる場合に「横スクロールできる」ことを示すグラデーション（モバイルのみ）。
+   PC は main と同じくタブ列がモーダルの直接の子として振る舞うよう、ラッパーの箱を作らない */
 .tabsWrapper {
-  position: relative;
-  flex-shrink: 0;
+  display: contents;
 }
 
 @media (max-width: 640px) {
+  .tabsWrapper {
+    display: block;
+    position: relative;
+    flex-shrink: 0;
+  }
+
   .tabsWrapper::after {
     content: '';
     position: absolute;
@@ -123,9 +129,7 @@
 }
 
 .content {
-  /* flexで残りの高さを使う（ヘッダー/フッター高さのハードコードをやめる） */
-  flex: 1 1 auto;
-  min-height: 0;
+  height: 100%; /* 利用可能な高さをすべて使用（PC は main と同じ） */
   overflow-y: auto;
   padding: 20px;
 }
@@ -277,52 +281,97 @@
   color: var(--text-secondary);
 }
 
-/* 適用ボタン（変更があるときだけ表示される、この画面の実操作）。
-   閉じる操作は右上×に一本化しており、フッターにdismissボタンは置かない */
-.applyButton {
-  padding: 8px 24px;
-  background: var(--primary-color);
-  color: var(--button-text-active);
-  border: none;
-  border-radius: 6px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
+/* フッターのボタン群（PC は main と同じ「適用」＋「閉じる」） */
+.footerActions {
+  display: flex;
+  gap: 8px;
 }
 
-.applyButton:hover {
+.footer .closeButton {
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.footer .closeButton:hover {
   background: var(--primary-color-hover);
 }
 
-/* 一括追加のトグル/実行はセカンダリ（プライマリの重みは単発「追加」と「適用」に残す） */
-.bulkToggle {
-  padding: 6px 12px;
-  background: transparent;
-  color: var(--primary-color);
-  border: 1px solid var(--border-color);
+/* 適用ボタン（変更があるときだけ表示される、この画面の実操作）。PC は main と同じ見た目 */
+.applyButton {
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: white;
+  border: none;
   border-radius: 4px;
-  font-size: 14px;
   cursor: pointer;
+  font-weight: bold;
 }
 
-.bulkToggle:hover {
-  background: var(--surface-hover);
+/* 一括追加のトグル/実行。PC は main と同じ見た目（プライマリ色） */
+.bulkToggle {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .bulkButton {
   margin-top: 8px;
   padding: 8px 16px;
-  background: var(--surface-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
+  background: var(--primary-color);
+  color: white;
+  border: none;
   border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
   cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
 }
 
-.bulkButton:hover {
-  background: var(--surface-hover);
+/* モバイル（≤640px）: 閉じる操作は右上×に一本化してフッターの「閉じる」は出さない。
+   一括追加はセカンダリ（プライマリの重みは単発「追加」と「適用」に残す） */
+@media (max-width: 640px) {
+  .footer .closeButton {
+    display: none;
+  }
+
+  .applyButton {
+    padding: 8px 24px;
+    color: var(--button-text-active);
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .applyButton:hover {
+    background: var(--primary-color-hover);
+  }
+
+  .bulkToggle {
+    background: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--border-color);
+  }
+
+  .bulkToggle:hover {
+    background: var(--surface-hover);
+  }
+
+  .bulkButton {
+    background: var(--surface-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    font-weight: 600;
+  }
+
+  .bulkButton:hover {
+    background: var(--surface-hover);
+  }
 }
 
 /* アニメーション */
@@ -363,6 +412,13 @@
     right: 0;
     padding-bottom: env(safe-area-inset-bottom);
     animation: slideUpMobile 0.3s ease-out;
+  }
+
+  .content {
+    /* flexで残りの高さを使う（ヘッダー/フッター高さのハードコードをやめる） */
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
   }
 }
 

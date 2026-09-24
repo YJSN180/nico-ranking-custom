@@ -11,6 +11,8 @@ interface ToastItem extends ToastPayload {
 
 const MAX_VISIBLE_TOASTS = 3
 const AUTO_DISMISS_MS = 3200
+// 操作ボタン付き（再試行など）は押す時間を確保するため長めに出す
+const AUTO_DISMISS_WITH_ACTION_MS = 8000
 const LEAVE_ANIMATION_MS = 200
 
 const TYPE_ICONS: Record<ToastPayload['type'], string> = {
@@ -23,6 +25,7 @@ const TYPE_ICONS: Record<ToastPayload['type'], string> = {
 export function ToastViewport() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const idRef = useRef(0)
+  const dismissRef = useRef<(id: number) => void>(() => {})
 
   useEffect(() => {
     const timers = new Set<ReturnType<typeof setTimeout>>()
@@ -34,6 +37,7 @@ export function ToastViewport() {
       }, LEAVE_ANIMATION_MS)
       timers.add(removeTimer)
     }
+    dismissRef.current = dismiss
 
     const handleToast = (event: Event) => {
       const detail = (event as CustomEvent<ToastPayload>).detail
@@ -41,7 +45,10 @@ export function ToastViewport() {
       idRef.current += 1
       const id = idRef.current
       setToasts((prev) => [...prev.slice(-(MAX_VISIBLE_TOASTS - 1)), { ...detail, id, leaving: false }])
-      const dismissTimer = setTimeout(() => dismiss(id), AUTO_DISMISS_MS)
+      const dismissTimer = setTimeout(
+        () => dismiss(id),
+        detail.action ? AUTO_DISMISS_WITH_ACTION_MS : AUTO_DISMISS_MS
+      )
       timers.add(dismissTimer)
     }
 
@@ -57,12 +64,24 @@ export function ToastViewport() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`toast toast--${toast.type}${toast.leaving ? ' toast--leaving' : ''}`}
+          className={`toast toast--${toast.type}${toast.action ? ' toast--with-action' : ''}${toast.leaving ? ' toast--leaving' : ''}`}
         >
           <span className="toast__icon" aria-hidden="true">
             {TYPE_ICONS[toast.type]}
           </span>
           <span className="toast__message">{toast.message}</span>
+          {toast.action && (
+            <button
+              type="button"
+              className="toast__action"
+              onClick={() => {
+                dismissRef.current(toast.id)
+                toast.action?.onAction()
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
         </div>
       ))}
     </div>

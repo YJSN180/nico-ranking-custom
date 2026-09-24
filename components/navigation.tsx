@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
+import { lockViewportScroll } from '@/lib/scroll-lock'
 import styles from './navigation.module.css'
 import { 
   HamburgerIcon, 
@@ -59,9 +61,18 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/changelog', label: '更新履歴', icon: <HistoryIcon />, section: 'info' },
 ]
 
-export function Navigation() {
-  const [isOpen, setIsOpen] = useState(false)
+interface NavigationProps {
+  /** メニューの開閉を親（ヘッダー）へ知らせる。ドロワーを開いている間はヘッダーを隠さないため */
+  onOpenChange?: (open: boolean) => void
+}
+
+export function Navigation({ onOpenChange }: NavigationProps = {}) {
+  const [isOpen, setIsOpenState] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
+  const setIsOpen = useCallback((open: boolean) => {
+    setIsOpenState(open)
+    onOpenChange?.(open)
+  }, [onOpenChange])
   const [isTouching, setIsTouching] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
@@ -72,15 +83,20 @@ export function Navigation() {
   const mobileMenuRef = useRef<HTMLElement>(null)
   const mobileButtonRef = useRef<HTMLButtonElement>(null)
   
-  // 退場アニメーション付きでメニューを閉じる
+  // メニューを閉じる。モバイルのドロワーは退場アニメーション付き。
+  // PC（769px 以上）のドロップダウンは main と同じく即座に閉じる
   const closeMenu = useCallback(() => {
     if (!isOpen || isClosing) return
+    if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(max-width: 768px)').matches) {
+      setIsOpen(false)
+      return
+    }
     setIsClosing(true)
     setTimeout(() => {
       setIsOpen(false)
       setIsClosing(false)
     }, 180)
-  }, [isOpen, isClosing])
+  }, [isOpen, isClosing, setIsOpen])
 
   // 設定モーダルを開く関数
   const openSettings = () => {
@@ -128,25 +144,17 @@ export function Navigation() {
     return () => document.removeEventListener('keydown', handleEscape)
   }, [isOpen, closeMenu])
 
-  // サイドドロワー表示時のボディスクロール制御
+  // サイドドロワー表示時は背景のスクロールを止める（モバイル幅のみ）。
+  // body ではなく html で止める（body に付けると sticky ヘッダーが外れる。lib/scroll-lock.ts）
   useEffect(() => {
     // テスト環境対応
-    if (typeof window === 'undefined' || !window.matchMedia) {
+    if (!isOpen || typeof window === 'undefined' || !window.matchMedia) {
       return
     }
-    
-    // CSSメディアクエリでモバイル判定 - 防御的コーディング
-    const mediaQuery = window.matchMedia && window.matchMedia('(max-width: 768px)')
-    
-    if (mediaQuery && mediaQuery.matches && isOpen) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
+    if (!window.matchMedia('(max-width: 768px)').matches) {
+      return
     }
-
-    return () => {
-      document.body.style.overflow = ''
-    }
+    return lockViewportScroll()
   }, [isOpen])
 
   // SSR時にデスクトップ版→マウント後にモバイル版へ差し替わるちらつきを避けるため、
@@ -170,9 +178,12 @@ export function Navigation() {
           </span>
         </button>
 
-        {/* モバイルメニュー（サイドドロワー） */}
-        {(isOpen || isClosing) && (
-          <>
+        {/* モバイルメニュー（サイドドロワー）。オーバーレイとドロワーは body 直下に描画する。
+            ヘッダーの中だと sticky ヘッダーの重なり（z-index 20）に閉じ込められてボトムナビ（25）より
+            下になり、ヘッダーを隠す transform がドロワーの位置の基準になってヘッダーごと消えるため。
+            portal 先でもモバイル幅（768px 以下）だけ表示するよう mobileOnly で包む */}
+        {(isOpen || isClosing) && createPortal(
+          <div className={styles.mobileOnly}>
             {/* 背景オーバーレイ */}
             <div
               onClick={() => closeMenu()}
@@ -384,7 +395,8 @@ export function Navigation() {
                 </div>
               </div>
             </nav>
-          </>
+          </div>,
+          document.body
         )}
       </div>
 
@@ -403,14 +415,14 @@ export function Navigation() {
         </span>
       </button>
 
-      {/* ドロップダウンメニュー */}
-      {(isOpen || isClosing) && (
+      {/* ドロップダウンメニュー（PC は main と同じく退場アニメーションなしで閉じる） */}
+      {isOpen && (
         <nav
           ref={menuRef}
           id="navigation-dropdown"
           role="navigation"
           aria-label="メインナビゲーション"
-          className={`${styles.dropdown}${isClosing ? ` ${styles.dropdownClosing}` : ''}`}
+          className={styles.dropdown}
         >
           <div className={styles.menuContent}>
             {/* メインセクション */}

@@ -127,7 +127,14 @@ export function ItemActionMenu({ video, disabled = false, onNGAdded }: ItemActio
       </button>
 
       {isOpen && (
-        <div ref={dropdownRef} className="item-action-menu__dropdown" role="menu">
+        // メニュー本体のクリック（見出し・余白・メニューから開いたモーダル等の portal を含む）は
+        // 行まで伝えない。伝わると行のクリック処理で動画が新しいタブで開いてしまう
+        <div
+          ref={dropdownRef}
+          className="item-action-menu__dropdown"
+          role="menu"
+          onClick={(e) => e.stopPropagation()}
+        >
           {view === 'menu' ? (
             <div className="item-action-menu__view" key="menu">
               <MylistButton video={video} asMenuItem />

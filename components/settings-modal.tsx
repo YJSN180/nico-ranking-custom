@@ -11,6 +11,7 @@ import { MylistBackup } from './mylist-backup'
 import { UnifiedBackup } from './unified-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
+import { lockViewportScroll } from '@/lib/scroll-lock'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -85,8 +86,9 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     if (!isOpen) return
     const previouslyFocused = document.activeElement as HTMLElement | null
     modalRef.current?.focus()
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // 背景スクロールはモバイル幅だけ html で止める（body に付けると sticky ヘッダーが外れる。
+    // PC は main と同じく止めない）
+    const unlockScroll = window.matchMedia?.('(max-width: 640px)').matches ? lockViewportScroll() : null
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -115,7 +117,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = previousOverflow
+      unlockScroll?.()
       previouslyFocused?.focus?.()
     }
   }, [isOpen])
@@ -1121,13 +1123,18 @@ ch2625894`}
               </>
             )}
           </div>
-          {/* 閉じる操作は右上の×に一本化（HIG: 単一の明確なdismiss。
-              プライマリの視覚的重みは実操作（適用/追加）にだけ使う） */}
-          {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
-            <button className={styles.applyButton} onClick={handleApply}>
-              適用
+          {/* PC は main と同じく「適用」＋「閉じる」。モバイル（≤640px）は閉じる操作を右上の×に
+              一本化し、フッターの「閉じる」は CSS で隠す（HIG: 単一の明確な dismiss） */}
+          <div className={styles.footerActions}>
+            {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
+              <button className={styles.applyButton} onClick={handleApply}>
+                適用
+              </button>
+            )}
+            <button className={styles.closeButton} onClick={handleClose}>
+              閉じる
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>

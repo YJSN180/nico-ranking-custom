@@ -271,6 +271,9 @@
 .iconWrapper.desktop {
   width: 16px;
   height: 16px;
+  /* PC のドロップダウンは main と同じ表示にする。flex にすると 20px のアイコンが
+     16px の枠に縮んで小さく見える（中央寄せはモバイルのドロワー用） */
+  display: block;
 }
 
 /* Desktop container styles */
@@ -355,17 +358,14 @@
   display: flex;
   gap: 8px;
 }
-/* 退場アニメーション（UX改善計画 フェーズ2） */
+/* 退場アニメーション（UX改善計画 フェーズ2）。モバイルのドロワーのみ
+   （PC のドロップダウンは main と同じく即座に閉じる） */
 .overlayClosing {
   animation: fadeOut 0.18s ease-in forwards;
 }
 
 .drawerClosing {
   animation: slideOut 0.18s ease-in forwards;
-}
-
-.dropdownClosing {
-  animation: dropOut 0.18s ease-in forwards;
 }
 
 @keyframes fadeOut {
@@ -376,15 +376,4 @@
 @keyframes slideOut {
   from { transform: translateX(0); }
   to { transform: translateX(-100%); }
-}
-
-@keyframes dropOut {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
 }

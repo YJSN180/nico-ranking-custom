@@ -19,6 +19,13 @@
     padding-bottom: env(safe-area-inset-bottom);
     background: var(--surface-color);
     border-top: 1px solid var(--border-color);
+    transition: transform var(--motion-base, 220ms) var(--ease-out, ease-out);
+  }
+
+  /* ドロワー（body 直下に描画される #navigation-menu）を開いている間は、
+     ボトムナビを画面の下へ下げてドロワーと重ならないようにする */
+  body:has(#navigation-menu) .bottom-nav {
+    transform: translateY(100%);
   }
 
   .bottom-nav__item {

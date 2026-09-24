@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -20,6 +20,12 @@ export function HeaderWithSettings() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   // モバイル用stickyヘッダー: 下スクロールで隠し、上スクロールで再表示（フェーズ3-2）
   const [isHeaderHidden, setIsHeaderHidden] = useState(false)
+  // ドロワー（メニュー）を開いている間はヘッダーを隠さない
+  const isNavOpenRef = useRef(false)
+  const handleNavOpenChange = useCallback((open: boolean) => {
+    isNavOpenRef.current = open
+    if (open) setIsHeaderHidden(false)
+  }, [])
 
   // アイドル時に設定モーダルのチャンクを先読み（初期描画のクリティカルパスには載せない）
   useEffect(() => {
@@ -63,6 +69,10 @@ export function HeaderWithSettings() {
         }
         const y = window.scrollY
         const dy = y - lastY
+        if (isNavOpenRef.current) {
+          lastY = y
+          return
+        }
         if (y <= 64) {
           setIsHeaderHidden(false)
         } else if (dy > THRESHOLD) {
@@ -97,8 +107,8 @@ export function HeaderWithSettings() {
         boxShadow: 'var(--shadow-md)',
         marginBottom: '20px',
       }}>
-        <Navigation />
-        
+        <Navigation onOpenChange={handleNavOpenChange} />
+
         <div className={styles.headerContent} style={{ 
           maxWidth: '1200px', 
           margin: '0 auto',
