@@ -629,3 +629,29 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
     })
   })
 })
+
+describe('lqng-poller 保存の順番', () => {
+  it('判定表を先に、履歴・受け箱の削除を経て、追跡表を最後に書く', async () => {
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      'lqng:inbox:run1:000001': { version: 1, runId: 'run1', seq: 1, at: T0.toISOString(), deltas: { authors: { '8001': { status: 'ng', reasons: ['B'], since: 's', evidence: [] } }, videos: {} } },
+    })
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm95', title: 'て/す/と/ま/ん' })])) }), 'poll')
+    const writes = m.ops.filter((op) => op.startsWith('put ') || op.startsWith('delete '))
+    expect(writes).toEqual([`put ${LQNG_KV_KEYS.verdicts}`, `put ${LQNG_KV_KEYS.events}`, 'delete lqng:inbox:run1:000001', `put ${LQNG_KV_KEYS.tracking}`])
+  })
+
+  it('判定表の保存に失敗したら追跡表は書かず、次回に同じ新着を取り直して判定する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const failing = { ...m.kv, put: async (key: string, value: string) => {
+      if (key === LQNG_KV_KEYS.verdicts) throw new Error('kv put failed')
+      await m.kv.put(key, value)
+    } }
+    const fetchNew = vi.fn(async () => pages([video({ id: 'sm96', title: 'て/す/と/ま/ん' })]))
+    await expect(runPoll(failing, deps({ fetchNewVideos: fetchNew }), 'poll')).rejects.toThrow('kv put failed')
+    expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: fetchNew }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm96?.status).toBe('ng')
+  })
+})

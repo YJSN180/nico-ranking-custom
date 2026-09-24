@@ -212,7 +212,8 @@ export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'tracking'
 
 /**
  * 内容（updatedAt を除く）が変わったキーだけを書き、updatedAt もそのときだけ進める。
- * 合流済みの受け箱（inboxKeys）は判定表を保存した後で消す。
+ * 順番は 判定表 → 履歴 → 受け箱の削除 → 追跡表。追跡表（取り込み済みの動画・最終取得時刻）を
+ * 最後にするので、途中で失敗しても次回は同じ新着と受け箱を取り直して冪等に判定し直せる。
  * 直近の実行の要約（書き込み数を含む）は書く前に数えて追跡表に入れ、同じ数を返す。
  */
 export async function saveState(
@@ -232,10 +233,10 @@ export async function saveState(
   if (verdictsChanged) state.verdicts.updatedAt = run.at
   if (trackingChanged) state.tracking.updatedAt = run.at
   if (eventsChanged) state.events.lastRun = summary
-  if (trackingChanged) await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
   if (verdictsChanged) await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
   if (eventsChanged) await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
   for (const key of inboxKeys) await kv.delete(key)
+  if (trackingChanged) await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
   return summary.kvWrites
 }
 
