@@ -135,9 +135,14 @@ export interface LoadedState {
   events: LqngEvents
 }
 
+/** 設定だけを読む（判定表・追跡表など大きいキーを読まずに済ませたいとき用） */
+export async function loadConfig(kv: KvLike): Promise<LqngConfig> {
+  return normalizeLqngConfig(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.config), null))
+}
+
 /** 有効フラグだけを読む。無効時にロック取得の KV 書き込み（1 日 96 回）を避けるための軽量読み */
 export async function loadEnabled(kv: KvLike): Promise<boolean> {
-  return normalizeLqngConfig(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.config), null)).enabled
+  return (await loadConfig(kv)).enabled
 }
 
 export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
