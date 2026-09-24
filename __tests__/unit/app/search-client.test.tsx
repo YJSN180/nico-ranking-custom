@@ -2,7 +2,7 @@
 // next/navigation は URL を外部ストアとして持つモックに置き換え、/api/search 系は合成した応答を返す。
 // 動画 ID・投稿者 ID・名前はすべて合成値。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup, act } from '@testing-library/react'
 import type { RankingItem } from '@/types/ranking'
 
 // URL（searchParams）を外部ストアとして持つ。router.replace とテストの「戻る・進む」がこれを書き換える
@@ -171,6 +171,54 @@ describe('SearchClient', () => {
       expect(other?.searchParams.get('page')).toBe('2')
       expect(other?.searchParams.has('boundary')).toBe(false)
       expect(other?.searchParams.has('rtCount')).toBe(false)
+    })
+  })
+
+  describe('URL の変化に合わせる（U-b）', () => {
+    it('戻る・進むなどで URL が変わったら、URL の条件で検索し直し、入力欄も戻す', async () => {
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      act(() => nav.setQuery('q=y&sort=-startTime'))
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      expect(searchRequests()[1]?.searchParams.get('q')).toBe('y')
+      expect(screen.getByLabelText('検索キーワード')).toHaveValue('y')
+      expect(screen.getByLabelText('並び順')).toHaveValue('-startTime')
+    })
+
+    it('URL から条件が消えたら（ナビの「検索」など）、結果を消して入力欄を空に戻す', async () => {
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      act(() => nav.setQuery(''))
+      await waitFor(() => expect(shownIds()).toEqual([]))
+      expect(screen.getByLabelText('検索キーワード')).toHaveValue('')
+      expect(screen.getByText('キーワードやタグ、詳細条件を指定して検索してください。')).toBeInTheDocument()
+      expect(searchRequests()).toHaveLength(1)
+    })
+
+    it('自分で書き換えた URL では検索し直さない', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      clickNextPage()
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(searchRequests()).toHaveLength(2)
+      expect(nav.getQuery()).toBe('q=x&page=2')
+    })
+
+    it('URL で別の条件の 2 ページ目へ移ったときは、前の結果の境界と新着件数を持ち越さない', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { source: 'merged', realtimeCount: 7 })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      act(() => nav.setQuery('q=z&sort=-startTime&page=3'))
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      expect(searchRequests()[1]?.searchParams.get('page')).toBe('3')
+      expect(searchRequests()[1]?.searchParams.has('boundary')).toBe(false)
+      expect(searchRequests()[1]?.searchParams.has('rtCount')).toBe(false)
     })
   })
 

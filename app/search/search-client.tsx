@@ -245,6 +245,12 @@ function buildQueryParams(form: FormState, page: number): URLSearchParams {
   return params
 }
 
+/** URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する） */
+const SEARCH_CONDITION_KEYS = [
+  'q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax',
+  'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot',
+] as const
+
 /** URLのクエリパラメータからフォーム状態を復元 */
 function parseFormFromUrl(params: URLSearchParams): { form: FormState; page: number } {
   const secToMin = (v: string | null): string => {
@@ -290,9 +296,9 @@ export function SearchClient() {
   const searchParams = useSearchParams()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
 
-  const initial = useMemo(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())), [searchParams])
-  const [form, setForm] = useState<FormState>(initial.form)
-  const [page, setPage] = useState(initial.page)
+  // 初期値だけ URL から作る。その後の URL の変化は下の同期（useEffect）で反映する
+  const [form, setForm] = useState<FormState>(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())).form)
+  const [page, setPage] = useState(() => parseFormFromUrl(new URLSearchParams(searchParams.toString())).page)
   const [items, setItems] = useState<RankingItem[] | null>(null)
   // 検索結果のデータ源（リアルタイム区間の有無）とリアルタイム件数
   const [resultMeta, setResultMeta] = useState<{ source: 'merged' | 'snapshot'; boundary?: string; realtimeCount: number } | null>(null)
@@ -313,6 +319,10 @@ export function SearchClient() {
   const abortRef = useRef<AbortController | null>(null)
   const resultsRef = useRef<HTMLDivElement | null>(null)
   const hasSearchedRef = useRef(false)
+  /** runSearch が書き換えたが、まだ searchParams に届いていない URL クエリ（古い順）。届いたら読み捨てる */
+  const pendingUrlWritesRef = useRef<string[]>([])
+  /** いま表示中（または取得中）の検索の URL クエリ。同じ URL への変化では検索し直さない */
+  const currentQueryRef = useRef<string | null>(null)
 
   // 保存済み検索と詳細条件の開閉状態を復元
   useEffect(() => {
@@ -453,7 +463,11 @@ export function SearchClient() {
       const params = buildQueryParams(searchForm, searchPage)
       const queryString = params.toString()
       const conditionKey = buildQueryParams(searchForm, 1).toString()
-      router.replace(queryString ? `/search?${queryString}` : '/search', { scroll: false })
+      currentQueryRef.current = queryString
+      if (queryString !== new URLSearchParams(window.location.search).toString()) {
+        pendingUrlWritesRef.current.push(queryString)
+        router.replace(queryString ? `/search?${queryString}` : '/search', { scroll: false })
+      }
 
       // 2ページ目以降は、直前に表示した結果と同じ条件のときだけ境界とリアルタイム件数のヒントを渡す
       // （件数のヒントでサーバーが Snapshot を並列取得できる）
@@ -502,19 +516,42 @@ export function SearchClient() {
     [router, enrichRealtimeTags, enrichOwners]
   )
 
-  // URLに条件付きで直接アクセスした場合は自動検索
-  useEffect(() => {
-    if (hasSearchedRef.current) return
-    const params = new URLSearchParams(searchParams.toString())
-    const hasCondition = ['q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax', 'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot'].some(
-      (key) => params.has(key)
-    )
-    if (hasCondition) {
-      void runSearch(initial.form, initial.page)
-    }
-    // 初回マウント時のみ実行
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // URL から条件が消えたとき（ナビの「検索」など）は、検索前の表示に戻す
+  const resetResults = useCallback((query: string) => {
+    abortRef.current?.abort()
+    abortRef.current = null
+    currentQueryRef.current = query
+    hasSearchedRef.current = false
+    pagingHintRef.current = null
+    setIsLoading(false)
+    setError(null)
+    setItems(null)
+    setTotalCount(0)
+    setResultMeta(null)
+    setLastForm(null)
   }, [])
+
+  // URL（外部システム）に画面を合わせる。直接アクセス、ブラウザの戻る・進む、ヘッダーやボトムナビからの遷移で
+  // searchParams が変わったら、URL から条件を戻して検索し直す。runSearch が自分で書いた URL が届いたときは読み捨てる
+  useEffect(() => {
+    const query = new URLSearchParams(searchParams.toString()).toString()
+    const pending = pendingUrlWritesRef.current
+    const ownWrite = pending.indexOf(query)
+    if (ownWrite >= 0) {
+      // それより前の書き込みは、あとの書き込みに追い越されて届かない
+      pending.splice(0, ownWrite + 1)
+      return
+    }
+    if (query === currentQueryRef.current) return
+    const params = new URLSearchParams(query)
+    const parsed = parseFormFromUrl(params)
+    setForm(parsed.form)
+    if (SEARCH_CONDITION_KEYS.some((key) => params.has(key))) {
+      void runSearch(parsed.form, parsed.page)
+    } else {
+      resetResults(query)
+    }
+  }, [searchParams, runSearch, resetResults])
 
   const handleSubmit = useCallback(
     (event: React.FormEvent) => {
