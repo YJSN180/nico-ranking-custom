@@ -636,6 +636,22 @@ describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () =
       expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_restored' && e.authorId === '1001')).toBe(true)
     })
 
+    it('確認待ちの投稿者が多くても、7 日前に確かめた退会扱いの再確認は後回しにし続けない', async () => {
+      const m = seeded()
+      // 6 時間ごとの定期確認が上限（10 人）を超えて溜まっている
+      const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+      const checkedAt = hours(7 * 24 - 7).toISOString()
+      for (let i = 0; i < LIMITS.usersPerRun + 5; i++) {
+        const id = String(1100 + i)
+        tracking.authors[id] = { authorId: id, firstSeenAt: checkedAt, lastPostAt: hours(7 * 24 - 1).toISOString(), posts: [{ id: `sm${1100 + i}`, title: 't', at: hours(7 * 24 - 1).toISOString(), tagDetails: [], ownerVisibility: 'visible' }], status: 'existing', lastCheckedAt: checkedAt, followerCount: 100, nickname: 'n', visibility: 'visible', deletedObservedAt: null, deletionSuspectedAt: null }
+      }
+      m.store.set(LQNG_KV_KEYS.tracking, JSON.stringify(tracking))
+      const info = vi.fn(async () => existing(5))
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 1)), 'poll')
+      expect(info).toHaveBeenCalledTimes(LIMITS.usersPerRun)
+      expect(info).toHaveBeenCalledWith('1001')
+    })
+
     it('再確認でも 404 なら退会のまま、その後は通常どおり追跡から外す', async () => {
       const m = seeded()
       const info = vi.fn(async () => deleted)

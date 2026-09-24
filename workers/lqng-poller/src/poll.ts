@@ -412,8 +412,9 @@ class Session {
   private checkPriority(author: TrackedAuthor, nowMs: number): number | null {
     if (!isUserId(author.authorId)) return null
     const sinceChecked = author.lastCheckedAt ? nowMs - new Date(author.lastCheckedAt).getTime() : Number.POSITIVE_INFINITY
-    // 退会扱い: 一定期間後に 1 回だけ存在を確かめ直す（存在すれば退会扱いを外す）
-    if (author.status === 'deleted') return sinceChecked >= LIMITS.deletedRecheckDays * DAY_MS ? 3 : null
+    // 退会扱い: 一定期間後に 1 回だけ存在を確かめ直す（存在すれば退会扱いを外す）。
+    // 定期確認と同じ順位に置き、最後の確認が古い順で先に来るので、定期確認に押されて止まらない
+    if (author.status === 'deleted') return sinceChecked >= LIMITS.deletedRecheckDays * DAY_MS ? 2 : null
     // 退会の疑い: 1 回目の 404 から時間を置いて最優先で確かめ、確定させる
     if (author.deletionSuspectedAt) {
       const confirmMs = LIMITS.deletionConfirmMinutes * MINUTE_MS
