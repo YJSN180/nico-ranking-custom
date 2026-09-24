@@ -1,14 +1,15 @@
 // ポーリング本体（差分取得 → 補完 → 投稿者確認 → 判定 → 保留の期限処理 → 保存）
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
-// 1 回の実行で: 外部呼び出し ≤ subrequestBudget、KV 書き込み ≤ 4 キー。
+// 1 回の実行で: 外部呼び出し ≤ subrequestBudget。KV は内容が変わったキーだけ書く（定常は追跡表の 1 回）。
+// ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { AccessLimitedError, type PollDeps, type SourceVideo } from './sources'
 import {
-  acquireLock,
-  loadEnabled, loadState,
+  captureBaseline,
+  loadEnabled,
+  loadState,
   pushEvent,
-  releaseLock,
   saveState,
   type KvLike,
   type LoadedState,
@@ -25,7 +26,6 @@ export const LIMITS = {
   subrequestBudget: 40,
   /** 新着取得の予算。本家タグページはタグ 3 × 種別 2（動画/ショート）× 最大 2 ページ = 12 とみなす（予備の nvapi は 3） */
   nvapiCost: 12,
-  lockTtlSeconds: 600,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,
   /** 補完に失敗した動画を諦めるまでの試行回数 */
@@ -370,81 +370,72 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   const now = deps.now()
   const nowIso = now.toISOString()
   const base: RunResult = { mode, skipped: null, newVideos: 0, enriched: 0, usersChecked: 0, subrequests: 0, kvWrites: 0 }
-  // 無効時はロックを取らずに抜ける（KV の書き込み枠はアカウント共通なので消費しない）
+  // 無効時は設定だけ読んで抜ける（KV は書かない）
   if (!(await loadEnabled(kv))) return { ...base, skipped: 'disabled' }
-  if (!(await acquireLock(kv, nowIso, LIMITS.lockTtlSeconds))) return { ...base, skipped: 'locked' }
-  try {
-    const state = await loadState(kv, nowIso)
-    const before = { verdicts: JSON.stringify(state.verdicts), events: JSON.stringify(state.events) }
-    const session = new Session(state, deps, now)
-    // ロック取得後に設定が変わっていた場合の二重ガード
-    if (!state.config.enabled) return { ...base, skipped: 'disabled' }
+  const state = await loadState(kv, nowIso)
+  if (!state.config.enabled) return { ...base, skipped: 'disabled' }
+  const sweepDate = yesterdayJst(now)
+  if (mode === 'sweep') {
+    if (!state.config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
+    if (state.tracking.lastSweepDate === sweepDate) return { ...base, skipped: 'already_swept' }
+  }
+  const baseline = captureBaseline(state)
+  const session = new Session(state, deps, now)
 
-    if (mode === 'sweep') {
-      const date = yesterdayJst(now)
-      if (!state.config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
-      if (state.tracking.lastSweepDate === date) return { ...base, skipped: 'already_swept' }
+  if (mode === 'sweep' && state.config.sweepGenre) {
+    session.spend(LIMITS.nvapiCost)
+    const videos = await deps.fetchSweepVideos(state.config.sweepGenre, sweepDate)
+    // 前日分をポーリングと同じく追跡に取り込む（差分取得の取りこぼしに対する日次の安全網）。
+    // 取り込み済みの動画は除外されるので、通常は少数だけが新たに追跡される
+    session.ingest(videos)
+    await session.enrichPending()
+    await session.checkAuthors()
+    session.expireAndPrune()
+    state.tracking.lastSweepDate = sweepDate
+  } else {
+    const since = state.tracking.lastPollAt
+      ? new Date(new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS)
+      : new Date(now.getTime() - LIMITS.firstPollLookbackMinutes * MINUTE_MS)
+    if (state.config.pollTags.length > 0) {
       session.spend(LIMITS.nvapiCost)
-      const videos = await deps.fetchSweepVideos(state.config.sweepGenre, date)
-      // 前日分をポーリングと同じく追跡に取り込む（差分取得の取りこぼしに対する日次の安全網）。
-      // 取り込み済みの動画は除外されるので、通常は少数だけが新たに追跡される
-      session.ingest(videos)
-      await session.enrichPending()
-      await session.checkAuthors()
-      session.expireAndPrune()
-      state.tracking.lastSweepDate = date
-    } else {
-      const since = state.tracking.lastPollAt
-        ? new Date(new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS)
-        : new Date(now.getTime() - LIMITS.firstPollLookbackMinutes * MINUTE_MS)
-      if (state.config.pollTags.length > 0) {
-        session.spend(LIMITS.nvapiCost)
-        try {
-          session.ingest(await deps.fetchNewVideos(state.config.pollTags, since.toISOString()))
-        } catch (error) {
-          if (error instanceof AccessLimitedError) {
-            pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: error.message })
-            session.note = error.message
-          } else if (deps.fetchNewVideosFallback) {
-            // 主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。原因は履歴に残す
-            const reason = error instanceof Error ? error.message : 'error'
-            pushEvent(state.events, { at: nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
-            session.note = `fallback: ${reason}`
-            try {
-              session.ingest(await deps.fetchNewVideosFallback(state.config.pollTags, since.toISOString()))
-            } catch (fallbackError) {
-              if (!(fallbackError instanceof AccessLimitedError)) throw fallbackError
-              pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: fallbackError.message })
-              session.note = fallbackError.message
-            }
-          } else {
-            throw error
+      try {
+        session.ingest(await deps.fetchNewVideos(state.config.pollTags, since.toISOString()))
+      } catch (error) {
+        if (error instanceof AccessLimitedError) {
+          pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: error.message })
+          session.note = error.message
+        } else if (deps.fetchNewVideosFallback) {
+          // 主経路（本家タグページ）が壊れたら予備（nvapi）で続ける。原因は履歴に残す
+          const reason = error instanceof Error ? error.message : 'error'
+          pushEvent(state.events, { at: nowIso, kind: 'error', note: `new_videos_primary_failed: ${reason}` })
+          session.note = `fallback: ${reason}`
+          try {
+            session.ingest(await deps.fetchNewVideosFallback(state.config.pollTags, since.toISOString()))
+          } catch (fallbackError) {
+            if (!(fallbackError instanceof AccessLimitedError)) throw fallbackError
+            pushEvent(state.events, { at: nowIso, kind: 'access_limited', note: fallbackError.message })
+            session.note = fallbackError.message
           }
+        } else {
+          throw error
         }
       }
-      await session.enrichPending()
-      await session.checkAuthors()
-      session.expireAndPrune()
-      state.tracking.lastPollAt = nowIso
     }
-
-    state.tracking.updatedAt = nowIso
-    state.verdicts.updatedAt = nowIso
-    const summary = {
-      at: nowIso,
-      mode,
-      newVideos: session.newVideos,
-      enriched: session.enriched,
-      usersChecked: session.usersChecked,
-      subrequests: session.subrequests,
-      kvWrites: 0,
-      ...(session.note ? { note: session.note } : {}),
-    }
-    state.events.lastRun = summary
-    pushEvent(state.events, { at: nowIso, kind: mode, note: `new=${session.newVideos} enriched=${session.enriched} users=${session.usersChecked}` })
-    const kvWrites = await saveState(kv, before, state)
-    return { ...base, newVideos: session.newVideos, enriched: session.enriched, usersChecked: session.usersChecked, subrequests: session.subrequests, kvWrites, ...(session.note ? { note: session.note } : {}) }
-  } finally {
-    await releaseLock(kv)
+    await session.enrichPending()
+    await session.checkAuthors()
+    session.expireAndPrune()
+    state.tracking.lastPollAt = nowIso
   }
+
+  // 定常の poll の要約は履歴に積まない（追跡表の lastRun に置く）。日次スイープは 1 日 1 件だけ残す
+  if (mode === 'sweep') pushEvent(state.events, { at: nowIso, kind: 'sweep', note: `new=${session.newVideos} enriched=${session.enriched} users=${session.usersChecked}` })
+  const summary = {
+    newVideos: session.newVideos,
+    enriched: session.enriched,
+    usersChecked: session.usersChecked,
+    subrequests: session.subrequests,
+    ...(session.note ? { note: session.note } : {}),
+  }
+  const kvWrites = await saveState(kv, baseline, state, { at: nowIso, mode, ...summary })
+  return { ...base, ...summary, kvWrites }
 }

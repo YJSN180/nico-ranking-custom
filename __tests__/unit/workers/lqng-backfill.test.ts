@@ -219,17 +219,19 @@ describe('mergeDeltas / commitBackfill', () => {
     expect(verdicts.authors['3001']?.since).toBe(T0.toISOString())
     expect(Object.keys(verdicts.videos)).toEqual(['sm9'])
     expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items[0]?.kind).toBe('backfill')
-    expect(m.puts.filter((k) => k !== LQNG_KV_KEYS.lock)).toEqual([LQNG_KV_KEYS.verdicts, LQNG_KV_KEYS.events])
-    expect(m.store.has(LQNG_KV_KEYS.lock)).toBe(false)
+    expect(m.puts).toEqual([LQNG_KV_KEYS.verdicts, LQNG_KV_KEYS.events])
 
     const again = await commitBackfill(m.kv, T0, deltas)
     expect(again.kvWrites).toBe(0)
   })
 
-  it('ロックが取れなければ commit をスキップする', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    m.store.set(LQNG_KV_KEYS.lock, 'busy')
-    const r = await commitBackfill(m.kv, T0, { authors: { '1': authorVerdict(['B']) }, videos: {} })
-    expect(r.skipped).toBe('locked')
+  it('commit はロックを使わない（古いロックキーが残っていても書き、ロックの put / delete をしない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, 'lqng:lock': 'busy' })
+    const deletes: string[] = []
+    const kv = { ...m.kv, delete: async (key: string) => { deletes.push(key); await m.kv.delete(key) } }
+    const r = await commitBackfill(kv, T0, { authors: { '1': authorVerdict(['B']) }, videos: {} })
+    expect(r.skipped).toBeNull()
+    expect(m.puts).not.toContain('lqng:lock')
+    expect(deletes).toEqual([])
   })
 })

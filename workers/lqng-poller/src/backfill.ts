@@ -24,7 +24,7 @@ import {
   type ThumbResult,
   type UserInfo,
 } from './sources'
-import { acquireLock, loadState, pushEvent, releaseLock, type KvLike } from './state'
+import { loadState, pushEvent, type KvLike } from './state'
 import { fetchNicoSearchPage, nicoPageOwnerId, NICO_PAGE_SIZE, type NicoPageKind, type NicoPageResult } from '../../../lib/search/nico-page-search'
 import { NICO_PAGE_KINDS } from './sources'
 
@@ -46,7 +46,6 @@ export const BACKFILL_LIMITS = {
   floorDefault: '2007-03-01T00:00:00.000Z',
   /** pages ソースの既定の遡り日数（Snapshot の更新遅れと Worker 停止の隙間を埋める用途） */
   pagesDefaultDays: 2,
-  lockTtlSeconds: 120,
 } as const
 
 const HOUR_MS = 3600_000
@@ -477,36 +476,31 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
 export async function commitBackfill(kv: KvLike, now: Date, deltas: BackfillDeltas): Promise<BackfillCommitResult> {
   const nowIso = now.toISOString()
   const none: BackfillCommitResult = { skipped: null, authorsAdded: 0, videosAdded: 0, kvWrites: 0 }
-  if (!(await acquireLock(kv, nowIso, BACKFILL_LIMITS.lockTtlSeconds))) return { ...none, skipped: 'locked' }
-  try {
-    const state = await loadState(kv, nowIso)
-    let authorsAdded = 0
-    let videosAdded = 0
-    for (const [authorId, verdict] of Object.entries(deltas.authors)) {
-      if (state.config.allowlist.authorIds.includes(authorId)) continue
-      const current = state.verdicts.authors[authorId]
-      if (!current) {
-        state.verdicts.authors[authorId] = { ...verdict, since: nowIso }
-        authorsAdded++
-        continue
-      }
-      const merged = Array.from(new Set([...current.reasons, ...verdict.reasons]))
-      if (merged.length !== current.reasons.length) current.reasons = merged
+  const state = await loadState(kv, nowIso)
+  let authorsAdded = 0
+  let videosAdded = 0
+  for (const [authorId, verdict] of Object.entries(deltas.authors)) {
+    if (state.config.allowlist.authorIds.includes(authorId)) continue
+    const current = state.verdicts.authors[authorId]
+    if (!current) {
+      state.verdicts.authors[authorId] = { ...verdict, since: nowIso }
+      authorsAdded++
+      continue
     }
-    for (const [videoId, verdict] of Object.entries(deltas.videos)) {
-      if (state.verdicts.videos[videoId]) continue
-      if (verdict.authorId && state.verdicts.authors[verdict.authorId]) continue
-      if (state.config.allowlist.videoIds.includes(videoId)) continue
-      state.verdicts.videos[videoId] = { ...verdict, since: nowIso }
-      videosAdded++
-    }
-    if (authorsAdded === 0 && videosAdded === 0) return none
-    state.verdicts.updatedAt = nowIso
-    pushEvent(state.events, { at: nowIso, kind: 'backfill', note: `投稿者 +${authorsAdded} / 動画 +${videosAdded}` })
-    await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
-    await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
-    return { skipped: null, authorsAdded, videosAdded, kvWrites: 2 }
-  } finally {
-    await releaseLock(kv)
+    const merged = Array.from(new Set([...current.reasons, ...verdict.reasons]))
+    if (merged.length !== current.reasons.length) current.reasons = merged
   }
+  for (const [videoId, verdict] of Object.entries(deltas.videos)) {
+    if (state.verdicts.videos[videoId]) continue
+    if (verdict.authorId && state.verdicts.authors[verdict.authorId]) continue
+    if (state.config.allowlist.videoIds.includes(videoId)) continue
+    state.verdicts.videos[videoId] = { ...verdict, since: nowIso }
+    videosAdded++
+  }
+  if (authorsAdded === 0 && videosAdded === 0) return none
+  state.verdicts.updatedAt = nowIso
+  pushEvent(state.events, { at: nowIso, kind: 'backfill', note: `投稿者 +${authorsAdded} / 動画 +${videosAdded}` })
+  await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
+  await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
+  return { skipped: null, authorsAdded, videosAdded, kvWrites: 2 }
 }

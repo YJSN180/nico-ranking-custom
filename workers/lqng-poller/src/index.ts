@@ -88,7 +88,7 @@ const handler = {
         if (new Date(e.at).getTime() < dayAgo) break
         eventCounts[e.kind] = (eventCounts[e.kind] ?? 0) + 1
       }
-      const lastRun = state.events.lastRun
+      const lastRun = state.tracking.lastRun
       // KV の JSON をそのまま引くので、constructor などの継承プロパティを拾わないよう自前のキーだけを見る
       const tracked = authorId !== null && Object.hasOwn(state.tracking.authors, authorId) ? state.tracking.authors[authorId] : undefined
       const authorVerdict = authorId !== null && Object.hasOwn(state.verdicts.authors, authorId) ? state.verdicts.authors[authorId] : undefined
@@ -130,10 +130,9 @@ const handler = {
           verdicts: { authors: Object.keys(state.verdicts.authors).length, videos: Object.keys(state.verdicts.videos).length, updatedAt: state.verdicts.updatedAt },
           lastRun: lastRun ? { at: lastRun.at, mode: lastRun.mode, newVideos: lastRun.newVideos, enriched: lastRun.enriched, usersChecked: lastRun.usersChecked, subrequests: lastRun.subrequests, kvWrites: lastRun.kvWrites, note: lastRun.note ?? null } : null,
           eventsLast24h: eventCounts,
-          // 直近の実行の内訳（件数のみ）と、直近イベントの種別だけの時系列
-          recentRuns: state.events.items.filter((e) => e.kind === 'poll' || e.kind === 'sweep').slice(0, 40).map((e) => ({ at: e.at, kind: e.kind, note: e.note ?? null })),
+          // 直近の実行の時刻と注記（追跡表に持つ）と、直近イベントの種別だけの時系列
+          recentRuns: state.tracking.recentRuns.map((r) => ({ at: r.at, kind: r.mode, note: r.note ?? null })),
           recentEvents: state.events.items.slice(0, 60).map((e) => ({ at: e.at, kind: e.kind, ...(e.kind === 'access_limited' || e.kind === 'error' || e.kind === 'backfill' ? { note: e.note ?? null } : {}) })),
-          lockHeld: (await env.LQNG_KV.get('lqng:lock')) !== null,
         },
         { headers: NO_STORE }
       )

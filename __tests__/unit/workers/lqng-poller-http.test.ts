@@ -43,6 +43,8 @@ function setup() {
     lastSweepDate: null,
     authors: { '1001': trackedAuthor('1001'), 'channel/ch55': trackedAuthor('channel/ch55') },
     pending: [],
+    lastRun: null,
+    recentRuns: [],
     updatedAt: '2026-02-01T00:00:00.000Z',
   }
   const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
@@ -101,6 +103,35 @@ describe('lqng-poller /status', () => {
     const unknownBody = (await unknown.json()) as { author: { tracked: unknown; verdict: unknown } }
     expect(unknownBody.author.tracked).toBeNull()
     expect(unknownBody.author.verdict).toBeNull()
+  })
+})
+
+describe('lqng-poller /status（直近の実行）', () => {
+  it('直近の実行の要約と実行の並びは追跡表から返す（履歴の poll イベントやロックには依らない）', async () => {
+    const lastRun = { at: '2026-02-01T00:15:00.000Z', mode: 'poll' as const, newVideos: 2, enriched: 1, usersChecked: 3, subrequests: 9, kvWrites: 1 }
+    const tracking: LqngTracking = {
+      version: 1,
+      lastPollAt: '2026-02-01T00:15:00.000Z',
+      lastSweepDate: null,
+      authors: {},
+      pending: [],
+      lastRun,
+      recentRuns: [
+        { at: '2026-02-01T00:15:00.000Z', mode: 'poll' },
+        { at: '2026-02-01T00:00:00.000Z', mode: 'poll', note: 'fallback: x' },
+      ],
+      updatedAt: '2026-02-01T00:15:00.000Z',
+    }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking, [LQNG_KV_KEYS.events]: { version: 1, items: [], lastRun: null } })
+    const res = await fetchWorker(new Request('https://w.test/status'), { LQNG_KV: m.kv, WORKER_AUTH_KEY: AUTH_KEY })
+    const body = (await res.json()) as { lastRun: { at: string; kvWrites: number } | null; recentRuns: Array<{ at: string; kind: string; note: string | null }>; lockHeld?: unknown }
+    expect(body.lastRun?.at).toBe(lastRun.at)
+    expect(body.lastRun?.kvWrites).toBe(1)
+    expect(body.recentRuns).toEqual([
+      { at: '2026-02-01T00:15:00.000Z', kind: 'poll', note: null },
+      { at: '2026-02-01T00:00:00.000Z', kind: 'poll', note: 'fallback: x' },
+    ])
+    expect(body.lockHeld).toBeUndefined()
   })
 })
 

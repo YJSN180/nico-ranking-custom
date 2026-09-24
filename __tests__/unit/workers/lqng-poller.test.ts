@@ -1,33 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { runPoll, LIMITS } from '@/workers/lqng-poller/src/poll'
 import { AccessLimitedError, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from '@/workers/lqng-poller/src/sources'
-import type { KvLike } from '@/workers/lqng-poller/src/state'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig, LqngVerdicts } from '@/lib/lqng/types'
 import type { LqngEvents, LqngTracking } from '@/workers/lqng-poller/src/state'
+import { memoryKv } from './helpers/lqng-memory-kv'
 
 // 合成データのみ。実在の ID・名前・タグは使わない
-
-function memoryKv(initial: Record<string, unknown> = {}) {
-  const store = new Map<string, string>()
-  for (const [k, v] of Object.entries(initial)) store.set(k, JSON.stringify(v))
-  const puts: string[] = []
-  const kv: KvLike = {
-    get: async (key) => store.get(key) ?? null,
-    put: async (key, value) => {
-      store.set(key, value)
-      puts.push(key)
-    },
-    delete: async (key) => {
-      store.delete(key)
-    },
-  }
-  const read = <T,>(key: string): T | null => {
-    const raw = store.get(key)
-    return raw ? (JSON.parse(raw) as T) : null
-  }
-  return { kv, puts, read, store }
-}
 
 const config: Partial<LqngConfig> = {
   enabled: true,
@@ -102,15 +81,49 @@ describe('lqng-poller runPoll', () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, enabled: false } })
     const r = await runPoll(m.kv, deps(), 'poll')
     expect(r.skipped).toBe('disabled')
-    expect(m.puts).toEqual([]) // ロックも含めて一切書かない（KV 書き込み枠を消費しない）
-    expect(m.store.has(LQNG_KV_KEYS.lock)).toBe(false)
+    expect(m.puts).toEqual([]) // 一切書かない（KV 書き込み枠を消費しない）
+    expect(m.deletes).toEqual([])
   })
 
-  it('ロックが残っていればスキップする', async () => {
-    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    m.store.set(LQNG_KV_KEYS.lock, 'busy')
+  it('ロックは使わない（古いロックキーが残っていても実行し、ロックの put / delete をしない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, 'lqng:lock': 'busy' })
     const r = await runPoll(m.kv, deps(), 'poll')
-    expect(r.skipped).toBe('locked')
+    expect(r.skipped).toBeNull()
+    expect(m.puts).not.toContain('lqng:lock')
+    expect(m.deletes).toEqual([])
+  })
+
+  it('何も変わらない定常の poll は追跡表だけを 1 回書き、判定表と履歴は書かない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => [video({ id: 'sm80', title: 'て/す/と/ま/ん' })]) }), 'poll')
+    const verdictsBefore = m.store.get(LQNG_KV_KEYS.verdicts)
+    const eventsBefore = m.store.get(LQNG_KV_KEYS.events)
+    m.reset()
+    const later = new Date(T0.getTime() + 15 * 60_000)
+    const r = await runPoll(m.kv, deps({}, later), 'poll')
+    expect(r.skipped).toBeNull()
+    expect(m.puts).toEqual([LQNG_KV_KEYS.tracking])
+    expect(m.deletes).toEqual([])
+    expect(r.kvWrites).toBe(1)
+    // 判定表は updatedAt も含めて前回のまま、履歴に poll の要約は積まない
+    expect(m.store.get(LQNG_KV_KEYS.verdicts)).toBe(verdictsBefore)
+    expect(m.store.get(LQNG_KV_KEYS.events)).toBe(eventsBefore)
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.lastRun?.at).toBe(later.toISOString())
+    expect(tracking.lastRun?.kvWrites).toBe(1)
+    expect(tracking.lastPollAt).toBe(later.toISOString())
+    expect(tracking.updatedAt).toBe(later.toISOString())
+  })
+
+  it('判定が変わった回は判定表・履歴・追跡表を書き、記録と戻り値の書き込み数が一致する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => [video({ id: 'sm81', title: 'て/す/と/ま/ん' })]) }), 'poll')
+    expect([...m.puts].sort()).toEqual([LQNG_KV_KEYS.events, LQNG_KV_KEYS.tracking, LQNG_KV_KEYS.verdicts].sort())
+    expect(r.kvWrites).toBe(3)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastRun?.kvWrites).toBe(3)
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.updatedAt).toBe(T0.toISOString())
+    const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
+    expect(events.items.some((e) => e.kind === 'poll')).toBe(false)
   })
 
   it('タイトル照合語に当たる新着は補完前に動画 NG ＋ 投稿者 NG になる', async () => {
@@ -124,9 +137,9 @@ describe('lqng-poller runPoll', () => {
     expect(verdicts.authors['1001']?.status).toBe('ng')
     expect(verdicts.authors['1001']?.evidence[0]?.videoId).toBe('sm1')
     const events = m.read<LqngEvents>(LQNG_KV_KEYS.events)!
-    expect(events.items.map((e) => e.kind)).toEqual(expect.arrayContaining(['video_ng', 'author_ng', 'poll']))
-    expect(events.lastRun?.newVideos).toBe(1)
-    // 書き込みは tracking / verdicts / events の 3 キー（＋ロック）
+    expect(events.items.map((e) => e.kind)).toEqual(expect.arrayContaining(['video_ng', 'author_ng']))
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastRun?.newVideos).toBe(1)
+    // 書き込みは tracking / verdicts / events の 3 キー
     expect(r.kvWrites).toBe(3)
   })
 
@@ -196,7 +209,8 @@ describe('lqng-poller runPoll', () => {
     const later = new Date(T0.getTime() + 7 * 3600_000)
     const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
     await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, later), 'poll')
-    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']).toBeUndefined()
+    // 判定が変わらなければ判定表は書かれない
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
   })
 
   it('許可リストの投稿者は判定テーブルに載らない', async () => {

@@ -7,7 +7,6 @@ export const LQNG_KV_KEYS = {
   verdicts: 'lqng:verdicts',
   tracking: 'lqng:tracking',
   events: 'lqng:events',
-  lock: 'lqng:lock',
 } as const
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
