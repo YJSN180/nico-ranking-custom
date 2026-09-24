@@ -50,7 +50,7 @@ export class KvReadError extends Error {
   }
 }
 
-/** 読み取りの時間予算。どちらも未指定なら従来どおり打ち切らない */
+/** 読み取りの時間予算。どちらも未指定でも、1 回の通信は KV_REQUEST_TIMEOUT_MS（20 秒）で打ち切る */
 export interface KvReadOptions {
   /** 全体の期限。中断されたら再試行をやめて KvReadError を投げる */
   signal?: AbortSignal
@@ -61,6 +61,32 @@ export interface KvReadOptions {
 export interface GetStrictOptions extends KvReadOptions {
   /** 試行回数（既定 3）。直前の成功値で代替できる読み取りは 1 にして待たせない */
   attempts?: number
+}
+
+// Covers the response body too: the signal stays attached while it is read.
+const KV_REQUEST_TIMEOUT_MS = 20_000
+
+type KvOperation = 'get' | 'set' | 'delete'
+
+class KvHttpError extends Error {
+  constructor(operation: KvOperation, readonly status: number) {
+    super(`KV ${operation} failed: ${status}`)
+  }
+}
+
+function describeKvFailure(error: unknown): string {
+  if (error instanceof KvHttpError) return `http_${error.status}`
+  if (error instanceof KvReadError && error.status !== null) return `http_${error.status}`
+  if (error instanceof Error) {
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') return 'timeout'
+    return error instanceof TypeError ? 'network' : error.name
+  }
+  return 'unknown'
+}
+
+// Key names never reach the log; they can identify users or internal data.
+function logKvFailure(operation: KvOperation, attempt: number, attempts: number, cause: string): void {
+  console.warn(`[KV] ${operation} attempt ${attempt}/${attempts} failed: ${cause}`)
 }
 
 class SimpleKV {
@@ -82,6 +108,7 @@ class SimpleKV {
           headers: {
             'Authorization': `Bearer ${CF_API_TOKEN}`,
           },
+          signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
         })
 
         if (response.status === 404) {
@@ -89,6 +116,7 @@ class SimpleKV {
         }
 
         if (response.status === 429) {
+          logKvFailure('get', attempt + 1, maxRetries, 'http_429')
           // Rate limited, wait with exponential backoff
           const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
           // KV rate limited, retrying with exponential backoff
@@ -98,7 +126,7 @@ class SimpleKV {
         }
 
         if (!response.ok) {
-          throw new Error(`KV get failed: ${response.status}`)
+          throw new KvHttpError('get', response.status)
         }
 
         const text = await response.text()
@@ -108,13 +136,12 @@ class SimpleKV {
           return text as T
         }
       } catch (error) {
+        logKvFailure('get', attempt + 1, maxRetries, describeKvFailure(error))
         if (attempt === maxRetries - 1) {
-          // Sanitize key for logging to prevent format string injection
-          const sanitizedKey = typeof key === 'string' ? key.replace(/[%$`]/g, '_') : String(key)
           // KV get error - returning null as fallback
           return null
         }
-        
+
         // Retry on network errors
         const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
         // KV request failed, retrying with exponential backoff
@@ -152,9 +179,10 @@ class SimpleKV {
           headers: {
             'Authorization': `Bearer ${CF_API_TOKEN}`,
           },
-          signal: timeoutMs !== undefined ? withTimeout(timeoutMs, signal) : signal,
+          signal: withTimeout(timeoutMs ?? KV_REQUEST_TIMEOUT_MS, signal),
         })
       } catch (error) {
+        logKvFailure('get', attempt + 1, attempts, describeKvFailure(error))
         lastError = new KvReadError(`KV get failed: ${error instanceof Error ? error.message : 'network error'}`)
         continue
       }
@@ -164,6 +192,7 @@ class SimpleKV {
       }
 
       if (!response.ok) {
+        logKvFailure('get', attempt + 1, attempts, `http_${response.status}`)
         lastError = new KvReadError(`KV get failed: ${response.status}`, response.status)
         // 429 と 5xx だけ再試行する（認証エラーなどは再試行しても直らない）
         if (response.status === 429 || response.status >= 500) continue
@@ -174,6 +203,7 @@ class SimpleKV {
       try {
         text = await response.text()
       } catch (error) {
+        logKvFailure('get', attempt + 1, attempts, describeKvFailure(error))
         lastError = new KvReadError(`KV get failed: ${error instanceof Error ? error.message : 'body read error'}`)
         continue
       }
@@ -218,11 +248,13 @@ class SimpleKV {
             'Content-Type': 'application/json',
           },
           body,
+          signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
         })
 
         if (response.status === 429) {
+          logKvFailure('set', attempt + 1, maxRetries, 'http_429')
           // Rate limited - use exponential backoff
-          lastError = new Error('KV set failed: 429')
+          lastError = new KvHttpError('set', 429)
           if (attempt < maxRetries - 1) {
             await sleep(backoffDelay(attempt))
           }
@@ -230,13 +262,14 @@ class SimpleKV {
         }
 
         if (!response.ok) {
-          throw new Error(`KV set failed: ${response.status}`)
+          throw new KvHttpError('set', response.status)
         }
 
         // Success
         return
       } catch (error) {
         lastError = error
+        logKvFailure('set', attempt + 1, maxRetries, describeKvFailure(error))
         if (attempt === maxRetries - 1) {
           throw error
         }
@@ -256,15 +289,23 @@ class SimpleKV {
       throw new Error('Cloudflare KV credentials not configured')
     }
 
-    const response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${CF_API_TOKEN}`,
-      },
-    })
+    let response: Response
+    try {
+      response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${CF_API_TOKEN}`,
+        },
+        signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
+      })
+    } catch (error) {
+      logKvFailure('delete', 1, 1, describeKvFailure(error))
+      throw error
+    }
 
     if (!response.ok && response.status !== 404) {
-      throw new Error(`KV delete failed: ${response.status}`)
+      logKvFailure('delete', 1, 1, `http_${response.status}`)
+      throw new KvHttpError('delete', response.status)
     }
   }
 

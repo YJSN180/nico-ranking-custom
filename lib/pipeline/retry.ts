@@ -45,6 +45,22 @@ export async function retry<T>(
   }
 }
 
+/**
+ * Rejects with a TimeoutError once `ms` has passed, even when `operation` never settles
+ * (a request abort cannot end every wait, e.g. a stream that stays open after a reset).
+ */
+export function withDeadline<T>(operation: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error(message)
+      error.name = 'TimeoutError'
+      reject(error)
+    }, ms)
+  })
+  return Promise.race([operation, deadline]).finally(() => clearTimeout(timer))
+}
+
 export async function fetchChecked(url: string, init: RequestInit = {}) {
   return retry(async () => {
     const response = await fetch(url, {
