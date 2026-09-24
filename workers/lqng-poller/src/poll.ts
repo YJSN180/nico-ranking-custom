@@ -5,7 +5,7 @@
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
-import { AccessLimitedError, type PollDeps, type SourceVideo } from './sources'
+import { AccessLimitedError, type PollDeps, type SourceVideo, type UserInfo } from './sources'
 import {
   captureBaseline,
   loadEnabled,
@@ -29,6 +29,13 @@ export const LIMITS = {
   nvapiCost: 12,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,
+  /** 退会の確定に要る、1 回目の 404 から 2 回目の確認までの間隔 */
+  deletionConfirmMinutes: 60,
+  /** 1 回の確認でこの人数以上を見て、404 がこの割合以上なら退会判定をすべて保留する（API 側の異常対策） */
+  deletionAnomalyMinChecks: 5,
+  deletionAnomalyRatio: 0.8,
+  /** 退会扱いの投稿者を再確認するまでの日数（存在すれば退会扱いを外す） */
+  deletedRecheckDays: 7,
   /** 補完に失敗した動画を諦めるまでの試行回数 */
   pendingMaxAttempts: 3,
   /**
@@ -372,48 +379,107 @@ class Session {
     this.state.tracking.pending = keep
   }
 
-  /** ユーザー情報 API で存在・フォロワー数を確認し、削除なら A∧C を判定する */
-  async checkAuthors(): Promise<void> {
-    const recheckBefore = this.now.getTime() - LIMITS.userRecheckHours * HOUR_MS
-    // 連投中（C 該当）の投稿者を最優先にする。初回取り込みで待ち行列が長いときに、
+  /** 確認の順番（小さいほど先）。確認しない投稿者は null */
+  private checkPriority(author: TrackedAuthor, nowMs: number): number | null {
+    if (!isUserId(author.authorId)) return null
+    const sinceChecked = author.lastCheckedAt ? nowMs - new Date(author.lastCheckedAt).getTime() : Number.POSITIVE_INFINITY
+    // 退会扱い: 一定期間後に 1 回だけ存在を確かめ直す（存在すれば退会扱いを外す）
+    if (author.status === 'deleted') return sinceChecked >= LIMITS.deletedRecheckDays * DAY_MS ? 3 : null
+    // 退会の疑い: 1 回目の 404 から時間を置いて最優先で確かめ、確定させる
+    if (author.deletionSuspectedAt) {
+      const confirmMs = LIMITS.deletionConfirmMinutes * MINUTE_MS
+      return nowMs - new Date(author.deletionSuspectedAt).getTime() >= confirmMs && sinceChecked >= confirmMs ? 0 : null
+    }
+    if (sinceChecked < LIMITS.userRecheckHours * HOUR_MS) return null
+    // 連投中（C 該当）の投稿者を先にする。初回取り込みで待ち行列が長いときに、
     // 新しい連投の A∧C 判定が数時間後回しになるのを防ぐ
+    return this.isFrequentAuthor(author.authorId) ? 1 : 2
+  }
+
+  /**
+   * ユーザー情報 API で存在・フォロワー数を確認する。退会（NOT_FOUND の 404）は 1 回目を疑いとし、
+   * 時間を置いた 2 回目で確定して A∧C を判定する。1 回の確認で 404 の割合が異常に高いときは、
+   * その回の退会判定をすべて保留して記録する。
+   */
+  async checkAuthors(): Promise<void> {
+    const nowMs = this.now.getTime()
     const candidates = Object.values(this.state.tracking.authors)
-      .filter((a) => isUserId(a.authorId) && a.status !== 'deleted')
-      .filter((a) => a.lastCheckedAt === null || new Date(a.lastCheckedAt).getTime() <= recheckBefore)
-      .map((a) => ({ a, priority: this.isFrequentAuthor(a.authorId) ? 0 : 1 }))
+      .map((a) => ({ a, priority: this.checkPriority(a, nowMs) }))
+      .filter((x): x is { a: TrackedAuthor; priority: number } => x.priority !== null)
       .sort((x, y) => x.priority - y.priority || (x.a.lastCheckedAt ?? '').localeCompare(y.a.lastCheckedAt ?? '') || x.a.firstSeenAt.localeCompare(y.a.firstSeenAt))
       .map((x) => x.a)
       .slice(0, LIMITS.usersPerRun)
+    const results: Array<{ author: TrackedAuthor; info: UserInfo }> = []
     for (const author of candidates) {
       if (!this.budgetLeft()) break
       this.spend()
-      let info
       try {
-        info = await this.deps.fetchUserInfo(author.authorId)
+        results.push({ author, info: await this.deps.fetchUserInfo(author.authorId) })
       } catch (error) {
         if (error instanceof AccessLimitedError) {
           this.recordAccessLimited(error)
           break
         }
-        continue
+        // 通信の失敗などは次回に確かめ直す
       }
+    }
+    // 退会扱いの再確認は 404 が当然なので割合に数えない
+    const judged = results.filter((r) => r.author.status !== 'deleted' && r.info.status !== 'error')
+    const notFound = judged.filter((r) => r.info.status === 'deleted').length
+    const holdDeletions = judged.length >= LIMITS.deletionAnomalyMinChecks && notFound >= judged.length * LIMITS.deletionAnomalyRatio
+    if (holdDeletions) {
+      pushEvent(this.state.events, { at: this.nowIso, kind: 'deletion_held', note: `404 ${notFound}/${judged.length}` })
+      this.addNote(`deletion_held: 404 ${notFound}/${judged.length}`)
+    }
+    for (const { author, info } of results) {
       this.usersChecked++
       author.lastCheckedAt = this.nowIso
       if (info.status === 'error') continue
-      if (info.status === 'existing') {
-        author.status = 'existing'
-        author.followerCount = info.followerCount
-        if (info.nickname) author.nickname = info.nickname
-      } else {
-        author.status = 'deleted'
-        author.deletedObservedAt = author.deletedObservedAt ?? this.nowIso
-        pushEvent(this.state.events, { at: this.nowIso, kind: 'author_deleted', authorId: author.authorId })
-        const deletion = evaluateDeletion(toObservation(author)!, this.config)
-        if (deletion.ng) this.setAuthorNg(author.authorId, ['A_C'], null)
-      }
+      if (info.status === 'existing') this.markExisting(author, info)
+      else if (!holdDeletions) this.markNotFound(author, nowMs)
       // フォロワー数・状態が分かったので、この投稿者の動画を判定し直す（昇格条件・保留信号）
       for (const post of author.posts) this.applyVideo(postToVideo(post, author.authorId))
     }
+  }
+
+  private markExisting(author: TrackedAuthor, info: UserInfo): void {
+    const wasDeleted = author.status === 'deleted'
+    author.status = 'existing'
+    author.followerCount = info.followerCount
+    if (info.nickname) author.nickname = info.nickname
+    author.deletionSuspectedAt = null
+    if (!wasDeleted) return
+    // 退会扱いを外す。投稿者 NG（恒久）は自動では外さず、管理画面で確かめられるよう履歴に残す
+    author.deletedObservedAt = null
+    const verdict = Object.hasOwn(this.state.verdicts.authors, author.authorId) ? this.state.verdicts.authors[author.authorId] : undefined
+    if (verdict) {
+      verdict.deletedObservedAt = null
+      verdict.followerCount = info.followerCount
+    }
+    pushEvent(this.state.events, { at: this.nowIso, kind: 'author_restored', authorId: author.authorId, ...(verdict ? { reasons: verdict.reasons } : {}) })
+  }
+
+  private markNotFound(author: TrackedAuthor, nowMs: number): void {
+    if (author.status === 'deleted') return // 再確認でも 404: 退会のまま
+    const suspectedAt = author.deletionSuspectedAt
+    if (!suspectedAt) {
+      author.deletionSuspectedAt = this.nowIso // 1 回目: 疑いにとどめる
+      return
+    }
+    if (nowMs - new Date(suspectedAt).getTime() < LIMITS.deletionConfirmMinutes * MINUTE_MS) return
+    author.status = 'deleted'
+    author.deletedObservedAt = suspectedAt // 最初に 404 を観測した時刻
+    author.deletionSuspectedAt = null
+    pushEvent(this.state.events, { at: this.nowIso, kind: 'author_deleted', authorId: author.authorId })
+    const observation = toObservation(author)
+    if (observation && evaluateDeletion(observation, this.config).ng) this.setAuthorNg(author.authorId, ['A_C'], null)
+  }
+
+  /** 退会扱いのまま、まだ再確認していない（投稿が古くなっても追跡から外さない） */
+  private awaitingDeletedRecheck(author: TrackedAuthor): boolean {
+    if (author.status !== 'deleted' || !author.deletedObservedAt) return false
+    if (!author.lastCheckedAt) return true
+    return new Date(author.lastCheckedAt).getTime() - new Date(author.deletedObservedAt).getTime() < LIMITS.deletedRecheckDays * DAY_MS
   }
 
   /** 保留の期限切れを解放し、古い項目を刈り込む */
@@ -435,7 +501,7 @@ class Session {
     for (const [authorId, author] of Object.entries(this.state.tracking.authors)) {
       author.posts = author.posts.filter((p) => nowMs - new Date(p.at).getTime() <= trackMs)
       const stale = nowMs - new Date(author.lastPostAt).getTime() > trackMs
-      if (stale && author.posts.length === 0) delete this.state.tracking.authors[authorId]
+      if (stale && author.posts.length === 0 && !this.awaitingDeletedRecheck(author)) delete this.state.tracking.authors[authorId]
     }
     this.state.tracking.pending = this.state.tracking.pending.filter((p) => p.authorId && this.state.tracking.authors[p.authorId])
     for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {

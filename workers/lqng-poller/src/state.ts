@@ -32,7 +32,10 @@ export interface TrackedAuthor {
   followerCount: number | null
   nickname: string | null
   visibility: OwnerVisibility | null
+  /** 退会を確定した投稿者の、最初に 404 を観測した時刻 */
   deletedObservedAt: string | null
+  /** 1 回目の 404 を観測した時刻（退会の疑い）。時間を置いた 2 回目の 404 で確定し、存在が分かれば消す */
+  deletionSuspectedAt?: string | null
 }
 
 export interface PendingVideo {
@@ -82,6 +85,10 @@ export type LqngEventKind =
   | 'hold'
   | 'released'
   | 'author_deleted'
+  /** 退会扱いの投稿者が再確認で存在した（退会扱いを外す。投稿者 NG は外さない） */
+  | 'author_restored'
+  /** 404 の割合が異常に高く、その回の退会判定を保留した */
+  | 'deletion_held'
   | 'access_limited'
   | 'backfill'
   | 'error'

@@ -117,6 +117,7 @@ const handler = {
                   followerCount: tracked.followerCount,
                   visibility: tracked.visibility,
                   deletedObservedAt: tracked.deletedObservedAt,
+                  deletionSuspectedAt: tracked.deletionSuspectedAt ?? null,
                 }
               : null,
             verdict: authorVerdict ? { status: authorVerdict.status, reasons: authorVerdict.reasons, since: authorVerdict.since } : null,
@@ -129,13 +130,21 @@ const handler = {
           time: nowIso,
           ...(author ? { author } : {}),
           config: { enabled: state.config.enabled, pollTags: state.config.pollTags.length, titleNeedles: state.config.titleNeedles.length, keywordNeedles: state.config.keywordNeedles.length, tagGroups: state.config.tagGroups.length, allowlistAuthors: state.config.allowlist.authorIds.length },
-          tracking: { lastPollAt: state.tracking.lastPollAt, lastSweepDate: state.tracking.lastSweepDate, authors: Object.keys(state.tracking.authors).length, pending: state.tracking.pending.length },
+          tracking: {
+            lastPollAt: state.tracking.lastPollAt,
+            lastSweepDate: state.tracking.lastSweepDate,
+            authors: Object.keys(state.tracking.authors).length,
+            pending: state.tracking.pending.length,
+            // 退会の疑い（1 回目の 404）と退会扱いの人数
+            deletionSuspected: Object.values(state.tracking.authors).filter((a) => a.deletionSuspectedAt).length,
+            deleted: Object.values(state.tracking.authors).filter((a) => a.status === 'deleted').length,
+          },
           verdicts: { authors: Object.keys(state.verdicts.authors).length, videos: Object.keys(state.verdicts.videos).length, updatedAt: state.verdicts.updatedAt },
           lastRun: lastRun ? { at: lastRun.at, mode: lastRun.mode, newVideos: lastRun.newVideos, enriched: lastRun.enriched, usersChecked: lastRun.usersChecked, subrequests: lastRun.subrequests, kvWrites: lastRun.kvWrites, note: lastRun.note ?? null } : null,
           eventsLast24h: eventCounts,
           // 直近の実行の時刻と注記（追跡表に持つ）と、直近イベントの種別だけの時系列
           recentRuns: state.tracking.recentRuns.map((r) => ({ at: r.at, kind: r.mode, note: r.note ?? null })),
-          recentEvents: state.events.items.slice(0, 60).map((e) => ({ at: e.at, kind: e.kind, ...(e.kind === 'access_limited' || e.kind === 'error' || e.kind === 'backfill' ? { note: e.note ?? null } : {}) })),
+          recentEvents: state.events.items.slice(0, 60).map((e) => ({ at: e.at, kind: e.kind, ...(e.kind === 'access_limited' || e.kind === 'error' || e.kind === 'backfill' || e.kind === 'deletion_held' ? { note: e.note ?? null } : {}) })),
         },
         { headers: NO_STORE }
       )

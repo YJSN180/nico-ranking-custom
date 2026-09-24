@@ -192,11 +192,29 @@ export async function fetchThumbInfoFromExt(videoId: string, fetchImpl: typeof f
   }
 }
 
-/** ユーザー情報 API: 404 が削除済み。channel/ 形式は対象外（存在扱い） */
+/**
+ * nvapi の 404 本文が「見つからない」（{"meta":{"status":404,"errorCode":"NOT_FOUND"}}）か。
+ * CDN・プロキシのエラーページなど別の 404 を退会と取り違えないために確かめる。
+ * なお存在しない API パスも同じ本文を返す（2026-09-25 実測）ので、API 変更で全員が 404 になる事態は
+ * 呼び出し側の「404 の割合」の検査で止める。
+ */
+async function isNvapiNotFound(res: Response): Promise<boolean> {
+  try {
+    const json = JSON.parse(await res.text()) as { meta?: { status?: unknown; errorCode?: unknown } }
+    return json.meta?.status === 404 && json.meta.errorCode === 'NOT_FOUND'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * ユーザー情報 API: 本文まで NOT_FOUND の 404 を deleted（退会の観測）として返す。
+ * 退会の確定（時間を置いた 2 回目）は呼び出し側が行う。channel/ 形式は対象外（存在扱い）
+ */
 export async function fetchUserInfoFromNvapi(userId: string, fetchImpl: typeof fetch = fetch): Promise<UserInfo> {
   if (!/^\d{1,12}$/.test(userId)) return { status: 'existing', followerCount: null, nickname: null }
   const res = await fetchImpl(`${NVAPI_USER_URL}${userId}`, { headers: NVAPI_HEADERS, signal: AbortSignal.timeout(TIMEOUT_MS) })
-  if (res.status === 404) return { status: 'deleted', followerCount: null, nickname: null }
+  if (res.status === 404) return { status: (await isNvapiNotFound(res)) ? 'deleted' : 'error', followerCount: null, nickname: null }
   if (res.status === 403) throw new AccessLimitedError('nvapi-user')
   if (!res.ok) return { status: 'error', followerCount: null, nickname: null }
   const json = (await res.json()) as { data?: { user?: { nickname?: string; followerCount?: number } } }

@@ -74,7 +74,13 @@ describe('lqng-poller runPoll', () => {
     expect(vi.mocked(fetchUserInfo).mock.calls[0]?.[0]).toBe('4000')
     // 補完も連投者の動画から始まる
     expect(vi.mocked(fetchThumbInfo).mock.calls.slice(0, 4).map((c) => c[0])).toEqual(['b0', 'b1', 'b2', 'b3'])
-    // 削除済み ∧ 連投 → 同じ実行内で投稿者 NG
+    // 1 回目の 404 は退会の疑いにとどめる
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['4000']?.deletionSuspectedAt).toBe(T0.toISOString())
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['4000']).toBeUndefined()
+    // 1 時間後の確認で、待ち行列より先に確かめて確定し、削除済み ∧ 連投 → 投稿者 NG
+    fetchUserInfo.mockClear()
+    await runPoll(m.kv, { ...d, now: () => new Date(T0.getTime() + 61 * 60_000) }, 'poll')
+    expect(vi.mocked(fetchUserInfo).mock.calls[0]?.[0]).toBe('4000')
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['4000']?.reasons).toEqual(['A_C'])
   })
 
@@ -199,8 +205,13 @@ describe('lqng-poller runPoll', () => {
     const later = new Date(T0.getTime() + 7 * 3600_000)
     const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
     await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, later), 'poll')
+    // 1 回目の 404 は疑いだけ（まだ NG にしない）
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+    const confirmAt = new Date(later.getTime() + 60 * 60_000)
+    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, confirmAt), 'poll')
     verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
     expect(verdicts.authors['1001']?.reasons).toEqual(['A_C'])
+    // 削除の観測時刻は最初に 404 を見た時刻
     expect(verdicts.authors['1001']?.deletedObservedAt).toBe(later.toISOString())
   })
 
@@ -459,5 +470,146 @@ describe('lqng-poller 新着取得の失敗と最終取得時刻', () => {
     const fallback = vi.fn(async () => [video({ id: 'sm91' })])
     await runPoll(m.kv, deps({ fetchNewVideos: primary, fetchNewVideosFallback: fallback }, later), 'poll')
     expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.lastPollAt).toBe(later.toISOString())
+  })
+})
+
+describe('lqng-poller 退会（ユーザー情報 API の 404）の確定', () => {
+  const deleted: UserInfo = { status: 'deleted', followerCount: null, nickname: null }
+  const hours = (h: number): Date => new Date(T0.getTime() + h * 3600_000)
+
+  it('1 回目の 404 は疑いにとどめ、1 時間以上あけた 2 回目の 404 で確定する（1 時間未満では再確認しない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const burst = [video({ id: 'sm10', registeredAt: at(-3) }), video({ id: 'sm11', registeredAt: at(-2) }), video({ id: 'sm12', registeredAt: at(-1) })]
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => burst), fetchUserInfo: vi.fn(async () => existing(0)) }), 'poll')
+
+    const gone = vi.fn(async () => deleted)
+    await runPoll(m.kv, deps({ fetchUserInfo: gone }, hours(7)), 'poll')
+    let author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
+    expect(author.status).toBe('existing')
+    expect(author.deletionSuspectedAt).toBe(hours(7).toISOString())
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_deleted')).toBe(false)
+
+    gone.mockClear()
+    await runPoll(m.kv, deps({ fetchUserInfo: gone }, hours(7.5)), 'poll')
+    expect(gone).not.toHaveBeenCalled()
+
+    await runPoll(m.kv, deps({ fetchUserInfo: gone }, hours(8)), 'poll')
+    author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
+    expect(author.status).toBe('deleted')
+    expect(author.deletedObservedAt).toBe(hours(7).toISOString())
+    expect(author.deletionSuspectedAt).toBeNull()
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']?.reasons).toEqual(['A_C'])
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_deleted' && e.authorId === '1001')).toBe(true)
+  })
+
+  it('404 の後に存在が確認できれば疑いを外す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const burst = [video({ id: 'sm10', registeredAt: at(-3) }), video({ id: 'sm11', registeredAt: at(-2) }), video({ id: 'sm12', registeredAt: at(-1) })]
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => burst), fetchUserInfo: vi.fn(async () => deleted) }), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']?.deletionSuspectedAt).toBe(T0.toISOString())
+    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => existing(4)) }, hours(1)), 'poll')
+    const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']!
+    expect(author.deletionSuspectedAt).toBeNull()
+    expect(author.status).toBe('existing')
+    expect(author.followerCount).toBe(4)
+    // さらに 1 時間後に 404 が来ても、それは新しい疑いであって確定ではない
+    await runPoll(m.kv, deps({ fetchUserInfo: vi.fn(async () => deleted) }, hours(7)), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']?.status).toBe('existing')
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+
+  it('確認した人数の 80% 以上が 404 なら、その回の退会判定をすべて保留して記録する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const uploads = Array.from({ length: 6 }, (_, i) => video({ id: `sm${300 + i}`, authorId: String(3100 + i) }))
+    const info = vi.fn(async (id: string) => (id === '3105' ? existing(7) : deleted))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => uploads), fetchUserInfo: info }), 'poll')
+    expect(info).toHaveBeenCalledTimes(6)
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    for (let i = 0; i < 5; i++) expect(tracking.authors[String(3100 + i)]?.deletionSuspectedAt ?? null).toBeNull()
+    // 404 以外の結果はそのまま反映する
+    expect(tracking.authors['3105']?.followerCount).toBe(7)
+    const held = m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.find((e) => e.kind === 'deletion_held')
+    expect(held?.note).toBe('404 5/6')
+    expect(tracking.lastRun?.note).toContain('deletion_held')
+  })
+
+  it('404 が 80% 未満なら通常どおり疑いを記録する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const uploads = Array.from({ length: 5 }, (_, i) => video({ id: `sm${310 + i}`, authorId: String(3200 + i) }))
+    const info = vi.fn(async (id: string) => (id === '3203' || id === '3204' ? existing(7) : deleted))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => uploads), fetchUserInfo: info }), 'poll')
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(['3200', '3201', '3202'].map((id) => tracking.authors[id]?.deletionSuspectedAt)).toEqual([T0.toISOString(), T0.toISOString(), T0.toISOString()])
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'deletion_held') ?? false).toBe(false)
+  })
+
+  describe('退会扱いの投稿者の再確認', () => {
+    const deletedAt = T0.toISOString()
+    const oldPost = new Date(T0.getTime() - 6 * 24 * 3600_000).toISOString()
+    function seeded() {
+      const tracking: LqngTracking = {
+        version: 1,
+        lastPollAt: deletedAt,
+        lastSweepDate: null,
+        authors: {
+          '1001': { authorId: '1001', firstSeenAt: oldPost, lastPostAt: oldPost, posts: [{ id: 'sm1', title: 't', at: oldPost, tagDetails: null, ownerVisibility: 'visible' }], status: 'deleted', lastCheckedAt: deletedAt, followerCount: null, nickname: 'n', visibility: 'visible', deletedObservedAt: deletedAt, deletionSuspectedAt: null },
+        },
+        pending: [],
+        lastRun: null,
+        recentRuns: [],
+        updatedAt: deletedAt,
+      }
+      const verdicts: LqngVerdicts = {
+        version: 1,
+        authors: { '1001': { status: 'ng', reasons: ['A_C'], since: deletedAt, evidence: [], nickname: 'n', followerCount: null, visibility: 'visible', deletedObservedAt: deletedAt } },
+        videos: {},
+        updatedAt: deletedAt,
+      }
+      return memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking, [LQNG_KV_KEYS.verdicts]: verdicts })
+    }
+
+    it('7 日たつまでは再確認せず、投稿が古くなっても追跡から外さない', async () => {
+      const m = seeded()
+      const info = vi.fn(async () => existing(5))
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(3 * 24)), 'poll')
+      expect(info).not.toHaveBeenCalled()
+      const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']
+      expect(author?.status).toBe('deleted')
+      expect(author?.posts).toEqual([])
+    })
+
+    it('7 日後に存在が確認できれば退会扱いを外し、投稿者 NG は外さずに記録する', async () => {
+      const m = seeded()
+      await runPoll(m.kv, deps({}, hours(3 * 24)), 'poll')
+      const info = vi.fn(async () => existing(5))
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 1)), 'poll')
+      expect(info).toHaveBeenCalledWith('1001')
+      // 追跡中の投稿はもう無いので追跡からは外れうるが、残っていれば退会扱いは外れている
+      const author = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']
+      if (author) {
+        expect(author.status).toBe('existing')
+        expect(author.deletedObservedAt).toBeNull()
+      }
+      const verdict = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']
+      expect(verdict?.status).toBe('ng')
+      expect(verdict?.reasons).toEqual(['A_C'])
+      expect(verdict?.deletedObservedAt).toBeNull()
+      expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_restored' && e.authorId === '1001')).toBe(true)
+    })
+
+    it('再確認でも 404 なら退会のまま、その後は通常どおり追跡から外す', async () => {
+      const m = seeded()
+      const info = vi.fn(async () => deleted)
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 1)), 'poll')
+      expect(info).toHaveBeenCalledWith('1001')
+      // 再確認は 1 回だけ。投稿はもう無いので、遅くとも次の実行で追跡から外れる
+      await runPoll(m.kv, deps({ fetchUserInfo: info }, hours(7 * 24 + 2)), 'poll')
+      expect(info).toHaveBeenCalledTimes(1)
+      expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.authors['1001']).toBeUndefined()
+      expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'author_restored') ?? false).toBe(false)
+      const verdict = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!.authors['1001']
+      expect(verdict?.reasons).toEqual(['A_C'])
+      expect(verdict?.deletedObservedAt).toBe(deletedAt)
+    })
   })
 })

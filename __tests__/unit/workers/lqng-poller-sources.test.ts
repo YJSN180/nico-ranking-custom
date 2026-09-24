@@ -67,14 +67,27 @@ describe('fetchThumbInfoFromExt', () => {
 })
 
 describe('fetchUserInfoFromNvapi', () => {
-  it('200 は現存（フォロワー数付き）、404 は削除、チャンネルは照会しない', async () => {
+  it('200 は現存（フォロワー数付き）、NOT_FOUND 本文の 404 は削除、チャンネルは照会しない', async () => {
     const ok = vi.fn(async () => response({ data: { user: { nickname: 'n', followerCount: 7 } } }))
     expect(await fetchUserInfoFromNvapi('12', ok as unknown as typeof fetch)).toEqual({ status: 'existing', followerCount: 7, nickname: 'n' })
-    const gone = vi.fn(async () => response({ meta: { status: 404 } }, 404))
+    const gone = vi.fn(async () => response({ meta: { status: 404, errorCode: 'NOT_FOUND' } }, 404))
     expect(await fetchUserInfoFromNvapi('12', gone as unknown as typeof fetch)).toEqual({ status: 'deleted', followerCount: null, nickname: null })
     const never = vi.fn()
     expect(await fetchUserInfoFromNvapi('channel/ch1', never as unknown as typeof fetch)).toEqual({ status: 'existing', followerCount: null, nickname: null })
     expect(never).not.toHaveBeenCalled()
+  })
+
+  it('本文が NOT_FOUND でない 404（HTML・別のエラー・壊れた JSON）は削除扱いにしない', async () => {
+    const bodies = [
+      response('<html>Not Found</html>', 404, true),
+      response({ meta: { status: 404, errorCode: 'SOMETHING_ELSE' } }, 404),
+      response({ meta: { status: 500, errorCode: 'NOT_FOUND' } }, 404),
+      response('{"meta":', 404, true),
+    ]
+    for (const body of bodies) {
+      const fetchImpl = vi.fn(async () => body)
+      expect((await fetchUserInfoFromNvapi('12', fetchImpl as unknown as typeof fetch)).status).toBe('error')
+    }
   })
 })
 
