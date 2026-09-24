@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { LQNG_TITLE_NEEDLE_MIN_LENGTH, validateLqngConfigInput } from '@/lib/lqng/config'
+import { LQNG_POLL_TAGS_MAX, LQNG_TITLE_NEEDLE_MIN_LENGTH, validateLqngConfigInput } from '@/lib/lqng/config'
 
 // 合成値のみ
 const valid = {
@@ -31,6 +31,12 @@ describe('validateLqngConfigInput', () => {
     expect(problems[0]).toContain('照合語「ＡＢ」は正規化すると 2 文字です')
     expect(problems[1]).toContain('2 文字')
     expect(problems[2]).toContain('照合語「か」は正規化すると 1 文字です')
+  })
+
+  it('ポーリング対象タグは 3 つまで（4 つ目からは Worker が取得しない）', () => {
+    expect(LQNG_POLL_TAGS_MAX).toBe(3)
+    expect(validateLqngConfigInput({ ...valid, pollTags: ['t1', 't2', 't3'] })).toEqual([])
+    expect(validateLqngConfigInput({ ...valid, pollTags: ['t1', 't2', 't3', 't4'] })).toEqual(['対象タグは 3 つまでにしてください（4 つ目からは新着を取得しません）'])
   })
 
   it('数値は整数で、項目ごとの下限・上限の範囲に収める', () => {

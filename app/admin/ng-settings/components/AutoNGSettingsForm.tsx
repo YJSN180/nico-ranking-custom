@@ -134,7 +134,7 @@ export function AutoNGSettingsForm({ config, onSave, readOnly = false }: AutoNGS
 
       <fieldset className={styles.fieldset}>
         <legend>ポーリング対象</legend>
-        <p className={styles.fieldHelp}>新着検索でこれらのタグを OR で取得します（1 行 1 タグ）。日次スイープは指定ジャンルの前日分にタイトル照合だけを掛けます。</p>
+        <p className={styles.fieldHelp}>新着検索でこれらのタグを OR で取得します（1 行 1 タグ、3 つまで）。日次スイープは指定ジャンルの前日分にタイトル照合だけを掛けます。</p>
         <div className={styles.fieldRow}>
           <div className={styles.field}>
             <label htmlFor="lqng-poll-tags">対象タグ</label>

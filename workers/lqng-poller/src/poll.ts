@@ -2,6 +2,7 @@
 // 判定はすべて lib/lqng の純粋関数に委ね、ここでは追跡状態の更新と外部呼び出しの予算管理を行う。
 // 1 回の実行で: 外部呼び出し ≤ subrequestBudget。KV は内容が変わったキーだけ書く（定常は追跡表の 1 回）。
 // ロックは使わない（KV の get → put は原子的でなく排他にならない）。判定表を書くのはこの実行だけにする。
+import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
@@ -26,7 +27,7 @@ export const LIMITS = {
   /** 外部呼び出しの総予算（無料プランの 50/実行 に KV 分の余裕を残す） */
   subrequestBudget: 40,
   /** 新着取得に使うタグの上限。本家タグページは タグ × 種別 2（動画/ショート）× 最大 2 ページ = 最大 12 リクエスト */
-  pollTagsMax: 3,
+  pollTagsMax: LQNG_POLL_TAGS_MAX,
   /** 予備（nvapi）・日次スイープ（Snapshot）は送ったページ数を返さないので、最大ページ数で見積もる */
   fallbackCost: MAX_PAGES,
   sweepCost: MAX_PAGES,

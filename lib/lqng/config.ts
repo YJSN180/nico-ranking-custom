@@ -67,6 +67,9 @@ export function normalizeLqngConfig(raw: unknown): LqngConfig {
 /** 照合語（B）の最小文字数（正規化後）。短い照合語は順序付き部分列一致で無関係なタイトルにも一致する */
 export const LQNG_TITLE_NEEDLE_MIN_LENGTH = 3
 
+/** 新着取得に使うタグの上限（Worker の外部呼び出しの予算から決まる。4 つ目からは取得しない） */
+export const LQNG_POLL_TAGS_MAX = 3
+
 interface NumberLimit {
   label: string
   min: number
@@ -112,6 +115,7 @@ export function validateLqngConfigInput(raw: unknown): string[] {
     }
   }
   if (config.enabled && config.pollTags.length === 0) problems.push('有効にするにはポーリング対象タグが 1 つ以上必要です')
+  if (config.pollTags.length > LQNG_POLL_TAGS_MAX) problems.push(`対象タグは ${LQNG_POLL_TAGS_MAX} つまでにしてください（${LQNG_POLL_TAGS_MAX + 1} つ目からは新着を取得しません）`)
   if (config.tagGroups.length > 0 && config.lockGroupsMin > config.tagGroups.length) problems.push('ロック群の閾値がグループ数を超えています')
   return problems
 }
