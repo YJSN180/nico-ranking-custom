@@ -150,9 +150,14 @@ export function validateLqngConfigInput(raw: unknown): string[] {
   return problems
 }
 
+/** 判定テーブルとして読める形か（authors と videos がオブジェクト）。読めない形は normalizeLqngVerdicts が空にする */
+export function isLqngVerdictsShape(raw: unknown): raw is Record<string, unknown> & { authors: Record<string, unknown>; videos: Record<string, unknown> } {
+  return isRecord(raw) && isRecord(raw.authors) && isRecord(raw.videos)
+}
+
 /** 判定テーブルの形を検証し、壊れていれば空を返す（サービスを落とさない） */
 export function normalizeLqngVerdicts(raw: unknown): LqngVerdicts {
-  if (!isRecord(raw) || !isRecord(raw.authors) || !isRecord(raw.videos)) return { ...EMPTY_LQNG_VERDICTS, authors: {}, videos: {} }
+  if (!isLqngVerdictsShape(raw)) return { ...EMPTY_LQNG_VERDICTS, authors: {}, videos: {} }
   return {
     version: 1,
     authors: raw.authors as LqngVerdicts['authors'],
