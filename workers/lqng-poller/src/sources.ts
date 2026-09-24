@@ -19,7 +19,11 @@ export interface ThumbInfo {
   nickname: string | null
 }
 
-export type ThumbResult = { ok: true; info: ThumbInfo } | { ok: false; reason: 'deleted' | 'error' }
+/**
+ * 失敗の種類: deleted = 動画が削除済み、error = その動画について確かな失敗（試行回数に数える）、
+ * unavailable = 5xx・429・通信失敗など上流の一時的な不調（試行回数に数えない）
+ */
+export type ThumbResult = { ok: true; info: ThumbInfo } | { ok: false; reason: 'deleted' | 'error' | 'unavailable' }
 
 export interface UserInfo {
   status: 'existing' | 'deleted' | 'error'
@@ -196,6 +200,7 @@ function pickXml(xml: string, tag: string): string | undefined {
 export async function fetchThumbInfoFromExt(videoId: string, fetchImpl: typeof fetch = fetch): Promise<ThumbResult> {
   const res = await fetchImpl(`${THUMB_URL}${videoId}`, { headers: { 'User-Agent': 'nico-rank.com lqng-poller' }, signal: AbortSignal.timeout(TIMEOUT_MS) })
   if (res.status === 403) throw new AccessLimitedError('getthumbinfo')
+  if (res.status >= 500 || res.status === 429) return { ok: false, reason: 'unavailable' }
   if (!res.ok) return { ok: false, reason: 'error' }
   const xml = await res.text()
   const status = xml.match(/<nicovideo_thumb_response status="(\w+)"/)?.[1]

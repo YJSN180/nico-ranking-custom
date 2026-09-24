@@ -5,7 +5,7 @@
 import { decideHold, evaluateDeletion, evaluateVideo, isFrequent } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
 import { mergeDeltasIntoVerdicts, readInbox, type InboxItem } from './inbox'
-import { AccessLimitedError, type PollDeps, type SourceVideo, type UserInfo } from './sources'
+import { AccessLimitedError, type PollDeps, type SourceVideo, type ThumbResult, type UserInfo } from './sources'
 import {
   captureBaseline,
   loadEnabled,
@@ -36,8 +36,10 @@ export const LIMITS = {
   deletionAnomalyRatio: 0.8,
   /** 退会扱いの投稿者を再確認するまでの日数（存在すれば退会扱いを外す） */
   deletedRecheckDays: 7,
-  /** 補完に失敗した動画を諦めるまでの試行回数 */
+  /** 補完に失敗した動画を諦めるまでの試行回数（5xx・通信失敗などの一時的な不調は数えない） */
   pendingMaxAttempts: 3,
+  /** getthumbinfo の一時的な不調がこの回数続いたら、上流の障害とみなしてその回の補完を打ち切る */
+  thumbUnavailableAbort: 3,
   /**
    * 差分取得の重なり。nvapi の検索インデックスには投稿から数十分以上の反映遅れがあり、
    * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は isKnownVideo で
@@ -346,6 +348,7 @@ class Session {
       .map((x) => x.item)
     const keep: typeof pending = []
     let processed = 0
+    let unavailableInRow = 0
     for (let i = 0; i < pending.length; i++) {
       const item = pending[i]!
       if (processed >= LIMITS.thumbPerRun || !this.budgetLeft()) {
@@ -357,7 +360,7 @@ class Session {
       if (!author || !post) continue // 追跡から外れた（期限切れなど）
       processed++
       this.spend()
-      let result
+      let result: ThumbResult
       try {
         result = await this.deps.fetchThumbInfo(item.id)
       } catch (error) {
@@ -366,8 +369,19 @@ class Session {
           keep.push(...pending.slice(i))
           break
         }
-        result = { ok: false as const, reason: 'error' as const }
+        result = { ok: false, reason: 'unavailable' } // 通信失敗・タイムアウト
       }
+      if (!result.ok && result.reason === 'unavailable') {
+        // 上流の一時的な不調は試行回数に数えずに持ち越す。続くようなら障害とみなして打ち切る
+        keep.push(item)
+        if (++unavailableInRow >= LIMITS.thumbUnavailableAbort) {
+          keep.push(...pending.slice(i + 1))
+          this.addNote('getthumbinfo_unavailable')
+          break
+        }
+        continue
+      }
+      unavailableInRow = 0
       if (result.ok) {
         post.tagDetails = result.info.tagDetails
         post.ownerVisibility = result.info.ownerVisibility

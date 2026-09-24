@@ -73,6 +73,15 @@ describe('fetchThumbInfoFromExt', () => {
     expect(r).toEqual({ ok: true, info: { tagDetails: [{ name: 'A', isLocked: true }, { name: 'B <c>', isLocked: false }, { name: 'C', isLocked: true }], ownerVisibility: 'visible', nickname: "n & m &lt;x&gt; 'q'" } })
   })
 
+  it('5xx と 429 は上流の一時的な不調（unavailable）、それ以外の失敗は error', async () => {
+    for (const status of [500, 502, 503, 429]) {
+      expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response('', status, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'unavailable' })
+    }
+    expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response('', 404, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'error' })
+    const notFound = '<nicovideo_thumb_response status="fail"><error><code>NOT_FOUND</code></error></nicovideo_thumb_response>'
+    expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response(notFound, 200, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'error' })
+  })
+
   it('投稿者が空なら hidden、削除済みは deleted、403 はアクセス制限', async () => {
     const hidden = xml('<tags><tag lock="1">A</tag></tags>')
     const r1 = await fetchThumbInfoFromExt('sm1', vi.fn(async () => response(hidden, 200, true)) as unknown as typeof fetch)

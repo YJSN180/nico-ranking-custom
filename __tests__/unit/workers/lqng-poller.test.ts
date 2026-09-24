@@ -709,3 +709,39 @@ describe('lqng-poller 追跡の刈り込みの順番', () => {
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
   })
 })
+
+describe('lqng-poller getthumbinfo の失敗の扱い', () => {
+  const unavailable: ThumbResult = { ok: false, reason: 'unavailable' }
+  const later = (n: number): Date => new Date(T0.getTime() + n * 15 * 60_000)
+
+  it('5xx や通信失敗は試行回数に数えず、補完待ちに残す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm500' })])), fetchThumbInfo: vi.fn(async () => unavailable) }), 'poll')
+    for (let i = 1; i <= 2; i++) {
+      await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => { throw new Error('network') }) }, later(i)), 'poll')
+    }
+    for (let i = 3; i <= 5; i++) await runPoll(m.kv, deps({ fetchThumbInfo: vi.fn(async () => unavailable) }, later(i)), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([{ id: 'sm500', authorId: '1001', attempts: 0 }])
+  })
+
+  it('確かな失敗（error）は試行回数に数え、上限で諦める', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const failing = vi.fn(async (): Promise<ThumbResult> => ({ ok: false, reason: 'error' }))
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm501' })])), fetchThumbInfo: failing }), 'poll')
+    for (let i = 1; i < LIMITS.pendingMaxAttempts; i++) await runPoll(m.kv, deps({ fetchThumbInfo: failing }, later(i)), 'poll')
+    expect(failing).toHaveBeenCalledTimes(LIMITS.pendingMaxAttempts)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.pending).toEqual([])
+  })
+
+  it('続けて一時的な失敗が起きたら上流の障害とみなし、その回の補完を打ち切って残りを持ち越す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const many = Array.from({ length: 8 }, (_, i) => video({ id: `sm${510 + i}`, authorId: String(5100 + i) }))
+    const thumb = vi.fn(async () => unavailable)
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(many)), fetchThumbInfo: thumb }), 'poll')
+    expect(thumb).toHaveBeenCalledTimes(LIMITS.thumbUnavailableAbort)
+    const pending = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!.pending
+    expect(pending).toHaveLength(8)
+    expect(pending.every((p) => p.attempts === 0)).toBe(true)
+    expect(r.note).toContain('getthumbinfo_unavailable')
+  })
+})
