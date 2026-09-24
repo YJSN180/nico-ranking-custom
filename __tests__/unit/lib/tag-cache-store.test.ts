@@ -9,6 +9,7 @@ import {
   type TagCacheEntry,
   readTagCacheShard,
   readTagCacheShardFromR2,
+  writeTagCacheShardToR2,
 } from '@/lib/tag-cache-store'
 import { kv } from '@/lib/simple-kv'
 
@@ -82,6 +83,27 @@ describe('R2 shard reads', () => {
     expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('pending')
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('rejected:TimeoutError')
+  })
+
+  it('gives up on a shard write that never settles', async () => {
+    vi.useFakeTimers()
+    stubR2Credentials()
+    const signals: unknown[] = []
+    vi.spyOn(S3Client.prototype, 'send').mockImplementation((_command: unknown, options?: { abortSignal?: unknown }) => {
+      signals.push(options?.abortSignal)
+      return new Promise(() => {})
+    })
+
+    const outcome = writeTagCacheShardToR2(5, { sm1: success(new Date().toISOString()) }).then(
+      () => 'resolved',
+      (error: Error) => `rejected:${error.name}`,
+    )
+    await vi.advanceTimersByTimeAsync(29_000)
+    expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('pending')
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('rejected:TimeoutError')
+    expect(signals).toHaveLength(1)
+    expect(signals[0]).toBeInstanceOf(AbortSignal)
   })
 
   it('keeps the collection path on the KV fallback when R2 fails', async () => {

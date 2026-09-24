@@ -2,6 +2,7 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3
 import type { TagDetail } from '../types/ranking'
 import { parseBufferAsJSON, compressForStorage } from './unified-compression'
 import { kv } from './simple-kv'
+import { withDeadline } from './pipeline/retry'
 
 export const TAG_CACHE_KEY_PREFIX = 'TAG_CACHE_'
 export const TAG_CACHE_SHARDS = 100
@@ -119,8 +120,8 @@ export async function writeTagCacheDeltaArtifact(
 }
 
 const R2_REQUEST_TIMEOUT_MS = 20_000
-// Also bounds waits the request abort cannot reach, such as body collection and gunzip.
-const R2_SHARD_READ_DEADLINE_MS = 30_000
+// Also bounds waits the request abort cannot reach, such as body collection and gzip.
+const R2_SHARD_DEADLINE_MS = 30_000
 
 let sharedR2Client: S3Client | null = null
 
@@ -177,18 +178,6 @@ export function describeStorageError(error: unknown): string {
   if (status !== undefined) parts.push(`http_${status}`)
   if (typeof code === 'string') parts.push(code)
   return `${parts.join(' ')}: ${error.message.slice(0, 200)}`
-}
-
-function withDeadline<T>(operation: Promise<T>, ms: number, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error(message)
-      error.name = 'TimeoutError'
-      reject(error)
-    }, ms)
-  })
-  return Promise.race([operation, deadline]).finally(() => clearTimeout(timer))
 }
 
 function isShard(value: unknown): value is TagCacheShard {
@@ -250,8 +239,8 @@ export async function readTagCacheShardFromR2(shardIdOrKey: string | number): Pr
 
   return withDeadline(
     read(),
-    R2_SHARD_READ_DEADLINE_MS,
-    `Tag cache shard read exceeded ${R2_SHARD_READ_DEADLINE_MS / 1000}s`,
+    R2_SHARD_DEADLINE_MS,
+    `Tag cache shard read exceeded ${R2_SHARD_DEADLINE_MS / 1000}s`,
   )
 }
 
@@ -261,21 +250,30 @@ export async function writeTagCacheShardToR2(shardIdOrKey: string | number, shar
     throw new Error('R2 credentials not configured')
   }
 
-  const compressionResult = await compressForStorage(shard)
-  await client.send(
-    new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking',
-      Key: getR2ShardKey(shardIdOrKey),
-      Body: compressionResult.compressedData,
-      ContentType: 'application/json',
-      ContentEncoding: 'gzip',
-      CacheControl: 'private, max-age=3600',
-      Metadata: {
-        version: '1',
-        updatedAt: new Date().toISOString(),
-        entries: String(Object.keys(shard).length),
-      },
-    }),
+  const write = async (): Promise<void> => {
+    const compressionResult = await compressForStorage(shard)
+    await client.send(
+      new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME || 'nico-ranking',
+        Key: getR2ShardKey(shardIdOrKey),
+        Body: compressionResult.compressedData,
+        ContentType: 'application/json',
+        ContentEncoding: 'gzip',
+        CacheControl: 'private, max-age=3600',
+        Metadata: {
+          version: '1',
+          updatedAt: new Date().toISOString(),
+          entries: String(Object.keys(shard).length),
+        },
+      }),
+      { abortSignal: AbortSignal.timeout(R2_REQUEST_TIMEOUT_MS) },
+    )
+  }
+
+  await withDeadline(
+    write(),
+    R2_SHARD_DEADLINE_MS,
+    `Tag cache shard write exceeded ${R2_SHARD_DEADLINE_MS / 1000}s`,
   )
 }
 
