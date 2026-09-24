@@ -68,7 +68,7 @@ describe('lqng-poller runPoll', () => {
     const normal = Array.from({ length: 12 }, (_, i) => video({ id: `n${i}`, authorId: `${3000 + i}`, registeredAt: at(-60 - i) }))
     const burst = Array.from({ length: 4 }, (_, i) => video({ id: `b${i}`, authorId: '4000', registeredAt: at(-2 - i) }))
     const fetchUserInfo = vi.fn(async (id: string) => (id === '4000' ? ({ status: 'deleted', followerCount: null, nickname: null } as UserInfo) : existing(100)))
-    const fetchThumbInfo = vi.fn(async () => okThumb())
+    const fetchThumbInfo = vi.fn(async (_id: string) => okThumb())
     const d = deps({ fetchNewVideos: vi.fn(async () => pages([...normal, ...burst])), fetchUserInfo, fetchThumbInfo })
     const r = await runPoll(m.kv, d, 'poll')
     expect(r.skipped).toBeNull()

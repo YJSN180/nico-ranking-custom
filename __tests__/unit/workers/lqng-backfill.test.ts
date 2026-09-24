@@ -114,7 +114,7 @@ describe('runBackfillStep', () => {
 
   it('連投 ∧ ロックタグ群（C∧D）は該当群のタグを持つ動画だけ補完して判定する', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
-    const fetchThumbInfo = vi.fn(async (): Promise<ThumbResult> => ({ ok: true, info: { tagDetails: locked('g1', 'g2', 'g3'), ownerVisibility: 'visible', nickname: 'n' } }))
+    const fetchThumbInfo = vi.fn(async (_id: string): Promise<ThumbResult> => ({ ok: true, info: { tagDetails: locked('g1', 'g2', 'g3'), ownerVisibility: 'visible', nickname: 'n' } }))
     const videos = [...burst('2005', 4, { tags: ['g1', 'g2', 'g3'] }), video({ id: 'plain', authorId: '2005', registeredAt: at(9), tags: ['g1'] })]
     const d = deps({ fetchWindowPage: pager(videos), fetchThumbInfo })
     const r = await runBackfillStep(m.kv, d, null, { days: 1 })
