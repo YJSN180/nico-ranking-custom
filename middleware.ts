@@ -287,6 +287,13 @@ const noStorePaths: string[] = []
     response.headers.set('Content-Type', 'text/css; charset=utf-8')
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
+  } else if (request.nextUrl.pathname === '/sw.js') {
+    // Service Worker 本体は長期キャッシュしない（ページ遷移を横取りするため、
+    // 不具合の修正版がすぐ届くようにする）。ブラウザは毎回再検証し、CDN には保存させない
+    response.headers.set('Content-Type', 'application/javascript; charset=utf-8')
+    response.headers.set('Cache-Control', 'no-cache')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   } else if (request.nextUrl.pathname.match(/\.js$/)) {
     // JSファイル: 正確なMIME type設定 + 24時間キャッシュ + ETag活用
     response.headers.set('Content-Type', 'application/javascript; charset=utf-8')
