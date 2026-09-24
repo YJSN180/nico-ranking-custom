@@ -47,9 +47,8 @@ export const LIMITS = {
   userRecheckHours: 6,
   /** 退会の確定に要る、1 回目の 404 から 2 回目の確認までの間隔 */
   deletionConfirmMinutes: 60,
-  /** 1 回の確認でこの人数以上を見て、404 がこの割合以上なら退会判定をすべて保留する（API 側の異常対策） */
-  deletionAnomalyMinChecks: 5,
-  deletionAnomalyRatio: 0.8,
+  /** 404 が出た回の対照に使う「最近存在を確認した投稿者」の範囲（時間） */
+  controlFreshHours: 24,
   /** 退会扱いの投稿者を再確認するまでの日数（存在すれば退会扱いを外す） */
   deletedRecheckDays: 7,
   /** 補完に失敗した動画を諦めるまでの試行回数（5xx・通信失敗などの一時的な不調は数えない） */
@@ -465,8 +464,8 @@ class Session {
 
   /**
    * ユーザー情報 API で存在・フォロワー数を確認する。退会（NOT_FOUND の 404）は 1 回目を疑いとし、
-   * 時間を置いた 2 回目で確定して A∧C を判定する。1 回の確認で 404 の割合が異常に高いときは、
-   * その回の退会判定をすべて保留して記録する。
+   * 時間を置いた 2 回目で確定して A∧C を判定する。404 が出た回は、API が存在するユーザーに 200 を
+   * 返しているかを対照で確かめ、確かめられなければその回の 404 をすべて保留する（次の回に確かめ直す）。
    */
   async checkAuthors(): Promise<void> {
     const nowMs = this.now.getTime()
@@ -478,7 +477,8 @@ class Session {
       .slice(0, LIMITS.usersPerRun)
     const results: Array<{ author: TrackedAuthor; info: UserInfo }> = []
     for (const author of candidates) {
-      if (!this.budgetLeft()) break
+      // 404 が出たときの対照の確認に 1 回分を残す
+      if (!this.budgetLeft(2)) break
       this.spend()
       try {
         results.push({ author, info: await this.deps.fetchUserInfo(author.authorId) })
@@ -490,23 +490,68 @@ class Session {
         // 通信の失敗などは次回に確かめ直す
       }
     }
-    // 退会扱いの再確認は 404 が当然なので割合に数えない
-    const judged = results.filter((r) => r.author.status !== 'deleted' && r.info.status !== 'error')
-    const notFound = judged.filter((r) => r.info.status === 'deleted').length
-    const holdDeletions = judged.length >= LIMITS.deletionAnomalyMinChecks && notFound >= judged.length * LIMITS.deletionAnomalyRatio
-    if (holdDeletions) {
-      pushEvent(this.state.events, { at: this.nowIso, kind: 'deletion_held', note: `404 ${notFound}/${judged.length}` })
-      this.addNote(`deletion_held: 404 ${notFound}/${judged.length}`)
+    // 退会扱いの再確認は 404 が当然なので、対照の確認の対象にしない
+    const notFound = results.filter((r) => r.author.status !== 'deleted' && r.info.status === 'deleted').length
+    const hold = notFound > 0 ? await this.verifyUserApi(results) : null
+    if (hold !== null) {
+      this.recordIssue('deletion_held', hold, `deletion_held: ${hold} (404 ${notFound}/${results.length})`, 'deletion_held', hold === 'control_404' ? new Error('deletion_held: control_404') : undefined)
+    } else if (notFound > 0) {
+      this.resolveIssue('deletion_held')
     }
     for (const { author, info } of results) {
       this.usersChecked++
+      // 保留した 404 は確かめなかったものとして扱い、lastCheckedAt を進めずに次の回に確かめ直す
+      const held = hold !== null && info.status === 'deleted' && author.status !== 'deleted'
+      if (held) continue
       author.lastCheckedAt = this.nowIso
       if (info.status === 'error') continue
       if (info.status === 'existing') this.markExisting(author, info)
-      else if (!holdDeletions) this.markNotFound(author, nowMs)
+      else this.markNotFound(author, nowMs)
       // フォロワー数・状態が分かったので、この投稿者の動画を判定し直す（昇格条件・保留信号）
       for (const post of author.posts) this.applyVideo(postToVideo(post, author.authorId))
     }
+  }
+
+  /**
+   * 404 が出た回に、ユーザー情報 API が存在するユーザーに 200 を返しているかを確かめる。
+   * 同じ回に存在の確認が取れていればそれで足りる。無ければ存在が分かっている対照を 1 件確かめる
+   * （API の変更で全員が 404 になったときに、実在の連投者を A∧C で恒久 NG にしないため）。
+   * 問題が無ければ null、保留するならその理由を返す。
+   */
+  private async verifyUserApi(results: ReadonlyArray<{ author: TrackedAuthor; info: UserInfo }>): Promise<string | null> {
+    if (results.some((r) => r.info.status === 'existing')) return null
+    const control = this.pickControl(new Set(results.map((r) => r.author.authorId)))
+    if (control === null) return 'no_control'
+    if (!this.budgetLeft()) return 'no_budget'
+    this.spend()
+    let info: UserInfo
+    try {
+      info = await this.deps.fetchUserInfo(control)
+    } catch (error) {
+      if (error instanceof AccessLimitedError) {
+        this.recordAccessLimited(error)
+        return 'control_access_limited'
+      }
+      return 'control_error'
+    }
+    this.usersChecked++
+    if (info.status !== 'existing') return info.status === 'deleted' ? 'control_404' : 'control_error'
+    const tracked = Object.hasOwn(this.state.tracking.authors, control) ? this.state.tracking.authors[control] : undefined
+    if (tracked) {
+      tracked.lastCheckedAt = this.nowIso
+      tracked.followerCount = info.followerCount
+    }
+    return null
+  }
+
+  /** 対照: 最近存在を確認した追跡中の投稿者（フォロワーの多い順）。いなければ設定の controlUserId */
+  private pickControl(exclude: ReadonlySet<string>): string | null {
+    const nowMs = this.now.getTime()
+    const checkedMs = (a: TrackedAuthor): number => (a.lastCheckedAt ? new Date(a.lastCheckedAt).getTime() : Number.NEGATIVE_INFINITY)
+    const tracked = Object.values(this.state.tracking.authors)
+      .filter((a) => a.status === 'existing' && !a.deletionSuspectedAt && isUserId(a.authorId) && !exclude.has(a.authorId) && nowMs - checkedMs(a) <= LIMITS.controlFreshHours * HOUR_MS)
+      .sort((x, y) => (y.followerCount ?? -1) - (x.followerCount ?? -1) || checkedMs(y) - checkedMs(x))
+    return tracked[0]?.authorId ?? this.config.controlUserId ?? null
   }
 
   private markExisting(author: TrackedAuthor, info: UserInfo): void {

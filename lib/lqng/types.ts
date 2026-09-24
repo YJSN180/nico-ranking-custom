@@ -57,6 +57,11 @@ export interface LqngConfig {
   trackDays: number
   /** A∧C: 投稿からこの日数以内の削除を「投稿直後の削除」とみなす */
   deletionWindowDays: number
+  /**
+   * 退会（ユーザー情報 API の 404）を確かめるときの対照のユーザー ID（任意、数字）。
+   * 追跡中に存在を確認した投稿者がいないときだけ使う。存在し続けるアカウントを選ぶ
+   */
+  controlUserId?: string | null
   allowlist: LqngAllowlist
   updatedAt: string
 }

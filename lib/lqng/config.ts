@@ -28,6 +28,9 @@ function positiveInt(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback
 }
 
+/** ユーザー ID（数字 1〜12 桁） */
+const USER_ID_PATTERN = /^\d{1,12}$/
+
 /** 不正な形を既定値で補い、常に完全な LqngConfig を返す */
 export function normalizeLqngConfig(raw: unknown): LqngConfig {
   const d = DEFAULT_LQNG_CONFIG
@@ -55,6 +58,8 @@ export function normalizeLqngConfig(raw: unknown): LqngConfig {
     holdHours: positiveInt(raw.holdHours, d.holdHours),
     trackDays: Math.max(1, positiveInt(raw.trackDays, d.trackDays)),
     deletionWindowDays: Math.max(1, positiveInt(raw.deletionWindowDays, d.deletionWindowDays)),
+    // 対照は設定されているときだけ持つ（無い設定の形は変えない）
+    ...(typeof raw.controlUserId === 'string' && USER_ID_PATTERN.test(raw.controlUserId.trim()) ? { controlUserId: raw.controlUserId.trim() } : {}),
     allowlist: {
       authorIds: stringArray(allow.authorIds, []),
       videoIds: stringArray(allow.videoIds, []),
@@ -117,6 +122,10 @@ export function validateLqngConfigInput(raw: unknown): string[] {
   if (config.enabled && config.pollTags.length === 0) problems.push('有効にするにはポーリング対象タグが 1 つ以上必要です')
   if (config.pollTags.length > LQNG_POLL_TAGS_MAX) problems.push(`対象タグは ${LQNG_POLL_TAGS_MAX} つまでにしてください（${LQNG_POLL_TAGS_MAX + 1} つ目からは新着を取得しません）`)
   if (config.tagGroups.length > 0 && config.lockGroupsMin > config.tagGroups.length) problems.push('ロック群の閾値がグループ数を超えています')
+  const control = raw.controlUserId
+  if (control !== undefined && control !== null && control !== '' && !(typeof control === 'string' && USER_ID_PATTERN.test(control.trim()))) {
+    problems.push('退会確認の対照のユーザー ID は数字 1〜12 桁にしてください')
+  }
   return problems
 }
 
