@@ -249,7 +249,12 @@ export function UnifiedBackup() {
         try {
           const conflicts = detectExtendedConflicts(ngList, pendingImportData.data.ngList.ngList)
           const result = await importExtendedNGListData(pendingImportData.data.ngList, 'merge')
-          results.push(`✅ NGリスト: ${result.imported.totalItems}件インポート`)
+          // 取り込み関数は失敗を throw せず success: false で返す
+          if (result.success) {
+            results.push(`✅ NGリスト: ${result.imported.totalItems}件インポート`)
+          } else {
+            errors.push(`❌ NGリスト: ${result.errors.join(' / ') || 'エラー'}`)
+          }
         } catch (error) {
           errors.push(`❌ NGリスト: ${error instanceof Error ? error.message : 'エラー'}`)
         }
@@ -311,7 +316,14 @@ export function UnifiedBackup() {
         try {
           const conflicts = await detectMylistConflicts(pendingImportData.data.mylists)
           const result = await importMylistData(pendingImportData.data.mylists, 'safe_add')
-          results.push(`✅ マイリスト: ${result.created.mylists}件, 動画${result.created.videos}件インポート`)
+          // 取り込み関数は失敗を throw せず success: false で返す（一部だけ入った場合も含む）
+          const importedCount = result.created.mylists + result.created.videos
+          if (result.success || importedCount > 0) {
+            results.push(`✅ マイリスト: ${result.created.mylists}件, 動画${result.created.videos}件インポート`)
+          }
+          if (!result.success) {
+            errors.push(`❌ マイリスト: ${result.errors.join(' / ') || 'エラー'}`)
+          }
         } catch (error) {
           errors.push(`❌ マイリスト: ${error instanceof Error ? error.message : 'エラー'}`)
         }
