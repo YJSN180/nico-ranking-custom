@@ -12,10 +12,6 @@ vi.mock('@/lib/simple-kv', () => ({
   }
 }))
 
-vi.mock('@/lib/scraper', () => ({
-  fetchRankingFromNiconico: vi.fn()
-}))
-
 vi.mock('@/lib/popular-tags', () => ({
   getPopularTags: vi.fn()
 }))
@@ -23,7 +19,6 @@ vi.mock('@/lib/popular-tags', () => ({
 // Import after mocks
 import { getFromCloudflareKV } from '@/lib/cloudflare-kv'
 import { kv } from '@/lib/simple-kv'
-import { fetchRankingFromNiconico } from '@/lib/scraper'
 import { getPopularTags } from '@/lib/popular-tags'
 
 describe('app/page.tsx Server Component', () => {
@@ -67,25 +62,6 @@ describe('app/page.tsx Server Component', () => {
       const data = await getFromCloudflareKV('RANKING_LATEST')
       expect(data).toEqual(mockRankingData)
       expect(getFromCloudflareKV).toHaveBeenCalledWith('RANKING_LATEST')
-    })
-
-    it('should fallback to scraper when KV fetch fails', async () => {
-      vi.mocked(getFromCloudflareKV).mockRejectedValueOnce(new Error('KV Error'))
-      vi.mocked(fetchRankingFromNiconico).mockResolvedValueOnce({
-        items: mockRankingData.genres.all['24h'].items,
-        popularTags: ['tag1', 'tag2']
-      })
-
-      // Simulate fallback logic
-      let data
-      try {
-        data = await getFromCloudflareKV('RANKING_LATEST')
-      } catch {
-        data = await fetchRankingFromNiconico('all', '24h')
-      }
-
-      expect(fetchRankingFromNiconico).toHaveBeenCalledWith('all', '24h')
-      expect(data).toHaveProperty('items')
     })
   })
 
@@ -172,27 +148,6 @@ describe('app/page.tsx Server Component', () => {
 
       const tags = await getPopularTags('all', '24h')
       expect(tags).toEqual(['tag1', 'tag2'])
-    })
-  })
-
-  describe('Error Handling', () => {
-    it('should handle complete data fetch failure', async () => {
-      vi.mocked(getFromCloudflareKV).mockRejectedValueOnce(new Error('KV Error'))
-      vi.mocked(fetchRankingFromNiconico).mockRejectedValueOnce(new Error('Scraper Error'))
-
-      let error
-      try {
-        await getFromCloudflareKV('RANKING_LATEST')
-      } catch (e1) {
-        try {
-          await fetchRankingFromNiconico('all', '24h')
-        } catch (e2) {
-          error = e2
-        }
-      }
-
-      expect(error).toBeDefined()
-      expect(error.message).toBe('Scraper Error')
     })
   })
 })

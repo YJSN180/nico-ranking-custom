@@ -5,7 +5,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 // kv.get は失敗時に 3 回・各 20 秒まで待つため使わない（呼ばれたら検出する）。小キーは getStrict で読む
 const kvGet = vi.fn()
 const kvGetStrict = vi.fn()
-const scrapeRankingPage = vi.fn()
 
 vi.mock('@/lib/simple-kv', () => ({
   kv: {
@@ -13,7 +12,6 @@ vi.mock('@/lib/simple-kv', () => ({
     getStrict: (...args: unknown[]) => kvGetStrict(...args),
   },
 }))
-vi.mock('@/lib/scraper', () => ({ scrapeRankingPage: (...args: unknown[]) => scrapeRankingPage(...args) }))
 
 import { getPopularTags, invalidatePopularTagsLatestCache, POPULAR_TAGS_LATEST_KEY } from '@/lib/popular-tags'
 
@@ -47,7 +45,7 @@ describe('getPopularTags (POPULAR_TAGS_LATEST fast path)', () => {
     vi.unstubAllGlobals()
   })
 
-  it('小キーがあればゲートウェイもスクレイパーも呼ばずに返す', async () => {
+  it('小キーがあればゲートウェイを呼ばずに返す', async () => {
     kvGetStrict.mockResolvedValue(latest)
 
     await expect(getPopularTags('game', '24h')).resolves.toEqual(['ゲーム実況', 'RTA'])
@@ -55,7 +53,6 @@ describe('getPopularTags (POPULAR_TAGS_LATEST fast path)', () => {
 
     expect(kvGetStrict).toHaveBeenCalledWith(POPULAR_TAGS_LATEST_KEY, expect.objectContaining({ attempts: 1 }))
     expect(gatewayFetch).not.toHaveBeenCalled()
-    expect(scrapeRankingPage).not.toHaveBeenCalled()
   })
 
   it('小キーが未生成(null)なら従来経路(ランキングゲートウェイ)にフォールバックする', async () => {

@@ -10,11 +10,6 @@ vi.mock('@/lib/simple-kv', () => ({
   },
 }))
 
-// Mock scraper
-vi.mock('@/lib/scraper', () => ({
-  scrapeRankingPage: vi.fn()
-}))
-
 // Mock Cloudflare KV
 vi.mock('@/lib/cloudflare-kv', () => ({
   getGenreRanking: vi.fn(),

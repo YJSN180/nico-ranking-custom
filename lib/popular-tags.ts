@@ -130,7 +130,7 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
 }
 
 // 個別ジャンルの人気タグ（公開済みの R2 世代をゲートウェイ経由で読む）。取れなければ空。
-// 以前はさらに nvapi のランキング（lib/scraper.ts）へ落ちていたが、そちらは人気タグを返さない
+// 以前はさらに nvapi のランキング（削除した lib/scraper.ts）へ落ちていたが、そちらは人気タグを返さない
 // （タグ API の廃止で常に空）うえ、ジャンルをエンコードせずに URL のパスへ入れ、タイムアウトも無かった
 async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
   try {
