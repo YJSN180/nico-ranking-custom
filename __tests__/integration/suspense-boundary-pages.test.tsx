@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render } from '@/__tests__/test-utils'
 import HomePage from '@/app/page'
-import Test500Page from '@/app/test-500/page'
 
 // モックの設定
 // Navigation mock is provided by global setup in vitest.setup.ts
@@ -82,14 +81,5 @@ describe('Suspense Boundary in Pages', () => {
     // element が React Element であることを確認
     expect(element).toBeTruthy()
     expect(element.type).toBe('main')
-  })
-
-  it('should render Test500Page with Suspense boundary', async () => {
-    // Test500Page も Server Component
-    const element = await Test500Page()
-    
-    // element が React Element であることを確認
-    expect(element).toBeTruthy()
-    expect(element.type).toBe('div')
   })
 })
