@@ -456,8 +456,9 @@ async function collectVideoStats(env, manifest) {
 
 /**
  * Process video stats update logic
+ * @param {string} endpointFamily - 'scheduled' for cron runs, '/trigger' for manual runs (Sentry tag)
  */
-async function processVideoStatsUpdate(env) {
+async function processVideoStatsUpdate(env, endpointFamily = 'scheduled') {
   console.log('=== Starting video stats update ===');
   console.log(`Time: ${new Date().toISOString()}`);
   
@@ -483,6 +484,7 @@ async function processVideoStatsUpdate(env) {
             tags: {
               runtime: 'cloudflare-worker',
               surface: 'video-stats-updater',
+              endpoint_family: endpointFamily,
               upstream_kind: 'stats-update',
               worker_version: 'video-stats-updater',
             },
@@ -517,7 +519,7 @@ async function processVideoStatsUpdate(env) {
         tags: {
           runtime: 'cloudflare-worker',
           surface: 'video-stats-updater',
-          endpoint_family: 'scheduled',
+          endpoint_family: endpointFamily,
           upstream_kind: 'stats-update',
           worker_version: 'video-stats-updater',
         },
@@ -558,7 +560,7 @@ const handler = {
     );
   },
   
-  async fetch(request, env, _ctx) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === '/verify-ranking') {
@@ -572,22 +574,18 @@ const handler = {
         return new Response('Unauthorized', { status: 401 });
       }
       
+      // The refresh holds the R2 lease until it ends. Registering it with waitUntil keeps it running if the
+      // caller disconnects first, so it can still finish and release the lease (the runtime allows up to
+      // 30 s after the disconnect). The answer below is unchanged; failures are reported inside the refresh.
+      const refresh = processVideoStatsUpdate(env, '/trigger');
+      ctx.waitUntil(refresh.then(() => undefined, () => undefined));
       try {
-        const result = await processVideoStatsUpdate(env);
+        const result = await refresh;
         if (result.skipped === 'generation-changed') {
           return Response.json({ error: GENERATION_CHANGED }, { status: 500 });
         }
         return Response.json(result);
       } catch (error) {
-        captureWorkerException(error, {
-          tags: {
-            runtime: 'cloudflare-worker',
-            surface: 'video-stats-updater',
-            endpoint_family: '/trigger',
-            upstream_kind: 'manual-trigger',
-            worker_version: 'video-stats-updater',
-          },
-        });
         return Response.json({ error: error.message }, { status: 500 });
       }
     }

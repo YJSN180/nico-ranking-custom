@@ -280,6 +280,51 @@ describe('Video Stats Updater Worker', () => {
         .toEqual(['in_progress', 'ok']);
     });
 
+    function triggerRequest() {
+      env.WORKER_AUTH_KEY = 'test-only-key';
+      return new Request('https://stats.example/trigger', { method: 'POST', headers: { Authorization: 'Bearer test-only-key' } });
+    }
+
+    it('hands a triggered refresh to waitUntil before it finishes, so a disconnect cannot strand the lease', async () => {
+      generationFixture();
+      const snapshot = global.fetch;
+      let releaseSnapshot;
+      const snapshotGate = new Promise((resolve) => { releaseSnapshot = resolve; });
+      global.fetch = vi.fn(async (url, init) => {
+        await snapshotGate;
+        return snapshot(url, init);
+      });
+
+      const pending = worker.fetch(triggerRequest(), env, ctx);
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(ctx.waitUntil).toHaveBeenCalledTimes(1);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+
+      releaseSnapshot();
+      await ctx.waitUntil.mock.calls[0][0];
+      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(env.R2_BUCKET._storage.get('pipeline/stats-lease.json')).expiresAt).toBe(0);
+
+      const response = await pending;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true, totalVideos: 3, updatedAt: expect.any(String) });
+    });
+
+    it('keeps the /trigger answer for a held lease and for a failure', async () => {
+      generationFixture();
+      env.R2_BUCKET._storage.set('pipeline/stats-lease.json', { owner: 'cron-refresh', expiresAt: Date.now() + 60_000 });
+      const busy = await worker.fetch(triggerRequest(), env, ctx);
+      expect(busy.status).toBe(200);
+      expect(await busy.json()).toEqual({ success: false, skipped: 'already-running' });
+
+      env.R2_BUCKET._storage.delete('pipeline/stats-lease.json');
+      global.fetch = vi.fn(async () => ({ ok: false, status: 503, statusText: 'Unavailable' }));
+      const failed = await worker.fetch(triggerRequest(), env, ctx);
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: 'Failed to fetch video stats' });
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
     it('answers /trigger with a 500 when the generation keeps changing', async () => {
       generationFixture();
       env.WORKER_AUTH_KEY = 'test-only-key';
