@@ -50,7 +50,7 @@ function ruleIn(body: string, selector: string): string | null {
 
 const TOUCH = '(max-width: 640px), (pointer: coarse)'
 
-describe('スマートフォン・タッチ操作の端末での入力欄', () => {
+describe('スマートフォン・タッチ操作の端末での入力欄と ✕', () => {
   it('入力欄と選択欄は 16px にする（iOS の Safari が 16px 未満の欄へのフォーカスで画面を拡大するため）', () => {
     const body = mediaBody(TOUCH)
     expect(body).not.toBeNull()
@@ -58,5 +58,24 @@ describe('スマートフォン・タッチ操作の端末での入力欄', () =
       expect(ruleIn(body ?? '', selector)).toMatch(/font-size:\s*16px/)
     }
     expect(ruleBody('.search-form__keyword')).toMatch(/font-size:\s*16px/)
+  })
+
+  it('適用中の条件の ✕ は、見た目を変えずにタップ領域を 44px 四方に広げ、隣のチップの領域と重ねない', () => {
+    const body = mediaBody(TOUCH) ?? ''
+    const area = ruleIn(body, '.search-results__chip button::after')
+    expect(area).toMatch(/width:\s*44px/)
+    expect(area).toMatch(/height:\s*44px/)
+    expect(ruleIn(body, '.search-results__chip button')).toMatch(/position:\s*relative/)
+    // チップの高さ（32px）と上下の間（12px）で 44px。✕ の領域は 44px なので上下の行と重ならない
+    expect(ruleIn(body, '.search-results__chip')).toMatch(/min-height:\s*32px/)
+    expect(ruleIn(body, '.search-results__chips')).toMatch(/gap:\s*12px/)
+  })
+})
+
+describe('保存した検索のチップのフォーカス', () => {
+  it('チップで中身を切り取らず（フォーカスのリングが切れる）、ボタンごとに角の丸いリングを出す', () => {
+    expect(ruleBody('.search-form__saved-chip')).not.toMatch(/overflow:\s*hidden/)
+    expect(ruleBody('.search-form__saved-load:focus-visible')).toMatch(/outline:\s*2px solid/)
+    expect(ruleBody('.search-form__saved-delete:focus-visible')).toMatch(/outline:\s*2px solid/)
   })
 })
