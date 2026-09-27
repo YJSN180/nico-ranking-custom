@@ -52,6 +52,8 @@ function pager(videos: SnapshotVideo[]) {
   return vi.fn(async (_tags: string[], _start: string, _end: string, offset: number) => ({ videos: videos.slice(offset, offset + 100), totalCount: videos.length }))
 }
 
+const thumbOk = (tagDetails: Array<{ name: string; isLocked: boolean }>): ThumbResult => ({ ok: true, info: { tagDetails, ownerVisibility: 'visible', nickname: 'n' } })
+
 /** 走査を終えるまで呼び出しを続け、判定差分を駆動スクリプトと同じく足し合わせる */
 async function runSteps(kv: KvLike, d: BackfillDeps, options: BackfillStepOptions, maxCalls = 60) {
   let cursor: BackfillCursor | null = null
@@ -361,6 +363,93 @@ describe('runBackfillStep（pages ソース: 本家タグページで直近を�
     const c = createBackfillCursor(T0, null, 'pages')
     expect(new Date(c.floor).getTime()).toBe(T0.getTime() - 2 * 24 * 3600_000)
     expect(c.tagIndex).toBe(0)
+  })
+})
+
+describe('runBackfillStep（漏れの無い判定）', () => {
+  it('補完待ちの動画の判定には、あとから読んだ同じ投稿者の古い投稿も数える（新しい 1 本だけがロックタグ群でも C∧D）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // 7001 が 20 分のあいだに 3 本。タグ群の名前を持つのは最も新しい 1 本だけ
+    const videos = [
+      video({ id: 'sm7011', authorId: '7001', registeredAt: at(1), tags: ['g1', 'g2', 'g3'] }),
+      video({ id: 'sm7012', authorId: '7001', registeredAt: at(10) }),
+      video({ id: 'sm7013', authorId: '7001', registeredAt: at(20) }),
+    ]
+    const fetchThumbInfo = vi.fn(async (id: string) => (id === 'sm7011' ? thumbOk(locked('g1', 'g2', 'g3')) : thumbOk(locked('x'))))
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager(videos), fetchThumbInfo, fetchUserInfo: vi.fn(async () => existing(100)) }), { days: 1 })
+    // フォロワー 100 人なので D 単独では昇格しない。連投 ∧ D（C∧D）で投稿者 NG
+    expect(r.deltas.authors['7001']?.reasons).toEqual(['C_D'])
+  })
+
+  it('ロックタグ群（D）単独でも補完して判定し、投稿者はフォロワー数（または退会）を確かめてから昇格する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // どれも 1 本だけ（連投でもキーワードでもない）。7101: フォロワー 3 人、7102: 500 人、7103: 退会済み
+    const videos = [
+      video({ id: 'sm7111', authorId: '7101', registeredAt: at(1), tags: ['g1', 'g2', 'g3'] }),
+      video({ id: 'sm7121', authorId: '7102', registeredAt: at(5 * 60), tags: ['g1', 'g2', 'g4'] }),
+      video({ id: 'sm7131', authorId: '7103', registeredAt: at(9 * 60), tags: ['g2', 'g3', 'g4'] }),
+    ]
+    const fetchThumbInfo = vi.fn(async (_id: string) => thumbOk(locked('g1', 'g2', 'g3', 'g4')))
+    const fetchUserInfo = vi.fn(async (id: string) => (id === '7101' ? existing(3) : id === '7103' ? deleted : existing(500)))
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager(videos), fetchThumbInfo, fetchUserInfo }), { days: 1 })
+    expect(r.deltas.authors['7101']?.reasons).toEqual(['D'])
+    expect(r.deltas.authors['7103']?.reasons).toEqual(['D'])
+    expect(r.deltas.authors['7102']).toBeUndefined()
+    expect(r.deltas.videos.sm7121?.reasons).toEqual(['D'])
+    // タグは 1 本につき 1 回だけ取る（投稿者の確認を待つあいだも取り直さない）
+    expect(fetchThumbInfo).toHaveBeenCalledTimes(3)
+  })
+
+  it('D の昇格のための投稿者の確認が失敗し続けても、待ち続けずに走査を終える（動画 NG は残す）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const fetchUserInfo = vi.fn(async (): Promise<UserInfo> => ({ status: 'error', followerCount: null, nickname: null }))
+    const fetchThumbInfo = vi.fn(async (_id: string) => thumbOk(locked('g1', 'g2', 'g3')))
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager([video({ id: 'sm7151', authorId: '7105', registeredAt: at(1), tags: ['g1', 'g2', 'g3'] })]), fetchThumbInfo, fetchUserInfo }), { days: 1 }, 10)
+    expect(r.deltas.videos.sm7151?.reasons).toEqual(['D'])
+    expect(r.deltas.authors['7105']).toBeUndefined()
+    expect(fetchThumbInfo).toHaveBeenCalledTimes(1)
+  })
+
+  it('判定済みの動画（既知の動画 NG）も投稿者の投稿頻度に数える', async () => {
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: { version: 1, authors: {}, videos: { sm7211: { status: 'ng', reasons: ['D'], authorId: '7201', title: 't', registeredAt: at(1), since: 's' } }, updatedAt: 't' },
+    })
+    const videos = [video({ id: 'sm7211', authorId: '7201', registeredAt: at(1) }), video({ id: 'sm7212', authorId: '7201', registeredAt: at(10) }), video({ id: 'sm7213', authorId: '7201', registeredAt: at(20) })]
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager(videos), fetchUserInfo: goneExceptControl() }), { days: 1 })
+    expect(r.deltas.authors['7201']?.reasons).toEqual(['A_C'])
+  })
+
+  it('補完待ちが一杯のあいだは次のページを読まず、候補を捨てない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // 400 本すべてがロックタグ群の候補（別々の投稿者・連投なし）
+    const videos = Array.from({ length: 400 }, (_, i) => video({ id: `sm${73_000 + i}`, authorId: String(73_000 + i), registeredAt: at(i), tags: ['g1', 'g2', 'g3'] }))
+    const fetchThumbInfo = vi.fn(async (_id: string) => thumbOk(locked('x')))
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager(videos), fetchThumbInfo }), { days: 1, pages: 3 })
+    expect(new Set(fetchThumbInfo.mock.calls.map((c) => c[0])).size).toBe(400)
+    expect(r.cursor.stats.videos).toBe(400)
+  })
+
+  it('getthumbinfo が一時的に取れなかった候補は捨てずに取り直す', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    let first = true
+    const fetchThumbInfo = vi.fn(async (_id: string): Promise<ThumbResult> => {
+      if (first) {
+        first = false
+        return { ok: false, reason: 'unavailable' }
+      }
+      return thumbOk(locked('g1', 'g2', 'g3'))
+    })
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager([video({ id: 'sm7411', authorId: '7401', registeredAt: at(1), tags: ['g1', 'g2', 'g3'] })]), fetchThumbInfo, fetchUserInfo: vi.fn(async () => existing(2)) }), { days: 1 })
+    expect(fetchThumbInfo).toHaveBeenCalledTimes(2)
+    expect(r.deltas.authors['7401']?.reasons).toEqual(['D'])
+  })
+
+  it('投稿頻度の本数の設定が持ち越しの上限（12 本）より多くても、連投を数え落とさない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, freq: { dayCount: 20, burstCount: 20, burstMinutes: 60 } } })
+    const videos = Array.from({ length: 20 }, (_, i) => video({ id: `sm${75_000 + i}`, authorId: '7501', registeredAt: at(1 + i * 2) }))
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager(videos), fetchUserInfo: goneExceptControl() }), { days: 1 })
+    expect(r.deltas.authors['7501']?.reasons).toEqual(['A_C'])
   })
 })
 

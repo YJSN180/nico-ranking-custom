@@ -10,13 +10,14 @@
 //   新しい順に読み直すので、全部のタグ×種別を読み終えてから判定する（それまで投稿頻度の記録を刈らない）。
 // - ルール: B（タイトル）と HK（キーワード ∧ 頻度）はタグなしで判定する。頻度 C に当たる投稿者だけ
 //   存在確認し、削除済みなら A∧C。ロックタグ群 D はタグ名の事前絞り込み（該当群のタグが閾値以上
-//   含まれる）に通った候補だけ getthumbinfo で補完して判定する。
+//   含まれる。pages はタグ名が無いので全部）に通った候補を getthumbinfo で補完して判定し（D 単独を含む）、
+//   D の投稿者昇格はポーリングと同じくフォロワー数（または退会）を確かめてから決める。
 //   過去分は削除時刻が分からないため、A∧C の「投稿から 7 日以内の削除」は「現在削除済み」で代用する
 //   （実データ検証と同じ評価）。
 import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
-import { containsAnyNormalized } from '../../../lib/lqng/normalize'
 import { evaluateVideo } from '../../../lib/lqng/rules'
 import type { AuthorObservation, LqngConfig, LqngEvidence, LqngPost, LqngRuleId, VideoObservation } from '../../../lib/lqng/types'
+import type { TagDetail } from '../../../types/ranking'
 import { emptyDeltas, inboxKey, normalizeDeltas, writeInboxItem, type BackfillDeltas } from './inbox'
 import {
   AccessLimitedError,
@@ -43,9 +44,12 @@ export const BACKFILL_LIMITS = {
   windowDays: 30,
   /** 投稿頻度 C の判定に持ち越す時間幅（判定する動画の前後この時間の投稿を数える） */
   carryHours: 24,
-  /** Snapshot で投稿者ごとに持ち越す投稿の数 */
+  /** Snapshot で投稿者ごとに持ち越す投稿の数（投稿頻度の本数の設定がこれより多ければ、そちらに合わせる） */
   carryPerAuthor: 12,
+  /** 補完待ちの目安。Snapshot はこれを超えそうなら次のページを読まずに待つ（候補は捨てない） */
   pendingThumbsMax: 300,
+  /** getthumbinfo の一時的な失敗（5xx・通信の失敗）や投稿者の確認の失敗のあとで、判定し直す回数 */
+  thumbTransientRetries: 2,
   evidencePerAuthor: 3,
   /** これより前は走査しない（ニコニコ動画の開始以前） */
   floorDefault: '2007-03-01T00:00:00.000Z',
@@ -97,6 +101,10 @@ export interface BackfillPendingThumb {
   registeredAt: string
   /** 投稿頻度の判定用に、判定した時点の同じ投稿者の投稿（ID と時刻。前後 carryHours を読み終えたもの）を写しておく */
   posts: LqngPost[]
+  /** 取得済みのロック状態付きタグ（投稿者の確認を待って判定し直すとき、取り直さずに使う） */
+  tagDetails?: TagDetail[]
+  /** 一時的に判定できなかった回数（getthumbinfo の一時的な失敗・投稿者の確認待ち）。上限で諦める */
+  transient?: number
 }
 
 /** 読んだが、まだ判定していない動画（同じ投稿者の前後の投稿を読み終えるまで待つ） */
@@ -249,6 +257,8 @@ class BackfillSession {
   subrequests = 0
   note: string | undefined
   readonly deltas = emptyDeltas()
+  /** Snapshot で投稿者ごとに持ち越す投稿の数（投稿頻度の本数の設定より少ないと、連投を数え落とす） */
+  private readonly carryPerAuthor: number
 
   constructor(
     readonly config: LqngConfig,
@@ -256,7 +266,9 @@ class BackfillSession {
     readonly knownVideoNg: (videoId: string) => boolean,
     readonly cursor: BackfillCursor,
     readonly nowIso: string
-  ) {}
+  ) {
+    this.carryPerAuthor = Math.max(BACKFILL_LIMITS.carryPerAuthor, config.freq.dayCount, config.freq.burstCount)
+  }
 
   budgetLeft(cost = 1): boolean {
     return this.subrequests + cost <= BACKFILL_LIMITS.subrequestBudget
@@ -266,9 +278,8 @@ class BackfillSession {
     return authorId !== null && (this.knownAuthorNg(authorId) || !!this.deltas.authors[authorId])
   }
 
-  isAllowlisted(video: { id: string; authorId: string | null }): boolean {
-    if (this.config.allowlist.videoIds.includes(video.id)) return true
-    return video.authorId !== null && this.config.allowlist.authorIds.includes(video.authorId)
+  private isAllowlistedAuthor(authorId: string | null): boolean {
+    return authorId !== null && this.config.allowlist.authorIds.includes(authorId)
   }
 
   authorObservation(authorId: string | null, posts: LqngPost[]): AuthorObservation | null {
@@ -340,11 +351,12 @@ class BackfillSession {
     if (list.some((p) => p.id === post.id)) return
     list.push(post)
     // Snapshot は新しい順に読むので、先に読んだ（新しい）投稿から捨てる。pages はタグ×種別ごとに読み直すので捨てない
-    if (this.cursor.source === 'snapshot' && list.length > BACKFILL_LIMITS.carryPerAuthor) list.splice(0, list.length - BACKFILL_LIMITS.carryPerAuthor)
+    if (this.cursor.source === 'snapshot' && list.length > this.carryPerAuthor) list.splice(0, list.length - this.carryPerAuthor)
   }
 
   /**
-   * 読んだ動画を投稿頻度の記録に足し、判定待ちに積む（判定はまだしない）。NG 済み・許可リストは読み飛ばす。
+   * 読んだ動画を投稿頻度の記録に足し、判定待ちに積む（判定はまだしない）。判定済みの動画や許可リストの動画も
+   * 投稿頻度には数える（ポーリングの追跡と同じ）。許可リストの投稿者と NG 済みの投稿者は読み飛ばす。
    * 読んだ動画の最も古い投稿時刻（ミリ秒。Snapshot の読んだ位置）を返す
    */
   collect(videos: readonly BackfillVideo[]): number | null {
@@ -354,7 +366,7 @@ class BackfillSession {
       this.cursor.stats.videos++
       const atMs = new Date(v.registeredAt).getTime()
       if (Number.isFinite(atMs) && (oldest === null || atMs < oldest)) oldest = atMs
-      if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id] || this.isAllowlisted(v)) continue
+      if (this.isAuthorNg(v.authorId) || this.isAllowlistedAuthor(v.authorId)) continue
       if (v.authorId !== null) this.remember(v.authorId, { id: v.id, at: v.registeredAt })
       // 同じ動画が複数のタグ・ページに出ても 1 回だけ判定する
       if (queued.has(v.id)) continue
@@ -384,15 +396,19 @@ class BackfillSession {
     }
   }
 
-  /** 走査を読み終えたあとで、残りの動画を判定する（pages はここで初めて判定する） */
+  /**
+   * 走査を読み終えたあとで、残りの動画を判定する（pages はここで初めて判定する）。記録はそろっているので、
+   * 補完待ちが一杯なら残りは次の呼び出しに回してよい
+   */
   evaluateRemaining(): void {
-    for (const v of this.cursor.unevaluated) this.evaluate(v)
-    this.cursor.unevaluated = []
+    while (this.cursor.unevaluated.length > 0 && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
+      this.evaluate(this.cursor.unevaluated.shift()!)
+    }
   }
 
   /** 動画 1 本をタグなしで判定し、連投の投稿者を確認待ちに、ロックタグ群の候補を補完待ちに入れる */
   private evaluate(v: BackfillVideo): void {
-    if (this.isAuthorNg(v.authorId) || this.deltas.videos[v.id]) return
+    if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id] || this.config.allowlist.videoIds.includes(v.id)) return
     const posts = v.authorId !== null ? [...(this.cursor.carry[v.authorId] ?? [])] : []
     const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null }
     const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, posts), this.config)
@@ -402,21 +418,21 @@ class BackfillSession {
       if (evaluation.escalate && v.authorId) this.addAuthorNg(v.authorId, evaluation.escalateReasons, [evidence])
       return
     }
-    if (!isUserId(v.authorId)) return
-    const checked = this.cursor.checked[v.authorId]
-    if (evaluation.frequent) {
+    if (evaluation.frequent && isUserId(v.authorId)) {
+      const checked = this.cursor.checked[v.authorId]
       if (checked?.status === 'deleted') {
         this.addAuthorNg(v.authorId, ['A_C'], [{ ...evidence, rules: ['A_C'] }])
         return
       }
       if (!checked) {
+        // 根拠を覚えて存在確認を待つ（根拠があることが、退会なら A∧C にする印）
         this.rememberEvidence(v.authorId, { ...evidence, rules: ['A_C'] })
         if (!this.cursor.pendingUsers.includes(v.authorId)) this.cursor.pendingUsers.push(v.authorId)
       }
     }
-    const keyword = this.config.keywordNeedles.length > 0 && containsAnyNormalized(v.title, this.config.keywordNeedles)
-    const groupsMayMatch = this.cursor.source === 'pages' ? true : this.presentGroups(v.tags) >= this.config.lockGroupsMin
-    if ((evaluation.frequent || keyword) && groupsMayMatch && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
+    // D（ロックタグ群）はロック状態が要るので補完する。Snapshot はタグ名で候補を絞る。pages はタグ名が無いので全部
+    const groupsMayMatch = this.config.tagGroups.length > 0 && (this.cursor.source === 'pages' || this.presentGroups(v.tags) >= this.config.lockGroupsMin)
+    if (groupsMayMatch && v.authorId !== null) {
       this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, posts })
     }
   }
@@ -457,7 +473,8 @@ class BackfillSession {
       }
       this.cursor.stats.usersChecked++
       this.cursor.checked[authorId] = { status, followerCount: info.followerCount, nickname: info.nickname, checkedAt: this.nowIso }
-      if (status === 'deleted') this.addAuthorNg(authorId, ['A_C'], this.cursor.evidence[authorId] ?? [])
+      // A∧C は連投で確認待ちにした投稿者だけ。D の昇格のために確かめた投稿者は、補完の判定で昇格を決める
+      if (status === 'deleted' && Object.hasOwn(this.cursor.evidence, authorId)) this.addAuthorNg(authorId, ['A_C'], this.cursor.evidence[authorId] ?? [])
       delete this.cursor.evidence[authorId]
     }
   }
@@ -519,39 +536,60 @@ class BackfillSession {
     return known[0]?.[0] ?? null
   }
 
+  /**
+   * 補完待ちの動画のロック状態を getthumbinfo で取り、D・C∧D・HK を判定する。
+   * - 存在確認待ちの投稿者の動画は後に回す（退会なら A∧C で片付き、D の昇格にはフォロワー数が要る）
+   * - D に当たっても投稿者のフォロワー数が分からなければ、投稿者を確認待ちに入れて判定し直す（タグは取り直さない）
+   * - 一時的な失敗（5xx・通信の失敗）は捨てずに後で取り直す（thumbTransientRetries 回まで）
+   */
   async enrichThumbs(deps: BackfillDeps): Promise<void> {
-    let processed = 0
-    const deferred: BackfillPendingThumb[] = []
-    while (this.cursor.pendingThumbs.length > 0 && processed < BACKFILL_LIMITS.thumbsPerCall && this.budgetLeft()) {
+    let fetched = 0
+    const later: BackfillPendingThumb[] = []
+    while (this.cursor.pendingThumbs.length > 0 && fetched < BACKFILL_LIMITS.thumbsPerCall && this.budgetLeft()) {
       const item = this.cursor.pendingThumbs.shift()!
-      if (this.isAuthorNg(item.authorId) || this.deltas.videos[item.id]) continue
-      // 存在確認待ちの投稿者は次回に回す（削除済みなら A∧C で片付くため補完しない）
+      if (this.isAuthorNg(item.authorId)) continue
       if (!this.cursor.checked[item.authorId] && this.cursor.pendingUsers.includes(item.authorId)) {
-        deferred.push(item)
+        later.push(item)
         continue
       }
-      this.subrequests++
-      processed++
-      let result: ThumbResult
-      try {
-        result = await deps.fetchThumbInfo(item.id)
-      } catch (error) {
-        if (error instanceof AccessLimitedError) {
-          this.cursor.pendingThumbs.unshift(item)
-          this.note = error.message
-          break
+      if (!item.tagDetails) {
+        this.subrequests++
+        fetched++
+        let result: ThumbResult
+        try {
+          result = await deps.fetchThumbInfo(item.id)
+        } catch (error) {
+          if (error instanceof AccessLimitedError) {
+            this.cursor.pendingThumbs.unshift(item)
+            this.note = error.message
+            break
+          }
+          result = { ok: false, reason: 'unavailable' } // 通信の失敗・タイムアウト
         }
-        continue
+        this.cursor.stats.thumbs++
+        if (result.ok === false) {
+          const transient = (item.transient ?? 0) + 1
+          if (result.reason === 'unavailable' && transient <= BACKFILL_LIMITS.thumbTransientRetries) later.push({ ...item, transient })
+          continue
+        }
+        item.tagDetails = result.info.tagDetails
       }
-      this.cursor.stats.thumbs++
-      if (!result.ok) continue
-      const observation: VideoObservation = { id: item.id, title: item.title, authorId: item.authorId, registeredAt: item.registeredAt, tagDetails: result.info.tagDetails, ownerVisibility: result.info.ownerVisibility }
+      const observation: VideoObservation = { id: item.id, title: item.title, authorId: item.authorId, registeredAt: item.registeredAt, tagDetails: item.tagDetails, ownerVisibility: null }
       const evaluation = evaluateVideo(observation, this.authorObservation(item.authorId, item.posts), this.config)
       if (!evaluation.ng) continue
       this.addVideoNg(item, evaluation.reasons)
-      if (evaluation.escalate) this.addAuthorNg(item.authorId, evaluation.escalateReasons, [{ videoId: item.id, title: item.title, registeredAt: item.registeredAt, rules: evaluation.reasons }])
+      if (evaluation.escalate) {
+        this.addAuthorNg(item.authorId, evaluation.escalateReasons, [{ videoId: item.id, title: item.title, registeredAt: item.registeredAt, rules: evaluation.reasons }])
+        continue
+      }
+      // 確認に失敗し続ける投稿者で待ち続けないよう、判定し直すのは上限まで（動画 NG は付けてある）
+      const transient = (item.transient ?? 0) + 1
+      if (evaluation.reasons.includes('D') && isUserId(item.authorId) && !this.cursor.checked[item.authorId] && transient <= BACKFILL_LIMITS.thumbTransientRetries + 1) {
+        if (!this.cursor.pendingUsers.includes(item.authorId)) this.cursor.pendingUsers.push(item.authorId)
+        later.push({ ...item, transient })
+      }
     }
-    this.cursor.pendingThumbs.push(...deferred)
+    this.cursor.pendingThumbs.push(...later)
   }
 }
 
@@ -579,6 +617,8 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   const tags = state.config.pollTags.slice(0, LQNG_POLL_TAGS_MAX)
   const pages = Math.max(1, Math.min(BACKFILL_LIMITS.pagesMax, Math.floor(options.pages ?? BACKFILL_LIMITS.pagesDefault)))
   for (let i = 0; i < pages && !windowsExhausted(cursor, tags.length) && session.budgetLeft(); i++) {
+    // Snapshot は 1 ページで最大 100 本が補完待ちに入りうる。一杯になりそうなら読み進めず、補完が進むのを待つ（候補を捨てない）
+    if (cursor.source === 'snapshot' && cursor.pendingThumbs.length + SNAPSHOT_PAGE_SIZE > BACKFILL_LIMITS.pendingThumbsMax) break
     session.subrequests++
     if (cursor.source === 'pages') {
       // 本家タグページ: タグ×種別（動画/ショート）ごとに新しい順にページを進め、floor より古い動画が出たら次へ。

@@ -74,6 +74,12 @@ describe('fetchThumbInfoFromExt', () => {
     expect(r).toEqual({ ok: true, info: { tagDetails: [{ name: 'A', isLocked: true }, { name: 'B <c>', isLocked: false }, { name: 'C', isLocked: true }], ownerVisibility: 'visible', nickname: "n & m &lt;x&gt; 'q'" } })
   })
 
+  it('数値文字参照は 0 埋め（&#039;）や 16 進（&#x27;）でも復号する（タグ名がロックタグ群と一致するように）', async () => {
+    const body = xml('<user_id>12</user_id><tags><tag lock="1">A&#039;s</tag><tag lock="1">B&#x27;s</tag><tag>C&#39;s &amp;#039;</tag></tags>')
+    const r = await fetchThumbInfoFromExt('sm1', vi.fn(async () => response(body, 200, true)) as unknown as typeof fetch)
+    expect(r.ok && r.info.tagDetails.map((t) => t.name)).toEqual(["A's", "B's", "C's &#039;"])
+  })
+
   it('5xx と 429 は上流の一時的な不調（unavailable）、それ以外の失敗は error', async () => {
     for (const status of [500, 502, 503, 429]) {
       expect(await fetchThumbInfoFromExt('sm1', vi.fn(async () => response('', status, true)) as unknown as typeof fetch)).toEqual({ ok: false, reason: 'unavailable' })

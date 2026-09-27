@@ -1,7 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
-import { fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
+import { decodeHtmlAttribute, fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -202,17 +202,9 @@ export async function fetchNewVideosFromNvapi(tags: string[], sinceIso: string, 
   return out
 }
 
-// 1 パスで復号する（&amp; を先に戻す逐次 replace は &amp;lt; → < の二重復号になる）
-const XML_ENTITIES = new Map<string, string>([
-  ['amp', '&'],
-  ['lt', '<'],
-  ['gt', '>'],
-  ['quot', '"'],
-  ['apos', "'"],
-  ['#39', "'"],
-])
-const decodeXml = (s: string): string =>
-  s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (match, name: string) => XML_ENTITIES.get(name) ?? match)
+// 実体参照は 1 パスで復号する（&amp; を先に戻す逐次 replace は &amp;lt; → < の二重復号になる）。
+// 数値参照は &#039;（0 埋め）や &#x27;（16 進）でも来うるので、本家ページの属性と同じ復号を使う
+const decodeXml = decodeHtmlAttribute
 
 function pickXml(xml: string, tag: string): string | undefined {
   const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
