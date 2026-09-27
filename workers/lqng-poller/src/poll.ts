@@ -477,7 +477,8 @@ class Session {
         }
         result = { ok: false, reason: 'unavailable' } // 通信失敗・タイムアウト
       }
-      if (!result.ok && result.reason === 'unavailable') {
+      // ok を === で比べる（strict でない型チェックでも判別共用体を絞り込めるように）
+      if (result.ok === false && result.reason === 'unavailable') {
         // 上流の一時的な不調は試行回数に数えず、末尾に回して持ち越す（上限を超えたら諦める）。
         // 続くようなら障害とみなして打ち切る
         const transient = (item.transient ?? 0) + 1
@@ -490,7 +491,7 @@ class Session {
         continue
       }
       unavailableInRow = 0
-      if (result.ok) {
+      if (result.ok === true) {
         post.tagDetails = result.info.tagDetails
         post.ownerVisibility = result.info.ownerVisibility
         author.visibility = result.info.ownerVisibility

@@ -101,6 +101,12 @@ jobs:
       - name: Bundle ranking scheduler without deploying
         run: npx wrangler deploy --dry-run -c workers/ranking-scheduler/wrangler.toml
 
+      - name: Typecheck the auto-NG poller strictly
+        run: npx tsc --noEmit -p workers/lqng-poller/tsconfig.json
+
+      - name: Bundle the auto-NG poller without deploying
+        run: npx wrangler deploy --dry-run -c workers/lqng-poller/wrangler.toml --env=""
+
   # Job 2: Build Test - Ensures build succeeds before heavy tests
   build-test:
     name: Build Test

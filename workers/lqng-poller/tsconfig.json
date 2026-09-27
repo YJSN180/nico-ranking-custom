@@ -1,0 +1,20 @@
+// 粗悪コンテンツ自動NG ポーリング Worker の strict 型チェック。CI の worker-tests が
+// npx tsc -p workers/lqng-poller/tsconfig.json で走らせる（取り込む lib/lqng なども同じ厳しさで確かめる）
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["esnext", "webworker", "webworker.iterable"],
+    "types": ["@cloudflare/workers-types"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src/**/*.ts"]
+}
