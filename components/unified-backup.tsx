@@ -27,6 +27,7 @@ import { CustomRankingManager } from '@/lib/storage/custom-rankings'
 import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/lib/storage/custom-ranking-backup-schema'
 import styles from './genre-order-backup.module.css'
 import { showToast } from '@/lib/toast'
+import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
 
 // 統合バックアップデータ構造
 interface UnifiedBackupData {
@@ -178,6 +179,13 @@ export function UnifiedBackup() {
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    // 大きすぎるファイルは読み込まない（丸ごと読むとタブが固まる・落ちる）
+    if (isBackupFileTooLarge(file)) {
+      setImportMessage({ type: 'error', text: BACKUP_FILE_TOO_LARGE_MESSAGE })
+      event.target.value = ''
+      return
+    }
 
     setIsImporting(true)
     setImportMessage(null)

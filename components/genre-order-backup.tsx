@@ -5,6 +5,7 @@ import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import type { GenreItem } from '@/types/genre-order'
 import styles from './genre-order-backup.module.css'
 import { showToast } from '@/lib/toast'
+import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
 
 interface BackupData {
   version: number
@@ -51,6 +52,13 @@ export function GenreOrderBackup() {
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    // 大きすぎるファイルは読み込まない（丸ごと読むとタブが固まる・落ちる）
+    if (isBackupFileTooLarge(file)) {
+      setImportMessage({ type: 'error', text: BACKUP_FILE_TOO_LARGE_MESSAGE })
+      event.target.value = ''
+      return
+    }
 
     setIsImporting(true)
     setImportMessage(null)
