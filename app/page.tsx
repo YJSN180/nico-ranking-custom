@@ -90,7 +90,8 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description += '最新の人気動画をチェック！'
   }
   
-  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）
+  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）。
+  // なお Next.js は描画時、パスが / の og:url をオリジンだけにする（クエリは出力されない）
   const ogQuery = new URLSearchParams()
   if (params.genre) ogQuery.set('genre', genre)
   if (params.period) ogQuery.set('period', period)

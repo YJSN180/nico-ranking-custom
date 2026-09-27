@@ -2,7 +2,9 @@
 import { describe, it, expect, vi } from 'vitest'
 
 // og:url は共有したときの正規の URL。どの組み合わせの指定でも、ホストは nico-rank.com のまま
-// クエリに genre・period・tag が入ること（以前は period だけだと https://nico-rank.com&period=hour になった）
+// クエリに genre・period・tag が入ること（以前は period だけだと https://nico-rank.com&period=hour になった）。
+// ここで確かめるのは generateMetadata の値。Next.js は描画時にパスが / の og:url をオリジンだけにする
+// （node_modules/next/dist/lib/metadata/resolvers/resolve-url.js）ので、HTML にはクエリは出ない
 
 vi.mock('@/lib/ng-filter-server', () => ({
   filterRankingDataServer: vi.fn(),
