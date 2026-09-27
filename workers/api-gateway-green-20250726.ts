@@ -28,6 +28,7 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
+import { timingSafeEqual } from 'node:crypto'
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
@@ -95,7 +96,16 @@ function retryingR2Reader(bucket: R2Bucket): { get: (key: string) => Promise<R2O
  * IP×エンドポイントごとのレート制限チェック。上限は各バインディングの設定（wrangler の simple.limit）。
  * 制限に掛かったときは 429 の応答を、通すときは null を返す
  */
-async function checkRateLimit(request: Request, limiter: RateLimit, endpoint: string = 'general'): Promise<Response | null> {
+async function checkRateLimit(
+  request: Request,
+  limiter: RateLimit,
+  endpoint: string = 'general',
+  workerAuthKey?: string,
+): Promise<Response | null> {
+  // サイトのサーバー（SSR・/api/ranking/full など）は Vercel の少数の送信元 IP から来るため、IP では数えない
+  if (hasWorkerKey(request, workerAuthKey)) {
+    return null
+  }
   try {
     // クライアントIPを取得（Cloudflare経由）
     const clientIP = request.headers.get('CF-Connecting-IP') || 
@@ -208,6 +218,18 @@ function extractHdThumbnailUrl(html: string): string | null {
   }
 
   return null
+}
+
+/**
+ * サイトのサーバーからの要求か（X-Worker-Auth が WORKER_AUTH_KEY と一致するか。比較は一定時間で行う）。
+ * Authorization は別オリジンへのリダイレクトで落とされるため、301 を追うサイトの取得でも残る X-Worker-Auth を使う
+ */
+function hasWorkerKey(request: Request, workerAuthKey?: string): boolean {
+  const presented = request.headers.get('X-Worker-Auth')
+  if (!workerAuthKey || !presented) return false
+  const expected = new TextEncoder().encode(workerAuthKey)
+  const actual = new TextEncoder().encode(presented)
+  return actual.byteLength === expected.byteLength && timingSafeEqual(actual, expected)
 }
 
 /**
@@ -581,7 +603,7 @@ const handler: ExportedHandler<Env> = {
     // /api/ranking パスの処理 - Cache API対応
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       // レート制限チェック（ランキングAPI用）
-      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'ranking')
+      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'ranking', env.WORKER_AUTH_KEY)
       if (rateLimited) {
         return rateLimited
       }
@@ -873,7 +895,7 @@ const handler: ExportedHandler<Env> = {
         }
         
         // レート制限チェック（サムネイル取得API用）
-        const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'thumbnail')
+        const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'thumbnail', env.WORKER_AUTH_KEY)
         if (rateLimited) {
           return rateLimited
         }
@@ -1055,7 +1077,7 @@ const handler: ExportedHandler<Env> = {
       }
       
       // レート制限チェック（HDサムネイル取得API用）
-      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'hd-thumbnail')
+      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'hd-thumbnail', env.WORKER_AUTH_KEY)
       if (rateLimited) {
         return rateLimited
       }
@@ -1155,7 +1177,7 @@ const handler: ExportedHandler<Env> = {
     // /api/search 系は上流でニコニコの検索 API を呼ぶため、Vercel へ渡す前に IP ごとに制限する
     const searchEndpoint = searchRateLimitEndpoint(url.pathname)
     if (searchEndpoint && env.SEARCH_RATE_LIMITER) {
-      const rateLimited = await checkRateLimit(request, env.SEARCH_RATE_LIMITER, searchEndpoint)
+      const rateLimited = await checkRateLimit(request, env.SEARCH_RATE_LIMITER, searchEndpoint, env.WORKER_AUTH_KEY)
       if (rateLimited) {
         return rateLimited
       }

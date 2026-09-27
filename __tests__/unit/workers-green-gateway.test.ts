@@ -317,3 +317,51 @@ describe('green HD thumbnail', () => {
     expect(body.thumbnail).toBe(JP_OG_IMAGE)
   })
 })
+
+describe('green per-IP limit and the site server', () => {
+  const rankingRequest = (headers: Record<string, string>) =>
+    new Request('https://nico-rank.com/api/ranking?genre=all&period=24h', {
+      headers: { 'CF-Connecting-IP': '198.51.100.20', ...headers },
+    })
+
+  it('does not count requests that carry the worker key (site server calls share Vercel egress IPs)', async () => {
+    const limiter = { limit: vi.fn(async () => ({ success: false })) }
+
+    const response = await fetchWorker(
+      rankingRequest({ 'X-Worker-Auth': 'test-only-worker-key' }),
+      greenEnv({ R2_BUCKET: flakyBucket(RANKING_KEY, 0), RATE_LIMITER: limiter }),
+      ctx,
+    )
+
+    expect(response.status).toBe(200)
+    expect(limiter.limit).not.toHaveBeenCalled()
+  })
+
+  it.each([{ 'X-Worker-Auth': 'test-only-worker-kez' }, { 'X-Worker-Auth': '' }, {}])(
+    'still limits other requests by IP (%o)',
+    async (headers) => {
+      const limiter = { limit: vi.fn(async () => ({ success: false })) }
+
+      const response = await fetchWorker(
+        rankingRequest(headers),
+        greenEnv({ R2_BUCKET: flakyBucket(RANKING_KEY, 0), RATE_LIMITER: limiter }),
+        ctx,
+      )
+
+      expect(response.status).toBe(429)
+      expect(limiter.limit).toHaveBeenCalledWith({ key: '198.51.100.20:ranking' })
+    },
+  )
+
+  it('limits by IP when no worker key is configured', async () => {
+    const limiter = { limit: vi.fn(async () => ({ success: false })) }
+
+    const response = await fetchWorker(
+      rankingRequest({ 'X-Worker-Auth': 'undefined' }),
+      greenEnv({ R2_BUCKET: flakyBucket(RANKING_KEY, 0), RATE_LIMITER: limiter, WORKER_AUTH_KEY: undefined }),
+      ctx,
+    )
+
+    expect(response.status).toBe(429)
+  })
+})
