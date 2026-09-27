@@ -74,7 +74,8 @@ import { SearchClient } from '@/app/search/search-client'
 
 type Json = Record<string, unknown>
 interface Handlers {
-  search: (url: URL) => Json
+  /** 応答の本文（200）か、状態コードを決めた Response */
+  search: (url: URL) => Json | Response
   owners: (url: URL) => Json
   tags: (url: URL) => Json
 }
@@ -82,12 +83,15 @@ interface Handlers {
 let handlers: Handlers
 const requests: URL[] = []
 
-const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost')
   requests.push(url)
-  if (url.pathname === '/api/search') return json(handlers.search(url))
+  if (url.pathname === '/api/search') {
+    const result = handlers.search(url)
+    return result instanceof Response ? result : json(result)
+  }
   if (url.pathname === '/api/search/owners') return json(handlers.owners(url))
   if (url.pathname === '/api/search/realtime-tags') return json(handlers.tags(url))
   throw new Error(`unexpected fetch: ${url.href}`)
@@ -261,6 +265,15 @@ describe('SearchClient', () => {
       render(<SearchClient />)
       await waitFor(() => expect(shownIds()).toEqual(['sm1']))
       expect(notices()).toEqual([])
+    })
+  })
+
+  describe('検索 API のエラーの案内', () => {
+    it('条件が不正（search_query_error）なら、条件を見直す案内を出す', async () => {
+      handlers.search = () => json({ error: 'search_query_error', detail: 'synthetic parse error' }, 400)
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('検索条件が不正です。条件を見直してください。'))
     })
   })
 

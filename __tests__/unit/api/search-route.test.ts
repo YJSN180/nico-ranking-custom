@@ -58,6 +58,8 @@ let nvapiStatus = 200
 let pageStatus = 200
 /** Snapshot の境界の問い合わせ（新しい順・1 件）の HTTP ステータス */
 let boundaryStatus = 200
+/** Snapshot のページ取得（境界の問い合わせ以外）の HTTP ステータス。400 は本物と同じ JSON 本文で返す */
+let snapshotPageStatus = 200
 /** Snapshot のページ取得（境界の問い合わせ以外）が、中断されるまで応答しない */
 let snapshotPageHang = false
 let calls: URL[] = []
@@ -158,6 +160,10 @@ const fakeFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit
   if (url.hostname === 'snapshot.search.nicovideo.jp') {
     if (url.searchParams.get('_limit') === '1' && boundaryStatus !== 200) return new Response('', { status: boundaryStatus })
     if (snapshotPageHang && url.searchParams.get('_limit') !== '1') return hang(init?.signal)
+    if (snapshotPageStatus === 400 && url.searchParams.get('_limit') !== '1') {
+      return json({ meta: { status: 400, errorCode: 'QUERY_PARSE_ERROR', errorMessage: 'synthetic parse error' } }, 400)
+    }
+    if (snapshotPageStatus !== 200 && url.searchParams.get('_limit') !== '1') return new Response('', { status: snapshotPageStatus })
     return snapshotResponse(url)
   }
   if (url.hostname === 'nvapi.nicovideo.jp') return nvapiResponse(url)
@@ -199,6 +205,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     nvapiStatus = 200
     pageStatus = 200
     boundaryStatus = 200
+    snapshotPageStatus = 200
     calls = []
     fakeFetch.mockClear()
     clearFreshCache()
@@ -251,6 +258,24 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     expect(unbounded).toHaveLength(1)
   })
 
+  it('Snapshot が条件を 400 で拒んだら、502 にせず「条件が不正」（search_query_error, 400）を返す', async () => {
+    snapshotPageStatus = 400
+    const { status, body } = await search('q=x&sort=-viewCounter')
+    expect(status).toBe(400)
+    expect(body).toMatchObject({ error: 'search_query_error' })
+    // 合成の経路でも同じ
+    const merged = await search('q=x&sort=-startTime')
+    expect(merged.status).toBe(400)
+    expect(merged.body).toMatchObject({ error: 'search_query_error' })
+  })
+
+  it('Snapshot のそれ以外の失敗は、これまでどおり上流の失敗（502）や保守中（503）として返す', async () => {
+    snapshotPageStatus = 500
+    expect((await search('q=x&sort=-viewCounter')).status).toBe(502)
+    snapshotPageStatus = 503
+    expect((await search('q=x&sort=-viewCounter')).body).toMatchObject({ error: 'search_maintenance' })
+  })
+
   it('境界の問い合わせに失敗したら、05:00 を境界にして合成せず、索引だけを返す（1 日分を欠かさない）', async () => {
     boundaryStatus = 503
     const { status, body } = await search('q=x&sort=-startTime')
@@ -298,6 +323,7 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
     nvapiStatus = 200
     pageStatus = 200
     boundaryStatus = 200
+    snapshotPageStatus = 200
     calls = []
     fakeFetch.mockClear()
     clearFreshCache()
@@ -338,6 +364,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
     nvapiStatus = 200
     pageStatus = 200
     boundaryStatus = 200
+    snapshotPageStatus = 200
     snapshotPageHang = false
     kvHang = false
     calls = []
@@ -402,6 +429,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     nvapiStatus = 200
     pageStatus = 200
     boundaryStatus = 200
+    snapshotPageStatus = 200
     calls = []
     fakeFetch.mockClear()
     clearFreshCache()

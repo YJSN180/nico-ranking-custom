@@ -67,6 +67,11 @@ async function fetchSnapshotPage(
     return { error: isTimeout ? 'search_timeout' : 'search_unreachable', status: 504 }
   }
   if (!response.ok) {
+    // 400 は条件の不正（QUERY_PARSE_ERROR など。範囲外の数値や解釈できない語）。上流の障害（502）と分けて、画面で条件を見直す案内を出す
+    if (response.status === 400) {
+      const body = (await response.json().catch(() => null)) as SnapshotSearchResponse | null
+      return { error: 'search_query_error', status: 400, detail: body?.meta?.errorMessage }
+    }
     // 503 はスナップショットAPIのメンテナンス中
     return response.status === 503
       ? { error: 'search_maintenance', status: 503 }
