@@ -188,3 +188,59 @@ describe('green upstream proxy', () => {
     expect(response.headers.get('Location')).toBe('/api/popular-tags')
   })
 })
+
+describe('green search rate limit', () => {
+  const clientHeaders = { 'CF-Connecting-IP': '203.0.113.7' }
+
+  it.each([
+    ['/api/search?q=synthetic', 'search'],
+    ['/api/search/owners?users=1', 'search-owners'],
+    ['/api/search/realtime-tags?ids=sm1', 'search-realtime-tags'],
+    ['/api/search/', 'search'],
+    ['/api/%73earch/owners?users=1', 'search-owners'],
+  ])('limits %s per client IP and endpoint', async (path, endpoint) => {
+    const upstream = stubUpstream()
+    const limiter = { limit: vi.fn(async () => ({ success: false })) }
+
+    const response = await fetchWorker(
+      new Request(`https://nico-rank.com${path}`, { headers: clientHeaders }),
+      greenEnv({ SEARCH_RATE_LIMITER: limiter }),
+      ctx,
+    )
+
+    expect(response.status).toBe(429)
+    expect(response.headers.get('Retry-After')).toBe('60')
+    expect(limiter.limit).toHaveBeenCalledWith({ key: `203.0.113.7:${endpoint}` })
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it('forwards search requests within the limit', async () => {
+    const upstream = stubUpstream(Response.json({ items: [] }))
+    const limiter = { limit: vi.fn(async () => ({ success: true })) }
+
+    const response = await fetchWorker(
+      new Request('https://nico-rank.com/api/search?q=synthetic', { headers: clientHeaders }),
+      greenEnv({ SEARCH_RATE_LIMITER: limiter }),
+      ctx,
+    )
+
+    expect(response.status).toBe(200)
+    expect(limiter.limit).toHaveBeenCalledTimes(1)
+    expect(upstream).toHaveBeenCalledTimes(1)
+    expect(requestedUrl(upstream.mock.calls[0])).toBe('https://upstream.example/api/search?q=synthetic')
+  })
+
+  it.each(['/api/popular-tags', '/api/searches'])('does not apply the search limit to %s', async (path) => {
+    stubUpstream(Response.json({}))
+    const limiter = { limit: vi.fn(async () => ({ success: false })) }
+
+    const response = await fetchWorker(
+      new Request(`https://nico-rank.com${path}`, { headers: clientHeaders }),
+      greenEnv({ SEARCH_RATE_LIMITER: limiter }),
+      ctx,
+    )
+
+    expect(response.status).toBe(200)
+    expect(limiter.limit).not.toHaveBeenCalled()
+  })
+})
