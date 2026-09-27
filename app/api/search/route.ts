@@ -16,7 +16,6 @@ import {
 import {
   assembleMergedPage,
   fetchRealtimeSegment,
-  getRealtimeBoundary,
   isRealtimeCandidate,
   isRealtimeMergeable,
   parseRequestedBoundary,
@@ -98,8 +97,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const conditions = parseSearchConditions(request.nextUrl.searchParams)
   const now = new Date()
   // 境界 T: 同じ条件で Snapshot の索引が実際に持つ最新の投稿時刻の 1 秒後。2 ページ目以降はクライアントが
-  // 前回応答の boundary を返すので、それを使ってページ間で一貫させる。取得に失敗したら従来の 05:00 JST
-  let boundary = getRealtimeBoundary(now)
+  // 前回応答の boundary を返すので、それを使ってページ間で一貫させる。
+  // 問い合わせに失敗したら合成しない（固定の 05:00 を境界にすると、索引の更新が遅れた日は 1 日分が欠ける）
+  let boundary: string | undefined
+  let boundaryError: string | undefined
   let mergeable = false
   if (isRealtimeEnabled() && isRealtimeCandidate(conditions)) {
     const requested = parseRequestedBoundary(request.nextUrl.searchParams.get('boundary'), now)
@@ -112,14 +113,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           now,
         })
       } catch {
-        boundary = getRealtimeBoundary(now)
+        boundaryError = 'boundary_unavailable'
       }
     }
-    mergeable = isRealtimeMergeable(conditions, boundary)
+    mergeable = boundary !== undefined && isRealtimeMergeable(conditions, boundary)
   }
 
   // ---- Snapshot 単独（従来どおり） ----
-  if (!mergeable) {
+  if (!mergeable || boundary === undefined) {
     const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE, deadline)
     if (isFailure(snapshot)) {
       return NextResponse.json({ error: snapshot.error, detail: snapshot.detail }, { status: snapshot.status })
@@ -128,8 +129,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       source: 'snapshot',
       boundary,
       realtimeCount: 0,
-      // SWR を短めにして、自動NG・許可リストの反映遅れを 3 分以内に抑える
-      cacheControl: 'public, s-maxage=60, stale-while-revalidate=120',
+      ...(boundaryError
+        ? // 新着を取れなかった応答は、取り直せるように短く置く
+          { realtimeError: boundaryError, cacheControl: 'public, s-maxage=30, stale-while-revalidate=60' }
+        : // SWR を短めにして、自動NG・許可リストの反映遅れを 3 分以内に抑える
+          { cacheControl: 'public, s-maxage=60, stale-while-revalidate=120' }),
     })
   }
 
@@ -230,7 +234,8 @@ function realtimeGapUntil(conditions: SearchConditions, segment: RealtimeSegment
 
 interface RespondMeta {
   source: 'merged' | 'snapshot'
-  boundary: string
+  /** 索引と新着の境界。決められなかった（問い合わせに失敗した・対象外の条件）ときは無し */
+  boundary?: string
   realtimeCount: number
   /** 新着区間を打ち切ったとき、投稿が欠けうる範囲（from = 境界、to = 取れた中で最も古い投稿時刻） */
   realtimeGap?: { from: string; to: string }
@@ -263,7 +268,7 @@ async function respond(
       pageSize: SEARCH_PAGE_SIZE,
       excludedCount: excludedCount + filteredCount,
       source: meta.source,
-      boundary: meta.boundary,
+      ...(meta.boundary ? { boundary: meta.boundary } : {}),
       realtimeCount: meta.realtimeCount,
       ...(meta.realtimeGap ? { realtimeTruncated: true, realtimeGap: meta.realtimeGap } : {}),
       ...(meta.realtimeError ? { realtimeError: meta.realtimeError } : {}),

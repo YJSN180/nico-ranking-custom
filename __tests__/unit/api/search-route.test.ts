@@ -56,6 +56,8 @@ const isoAt = (msValue: number): string => formatJstIso(new Date(msValue))
 let videos: FakeVideo[] = []
 let nvapiStatus = 200
 let pageStatus = 200
+/** Snapshot の境界の問い合わせ（新しい順・1 件）の HTTP ステータス */
+let boundaryStatus = 200
 /** Snapshot のページ取得（境界の問い合わせ以外）が、中断されるまで応答しない */
 let snapshotPageHang = false
 let calls: URL[] = []
@@ -154,6 +156,7 @@ const fakeFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit
   // 実際の fetch と同じく、中断済みのシグナルでは即座に失敗する
   if (init?.signal?.aborted) throw init.signal.reason
   if (url.hostname === 'snapshot.search.nicovideo.jp') {
+    if (url.searchParams.get('_limit') === '1' && boundaryStatus !== 200) return new Response('', { status: boundaryStatus })
     if (snapshotPageHang && url.searchParams.get('_limit') !== '1') return hang(init?.signal)
     return snapshotResponse(url)
   }
@@ -195,6 +198,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    boundaryStatus = 200
     calls = []
     fakeFetch.mockClear()
     clearFreshCache()
@@ -247,6 +251,21 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     expect(unbounded).toHaveLength(1)
   })
 
+  it('境界の問い合わせに失敗したら、05:00 を境界にして合成せず、索引だけを返す（1 日分を欠かさない）', async () => {
+    boundaryStatus = 503
+    const { status, body } = await search('q=x&sort=-startTime')
+    expect(status).toBe(200)
+    expect(body.source).toBe('snapshot')
+    expect(body.realtimeError).toBeTruthy()
+    expect(body.boundary).toBeUndefined()
+    expect(ids(body)[0]).toBe('sm1060')
+    expect(body.items).toHaveLength(50)
+    expect(callsTo('nvapi.nicovideo.jp')).toHaveLength(0)
+    expect(callsTo('www.nicovideo.jp')).toHaveLength(0)
+    const pages = callsTo('snapshot.search.nicovideo.jp').filter((u) => u.searchParams.get('_limit') === '50')
+    expect(pages.every((u) => !u.searchParams.has('filters[startTime][lt]'))).toBe(true)
+  })
+
   describe('ショートだけの検索', () => {
     it('本家ページ区間を先頭に、索引の最新のショートから続ける', async () => {
       const { body } = await search('q=x&sort=-startTime&contentType=short')
@@ -278,6 +297,7 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    boundaryStatus = 200
     calls = []
     fakeFetch.mockClear()
     clearFreshCache()
@@ -317,6 +337,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    boundaryStatus = 200
     snapshotPageHang = false
     kvHang = false
     calls = []
@@ -380,6 +401,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    boundaryStatus = 200
     calls = []
     fakeFetch.mockClear()
     clearFreshCache()
