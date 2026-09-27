@@ -448,13 +448,14 @@ export default function ClientPage({
     // PWA環境での追加イベント対応
     window.addEventListener('pagehide', saveCurrentState)
     
-    // iOSでのPWA対応
-    window.addEventListener('blur', () => {
-      // PWAモードでアプリが非アクティブになった時に保存
+    // iOSでのPWA対応: PWAモードでアプリが非アクティブになった時に保存
+    // （名前を付けて登録し、片付けで同じ関数を外す。無名だとアンマウント後も残り続ける）
+    const handleBlur = () => {
       if (isPWA()) {
         saveCurrentState()
       }
-    })
+    }
+    window.addEventListener('blur', handleBlur)
     
     // 外部リンククリック時に状態を保存
     const handleExternalNavigation = (e: MouseEvent) => {
@@ -502,7 +503,7 @@ export default function ClientPage({
     return () => {
       window.removeEventListener('beforeunload', saveCurrentState)
       window.removeEventListener('pagehide', saveCurrentState)
-      window.removeEventListener('blur', saveCurrentState)
+      window.removeEventListener('blur', handleBlur)
       document.removeEventListener('click', handleExternalNavigation)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
