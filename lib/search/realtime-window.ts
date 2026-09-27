@@ -94,7 +94,9 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
   // ショートは本家ページだけが取得元。読み足しの上限で境界まで届かなければ、境界からそこまでが欠けうる
   if (fresh.truncatedAt.short) gaps.push({ from: boundary, to: fresh.truncatedAt.short })
 
-  if (hasPostFilters(conditions)) {
+  // nvapi が総数を返さなければ、区間の長さが分からず続きの位置も決められない（先頭から読む）
+  const totalUnknown = first.hasNext && first.totalCount === undefined
+  if (hasPostFilters(conditions) || totalUnknown) {
     // 再生数などの範囲は後から当てるので、区間の中の位置は先頭から読まないと決まらない。
     // どのページでも同じ位置になるよう、先頭から REALTIME_MAX_PAGES ページまでを読む（それより古い分は gap で知らせる）
     const raw = [...first.items]

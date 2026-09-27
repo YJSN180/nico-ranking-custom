@@ -65,6 +65,8 @@ let nvapiStatus = 200
 let pageStatus = 200
 /** 本家のショートのページ（/search_shorts, /tag_shorts）だけの HTTP ステータス */
 let shortsPageStatus = 200
+/** nvapi が総数（totalCount）を返さない */
+let nvapiOmitsTotal = false
 /** Snapshot の境界の問い合わせ（新しい順・1 件）の HTTP ステータス */
 let boundaryStatus = 200
 /** Snapshot のページ取得（境界の問い合わせ以外）の HTTP ステータス。400 は本物と同じ JSON 本文で返す */
@@ -150,7 +152,8 @@ function nvapiResponse(url: URL): Response {
     count: { view: 10, comment: 0, mylist: 0, like: 0 },
     owner: { id: 1001, name: 'user-1001', ownerType: 'user' },
   }))
-  return json({ meta: { status: 200 }, data: { totalCount: list.length, hasNext: list.length > page * pageSize && page * pageSize < NVAPI_DEPTH, items } })
+  const hasNext = list.length > page * pageSize && page * pageSize < NVAPI_DEPTH
+  return json({ meta: { status: 200 }, data: { ...(nvapiOmitsTotal ? {} : { totalCount: list.length }), hasNext, items } })
 }
 
 function pageResponse(url: URL): Response {
@@ -223,6 +226,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
   beforeEach(() => {
     seedWorld()
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -351,6 +355,7 @@ describe('/api/search: 受け付けるパラメータ（S-d）', () => {
   beforeEach(() => {
     seedWorld()
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -391,6 +396,7 @@ describe('/api/search: インスタンスごとの流量制限（S-d）', () => 
   beforeEach(() => {
     seedWorld()
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -435,6 +441,7 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
   beforeEach(() => {
     seedWorld()
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -478,6 +485,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
   beforeEach(() => {
     seedWorld()
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -545,6 +553,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
   beforeEach(() => {
     seedWorld()
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -602,6 +611,7 @@ describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
     // 索引より後の動画は、テストごとに足す
     videos = videos.filter((v) => v.indexed)
     nvapiStatus = 200
+    nvapiOmitsTotal = false
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -684,6 +694,16 @@ describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
     expect(ms(body.realtimeGap?.from ?? '')).toBe(at(uploads[150]))
     expect(ms(body.realtimeGap?.to ?? '')).toBe(at(uploads[95]))
     expect(ids(body)).toEqual(uploads.slice(0, 50))
+  })
+
+  it('nvapi が総数を返さないときは区間の長さが分からないので、先頭から 300 件までを読み、その先を realtimeGap で知らせる', async () => {
+    nvapiOmitsTotal = true
+    const uploads = addLongUploads(400)
+    const { body } = await search('q=x&sort=-startTime')
+    expect(body.realtimeCount).toBe(300)
+    expect(ids(body)).toEqual(uploads.slice(0, 50))
+    expect(body.realtimeGap?.from).toBe(BOUNDARY)
+    expect(ms(body.realtimeGap?.to ?? '')).toBe(ms(videos.find((v) => v.id === uploads[299])?.at ?? ''))
   })
 
   it('nvapi が返せる深さ（5,000 件）を超える新着は、そこまでを新着区間にし、区間の終わりのページから realtimeGap で知らせる', async () => {
