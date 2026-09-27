@@ -244,3 +244,76 @@ describe('green search rate limit', () => {
     expect(limiter.limit).not.toHaveBeenCalled()
   })
 })
+
+describe('green HD thumbnail', () => {
+  const page = (ogImage: string) =>
+    new Response(`<html><head><meta property="og:image" content="${ogImage}"></head></html>`, {
+      headers: { 'Content-Type': 'text/html' },
+    })
+  const JP_OG_IMAGE = 'https://img.cdn.nimg.jp/s/nicovideo/thumbnails/1/1.1.original/r1280x720l?key=synthetic'
+
+  async function hdThumbnail(videoId: string) {
+    const response = await fetchWorker(new Request(`https://nico-rank.com/api/hd-thumbnail/${videoId}`), greenEnv(), ctx)
+    return { response, body: (await response.json()) as { thumbnail: string | null; source: string } }
+  }
+
+  it.each([
+    'javascript:alert(document.domain)',
+    'http://nicovideo.cdn.nimg.jp/thumbnails/1/1.1',
+    'https://elsewhere.example/thumbnails/1/1.1',
+    'https://nicovideo.cdn.nimg.jp.elsewhere.example/thumbnails/1/1.1',
+  ])('does not return the mirror og:image %s and reads nicovideo.jp instead', async (ogImage) => {
+    const upstream = stubUpstream(page(ogImage), page(JP_OG_IMAGE))
+
+    const { response, body } = await hdThumbnail('sm1')
+
+    expect(response.status).toBe(200)
+    expect(body.thumbnail).toBe(JP_OG_IMAGE)
+    expect(body.source).toBe('nicovideo.jp og:image')
+    expect(requestedUrl(upstream.mock.calls[0])).toBe('https://www.nicovideo.gay/watch/sm1')
+    expect(requestedUrl(upstream.mock.calls[1])).toBe('https://www.nicovideo.jp/watch/sm1')
+  })
+
+  it('uses a mirror og:image on the thumbnail CDN', async () => {
+    const upstream = stubUpstream(page('https://nicovideo.cdn.nimg.jp/thumbnails/1/1.12345'))
+
+    const { body } = await hdThumbnail('sm1')
+
+    expect(upstream).toHaveBeenCalledTimes(1)
+    expect(body.thumbnail).toBe('https://nicovideo.cdn.nimg.jp/thumbnails/1/1.12345.original')
+    expect(body.source).toBe('nicovideo.gay og:image')
+  })
+
+  it('bounds each source with a timeout and falls back when the mirror fails', async () => {
+    const upstream = vi.fn(async (input: string, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+      if (input.startsWith('https://www.nicovideo.gay/')) throw new DOMException('The operation timed out.', 'TimeoutError')
+      return page(JP_OG_IMAGE)
+    })
+    vi.stubGlobal('fetch', upstream)
+
+    const { body } = await hdThumbnail('sm1')
+
+    expect(upstream).toHaveBeenCalledTimes(2)
+    expect(body.thumbnail).toBe(JP_OG_IMAGE)
+  })
+
+  it('answers thumbnail null when no source has a thumbnail CDN URL', async () => {
+    stubUpstream(page('javascript:alert(1)'), page('https://elsewhere.example/x.jpg'))
+
+    const { response, body } = await hdThumbnail('sm1')
+
+    expect(response.status).toBe(200)
+    expect(body.thumbnail).toBeNull()
+  })
+
+  it('reads so videos from nicovideo.jp directly, as the site route does', async () => {
+    const upstream = stubUpstream(page(JP_OG_IMAGE))
+
+    const { body } = await hdThumbnail('so1')
+
+    expect(upstream).toHaveBeenCalledTimes(1)
+    expect(requestedUrl(upstream.mock.calls[0])).toBe('https://www.nicovideo.jp/watch/so1')
+    expect(body.thumbnail).toBe(JP_OG_IMAGE)
+  })
+})

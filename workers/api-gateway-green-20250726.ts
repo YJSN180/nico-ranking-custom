@@ -151,6 +151,65 @@ async function checkRateLimit(request: Request, limiter: RateLimit, endpoint: st
   }
 }
 
+// ニコニコ動画のサムネイル画像を配る CDN。サイト側 lib/thumbnail-hosts.ts の THUMBNAIL_HOSTS と同じ値にする
+// （Worker からは import できないため値を揃えて持つ）。/api/hd-thumbnail が返してよい URL はこれに限る
+const THUMBNAIL_HOSTS: ReadonlySet<string> = new Set([
+  'nicovideo.cdn.nimg.jp',
+  'img.cdn.nimg.jp',
+  'tn.smilevideo.jp',
+  'tn-skr1.smilevideo.jp',
+  'tn-skr2.smilevideo.jp',
+  'tn-skr3.smilevideo.jp',
+  'tn-skr4.smilevideo.jp',
+])
+
+// HD サムネイルの 1 か所の取得（本文の読み取りを含む）の期限。ミラーが遅くても nicovideo.jp を読む時間を残す
+const HD_THUMBNAIL_SOURCE_TIMEOUT_MS = 4_000
+
+/** https で、サムネイルの CDN を指す URL か（外部のページから得た URL を利用者へ返す前に確かめる） */
+function isThumbnailCdnUrl(value: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+  return parsed.protocol === 'https:' && THUMBNAIL_HOSTS.has(parsed.hostname)
+}
+
+/** .M / .L を外し、.original を付けて最大サイズの URL にする */
+function toOriginalSizeUrl(thumbnailUrl: string): string {
+  const [urlBase = '', urlQuery] = thumbnailUrl.split('?')
+  let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
+  if (!originalUrl.includes('.original')) {
+    originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
+  }
+  return urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
+}
+
+/**
+ * og:image（無ければ thumbnail の meta）から HD サムネイルの URL を取り出す。
+ * ページの値は信用しない: サムネイル CDN の https URL でなければ採用しない
+ * （利用者はこの URL をプロキシ経由で保存し、だめなら新しいタブで開く）
+ */
+function extractHdThumbnailUrl(html: string): string | null {
+  // 属性の順序が異なる場合も対応（content が先にくる場合）
+  const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
+  const ogImage = ogImageMatch ? ogImageMatch[1] || ogImageMatch[2] : undefined
+  if (ogImage && isThumbnailCdnUrl(ogImage)) {
+    // 1280x720 / .original はそのまま、それ以外は .original で最大サイズを試す
+    return ogImage.includes('1280x720') || ogImage.includes('.original') ? ogImage : toOriginalSizeUrl(ogImage)
+  }
+
+  const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
+  const thumbnail = thumbnailMatch?.[1]
+  if (thumbnail && isThumbnailCdnUrl(thumbnail)) {
+    return toOriginalSizeUrl(thumbnail)
+  }
+
+  return null
+}
+
 /**
  * /api/search 系のレート制限キー（エンドポイント名）。検索 1 回で owners / realtime-tags が
  * 数回ずつ呼ばれるため、エンドポイントごとに数える。%xx や重複スラッシュで制限を外せないよう正規化する
@@ -1002,70 +1061,53 @@ const handler: ExportedHandler<Env> = {
       }
       
       try {
-        // nicovideo.gay から高解像度サムネイル取得
         console.log(`[HD Thumbnail] Fetching HD thumbnail for ${videoId}`)
-        const nicogayUrl = `https://www.nicovideo.gay/watch/${videoId}`
-        
-        const response = await fetch(nicogayUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-            'Accept-Language': 'ja,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          }
-        })
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch from nicovideo.gay: ${response.status}`)
-        }
-        
-        const html = await response.text()
-        
-        // og:image メタタグから1280x720サムネイルURL取得
-        // 属性の順序が異なる場合も対応（content が先にくる場合）
-        const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
-        let hdThumbnailUrl = null
-        
-        if (ogImageMatch) {
-          hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]
-          console.log(`[HD Thumbnail] Found og:image: ${hdThumbnailUrl}`)
-          
-          // サムネイルURLの検証（1280x720であることを確認）
-          if (hdThumbnailUrl.includes('1280x720') || hdThumbnailUrl.includes('.original')) {
-            console.log(`[HD Thumbnail] Confirmed HD size for ${videoId}`)
-          } else {
-            // フォールバック: .original サフィックスで最大サイズ取得を試行
-            const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
-            let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
-            if (!originalUrl.includes('.original')) {
-              originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
+        let hdThumbnailUrl: string | null = null
+        let source = 'nicovideo.gay'
+
+        // ミラー（nicovideo.gay）を先に試す。so 動画はサイト側と同じく nicovideo.jp から直接取る
+        if (!videoId.startsWith('so')) {
+          try {
+            const response = await fetch(`https://www.nicovideo.gay/watch/${videoId}`, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'Accept-Language': 'ja,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+              },
+              signal: AbortSignal.timeout(HD_THUMBNAIL_SOURCE_TIMEOUT_MS)
+            })
+            if (response.ok) {
+              hdThumbnailUrl = extractHdThumbnailUrl(await response.text())
             }
-            hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-            console.log(`[HD Thumbnail] Fallback to original: ${hdThumbnailUrl}`)
+          } catch (error) {
+            console.warn(`[HD Thumbnail] nicovideo.gay failed for ${videoId}, trying nicovideo.jp`, error)
           }
         }
-        
-        // フォールバック: og:imageが見つからない場合
+
+        // 失敗・期限切れのほか、使える URL が無かったときも nicovideo.jp を読む（og:image は img.cdn.nimg.jp）
         if (!hdThumbnailUrl) {
-          const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
-          if (thumbnailMatch) {
-            hdThumbnailUrl = thumbnailMatch[1]
-            // .original サフィックス追加で最大サイズ化
-            const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
-            let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
-            if (!originalUrl.includes('.original')) {
-              originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
-            }
-            hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-            console.log(`[HD Thumbnail] Fallback thumbnail with original: ${hdThumbnailUrl}`)
+          source = 'nicovideo.jp'
+          const response = await fetch(`https://www.nicovideo.jp/watch/${videoId}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Language': 'ja,en;q=0.9',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            },
+            signal: AbortSignal.timeout(HD_THUMBNAIL_SOURCE_TIMEOUT_MS)
+          })
+          if (!response.ok) {
+            throw new Error(`Failed to fetch from nicovideo.jp: ${response.status}`)
           }
+          hdThumbnailUrl = extractHdThumbnailUrl(await response.text())
         }
-        
+
         const result = {
           videoId,
           thumbnail: hdThumbnailUrl,
           resolution: hdThumbnailUrl ? '1280x720 (HD)' : 'Not available',
-          source: 'nicovideo.gay og:image',
+          source: `${source} og:image`,
           timestamp: new Date().toISOString()
         }
         
@@ -1074,7 +1116,7 @@ const handler: ExportedHandler<Env> = {
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'public, max-age=3600, s-maxage=86400',
-            'X-HD-Source': 'nicovideo.gay',
+            'X-HD-Source': source,
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
