@@ -1189,8 +1189,9 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
       
       if (location) {
         const loc = new URL(location, url)
-        // 同一ホストへのリダイレクトは追跡せずそのまま返す（自身に戻るループを防止）
-        if (loc.hostname === url.hostname) {
+        // 追跡するのは上流デプロイ内のリダイレクトだけ。公開ホスト（自身に戻るループ）や
+        // 他のホストへは、クライアントの Cookie / Authorization を付けて取りに行かずそのまま返す
+        if (loc.hostname !== targetHost) {
           const origin = request.headers.get('Origin')
           const safeHeaders = new Headers(response.headers)
           Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))

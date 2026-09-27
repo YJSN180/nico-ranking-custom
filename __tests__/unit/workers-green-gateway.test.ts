@@ -69,4 +69,46 @@ describe('green upstream proxy', () => {
     expect(requestedUrl(upstream.mock.calls[0])).toBe('https://upstream.example/api/popular-tags?genre=all')
     expect(requestedHeaders(upstream.mock.calls[0]).get('X-Worker-Auth')).toBeNull()
   })
+
+  it('passes a redirect to another host to the client instead of fetching it with client credentials', async () => {
+    const upstream = stubUpstream(
+      new Response(null, { status: 302, headers: { Location: 'https://elsewhere.example/collect?x=1' } }),
+    )
+
+    const response = await fetchWorker(
+      new Request('https://nico-rank.com/api/admin/ng-list', {
+        headers: { Authorization: 'Basic c3ludGhldGljOnRlc3Q=', Cookie: 'session=synthetic' },
+      }),
+      greenEnv(),
+      ctx,
+    )
+
+    expect(upstream).toHaveBeenCalledTimes(1)
+    expect(response.status).toBe(302)
+    expect(response.headers.get('Location')).toBe('https://elsewhere.example/collect?x=1')
+  })
+
+  it('still follows a redirect that stays on the upstream deployment', async () => {
+    const upstream = stubUpstream(
+      new Response(null, { status: 308, headers: { Location: 'https://upstream.example/api/popular-tags/' } }),
+      Response.json({ popularTags: ['synthetic'] }),
+    )
+
+    const response = await fetchWorker(new Request('https://nico-rank.com/api/popular-tags'), greenEnv(), ctx)
+
+    expect(upstream).toHaveBeenCalledTimes(2)
+    expect(requestedUrl(upstream.mock.calls[1])).toBe('https://upstream.example/api/popular-tags/')
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ popularTags: ['synthetic'] })
+  })
+
+  it('returns a redirect back to the public host unchanged', async () => {
+    const upstream = stubUpstream(new Response(null, { status: 308, headers: { Location: '/api/popular-tags' } }))
+
+    const response = await fetchWorker(new Request('https://nico-rank.com/api/popular-tags/'), greenEnv(), ctx)
+
+    expect(upstream).toHaveBeenCalledTimes(1)
+    expect(response.status).toBe(308)
+    expect(response.headers.get('Location')).toBe('/api/popular-tags')
+  })
 })
