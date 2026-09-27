@@ -196,15 +196,17 @@ export class MylistManager {
     // 既存の動画を確認
     const existingVideo = await tx.objectStore('mylistVideos').get([mylistId, video.id!])
     const isNewVideo = !existingVideo
-    
-    // 動画データを作成
+
+    // 動画データを作成。登録済みの動画を追加し直す場合（別タブの古い画面など）は、
+    // 利用者が付けたメモ・並び順と最初の追加日時を残し、動画の情報だけを新しくする
     const mylistVideo: MylistVideo = {
       id: video.id!,
       mylistId,
       title: video.title!,
       thumbURL: video.thumbURL!,
-      addedAt: Date.now(),
-      memo: video.memo,
+      addedAt: existingVideo?.addedAt ?? Date.now(),
+      memo: video.memo ?? existingVideo?.memo,
+      ...(existingVideo?.orderIndex !== undefined && { orderIndex: existingVideo.orderIndex }),
       views: video.views,
       comments: video.comments,
       mylists: video.mylists,

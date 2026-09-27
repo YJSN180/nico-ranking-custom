@@ -30,4 +30,33 @@ describe('MylistManager の保存整合性', () => {
     expect(videos.map((v) => v.id)).toEqual(['sm90000002'])
     expect(mylist?.videoCount).toBe(1)
   })
+
+  it('登録済みの動画をもう一度追加しても、メモ・追加日時・並び順は消えない', async () => {
+    const mylistId = await manager.createMylist('合成リスト')
+    await manager.addVideoToMylist(mylistId, {
+      id: 'sm90000001',
+      title: '合成動画',
+      thumbURL: 'https://example.invalid/thumb-a.jpg',
+    })
+    await manager.updateVideoMemo(mylistId, 'sm90000001', '合成メモ')
+    await manager.updateVideoOrder(mylistId, [{ id: 'sm90000001', orderIndex: 3 }])
+    const [before] = await manager.getVideosInMylist(mylistId)
+
+    // 古い画面（別タブ）のマイリストモーダルから同じマイリストへ追加した状態。メモは渡らない
+    await manager.addVideoToMylist(mylistId, {
+      id: 'sm90000001',
+      title: '合成動画（更新後）',
+      thumbURL: 'https://example.invalid/thumb-b.jpg',
+      views: 10,
+    })
+
+    const [after] = await manager.getVideosInMylist(mylistId)
+    expect(after.memo).toBe('合成メモ')
+    expect(after.addedAt).toBe(before.addedAt)
+    expect(after.orderIndex).toBe(3)
+    // 動画の情報そのものは新しい値に更新する
+    expect(after.title).toBe('合成動画（更新後）')
+    expect(after.views).toBe(10)
+    expect((await manager.getMylist(mylistId))?.videoCount).toBe(1)
+  })
 })
