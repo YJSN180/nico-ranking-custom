@@ -17,6 +17,7 @@ import {
   loadSavedSearches,
   persistSavedSearches,
   removeSavedSearch,
+  SavedSearchError,
   type SavedSearch,
 } from '@/lib/search/saved-searches'
 import {
@@ -762,10 +763,16 @@ export function SearchClient() {
       form.q.trim() || form.tagConditions.find((c) => c.tag.trim())?.tag || '無題の検索'
     const name = window.prompt('この検索条件の名前を入力してください', defaultName)
     if (!name?.trim()) return
-    const next = addSavedSearch(savedSearches, name, query)
-    setSavedSearches(next)
-    persistSavedSearches(next)
-    showToast(`検索条件「${name.trim()}」を保存しました`)
+    // 上限に達している・ブラウザに保存できないときは、保存したことにせず理由を知らせる
+    try {
+      const next = addSavedSearch(savedSearches, name, query)
+      persistSavedSearches(next)
+      setSavedSearches(next)
+      showToast(`検索条件「${name.trim()}」を保存しました`)
+    } catch (err) {
+      if (!(err instanceof SavedSearchError)) throw err
+      showToast(err.message, 'error')
+    }
   }, [form, savedSearches])
 
   const handleLoadSaved = useCallback(
@@ -781,8 +788,15 @@ export function SearchClient() {
     (saved: SavedSearch) => {
       if (!window.confirm(`保存した検索「${saved.name}」を削除しますか？`)) return
       const next = removeSavedSearch(savedSearches, saved.id)
+      // 保存できなければ一覧も消さない（再読み込みで戻ってくるのに消えたように見せない）
+      try {
+        persistSavedSearches(next)
+      } catch (err) {
+        if (!(err instanceof SavedSearchError)) throw err
+        showToast(err.message, 'error')
+        return
+      }
       setSavedSearches(next)
-      persistSavedSearches(next)
       showToast(`保存した検索「${saved.name}」を削除しました`, 'info')
     },
     [savedSearches]

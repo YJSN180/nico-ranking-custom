@@ -528,6 +528,68 @@ describe('SearchClient', () => {
     })
   })
 
+  describe('保存した検索の保存と削除（失敗を成功にしない）', () => {
+    const toasts: Array<{ message: string; type: string }> = []
+    const onToast = (event: Event): void => {
+      toasts.push((event as CustomEvent<{ message: string; type: string }>).detail)
+    }
+    const savedChipNames = (): string[] => Array.from(document.querySelectorAll('.search-form__saved-load')).map((el) => el.textContent ?? '')
+    const storeSaved = (count: number): void => {
+      localStorage.setItem(
+        'saved-searches',
+        JSON.stringify({
+          version: 1,
+          searches: Array.from({ length: count }, (_, i) => ({ id: `id${i}`, name: `保存${i}`, query: 'q=x', createdAt: 't', updatedAt: 't' })),
+        })
+      )
+    }
+
+    beforeEach(() => {
+      toasts.length = 0
+      window.addEventListener('app:toast', onToast)
+      vi.spyOn(window, 'prompt').mockReturnValue('新しい保存')
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+    })
+    afterEach(() => {
+      window.removeEventListener('app:toast', onToast)
+      vi.restoreAllMocks()
+    })
+
+    it('上限（50 件）に達していたら保存せず、そのことを知らせる', async () => {
+      storeSaved(50)
+      render(<SearchClient />)
+      await waitFor(() => expect(savedChipNames()).toHaveLength(50))
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.click(screen.getByRole('button', { name: '☆ この条件を保存' }))
+      expect(toasts.at(-1)).toMatchObject({ type: 'error', message: '保存できる検索条件は 50 件までです。不要なものを削除してから保存してください。' })
+      expect(savedChipNames()).toHaveLength(50)
+      expect(savedChipNames()).not.toContain('新しい保存')
+    })
+
+    it('ブラウザに保存できなければ、保存したことにしない', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('quota', 'QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: '☆ この条件を保存' }))
+      expect(toasts.at(-1)?.type).toBe('error')
+      expect(savedChipNames()).toEqual([])
+    })
+
+    it('削除を保存できなければ、一覧から消さずに知らせる', async () => {
+      storeSaved(1)
+      render(<SearchClient />)
+      await waitFor(() => expect(savedChipNames()).toEqual(['保存0']))
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('quota', 'QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: '保存した検索「保存0」を削除' }))
+      expect(toasts.at(-1)?.type).toBe('error')
+      expect(savedChipNames()).toEqual(['保存0'])
+    })
+  })
+
   describe('検索 API のエラーの案内', () => {
     it('条件が不正（search_query_error）なら、条件を見直す案内を出す', async () => {
       handlers.search = () => json({ error: 'search_query_error', detail: 'synthetic parse error' }, 400)
