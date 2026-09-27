@@ -124,6 +124,7 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
       return (
         <button
           type="button"
+          role="menuitem"
           data-testid="mylist-button-placeholder"
           className="item-action-menu__item"
           disabled
@@ -146,7 +147,14 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
     <>
       <button
         data-testid="mylist-button"
-        aria-label={isInMylist ? "マイリストから削除" : "マイリストに追加"}
+        // ⋮メニューの項目は表示している文言（登録済み / 追加）をそのまま名前にする。
+        // 押すと選択モーダルが開く（登録済みでも削除はしない）
+        {...(asMenuItem
+          ? { role: 'menuitem', 'aria-haspopup': 'dialog' as const }
+          : {
+              'aria-label': isInMylist ? 'マイリストから削除' : 'マイリストに追加',
+              title: isInMylist ? 'マイリストから削除' : 'マイリストに追加',
+            })}
         onClick={handleClick}
         onTouchStart={(e) => {
           // 親のVideoContextMenuの長押し検出を防ぐ
@@ -164,7 +172,6 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
                 isInMylist ? 'mylist-button--active' : 'mylist-button--normal'
               } ${isProcessing ? 'mylist-button--processing' : ''}`
         }
-        title={isInMylist ? "マイリストから削除" : "マイリストに追加"}
       >
         {asMenuItem ? (
           <>
