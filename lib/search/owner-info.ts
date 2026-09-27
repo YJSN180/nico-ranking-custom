@@ -7,7 +7,7 @@
 //   - チャンネル: ID から引ける API は見つからず（nvapi /v1/channels/{id} 等は 404）。
 //     watch v3_guest の data.channel.{id,name,thumbnail} から取れるので、チャンネルごとに
 //     代表動画 1 件を叩いて解決する。
-import { buildV3GuestUrl } from '@/lib/search/realtime-tags'
+import { buildV3GuestUrl, compareIds, isVideoId } from '@/lib/search/realtime-tags'
 import { withTimeout } from '../abort-signal'
 
 /**
@@ -34,9 +34,23 @@ const V3_GUEST_HEADERS: Record<string, string> = {
   'Accept-Language': 'ja,en;q=0.9',
 }
 
-const USER_ID_PATTERN = /^\d{1,12}$/
-/** チャンネルの代表動画にはショート（ss）も来る */
-const VIDEO_ID_PATTERN = /^(sm|so|nm|ss)\d{1,12}$/
+/** 番号の先頭に 0 は付かない（同じ投稿者を別の書き方で問い合わせられないようにする） */
+const USER_ID_PATTERN = /^[1-9]\d{0,11}$/
+
+export const isUserId = (id: string): boolean => USER_ID_PATTERN.test(id)
+
+/**
+ * 投稿者情報の問い合わせの正規形（ID は重複なし・昇順。ユーザー → チャンネルの代表動画の順）。
+ * 画面はこれで組み立て、サーバーはこれと同じ形だけを受け付ける（並べ替えや書き換えで CDN のキャッシュを外せないようにする）
+ */
+export function buildOwnersQuery(input: { userIds: string[]; channelVideoIds: string[] }): string {
+  const params = new URLSearchParams()
+  const users = Array.from(new Set(input.userIds)).sort(compareIds)
+  const videos = Array.from(new Set(input.channelVideoIds)).sort(compareIds)
+  if (users.length > 0) params.set('users', users.join(','))
+  if (videos.length > 0) params.set('videos', videos.join(','))
+  return params.toString()
+}
 
 export interface OwnerInfo {
   name: string
@@ -66,13 +80,13 @@ export function authorIdsMatchingNames(result: OwnerInfoResult, matches: (name: 
   return [...users, ...channels]
 }
 
-function sanitizeIds(raw: string | null, pattern: RegExp, max: number): string[] {
+function sanitizeIds(raw: string | null, isValid: (id: string) => boolean, max: number): string[] {
   if (!raw) return []
   const seen = new Set<string>()
   const ids: string[] = []
   for (const part of raw.split(',')) {
     const id = part.trim()
-    if (!pattern.test(id) || seen.has(id)) continue
+    if (!isValid(id) || seen.has(id)) continue
     seen.add(id)
     ids.push(id)
     if (ids.length >= max) break
@@ -81,11 +95,12 @@ function sanitizeIds(raw: string | null, pattern: RegExp, max: number): string[]
 }
 
 export function sanitizeUserIds(raw: string | null, max = OWNER_INFO_MAX_USERS): string[] {
-  return sanitizeIds(raw, USER_ID_PATTERN, max)
+  return sanitizeIds(raw, isUserId, max)
 }
 
 export function sanitizeChannelVideoIds(raw: string | null, max = OWNER_INFO_MAX_CHANNEL_VIDEOS): string[] {
-  return sanitizeIds(raw, VIDEO_ID_PATTERN, max)
+  // チャンネルの代表動画にはショート（ss）も来る
+  return sanitizeIds(raw, isVideoId, max)
 }
 
 export function buildUserInfoUrl(userId: string): string {

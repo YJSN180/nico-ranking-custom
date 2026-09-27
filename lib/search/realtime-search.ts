@@ -8,7 +8,7 @@
 import type { RankingItem } from '@/types/ranking'
 import { withTimeout } from '../abort-signal'
 import { nicoPageOwnerId } from './nico-page-search'
-import type { SearchConditions } from './snapshot-search'
+import { formatJstIso, type SearchConditions } from './snapshot-search'
 
 export const NVAPI_SEARCH_URL = 'https://nvapi.nicovideo.jp/v2/search/video'
 export const REALTIME_PAGE_SIZE = 100
@@ -85,12 +85,8 @@ export const REALTIME_BOUNDARY_MAX_AGE_DAYS = 3
 /** Snapshot に 1 件も無い条件で使う既定の遡り幅 */
 export const REALTIME_BOUNDARY_FALLBACK_HOURS = 48
 
-/** Date を +09:00 表記の ISO 文字列にする（Snapshot の filters と nvapi の minRegisteredAt の両方が受け付ける形） */
-export function formatJstIso(date: Date): string {
-  const jst = new Date(date.getTime() + JST_OFFSET_MS)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`
-}
+/** +09:00 表記の ISO 文字列（検索条件の正規形と共通なので snapshot-search に置く） */
+export { formatJstIso }
 
 export interface FreshQuery {
   kind: 'keyword' | 'tag'

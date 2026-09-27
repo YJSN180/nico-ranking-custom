@@ -253,7 +253,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
   })
 
   it('ジャンルだけの条件は nvapi が応じないので、合成せず索引だけを返す（最新を含む）', async () => {
-    const { body } = await search(`genre=${encodeGenre}&sort=-startTime`)
+    const { body } = await search(`sort=-startTime&genre=${encodeGenre}`)
     expect(body.source).toBe('snapshot')
     expect(ids(body)[0]).toBe('sm1060')
     expect(callsTo('nvapi.nicovideo.jp')).toHaveLength(0)
@@ -261,7 +261,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
   })
 
   it('キーワード＋AND タグも nvapi が応じないので、索引だけを返す（最新を含む）', async () => {
-    const { body } = await search('q=x&tagAnd=y&sort=-startTime')
+    const { body } = await search('q=x&sort=-startTime&tagAnd=y')
     expect(body.source).toBe('snapshot')
     expect(ids(body)[0]).toBe('sm1060')
     expect(callsTo('nvapi.nicovideo.jp')).toHaveLength(0)
@@ -280,7 +280,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
 
   it('Snapshot が条件を 400 で拒んだら、502 にせず「条件が不正」（search_query_error, 400）を返す', async () => {
     snapshotPageStatus = 400
-    const { status, body } = await search('q=x&sort=-viewCounter')
+    const { status, body } = await search('q=x')
     expect(status).toBe(400)
     expect(body).toMatchObject({ error: 'search_query_error' })
     // 合成の経路でも同じ
@@ -291,9 +291,9 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
 
   it('Snapshot のそれ以外の失敗は、これまでどおり上流の失敗（502）や保守中（503）として返す', async () => {
     snapshotPageStatus = 500
-    expect((await search('q=x&sort=-viewCounter')).status).toBe(502)
+    expect((await search('q=x')).status).toBe(502)
     snapshotPageStatus = 503
-    expect((await search('q=x&sort=-viewCounter')).body).toMatchObject({ error: 'search_maintenance' })
+    expect((await search('q=x')).body).toMatchObject({ error: 'search_maintenance' })
   })
 
   it('境界の問い合わせに失敗したら、05:00 を境界にして合成せず、索引だけを返す（1 日分を欠かさない）', async () => {
@@ -321,14 +321,14 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
 
   describe('ショートだけの検索', () => {
     it('本家ページ区間を先頭に、索引の最新のショートから続ける', async () => {
-      const { body } = await search('q=x&sort=-startTime&contentType=short')
+      const { body } = await search('q=x&contentType=short&sort=-startTime')
       expect(body.source).toBe('merged')
       expect(ids(body)).toEqual(['ss9101', ...Array.from({ length: 10 }, (_, i) => `ss${2001 + i}`)])
       expect(callsTo('nvapi.nicovideo.jp')).toHaveLength(0)
     })
 
     it('本家ページで表せない条件（ジャンル指定）は、索引だけを返す', async () => {
-      const { body } = await search(`q=x&sort=-startTime&contentType=short&genre=${encodeGenre}`)
+      const { body } = await search(`q=x&contentType=short&sort=-startTime&genre=${encodeGenre}`)
       expect(body.source).toBe('snapshot')
       expect(ids(body)[0]).toBe('ss2001')
       expect(callsTo('www.nicovideo.jp')).toHaveLength(0)
@@ -336,12 +336,51 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
 
     it('本家ページの取得に失敗したら、索引だけを返す（「リアルタイム込み」にしない）', async () => {
       pageStatus = 503
-      const { body } = await search('q=x&sort=-startTime&contentType=short')
+      const { body } = await search('q=x&contentType=short&sort=-startTime')
       expect(body.source).toBe('snapshot')
       expect(body.realtimeError).toContain('503')
       expect(ids(body)[0]).toBe('ss2001')
       expect(body.items).toHaveLength(10)
     })
+  })
+})
+
+describe('/api/search: 受け付けるパラメータ（S-d）', () => {
+  beforeEach(() => {
+    seedWorld()
+    nvapiStatus = 200
+    pageStatus = 200
+    shortsPageStatus = 200
+    boundaryStatus = 200
+    snapshotPageStatus = 200
+    calls = []
+    fakeFetch.mockClear()
+    clearFreshCache()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ['知らないパラメータ（キャッシュ外し）', 'q=x&sort=-startTime&_=123'],
+    ['並べ替え', 'sort=-startTime&q=x'],
+    ['既定値の明示', 'q=x&sort=-viewCounter'],
+    ['数値の別表記', 'q=x&viewsMin=010'],
+    ['同じキーの重複', 'q=x&q=y'],
+    ['読めない境界', 'q=x&sort=-startTime&page=2&boundary=broken'],
+  ])('%s は 400（invalid_params）にし、上流へ問い合わせず、CDN にも置かない', async (_label, query) => {
+    const res = await GET(new NextRequest(`http://localhost/api/search?${query}`))
+    expect(res.status).toBe(400)
+    expect(await res.json()).toMatchObject({ error: 'invalid_params' })
+    expect(res.headers.get('cache-control')).toContain('no-store')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('正規形の問い合わせは受け付ける', async () => {
+    const { status } = await search('q=x&sort=-startTime&genre=%E3%82%B2%E3%83%BC%E3%83%A0&viewsMin=0&tagAnd=a&tagNot=b&page=2')
+    expect(status).toBe(200)
   })
 })
 
@@ -423,7 +462,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
 
   it('Snapshot が応答しなくても、期限で打ち切って search_timeout（504）を返す', async () => {
     snapshotPageHang = true
-    const pending = search('q=x&sort=-viewCounter')
+    const pending = search('q=x')
     await vi.waitFor(() => expect(callsTo('snapshot.search.nicovideo.jp').length).toBeGreaterThan(0))
     expire()
     const { status, body } = await pending
@@ -433,7 +472,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
 
   it('KV（管理者 NG・自動 NG）が応答しなくても、期限で打ち切って結果を返す', async () => {
     kvHang = true
-    const pending = search('q=x&sort=-viewCounter')
+    const pending = search('q=x')
     await vi.waitFor(() => expect(vi.mocked(kv.getStrict)).toHaveBeenCalled())
     await vi.waitFor(() => expect(callsTo('snapshot.search.nicovideo.jp').length).toBeGreaterThan(0))
     expire()
@@ -489,7 +528,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
 
   it('ショートだけの検索で本家ページの読み足しが上限に達したら、realtimeGap で返す', async () => {
     addNewUploads('short', 100)
-    const { body } = await search('q=x&sort=-startTime&contentType=short')
+    const { body } = await search('q=x&contentType=short&sort=-startTime')
     expect(body.source).toBe('merged')
     expect(body.realtimeGap?.from).toBe('2026-09-22T03:45:01+09:00')
     // 本家ページ 3 ページ（96 件）で打ち切り。96 件目は 07:14 の投稿
@@ -498,7 +537,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
 
   it('動画だけの検索では、本家ページが nvapi の最新まで届いていれば打ち切りにしない（その先は nvapi が受け持つ）', async () => {
     addNewUploads('long', 100)
-    const { body } = await search('q=x&sort=-startTime&contentType=long')
+    const { body } = await search('q=x&contentType=long&sort=-startTime')
     expect(body.source).toBe('merged')
     expect(body.realtimeGap).toBeUndefined()
   })

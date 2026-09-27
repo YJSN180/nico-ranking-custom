@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  buildSearchQuery,
   buildSnapshotSearchUrl,
   buildTagJsonFilter,
   mapSnapshotVideoToRankingItem,
+  parseSearchApiQuery,
   parseSearchConditions,
   SEARCH_PAGE_SIZE,
   fetchSnapshotNewestStartTime,
@@ -77,8 +79,9 @@ describe('buildSnapshotSearchUrl', () => {
     expect(url.searchParams.get('filters[viewCounter][gte]')).toBe('1000')
     expect(url.searchParams.get('filters[viewCounter][lte]')).toBe('50000')
     expect(url.searchParams.get('filters[lengthSeconds][gte]')).toBe('300')
-    expect(url.searchParams.get('filters[genre][0]')).toBe('ゲーム')
-    expect(url.searchParams.get('filters[genre][1]')).toBe('アニメ')
+    // ジャンルは正規形（一覧の順）で並ぶ。Snapshot のジャンル条件は順によらない
+    expect(url.searchParams.get('filters[genre][0]')).toBe('アニメ')
+    expect(url.searchParams.get('filters[genre][1]')).toBe('ゲーム')
   })
 
   it('ページからオフセットを計算する', () => {
@@ -292,5 +295,83 @@ describe('fetchSnapshotNewestStartTime', () => {
     await expect(fetchSnapshotNewestStartTime(conditions, empty as unknown as typeof fetch)).resolves.toBeNull()
     const down = vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response)
     await expect(fetchSnapshotNewestStartTime(conditions, down as unknown as typeof fetch)).rejects.toThrow('snapshot_http_503')
+  })
+})
+
+describe('検索条件の正規形（S-d）', () => {
+  const canonical = (query: string): string => buildSearchQuery(parseSearchConditions(new URLSearchParams(query)))
+
+  it('既定値は省き、決まった順に並べる（ジャンルは一覧の順、タグは AND・OR・NOT の順）', () => {
+    const params = new URLSearchParams()
+    params.append('page', '3')
+    params.append('tagNot', 'n1')
+    params.append('genre', 'ラジオ')
+    params.append('tagAnd', 'a1')
+    params.append('q', '  テスト  ')
+    params.append('sort', '-startTime')
+    params.append('genre', 'アニメ')
+    params.append('viewsMin', '0010')
+    params.append('targets', 'keyword')
+    params.append('dateFrom', '2026-09-20T00:00:00+09:00')
+    const query = buildSearchQuery(parseSearchConditions(params))
+    expect(query).toBe(
+      new URLSearchParams([
+        ['q', 'テスト'],
+        ['sort', '-startTime'],
+        ['genre', 'アニメ'],
+        ['genre', 'ラジオ'],
+        ['viewsMin', '10'],
+        ['dateFrom', '2026-09-20T00:00:00+09:00'],
+        ['tagAnd', 'a1'],
+        ['tagNot', 'n1'],
+        ['page', '3'],
+      ]).toString()
+    )
+  })
+
+  it('投稿日時は +09:00 の秒単位にそろえ、同じタグ・ジャンルの重複は 1 つにする', () => {
+    expect(canonical('dateTo=2026-09-20T14:59:59.000Z')).toBe('dateTo=2026-09-20T23%3A59%3A59%2B09%3A00')
+    expect(canonical('tagAnd=a&tagAnd=a&genre=%E3%82%A2%E3%83%8B%E3%83%A1&genre=%E3%82%A2%E3%83%8B%E3%83%A1')).toBe(
+      'genre=%E3%82%A2%E3%83%8B%E3%83%A1&tagAnd=a'
+    )
+  })
+
+  it('正規形は読み直しても変わらない', () => {
+    const inputs = [
+      '',
+      'q=x',
+      'q=%E5%88%9D%E9%9F%B3+%E3%83%9F%E3%82%AF&targets=tag&contentType=short&sort=%2BstartTime&page=2000',
+      'viewsMin=1&viewsMax=2&commentsMin=3&commentsMax=4&likesMin=5&likesMax=6&mylistsMin=7&mylistsMax=8&durationMin=90&durationMax=600',
+      'dateFrom=2026-09-01T00%3A00%3A00%2B09%3A00&dateTo=2026-09-02T23%3A59%3A59%2B09%3A00&tagAnd=a&tagOr=b&tagOr=c&tagNot=d',
+      `q=${'あ'.repeat(250)}`,
+      'page=99999&viewsMin=1e3',
+    ]
+    for (const input of inputs) {
+      const once = canonical(input)
+      expect(canonical(once)).toBe(once)
+    }
+  })
+
+  it('/api/search の問い合わせは正規形だけを受け付ける（知らないキー・並べ替え・書き換えは拒む）', () => {
+    const read = (query: string) => parseSearchApiQuery(new URLSearchParams(query), query)
+    expect(read('q=x&sort=-startTime')).not.toBeNull()
+    expect(read('')).not.toBeNull()
+    expect(read('q=x&sort=-startTime&page=2&rtCount=7&boundary=2026-09-22T04%3A00%3A01%2B09%3A00')?.extras).toEqual({
+      rtCount: 7,
+      boundary: '2026-09-22T04:00:01+09:00',
+    })
+    // 知らないキー（キャッシュ外し）
+    expect(read('q=x&_=123')).toBeNull()
+    // 並べ替え・既定値の明示・数値や日付の別表記・前後の空白
+    expect(read('sort=-startTime&q=x')).toBeNull()
+    expect(read('q=x&sort=-viewCounter')).toBeNull()
+    expect(read('q=x&page=1')).toBeNull()
+    expect(read('q=x&viewsMin=010')).toBeNull()
+    expect(read('q=%20x')).toBeNull()
+    expect(read('q=x&page=2&boundary=2026-09-21T19%3A00%3A01.000Z')).toBeNull()
+    expect(read('q=x&page=2&boundary=broken')).toBeNull()
+    expect(read('q=x&page=2&rtCount=0')).toBeNull()
+    // 同じキーの重複（単一の値のキー）
+    expect(read('q=x&q=y')).toBeNull()
   })
 })

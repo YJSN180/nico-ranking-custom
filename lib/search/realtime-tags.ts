@@ -18,8 +18,24 @@ const V3_GUEST_HEADERS: Record<string, string> = {
   'Accept-Language': 'ja,en;q=0.9',
 }
 
-/** ショート（ss）も対象。v3_guest は ss にもタグ付きで応答する（2026-09-22 実測） */
-const VIDEO_ID_PATTERN = /^(sm|so|nm|ss)\d{1,12}$/
+/** ショート（ss）も対象。v3_guest は ss にもタグ付きで応答する（2026-09-22 実測）。番号の先頭に 0 は付かない */
+const VIDEO_ID_PATTERN = /^(sm|so|nm|ss)[1-9]\d{0,11}$/
+
+export const isVideoId = (id: string): boolean => VIDEO_ID_PATTERN.test(id)
+
+/** 問い合わせの正規形で ID を並べる順（文字の並びで比べる。画面とサーバーで同じ順にする） */
+export const compareIds = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
+
+/**
+ * タグ補完の問い合わせの正規形（ID は重複なし・昇順）。画面はこれで組み立て、サーバーはこれと同じ形だけを受け付ける
+ * （並べ替えや書き換えで CDN のキャッシュを外し、上流への問い合わせを増やせないようにする）
+ */
+export function buildRealtimeTagsQuery(ids: string[]): string {
+  const params = new URLSearchParams()
+  const unique = Array.from(new Set(ids)).sort(compareIds)
+  if (unique.length > 0) params.set('ids', unique.join(','))
+  return params.toString()
+}
 
 export function sanitizeVideoIds(raw: string | null, max = REALTIME_TAGS_MAX_VIDEOS): string[] {
   if (!raw) return []

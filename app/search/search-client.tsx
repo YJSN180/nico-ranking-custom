@@ -24,13 +24,15 @@ import {
   SEARCH_GENRES,
   SEARCH_PAGE_SIZE,
   SEARCH_SORT_OPTIONS,
+  buildSearchQuery,
+  parseSearchConditions,
   parseSearchContentType,
   type SearchContentType,
   type SearchTagCondition,
   type SearchTagOperator,
 } from '@/lib/search/snapshot-search'
-import { REALTIME_TAGS_MAX_VIDEOS } from '@/lib/search/realtime-tags'
-import { OWNER_INFO_MAX_CHANNEL_VIDEOS, OWNER_INFO_MAX_USERS } from '@/lib/search/owner-info'
+import { REALTIME_TAGS_MAX_VIDEOS, buildRealtimeTagsQuery, isVideoId } from '@/lib/search/realtime-tags'
+import { OWNER_INFO_MAX_CHANNEL_VIDEOS, OWNER_INFO_MAX_USERS, buildOwnersQuery, isUserId } from '@/lib/search/owner-info'
 import type { OwnerInfo } from '@/lib/search/owner-info'
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
@@ -231,7 +233,9 @@ function formatDateInput(d: Date): string {
   return jst.toISOString().slice(0, 10)
 }
 
-/** フォーム状態からAPI/URL用のクエリパラメータを構築 */
+/**
+ * フォーム状態をクエリパラメータにする（入力のまま。正規形にするのは toSearchQuery）
+ */
 function buildQueryParams(form: FormState, page: number): URLSearchParams {
   const params = new URLSearchParams()
   if (form.q) params.set('q', form.q)
@@ -269,6 +273,14 @@ function buildQueryParams(form: FormState, page: number): URLSearchParams {
   }
   if (page > 1) params.set('page', String(page))
   return params
+}
+
+/**
+ * フォーム状態を検索条件の正規形の URL クエリにする。画面の URL・保存した検索・/api/search に使う
+ * （サーバーと同じ読み方で読み直すので、サーバーが受け付ける形と一致する）
+ */
+function toSearchQuery(form: FormState, page: number): string {
+  return buildSearchQuery(parseSearchConditions(buildQueryParams(form, page)))
 }
 
 /** URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する） */
@@ -373,13 +385,13 @@ export function SearchClient() {
     // 早期 return より前に採番し、新しい検索が来たら（結果がマージでなくても）古い補完を無効化する
     const requestId = ++tagsRequestIdRef.current
     if (data.source !== 'merged' || !data.realtimeCount) return
-    const targets = data.items.filter((it) => it.tags === undefined && it.tagDetails === undefined).map((it) => it.id)
+    const targets = data.items.filter((it) => it.tags === undefined && it.tagDetails === undefined && isVideoId(it.id)).map((it) => it.id)
     if (targets.length === 0) return
     try {
-      // サーバー側の1リクエスト上限に合わせて分割し、順に取得（区間は通常数件〜数十件）
+      // サーバー側の1リクエスト上限に合わせて分割し、順に取得（区間は通常数件〜数十件）。問い合わせは正規形（ID を昇順）
       for (let i = 0; i < targets.length; i += REALTIME_TAGS_MAX_VIDEOS) {
         const chunk = targets.slice(i, i + REALTIME_TAGS_MAX_VIDEOS)
-        const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(chunk.join(','))}`, { signal })
+        const res = await fetch(`/api/search/realtime-tags?${buildRealtimeTagsQuery(chunk)}`, { signal })
         if (!res.ok) return
         const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>>; hiddenIds?: string[] }
         if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
@@ -414,8 +426,8 @@ export function SearchClient() {
       if (it.authorName || !it.authorId) continue
       if (it.authorId.startsWith('channel/')) {
         const channelId = it.authorId.slice('channel/'.length)
-        if (!channelVideos.has(channelId)) channelVideos.set(channelId, it.id)
-      } else if (/^\d+$/.test(it.authorId)) {
+        if (!channelVideos.has(channelId) && isVideoId(it.id)) channelVideos.set(channelId, it.id)
+      } else if (isUserId(it.authorId)) {
         userIds.add(it.authorId)
       }
     }
@@ -445,14 +457,15 @@ export function SearchClient() {
       )
     }
 
+    // 問い合わせは正規形（ID を昇順）。サーバーはそれ以外の形を受け付けない
     const requests: string[] = []
     const userList = Array.from(userIds)
     for (let i = 0; i < userList.length; i += OWNER_INFO_MAX_USERS) {
-      requests.push(`users=${encodeURIComponent(userList.slice(i, i + OWNER_INFO_MAX_USERS).join(','))}`)
+      requests.push(buildOwnersQuery({ userIds: userList.slice(i, i + OWNER_INFO_MAX_USERS), channelVideoIds: [] }))
     }
     const videoList = Array.from(channelVideos.values())
     for (let i = 0; i < videoList.length; i += OWNER_INFO_MAX_CHANNEL_VIDEOS) {
-      requests.push(`videos=${encodeURIComponent(videoList.slice(i, i + OWNER_INFO_MAX_CHANNEL_VIDEOS).join(','))}`)
+      requests.push(buildOwnersQuery({ userIds: [], channelVideoIds: videoList.slice(i, i + OWNER_INFO_MAX_CHANNEL_VIDEOS) }))
     }
 
     await Promise.all(
@@ -484,11 +497,12 @@ export function SearchClient() {
       setIsLoading(true)
       setError(null)
       hasSearchedRef.current = true
-      setLastForm(searchForm)
 
-      const params = buildQueryParams(searchForm, searchPage)
-      const queryString = params.toString()
-      const conditionKey = buildQueryParams(searchForm, 1).toString()
+      // 条件は正規形にしてから使う（URL・API・適用中のチップのどれも、実際に検索した条件と一致させる）
+      const conditions = parseSearchConditions(buildQueryParams(searchForm, searchPage))
+      const queryString = buildSearchQuery(conditions)
+      const conditionKey = buildSearchQuery({ ...conditions, page: 1 })
+      setLastForm(parseFormFromUrl(new URLSearchParams(queryString)).form)
       currentQueryRef.current = queryString
       if (queryString !== new URLSearchParams(window.location.search).toString()) {
         pendingUrlWritesRef.current.push(queryString)
@@ -497,15 +511,15 @@ export function SearchClient() {
 
       // 2ページ目以降は、直前に表示した結果と同じ条件のときだけ境界とリアルタイム件数のヒントを渡す
       // （件数のヒントでサーバーが Snapshot を並列取得できる）
-      const apiParams = new URLSearchParams(params)
       const hint = pagingHintRef.current
-      if (searchPage > 1 && hint && hint.conditionKey === conditionKey) {
-        if (hint.realtimeCount > 0) apiParams.set('rtCount', String(hint.realtimeCount))
-        if (hint.boundary) apiParams.set('boundary', hint.boundary)
-      }
+      const sameConditions = conditions.page > 1 && hint !== null && hint.conditionKey === conditionKey
+      const apiQuery = buildSearchQuery(
+        conditions,
+        sameConditions ? { rtCount: hint.realtimeCount, boundary: hint.boundary ?? undefined } : {}
+      )
 
       try {
-        const res = await fetch(`/api/search?${apiParams.toString()}`, { signal: controller.signal })
+        const res = await fetch(`/api/search?${apiQuery}`, { signal: controller.signal })
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
           const messages: Record<string, string> = {
@@ -689,7 +703,7 @@ export function SearchClient() {
 
   // 検索条件の保存・復元・削除
   const handleSaveCurrent = useCallback(() => {
-    const query = buildQueryParams(form, 1).toString()
+    const query = toSearchQuery(form, 1)
     if (!query) {
       showToast('保存する条件がありません。キーワードや詳細条件を指定してください。', 'error')
       return

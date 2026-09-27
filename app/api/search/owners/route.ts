@@ -5,7 +5,7 @@
 //   users  = ユーザーID（数字）のカンマ区切り
 //   videos = チャンネル動画の動画ID（チャンネルごとに代表 1 件）のカンマ区切り
 import { NextRequest, NextResponse } from 'next/server'
-import { authorIdsMatchingNames, fetchOwnerInfo, sanitizeChannelVideoIds, sanitizeUserIds } from '@/lib/search/owner-info'
+import { authorIdsMatchingNames, buildOwnersQuery, fetchOwnerInfo, sanitizeChannelVideoIds, sanitizeUserIds } from '@/lib/search/owner-info'
 import { getServerNGList } from '@/lib/ng-list-server'
 import { matchesAuthorNameNG } from '@/lib/ng-filter-core'
 
@@ -17,10 +17,15 @@ const OWNERS_DEADLINE_MS = 8000
 const KV_READ_TIMEOUT_MS = 3000
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const userIds = sanitizeUserIds(request.nextUrl.searchParams.get('users'))
-  const channelVideoIds = sanitizeChannelVideoIds(request.nextUrl.searchParams.get('videos'))
+  const params = request.nextUrl.searchParams
+  const userIds = sanitizeUserIds(params.get('users'))
+  const channelVideoIds = sanitizeChannelVideoIds(params.get('videos'))
   if (userIds.length === 0 && channelVideoIds.length === 0) {
-    return NextResponse.json({ error: 'no_ids' }, { status: 400 })
+    return NextResponse.json({ error: 'no_ids' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+  }
+  // 受け付けるのは画面が組み立てる正規形だけ（知らないキー・並べ替え・形式不正の ID・上限超えで CDN のキャッシュを外させない）
+  if (buildOwnersQuery({ userIds, channelVideoIds }) !== request.nextUrl.search.replace(/^\?/, '')) {
+    return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
   }
   const started = Date.now()
   const deadline = AbortSignal.timeout(OWNERS_DEADLINE_MS)

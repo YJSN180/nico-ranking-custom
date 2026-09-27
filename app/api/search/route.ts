@@ -8,7 +8,7 @@ import {
   buildSnapshotSearchUrl,
   fetchSnapshotNewestStartTime,
   mapSnapshotVideoToRankingItem,
-  parseSearchConditions,
+  parseSearchApiQuery,
   SEARCH_PAGE_SIZE,
   type SearchConditions,
   type SnapshotSearchResponse,
@@ -94,11 +94,16 @@ async function fetchSnapshotPage(
 const isFailure = (r: SnapshotPage | SnapshotFailure): r is SnapshotFailure => 'error' in r
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  // 受け付けるのは正規形の問い合わせだけ（知らないキーや書き換えで CDN のキャッシュを外し、上流への問い合わせを増やせないようにする）
+  const parsed = parseSearchApiQuery(request.nextUrl.searchParams, request.nextUrl.search.replace(/^\?/, ''))
+  if (!parsed) {
+    return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+  }
+  const { conditions, extras } = parsed
   const deadline = AbortSignal.timeout(SEARCH_DEADLINE_MS)
   // NG の読み取りは上流の問い合わせと並列に始める（後から始めると、残りの予算が少ないときに KV 待ちで期限を越える）。
   // 失敗や期限切れでも投げず、直前の成功値（無ければ空）で続く
   const ngContext = loadServerNgContext({ signal: deadline, timeoutMs: KV_READ_TIMEOUT_MS })
-  const conditions = parseSearchConditions(request.nextUrl.searchParams)
   const now = new Date()
   // 境界 T: 同じ条件で Snapshot の索引が実際に持つ最新の投稿時刻の 1 秒後。2 ページ目以降はクライアントが
   // 前回応答の boundary を返すので、それを使ってページ間で一貫させる。
@@ -107,7 +112,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let boundaryError: string | undefined
   let mergeable = false
   if (isRealtimeEnabled() && isRealtimeCandidate(conditions)) {
-    const requested = parseRequestedBoundary(request.nextUrl.searchParams.get('boundary'), now)
+    const requested = parseRequestedBoundary(extras.boundary, now)
     if (requested) {
       boundary = requested
     } else {
@@ -145,7 +150,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Snapshot の offset はリアルタイム件数 R に依存する。2ページ目以降はクライアントが
   // 前回応答の realtimeCount を rtCount として送るので、それを仮の R として並列取得し、
   // 実際の R とずれて窓が足りない場合だけ取り直す（新着が増えた直後のみ発生）。
-  const rtCountHint = Math.max(0, parseInt(request.nextUrl.searchParams.get('rtCount') ?? '0', 10) || 0)
+  const rtCountHint = extras.rtCount ?? 0
   const provisional = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, rtCountHint)
   const pageFrom = (conditions.page - 1) * SEARCH_PAGE_SIZE
 

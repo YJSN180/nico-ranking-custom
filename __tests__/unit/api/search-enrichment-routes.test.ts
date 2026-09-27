@@ -12,7 +12,8 @@ vi.mock('@/lib/simple-kv', () => ({
 
 import { GET as getOwners } from '@/app/api/search/owners/route'
 import { GET as getRealtimeTags } from '@/app/api/search/realtime-tags/route'
-import { clearOwnerInfoCache } from '@/lib/search/owner-info'
+import { buildOwnersQuery, clearOwnerInfoCache } from '@/lib/search/owner-info'
+import { buildRealtimeTagsQuery } from '@/lib/search/realtime-tags'
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -79,7 +80,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 全体の期限（S-
 
   it('owners: 応答しない問い合わせは期限で打ち切り、取れた分を返す（部分失敗は CDN に長く置かない）', async () => {
     hangIds = new Set(['1002'])
-    const pending = getOwners(new NextRequest('http://localhost/api/search/owners?users=1001,1002'))
+    const pending = getOwners(new NextRequest('http://localhost/api/search/owners?users=1001%2C1002'))
     await vi.waitFor(() => expect(fakeFetch).toHaveBeenCalledTimes(2))
     expire()
     const res = await pending
@@ -92,7 +93,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 全体の期限（S-
 
   it('realtime-tags: 応答しない問い合わせは期限で打ち切り、取れた分を返す', async () => {
     hangIds = new Set(['sm12'])
-    const pending = getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11,sm12'))
+    const pending = getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11%2Csm12'))
     await vi.waitFor(() => expect(fakeFetch).toHaveBeenCalledTimes(2))
     expire()
     const res = await pending
@@ -127,7 +128,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 検索で効かな�
       authorIds: [],
       authorNames: { exact: ['user-1002'], partial: ['-so5'] },
     })
-    const res = await getOwners(new NextRequest('http://localhost/api/search/owners?users=1001,1002&videos=so5,so6'))
+    const res = await getOwners(new NextRequest('http://localhost/api/search/owners?users=1001%2C1002&videos=so5%2Cso6'))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { users: Record<string, unknown>; hiddenAuthorIds: string[] }
     expect(Object.keys(body.users).sort()).toEqual(['1001', '1002'])
@@ -154,7 +155,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 検索で効かな�
       so7: locked('g1', 'g2'),
       sm14: locked('g1', 'g2'),
     }
-    const res = await getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11,sm12,so7,sm14'))
+    const res = await getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11%2Csm12%2Csm14%2Cso7'))
     expect(res.status).toBe(200)
     const body = (await res.json()) as { tagDetails: Record<string, unknown>; hiddenIds: string[] }
     expect(Object.keys(body.tagDetails).sort()).toEqual(['sm11', 'sm12', 'sm14', 'so7'])
@@ -166,5 +167,53 @@ describe('/api/search/owners と /api/search/realtime-tags: 検索で効かな�
     tagItemsById = { sm11: locked('g1', 'g2') }
     const res = await getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11'))
     expect(((await res.json()) as { hiddenIds: string[] }).hiddenIds).toEqual([])
+  })
+})
+
+describe('/api/search/owners と /api/search/realtime-tags: 受け付けるパラメータ（S-d）', () => {
+  beforeEach(() => {
+    hangIds = new Set()
+    tagItemsById = {}
+    kvStore.clear()
+    fakeFetch.mockClear()
+    clearOwnerInfoCache()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    ['並べ替え', 'users=1002%2C1001'],
+    ['区切りの別表記', 'users=1001,1002'],
+    ['知らないパラメータ', 'users=1001&_=1'],
+    ['重複', 'users=1001%2C1001'],
+    ['形式不正の ID が混じる', 'users=1001%2Cabc'],
+    ['先頭が 0 の ID', 'users=01%2C1001'],
+    ['上限を超える件数', `users=${Array.from({ length: 21 }, (_, i) => String(1001 + i)).join('%2C')}`],
+  ])('owners: %s は 400 にして上流へ問い合わせない', async (_label, query) => {
+    const res = await getOwners(new NextRequest(`http://localhost/api/search/owners?${query}`))
+    expect(res.status).toBe(400)
+    expect(res.headers.get('cache-control')).toContain('no-store')
+    expect(fakeFetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['並べ替え', 'ids=sm12%2Csm11'],
+    ['知らないパラメータ', 'ids=sm11&x=1'],
+    ['上限を超える件数', `ids=${Array.from({ length: 11 }, (_, i) => `sm${11 + i}`).join('%2C')}`],
+  ])('realtime-tags: %s は 400 にして上流へ問い合わせない', async (_label, query) => {
+    const res = await getRealtimeTags(new NextRequest(`http://localhost/api/search/realtime-tags?${query}`))
+    expect(res.status).toBe(400)
+    expect(res.headers.get('cache-control')).toContain('no-store')
+    expect(fakeFetch).not.toHaveBeenCalled()
+  })
+
+  it('画面が組み立てる問い合わせ（正規形）は受け付ける', async () => {
+    const owners = await getOwners(new NextRequest(`http://localhost/api/search/owners?${buildOwnersQuery({ userIds: ['1002', '1001'], channelVideoIds: ['so6', 'so5'] })}`))
+    expect(owners.status).toBe(200)
+    const tags = await getRealtimeTags(new NextRequest(`http://localhost/api/search/realtime-tags?${buildRealtimeTagsQuery(['sm12', 'sm11'])}`))
+    expect(tags.status).toBe(200)
   })
 })

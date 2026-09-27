@@ -71,6 +71,9 @@ vi.mock('@/components/tag-autocomplete-input', async () => {
 })
 
 import { SearchClient } from '@/app/search/search-client'
+import { parseSearchApiQuery } from '@/lib/search/snapshot-search'
+import { buildOwnersQuery, sanitizeChannelVideoIds, sanitizeUserIds } from '@/lib/search/owner-info'
+import { buildRealtimeTagsQuery, sanitizeVideoIds } from '@/lib/search/realtime-tags'
 
 type Json = Record<string, unknown>
 interface Handlers {
@@ -82,12 +85,27 @@ interface Handlers {
 
 let handlers: Handlers
 const requests: URL[] = []
+/** サーバーが 400（invalid_params）にする形の問い合わせ。画面は正規形だけを送る */
+const nonCanonical: string[] = []
+
+const rawQuery = (url: URL): string => url.search.replace(/^\?/, '')
+function checkCanonical(url: URL): void {
+  const raw = rawQuery(url)
+  const ok =
+    url.pathname === '/api/search'
+      ? parseSearchApiQuery(url.searchParams, raw) !== null
+      : url.pathname === '/api/search/owners'
+        ? buildOwnersQuery({ userIds: sanitizeUserIds(url.searchParams.get('users')), channelVideoIds: sanitizeChannelVideoIds(url.searchParams.get('videos')) }) === raw
+        : buildRealtimeTagsQuery(sanitizeVideoIds(url.searchParams.get('ids'))) === raw
+  if (!ok) nonCanonical.push(`${url.pathname}?${raw}`)
+}
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost')
   requests.push(url)
+  checkCanonical(url)
   if (url.pathname === '/api/search') {
     const result = handlers.search(url)
     return result instanceof Response ? result : json(result)
@@ -120,6 +138,7 @@ describe('SearchClient', () => {
   beforeEach(() => {
     localStorage.clear()
     requests.length = 0
+    nonCanonical.length = 0
     fetchMock.mockClear()
     nav.router.replace.mockClear()
     nav.setQuery('')
@@ -134,6 +153,40 @@ describe('SearchClient', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    // どのテストでも、画面が送った問い合わせはサーバーが受け付ける正規形
+    expect(nonCanonical).toEqual([])
+  })
+
+  describe('問い合わせの正規形（S-d）', () => {
+    it('入力の順や空白によらず、正規形で検索し、URL も正規形にする', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: '  x  ' } })
+      fireEvent.click(screen.getByRole('button', { name: '＋ タグ条件を追加' }))
+      fireEvent.click(screen.getByRole('button', { name: '＋ タグ条件を追加' }))
+      const operators = screen.getAllByLabelText(/タグ条件\dの演算子/)
+      fireEvent.change(operators[0] as HTMLElement, { target: { value: 'NOT' } })
+      const tagInputs = screen.getAllByPlaceholderText('タグ名（入力で候補表示）')
+      fireEvent.change(tagInputs[0] as HTMLElement, { target: { value: 'n1' } })
+      fireEvent.change(tagInputs[1] as HTMLElement, { target: { value: 'a1' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(rawQuery(searchRequests()[0] as URL)).toBe('q=x&tagAnd=a1&tagNot=n1')
+      expect(nav.getQuery()).toBe('q=x&tagAnd=a1&tagNot=n1')
+    })
+
+    it('投稿者情報とタグの補完も正規形（ID を昇順）で問い合わせる', async () => {
+      handlers.search = (url) =>
+        searchBody(url, [{ id: 'sm9', authorId: '1002' }, { id: 'sm8', authorId: '1001' }, { id: 'so7', authorId: 'channel/ch3003' }], {
+          source: 'merged',
+          realtimeCount: 2,
+        })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(requests.filter((u) => u.pathname !== '/api/search')).toHaveLength(3))
+      const owners = requests.filter((u) => u.pathname === '/api/search/owners').map(rawQuery).sort()
+      expect(owners).toEqual(['users=1001%2C1002', 'videos=so7'])
+      expect(requests.filter((u) => u.pathname === '/api/search/realtime-tags').map(rawQuery)).toEqual(['ids=sm8%2Csm9%2Cso7'])
+    })
   })
 
   describe('ページ送り（U-a）', () => {

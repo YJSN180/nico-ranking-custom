@@ -139,28 +139,52 @@ export interface SnapshotSearchResponse {
   data?: SnapshotVideo[]
 }
 
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000
+
+/** Date を +09:00 表記の ISO 文字列（秒単位）にする（Snapshot の filters と nvapi の minRegisteredAt の両方が受け付ける形） */
+export function formatJstIso(date: Date): string {
+  const jst = new Date(date.getTime() + JST_OFFSET_MS)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`
+}
+
 function parsePositiveInt(value: string | null): number | undefined {
   if (value === null || value === '') return undefined
   const n = Number(value)
   if (!Number.isFinite(n) || n < 0) return undefined
-  return Math.floor(n)
+  // 指数表記にならない範囲に収める（正規形の文字列が読み直しで変わらないように）
+  return Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER)
 }
 
+/** 投稿日時は +09:00 の秒単位にそろえる。読めない値と、4 桁の年に収まらない値は無視する */
 function parseDate(value: string | null): string | undefined {
   if (!value) return undefined
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return undefined
-  return d.toISOString()
+  const year = new Date(d.getTime() + JST_OFFSET_MS).getUTCFullYear()
+  if (year < 1970 || year > 9999) return undefined
+  return formatJstIso(d)
 }
 
 const MAX_TAG_CONDITIONS = 10
+const MAX_QUERY_LENGTH = 200
+const MAX_TAG_LENGTH = 100
+const DEFAULT_SORT = '-viewCounter'
+
+/** 前後の空白を除き、コードポイント単位で max 文字に切る（サロゲートペアを割らない） */
+function normalizeText(raw: string, max: number): string {
+  return Array.from(raw.trim()).slice(0, max).join('').trim()
+}
 
 function parseTagConditions(params: URLSearchParams): SearchTagCondition[] {
   const conditions: SearchTagCondition[] = []
   const collect = (key: string, operator: SearchTagOperator) => {
+    const seen = new Set<string>()
     for (const raw of params.getAll(key)) {
-      const tag = raw.trim().slice(0, 100)
-      if (tag) conditions.push({ tag, operator })
+      const tag = normalizeText(raw, MAX_TAG_LENGTH)
+      if (!tag || seen.has(tag)) continue
+      seen.add(tag)
+      conditions.push({ tag, operator })
     }
   }
   collect('tagAnd', 'AND')
@@ -169,18 +193,21 @@ function parseTagConditions(params: URLSearchParams): SearchTagCondition[] {
   return conditions.slice(0, MAX_TAG_CONDITIONS)
 }
 
-/** URLSearchParams から検索条件を安全にパース（不正値は無視） */
+/**
+ * URLSearchParams から検索条件を安全にパース（不正値は無視）。結果は正規形：
+ * 文字列は前後の空白を除き、ジャンルは一覧の順で重複なし、タグは AND・OR・NOT の順で重複なし、投稿日時は +09:00 の秒単位
+ */
 export function parseSearchConditions(params: URLSearchParams): SearchConditions {
-  const sort = params.get('sort') ?? '-viewCounter'
-  const rawGenres = params.getAll('genre').filter((g) => VALID_GENRES.has(g))
+  const sort = params.get('sort') ?? DEFAULT_SORT
+  const genreSet = new Set(params.getAll('genre').filter((g) => VALID_GENRES.has(g)))
   const page = parsePositiveInt(params.get('page')) ?? 1
 
   return {
-    q: (params.get('q') ?? '').slice(0, 200),
+    q: normalizeText(params.get('q') ?? '', MAX_QUERY_LENGTH),
     targets: params.get('targets') === 'tag' ? 'tag' : 'keyword',
     contentType: parseSearchContentType(params.get('contentType')),
-    sort: VALID_SORT_VALUES.has(sort) ? sort : '-viewCounter',
-    genres: rawGenres,
+    sort: VALID_SORT_VALUES.has(sort) ? sort : DEFAULT_SORT,
+    genres: SEARCH_GENRES.filter((genre) => genreSet.has(genre)),
     viewsMin: parsePositiveInt(params.get('viewsMin')),
     viewsMax: parsePositiveInt(params.get('viewsMax')),
     commentsMin: parsePositiveInt(params.get('commentsMin')),
@@ -196,6 +223,99 @@ export function parseSearchConditions(params: URLSearchParams): SearchConditions
     tagConditions: parseTagConditions(params),
     page: Math.max(1, Math.min(page, Math.floor(SEARCH_MAX_OFFSET / SEARCH_PAGE_SIZE))),
   }
+}
+
+/** /api/search だけが受け取る、ページ間で区間を一貫させるための値（前回応答の新着件数と境界） */
+export interface SearchApiExtras {
+  rtCount?: number
+  boundary?: string
+}
+
+/** 新着件数の上限（nvapi の深さ 5,000 件と本家ページの分より十分大きい値） */
+const MAX_RT_COUNT = 100000
+
+const NUMERIC_KEYS = [
+  'viewsMin',
+  'viewsMax',
+  'commentsMin',
+  'commentsMax',
+  'likesMin',
+  'likesMax',
+  'mylistsMin',
+  'mylistsMax',
+  'durationMin',
+  'durationMax',
+] as const
+
+const SEARCH_API_KEYS = new Set<string>([
+  'q',
+  'targets',
+  'contentType',
+  'sort',
+  'genre',
+  ...NUMERIC_KEYS,
+  'dateFrom',
+  'dateTo',
+  'tagAnd',
+  'tagOr',
+  'tagNot',
+  'page',
+  'rtCount',
+  'boundary',
+])
+
+/**
+ * 検索条件を URL クエリの正規形にする（画面の URL・保存した検索・/api/search で共通）。
+ * 既定値は省き、キーは決まった順に並べる。parseSearchConditions の結果を渡すと、読み直しても同じ文字列になる
+ */
+export function buildSearchQuery(conditions: SearchConditions, extras: SearchApiExtras = {}): string {
+  const params = new URLSearchParams()
+  if (conditions.q) params.set('q', conditions.q)
+  if (conditions.targets !== 'keyword') params.set('targets', conditions.targets)
+  if (conditions.contentType !== 'all') params.set('contentType', conditions.contentType)
+  if (conditions.sort !== DEFAULT_SORT) params.set('sort', conditions.sort)
+  for (const genre of conditions.genres) params.append('genre', genre)
+  for (const key of NUMERIC_KEYS) {
+    const value = conditions[key]
+    if (value !== undefined) params.set(key, String(value))
+  }
+  if (conditions.dateFrom) params.set('dateFrom', conditions.dateFrom)
+  if (conditions.dateTo) params.set('dateTo', conditions.dateTo)
+  const keyOf: Record<SearchTagOperator, string> = { AND: 'tagAnd', OR: 'tagOr', NOT: 'tagNot' }
+  for (const operator of ['AND', 'OR', 'NOT'] as const) {
+    for (const condition of conditions.tagConditions) {
+      if (condition.operator === operator) params.append(keyOf[operator], condition.tag)
+    }
+  }
+  if (conditions.page > 1) params.set('page', String(conditions.page))
+  if (extras.rtCount !== undefined && extras.rtCount > 0) params.set('rtCount', String(extras.rtCount))
+  if (extras.boundary) params.set('boundary', extras.boundary)
+  return params.toString()
+}
+
+function parseSearchApiExtras(params: URLSearchParams): SearchApiExtras {
+  const rtCount = parsePositiveInt(params.get('rtCount'))
+  const boundary = parseDate(params.get('boundary'))
+  return {
+    ...(rtCount !== undefined ? { rtCount: Math.min(rtCount, MAX_RT_COUNT) } : {}),
+    ...(boundary ? { boundary } : {}),
+  }
+}
+
+/**
+ * /api/search の問い合わせ（先頭の ? を除いた rawQuery）を読む。知らないキーを含むか、正規形（buildSearchQuery）と
+ * 違う書き方なら null。同じ条件を別の URL にして CDN のキャッシュを外し、上流への問い合わせを増やせないようにする
+ */
+export function parseSearchApiQuery(
+  params: URLSearchParams,
+  rawQuery: string
+): { conditions: SearchConditions; extras: SearchApiExtras } | null {
+  for (const key of params.keys()) {
+    if (!SEARCH_API_KEYS.has(key)) return null
+  }
+  const conditions = parseSearchConditions(params)
+  const extras = parseSearchApiExtras(params)
+  return buildSearchQuery(conditions, extras) === rawQuery ? { conditions, extras } : null
 }
 
 /**
