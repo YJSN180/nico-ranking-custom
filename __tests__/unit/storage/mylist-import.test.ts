@@ -95,6 +95,43 @@ describe('importMylistData', () => {
     })
   })
 
+  describe('取り込み後の件数', () => {
+    it('スマートマージ後の件数は、ファイルの値ではなく実際に入っている動画の数になる', async () => {
+      const existingId = await manager.createMylist('合成リスト')
+      await manager.addVideoToMylist(existingId, { id: 'sm90000001', title: '合成動画1', thumbURL: '' })
+      await manager.addVideoToMylist(existingId, { id: 'sm90000002', title: '合成動画2', thumbURL: '' })
+
+      // バックアップの後に動画を 1 本足した状態で、古いバックアップを取り込む
+      const backup = makeBackup({
+        mylists: [{ id: existingId, name: '合成リスト', createdAt: 1700000000000, updatedAt: 1700000000000, videoCount: 1 }],
+        mylistVideos: [
+          { id: 'sm90000001', mylistId: existingId, title: '合成動画1', thumbURL: '', addedAt: 1700000000000 },
+        ],
+      })
+
+      const result = await importMylistData(backup, 'smart_merge')
+
+      expect(result.success).toBe(true)
+      expect(await manager.getVideosInMylist(existingId)).toHaveLength(2)
+      expect((await manager.getMylist(existingId))?.videoCount).toBe(2)
+    })
+
+    it('ファイルの件数が中身と合っていなくても、実際の数で表示される', async () => {
+      const backup = makeBackup({
+        mylists: [
+          { id: 'mylist-import-1', name: '取り込む合成リスト', createdAt: 1700000000000, updatedAt: 1700000000000, videoCount: 99 },
+        ],
+        mylistVideos: [
+          { id: 'sm90000101', mylistId: 'mylist-import-1', title: '合成動画', thumbURL: '', addedAt: 1700000000000 },
+        ],
+      })
+
+      await importMylistData(backup, 'complete_overwrite')
+
+      expect((await manager.getMylist('mylist-import-1'))?.videoCount).toBe(1)
+    })
+  })
+
   describe('ファイルの中身の検証（統合形式は readBackupFile の検証を通らない）', () => {
     // 統合バックアップの data.mylists から組み立てたデータに、所属マイリスト ID の無い動画が混ざっている
     const backupWithBrokenVideo = () =>

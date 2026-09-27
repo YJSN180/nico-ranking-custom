@@ -490,6 +490,17 @@ export async function importMylistData(
     // 既存の名前リストを構築（リネーム検出用）
     const existingNames = existingMylists.map(m => m.name)
     
+    // 書き込んだマイリスト（あとで件数を実数にそろえる）
+    const touchedMylistIds = new Set<string>()
+    const putMylist = async (mylist: Mylist) => {
+      await importTx.objectStore('mylists').put(mylist)
+      touchedMylistIds.add(mylist.id)
+    }
+    const putVideo = async (video: MylistVideo) => {
+      await importTx.objectStore('mylistVideos').put(video)
+      touchedMylistIds.add(video.mylistId)
+    }
+    
     // マイリストをインポート
     for (const importingMylist of content.mylists) {
       try {
@@ -497,7 +508,7 @@ export async function importMylistData(
         
         if (conflictResolution === 'complete_overwrite') {
           // 完全上書き：そのまま追加
-          await importTx.objectStore('mylists').put(mylistToImport)
+          await putMylist(mylistToImport)
           importedMylists++
           createdMylists++
         } else {
@@ -515,12 +526,12 @@ export async function importMylistData(
                 renamed.push({ original: importingMylist.name, renamed: newName })
                 existingNames.push(newName)
               }
-              await importTx.objectStore('mylists').put(mylistToImport)
+              await putMylist(mylistToImport)
               importedMylists++
               createdMylists++
             } else if (conflictResolution === 'smart_merge') {
               // スマートマージ：既存を上書き
-              await importTx.objectStore('mylists').put(mylistToImport)
+              await putMylist(mylistToImport)
               importedMylists++
               overwrittenMylists++
             }
@@ -531,13 +542,13 @@ export async function importMylistData(
               mylistToImport.name = newName
               renamed.push({ original: importingMylist.name, renamed: newName })
               existingNames.push(newName)
-              await importTx.objectStore('mylists').put(mylistToImport)
+              await putMylist(mylistToImport)
               importedMylists++
               createdMylists++
             }
           } else {
             // 重複なし：そのまま追加
-            await importTx.objectStore('mylists').put(mylistToImport)
+            await putMylist(mylistToImport)
             importedMylists++
             createdMylists++
           }
@@ -554,7 +565,7 @@ export async function importMylistData(
         
         if (conflictResolution === 'complete_overwrite') {
           // 完全上書き：そのまま追加
-          await importTx.objectStore('mylistVideos').put(videoToImport)
+          await putVideo(videoToImport)
           importedVideos++
           createdVideos++
         } else {
@@ -588,7 +599,7 @@ export async function importMylistData(
             if (conflictResolution === 'safe_add') {
               // 安全追加：重複を許可（異なるマイリストの場合）
               if (existingVideo.mylistId !== videoToImport.mylistId) {
-                await importTx.objectStore('mylistVideos').put(videoToImport)
+                await putVideo(videoToImport)
                 importedVideos++
                 createdVideos++
               } else {
@@ -600,19 +611,19 @@ export async function importMylistData(
               // スマートマージ：同一マイリスト内は除去、異なるマイリスト間は許可
               if (existingVideo.mylistId === videoToImport.mylistId) {
                 // 同一マイリスト内：上書き
-                await importTx.objectStore('mylistVideos').put(videoToImport)
+                await putVideo(videoToImport)
                 importedVideos++
                 overwrittenVideos++
               } else {
                 // 異なるマイリスト間：重複許可
-                await importTx.objectStore('mylistVideos').put(videoToImport)
+                await putVideo(videoToImport)
                 importedVideos++
                 createdVideos++
               }
             }
           } else {
             // 重複なし：そのまま追加
-            await importTx.objectStore('mylistVideos').put(videoToImport)
+            await putVideo(videoToImport)
             importedVideos++
             createdVideos++
           }
@@ -620,6 +631,21 @@ export async function importMylistData(
       } catch (error) {
         errors.push(`動画関連データのインポートに失敗: ${error}`)
       }
+    }
+
+    // 件数はファイルの値ではなく、実際に入っている動画の数にそろえる
+    // （スマートマージで残る既存の動画や、中身と合わない件数のファイルでも表示がずれない）
+    try {
+      for (const mylistId of touchedMylistIds) {
+        const stored = await importTx.objectStore('mylists').get(mylistId)
+        if (!stored) continue
+        const actualCount = await importTx.objectStore('mylistVideos').index('mylistId').count(mylistId)
+        if (stored.videoCount !== actualCount) {
+          await importTx.objectStore('mylists').put({ ...stored, videoCount: actualCount })
+        }
+      }
+    } catch (error) {
+      errors.push(`マイリストの件数の更新に失敗: ${error}`)
     }
 
     // 完全上書きは一部だけ入った状態で既存を消さない。1 件でも書けなければ全体を取り消す
