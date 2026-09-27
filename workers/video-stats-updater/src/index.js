@@ -7,6 +7,7 @@ import {
 import { readR2Text } from '../../utils/r2-json.js';
 import { currentGeneration, rankingKey, STATS_SOURCE_KEY } from '../../utils/ranking-generation.js';
 import { acquireLease } from '../../utils/r2-lease.js';
+import { R2_SERVER_ERROR_CODES, R2_TOO_MUCH_CONCURRENCY, withR2Retry } from '../../utils/r2-retry.js';
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js';
 
 import { isWorkerAuthorized, verifyRanking } from './verify-ranking.js';
@@ -15,6 +16,14 @@ import { isWorkerAuthorized, verifyRanking } from './verify-ranking.js';
 const STATS_KEY = 'VIDEO_STATS_LATEST';
 const BATCH_SIZE = 50; // Snapshot API batch size
 const SNAPSHOT_CONCURRENCY = 6;
+// Every refresh (cron or /trigger, legacy or generation layout) holds this lease, so two refreshes never overlap.
+const STATS_LEASE_KEY = 'pipeline/stats-lease.json';
+const STATS_LEASE_MS = 5 * 60_000;
+// 10058: another listing of the same objects is in flight. Back off and resume from the same cursor.
+const R2_LIST_RETRY = {
+  retryableCodes: [R2_TOO_MUCH_CONCURRENCY, ...R2_SERVER_ERROR_CODES],
+  delaysMs: [1_000, 2_000, 4_000],
+};
 
 // Default metadata when not found in R2
 const DEFAULT_METADATA = {
@@ -155,11 +164,11 @@ async function discoverAvailableData(r2Bucket) {
 
     // Historical tag objects can fill a page before later genres appear.
     while (true) {
-      const list = await r2Bucket.list({
+      const list = await withR2Retry(() => r2Bucket.list({
         prefix: 'rankings/',
         limit: 1000,
         ...(cursor ? { cursor } : {}),
-      });
+      }), R2_LIST_RETRY);
       for (const object of list.objects) {
         const parts = object.key.split('/');
         if (parts.length === 4 && parts[3] === 'all.json') {
@@ -411,10 +420,8 @@ async function processVideoStatsUpdate(env) {
         reportR2ReadFailure(error, { upstreamKind: 'r2-metadata', r2Key: 'rankings/current.json', parseStage: 'manifest-read' });
         throw new Error('Failed to fetch ranking metadata manifest', { cause: error });
       });
-      if (manifest) {
-        lease = await acquireLease(env.R2_BUCKET, 'pipeline/stats-lease.json', 5 * 60_000);
-        if (!lease) return { success: false, skipped: 'already-running' };
-      }
+      lease = await acquireLease(env.R2_BUCKET, STATS_LEASE_KEY, STATS_LEASE_MS);
+      if (!lease) return { success: false, skipped: 'already-running' };
       // 1. Fetch ranking metadata from R2
       const metadata = await fetchRankingMetadata(env.R2_BUCKET, manifest);
       console.log(`Using metadata - Genres: ${metadata.genres.join(', ')}, Periods: ${metadata.periods.join(', ')}`);
@@ -449,10 +456,8 @@ async function processVideoStatsUpdate(env) {
       const previous = await env.STATS_KV.get(STATS_KEY, 'json');
       if (!statsData.metadata.totalVideos || (previous?.metadata?.totalVideos > 0 &&
           statsData.metadata.totalVideos < previous.metadata.totalVideos * 0.5)) throw new Error('Video stats count dropped below 50%');
-      if (manifest) {
-        await lease.assertOwned();
-        if ((await currentGeneration(env.R2_BUCKET))?.generation !== manifest.generation) throw new Error('Ranking generation changed during stats refresh');
-      }
+      await lease.assertOwned();
+      if (manifest && (await currentGeneration(env.R2_BUCKET))?.generation !== manifest.generation) throw new Error('Ranking generation changed during stats refresh');
       await env.STATS_KV.put(STATS_KEY, JSON.stringify(statsData));
       if (manifest) await env.R2_BUCKET.put(STATS_SOURCE_KEY, JSON.stringify({
         generation: manifest.generation, collectedAt: manifest.collectedAt,

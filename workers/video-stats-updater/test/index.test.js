@@ -147,6 +147,40 @@ describe('Video Stats Updater Worker', () => {
       expect(env.STATS_KV._storage.get('VIDEO_STATS_LATEST')).toBe(previous);
     });
 
+    it('does not list R2 while another refresh holds the stats lease (legacy layout)', async () => {
+      paginatedLegacyFixture();
+      env.R2_BUCKET._storage.set('pipeline/stats-lease.json', { owner: 'other-refresh', expiresAt: Date.now() + 60_000 });
+      await runScheduled();
+      expect(env.R2_BUCKET.list).not.toHaveBeenCalled();
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('waits and resumes from the same cursor when R2 rejects a listing for concurrent access (10058)', async () => {
+      paginatedLegacyFixture();
+      const busy = () => new Error('list: Reduce your concurrent request rate for the same object. (10058)');
+      env.R2_BUCKET.list.mockReset()
+        .mockResolvedValueOnce({
+          objects: [{ key: 'rankings/all/24h/all.json' }, { key: 'rankings/all/hour/all.json' }],
+          truncated: true,
+          cursor: 'page-2',
+        })
+        .mockRejectedValueOnce(busy())
+        .mockRejectedValueOnce(busy())
+        .mockResolvedValueOnce({ objects: [{ key: 'rankings/nature/hour/all.json' }], truncated: false });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+      try {
+        const run = runScheduled();
+        await vi.advanceTimersByTimeAsync(30_000);
+        await run;
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(env.R2_BUCKET.list).toHaveBeenCalledTimes(4);
+      expect(env.R2_BUCKET.list.mock.calls.slice(1).map(([options]) => options.cursor)).toEqual(['page-2', 'page-2', 'page-2']);
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(stats.stats).toHaveProperty('sm4');
+    });
+
     it.each([undefined, 'repeated'])('rejects invalid discovery cursor %s instead of publishing a partial list', async (cursor) => {
       paginatedLegacyFixture();
       env.R2_BUCKET.list.mockReset().mockResolvedValue({
