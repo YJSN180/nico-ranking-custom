@@ -216,3 +216,53 @@ describe('decideHold', () => {
     expect(decideHold(video({ authorId: '9001', ownerVisibility: 'hidden' }), author({ authorId: '9001' }), config, now).hold).toBe(false)
   })
 })
+
+describe('規則の「ちょうど」の境界値', () => {
+  const MIN = 60_000
+  const HOUR = 60 * MIN
+  const DAY = 24 * HOUR
+  /** T0 からのミリ秒オフセットの投稿（ID は並び順から合成） */
+  const postsAtMs = (...offsetsMs: number[]) => offsetsMs.map((ms, i) => ({ id: `sm${7500 + i}`, at: new Date(T0 + ms).toISOString() }))
+
+  it('投稿頻度 C: 短時間の幅（30 分）ちょうどに 3 本は該当、1 ミリ秒でも超えれば非該当', () => {
+    expect(isFrequent(postsAtMs(0, 10 * MIN, 30 * MIN), config.freq)).toBe(true)
+    expect(isFrequent(postsAtMs(0, 10 * MIN, 30 * MIN + 1), config.freq)).toBe(false)
+  })
+
+  it('投稿頻度 C: 24 時間ちょうどに 5 本は該当、1 ミリ秒でも超えれば非該当。4 本では非該当', () => {
+    expect(isFrequent(postsAtMs(0, 6 * HOUR, 12 * HOUR, 18 * HOUR, DAY), config.freq)).toBe(true)
+    expect(isFrequent(postsAtMs(0, 6 * HOUR, 12 * HOUR, 18 * HOUR, DAY + 1), config.freq)).toBe(false)
+    expect(isFrequent(postsAtMs(0, 1 * MIN, 50 * MIN, 2 * HOUR), config.freq)).toBe(false)
+  })
+
+  it('D: ロック済みのグループ数が閾値ちょうどなら該当、1 つ少なければ非該当（閾値を変えても同じ）', () => {
+    const four = { ...config, lockGroupsMin: 4 }
+    expect(evaluateVideo(video({ tagDetails: locked('g1', 'g2', 'g4', 'g5') }), author(), four).reasons).toEqual(['D'])
+    expect(evaluateVideo(video({ tagDetails: locked('g1', 'g2', 'g4') }), author(), four).ng).toBe(false)
+  })
+
+  it('D の昇格: フォロワーがちょうど followerMax なら昇格し、1 人多ければ昇格しない', () => {
+    const v = video({ tagDetails: locked('g1', 'g2', 'g4') })
+    expect(evaluateVideo(v, author({ followerCount: config.followerMax }), config).escalate).toBe(true)
+    expect(evaluateVideo(v, author({ followerCount: config.followerMax + 1 }), config).escalate).toBe(false)
+  })
+
+  it('保留: 投稿から保留時間ちょうどで解け、その 1 ミリ秒前は保留。フォロワーはちょうど followerMax まで保留の信号', () => {
+    const until = T0 + config.holdHours * HOUR
+    expect(decideHold(video({ ownerVisibility: 'hidden' }), author(), config, new Date(until - 1)).hold).toBe(true)
+    expect(decideHold(video({ ownerVisibility: 'hidden' }), author(), config, new Date(until)).hold).toBe(false)
+    const now = new Date(T0 + HOUR)
+    expect(decideHold(video(), author({ followerCount: config.followerMax }), config, now).signals).toEqual(['low_followers'])
+    expect(decideHold(video(), author({ followerCount: config.followerMax + 1 }), config, now).hold).toBe(false)
+  })
+
+  it('A∧C: 投稿から削除とみなす日数ちょうどの削除は該当、1 ミリ秒でも後なら非該当。投稿より前の 404 は数えない', () => {
+    const burst = postsAtMs(0, 5 * MIN, 10 * MIN)
+    const deletedAt = (ms: number) => author({ status: 'deleted', followerCount: null, posts: burst, deletedObservedAt: new Date(T0 + ms).toISOString() })
+    const window = config.deletionWindowDays * DAY
+    // 最後の投稿（+10 分）から数える
+    expect(evaluateDeletion(deletedAt(10 * MIN + window), config).ng).toBe(true)
+    expect(evaluateDeletion(deletedAt(10 * MIN + window + 1), config).ng).toBe(false)
+    expect(evaluateDeletion(deletedAt(-1), config).ng).toBe(false)
+  })
+})

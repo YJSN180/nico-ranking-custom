@@ -43,6 +43,13 @@ describe('collectAutoNg / mergeAutoNgIntoList', () => {
     expect(auto.videoIds.sort()).toEqual(['sm1', 'sm2'])
   })
 
+  it('保留は期限ちょうどで外れ、その 1 ミリ秒前までは自動 NG に含める', () => {
+    const until = later(2)
+    const held: LqngVerdicts = { ...verdicts, authors: {}, videos: { sm8: { status: 'hold', reasons: [], holdSignals: ['hidden_owner'], authorId: '2008', title: 't', registeredAt: now.toISOString(), since: now.toISOString(), holdUntil: until } } }
+    expect(collectAutoNg(held, config, new Date(new Date(until).getTime() - 1)).videoIds).toEqual(['sm8'])
+    expect(collectAutoNg(held, config, new Date(until)).videoIds).toEqual([])
+  })
+
   it('設定が無効か判定テーブルが無ければ空', () => {
     expect(collectAutoNg(verdicts, { ...config, enabled: false }, now)).toEqual({ authorIds: [], videoIds: [] })
     expect(collectAutoNg(null, config, now)).toEqual({ authorIds: [], videoIds: [] })

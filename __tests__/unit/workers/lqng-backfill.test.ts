@@ -265,12 +265,28 @@ describe('runBackfillStep', () => {
     const many = Array.from({ length: 250 }, (_, i) => video({ id: `v${i}`, authorId: `${5000 + i}`, registeredAt: at(i) }))
     const fetchWindowPage = pager(many)
     const d = deps({ fetchWindowPage })
+    const daysAgo = (n: number): string => new Date(T0.getTime() - n * 24 * 3600_000).toISOString()
     const first = await runBackfillStep(m.kv, d, null, { pages: 3, days: 60 })
-    expect(vi.mocked(fetchWindowPage).mock.calls.map((c) => c[3])).toEqual([0, 100, 200])
+    // 1 つ目の窓は直近 30 日 [T0−30 日, T0)。100 件ずつ読み、3 ページ目が末尾（50 件）なので次の窓へ
+    expect(vi.mocked(fetchWindowPage).mock.calls.map((c) => [c[1], c[2], c[3]])).toEqual([
+      [daysAgo(30), daysAgo(0), 0],
+      [daysAgo(30), daysAgo(0), 100],
+      [daysAgo(30), daysAgo(0), 200],
+    ])
     expect(first.done).toBe(false)
-    expect(first.cursor.offset).toBe(0) // 3 ページ目が末尾（50 件）なので次の窓へ
-    expect(first.cursor.windowEnd).toBe(first.cursor.windowStart < first.cursor.windowEnd ? first.cursor.windowEnd : first.cursor.windowEnd)
+    // 次の窓は、その前の 30 日（下限は 60 日前）。offset は 0 から
+    expect(first.cursor.offset).toBe(0)
+    expect(first.cursor.windowEnd).toBe(daysAgo(30))
+    expect(first.cursor.windowStart).toBe(daysAgo(60))
+    expect(first.cursor.floor).toBe(daysAgo(60))
     const second = await runBackfillStep(m.kv, d, first.cursor, { pages: 3 })
+    expect(vi.mocked(fetchWindowPage).mock.calls.slice(3).map((c) => [c[1], c[2], c[3]])).toEqual([
+      [daysAgo(60), daysAgo(30), 0],
+      [daysAgo(60), daysAgo(30), 100],
+      [daysAgo(60), daysAgo(30), 200],
+    ])
+    // 下限まで読み終えたので、窓は下限で止まる
+    expect(second.cursor.windowEnd).toBe(daysAgo(60))
     expect(second.cursor.stats.calls).toBe(2)
     expect(second.done).toBe(true)
   })

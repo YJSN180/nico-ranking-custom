@@ -1518,3 +1518,58 @@ describe('lqng-poller 判定表の文字列化・パース（CPU 時間）', () 
     expect(m.puts).toEqual([LQNG_KV_KEYS.tracking])
   })
 })
+
+describe('lqng-poller 刈り込みの境界', () => {
+  const DAY = 24 * 3600_000
+  const ago = (ms: number): string => new Date(T0.getTime() - ms).toISOString()
+  const trackedAuthor = (posts: Array<{ id: string; at: string }>): TrackedAuthor => ({
+    authorId: '1001',
+    firstSeenAt: ago(8 * DAY),
+    lastPostAt: posts[0]?.at ?? ago(8 * DAY),
+    posts: posts.map((p) => ({ ...p, title: 't', tagDetails: [], ownerVisibility: 'visible' })),
+    status: 'existing',
+    // 直近に確かめ済み（この回は存在確認をしない）
+    lastCheckedAt: ago(60_000),
+    followerCount: 100,
+    nickname: 'n',
+    visibility: 'visible',
+    deletedObservedAt: null,
+  })
+
+  it('追跡期間（7 日）ちょうど前の投稿は残し、1 ミリ秒でも古ければ刈り込む', async () => {
+    const tracking: LqngTracking = { ...emptyTracking(ago(15 * 60_000)), lastPollAt: ago(15 * 60_000), authors: { '1001': trackedAuthor([{ id: 'sm801', at: ago(7 * DAY) }, { id: 'sm802', at: ago(7 * DAY + 1) }]) } }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm801'])
+  })
+
+  it('新着の取り込みも同じ境界（ちょうど 7 日前の動画は取り込み、それより古ければ取り込まない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm811', registeredAt: ago(7 * DAY) }), video({ id: 'sm812', registeredAt: ago(7 * DAY + 1) })])) }), 'poll')
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm811'])
+  })
+
+  it('動画の判定は 90 日（解放は 7 日）ちょうどまで残し、1 ミリ秒でも古ければ消す。投稿者 NG は消さない', async () => {
+    const old = ago(200 * DAY) // 追跡期間の外（追跡には戻さない）
+    const videoVerdict = (status: 'ng' | 'released', since: string) => ({ status, reasons: status === 'ng' ? ['D'] : [], authorId: '2001', title: 't', registeredAt: old, since })
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: {
+        version: 1,
+        authors: { '2002': { status: 'ng', reasons: ['B'], since: ago(400 * DAY), evidence: [] } },
+        videos: {
+          sm821: videoVerdict('ng', ago(90 * DAY)),
+          sm822: videoVerdict('ng', ago(90 * DAY + 1)),
+          sm823: videoVerdict('released', ago(7 * DAY)),
+          sm824: videoVerdict('released', ago(7 * DAY + 1)),
+        },
+        updatedAt: old,
+      },
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.videos).sort()).toEqual(['sm821', 'sm823'])
+    expect(Object.keys(verdicts.authors)).toEqual(['2002'])
+  })
+})
