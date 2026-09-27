@@ -461,23 +461,18 @@ export async function importMylistData(
       throw new Error('Database not initialized')
     }
     
-    // 既存データを取得
-    let tx = db.transaction(['mylists', 'mylistVideos'], 'readonly')
-    const existingMylists = await tx.objectStore('mylists').getAll()
-    const existingMylistVideos = await tx.objectStore('mylistVideos').getAll()
-    await tx.done
-    
+    // 既存データの読み取り・（完全上書きなら）全削除・取り込みを 1 つのトランザクションで行う。
+    // 取り込みが途中で失敗・中断しても削除ごと取り消され、既存のマイリストは残る
+    const importTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
+    const existingMylists = await importTx.objectStore('mylists').getAll()
+    const existingMylistVideos = await importTx.objectStore('mylistVideos').getAll()
+
     // 完全上書きモードの場合、全データを削除
     if (conflictResolution === 'complete_overwrite') {
-      const deleteTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
-      await deleteTx.objectStore('mylists').clear()
-      await deleteTx.objectStore('mylistVideos').clear()
-      await deleteTx.done
+      await importTx.objectStore('mylists').clear()
+      await importTx.objectStore('mylistVideos').clear()
     }
-    
-    // インポート用トランザクション開始
-    const importTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
-    
+
     // 既存の名前リストを構築（リネーム検出用）
     const existingNames = existingMylists.map(m => m.name)
     
@@ -612,7 +607,21 @@ export async function importMylistData(
         errors.push(`動画関連データのインポートに失敗: ${error}`)
       }
     }
-    
+
+    // 完全上書きは一部だけ入った状態で既存を消さない。1 件でも書けなければ全体を取り消す
+    if (conflictResolution === 'complete_overwrite' && errors.length > 0) {
+      try {
+        importTx.abort()
+      } catch {
+        // 既に中断されている
+      }
+      await importTx.done.catch(() => undefined)
+      return failedImportResult([
+        ...errors,
+        '完全上書きを中止しました。既存のマイリストは変更していません。'
+      ])
+    }
+
     await importTx.done
     
     const message = conflictResolution === 'complete_overwrite' 
@@ -643,30 +652,37 @@ export async function importMylistData(
       message
     }
   } catch (error) {
-    return {
-      success: false,
-      imported: {
-        mylists: 0,
-        videos: 0
-      },
-      created: {
-        mylists: 0,
-        videos: 0
-      },
-      overwritten: {
-        mylists: 0,
-        videos: 0
-      },
-      skipped: {
-        mylists: 0,
-        videos: 0,
-        reason: []
-      },
-      renamed: {
-        mylists: []
-      },
-      errors: [`インポート処理中にエラーが発生しました: ${error}`]
-    }
+    return failedImportResult([`インポート処理中にエラーが発生しました: ${error}`])
+  }
+}
+
+/**
+ * 何も取り込まなかったときの結果
+ */
+function failedImportResult(errors: string[]): MylistImportResult {
+  return {
+    success: false,
+    imported: {
+      mylists: 0,
+      videos: 0
+    },
+    created: {
+      mylists: 0,
+      videos: 0
+    },
+    overwritten: {
+      mylists: 0,
+      videos: 0
+    },
+    skipped: {
+      mylists: 0,
+      videos: 0,
+      reason: []
+    },
+    renamed: {
+      mylists: []
+    },
+    errors
   }
 }
 
