@@ -76,13 +76,10 @@ export function OptimizedImage({
         style={style}
         loading={loading}
         decoding="async"
-        // LCP改善: 上位表示のサムネイルは優先取得（fetchpriority は
-        // React 18 の型定義に無いため属性として直接設定する）
-        ref={(el) => {
-          if (el) {
-            el.setAttribute('fetchpriority', priority ? 'high' : 'auto')
-          }
-        }}
+        // LCP改善: 先頭のサムネイルは優先取得する。サーバーが返す HTML の時点で付ける
+        // （以前は ref でハイドレーション後に付けており、取得はもう始まっていて効かなかった）。
+        // App Router の React は fetchPriority を fetchpriority 属性として出力し、画像の preload にも使う
+        fetchPriority={priority ? 'high' : undefined}
         className={className}
         onClick={onClick}
         onError={handleError}

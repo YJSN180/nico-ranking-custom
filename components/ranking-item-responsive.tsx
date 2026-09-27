@@ -232,7 +232,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                   aspectRatio: '16 / 9'
                 }}
                 loading={item.rank <= 3 ? undefined : "lazy"}
-                priority={item.rank <= 3}
+                // 高優先（fetchpriority="high"）は先頭の 1 枚（LCP の候補）だけ。上位 3 件は遅延読み込みにしない
+                priority={item.rank === 1}
               />
             </a>
             {/* 再生時間オーバーレイ */}
