@@ -461,7 +461,27 @@ describe('runBackfillStep（漏れの無い判定）', () => {
     expect(r.deltas.authors['7401']?.reasons).toEqual(['D'])
   })
 
-  it('投稿頻度の本数の設定が持ち越しの上限（12 本）より多くても、連投を数え落とさない', async () => {
+  it('持ち越しの記録は本数で捨てない（疎なタグで 1 ページが数日に及び、連投より古い投稿が多くても連投を数え落とさない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const HOUR_MIN = 60
+    // 7601 が最新に 20 分で 3 本（連投）。その 30 時間前から 7 時間おきに 12 本（こちらは連投にならない）。1 ページに全部載る
+    const burstVideos = [1, 10, 20].map((min, i) => video({ id: `sm${76_000 + i}`, authorId: '7601', registeredAt: at(min) }))
+    const older = Array.from({ length: 12 }, (_, i) => video({ id: `sm${76_100 + i}`, authorId: '7601', registeredAt: at(30 * HOUR_MIN + i * 7 * HOUR_MIN) }))
+    const r = await runSteps(m.kv, deps({ fetchWindowPage: pager([...burstVideos, ...older]), fetchUserInfo: goneExceptControl() }), { days: 5 })
+    expect(r.deltas.authors['7601']?.reasons).toEqual(['A_C'])
+  })
+
+  it('補完待ちに写す投稿は、その動画の前後 24 時間のうち近いものから上限まで（多作な投稿者でもカーソルを太らせない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // 7701 が 24 時間に 300 本（すべてロックタグ群の候補）
+    const many = Array.from({ length: 300 }, (_, i) => video({ id: `sm${77_000 + i}`, authorId: '7701', registeredAt: at(i * 4), tags: ['g1', 'g2', 'g3'] }))
+    const r = await runBackfillStep(m.kv, deps({ fetchWindowPage: pager(many), fetchUserInfo: vi.fn(async () => existing(100)), fetchThumbInfo: vi.fn(async (_id: string) => thumbOk(locked('x'))) }), null, { days: 2, pages: 3 })
+    const limit = 2 * Math.max(config.freq!.dayCount, config.freq!.burstCount)
+    expect(r.cursor.pendingThumbs.length).toBeGreaterThan(0)
+    expect(Math.max(...r.cursor.pendingThumbs.map((t) => t.posts.length))).toBeLessThanOrEqual(limit)
+  })
+
+  it('投稿頻度の本数の設定が大きく（24 時間に 20 本）ても、連投を数え落とさない', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, freq: { dayCount: 20, burstCount: 20, burstMinutes: 60 } } })
     const videos = Array.from({ length: 20 }, (_, i) => video({ id: `sm${75_000 + i}`, authorId: '7501', registeredAt: at(1 + i * 2) }))
     const r = await runSteps(m.kv, deps({ fetchWindowPage: pager(videos), fetchUserInfo: goneExceptControl() }), { days: 1 })

@@ -44,8 +44,6 @@ export const BACKFILL_LIMITS = {
   windowDays: 30,
   /** 投稿頻度 C の判定に持ち越す時間幅（判定する動画の前後この時間の投稿を数える） */
   carryHours: 24,
-  /** Snapshot で投稿者ごとに持ち越す投稿の数（投稿頻度の本数の設定がこれより多ければ、そちらに合わせる） */
-  carryPerAuthor: 12,
   /** 補完待ちの目安。Snapshot はこれを超えそうなら次のページを読まずに待つ（候補は捨てない） */
   pendingThumbsMax: 300,
   /** getthumbinfo の一時的な失敗（5xx・通信の失敗）や投稿者の確認の失敗のあとで、判定し直す回数 */
@@ -99,7 +97,10 @@ export interface BackfillPendingThumb {
   authorId: string
   title: string
   registeredAt: string
-  /** 投稿頻度の判定用に、判定した時点の同じ投稿者の投稿（ID と時刻。前後 carryHours を読み終えたもの）を写しておく */
+  /**
+   * 投稿頻度の判定用に、同じ投稿者の前後 carryHours の投稿（ID と時刻）を近い順に上限まで写しておく
+   * （上限は投稿頻度の本数の 2 倍。それを超えるほど多ければ、どこかの 24 時間に本数以上あるので判定は変わらない）
+   */
   posts: LqngPost[]
   /** 取得済みのロック状態付きタグ（投稿者の確認を待って判定し直すとき、取り直さずに使う） */
   tagDetails?: TagDetail[]
@@ -257,8 +258,8 @@ class BackfillSession {
   subrequests = 0
   note: string | undefined
   readonly deltas = emptyDeltas()
-  /** Snapshot で投稿者ごとに持ち越す投稿の数（投稿頻度の本数の設定より少ないと、連投を数え落とす） */
-  private readonly carryPerAuthor: number
+  /** 動画 1 本の判定に使う、同じ投稿者の投稿の上限（投稿頻度の本数の 2 倍。posts の説明を参照） */
+  private readonly postsPerVideo: number
 
   constructor(
     readonly config: LqngConfig,
@@ -267,7 +268,7 @@ class BackfillSession {
     readonly cursor: BackfillCursor,
     readonly nowIso: string
   ) {
-    this.carryPerAuthor = Math.max(BACKFILL_LIMITS.carryPerAuthor, config.freq.dayCount, config.freq.burstCount)
+    this.postsPerVideo = 2 * Math.max(config.freq.dayCount, config.freq.burstCount)
   }
 
   budgetLeft(cost = 1): boolean {
@@ -345,13 +346,25 @@ class BackfillSession {
     if (list.length < BACKFILL_LIMITS.evidencePerAuthor && !list.some((x) => x.videoId === e.videoId)) list.push(e)
   }
 
-  /** 投稿を投稿頻度の記録（持ち越し）に足す（動画 ID で重複を除く） */
+  /**
+   * 投稿を投稿頻度の記録（持ち越し）に足す（動画 ID で重複を除く）。本数では捨てない: 判定を待つ動画が要る投稿を
+   * 先に捨ててしまうため。Snapshot は読んだ位置からの時間で刈り（evaluateReady）、pages は遡る日数で収まる
+   */
   private remember(authorId: string, post: LqngPost): void {
     const list = (this.cursor.carry[authorId] ??= [])
-    if (list.some((p) => p.id === post.id)) return
-    list.push(post)
-    // Snapshot は新しい順に読むので、先に読んだ（新しい）投稿から捨てる。pages はタグ×種別ごとに読み直すので捨てない
-    if (this.cursor.source === 'snapshot' && list.length > this.carryPerAuthor) list.splice(0, list.length - this.carryPerAuthor)
+    if (!list.some((p) => p.id === post.id)) list.push(post)
+  }
+
+  /** 同じ投稿者の、その動画の前後 carryHours の投稿を近い順に postsPerVideo 本まで（判定と補完待ちに使う） */
+  private neighborhood(authorId: string, registeredAt: string): LqngPost[] {
+    const atMs = new Date(registeredAt).getTime()
+    const spanMs = BACKFILL_LIMITS.carryHours * HOUR_MS
+    return (this.cursor.carry[authorId] ?? [])
+      .map((post) => ({ post, distance: Math.abs(new Date(post.at).getTime() - atMs) }))
+      .filter((x) => x.distance <= spanMs)
+      .sort((a, b) => a.distance - b.distance)
+      .slice(0, this.postsPerVideo)
+      .map((x) => x.post)
   }
 
   /**
@@ -409,7 +422,7 @@ class BackfillSession {
   /** 動画 1 本をタグなしで判定し、連投の投稿者を確認待ちに、ロックタグ群の候補を補完待ちに入れる */
   private evaluate(v: BackfillVideo): void {
     if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id] || this.config.allowlist.videoIds.includes(v.id)) return
-    const posts = v.authorId !== null ? [...(this.cursor.carry[v.authorId] ?? [])] : []
+    const posts = v.authorId !== null ? this.neighborhood(v.authorId, v.registeredAt) : []
     const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null }
     const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, posts), this.config)
     const evidence: LqngEvidence = { videoId: v.id, title: v.title, registeredAt: v.registeredAt, rules: evaluation.reasons }
