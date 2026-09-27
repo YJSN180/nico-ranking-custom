@@ -199,11 +199,12 @@ class Session {
   }
 
   /**
-   * 投稿者 NG 済み（許可リストでない）か。NG 済みの投稿者の動画は投稿者 NG で落ちるので、補完（getthumbinfo）の
-   * 予算も動画ごとの判定も使わない（受け箱の合流と同じ扱い）
+   * 投稿者 NG 済み（許可リストでない）のユーザーか。NG 済みの投稿者の動画は投稿者 NG で落ちるので、補完（getthumbinfo）の
+   * 予算も動画ごとの判定も使わない（受け箱の合流と同じ扱い）。チャンネル（channel/chNNN）は対象外: ランキングの項目は
+   * 投稿者 ID を chNNN の形で持ち、投稿者 NG が当たらない場所があるので、動画ごとの判定を続ける
    */
   isAuthorNg(authorId: string | null): boolean {
-    return authorId !== null && Object.hasOwn(this.state.verdicts.authors, authorId) && !this.config.allowlist.authorIds.includes(authorId)
+    return authorId !== null && isUserId(authorId) && Object.hasOwn(this.state.verdicts.authors, authorId) && !this.config.allowlist.authorIds.includes(authorId)
   }
 
   spend(cost = 1): void {

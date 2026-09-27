@@ -1626,6 +1626,19 @@ describe('lqng-poller 投稿者 NG 済みの投稿者の新着', () => {
     expect(fetchUserInfo.mock.calls[0]?.[0]).toBe('4200')
   })
 
+  it('チャンネル（channel/chNNN）の投稿者 NG は、ランキングの投稿者 ID（chNNN）と形が違って当たらないことがあるので、動画ごとの判定と補完を続ける', async () => {
+    const verdicts: LqngVerdicts = { version: 1, authors: { 'channel/ch55': { status: 'ng', reasons: ['B'], since: '2026-01-01T00:00:00.000Z', evidence: [] } }, videos: {}, updatedAt: '2026-01-01T00:00:00.000Z' }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: verdicts })
+    // キーワード入りを 10 分のあいだに 3 本（キーワード ∧ 連投 = HK）
+    const uploads = [0, 5, 10].map((min, i) => video({ id: `so92${i}`, authorId: 'channel/ch55', title: 'ほもと見る何か', registeredAt: at(-1 - min) }))
+    const thumb = vi.fn(async (_id: string) => okThumb())
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: thumb }), 'poll')
+    const saved = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(saved.videos).sort()).toEqual(['so920', 'so921', 'so922'])
+    expect(saved.videos.so920?.reasons).toContain('HK')
+    expect(thumb).toHaveBeenCalledTimes(3)
+  })
+
   it('許可リストの投稿者は判定表に NG が残っていても NG 扱いにしない（補完して判定する）', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['1001'], videoIds: [] } }, [LQNG_KV_KEYS.verdicts]: ngVerdicts() })
     const thumb = vi.fn(async (_id: string) => okThumb())
