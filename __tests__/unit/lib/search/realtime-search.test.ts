@@ -94,11 +94,14 @@ describe('境界の決定（Snapshot の索引の実際の最新時刻に合わ�
     expect(isRealtimeCandidate(base({ contentType: 'short', tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(false)
   })
 
-  it('parseRequestedBoundary は不正・未来・60 日超を捨てる', () => {
+  it('parseRequestedBoundary は不正・未来・3 日より古い値を捨てる', () => {
     expect(parseRequestedBoundary(null, now)).toBeNull()
     expect(parseRequestedBoundary('x', now)).toBeNull()
     expect(parseRequestedBoundary('2026-09-22T12:00:00+09:00', now)).toBeNull()
     expect(parseRequestedBoundary('2026-06-01T00:00:00+09:00', now)).toBeNull()
+    // now は 2026-09-22 06:50 JST。3 日前（09-19 06:50）より古い境界は受け付けない
+    expect(parseRequestedBoundary('2026-09-19T06:49:59+09:00', now)).toBeNull()
+    expect(parseRequestedBoundary('2026-09-19T06:50:00+09:00', now)).toBe('2026-09-19T06:50:00+09:00')
     expect(parseRequestedBoundary('2026-09-21T04:28:31+09:00', now)).toBe('2026-09-21T04:28:31+09:00')
   })
 

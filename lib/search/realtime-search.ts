@@ -72,8 +72,11 @@ export function getRealtimeBoundary(now: Date = new Date()): string {
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
-/** クライアントが持ち回る境界として受け付ける上限（これより古い値は捨てて決め直す） */
-export const REALTIME_BOUNDARY_MAX_AGE_DAYS = 60
+/**
+ * クライアントが持ち回る境界として受け付ける上限（これより古い値は捨てて決め直す）。
+ * 索引は毎朝更新されるので、正しい境界は通常 1 日以内。古い境界で新着区間を広げさせない
+ */
+export const REALTIME_BOUNDARY_MAX_AGE_DAYS = 3
 /** Snapshot に 1 件も無い条件で使う既定の遡り幅 */
 export const REALTIME_BOUNDARY_FALLBACK_HOURS = 48
 
