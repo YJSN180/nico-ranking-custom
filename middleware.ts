@@ -98,8 +98,8 @@ const noStorePaths: string[] = []
   const cfWorkerKey = request.headers.get('X-Worker-Auth')
   const expectedKey = process.env.WORKER_AUTH_KEY
   
-  // Workersからの認証チェック
-  if (cfWorkerKey && expectedKey && cfWorkerKey === expectedKey) {
+  // Workersからの認証チェック（共有キーは定数時間で比べる）
+  if (cfWorkerKey && expectedKey && await timingSafeEqual(cfWorkerKey, expectedKey)) {
     // 管理系パスはWorker認証があってもBasic認証を要求
     if (!isAdminPath) {
       return NextResponse.next()
