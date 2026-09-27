@@ -90,13 +90,20 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description += '最新の人気動画をチェック！'
   }
   
+  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）
+  const ogQuery = new URLSearchParams()
+  if (params.genre) ogQuery.set('genre', genre)
+  if (params.period) ogQuery.set('period', period)
+  if (tag) ogQuery.set('tag', tag)
+  const ogSearch = ogQuery.toString()
+  
   return {
     title,
     description,
     openGraph: {
       title,
       description,
-      url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      url: ogSearch ? `https://nico-rank.com/?${ogSearch}` : 'https://nico-rank.com',
       images: [{
         url: '/og-image.png',
         alt: title,
