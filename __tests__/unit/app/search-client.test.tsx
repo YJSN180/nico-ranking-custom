@@ -433,7 +433,7 @@ describe('SearchClient', () => {
       await waitFor(() => expect(shownIds()).toEqual(['sm1']))
       fireEvent.click(screen.getByRole('button', { name: 'author-ng-sm1' }))
       expect(registeredNames()).not.toContain('1001')
-      expect(toasts).toEqual([{ message: '投稿者名が分からないため、投稿者名では NG にできません。投稿者 ID で NG にしてください。', type: 'error', action: undefined }])
+      expect(toasts).toEqual([{ message: '投稿者名が分からないため、投稿者 ID で NG にしてください。', type: 'error', action: undefined }])
     })
 
     it('名前の分かる行は、これまでどおり投稿者名で登録する', async () => {

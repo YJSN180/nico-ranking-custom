@@ -692,7 +692,7 @@ export function SearchClient() {
       // 名前の分からない行（名前の補完前・補完に失敗した行）の「投稿者名」は ID になっている。
       // 名前として登録しても効かないので登録せず、投稿者 ID で NG にするよう案内する（行の⋮メニューはまだ出す）
       if (type === 'author' && !video.authorName?.trim()) {
-        showToast('投稿者名が分からないため、投稿者名では NG にできません。投稿者 ID で NG にしてください。', 'error')
+        showToast('投稿者名が分からないため、投稿者 ID で NG にしてください。', 'error')
         return
       }
 
