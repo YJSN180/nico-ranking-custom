@@ -1,36 +1,17 @@
 'use client'
 // ブラウザ側 Sentry のエントリ。SDK 本体（gzip 約150KB）は静的 import せず、
 // lib/sentry/client.ts の遅延ローダー経由で window load 後のアイドル時に初期化する。
-// 初期化前に発生した未捕捉エラー / unhandledrejection は小さなバッファに溜め、初期化後に送る。
-import { loadSentryClient } from '@/lib/sentry/client'
+// 初期化までに発生した未捕捉エラー / unhandledrejection は、ここで最初に開始するバッファに溜め、
+// 初期化した時点で送る（captureWebException が先に SDK を読み込んだ場合も同じ）。
+import { isSentryClientLoading, loadSentryClient, startBufferingEarlyErrors } from '@/lib/sentry/client'
 
-const EARLY_ERROR_BUFFER_MAX = 10
-const earlyErrors: unknown[] = []
 let started = false
-
-function bufferEarlyError(error: unknown): void {
-  if (earlyErrors.length >= EARLY_ERROR_BUFFER_MAX) return
-  earlyErrors.push(error)
-}
-
-function onEarlyError(event: ErrorEvent): void {
-  bufferEarlyError(event.error ?? event.message)
-}
-
-function onEarlyRejection(event: PromiseRejectionEvent): void {
-  bufferEarlyError(event.reason)
-}
 
 function startSentry(): void {
   if (started) return
   started = true
-  window.removeEventListener('error', onEarlyError)
-  window.removeEventListener('unhandledrejection', onEarlyRejection)
-  void loadSentryClient().then((Sentry) => {
-    for (const error of earlyErrors.splice(0)) {
-      Sentry.captureException(error instanceof Error ? error : new Error(String(error)))
-    }
-  })
+  // 読み込みに失敗してもバッファは残る。次の captureWebException や遷移の通知で読み直す
+  loadSentryClient().catch(() => {})
 }
 
 function scheduleStart(): void {
@@ -42,8 +23,8 @@ function scheduleStart(): void {
 }
 
 if (typeof window !== 'undefined') {
-  window.addEventListener('error', onEarlyError)
-  window.addEventListener('unhandledrejection', onEarlyRejection)
+  // アプリのコード（ハイドレーション）より前に実行される。ここからバッファを開始する
+  startBufferingEarlyErrors()
   if (document.readyState === 'complete') {
     scheduleStart()
   } else {
@@ -51,8 +32,13 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// Next.js の App Router 遷移フック。SDK 読み込み後に転送する（読み込み前の遷移は捨てる）
+// Next.js の App Router 遷移フック。SDK の読み込みが始まっていれば（アイドル時の開始、または
+// captureWebException が先に読み込んだ場合）読み込み後に転送する。まだ何も読み込んでいない
+// うちの遷移のために SDK を読み込むことはしない（初期表示の帯域を取らない。遷移中のエラーは
+// バッファが拾う）
 export function onRouterTransitionStart(href: string, navigationType: string): void {
-  if (!started) return
-  void loadSentryClient().then((Sentry) => Sentry.captureRouterTransitionStart(href, navigationType))
+  if (!isSentryClientLoading()) return
+  loadSentryClient()
+    .then((Sentry) => Sentry.captureRouterTransitionStart(href, navigationType))
+    .catch(() => {})
 }
