@@ -392,3 +392,35 @@ describe('green logging', () => {
     expect(lines.join('\n')).not.toContain(encodeURIComponent(tag))
   })
 })
+
+describe('green tag autocomplete', () => {
+  const tags = Array.from({ length: 80 }, (_, i) => `syn${String(i).padStart(2, '0')}`)
+  const tagBucket = () => ({
+    get: vi.fn(async (key: string) => {
+      if (key !== 'tag-accumulation.json') return null
+      const body = JSON.stringify({ tags, metadata: { lastUpdated: '2026-01-01T00:00:00.000Z', totalUniqueTags: tags.length } })
+      return { httpMetadata: {}, arrayBuffer: async () => new TextEncoder().encode(body).buffer }
+    }),
+  })
+
+  it.each([
+    ['10', 10, 10],
+    ['-1', 10, 10],
+    ['not-a-number', 10, 10],
+    ['0', 10, 10],
+    ['1000', 50, 50],
+    [null, 10, 10],
+  ])('keeps limit=%s within 1..50', async (limit, expectedCount, expectedMax) => {
+    const query = limit === null ? '' : `&limit=${limit}`
+    const response = await fetchWorker(
+      new Request(`https://nico-rank.com/api/tags/autocomplete?q=syn${query}`),
+      greenEnv({ R2_BUCKET: tagBucket() }),
+      ctx,
+    )
+    const body = (await response.json()) as { suggestions: string[]; metadata: { maxResults: number } }
+
+    expect(response.status).toBe(200)
+    expect(body.suggestions).toHaveLength(expectedCount)
+    expect(body.metadata.maxResults).toBe(expectedMax)
+  })
+})

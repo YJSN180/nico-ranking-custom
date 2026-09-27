@@ -220,6 +220,17 @@ function extractHdThumbnailUrl(html: string): string | null {
   return null
 }
 
+// タグ候補の件数（クライアントは 10 件を指定する）。サイト側 app/api/tags/autocomplete と同じく、
+// 不正な値（数でない・1 未満）は既定の 10、大きすぎる値は 50 に丸める
+const AUTOCOMPLETE_DEFAULT_LIMIT = 10
+const AUTOCOMPLETE_MAX_LIMIT = 50
+
+function parseAutocompleteLimit(value: string | null): number {
+  const limit = Number.parseInt(value ?? '', 10)
+  if (!Number.isFinite(limit) || limit < 1) return AUTOCOMPLETE_DEFAULT_LIMIT
+  return Math.min(limit, AUTOCOMPLETE_MAX_LIMIT)
+}
+
 /**
  * ログ用の R2 キー。console の出力は Sentry のパンくずにも載るため、利用者が入力したタグ名は伏せる
  */
@@ -547,7 +558,7 @@ const handler: ExportedHandler<Env> = {
 
         // プレフィックス検索を実行
         const lowerQuery = query.toLowerCase()
-        const maxResults = parseInt(url.searchParams.get('limit') || '10')
+        const maxResults = parseAutocompleteLimit(url.searchParams.get('limit'))
         const suggestions = (tagData.tags || [])
           .filter((tag: string) => tag.toLowerCase().startsWith(lowerQuery))
           .slice(0, maxResults)
