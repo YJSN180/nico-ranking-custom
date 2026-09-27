@@ -250,6 +250,20 @@ export function captureWorkerException(error, options = {}) {
   })
 }
 
+export function captureWorkerMessage(message, level, options = {}) {
+  Sentry.withScope((scope) => {
+    for (const [key, value] of Object.entries(buildSafeTags(options.tags || {}))) {
+      scope.setTag(key, value)
+    }
+
+    for (const [key, value] of Object.entries(options.contexts || {})) {
+      scope.setContext(key, value)
+    }
+
+    Sentry.captureMessage(message, level)
+  })
+}
+
 export function captureWorkerLog(level, message, options = {}) {
   const capture = Sentry.logger?.[level]
 

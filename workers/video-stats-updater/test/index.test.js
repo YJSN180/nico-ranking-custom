@@ -191,16 +191,47 @@ describe('Video Stats Updater Worker', () => {
       expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
-    function generationFixture() {
-      const manifest = { version: 1, generation: '123-1', counts: { 'all/24h': 2, 'all/hour': 2 },
+    function storeGeneration(generation) {
+      const manifest = { version: 1, generation, counts: { 'all/24h': 2, 'all/hour': 2 },
         collectedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
-      env.R2_BUCKET._storage.set('rankings/current.json', manifest);
-      env.R2_BUCKET._storage.set('rankings/generations/123-1/metadata.json',
+      env.R2_BUCKET._storage.set(`rankings/generations/${generation}/metadata.json`,
         { version: 1, updatedAt: manifest.collectedAt, tagsByGenrePeriod: { 'all/24h': {}, 'all/hour': {} } });
-      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/24h/all.json', mockRankingData);
-      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/hour/all.json', mockRankingDataHour);
+      env.R2_BUCKET._storage.set(`rankings/generations/${generation}/all/24h/all.json`, mockRankingData);
+      env.R2_BUCKET._storage.set(`rankings/generations/${generation}/all/hour/all.json`, mockRankingDataHour);
+      return manifest;
+    }
+
+    function generationFixture() {
+      const manifest = storeGeneration('123-1');
+      env.R2_BUCKET._storage.set('rankings/current.json', manifest);
       setupSnapshotAPIMock({ 'sm1,sm2,sm3': { data: ['sm1', 'sm2', 'sm3'].map(contentId => ({ contentId })) } });
       return manifest;
+    }
+
+    /** Publishes a new generation whenever the Snapshot API is called, like a pipeline run finishing mid-refresh. */
+    function publishDuringSnapshot({ times }) {
+      const snapshot = global.fetch;
+      let next = 124;
+      global.fetch = vi.fn(async (url, init) => {
+        if (String(url).includes('snapshot.search.nicovideo.jp') && times-- > 0) {
+          env.R2_BUCKET._storage.set('rankings/current.json', storeGeneration(`${next++}-1`));
+        }
+        return snapshot(url, init);
+      });
+      return global.fetch;
+    }
+
+    function snapshotCalls(fetchMock) {
+      return fetchMock.mock.calls.filter(([url]) => String(url).includes('snapshot.search.nicovideo.jp')).length;
+    }
+
+    /** Sends Sentry envelopes to the fetch mock and returns every parsed envelope line sent so far. */
+    function captureSentry() {
+      env.SENTRY_WORKER_DSN = 'https://public@example.ingest.us.sentry.io/1';
+      return (fetchMock) => fetchMock.mock.calls
+        .filter(([url]) => String(url).includes('.ingest.us.sentry.io'))
+        .flatMap(([, init]) => (typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body))
+          .split('\n').filter(Boolean).map((line) => JSON.parse(line)));
     }
 
     it('reads only the pinned generation and records its stats source', async () => {
@@ -221,14 +252,45 @@ describe('Video Stats Updater Worker', () => {
       expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
-    it('rejects a generation switch during a stats fetch', async () => {
-      const manifest = generationFixture();
-      const fetchStats = global.fetch;
-      global.fetch = vi.fn(async (...args) => {
-        env.R2_BUCKET._storage.set('rankings/current.json', { ...manifest, generation: '124-1' });
-        return fetchStats(...args);
-      });
-      await expect(runScheduled()).rejects.toThrow('generation changed');
+    it('refreshes again from a generation published during the run', async () => {
+      generationFixture();
+      const fetchMock = publishDuringSnapshot({ times: 1 });
+      await runScheduled();
+      expect(snapshotCalls(fetchMock)).toBe(2);
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/generations/124-1/all/24h/all.json');
+      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
+      const source = JSON.parse(env.R2_BUCKET._storage.get('pipeline/video-stats-source.json'));
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(source.generation).toBe('124-1');
+      expect(source.updatedAt).toBe(stats.metadata.updatedAt);
+    });
+
+    it('skips with a warning, not an error, if the generation changes again', async () => {
+      generationFixture();
+      const sentryItems = captureSentry();
+      const fetchMock = publishDuringSnapshot({ times: 2 });
+      await runScheduled();
+      expect(snapshotCalls(fetchMock)).toBe(2);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(env.R2_BUCKET._storage.has('pipeline/video-stats-source.json')).toBe(false);
+      const items = sentryItems(fetchMock);
+      expect(items.filter((item) => item.level === 'error')).toEqual([]);
+      expect(items.some((item) => item.level === 'warning' && JSON.stringify(item).includes('generation'))).toBe(true);
+      expect(items.filter((item) => item.monitor_slug === 'video-stats-updater').map((item) => item.status))
+        .toEqual(['in_progress', 'ok']);
+    });
+
+    it('answers /trigger with a 500 when the generation keeps changing', async () => {
+      generationFixture();
+      env.WORKER_AUTH_KEY = 'test-only-key';
+      publishDuringSnapshot({ times: 2 });
+      const response = await worker.fetch(
+        new Request('https://stats.example/trigger', { method: 'POST', headers: { Authorization: 'Bearer test-only-key' } }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: expect.stringContaining('generation') });
       expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
