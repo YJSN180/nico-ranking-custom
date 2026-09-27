@@ -6,6 +6,7 @@ import type { GenreItem } from '@/types/genre-order'
 import styles from './genre-order-backup.module.css'
 import { showToast } from '@/lib/toast'
 import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
+import { INVALID_GENRE_ORDER_MESSAGE, isValidGenreOrder } from '@/lib/storage/genre-order-validation'
 
 interface BackupData {
   version: number
@@ -98,10 +99,8 @@ export function GenreOrderBackup() {
         }
 
         // 各アイテムのバリデーション
-        for (const item of genreOrderData) {
-          if (!item.id || typeof item.isVisible !== 'boolean' || typeof item.order !== 'number') {
-            throw new Error('無効なジャンルデータが含まれています')
-          }
+        if (!isValidGenreOrder(genreOrderData)) {
+          throw new Error(INVALID_GENRE_ORDER_MESSAGE)
         }
 
         // 確認ダイアログを表示

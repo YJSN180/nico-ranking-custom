@@ -195,6 +195,22 @@ describe('まとめてインポートの結果表示', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
+  it('形の違うジャンル並び替えで、今の並び順を上書きしない（個別のインポートと同じ検証）', async () => {
+    const savedOrder = JSON.stringify([{ id: 'game', isVisible: true, order: 0 }])
+    localStorage.setItem('nicoRankingGenreOrder', savedOrder)
+
+    await importUnified({
+      version: 1,
+      exportDate: '2026-01-01',
+      appVersion: '1.0.0',
+      data: { genreOrder: [{ id: 'all' }, null] }
+    })
+
+    expect(localStorage.getItem('nicoRankingGenreOrder')).toBe(savedOrder)
+    expect(screen.getByTestId('import-error-message').textContent).toContain('ジャンル並び替え')
+    expect(reload).not.toHaveBeenCalled()
+  })
+
   it('NG リストの取り込みが失敗を返したら、ほかが成功しても一部失敗として知らせる', async () => {
     vi.mocked(importExtendedNGListData).mockReturnValue(failedNGResult(['合成: NG リストを保存できませんでした']))
 

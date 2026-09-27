@@ -28,6 +28,7 @@ import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/
 import styles from './genre-order-backup.module.css'
 import { showToast } from '@/lib/toast'
 import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
+import { INVALID_GENRE_ORDER_MESSAGE, isValidGenreOrder } from '@/lib/storage/genre-order-validation'
 
 // 統合バックアップデータ構造
 interface UnifiedBackupData {
@@ -297,6 +298,10 @@ export function UnifiedBackup() {
       // ジャンル並び替えのインポート
       if (pendingImportData.data.genreOrder) {
         try {
+          // 個別のジャンル並び替えのインポートと同じ検証。形の違うデータで今の並び順を上書きしない
+          if (!isValidGenreOrder(pendingImportData.data.genreOrder)) {
+            throw new Error(INVALID_GENRE_ORDER_MESSAGE)
+          }
           localStorage.setItem('nicoRankingGenreOrder', JSON.stringify(pendingImportData.data.genreOrder))
           results.push(`✅ ジャンル並び替え: ${pendingImportData.data.genreOrder.length}件設定`)
         } catch (error) {
