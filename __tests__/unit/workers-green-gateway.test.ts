@@ -52,6 +52,82 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+const RANKING_KEY = 'rankings/all/24h/all.json'
+const r2InternalError = () => new Error('get: We encountered an internal error. Please try again. (10001)')
+
+function rankingObject() {
+  const body = JSON.stringify({
+    items: [{ id: 'sm1', title: 'Synthetic &amp; title' }],
+    popularTags: [],
+    metadata: { updatedAt: '2026-01-01T00:00:00.000Z' },
+  })
+  return { etag: 'synthetic', httpMetadata: {}, body: new Response(body).body }
+}
+
+/** R2 get that fails `failures` times for `failingKey`, then serves the legacy ranking object. */
+function flakyBucket(failingKey: string, failures: number, error: () => Error = r2InternalError) {
+  let remaining = failures
+  return {
+    get: vi.fn(async (key: string) => {
+      if (key === failingKey && remaining > 0) {
+        remaining--
+        throw error()
+      }
+      return key === RANKING_KEY ? rankingObject() : null
+    }),
+  }
+}
+
+function getCalls(bucket: { get: ReturnType<typeof vi.fn> }, key: string): number {
+  return bucket.get.mock.calls.filter(([requested]) => requested === key).length
+}
+
+describe('green R2 reads', () => {
+  it.each([
+    ['the ranking object', RANKING_KEY],
+    ['the generation pointer', 'rankings/current.json'],
+  ])('retries a transient R2 internal error while reading %s', async (_label, key) => {
+    const bucket = flakyBucket(key, 1)
+
+    const response = await fetchWorker(
+      new Request('https://nico-rank.com/api/ranking?genre=all&period=24h'),
+      greenEnv({ R2_BUCKET: bucket }),
+      ctx,
+    )
+
+    expect(response.status).toBe(200)
+    expect((await response.json()).items[0].title).toBe('Synthetic & title')
+    expect(getCalls(bucket, key)).toBe(2)
+  })
+
+  it('retries a 503 (10043) as well', async () => {
+    const bucket = flakyBucket(RANKING_KEY, 1, () => new Error('get: Service unavailable. (10043)'))
+
+    const response = await fetchWorker(new Request('https://nico-rank.com/api/ranking'), greenEnv({ R2_BUCKET: bucket }), ctx)
+
+    expect(response.status).toBe(200)
+    expect(getCalls(bucket, RANKING_KEY)).toBe(2)
+  })
+
+  it('gives up after two retries', async () => {
+    const bucket = flakyBucket(RANKING_KEY, 5)
+
+    const response = await fetchWorker(new Request('https://nico-rank.com/api/ranking'), greenEnv({ R2_BUCKET: bucket }), ctx)
+
+    expect(response.status).toBe(500)
+    expect(getCalls(bucket, RANKING_KEY)).toBe(3)
+  })
+
+  it('does not retry errors that are not transient', async () => {
+    const bucket = flakyBucket(RANKING_KEY, 5, () => new Error('get: Access denied. (10003)'))
+
+    const response = await fetchWorker(new Request('https://nico-rank.com/api/ranking'), greenEnv({ R2_BUCKET: bucket }), ctx)
+
+    expect(response.status).toBe(500)
+    expect(getCalls(bucket, RANKING_KEY)).toBe(1)
+  })
+})
+
 describe('green upstream proxy', () => {
   it('does not send the worker secret to the upstream deployment', async () => {
     const upstream = stubUpstream(Response.json({ popularTags: [] }))

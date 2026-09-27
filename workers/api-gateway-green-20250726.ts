@@ -34,6 +34,7 @@ import { handleWithCache } from './utils/cache-handler'
 import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
 import { currentGeneration, rankingKey } from './utils/ranking-generation.js'
+import { R2_SERVER_ERROR_CODES, withR2Retry } from './utils/r2-retry.js'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -76,6 +77,18 @@ const securityHeaders = {
 }
 
 // CORSヘッダーは ./utils/cors-config.ts で統一管理
+
+// R2 の一時障害（10001 内部エラー / 10043 一時停止）は、短い間隔で 2 回まで読み直す
+const R2_READ_RETRY = { retryableCodes: R2_SERVER_ERROR_CODES, delaysMs: [50, 150] }
+
+function readR2(bucket: R2Bucket, key: string): Promise<R2ObjectBody | null> {
+  return withR2Retry(() => bucket.get(key), R2_READ_RETRY)
+}
+
+/** currentGeneration に渡す、再試行付きの読み取り口 */
+function retryingR2Reader(bucket: R2Bucket): { get: (key: string) => Promise<R2ObjectBody | null> } {
+  return { get: (key) => readR2(bucket, key) }
+}
 
 /**
  * IP別レート制限チェック（サムネイル取得API用）
@@ -299,8 +312,8 @@ const handler: ExportedHandler<Env> = {
     // /api/metadata パスの処理
     if (url.pathname === '/api/metadata' && env.R2_BUCKET) {
       try {
-        const manifest = await currentGeneration(env.R2_BUCKET)
-        const metadataObject = await env.R2_BUCKET.get(rankingKey(manifest, 'rankings/metadata.json'))
+        const manifest = await currentGeneration(retryingR2Reader(env.R2_BUCKET))
+        const metadataObject = await readR2(env.R2_BUCKET, rankingKey(manifest, 'rankings/metadata.json'))
         if (metadataObject) {
           const { cacheControl } = calculateDynamicTTL()
           const { text: metadataText } = await readR2Json(metadataObject)
@@ -368,7 +381,7 @@ const handler: ExportedHandler<Env> = {
         }
 
         // R2からタグ累積データを取得
-        const tagAccumulationObject = await env.R2_BUCKET.get('tag-accumulation.json')
+        const tagAccumulationObject = await readR2(env.R2_BUCKET, 'tag-accumulation.json')
         
         if (!tagAccumulationObject) {
           // タグ累積データが存在しない場合
@@ -506,14 +519,14 @@ const handler: ExportedHandler<Env> = {
 
         try {
         // R2からデータを取得
-        const manifest = await currentGeneration(env.R2_BUCKET)
+        const manifest = await currentGeneration(retryingR2Reader(env.R2_BUCKET))
         const legacyKey = tag
           ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
           : `rankings/${genre}/${period}/all.json`
         const r2Key = rankingKey(manifest, legacyKey)
         
         console.log(`[Worker v2.0] Fetching from R2: ${r2Key}`)
-        const r2Object = await env.R2_BUCKET.get(r2Key)
+        const r2Object = await readR2(env.R2_BUCKET, r2Key)
         
         if (!r2Object) {
           if (tag) {
@@ -1088,7 +1101,7 @@ const handler: ExportedHandler<Env> = {
       try {
         const r2Key = pathname.startsWith('/') ? `static${pathname}` : `static/${pathname}`
         console.log(`[Static File 20250726] Trying to fetch from R2: ${r2Key}`)
-        const object = await env.R2_BUCKET.get(r2Key)
+        const object = await readR2(env.R2_BUCKET, r2Key)
         
         if (object) {
           const extension = pathname.split('.').pop()?.toLowerCase() || ''
