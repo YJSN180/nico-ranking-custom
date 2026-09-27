@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AuthorVerdict, LqngConfig, LqngRuleId, LqngVerdicts, VideoVerdict } from '@/lib/lqng/types'
+import type { LqngImpact } from '@/lib/lqng/impact'
 import { LQNG_CONTROL_MISSING_WARNING, LQNG_CONTROL_NOT_FOUND_WARNING, LQNG_EVENT_KIND_LABELS, LQNG_HOLD_SIGNAL_LABELS, LQNG_RULE_LABELS } from '@/lib/lqng/labels'
-import { AutoNGSettingsForm } from './AutoNGSettingsForm'
+import { AutoNGSettingsForm, type LqngImpactPreview } from './AutoNGSettingsForm'
 import styles from './auto-ng.module.css'
 
 interface EventItem {
@@ -221,6 +222,22 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
       return body.config
     } finally {
       setSavingConfig(false)
+    }
+  }, [])
+
+  // 下書きを公開中のランキングに当てる（読み取りだけ。保存と同じく許可リストは送らず、サーバーが KV の値を使う）
+  const previewImpact = useCallback(async (next: LqngConfig): Promise<LqngImpactPreview> => {
+    try {
+      const res = await fetch('/api/admin/lqng/impact', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...next, allowlist: undefined }),
+      })
+      if (!res.ok) return { ok: false, status: res.status }
+      return { ok: true, impact: (await res.json()) as LqngImpact }
+    } catch {
+      return { ok: false, status: null }
     }
   }, [])
 
@@ -514,7 +531,7 @@ export function AutoNGPanel({ onCopyToManualNG, manualAuthorIds, canCopyToManual
 
       {overview && tab === 'allowlist' && <AllowlistEditor allowlist={allowlist} busyId={busyId} disabled={!writable || savingConfig} onChange={updateAllowlist} />}
 
-      {overview && tab === 'settings' && <AutoNGSettingsForm config={overview.config} onSave={saveConfig} readOnly={!writable || busyId !== null} />}
+      {overview && tab === 'settings' && <AutoNGSettingsForm config={overview.config} onSave={saveConfig} onPreviewImpact={previewImpact} readOnly={!writable || busyId !== null} />}
     </section>
   )
 }

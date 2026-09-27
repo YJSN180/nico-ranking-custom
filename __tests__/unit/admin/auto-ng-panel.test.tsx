@@ -229,6 +229,82 @@ describe('AutoNGPanel', () => {
     expect(await screen.findByText(/保存しました/)).toBeInTheDocument()
   })
 
+  describe('保存の前の影響確認（今のランキングへの一致）', () => {
+    const impact = {
+      evaluated: 2000,
+      hidden: 48,
+      rules: [
+        { rule: 'B', count: 45, examples: [{ id: 'sm9101', title: 'まんまるの合成タイトル' }, { id: 'sm9102', title: 'ま・ん・ま・る合成' }] },
+        { rule: 'D', count: 3, examples: [{ id: 'sm9201', title: 'ロック群の合成タイトル' }] },
+        { rule: 'HK', count: 0, examples: [] },
+      ],
+    }
+    const withImpact = (impactResponse: () => Response) =>
+      fetchMock.mockImplementation(async (url: string) => {
+        if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
+        if (url === '/api/admin/lqng/impact') return impactResponse()
+        if (url === '/api/admin/lqng/config') return jsonResponse({ success: true, config: { ...overview.config, titleNeedles: ['てすとまん', 'まんまる'], updatedAt: '2026-01-03T00:00:00.000Z' } })
+        return jsonResponse({ error: 'not found' }, 404)
+      })
+    const openSettings = async () => {
+      render(<AutoNGPanel manualAuthorIds={[]} onCopyToManualNG={() => {}} />)
+      await screen.findByText('● 稼働中')
+      fireEvent.click(screen.getByRole('tab', { name: /設定/ }))
+    }
+    const callsTo = (url: string) => fetchMock.mock.calls.filter((c) => c[0] === url)
+
+    it('照合語などランキングに効く項目を変えたら、保存の前に下書きを今のランキングに当てて本数と例を見せる', async () => {
+      withImpact(() => jsonResponse(impact))
+      await openSettings()
+      fireEvent.change(screen.getByLabelText('照合語（B、1 行 1 語）'), { target: { value: 'てすとまん\nまんまる' } })
+      fireEvent.click(screen.getByRole('button', { name: '影響を確かめる' }))
+      await screen.findByText(/2,000 本のうち/)
+      const sent = JSON.parse(String((callsTo('/api/admin/lqng/impact')[0]![1] as RequestInit).body)) as Record<string, unknown>
+      expect(sent).toMatchObject({ titleNeedles: ['てすとまん', 'まんまる'], updatedAt: '2026-01-01T00:00:00.000Z' })
+      expect(sent).not.toHaveProperty('allowlist')
+      expect(screen.getByText(/2,000 本のうち/)).toHaveTextContent('48 本（2.4%）')
+      expect(screen.getByRole('link', { name: 'まんまるの合成タイトル' })).toHaveAttribute('href', 'https://www.nicovideo.jp/watch/sm9101')
+      expect(screen.getByText('ロック群の合成タイトル')).toBeInTheDocument()
+      // まだ保存していない。見たうえで保存する
+      expect(callsTo('/api/admin/lqng/config')).toHaveLength(0)
+      fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+      await waitFor(() => expect(callsTo('/api/admin/lqng/config')).toHaveLength(1))
+      expect(await screen.findByText(/保存しました/)).toBeInTheDocument()
+      expect(screen.queryByText(/2,000 本のうち/)).not.toBeInTheDocument()
+    })
+
+    it('確かめたあとで効く項目を変えたら、結果を消して確かめ直させる', async () => {
+      withImpact(() => jsonResponse(impact))
+      await openSettings()
+      fireEvent.change(screen.getByLabelText('照合語（B、1 行 1 語）'), { target: { value: 'てすとまん\nまんまる' } })
+      fireEvent.click(screen.getByRole('button', { name: '影響を確かめる' }))
+      await screen.findByText(/2,000 本のうち/)
+      fireEvent.change(screen.getByLabelText('照合語（B、1 行 1 語）'), { target: { value: 'てすとまん\nまんまるい' } })
+      expect(screen.queryByText(/2,000 本のうち/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '影響を確かめる' })).toBeEnabled()
+      expect(screen.queryByRole('button', { name: '設定を保存' })).not.toBeInTheDocument()
+    })
+
+    it('今のランキングを読めなければ理由を出し、確かめずに保存することもできる', async () => {
+      withImpact(() => jsonResponse({ error: 'Ranking unavailable' }, 502))
+      await openSettings()
+      fireEvent.change(screen.getByLabelText('照合語（B、1 行 1 語）'), { target: { value: 'てすとまん\nまんまる' } })
+      fireEvent.click(screen.getByRole('button', { name: '影響を確かめる' }))
+      expect(await screen.findByText(/影響を確かめられませんでした/)).toHaveTextContent('502')
+      fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+      await waitFor(() => expect(callsTo('/api/admin/lqng/config')).toHaveLength(1))
+    })
+
+    it('ランキングに効かない項目（保留時間など）だけなら、確かめずにそのまま保存する', async () => {
+      withImpact(() => jsonResponse(impact))
+      await openSettings()
+      fireEvent.change(screen.getByLabelText('保留時間（時間）'), { target: { value: '12' } })
+      fireEvent.click(screen.getByRole('button', { name: '設定を保存' }))
+      await waitFor(() => expect(callsTo('/api/admin/lqng/config')).toHaveLength(1))
+      expect(callsTo('/api/admin/lqng/impact')).toHaveLength(0)
+    })
+  })
+
   it('保存後の「保存しました」は設定の置き換えで消えず、下書きは保存後の値になる', async () => {
     fetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/admin/lqng/overview') return jsonResponse(overview)
