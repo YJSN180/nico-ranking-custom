@@ -612,6 +612,15 @@ describe('SearchClient', () => {
     })
   })
 
+  describe('受け付けられない問い合わせの案内', () => {
+    it('invalid_params（画面とサーバーの版がずれたときなど）なら、再読み込みを案内する', async () => {
+      handlers.search = () => json({ error: 'invalid_params' }, 400)
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('検索できませんでした。ページを再読み込みしてから、もう一度お試しください。'))
+    })
+  })
+
   describe('検索 API の流量制限の案内', () => {
     it('混み合って断られた（rate_limited）なら、少し待つよう案内する', async () => {
       handlers.search = () => json({ error: 'rate_limited' }, 429)

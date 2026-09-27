@@ -352,6 +352,18 @@ describe('検索条件の正規形（S-d）', () => {
     }
   })
 
+  it('語とタグの長さは、これまでどおり UTF-16 の単位で数え（URL が長くなりすぎない）、サロゲートペアは割らない', () => {
+    const emoji = '😀'
+    const q = parseSearchConditions(new URLSearchParams({ q: emoji.repeat(150) })).q
+    expect(q.length).toBeLessThanOrEqual(200)
+    expect(q).toBe(emoji.repeat(100))
+    const odd = parseSearchConditions(new URLSearchParams({ q: `a${emoji.repeat(150)}` })).q
+    expect(odd.length).toBe(199)
+    expect(/[\uD800-\uDBFF]$/.test(odd)).toBe(false)
+    const tag = parseSearchConditions(new URLSearchParams({ tagAnd: emoji.repeat(80) })).tagConditions[0]?.tag ?? ''
+    expect(tag).toBe(emoji.repeat(50))
+  })
+
   it('/api/search の問い合わせは正規形だけを受け付ける（知らないキー・並べ替え・書き換えは拒む）', () => {
     const read = (query: string) => parseSearchApiQuery(new URLSearchParams(query), query)
     expect(read('q=x&sort=-startTime')).not.toBeNull()

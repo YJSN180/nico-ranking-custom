@@ -171,9 +171,14 @@ const MAX_QUERY_LENGTH = 200
 const MAX_TAG_LENGTH = 100
 const DEFAULT_SORT = '-viewCounter'
 
-/** 前後の空白を除き、コードポイント単位で max 文字に切る（サロゲートペアを割らない） */
+/**
+ * 前後の空白を除き、UTF-16 の単位で max 文字までに切る（これまでと同じ数え方で、URL を長くしすぎない）。
+ * 切れ目でサロゲートペアを割ったときは、残った上位サロゲートを落とす（割れた文字は URL で別の文字に化ける）
+ */
 function normalizeText(raw: string, max: number): string {
-  return Array.from(raw.trim()).slice(0, max).join('').trim()
+  let text = raw.trim().slice(0, max)
+  if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1)
+  return text.trim()
 }
 
 function parseTagConditions(params: URLSearchParams): SearchTagCondition[] {

@@ -554,6 +554,8 @@ export function SearchClient() {
             search_timeout: '検索がタイムアウトしました。条件を絞ってお試しください。',
             search_query_error: '検索条件が不正です。条件を見直してください。',
             rate_limited: 'アクセスが集中しています。少し待ってから、もう一度お試しください。',
+            // 画面は正規形だけを送るので、起きるのはサイトの更新をまたいで古い画面のまま検索したときなど
+            invalid_params: '検索できませんでした。ページを再読み込みしてから、もう一度お試しください。',
           }
           setError(messages[body?.error ?? ''] ?? '検索中にエラーが発生しました。')
           setItems(null)
