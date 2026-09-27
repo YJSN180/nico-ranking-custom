@@ -24,6 +24,7 @@ import {
 } from '@/lib/storage/ng-backup-extended'
 import { exportMylistData, importMylistData, detectMylistConflicts } from '@/lib/storage/backup'
 import { CustomRankingManager } from '@/lib/storage/custom-rankings'
+import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/lib/storage/custom-ranking-backup-schema'
 import styles from './genre-order-backup.module.css'
 import { showToast } from '@/lib/toast'
 
@@ -292,34 +293,30 @@ export function UnifiedBackup() {
       // カスタムランキングのインポート
       if (pendingImportData.data.customRankings) {
         try {
+          // 文字列でないタグや未知の演算子・ジャンルは、保存するとそのランキングの表示で落ちるため取り込まない
+          const importable = parseCustomRankingsForImport(pendingImportData.data.customRankings)
+          if (!importable) {
+            throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
+          }
+          
           const dbManager = new DBManager()
           await dbManager.init()
           const rankingManager = new CustomRankingManager(dbManager)
           
           let importedCount = 0
-          for (const ranking of pendingImportData.data.customRankings) {
+          for (const ranking of importable) {
             const existing = customRankings.find(r => r.title === ranking.title)
             if (existing) {
               await rankingManager.updateRanking(existing.id, {
                 title: ranking.title,
                 baseGenre: ranking.baseGenre,
-                conditions: ranking.conditions.map(c => ({
-                  tag: c.tag,
-                  operator: c.operator,
-                  tagType: c.tagType,
-                  orderIndex: c.orderIndex
-                }))
+                conditions: ranking.conditions
               })
             } else {
               await rankingManager.createRanking({
                 title: ranking.title,
                 baseGenre: ranking.baseGenre,
-                conditions: ranking.conditions.map(c => ({
-                  tag: c.tag,
-                  operator: c.operator,
-                  tagType: c.tagType,
-                  orderIndex: c.orderIndex
-                }))
+                conditions: ranking.conditions
               })
             }
             importedCount++
