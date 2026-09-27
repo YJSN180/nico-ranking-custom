@@ -15,6 +15,14 @@ export type { PopularTagsLatest } from './pipeline/popular-tags-latest'
 // 未生成・不正・読取失敗のときは従来経路（ゲートウェイ → スクレイパー）へ落ちる。
 const POPULAR_TAGS_CACHE_TTL_MS = 5 * 60 * 1000
 
+// 小キーの鮮度。updatedAt は公開した世代の収集開始時刻（collectedAt）で、正常でも公開までの時間と
+// 毎時の間隔の分だけ古い。書き手（補助同期）は失敗しても公開を止めないため、取り残された値を
+// 見分ける。Worker の監視が ranking-source-stale とみなす 150 分（workers/utils/ranking-generation.js）
+// より古いものは使わず、ゲートウェイ経路（公開中の世代）で代替する
+const POPULAR_TAGS_LATEST_MAX_AGE_MS = 150 * 60 * 1000
+// 書き手と読み手の時計のずれとして許す未来方向の幅
+const POPULAR_TAGS_LATEST_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+
 let popularTagsLatestCache: { value: PopularTagsLatest | null; fetchedAt: number } | null = null
 
 export function invalidatePopularTagsLatestCache(): void {
@@ -25,6 +33,14 @@ function isPopularTagsLatest(value: unknown): value is PopularTagsLatest {
   if (typeof value !== 'object' || value === null) return false
   const { genres, all } = value as Record<string, unknown>
   return typeof genres === 'object' && genres !== null && typeof all === 'object' && all !== null
+}
+
+function isFreshPopularTagsLatest(latest: PopularTagsLatest, now: number): boolean {
+  const updatedAt: unknown = latest.updatedAt
+  if (typeof updatedAt !== 'string') return false
+  const age = now - Date.parse(updatedAt)
+  // Date.parse が読めないと NaN になり、どちらの比較も偽になる
+  return age <= POPULAR_TAGS_LATEST_MAX_AGE_MS && age >= -POPULAR_TAGS_LATEST_MAX_CLOCK_SKEW_MS
 }
 
 async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
@@ -68,9 +84,9 @@ async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
 
 // ジャンルの人気タグを取得（キャッシュ付き）
 export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
-  // 0. 小キー（1読み・5分メモ）。未生成/不正なら従来経路へフォールバック
+  // 0. 小キー（1読み・5分メモ）。未生成/不正/古いなら従来経路へフォールバック（古いタグは返さない）
   const latest = await getPopularTagsLatest()
-  if (latest) {
+  if (latest && isFreshPopularTagsLatest(latest, Date.now())) {
     const tags = genre === 'all' ? latest.all[period] : latest.genres[genre]?.[period]
     if (Array.isArray(tags) && tags.length > 0) return tags
   }
