@@ -479,11 +479,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
   
-  // オーバーレイクリック時の処理（ドラッグ中は閉じない）
+  // オーバーレイクリック時の処理。× や Esc と同じく、ドラッグ中は閉じず、
+  // 未適用の変更があれば破棄してよいか確かめる（背景に触れただけで編集が消えないように）
   const handleOverlayClick = () => {
-    if (!isDragging) {
-      onClose()
-    }
+    handleClose()
   }
 
   // Escape ハンドラ（early return より上の effect）から最新の handleClose を呼べるようにする
