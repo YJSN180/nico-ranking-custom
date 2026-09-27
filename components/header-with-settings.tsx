@@ -165,7 +165,10 @@ export function HeaderWithSettings() {
           </button>
         </div>
       </header>
-      
+      {/* スキップリンク（app/layout.tsx の「本文へスキップ」）の飛び先。ナビを含むヘッダーの直後＝本文の先頭。
+          各ページの <main id="main-content"> はヘッダーを内側に含むので、そこへ飛んでもナビを飛ばせない */}
+      <div id="content-start" tabIndex={-1} className="skip-link-target" />
+
       {isSettingsOpen && (
         <SettingsModal
           isOpen={isSettingsOpen}

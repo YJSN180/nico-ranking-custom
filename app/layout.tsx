@@ -146,7 +146,8 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <a href="#main-content" className="skip-link">本文へスキップ</a>
+        {/* 飛び先はヘッダー（ナビ）の直後（components/header-with-settings.tsx） */}
+        <a href="#content-start" className="skip-link">本文へスキップ</a>
         <ServiceWorkerManager />
         <ThemeProvider>
           <MylistOperationsProvider>
