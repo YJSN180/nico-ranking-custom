@@ -120,6 +120,11 @@ const nextConfig = {
             key: 'Expect-CT',
             value: 'max-age=86400, enforce'
           },
+          // 本番以外（プレビュー・ローカル）は検索エンジンに載せない。本番は以前 vercel.json で返していた 'all' のまま
+          {
+            key: 'X-Robots-Tag',
+            value: process.env.VERCEL_ENV === 'production' ? 'all' : 'noindex, nofollow'
+          },
         ]
       },
       // Note: API route cache headers - キャッシュはCloudflare Worker側で管理
