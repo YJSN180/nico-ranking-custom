@@ -291,12 +291,18 @@ const SEARCH_CONDITION_KEYS = [
 
 /** URLのクエリパラメータからフォーム状態を復元 */
 function parseFormFromUrl(params: URLSearchParams): { form: FormState; page: number } {
+  // 秒を分に戻す。小数第 2 位までにすると、どの整数秒も分→秒の丸めで同じ秒に戻る（1.5 分 = 90 秒、100 秒 = 1.67 分）
   const secToMin = (v: string | null): string => {
     if (!v) return ''
     const n = Number(v)
-    return Number.isFinite(n) && n >= 0 ? String(Math.round(n / 60)) : ''
+    return Number.isFinite(n) && n >= 0 ? String(Math.round((n / 60) * 100) / 100) : ''
   }
-  const isoToDate = (v: string | null): string => (v ? v.slice(0, 10) : '')
+  // 日付は日本時間の日にする（+09:00 以外の表記の URL でも日がずれないように）
+  const isoToDate = (v: string | null): string => {
+    if (!v) return ''
+    const d = new Date(v)
+    return Number.isFinite(d.getTime()) ? formatDateInput(d) : ''
+  }
   const genres = params.getAll('genre').filter((g) => (SEARCH_GENRES as readonly string[]).includes(g))
   const sort = params.get('sort') ?? '-viewCounter'
 
@@ -356,6 +362,7 @@ export function SearchClient() {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const resultsRef = useRef<HTMLDivElement | null>(null)
+  const detailsRef = useRef<HTMLDetailsElement | null>(null)
   const hasSearchedRef = useRef(false)
   /** runSearch が書き換えたが、まだ searchParams に届いていない URL クエリ（古い順）。届いたら読み捨てる */
   const pendingUrlWritesRef = useRef<string[]>([])
@@ -609,6 +616,15 @@ export function SearchClient() {
     [form, runSearch]
   )
 
+  // 詳細条件を閉じたままだと、ブラウザは不正な値の欄を見せられず、送信が無反応になる。
+  // 送信を止めた欄が詳細条件の中にあれば、開いてブラウザがその欄と理由を示せるようにする
+  const handleInvalid = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    const details = detailsRef.current
+    if (!details || details.open || !(event.target instanceof Node) || !details.contains(event.target)) return
+    details.open = true
+    setDetailsOpen(true)
+  }, [])
+
   // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す。
   // 送るのは実行済みの条件（lastForm）。入力欄で編集中の、まだ送信していない条件は使わない
   const handlePageChangeTop = useCallback(
@@ -760,7 +776,7 @@ export function SearchClient() {
     <div className="search-page">
       <h1 className="search-page__title">動画検索</h1>
 
-      <form className="search-form" onSubmit={handleSubmit}>
+      <form className="search-form" onSubmit={handleSubmit} onInvalidCapture={handleInvalid}>
         <div className="search-form__row">
           <input
             type="search"
@@ -873,6 +889,7 @@ export function SearchClient() {
         )}
 
         <details
+          ref={detailsRef}
           className="search-form__details"
           open={detailsOpen}
           onToggle={(e) => {
@@ -958,6 +975,7 @@ export function SearchClient() {
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   className="search-form__number"
                   value={form.durationMin}
                   onChange={(e) => updateField('durationMin', e.target.value)}
@@ -968,6 +986,7 @@ export function SearchClient() {
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   className="search-form__number"
                   value={form.durationMax}
                   onChange={(e) => updateField('durationMax', e.target.value)}

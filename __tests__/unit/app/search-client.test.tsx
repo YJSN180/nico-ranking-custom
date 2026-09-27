@@ -321,6 +321,40 @@ describe('SearchClient', () => {
     })
   })
 
+  describe('詳細条件の数値欄', () => {
+    const details = (): HTMLDetailsElement => document.querySelector('details.search-form__details') as HTMLDetailsElement
+
+    it('閉じた詳細条件の中に不正な値があれば、詳細条件を開いてその欄を見せる（無反応にしない）', async () => {
+      render(<SearchClient />)
+      expect(details().open).toBe(false)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.change(screen.getByLabelText('再生数の下限'), { target: { value: '-5' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(details().open).toBe(true))
+      expect(searchRequests()).toHaveLength(0)
+    })
+
+    it('再生時間は小数の分も入れられ、秒にして検索し、条件の表示も小数のまま', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.change(screen.getByLabelText('再生時間の下限（分）'), { target: { value: '1.5' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(searchRequests()[0]?.searchParams.get('durationMin')).toBe('90')
+      expect(screen.getByText('再生時間: 1.5分〜')).toBeInTheDocument()
+    })
+
+    it('URL の秒は、小数の分に戻して入力欄に入れる', async () => {
+      nav.setQuery('q=x&durationMin=100&durationMax=90')
+      render(<SearchClient />)
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(screen.getByLabelText('再生時間の下限（分）')).toHaveValue(1.67)
+      expect(screen.getByLabelText('再生時間の上限（分）')).toHaveValue(1.5)
+      // 1.67 分は 100 秒に戻る（丸めで条件が変わらない）
+      expect(searchRequests()[0]?.searchParams.get('durationMin')).toBe('100')
+    })
+  })
+
   describe('検索 API のエラーの案内', () => {
     it('条件が不正（search_query_error）なら、条件を見直す案内を出す', async () => {
       handlers.search = () => json({ error: 'search_query_error', detail: 'synthetic parse error' }, 400)
