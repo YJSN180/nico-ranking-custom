@@ -313,6 +313,8 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
                           }
                         }}
                         className={`${styles.themeButton} ${preferences.theme === 'light' ? styles.active : ''}`}
+                        aria-label="ライトモード"
+                        aria-pressed={preferences.theme === 'light'}
                       >
                         ☀️
                       </button>
@@ -324,6 +326,8 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
                           }
                         }}
                         className={`${styles.themeButton} ${preferences.theme === 'dark' ? styles.active : ''}`}
+                        aria-label="ダークモード"
+                        aria-pressed={preferences.theme === 'dark'}
                       >
                         🌙
                       </button>
@@ -335,6 +339,8 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
                           }
                         }}
                         className={`${styles.themeButton} ${preferences.theme === 'darkblue' ? styles.active : ''}`}
+                        aria-label="ダークブルー"
+                        aria-pressed={preferences.theme === 'darkblue'}
                       >
                         🌌
                       </button>
