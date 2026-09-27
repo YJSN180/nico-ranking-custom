@@ -1168,11 +1168,10 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
-  
-  if (env.WORKER_AUTH_KEY) {
-    headers.set('X-Worker-Auth', env.WORKER_AUTH_KEY)
-  }
-  
+  // Worker の秘密は上流へ渡さない。現行の middleware は /api/* でこの値を使わず、
+  // 2026-01 より前のビルドでは /api/admin/* の Basic 認証を飛ばす鍵として働いてしまう
+  headers.delete('X-Worker-Auth')
+
   const proxyRequest = new Request(proxyUrl.toString(), {
     method: request.method,
     headers,
