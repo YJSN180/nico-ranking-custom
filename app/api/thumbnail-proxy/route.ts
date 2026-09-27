@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { THUMBNAIL_HOSTS } from '@/lib/thumbnail-hosts'
 
 /**
  * サムネイル画像プロキシAPI
@@ -16,19 +17,10 @@ export async function GET(request: NextRequest) {
       )
     }
     
-    // URLの検証（ニコニコ動画のCDNからのみ許可）
+    // URLの検証（ニコニコ動画のCDNからのみ許可。/api/hd-thumbnail が返す URL と同じ一覧）
     const url = new URL(imageUrl)
-    const allowedHosts = [
-      'nicovideo.cdn.nimg.jp',
-      'img.cdn.nimg.jp',
-      'tn.smilevideo.jp',
-      'tn-skr1.smilevideo.jp',
-      'tn-skr2.smilevideo.jp',
-      'tn-skr3.smilevideo.jp',
-      'tn-skr4.smilevideo.jp'
-    ]
     
-    if (!allowedHosts.includes(url.hostname)) {
+    if (!THUMBNAIL_HOSTS.has(url.hostname)) {
       return NextResponse.json(
         { error: 'Invalid image URL' },
         { status: 400 }
