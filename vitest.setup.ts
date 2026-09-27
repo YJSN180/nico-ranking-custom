@@ -437,31 +437,22 @@ vi.mock('@/components/mylist-modal.module.css', () => ({
 }))
 
 // Global mock for MylistOperations context - CI compatibility
-// Enforced mock to prevent undefined returns in CI environment
+// 呼ぶたびに同じ参照を返す。行ごとの MylistButton は isVideoInAnyMylist を effect の依存に
+// 持つので、新しい関数を返すと描画のたびに effect が再実行されて止まらず、行を長く表示する
+// テストがメモリ不足で落ちる。既定の戻り値は vi.fn の実装として渡し、mockReset /
+// resetAllMocks の後も残るようにする（テストごとの差し替えは mockReturnValue か各ファイルの vi.mock で）
 vi.mock('@/context/mylist-operations-context', () => {
-  const createMockOperations = () => ({
+  const operations = {
     mylists: [],
     isLoading: false,
-    addVideoToMylist: vi.fn().mockResolvedValue(true),
-    removeVideoFromMylist: vi.fn().mockResolvedValue(undefined),
-    isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] }),
+    addVideoToMylist: vi.fn(async () => true),
+    removeVideoFromMylist: vi.fn(async () => undefined),
+    isVideoInAnyMylist: vi.fn(async () => ({ inMylist: false, mylistIds: [] as string[] })),
     createMylist: vi.fn()
-  })
-  
-  const mockUseMylistOperations = vi.fn(() => createMockOperations())
-  
-  // Ensure mock never returns undefined by setting a fallback
-  mockUseMylistOperations.mockImplementation(() => {
-    const ops = createMockOperations()
-    if (!ops) {
-      console.warn('[Test] Mock operations fallback triggered')
-      return createMockOperations()
-    }
-    return ops
-  })
-  
+  }
+
   return {
-    useMylistOperations: mockUseMylistOperations,
+    useMylistOperations: vi.fn(() => operations),
     MylistOperationsProvider: ({ children }: { children: React.ReactNode }) => children
   }
 })
