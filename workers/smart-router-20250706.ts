@@ -89,7 +89,7 @@ async function proxyToVercel(
   replayableBody: ArrayBuffer | null,
 ): Promise<Response> {
   const url = new URL(request.url)
-  const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-2ezx48med-yjsns-projects.vercel.app'
+  const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
   const target = new URL(url.pathname + url.search, targetBase)
 
   // Hostヘッダーはfetchに任せ、オリジナルHost情報だけ伝える
