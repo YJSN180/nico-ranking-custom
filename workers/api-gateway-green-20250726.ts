@@ -221,6 +221,13 @@ function extractHdThumbnailUrl(html: string): string | null {
 }
 
 /**
+ * ログ用の R2 キー。console の出力は Sentry のパンくずにも載るため、利用者が入力したタグ名は伏せる
+ */
+function loggableRankingKey(key: string): string {
+  return key.replace(/\/tags\/[^/]+\.json$/, '/tags/<tag>.json')
+}
+
+/**
  * サイトのサーバーからの要求か（X-Worker-Auth が WORKER_AUTH_KEY と一致するか。比較は一定時間で行う）。
  * Authorization は別オリジンへのリダイレクトで落とされるため、301 を追うサイトの取得でも残る X-Worker-Auth を使う
  */
@@ -614,7 +621,7 @@ const handler: ExportedHandler<Env> = {
         const period = url.searchParams.get('period') || '24h'
         const tag = url.searchParams.get('tag') || ''
 
-        console.log(`[Worker v2.0 + Cache] Request processing - Genre: ${genre}, Period: ${period}, Tag: ${tag}`)
+        console.log(`[Worker v2.0 + Cache] Request processing - Genre: ${genre}, Period: ${period}, hasTag: ${Boolean(tag)}`)
 
         try {
         // R2からデータを取得
@@ -624,13 +631,13 @@ const handler: ExportedHandler<Env> = {
           : `rankings/${genre}/${period}/all.json`
         const r2Key = rankingKey(manifest, legacyKey)
         
-        console.log(`[Worker v2.0] Fetching from R2: ${r2Key}`)
+        console.log(`[Worker v2.0] Fetching from R2: ${loggableRankingKey(r2Key)}`)
         const r2Object = await readR2(env.R2_BUCKET, r2Key)
         
         if (!r2Object) {
           if (tag) {
             // タグ別データが存在しない場合は空の結果を返す
-            console.log(`[Worker v2.0] Tag data not found for ${r2Key}, returning empty result`)
+            console.log(`[Worker v2.0] Tag data not found for ${loggableRankingKey(r2Key)}, returning empty result`)
             const emptyResponse = {
               items: [],
               popularTags: [],
@@ -1289,7 +1296,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     // 30xリダイレクトの処理（無限ループ防止）
     if (response.status === 307 || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 308) {
       const location = response.headers.get('Location')
-      console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location}`)
+      console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location ? sanitizeUrlForSentry(location) : 'none'}`)
       
       if (location) {
         const loc = new URL(location, url)

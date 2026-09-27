@@ -365,3 +365,30 @@ describe('green per-IP limit and the site server', () => {
     expect(response.status).toBe(429)
   })
 })
+
+describe('green logging', () => {
+  it.each([
+    ['a tag without data', null],
+    ['a tag with data', rankingObject],
+  ])('keeps the requested tag out of console output for %s (console lines become Sentry breadcrumbs)', async (_label, object) => {
+    const lines: string[] = []
+    for (const level of ['log', 'warn', 'error'] as const) {
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        lines.push(args.map(String).join(' '))
+      })
+    }
+    const tag = 'synthetic private tag'
+    const bucket = { get: vi.fn(async (key: string) => (key.includes('/tags/') && object ? object() : null)) }
+
+    const response = await fetchWorker(
+      new Request(`https://nico-rank.com/api/ranking?genre=all&period=24h&tag=${encodeURIComponent(tag)}`),
+      greenEnv({ R2_BUCKET: bucket }),
+      ctx,
+    )
+
+    expect(response.status).toBe(200)
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.join('\n')).not.toContain(tag)
+    expect(lines.join('\n')).not.toContain(encodeURIComponent(tag))
+  })
+})
