@@ -373,6 +373,18 @@ export function SearchClient() {
   /** いま表示中（または取得中）の検索の URL クエリ。同じ URL への変化では検索し直さない */
   const currentQueryRef = useRef<string | null>(null)
 
+  // ページを離れたら、検索と補完（投稿者情報・タグ）の問い合わせを止める（補完は検索と同じシグナルで動く）。
+  // 開発時の StrictMode は付け外しを 2 回行うので、覚えている URL も忘れて、付け直しのときに検索し直させる
+  useEffect(
+    () => () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+      currentQueryRef.current = null
+      pendingUrlWritesRef.current = []
+    },
+    []
+  )
+
   // 保存済み検索と詳細条件の開閉状態を復元
   useEffect(() => {
     setSavedSearches(loadSavedSearches())

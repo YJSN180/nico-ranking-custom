@@ -494,6 +494,38 @@ describe('SearchClient', () => {
       expect(searchRequests()[0]?.searchParams.getAll('tagAnd')).toEqual(['t1'])
     })
 
+    it('ページを離れたら、検索の問い合わせを止める', async () => {
+      openGate()
+      nav.setQuery('q=x')
+      const { unmount } = render(<SearchClient />)
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      unmount()
+      expect(searchSignals()[0]?.aborted).toBe(true)
+    })
+
+    it('ページを離れたら、投稿者情報とタグの補完の問い合わせも止める', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm9', authorId: '1002' }], { source: 'merged', realtimeCount: 1 })
+      const pendingSignals: Array<AbortSignal | undefined> = []
+      const enrichmentGate = new Promise<void>(() => undefined)
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), 'http://localhost')
+        requests.push(url)
+        if (url.pathname === '/api/search') return json(handlers.search(url))
+        pendingSignals.push(init?.signal ?? undefined)
+        await Promise.race([enrichmentGate, new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))))])
+        return json({})
+      })
+      try {
+        nav.setQuery('q=x&sort=-startTime')
+        const { unmount } = render(<SearchClient />)
+        await waitFor(() => expect(pendingSignals).toHaveLength(2))
+        unmount()
+        expect(pendingSignals.every((signal) => signal?.aborted === true)).toBe(true)
+      } finally {
+        fetchMock.mockReset()
+        fetchMock.mockImplementation(defaultFetch)
+      }
+    })
   })
 
   describe('検索 API のエラーの案内', () => {
