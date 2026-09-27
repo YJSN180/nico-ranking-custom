@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   AccessLimitedError,
   fetchNewVideosFromNvapi,
+  fetchSweepNewestStartTimeFromSnapshot,
   fetchSweepVideosFromSnapshot,
   fetchThumbInfoFromExt,
   fetchUserInfoFromNvapi,
@@ -131,6 +132,25 @@ describe('fetchSweepVideosFromSnapshot', () => {
     expect(url.searchParams.get('filters[startTime][gte]')).toBe('2026-01-31T00:00:00+09:00')
     expect(url.searchParams.get('filters[startTime][lt]')).toBe('2026-02-01T00:00:00+09:00')
     expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('fetchSweepNewestStartTimeFromSnapshot', () => {
+  it('スイープと同じジャンル条件で、索引の最新の投稿時刻を 1 件だけ取る', async () => {
+    const fetchImpl = vi.fn(async () => response({ meta: { status: 200, totalCount: 5 }, data: [{ startTime: '2026-02-01T04:59:30+09:00' }] }))
+    expect(await fetchSweepNewestStartTimeFromSnapshot('genreX', fetchImpl as unknown as typeof fetch)).toBe('2026-02-01T04:59:30+09:00')
+    const url = new URL((fetchImpl.mock.calls[0] as unknown as [string])[0])
+    expect(url.searchParams.get('q')).toBe('genreX')
+    expect(url.searchParams.get('targets')).toBe('genre')
+    expect(url.searchParams.get('_sort')).toBe('-startTime')
+    expect(url.searchParams.get('_limit')).toBe('1')
+  })
+
+  it('1 件も無ければ null、失敗・形の違う応答は投げる（索引に入ったとみなさない）', async () => {
+    const empty = vi.fn(async () => response({ meta: { status: 200, totalCount: 0 }, data: [] }))
+    expect(await fetchSweepNewestStartTimeFromSnapshot('genreX', empty as unknown as typeof fetch)).toBeNull()
+    await expect(fetchSweepNewestStartTimeFromSnapshot('genreX', vi.fn(async () => response('', 503, true)) as unknown as typeof fetch)).rejects.toThrow('snapshot_http_503')
+    await expect(fetchSweepNewestStartTimeFromSnapshot('genreX', vi.fn(async () => response({ meta: { status: 400 } })) as unknown as typeof fetch)).rejects.toThrow('snapshot_invalid_response')
   })
 })
 

@@ -229,23 +229,29 @@ export async function loadConfig(kv: KvLike): Promise<LqngConfig> {
   return normalizeLqngConfig(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.config), null))
 }
 
-/** 有効フラグだけを読む。無効時に判定表・追跡表など大きいキーを読まずに抜けるための軽量読み */
-export async function loadEnabled(kv: KvLike): Promise<boolean> {
-  return (await loadConfig(kv)).enabled
+/** 追跡表だけを読む（日次スイープが、判定表など大きいキーを読む前に済んだ日を確かめる） */
+export async function loadTracking(kv: KvLike, now: string): Promise<LqngTracking> {
+  return normalizeTracking(parseJson<unknown>(await kv.get(LQNG_KV_KEYS.tracking), null), now)
 }
 
-export async function loadState(kv: KvLike, now: string): Promise<LoadedState> {
+/** 先に読んだ設定・追跡表（渡したキーは読み直さない） */
+export interface PreloadedState {
+  config?: LqngConfig
+  tracking?: LqngTracking
+}
+
+export async function loadState(kv: KvLike, now: string, preloaded: PreloadedState = {}): Promise<LoadedState> {
   const [config, verdicts, tracking, events] = await Promise.all([
-    kv.get(LQNG_KV_KEYS.config),
+    preloaded.config ? null : kv.get(LQNG_KV_KEYS.config),
     kv.get(LQNG_KV_KEYS.verdicts),
-    kv.get(LQNG_KV_KEYS.tracking),
+    preloaded.tracking ? null : kv.get(LQNG_KV_KEYS.tracking),
     kv.get(LQNG_KV_KEYS.events),
   ])
   return {
-    config: normalizeLqngConfig(parseJson<unknown>(config, null)),
+    config: preloaded.config ?? normalizeLqngConfig(parseJson<unknown>(config, null)),
     verdicts: normalizeLqngVerdicts(parseJson<unknown>(verdicts, null)),
     verdictsReadable: isReadableVerdicts(verdicts),
-    tracking: normalizeTracking(parseJson<unknown>(tracking, null), now),
+    tracking: preloaded.tracking ?? normalizeTracking(parseJson<unknown>(tracking, null), now),
     events: normalizeEvents(parseJson<unknown>(events, null)),
   }
 }

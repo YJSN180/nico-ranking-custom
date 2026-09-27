@@ -1,6 +1,6 @@
 // 粗悪コンテンツ自動NG ポーリング Worker（Cloudflare cron）
 // - */15 * * * *  : nvapi 新着の差分取得 → 補完 → 判定 → KV の判定テーブル更新
-// - 10 20 * * *   : 05:10 JST に Snapshot「前日分」のタイトルスイープ
+// - 10 20-23,0-5 * * * : 05:10〜14:10 JST の毎時、Snapshot の索引が前日分を含んでいれば前日分をスイープ
 // 判定ロジックは lib/lqng（Next.js と共用）。設定・許可リストは KV lqng:config（管理画面で編集）。
 import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js'
 import { LQNG_POLL_TAGS_MAX } from '../../../lib/lqng/config'
@@ -27,7 +27,8 @@ interface ExecutionContextLike {
   waitUntil(promise: Promise<unknown>): void
 }
 
-export const SWEEP_CRON = '10 20 * * *'
+/** 日次スイープの cron（wrangler.toml と同じ文字列）。索引の更新が遅れる日に備えて朝から昼まで毎時試す */
+export const SWEEP_CRON = '10 20-23,0-5 * * *'
 
 /** /status?author= が受け付ける投稿者 ID（ユーザーは数字、チャンネルは channel/ch＋数字） */
 const AUTHOR_ID_PATTERN = /^(?:\d{1,12}|channel\/ch\d{1,12})$/

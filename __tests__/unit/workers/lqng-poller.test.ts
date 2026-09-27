@@ -51,6 +51,8 @@ function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
     fetchThumbInfo: vi.fn(async () => okThumb()),
     fetchUserInfo: vi.fn(async () => existing(100)),
     fetchSweepVideos: vi.fn(async () => []),
+    // 既定は索引が実行時刻まで更新済み（前日分を含む）
+    fetchSweepNewestStartTime: vi.fn(async () => now.toISOString()),
     ...over,
   }
 }
@@ -1337,5 +1339,112 @@ describe('lqng-poller 追跡期間より古い動画', () => {
     expect(tracked.status).toBe('deleted')
     expect(tracked.posts.map((p) => p.id)).toEqual(['sm710'])
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})
+
+describe('lqng-poller 日次スイープ（索引の更新と持ち越し）', () => {
+  /** JST の日時 */
+  const jst = (dateTime: string): Date => new Date(`${dateTime}+09:00`)
+  const readTracking = (m: ReturnType<typeof memoryKv>): LqngTracking | null => m.read<LqngTracking>(LQNG_KV_KEYS.tracking)
+  const trackingWith = (lastSweepDate: string | null): LqngTracking => ({ ...emptyTracking('2026-01-20T00:00:00.000Z'), lastSweepDate })
+  /** 指定した日の夜に投稿された、照合語に当たる動画 */
+  const uploadOn = (date: string, n: number): SourceVideo => video({ id: `sm9${n}`, title: 'て/す/と/ま/ん', authorId: String(3100 + n), registeredAt: jst(`${date}T21:00:00`).toISOString() })
+
+  it('索引が前日分を含むまで（最新の投稿が前日の 24 時より前）はスイープせず、完了も記録しない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const sweep = vi.fn(async () => [uploadOn('2026-01-31', 1)])
+    // 05:10 の時点で索引の最新は前日の 04:28（毎朝の更新が遅れている）
+    const r1 = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => '2026-01-31T04:28:00+09:00') }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(r1.skipped).toBe('sweep_index_not_ready')
+    expect(sweep).not.toHaveBeenCalled()
+    expect(m.puts).toEqual([])
+    // 1 時間後の回に索引が更新されていれば、前日分を取り込んで記録する
+    const r2 = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => '2026-02-01T04:59:30+09:00') }, jst('2026-02-01T06:10:00')), 'sweep')
+    expect(r2.skipped).toBeNull()
+    expect(sweep).toHaveBeenCalledWith('genreX', '2026-01-31')
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-31')
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm91?.reasons).toEqual(['B'])
+  })
+
+  it('索引の最新がちょうど翌日 0 時（JST）なら前日分は索引に入っている。1 秒前なら入っていない', async () => {
+    const run = async (newest: string) => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const sweep = vi.fn(async () => [])
+      const r = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => newest) }, jst('2026-02-01T05:10:00')), 'sweep')
+      return { r, sweep }
+    }
+    const exact = await run('2026-02-01T00:00:00+09:00')
+    expect(exact.r.skipped).toBeNull()
+    expect(exact.sweep).toHaveBeenCalledWith('genreX', '2026-01-31')
+    const before = await run('2026-01-31T23:59:59+09:00')
+    expect(before.r.skipped).toBe('sweep_index_not_ready')
+    expect(before.sweep).not.toHaveBeenCalled()
+  })
+
+  it('スイープの対象は JST の前日（UTC 14:59:59 は同じ JST 日、15:00 で日付が変わる）', async () => {
+    const sweptDate = async (now: Date): Promise<string | undefined> => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const sweep = vi.fn(async (_genre: string, _date: string) => [])
+      await runPoll(m.kv, deps({ fetchSweepVideos: sweep }, now), 'sweep')
+      return sweep.mock.calls[0]?.[1]
+    }
+    expect(await sweptDate(new Date('2026-02-01T14:59:59.999Z'))).toBe('2026-01-31')
+    expect(await sweptDate(new Date('2026-02-01T15:00:00.000Z'))).toBe('2026-02-01')
+    // 月・年をまたぐ
+    expect(await sweptDate(jst('2027-01-01T05:10:00'))).toBe('2026-12-31')
+    expect(await sweptDate(jst('2026-03-01T05:10:00'))).toBe('2026-02-28')
+  })
+
+  it('取得に失敗した日は完了にせず、次の回に取り直す（失敗は記録する）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const failing = vi.fn(async (): Promise<SourceVideo[]> => {
+      throw new Error('snapshot_http_503')
+    })
+    const r1 = await runPoll(m.kv, deps({ fetchSweepVideos: failing }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(r1.skipped).toBeNull()
+    expect(r1.note).toContain('sweep_failed')
+    expect(readTracking(m)?.lastSweepDate ?? null).toBeNull()
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note?.includes('sweep_failed'))).toBe(true)
+    const ok = vi.fn(async () => [uploadOn('2026-01-31', 2)])
+    await runPoll(m.kv, deps({ fetchSweepVideos: ok }, jst('2026-02-01T06:10:00')), 'sweep')
+    expect(ok).toHaveBeenCalledWith('genreX', '2026-01-31')
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-31')
+  })
+
+  it('未処理の日を古い順に持ち越して取り、索引に入った日までで止める。遡るのは 3 日までで、それより古い日は諦めて記録する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith('2026-01-25') })
+    const sweep = vi.fn(async (_genre: string, date: string) => [uploadOn(date, Number(date.slice(-2)))])
+    // 索引は 1/29 分まで（最新が 1/30 04:50）
+    await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => '2026-01-30T04:50:00+09:00') }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(sweep.mock.calls.map((c) => c[1])).toEqual(['2026-01-29'])
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-29')
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note === 'sweep_skipped: 2026-01-26..2026-01-28')).toBe(true)
+    // 次の回に索引が追いつけば、残りの日を古い順に取る
+    sweep.mockClear()
+    await runPoll(m.kv, deps({ fetchSweepVideos: sweep }, jst('2026-02-01T06:10:00')), 'sweep')
+    expect(sweep.mock.calls.map((c) => c[1])).toEqual(['2026-01-30', '2026-01-31'])
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-31')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.videos).sort()).toEqual(['sm929', 'sm930', 'sm931'])
+  })
+
+  it('スイープ済みの回は設定と追跡表だけを読んで抜ける（判定表・履歴を読まず、外部にも問い合わせない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith('2026-01-31') })
+    const newest = vi.fn(async () => T0.toISOString())
+    const r = await runPoll(m.kv, deps({ fetchSweepNewestStartTime: newest }, jst('2026-02-01T07:10:00')), 'sweep')
+    expect(r.skipped).toBe('already_swept')
+    expect(newest).not.toHaveBeenCalled()
+    expect(m.ops).toEqual([`get ${LQNG_KV_KEYS.config}`, `get ${LQNG_KV_KEYS.tracking}`])
+  })
+
+  it('索引の更新を確かめられなければスイープせず、監視に出す（書き込みなし）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const reportError = vi.fn()
+    const sweep = vi.fn(async () => [])
+    const r = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, reportError, fetchSweepNewestStartTime: vi.fn(async (): Promise<string | null> => { throw new Error('snapshot_http_500') }) }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(r.skipped).toBe('sweep_index_unavailable')
+    expect(sweep).not.toHaveBeenCalled()
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(m.puts).toEqual([])
   })
 })
