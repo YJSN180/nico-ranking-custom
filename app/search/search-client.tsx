@@ -366,6 +366,7 @@ export function SearchClient() {
   const abortRef = useRef<AbortController | null>(null)
   const resultsRef = useRef<HTMLDivElement | null>(null)
   const detailsRef = useRef<HTMLDetailsElement | null>(null)
+  const submitRef = useRef<HTMLButtonElement | null>(null)
   const hasSearchedRef = useRef(false)
   /** runSearch が書き換えたが、まだ searchParams に届いていない URL クエリ（古い順）。届いたら読み捨てる */
   const pendingUrlWritesRef = useRef<string[]>([])
@@ -532,6 +533,8 @@ export function SearchClient() {
         const res = await fetch(`/api/search?${apiQuery}`, { signal: controller.signal })
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
+          // 新しい検索に置き換えられた（または離れた）後の応答は捨てる
+          if (controller.signal.aborted) return
           const messages: Record<string, string> = {
             search_maintenance: '検索APIがメンテナンス中です。しばらくしてからお試しください。',
             search_timeout: '検索がタイムアウトしました。条件を絞ってお試しください。',
@@ -543,6 +546,7 @@ export function SearchClient() {
           return
         }
         const data = (await res.json()) as SearchApiResponse
+        if (controller.signal.aborted) return
         setItems(data.items)
         setTotalCount(data.totalCount)
         setPage(data.page)
@@ -562,7 +566,8 @@ export function SearchClient() {
         void enrichRealtimeTags(data, controller.signal)
         void enrichOwners(data, controller.signal)
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return
+        // 置き換えられた検索の失敗（中断を含む）で、新しい検索の表示を上書きしない
+        if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) return
         setError('検索中にエラーが発生しました。ネットワークをご確認ください。')
         setItems(null)
       } finally {
@@ -618,6 +623,13 @@ export function SearchClient() {
     },
     [form, runSearch]
   )
+
+  // タグ欄の Enter でも検索する（候補を選ぶ Enter は欄が受け持つ）。日本語の変換を確定する Enter では送らない。
+  // 送信ボタンを押したのと同じ扱いにして、入力の検証も通す
+  const handleTagKeyPress = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return
+    submitRef.current?.click()
+  }, [])
 
   // 詳細条件を閉じたままだと、ブラウザは不正な値の欄を見せられず、送信が無反応になる。
   // 送信を止めた欄が詳細条件の中にあれば、開いてブラウザがその欄と理由を示せるようにする
@@ -795,7 +807,8 @@ export function SearchClient() {
             placeholder={form.targets === 'tag' ? 'タグを入力（完全一致）' : 'キーワードを入力'}
             aria-label="検索キーワード"
           />
-          <button type="submit" className="search-form__submit" disabled={isLoading}>
+          {/* 読み込み中も押せる（条件を直してすぐ検索し直せる。前の検索は止める）。無効にすると入力欄の Enter でも送れない */}
+          <button ref={submitRef} type="submit" className="search-form__submit">
             {isLoading ? '検索中…' : '検索'}
           </button>
         </div>
@@ -1034,6 +1047,7 @@ export function SearchClient() {
                 <TagAutocompleteInput
                   className="search-form__number search-form__tag-input"
                   value={condition.tag}
+                  onKeyPress={handleTagKeyPress}
                   onChange={(value) =>
                     updateField(
                       'tagConditions',

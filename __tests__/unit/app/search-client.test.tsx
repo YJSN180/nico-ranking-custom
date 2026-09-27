@@ -75,8 +75,23 @@ vi.mock('@/components/initial-ranking-skeleton', () => ({ default: () => null })
 vi.mock('@/components/tag-autocomplete-input', async () => {
   const React = await import('react')
   return {
-    TagAutocompleteInput: (props: { value: string; onChange: (value: string) => void; placeholder?: string }) =>
-      React.createElement('input', { value: props.value, placeholder: props.placeholder, onChange: (e: { target: { value: string } }) => props.onChange(e.target.value) }),
+    // 本物と同じく、候補を選んでいない Enter は既定の動作（フォームの送信）を止めて onKeyPress に渡す
+    TagAutocompleteInput: (props: {
+      value: string
+      onChange: (value: string) => void
+      onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+      placeholder?: string
+    }) =>
+      React.createElement('input', {
+        value: props.value,
+        placeholder: props.placeholder,
+        onChange: (e: { target: { value: string } }) => props.onChange(e.target.value),
+        onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          props.onKeyPress?.(e)
+        },
+      }),
   }
 })
 
@@ -112,18 +127,30 @@ function checkCanonical(url: URL): void {
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
-const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
+/** 設定されている間、/api/search の応答をこの Promise が解けるまで返さない（中断されたら AbortError） */
+let searchGate: Promise<void> | null = null
+const waitForGate = (signal?: AbortSignal | null): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (!searchGate) return resolve()
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+    signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+    void searchGate.then(() => resolve())
+  })
+
+const defaultFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost')
   requests.push(url)
   checkCanonical(url)
   if (url.pathname === '/api/search') {
+    await waitForGate(init?.signal)
     const result = handlers.search(url)
     return result instanceof Response ? result : json(result)
   }
   if (url.pathname === '/api/search/owners') return json(handlers.owners(url))
   if (url.pathname === '/api/search/realtime-tags') return json(handlers.tags(url))
   throw new Error(`unexpected fetch: ${url.href}`)
-})
+}
+const fetchMock = vi.fn(defaultFetch)
 
 /** /api/search の応答。page は要求どおりに返す */
 const searchBody = (url: URL, items: Array<Partial<RankingItem> & { id: string }>, extra: Json = {}): Json => ({
@@ -149,6 +176,7 @@ describe('SearchClient', () => {
     localStorage.clear()
     requests.length = 0
     nonCanonical.length = 0
+    searchGate = null
     fetchMock.mockClear()
     nav.router.replace.mockClear()
     nav.setQuery('')
@@ -416,6 +444,56 @@ describe('SearchClient', () => {
       fireEvent.click(screen.getByRole('button', { name: 'author-ng-sm1' }))
       expect(registeredNames()).toContain('user-1001')
     })
+  })
+
+  describe('読み込み中の操作とページを離れたとき', () => {
+    const openGate = (): (() => void) => {
+      let release: () => void = () => undefined
+      searchGate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return () => {
+        searchGate = null
+        release()
+      }
+    }
+    const searchSignals = (): Array<AbortSignal | undefined> =>
+      fetchMock.mock.calls
+        .filter(([input]) => new URL(String(input), 'http://localhost').pathname === '/api/search')
+        .map(([, init]) => init?.signal ?? undefined)
+
+    it('読み込み中でも条件を変えて検索し直せる（前の検索は止める）', async () => {
+      const release = openGate()
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'y' } })
+      const submit = screen.getByRole('button', { name: '検索中…' })
+      expect(submit).toBeEnabled()
+      fireEvent.click(submit)
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      expect(searchRequests()[1]?.searchParams.get('q')).toBe('y')
+      expect(searchSignals()[0]?.aborted).toBe(true)
+      release()
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      expect(nav.getQuery()).toBe('q=y')
+    })
+
+    it('タグ欄で Enter を押すと検索する（日本語の変換を確定する Enter では送らない）', async () => {
+      render(<SearchClient />)
+      fireEvent.click(screen.getByRole('button', { name: '＋ タグ条件を追加' }))
+      const tagInput = screen.getByPlaceholderText('タグ名（入力で候補表示）')
+      fireEvent.change(tagInput, { target: { value: 't1' } })
+      fireEvent.keyDown(tagInput, { key: 'Enter', isComposing: true })
+      fireEvent.keyDown(tagInput, { key: 'Enter', keyCode: 229 })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(searchRequests()).toHaveLength(0)
+      fireEvent.keyDown(tagInput, { key: 'Enter' })
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(searchRequests()[0]?.searchParams.getAll('tagAnd')).toEqual(['t1'])
+    })
+
   })
 
   describe('検索 API のエラーの案内', () => {
