@@ -26,7 +26,7 @@ import { applyExclusionRules } from '@/lib/search/exclusion-rules'
 import { fetchFreshSegment } from '@/lib/search/fresh-segment'
 import { fetchRealtimeWindow, type FreshOutcome, type RealtimeWindow } from '@/lib/search/realtime-window'
 import { applyServerNgContext, loadServerNgContext, type ServerNgContext } from '@/lib/ng-filter-server'
-import { anySignal, withTimeout } from '@/lib/abort-signal'
+import { withTimeout } from '@/lib/abort-signal'
 import { searchRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 import type { RankingItem } from '@/types/ranking'
 
@@ -39,7 +39,10 @@ export const revalidate = 0
 const SEARCH_DEADLINE_MS = 12000
 const FETCH_TIMEOUT_MS = 10000
 const BOUNDARY_TIMEOUT_MS = 3000
-/** リアルタイム区間取得の全体予算。超過時は Snapshot 単独に縮退する（プラットフォーム504より先に必ず効かせる） */
+/**
+ * 新着区間の取得の段ごとの予算（先頭ページと本家ページを待つ段、続きのページを読む段）。nvapi が間に合わなければ
+ * Snapshot 単独に縮退し、本家ページが間に合わなければ nvapi の分で続ける（どちらも全体の期限より先に効かせる）
+ */
 const REALTIME_BUDGET_MS = 4000
 const NVAPI_TIMEOUT_MS = 4000
 /** 管理者 NG・自動 NG の KV 読み取り 1 回のタイムアウト（再試行を含めて全体の期限で打ち切る） */
@@ -175,7 +178,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       to: pageFrom + SEARCH_PAGE_SIZE,
       fresh: freshPromise,
       timeoutMs: NVAPI_TIMEOUT_MS,
-      signal: anySignal([deadline, AbortSignal.timeout(REALTIME_BUDGET_MS)]),
+      budgetMs: REALTIME_BUDGET_MS,
+      signal: deadline,
     }).then(
       (realtimeWindow): { realtimeWindow: RealtimeWindow; error?: undefined } => ({ realtimeWindow }),
       (error: unknown): { realtimeWindow?: undefined; error: string } => ({
@@ -184,7 +188,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ),
     fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, deadline, boundary),
   ])
-  const freshResult = await freshPromise
 
   if (isFailure(snapshotResult)) {
     return NextResponse.json({ error: snapshotResult.error, detail: snapshotResult.detail }, { status: snapshotResult.status })
@@ -224,8 +227,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     snapshotItems = snapshotItems.slice(plan.snapshotOffset - provisional.snapshotOffset)
   }
 
-  // 本家ページが落ちた（全体）か、動画とショートの片方だけ落ちた（一部）ときは、最新の投稿が欠けうることを知らせる
-  const freshError = freshResult.error ?? freshResult.segment?.error
+  // 本家ページが落ちた（全体）・動画とショートの片方だけ落ちた（一部）・間に合わなかったときは、最新の投稿が欠けうることを知らせる
+  const freshError = realtimeWindow.freshError
   const merged = assembleMergedPage(realtimeWindow.items, snapshotItems, plan)
   return await respond(merged, realtimeWindow.total + snapshotResult.totalCount, conditions, ngContext, {
     source: 'merged',

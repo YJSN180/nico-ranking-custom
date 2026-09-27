@@ -4,6 +4,7 @@
 // 範囲を後から当てない検索（期間と再生時間は nvapi で絞れる）は、区間の件数が nvapi の総数から決まるので、
 // 深いページでも先頭のページとそのページが要るページだけを取ればよい（1 回の検索で nvapi へは 3 回まで）。
 import type { RankingItem } from '@/types/ranking'
+import { withTimeout } from '../abort-signal'
 import { mergeFreshIntoRealtime, type FreshSegment } from './fresh-segment'
 import {
   applyRealtimeRangeFilters,
@@ -34,6 +35,8 @@ export interface RealtimeWindow {
   freshAdded: number
   /** 欠けうる範囲（複数あればまとめた範囲）。無ければ undefined */
   gap?: RealtimeGap
+  /** 本家ページ（最新の投稿）が取れなかった・間に合わなかったとき（fresh_timeout）の理由。nvapi の分では続ける */
+  freshError?: string
 }
 
 export interface RealtimeWindowInput {
@@ -46,11 +49,29 @@ export interface RealtimeWindowInput {
   fetchImpl?: typeof fetch
   /** nvapi 1 回のタイムアウト */
   timeoutMs?: number
-  /** 区間全体の期限 */
+  /**
+   * 段ごとの時間予算。1 段目は nvapi の先頭ページと本家ページを待つ段、2 段目は続きのページを読む段。
+   * 本家ページが遅くても、続きのページを読む時間を食わない（深いページだけ索引に落ちるのを防ぐ）
+   */
+  budgetMs?: number
+  /** 呼び出し全体の期限 */
   signal?: AbortSignal
 }
 
 const timeOf = (iso: string): number => new Date(iso).getTime()
+
+/** promise を signal が中断されるまで待つ。間に合わなければ onTimeout を返す（promise は拒否しない前提） */
+function settleWithin<T>(promise: Promise<T>, signal: AbortSignal, onTimeout: T): Promise<T> {
+  if (signal.aborted) return Promise.resolve(onTimeout)
+  return new Promise((resolve) => {
+    const onAbort = (): void => resolve(onTimeout)
+    signal.addEventListener('abort', onAbort, { once: true })
+    void promise.then((value) => {
+      signal.removeEventListener('abort', onAbort)
+      resolve(value)
+    })
+  })
+}
 
 /** 欠けうる範囲をまとめる（最も早い始まりから最も遅い終わりまで）。時刻の読めないものは除く */
 function coverGaps(gaps: RealtimeGap[]): RealtimeGap | undefined {
@@ -69,6 +90,7 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
   const { conditions, boundary, from, to } = input
   const fetchImpl = input.fetchImpl ?? fetch
   const timeoutMs = input.timeoutMs ?? 4000
+  const budgetMs = input.budgetMs ?? 4000
 
   // nvapi の動画検索はショート（ss）を返さない。ショートだけの検索では本家ページだけが新着区間になる
   if (conditions.contentType === 'short') {
@@ -80,10 +102,19 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
     return { total: items.length, items: items.slice(from, to), freshAdded: items.length, ...(gap ? { gap } : {}) }
   }
 
-  const fetchPage = (page: number): Promise<NvapiPage> => fetchNvapiPage(conditions, boundary, page, fetchImpl, timeoutMs, input.signal)
-  const [first, freshOutcome] = await Promise.all([fetchPage(1), input.fresh])
+  const fetchPage = (page: number, phase: AbortSignal): Promise<NvapiPage> =>
+    fetchNvapiPage(conditions, boundary, page, fetchImpl, timeoutMs, phase)
+  // 1 段目: nvapi の先頭ページと本家ページ。本家ページは予算の内だけ待ち、間に合わなければ nvapi の分で続ける
+  const firstPhase = withTimeout(budgetMs, input.signal)
+  const [first, freshOutcome] = await Promise.all([
+    fetchPage(1, firstPhase),
+    settleWithin<FreshOutcome>(input.fresh, firstPhase, { error: 'fresh_timeout' }),
+  ])
   const fresh: FreshSegment = freshOutcome.segment ?? { items: [], truncatedAt: {} }
+  const freshError = freshOutcome.error ?? fresh.error
   const gaps: RealtimeGap[] = []
+  // 2 段目（続きのページ）の予算は、1 段目が終わってから数える
+  const secondPhase = withTimeout(budgetMs, input.signal)
 
   // 長尺の本家ページが境界まで届かず、nvapi の最新がそれより古いときは、そのあいだの投稿が欠けうる（nvapi の索引の遅れ）
   const longFloor = fresh.truncatedAt.long
@@ -102,7 +133,7 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
     const raw = [...first.items]
     let hasNext = first.hasNext && first.items.length > 0
     for (let page = 2; page <= REALTIME_MAX_PAGES && hasNext; page++) {
-      const next = await fetchPage(page)
+      const next = await fetchPage(page, secondPhase)
       raw.push(...next.items)
       hasNext = next.hasNext && next.items.length > 0
     }
@@ -113,11 +144,25 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
     const merged = mergeFreshIntoRealtime(fresh.items, unique)
     const list = applyRealtimeRangeFilters(merged.items, conditions)
     const gap = coverGaps(gaps)
-    return { total: list.length, items: list.slice(from, to), freshAdded: merged.added, ...(gap ? { gap } : {}) }
+    return {
+      total: list.length,
+      items: list.slice(from, to),
+      freshAdded: merged.added,
+      ...(gap ? { gap } : {}),
+      ...(freshError ? { freshError } : {}),
+    }
   }
 
-  // 範囲を後から当てない。頭（nvapi の先頭ページ＋本家ページで足した分）の後は、nvapi の並びがそのまま続く
-  const head = mergeFreshIntoRealtime(fresh.items, first.items)
+  // 範囲を後から当てない。頭（nvapi の先頭ページ＋本家ページで足した分）の後は、nvapi の並びがそのまま続く。
+  // 頭に足すのは、nvapi の先頭ページが受け持つ時刻の範囲（最も古い動画より新しい）にありながら先頭ページに無い動画
+  // （nvapi に未反映の最新）だけ。それより古い本家ページの動画は、nvapi の 2 ページ目以降の位置に出るので足さない
+  // （足すと区間を数え過ぎ、続きのページで同じ動画を読み飛ばして短いページになる）
+  const firstOldest = first.items[first.items.length - 1]?.registeredAt
+  const freshForHead =
+    first.hasNext && firstOldest !== undefined
+      ? fresh.items.filter((it) => it.registeredAt !== undefined && timeOf(it.registeredAt) > timeOf(firstOldest))
+      : fresh.items
+  const head = mergeFreshIntoRealtime(freshForHead, first.items)
   const headIndexed = first.items.length
   const reachable = first.hasNext ? Math.min(Math.max(first.totalCount ?? 0, headIndexed), NVAPI_MAX_ITEMS) : headIndexed
   const total = head.items.length + Math.max(0, reachable - headIndexed)
@@ -135,7 +180,7 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
   const fetched = new Map<number, NvapiPage>([[1, first]])
   await Promise.all(
     Array.from(pages, async (page) => {
-      fetched.set(page, await fetchPage(page))
+      fetched.set(page, await fetchPage(page, secondPhase))
     })
   )
 
@@ -161,5 +206,11 @@ export async function fetchRealtimeWindow(input: RealtimeWindowInput): Promise<R
   }
   const gap = coverGaps(gaps)
   // 期間・再生時間は nvapi が絞っている。本家ページの分は取得時に絞っている。念のため同じ条件を当てる
-  return { total, items: applyRealtimeRangeFilters(items, conditions), freshAdded: head.added, ...(gap ? { gap } : {}) }
+  return {
+    total,
+    items: applyRealtimeRangeFilters(items, conditions),
+    freshAdded: head.added,
+    ...(gap ? { gap } : {}),
+    ...(freshError ? { freshError } : {}),
+  }
 }

@@ -38,6 +38,8 @@ interface FakeVideo {
   nvapi: boolean
   /** 再生時間（秒）。省略時は長尺 300・ショート 30 */
   duration?: number
+  /** 本家の検索ページに出ない（false のとき。本家ページが nvapi の一部しか載せない場合の再現） */
+  onPage?: boolean
 }
 
 const durationOf = (v: FakeVideo): number => v.duration ?? (v.kind === 'short' ? 30 : 300)
@@ -67,6 +69,8 @@ let pageStatus = 200
 let shortsPageStatus = 200
 /** nvapi が総数（totalCount）を返さない */
 let nvapiOmitsTotal = false
+/** 本家ページの応答を遅らせる時間（ミリ秒） */
+let pageDelayMs = 0
 /** Snapshot の境界の問い合わせ（新しい順・1 件）の HTTP ステータス */
 let boundaryStatus = 200
 /** Snapshot のページ取得（境界の問い合わせ以外）の HTTP ステータス。400 は本物と同じ JSON 本文で返す */
@@ -161,7 +165,7 @@ function pageResponse(url: URL): Response {
   const kind: Kind = url.pathname.startsWith('/search_shorts') || url.pathname.startsWith('/tag_shorts') ? 'short' : 'long'
   if (kind === 'short' && shortsPageStatus !== 200) return new Response('', { status: shortsPageStatus })
   const page = Number(url.searchParams.get('page') ?? 1)
-  const list = videos.filter((v) => v.kind === kind).sort(byNewest)
+  const list = videos.filter((v) => v.kind === kind && v.onPage !== false).sort(byNewest)
   const items = list.slice((page - 1) * 32, page * 32).map((v) => ({
     id: v.id,
     title: `title ${v.id}`,
@@ -190,7 +194,19 @@ const fakeFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit
     return snapshotResponse(url)
   }
   if (url.hostname === 'nvapi.nicovideo.jp') return nvapiResponse(url)
-  if (url.hostname === 'www.nicovideo.jp') return pageResponse(url)
+  if (url.hostname === 'www.nicovideo.jp') {
+    // 本家ページの応答を遅らせる（中断されたらそこで失敗する）
+    if (pageDelayMs > 0) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, pageDelayMs)
+        init?.signal?.addEventListener('abort', () => {
+          clearTimeout(timer)
+          reject(init.signal?.reason)
+        }, { once: true })
+      })
+    }
+    return pageResponse(url)
+  }
   throw new Error(`unexpected fetch: ${url.href}`)
 })
 
@@ -227,6 +243,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     seedWorld()
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -356,6 +373,7 @@ describe('/api/search: 受け付けるパラメータ（S-d）', () => {
     seedWorld()
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -397,6 +415,7 @@ describe('/api/search: インスタンスごとの流量制限（S-d）', () => 
     seedWorld()
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -442,6 +461,7 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
     seedWorld()
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -486,6 +506,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
     seedWorld()
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -554,6 +575,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     seedWorld()
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -612,6 +634,7 @@ describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
     videos = videos.filter((v) => v.indexed)
     nvapiStatus = 200
     nvapiOmitsTotal = false
+    pageDelayMs = 0
     pageStatus = 200
     shortsPageStatus = 200
     boundaryStatus = 200
@@ -694,6 +717,35 @@ describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
     expect(ms(body.realtimeGap?.from ?? '')).toBe(at(uploads[150]))
     expect(ms(body.realtimeGap?.to ?? '')).toBe(at(uploads[95]))
     expect(ids(body)).toEqual(uploads.slice(0, 50))
+  })
+
+  it('本家ページが nvapi の一部しか載せず、nvapi の 2 ページ目以降の動画まで並べても、区間を数え過ぎず重複もしない', async () => {
+    const uploads = addLongUploads(400)
+    // 本家ページには 3 本に 1 本しか載らない（本家ページの 96 本は nvapi の 1 ページ目より深くまで届く）
+    videos.forEach((v, i) => {
+      if (v.id.startsWith('sm7') && i % 3 !== 0) v.onPage = false
+    })
+    const bodies = await readPages('q=x&sort=-startTime', 10)
+    expect(bodies[0]?.realtimeCount).toBe(400)
+    expect(bodies.flatMap(ids)).toEqual([...uploads, ...indexedNewestFirst()])
+  })
+
+  it('本家ページが遅く区間の予算を使い切っても、深いページは索引だけに落とさず新着区間を続ける（取れなかったことは知らせる）', async () => {
+    const uploads = addLongUploads(400)
+    // 時間を 1/100 に縮める。本家ページは 1 ページ 21ms（上限 30ms 以内）で、読み足しと合わせて区間の予算 40ms を超える
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal)
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => realTimeout(Math.max(1, Math.round(ms / 100))))
+    pageDelayMs = 21
+    try {
+      const hint = `&rtCount=400&boundary=${encodeURIComponent(BOUNDARY)}`
+      const { status, body } = await search(`q=x&sort=-startTime&page=7${hint}`)
+      expect(status).toBe(200)
+      expect(body.source).toBe('merged')
+      expect(ids(body)).toEqual(uploads.slice(300, 350))
+      expect(body.freshError).toBe('fresh_timeout')
+    } finally {
+      vi.restoreAllMocks()
+    }
   })
 
   it('nvapi が総数を返さないときは区間の長さが分からないので、先頭から 300 件までを読み、その先を realtimeGap で知らせる', async () => {
