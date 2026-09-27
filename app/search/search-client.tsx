@@ -23,6 +23,7 @@ import {
 import {
   SEARCH_CONTENT_TYPE_OPTIONS,
   SEARCH_GENRES,
+  SEARCH_MAX_OFFSET,
   SEARCH_PAGE_SIZE,
   SEARCH_SORT_OPTIONS,
   buildSearchQuery,
@@ -679,7 +680,8 @@ export function SearchClient() {
   }, [items, ngList])
 
   const ngHiddenCount = items && filteredItems ? items.length - filteredItems.length : 0
-  const totalPages = Math.max(1, Math.ceil(Math.min(totalCount, 100000) / SEARCH_PAGE_SIZE))
+  // 件数は「検索結果 N 件」とページ送りの「全 N 件中」で同じ総数を出す。送れるのは索引が返せる深さ（10 万件）まで
+  const totalPages = Math.max(1, Math.ceil(Math.min(totalCount, SEARCH_MAX_OFFSET) / SEARCH_PAGE_SIZE))
 
   // クイックNG追加（client-page と同じセマンティクス: title/author は完全一致）
   const handleQuickNGAdd = useCallback(
@@ -1229,7 +1231,7 @@ export function SearchClient() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={Math.min(totalCount, 100000)}
+            totalItems={totalCount}
             itemsPerPage={SEARCH_PAGE_SIZE}
             onPageChange={handlePageChangeTop}
           />
@@ -1259,7 +1261,7 @@ export function SearchClient() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={Math.min(totalCount, 100000)}
+            totalItems={totalCount}
             itemsPerPage={SEARCH_PAGE_SIZE}
             onPageChange={handlePageChangeBottom}
           />

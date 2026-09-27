@@ -590,6 +590,19 @@ describe('SearchClient', () => {
     })
   })
 
+  describe('件数の表示', () => {
+    it('結果の総数と、ページ送りの「全 N 件中」をそろえる（送れるのは索引の上限の 2000 ページまで）', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { totalCount: 250000 })
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      expect(screen.getByText(/検索結果 250,000 件/)).toBeInTheDocument()
+      expect(screen.getAllByText('1〜50件を表示 (全250000件中)')).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: 'ページ 2000' })).toHaveLength(2)
+      expect(screen.queryByRole('button', { name: 'ページ 5000' })).toBeNull()
+    })
+  })
+
   describe('検索 API のエラーの案内', () => {
     it('条件が不正（search_query_error）なら、条件を見直す案内を出す', async () => {
       handlers.search = () => json({ error: 'search_query_error', detail: 'synthetic parse error' }, 400)
