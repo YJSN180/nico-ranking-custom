@@ -1,7 +1,8 @@
 // ポーリング Worker の状態（KV に保存する追跡情報・イベント）と KV アクセスの薄い層
 // KV の書き込みは内容（updatedAt を除く）が変わったキーだけ。ロックは使わない。
 // 定常の実行で変わるのは追跡表（lastPollAt と直近の実行の要約）だけなので、書き込みは通常 1 回。
-import { LQNG_KV_KEYS, normalizeLqngConfig, normalizeLqngVerdicts } from '../../../lib/lqng/config'
+// 判定表（投稿者 NG は恒久で増え続ける）は 1 回の実行でパース 1 回・文字列化 1 回にする（CPU 時間を抑える）。
+import { isLqngVerdictsShape, LQNG_KV_KEYS, normalizeLqngConfig, normalizeLqngVerdicts } from '../../../lib/lqng/config'
 import type { AuthorStatus, LqngConfig, LqngRuleId, LqngVerdicts, OwnerVisibility } from '../../../lib/lqng/types'
 import type { TagDetail } from '../../../types/ranking'
 
@@ -213,15 +214,10 @@ export interface LoadedState {
   verdicts: LqngVerdicts
   /** false: 判定表のキーはあるが JSON として読めない・形が違う（空として扱ってはいけない） */
   verdictsReadable: boolean
+  /** KV から読んだ判定表の文字列（無ければ null）。保存時に、文字列化し直さずに変わったかを比べる */
+  verdictsRaw: string | null
   tracking: LqngTracking
   events: LqngEvents
-}
-
-/** 判定表の生の値が読めるか（無いのは初回として読める扱い） */
-function isReadableVerdicts(raw: string | null): boolean {
-  if (raw === null) return true
-  const parsed = parseJson<unknown>(raw, undefined)
-  return isRecord(parsed) && isRecord(parsed.authors) && isRecord(parsed.videos)
 }
 
 /** 設定だけを読む（判定表・追跡表など大きいキーを読まずに済ませたいとき用） */
@@ -247,34 +243,55 @@ export async function loadState(kv: KvLike, now: string, preloaded: PreloadedSta
     preloaded.tracking ? null : kv.get(LQNG_KV_KEYS.tracking),
     kv.get(LQNG_KV_KEYS.events),
   ])
+  // 判定表はここで 1 回だけパースする（読めるかの判定にも同じ結果を使う）
+  const verdictsParsed = parseJson<unknown>(verdicts, null)
   return {
     config: preloaded.config ?? normalizeLqngConfig(parseJson<unknown>(config, null)),
-    verdicts: normalizeLqngVerdicts(parseJson<unknown>(verdicts, null)),
-    verdictsReadable: isReadableVerdicts(verdicts),
+    verdicts: normalizeLqngVerdicts(verdictsParsed),
+    verdictsReadable: verdicts === null || isLqngVerdictsShape(verdictsParsed),
+    verdictsRaw: verdicts,
     tracking: preloaded.tracking ?? normalizeTracking(parseJson<unknown>(tracking, null), now),
     events: normalizeEvents(parseJson<unknown>(events, null)),
   }
 }
 
-/** updatedAt を除いた内容（書き込みの要否の判定に使う） */
-function contentOf(value: { updatedAt: string }): string {
-  return JSON.stringify({ ...value, updatedAt: '' })
+/**
+ * 判定表の JSON のうち updatedAt より前の部分。JSON.stringify(verdicts) の先頭と同じ文字列で、保存時はこれに
+ * updatedAt を足して書く（比較に使った文字列を書き込みにも使い、判定表の文字列化を 1 回にする）
+ */
+export function verdictsHead(verdicts: Pick<LqngVerdicts, 'authors' | 'videos'>): string {
+  return `{"version":1,"authors":${JSON.stringify(verdicts.authors)},"videos":${JSON.stringify(verdicts.videos)}`
 }
 
-/** 読み込み直後の内容。保存時にこれと比べて、変わったキーだけを書く */
+const verdictsTail = (updatedAt: string): string => `,"updatedAt":${JSON.stringify(updatedAt)}}`
+
+/**
+ * KV から読んだ判定表の文字列の、verdictsHead にあたる部分。この Worker が書いた形（キーが version・authors・
+ * videos・updatedAt の順）でなければ null を返し、内容が同じでも次の保存で書き直す。キーが無ければ空の判定表
+ */
+function headOfStoredVerdicts(raw: string | null, updatedAt: string): string | null {
+  if (raw === null) return verdictsHead({ authors: {}, videos: {} })
+  const tail = verdictsTail(updatedAt)
+  return raw.startsWith('{"version":1,"authors":') && raw.endsWith(tail) ? raw.slice(0, raw.length - tail.length) : null
+}
+
+/** 読み込み直後の状態。保存時にこれと比べて、変わったキーだけを書く */
 export interface StateBaseline {
-  verdicts: string
-  tracking: string
-  events: string
+  /** 読み込んだ判定表の verdictsHead にあたる部分（書き直しが要る形なら null） */
+  verdictsHead: string | null
+  /** 読み込み時の履歴の先頭と件数（履歴は pushEvent で先頭に積むだけなので、先頭が替われば変わった） */
+  eventsTop: LqngEvent | null
+  eventsLength: number
   /** 読み込み時の投稿者 NG の数（書き込みで減らさない） */
   authorCount: number
 }
 
-export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'tracking' | 'events'>): StateBaseline {
+/** verdictsRaw を省いたとき（テストなど）は、読み込んだ判定表を文字列化して比べる */
+export function captureBaseline(state: Pick<LoadedState, 'verdicts' | 'events'> & { verdictsRaw?: string | null }): StateBaseline {
   return {
-    verdicts: contentOf(state.verdicts),
-    tracking: contentOf(state.tracking),
-    events: JSON.stringify(state.events.items),
+    verdictsHead: state.verdictsRaw === undefined ? verdictsHead(state.verdicts) : headOfStoredVerdicts(state.verdictsRaw, state.verdicts.updatedAt),
+    eventsTop: state.events.items[0] ?? null,
+    eventsLength: state.events.items.length,
     authorCount: Object.keys(state.verdicts.authors).length,
   }
 }
@@ -289,7 +306,8 @@ export function verdictsWriteProblem(baseline: StateBaseline, verdicts: LqngVerd
 }
 
 /**
- * 内容（updatedAt を除く）が変わったキーだけを書き、updatedAt もそのときだけ進める。
+ * 内容（updatedAt を除く）が変わったキーだけを書き、updatedAt もそのときだけ進める。追跡表は直近の実行の要約が
+ * 毎回変わるので毎回書く（比べるための文字列化はしない）。
  * 順番は 判定表 → 履歴 → 受け箱の削除 → 追跡表。追跡表（取り込み済みの動画・最終取得時刻）を
  * 最後にするので、途中で失敗しても次回は同じ新着と受け箱を取り直して冪等に判定し直せる。
  * 直近の実行の要約（書き込み数を含む）は書く前に数えて追跡表に入れ、同じ数を返す。
@@ -301,20 +319,20 @@ export async function saveState(
   run: Omit<LqngRunSummary, 'kvWrites'>,
   inboxKeys: readonly string[] = []
 ): Promise<number> {
-  const verdictsChanged = contentOf(state.verdicts) !== baseline.verdicts
-  const eventsChanged = JSON.stringify(state.events.items) !== baseline.events
+  const head = verdictsHead(state.verdicts)
+  const verdictsChanged = head !== baseline.verdictsHead
+  const eventsChanged = (state.events.items[0] ?? null) !== baseline.eventsTop || state.events.items.length !== baseline.eventsLength
   const summary: LqngRunSummary = { ...run, kvWrites: 0 }
   state.tracking.lastRun = summary
   state.tracking.recentRuns = [{ at: run.at, mode: run.mode, ...(run.note ? { note: run.note } : {}) }, ...state.tracking.recentRuns].slice(0, RECENT_RUNS_MAX)
-  const trackingChanged = contentOf(state.tracking) !== baseline.tracking
-  summary.kvWrites = (verdictsChanged ? 1 : 0) + (eventsChanged ? 1 : 0) + inboxKeys.length + (trackingChanged ? 1 : 0)
+  state.tracking.updatedAt = run.at
+  summary.kvWrites = (verdictsChanged ? 1 : 0) + (eventsChanged ? 1 : 0) + inboxKeys.length + 1
   if (verdictsChanged) state.verdicts.updatedAt = run.at
-  if (trackingChanged) state.tracking.updatedAt = run.at
   if (eventsChanged) state.events.lastRun = summary
-  if (verdictsChanged) await kv.put(LQNG_KV_KEYS.verdicts, JSON.stringify(state.verdicts))
+  if (verdictsChanged) await kv.put(LQNG_KV_KEYS.verdicts, head + verdictsTail(run.at))
   if (eventsChanged) await kv.put(LQNG_KV_KEYS.events, JSON.stringify(state.events))
   for (const key of inboxKeys) await kv.delete(key)
-  if (trackingChanged) await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
+  await kv.put(LQNG_KV_KEYS.tracking, JSON.stringify(state.tracking))
   return summary.kvWrites
 }
 

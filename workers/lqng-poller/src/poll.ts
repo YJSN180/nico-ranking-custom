@@ -68,7 +68,7 @@ export const LIMITS = {
   pendingMaxTransient: 8,
   /**
    * 差分取得の重なり。nvapi の検索インデックスには投稿から数十分以上の反映遅れがあり、
-   * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は isKnownVideo で
+   * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は trackedVideoIds で
    * 除外されるので、6 時間まで広げても取得ページ数（最大 3）は変わらない
    */
   sinceOverlapMinutes: 6 * 60,
@@ -203,14 +203,16 @@ class Session {
   }
 
   /**
-   * 追跡している動画か（投稿・補完待ち・投稿者 ID の無い動画）。判定表は見ない: 判定表を書けて追跡表の前で
-   * 落ちた回の動画や、バックフィルで判定だけ入った動画を、新着に出たときに追跡へ戻すため
+   * 追跡している動画の ID（投稿・補完待ち・投稿者 ID の無い動画）。判定表は見ない: 判定表を書けて追跡表の前で
+   * 落ちた回の動画や、バックフィルで判定だけ入った動画を、新着に出たときに追跡へ戻すため。
+   * 取り込みのたびに作り直す（動画ごとに追跡表全体をなめない）
    */
-  isKnownVideo(id: string): boolean {
-    if (this.state.tracking.pending.some((p) => p.id === id)) return true
-    if (this.state.tracking.unattributed.some((u) => u.id === id)) return true
-    for (const author of Object.values(this.state.tracking.authors)) if (author.posts.some((p) => p.id === id)) return true
-    return false
+  trackedVideoIds(): Set<string> {
+    const ids = new Set<string>()
+    for (const author of Object.values(this.state.tracking.authors)) for (const post of author.posts) ids.add(post.id)
+    for (const item of this.state.tracking.pending) ids.add(item.id)
+    for (const item of this.state.tracking.unattributed) ids.add(item.id)
+    return ids
   }
 
   ensureAuthor(authorId: string): TrackedAuthor {
@@ -411,11 +413,13 @@ class Session {
   ingest(videos: SourceVideo[]): void {
     const nowMs = this.now.getTime()
     const trackMs = this.config.trackDays * DAY_MS
+    const known = this.trackedVideoIds()
     for (const v of videos) {
       // 追跡期間より古い動画は取り込まない（取り込んでも次の刈り込みで消え、取り込み直すたびに
       // 古い連投を投稿頻度に数えてしまう）
       if (nowMs - new Date(v.registeredAt).getTime() > trackMs) continue
-      if (this.isKnownVideo(v.id)) continue
+      if (known.has(v.id)) continue
+      known.add(v.id)
       this.newVideos++
       const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility }
       if (v.authorId) {
@@ -702,10 +706,7 @@ class Session {
   restoreUntrackedVerdicts(): void {
     const nowMs = this.now.getTime()
     const trackMs = this.config.trackDays * DAY_MS
-    const tracked = new Set<string>()
-    for (const author of Object.values(this.state.tracking.authors)) for (const post of author.posts) tracked.add(post.id)
-    for (const item of this.state.tracking.pending) tracked.add(item.id)
-    for (const item of this.state.tracking.unattributed) tracked.add(item.id)
+    const tracked = this.trackedVideoIds()
     for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
       if (tracked.has(id) || verdict.status === 'released') continue
       const atMs = new Date(verdict.registeredAt).getTime()

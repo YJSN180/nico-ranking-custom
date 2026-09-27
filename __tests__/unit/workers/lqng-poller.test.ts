@@ -1277,8 +1277,7 @@ describe('lqng-poller 判定表を壊さない', () => {
       videos: {},
       updatedAt: 's',
     })
-    const tracking = emptyTracking(T0.toISOString())
-    const baseline = captureBaseline({ verdicts: verdicts(['1', '2']), tracking, events: emptyEvents() })
+    const baseline = captureBaseline({ verdicts: verdicts(['1', '2']), events: emptyEvents() })
     expect(verdictsWriteProblem(baseline, verdicts(['1']))).toBe('verdicts_shrank: 2>1')
     expect(verdictsWriteProblem(baseline, verdicts(['1', '2']))).toBeNull()
     expect(verdictsWriteProblem(baseline, verdicts(['1', '2', '3']))).toBeNull()
@@ -1446,5 +1445,76 @@ describe('lqng-poller 日次スイープ（索引の更新と持ち越し）', (
     expect(sweep).not.toHaveBeenCalled()
     expect(reportError).toHaveBeenCalledTimes(1)
     expect(m.puts).toEqual([])
+  })
+})
+
+describe('lqng-poller 判定表の文字列化・パース（CPU 時間）', () => {
+  /** 大きい判定表（合成。投稿者 NG 3,000 件で約 0.8MB） */
+  const BIG = 300_000
+  const bigVerdicts = (): LqngVerdicts => {
+    const authors: LqngVerdicts['authors'] = {}
+    for (let i = 0; i < 3000; i++) {
+      authors[String(500_000 + i)] = {
+        status: 'ng',
+        reasons: ['B'],
+        since: '2026-01-01T00:00:00.000Z',
+        evidence: [{ videoId: `sm${800_000 + i}`, title: `合成の長めのタイトル${i}・`.repeat(4), registeredAt: '2026-01-01T00:00:00.000Z', rules: ['B'] }],
+        nickname: null,
+        followerCount: null,
+        visibility: null,
+        deletedObservedAt: null,
+      }
+    }
+    return { version: 1, authors, videos: {}, updatedAt: '2026-01-02T00:00:00.000Z' }
+  }
+  /** runPoll の間だけ、大きい文字列の JSON.parse と、大きい文字列を返す JSON.stringify を数える */
+  const countBigJson = async (run: () => Promise<unknown>): Promise<{ parses: number; stringifies: number }> => {
+    const parse = vi.spyOn(JSON, 'parse')
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      await run()
+      return {
+        parses: parse.mock.calls.filter(([text]) => typeof text === 'string' && text.length > BIG).length,
+        stringifies: stringify.mock.results.filter((r) => r.type === 'return' && typeof r.value === 'string' && r.value.length > BIG).length,
+      }
+    } finally {
+      parse.mockRestore()
+      stringify.mockRestore()
+    }
+  }
+
+  it('定常の回は判定表を 1 回だけパースし、書かないので文字列化も比較の 1 回だけ', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: bigVerdicts() })
+    const raw = m.store.get(LQNG_KV_KEYS.verdicts)
+    expect(raw!.length).toBeGreaterThan(BIG)
+    const counts = await countBigJson(() => runPoll(m.kv, deps(), 'poll'))
+    expect(counts).toEqual({ parses: 1, stringifies: 1 })
+    expect(m.puts).toEqual([LQNG_KV_KEYS.tracking])
+    expect(m.store.get(LQNG_KV_KEYS.verdicts)).toBe(raw)
+  })
+
+  it('判定が変わった回も、判定表のパースと文字列化はそれぞれ 1 回（比較に使った文字列をそのまま書く）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: bigVerdicts() })
+    const counts = await countBigJson(() => runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm990', authorId: '9901', title: 'て/す/と/ま/ん' })])) }), 'poll'))
+    expect(counts).toEqual({ parses: 1, stringifies: 1 })
+    // 書いた判定表は JSON として読め、内容と更新時刻が正しい
+    const saved = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(saved.version).toBe(1)
+    expect(Object.keys(saved.authors)).toHaveLength(3001)
+    expect(saved.authors['9901']?.reasons).toEqual(['B'])
+    expect(saved.videos.sm990?.status).toBe('ng')
+    expect(saved.updatedAt).toBe(T0.toISOString())
+    expect(Object.keys(saved)).toEqual(['version', 'authors', 'videos', 'updatedAt'])
+  })
+
+  it('この Worker が書いた形と違う判定表（キーの並びが違う）は、内容が同じでも 1 回だけ書き直して、その後は書かない', async () => {
+    const { version, authors, videos, updatedAt } = bigVerdicts()
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    m.store.set(LQNG_KV_KEYS.verdicts, JSON.stringify({ updatedAt, version, videos, authors }))
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.puts).toContain(LQNG_KV_KEYS.verdicts)
+    m.reset()
+    await runPoll(m.kv, deps({}, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(m.puts).toEqual([LQNG_KV_KEYS.tracking])
   })
 })
