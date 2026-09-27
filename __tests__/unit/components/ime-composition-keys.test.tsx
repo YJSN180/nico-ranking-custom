@@ -83,6 +83,29 @@ describe('カスタムランキング作成モーダル', () => {
   })
 })
 
+describe('カスタムランキング作成モーダルのタグ候補', () => {
+  it('候補を閉じる Esc ではモーダルを閉じない。候補が無いときの Esc は閉じる', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ suggestions: ['合成タグ候補'] }))))
+    const onClose = vi.fn()
+    render(<CustomRankingModal isOpen={true} onClose={onClose} onSave={vi.fn()} />)
+    fireEvent.click(screen.getByLabelText('ゲーム'))
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '次へ' }))
+    })
+    const input = screen.getByPlaceholderText('タグを入力')
+
+    fireEvent.change(input, { target: { value: '合成' } })
+    await screen.findByText('合成タグ候補', undefined, { timeout: 2000 })
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(screen.queryByText('合成タグ候補')).toBeNull()
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('マイリスト追加モーダルの新規作成', () => {
   it('変換を確定する Enter では、入力途中の名前でマイリストを作らない', async () => {
     const onCreateMylist = vi.fn(async () => undefined)

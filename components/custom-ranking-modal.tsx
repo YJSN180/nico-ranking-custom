@@ -481,7 +481,11 @@ export function CustomRankingModal({
                           handleAddTag()
                         }
                       } else if (e.key === 'Escape') {
-                        // オートコンプリートを閉じる
+                        // オートコンプリートを閉じる。候補が出ているときはモーダルまで閉じない
+                        // （閉じると作成途中の内容が消える）
+                        if (showSuggestions) {
+                          e.stopPropagation()
+                        }
                         setShowSuggestions(false)
                         setSelectedSuggestionIndex(-1)
                       } else if (e.key === 'ArrowDown' && showSuggestions) {
