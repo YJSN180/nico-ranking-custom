@@ -83,6 +83,14 @@ export function shouldSkipInitialFetch(
   )
 }
 
+// リンクのクリックで、このページ自体が移動するか（新しいタブ・ウィンドウに開くときは false）
+function navigatesThisPage(link: HTMLAnchorElement, event: MouseEvent): boolean {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return false
+  }
+  return link.target === '' || link.target === '_self'
+}
+
 // タグ表示トグルボタンは components/tag-toggle-button.tsx に共通化（フェーズ4-2）
 
 // リロード検出用のユーティリティ（コンポーネント外で定義）
@@ -465,7 +473,12 @@ export default function ClientPage({
       // 外部リンク（ニコニコ動画など）の場合に状態を保存
       if (link && link.href && (link.href.includes('nicovideo.jp') || link.href.includes('niconico.jp') || link.href.includes('ch.nicovideo.jp') || link.href.includes('com.nicovideo.jp'))) {
         saveCurrentState()
-        setIsNavigating(true)
+        // 行を無効にする（移動中）のは、このページ自体が移動するときだけ。新しいタブ（target=_blank）や
+        // Cmd / Ctrl / Shift で別のタブ・ウィンドウに開いたときはこのページに残る。裏のタブで開くと
+        // visibilitychange も focus も来ないので、無効のまま戻らず次の動画も開けなくなっていた
+        if (navigatesThisPage(link, e)) {
+          setIsNavigating(true)
+        }
       }
       
       // 内部リンク（メニューページ）の場合も状態を保存
