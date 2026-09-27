@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { filterRankingDataServer } from '@/lib/ng-filter-server'
 import { captureWebException } from '@/lib/sentry/capture'
+import { fetchWithTransientRetry } from '@/lib/fetch-with-transient-retry'
+
+// 上流の取得の期限（一時障害の再試行と本文の読み取りを含む）
+const UPSTREAM_TIMEOUT_MS = 30_000
 
 // フェーズ2.5-1: SSRはランキングの1ページ目のみをHTMLに埋め込むため、
 // クライアントはマウント後にこのルートで残り全件を補完する。
@@ -25,17 +29,17 @@ export async function GET(request: NextRequest) {
   params.forEach((value, key) => upstreamUrl.searchParams.set(key, value))
 
   try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30000)
-    const response = await fetch(upstreamUrl.toString(), {
+    // 期限は本文の読み取りまで掛ける（ヘッダー受信で外すと、本文が止まったときに無期限に待つ）。
+    // R2 の一時障害などの 5xx・通信エラーは 1 回だけ再試行する
+    const response = await fetchWithTransientRetry(upstreamUrl.toString(), {
       // ヘッダーはSSR(page.tsx)のフェッチと同一にする（実績のある組み合わせ）
       headers: {
         Accept: 'application/json',
         'Accept-Encoding': 'gzip, deflate, br'
       },
       cache: 'no-store',
-      signal: controller.signal
-    }).finally(() => clearTimeout(timeoutId))
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)
+    })
 
     if (!response.ok) {
       return NextResponse.json(
