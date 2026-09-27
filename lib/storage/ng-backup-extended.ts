@@ -34,6 +34,7 @@ export type ExtendedNGListBackupData = {
   }
 }
 import { migrateToExtendedNGList, createEmptyTagNGList } from '../ng-list-migration-extended'
+import { hasNGListStructure, sanitizeNGListEntries } from '../ng-list-sanitize'
 
 /**
  * 拡張版の重複検出結果
@@ -275,6 +276,10 @@ export function detectExtendedConflicts(
   existingNGList: ExtendedUserNGList, 
   importingNGList: ExtendedUserNGList
 ): ExtendedConflictDetectionResult {
+  // 取り込むファイルは検証前のことがあるので、比較に使える語だけにそろえる（文字列でない要素で落ちないように）
+  existingNGList = sanitizeNGListEntries(existingNGList)
+  importingNGList = sanitizeNGListEntries(importingNGList)
+
   const conflicts: ExtendedConflictDetectionResult['conflicts'] = {
     videoIds: [],
     videoTitles: {
@@ -484,10 +489,10 @@ export function importExtendedNGListData(
         const parsed = JSON.parse(stored)
         if (parsed.version === 1) {
           // v1からマイグレーション
-          existingNGList = migrateToExtendedNGList(parsed) as ExtendedUserNGList
+          existingNGList = sanitizeNGListEntries(migrateToExtendedNGList(parsed) as ExtendedUserNGList)
           existingNGList.version = 2
         } else {
-          existingNGList = parsed
+          existingNGList = sanitizeNGListEntries(parsed)
         }
       } else {
         // 初期データ
@@ -506,8 +511,14 @@ export function importExtendedNGListData(
       throw new Error('既存のNGリストデータの読み込みに失敗しました')
     }
     
-    // インポートデータもマイグレーション
-    let importingNGList = data.ngList
+    // 形の違うファイルは取り込まない（「上書き」で今のリストを空にしないため）
+    if (!hasNGListStructure(data?.ngList)) {
+      throw new Error('NGリストのバックアップファイルではありません')
+    }
+    
+    // インポートデータもマイグレーション。空文字・空白だけ・文字列でない要素は取り込まない
+    // （空の部分一致はすべての動画に当たり、文字列でないタグは絞り込みで落ちる）
+    let importingNGList = sanitizeNGListEntries(data.ngList)
     if (!importingNGList.tags) {
       importingNGList = migrateToExtendedNGList(importingNGList) as ExtendedUserNGList
     }
