@@ -626,7 +626,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   {tempNGList.videoIds.map((id) => (
                     <div key={id} className={styles.listItem}>
                       <span>{id}</span>
-                      <button onClick={() => removeVideoId(id)}>×</button>
+                      <button onClick={() => removeVideoId(id)} aria-label={`${id} を削除`}>×</button>
                     </div>
                   ))}
                 </div>
@@ -711,13 +711,13 @@ sm11111111`}
                   {tempNGList.videoTitles.exact.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (完全)</span>
-                      <button onClick={() => removeVideoTitle(title, 'exact')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'exact')} aria-label={`${title} (完全) を削除`}>×</button>
                     </div>
                   ))}
                   {tempNGList.videoTitles.partial.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (部分)</span>
-                      <button onClick={() => removeVideoTitle(title, 'partial')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'partial')} aria-label={`${title} (部分) を削除`}>×</button>
                     </div>
                   ))}
                 </div>
@@ -779,7 +779,7 @@ sm11111111`}
                     {tempNGList.authorIds.map((id) => (
                       <div key={id} className={styles.listItem}>
                         <span>ID: {id}</span>
-                        <button onClick={() => removeAuthorId(id)}>×</button>
+                        <button onClick={() => removeAuthorId(id)} aria-label={`ID: ${id} を削除`}>×</button>
                       </div>
                     ))}
                   </div>
@@ -864,13 +864,13 @@ ch2625894`}
                     {tempNGList.authorNames.exact.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (完全)</span>
-                        <button onClick={() => removeAuthorName(name, 'exact')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'exact')} aria-label={`名前: ${name} (完全) を削除`}>×</button>
                       </div>
                     ))}
                     {tempNGList.authorNames.partial.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (部分)</span>
-                        <button onClick={() => removeAuthorName(name, 'partial')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'partial')} aria-label={`名前: ${name} (部分) を削除`}>×</button>
                       </div>
                     ))}
                   </div>
