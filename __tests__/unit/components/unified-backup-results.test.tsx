@@ -2,8 +2,8 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { UnifiedBackup } from '@/components/unified-backup'
-import { importExtendedNGListData, type ExtendedNGListImportResult } from '@/lib/storage/ng-backup-extended'
-import { importMylistData, detectMylistConflicts, type MylistImportResult } from '@/lib/storage/backup'
+import { exportExtendedNGListData, importExtendedNGListData, type ExtendedNGListImportResult } from '@/lib/storage/ng-backup-extended'
+import { exportMylistData, importMylistData, detectMylistConflicts, type MylistImportResult } from '@/lib/storage/backup'
 import { TOAST_EVENT, type ToastPayload } from '@/lib/toast'
 
 // まとめてインポートは、各データの取り込み関数が「失敗」を返したとき（throw せず success: false）も
@@ -134,6 +134,52 @@ afterEach(() => {
   window.removeEventListener(TOAST_EVENT, onToast)
   window.location = originalLocation
   vi.useRealTimers()
+})
+
+describe('まとめてエクスポート', () => {
+  async function exportUnified(): Promise<void> {
+    render(<UnifiedBackup />)
+    fireEvent.click(screen.getByTestId('export-unified-button'))
+    await waitFor(() => expect(screen.getByTestId('export-confirm-dialog')).toBeInTheDocument())
+    await act(async () => {
+      fireEvent.click(screen.getByText('ダウンロード'))
+    })
+  }
+
+  beforeEach(() => {
+    // jsdom にはダウンロードが無いので、ファイル保存の手前までを動かす
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:synthetic')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('マイリストを書き出せなかったとき、欠けたファイルを黙って保存しない', async () => {
+    vi.mocked(exportExtendedNGListData).mockReturnValue(ngListBackup as unknown as ReturnType<typeof exportExtendedNGListData>)
+    vi.mocked(exportMylistData).mockRejectedValue(new Error('合成: IndexedDB を開けません'))
+
+    await exportUnified()
+
+    await waitFor(() => {
+      expect(toasts.some((t) => t.type === 'error' && t.message.includes('マイリスト'))).toBe(true)
+    })
+  })
+
+  it('NG リストを一度も保存していない（書き出すものが無い）ときは警告しない', async () => {
+    localStorage.removeItem('user-ng-list')
+    vi.mocked(exportExtendedNGListData).mockImplementation(() => {
+      throw new Error('NGリストの読み込みに失敗しました: Error: NGリストデータが見つかりません')
+    })
+    vi.mocked(exportMylistData).mockResolvedValue(mylistBackup as unknown as Awaited<ReturnType<typeof exportMylistData>>)
+
+    await exportUnified()
+
+    await waitFor(() => expect(screen.queryByTestId('export-confirm-dialog')).toBeNull())
+    expect(toasts.some((t) => t.type === 'error')).toBe(false)
+  })
 })
 
 describe('まとめてインポートの結果表示', () => {

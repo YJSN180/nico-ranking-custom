@@ -42,6 +42,14 @@ interface UnifiedBackupData {
   }
 }
 
+function hasStoredNGList(): boolean {
+  try {
+    return localStorage.getItem('user-ng-list') !== null
+  } catch {
+    return false
+  }
+}
+
 export function UnifiedBackup() {
   const { ngList } = useUserNGListExtended()
   const { items: genreOrderItems } = useGenreOrderV2()
@@ -67,13 +75,19 @@ export function UnifiedBackup() {
         data: {}
       }
       
-      // 各データを個別にエクスポート（エラーが発生しても他のデータは保存）
+      // 各データを個別にエクスポート（エラーが発生しても他のデータは保存）。
+      // 書き出せなかったデータは、欠けたファイルだと気づけるよう保存後に知らせる
+      const failedSections: string[] = []
       try {
         const ngListData = exportExtendedNGListData()
         data.data.ngList = ngListData
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Failed to export NG list:', error)
+        // NG リストを一度も保存していない（書き出すものが無い）ときは失敗ではない
+        if (hasStoredNGList()) {
+          failedSections.push('NGリスト')
+        }
       }
       
       try {
@@ -97,6 +111,7 @@ export function UnifiedBackup() {
         // eslint-disable-next-line no-console
         console.error('Failed to export mylist data:', error)
         // マイリストのエクスポートに失敗した場合でも続行
+        failedSections.push('マイリスト')
       }
 
       try {
@@ -135,6 +150,10 @@ export function UnifiedBackup() {
       // eslint-disable-next-line no-console
       console.log(`エクスポート完了: ${exportedTypes.join(', ')}`)
       setExportConfirmOpen(false)
+
+      if (failedSections.length > 0) {
+        showToast(`${failedSections.join('・')}を書き出せませんでした。保存したファイルには含まれていません`, 'error')
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to export unified backup:', error)
