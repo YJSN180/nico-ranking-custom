@@ -66,7 +66,7 @@ read_when:
 - Browser transport は direct ingest です。`connect-src` に `https://*.ingest.sentry.io` を許可します。
 - Next.js と Workers の sourcemap upload は build / deploy で有効化します。
 - browser の `/api/ranking` と `/api/tags/autocomplete` の 429 は warning として `web` project に送ります。
-- `/api/debug-log` の `info` は production ではサーバー送信しません。
+- `/api/debug-log` は開発時だけ動きます。本番ビルドでは 404 を返し、クライアント（`lib/server-log.ts`）も送信しません。
 - trace 名は raw URL ではなく route family に寄せています。
 
 ## Smoke Checklist

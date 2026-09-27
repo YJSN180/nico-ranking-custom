@@ -1,64 +1,27 @@
 /**
- * Vercelログに出力するためのクライアントサイドログ関数
+ * 開発時だけ、クライアントのログをブラウザのコンソールと開発サーバーの端末（/api/debug-log）に出す。
+ * 本番ビルドでは何もしない（/api/debug-log も本番では 404）。
  */
 
 import { requestThrottle } from './request-throttle'
 
 type LogLevel = 'info' | 'warn' | 'error'
 
-const WARN_ERROR_DEDUPE_WINDOW_MS = 15_000
-const recentProductionLogs = new Map<string, number>()
-
-function shouldSendLogToServer(level: LogLevel, message: string, isDevelopment: boolean) {
-  if (isDevelopment) {
-    return true
-  }
-
-  if (level === 'info') {
-    return false
-  }
-
-  const now = Date.now()
-  const key = `${level}:${message}`
-  const staleThreshold = now - WARN_ERROR_DEDUPE_WINDOW_MS
-
-  for (const [existingKey, timestamp] of recentProductionLogs.entries()) {
-    if (timestamp < staleThreshold) {
-      recentProductionLogs.delete(existingKey)
-    }
-  }
-
-  const lastSentAt = recentProductionLogs.get(key)
-
-  if (lastSentAt && now - lastSentAt < WARN_ERROR_DEDUPE_WINDOW_MS) {
-    return false
-  }
-
-  recentProductionLogs.set(key, now)
-  return true
-}
-
 async function sendLogToServer(level: LogLevel, message: string, data?: any) {
-  // 開発環境判定（クライアントサイド用）
-  const isDevelopment = typeof window !== 'undefined' && 
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  
-  // 開発環境では通常のconsole.logも併用
-  if (isDevelopment) {
-    if (level === 'error') {
-      // eslint-disable-next-line no-console
-      console.error(`[DEBUG] ${message}`, data)
-    } else if (level === 'warn') {
-      // eslint-disable-next-line no-console
-      console.warn(`[DEBUG] ${message}`, data)
-    } else {
-      // eslint-disable-next-line no-console
-      console.log(`[DEBUG] ${message}`, data)
-    }
+  // SSR 中（window が無い）も送らない。相対 URL の fetch はサーバーでは失敗する
+  if (process.env.NODE_ENV === 'production' || typeof window === 'undefined') {
+    return
   }
 
-  if (!shouldSendLogToServer(level, message, isDevelopment)) {
-    return
+  if (level === 'error') {
+    // eslint-disable-next-line no-console
+    console.error(`[DEBUG] ${message}`, data)
+  } else if (level === 'warn') {
+    // eslint-disable-next-line no-console
+    console.warn(`[DEBUG] ${message}`, data)
+  } else {
+    // eslint-disable-next-line no-console
+    console.log(`[DEBUG] ${message}`, data)
   }
 
   try {
