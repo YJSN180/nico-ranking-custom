@@ -95,6 +95,35 @@ describe('importMylistData', () => {
     })
   })
 
+  describe('安全追加（統合インポートの既定）', () => {
+    it('同じ ID のマイリストは、動画ごと改名した複製として追加し、既存には手を付けない', async () => {
+      const existingId = await manager.createMylist('合成リスト')
+      await manager.addVideoToMylist(existingId, { id: 'sm90000001', title: '合成動画1', thumbURL: '' })
+
+      // 同じ端末で書き出したファイル（書き出した後に既存側から sm90000002 を外した）
+      const backup = makeBackup({
+        mylists: [{ id: existingId, name: '合成リスト', createdAt: 1700000000000, updatedAt: 1700000000000, videoCount: 2 }],
+        mylistVideos: [
+          { id: 'sm90000001', mylistId: existingId, title: '合成動画1', thumbURL: '', addedAt: 1700000000000 },
+          { id: 'sm90000002', mylistId: existingId, title: '合成動画2', thumbURL: '', addedAt: 1700000000001 },
+        ],
+      })
+
+      const result = await importMylistData(backup, 'safe_add')
+
+      expect(result.success).toBe(true)
+      // 既存はそのまま
+      expect((await manager.getVideosInMylist(existingId)).map((v) => v.id)).toEqual(['sm90000001'])
+      expect((await manager.getMylist(existingId))?.videoCount).toBe(1)
+      // 複製は改名され、ファイルの動画がすべて入り、件数も合う
+      const copies = (await manager.getAllMylists()).filter((m) => m.id !== existingId)
+      expect(copies.map((m) => m.name)).toEqual(['合成リスト (2)'])
+      const copyVideos = await manager.getVideosInMylist(copies[0]?.id ?? '')
+      expect(copyVideos.map((v) => v.id).sort()).toEqual(['sm90000001', 'sm90000002'])
+      expect(copies[0]?.videoCount).toBe(2)
+    })
+  })
+
   describe('取り込み後の件数', () => {
     it('スマートマージ後の件数は、ファイルの値ではなく実際に入っている動画の数になる', async () => {
       const existingId = await manager.createMylist('合成リスト')
