@@ -48,20 +48,23 @@ function isSavedSearch(value: unknown): value is SavedSearch {
   )
 }
 
-/** 未知の形式でも落ちないよう、有効なエントリだけを取り出す */
+/**
+ * 未知の形式でも落ちないよう、有効なエントリだけを取り出す。件数は切り捨てない
+ * （バックアップの取り込みで上限を超えたことを知らせるため。読み込みは loadSavedSearches が上限で切る）
+ */
 export function sanitizeSavedSearches(value: unknown): SavedSearch[] {
   if (typeof value !== 'object' || value === null) return []
   const store = value as Record<string, unknown>
   const searches = store['searches']
   if (!Array.isArray(searches)) return []
-  return searches.filter(isSavedSearch).slice(0, MAX_SAVED_SEARCHES)
+  return searches.filter(isSavedSearch)
 }
 
 export function loadSavedSearches(): SavedSearch[] {
   try {
     const raw = localStorage.getItem(SAVED_SEARCHES_KEY)
     if (!raw) return []
-    return sanitizeSavedSearches(JSON.parse(raw))
+    return sanitizeSavedSearches(JSON.parse(raw)).slice(0, MAX_SAVED_SEARCHES)
   } catch {
     return []
   }

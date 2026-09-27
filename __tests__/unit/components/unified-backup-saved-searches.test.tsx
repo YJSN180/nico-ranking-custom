@@ -96,6 +96,16 @@ describe('統合バックアップの取り込み: 保存した検索条件', ()
     expect(stored.searches.map((s) => s.name)).toEqual(existing.map((s) => s.name))
   })
 
+  it('ファイルそのものが上限を超える件数を持つときも、切り捨てて成功とせず、失敗として示す', async () => {
+    await importSavedSearches(searches(MAX_SAVED_SEARCHES + 10, 'imported'))
+
+    const message = screen.getByTestId('import-error-message').textContent ?? ''
+    expect(message).toContain(`保存できる検索条件は ${MAX_SAVED_SEARCHES} 件まで`)
+    expect(toasts.some((toast) => toast.type === 'success')).toBe(false)
+    expect(reload).not.toHaveBeenCalled()
+    expect(localStorage.getItem(SAVED_SEARCHES_KEY)).toBeNull()
+  })
+
   it('ブラウザに保存できなければ、失敗として示す', async () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError')

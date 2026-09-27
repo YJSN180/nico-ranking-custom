@@ -42,9 +42,16 @@ describe('sanitizeSavedSearches', () => {
     expect(result.map((s) => s.name)).toEqual(['valid', 'valid2'])
   })
 
-  it('上限を超えるエントリは切り捨てる', () => {
+  it('読み込み（loadSavedSearches）では上限を超えるエントリを切り捨てる', () => {
     const many = Array.from({ length: MAX_SAVED_SEARCHES + 10 }, (_, i) => makeSearch(`s${i}`))
-    expect(sanitizeSavedSearches({ version: 1, searches: many })).toHaveLength(MAX_SAVED_SEARCHES)
+    localStorage.setItem('saved-searches', JSON.stringify({ version: 1, searches: many }))
+    expect(loadSavedSearches()).toHaveLength(MAX_SAVED_SEARCHES)
+    localStorage.clear()
+  })
+
+  it('取り込み用の整形（sanitizeSavedSearches）では切り捨てない（上限を超えたことを取り込みで知らせるため）', () => {
+    const many = Array.from({ length: MAX_SAVED_SEARCHES + 10 }, (_, i) => makeSearch(`s${i}`))
+    expect(sanitizeSavedSearches({ version: 1, searches: many })).toHaveLength(MAX_SAVED_SEARCHES + 10)
   })
 })
 
