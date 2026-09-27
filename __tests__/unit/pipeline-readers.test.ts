@@ -9,7 +9,9 @@ vi.mock('../../workers/sentry.js', () => ({
 }))
 vi.mock('../../lib/scraper', () => ({ scrapeRankingPage: vi.fn() }))
 // 人気タグの小キー（POPULAR_TAGS_LATEST）が未生成でも、ゲートウェイ経路だけで動くことを検証する
-vi.mock('../../lib/simple-kv', () => ({ kv: { get: vi.fn(async () => null) } }))
+vi.mock('../../lib/simple-kv', () => ({
+  kv: { get: vi.fn(async () => null), getStrict: vi.fn(async () => null) },
+}))
 import worker from '../../workers/api-gateway-green-20250726'
 import { getPopularTags } from '../../lib/popular-tags'
 import { scrapeRankingPage } from '../../lib/scraper'
