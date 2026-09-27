@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
+import { timingSafeEqual } from './lib/timing-safe-equal'
 // Note: Edge Runtime対応のため、直接process.envを使用
 // import { config } from './lib/config'
 
@@ -186,7 +187,10 @@ const noStorePaths: string[] = []
     try {
       const base64Credentials = authHeader.split(' ')[1]
       const credentials = atob(base64Credentials!)
-      const [username, password] = credentials.split(':')
+      // ユーザー ID は : を含めないが、パスワードは含められる（RFC 7617）ので、最初の : だけで分ける
+      const separator = credentials.indexOf(':')
+      const username = separator === -1 ? credentials : credentials.slice(0, separator)
+      const password = separator === -1 ? '' : credentials.slice(separator + 1)
       
       // 環境変数が設定されていない場合はエラー
       if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
@@ -197,7 +201,13 @@ const noStorePaths: string[] = []
       const validUsername = process.env.ADMIN_USERNAME
       const validPassword = process.env.ADMIN_PASSWORD
       
-      if (username !== validUsername || password !== validPassword) {
+      // 定数時間で比べる。ユーザー名が違ってもパスワードの比較を省かない（どちらが違ったかを時間で漏らさない）
+      const [usernameMatches, passwordMatches] = await Promise.all([
+        timingSafeEqual(username, validUsername),
+        timingSafeEqual(password, validPassword),
+      ])
+      
+      if (!usernameMatches || !passwordMatches) {
         SecurityLogger.logAuthFailure(
           'admin',
           ip,
