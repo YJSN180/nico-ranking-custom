@@ -24,3 +24,39 @@ describe('検索ページのジャンル選択（U-c）', () => {
     expect(ruleBody('.search-form__genre:has(input:focus-visible)')).toMatch(/outline:\s*2px solid/)
   })
 })
+
+/** @media (条件) { ... } の中身（最初の 1 つ）。無ければ null。入れ子の波かっこを数えて取り出す */
+function mediaBody(condition: string): string | null {
+  const start = css.indexOf(`@media ${condition} {`)
+  if (start < 0) return null
+  let depth = 0
+  for (let i = css.indexOf('{', start); i < css.length; i++) {
+    if (css[i] === '{') depth++
+    if (css[i] === '}') depth--
+    if (depth === 0) return css.slice(css.indexOf('{', start) + 1, i)
+  }
+  return null
+}
+
+/** 中身の中で、セレクタ（カンマ区切りの一覧のどれか）に当たる規則の本体 */
+function ruleIn(body: string, selector: string): string | null {
+  const withoutComments = body.replace(/\/\*[\s\S]*?\*\//g, '')
+  for (const match of withoutComments.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    const selectors = (match[1] ?? '').split(',').map((s) => s.trim())
+    if (selectors.includes(selector)) return match[2] ?? ''
+  }
+  return null
+}
+
+const TOUCH = '(max-width: 640px), (pointer: coarse)'
+
+describe('スマートフォン・タッチ操作の端末での入力欄', () => {
+  it('入力欄と選択欄は 16px にする（iOS の Safari が 16px 未満の欄へのフォーカスで画面を拡大するため）', () => {
+    const body = mediaBody(TOUCH)
+    expect(body).not.toBeNull()
+    for (const selector of ['.search-form__number', '.search-form__date', '.search-form__sort']) {
+      expect(ruleIn(body ?? '', selector)).toMatch(/font-size:\s*16px/)
+    }
+    expect(ruleBody('.search-form__keyword')).toMatch(/font-size:\s*16px/)
+  })
+})
