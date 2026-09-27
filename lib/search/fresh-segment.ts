@@ -175,10 +175,20 @@ export async function fetchFreshSegment(
   return { items: applyRealtimeRangeFilters(applyDateFilters(newer, conditions), conditions), truncatedAt, ...(error ? { error } : {}) }
 }
 
+/** 投稿時刻（ミリ秒）。不明・不正な値は最も古い扱い */
+const postedAt = (item: RankingItem): number => {
+  const t = item.registeredAt ? new Date(item.registeredAt).getTime() : Number.NaN
+  return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY
+}
+
 /** 最新区間を nvapi のリアルタイム区間に併合する（ID で重複除外、投稿時刻の降順、rank 振り直し） */
 export function mergeFreshIntoRealtime(fresh: RankingItem[], realtime: RankingItem[]): { items: RankingItem[]; added: number } {
   const known = new Set(realtime.map((it) => it.id))
   const added = fresh.filter((it) => !known.has(it.id))
-  const merged = [...realtime, ...added].sort((a, b) => (b.registeredAt ?? '').localeCompare(a.registeredAt ?? ''))
+  // 時刻の表記（+09:00 / Z）によらず時刻で並べる。同時刻は nvapi 側を先にする（安定ソート）
+  const merged = [...realtime, ...added].sort((a, b) => {
+    const diff = postedAt(b) - postedAt(a)
+    return Number.isNaN(diff) ? 0 : diff
+  })
   return { items: merged.map((it, i) => ({ ...it, rank: i + 1 })), added: added.length }
 }

@@ -35,7 +35,13 @@ interface FakeVideo {
   indexed: boolean
   /** nvapi の索引にある（ショートは常に無い） */
   nvapi: boolean
+  /** 再生時間（秒）。省略時は長尺 300・ショート 30 */
+  duration?: number
 }
+
+const durationOf = (v: FakeVideo): number => v.duration ?? (v.kind === 'short' ? 30 : 300)
+/** nvapi が返せる深さ（page×pageSize が 5,000 件まで。2026-09-27 実測） */
+const NVAPI_DEPTH = 5000
 
 interface SearchBody {
   items: Array<{ id: string; rank: number }>
@@ -88,6 +94,10 @@ function snapshotResponse(url: URL): Response {
   if (gte) list = list.filter((v) => ms(v.at) >= ms(gte))
   if (lt) list = list.filter((v) => ms(v.at) < ms(lt))
   if (lte) list = list.filter((v) => ms(v.at) <= ms(lte))
+  const lengthGte = p.get('filters[lengthSeconds][gte]')
+  const lengthLte = p.get('filters[lengthSeconds][lte]')
+  if (lengthGte) list = list.filter((v) => durationOf(v) >= Number(lengthGte))
+  if (lengthLte) list = list.filter((v) => durationOf(v) <= Number(lengthLte))
   list.sort(byNewest)
   const offset = Number(p.get('_offset') ?? 0)
   const limit = Number(p.get('_limit') ?? 50)
@@ -99,7 +109,7 @@ function snapshotResponse(url: URL): Response {
     commentCounter: 0,
     likeCounter: 0,
     mylistCounter: 0,
-    lengthSeconds: v.kind === 'short' ? 30 : 300,
+    lengthSeconds: durationOf(v),
     startTime: v.at,
     userId: 1001,
     channelId: null,
@@ -119,21 +129,27 @@ function nvapiResponse(url: URL): Response {
   if (keyword && tag) return json({ meta: { status: 400, errorCode: 'INVALID_PARAMETER' } }, 400)
   const min = p.get('minRegisteredAt')
   const max = p.get('maxRegisteredAt')
+  // 再生時間は nvapi 側で絞れる（minDuration / maxDuration、どちらも端を含む。2026-09-27 実測）
+  const minDuration = p.get('minDuration')
+  const maxDuration = p.get('maxDuration')
   const list = videos
     .filter((v) => v.nvapi && v.kind === 'long')
     .filter((v) => (!min || ms(v.at) >= ms(min)) && (!max || ms(v.at) <= ms(max)))
+    .filter((v) => (!minDuration || durationOf(v) >= Number(minDuration)) && (!maxDuration || durationOf(v) <= Number(maxDuration)))
     .sort(byNewest)
   const pageSize = Number(p.get('pageSize') ?? 100)
   const page = Number(p.get('page') ?? 1)
+  // 5,000 件より深いページは 400。上限のページでは続きがあっても hasNext が false になる（実測）
+  if (page * pageSize > NVAPI_DEPTH) return json({ meta: { status: 400, errorCode: 'INVALID_PARAMETER' } }, 400)
   const items = list.slice((page - 1) * pageSize, page * pageSize).map((v) => ({
     id: v.id,
     title: `title ${v.id}`,
     registeredAt: v.at,
-    duration: 300,
+    duration: durationOf(v),
     count: { view: 10, comment: 0, mylist: 0, like: 0 },
     owner: { id: 1001, name: 'user-1001', ownerType: 'user' },
   }))
-  return json({ meta: { status: 200 }, data: { totalCount: list.length, hasNext: list.length > page * pageSize, items } })
+  return json({ meta: { status: 200 }, data: { totalCount: list.length, hasNext: list.length > page * pageSize && page * pageSize < NVAPI_DEPTH, items } })
 }
 
 function pageResponse(url: URL): Response {
@@ -146,7 +162,7 @@ function pageResponse(url: URL): Response {
     id: v.id,
     title: `title ${v.id}`,
     registeredAt: v.at,
-    duration: kind === 'short' ? 30 : 300,
+    duration: durationOf(v),
     count: { view: 10, comment: 0, mylist: 0, like: 0 },
     owner: { id: '1001', name: 'user-1001', ownerType: 'user' },
   }))
@@ -462,9 +478,9 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     }
   }
 
-  it('nvapi の新着が上限（300 件）を超えたら、境界から取れた中で最も古い投稿までを realtimeGap で返す', async () => {
+  it('再生数などの範囲を後から当てる検索は、先頭から 300 件までを読み、そこから境界までを realtimeGap で返す', async () => {
     addNewUploads('long', 310)
-    const { body } = await search('q=x&sort=-startTime')
+    const { body } = await search('q=x&sort=-startTime&viewsMin=1')
     expect(body.source).toBe('merged')
     expect(body.realtimeGap?.from).toBe('2026-09-22T04:00:01+09:00')
     // 新しい順に 300 件目は 07:20 の投稿
@@ -480,10 +496,117 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     expect(ms(body.realtimeGap?.to ?? '')).toBe(ms(jst('07:14:00')))
   })
 
-  it('動画だけの検索では、本家ページの読み足しの上限は打ち切りにしない（長尺は nvapi が受け持つ）', async () => {
+  it('動画だけの検索では、本家ページが nvapi の最新まで届いていれば打ち切りにしない（その先は nvapi が受け持つ）', async () => {
     addNewUploads('long', 100)
     const { body } = await search('q=x&sort=-startTime&contentType=long')
     expect(body.source).toBe('merged')
     expect(body.realtimeGap).toBeUndefined()
+  })
+})
+
+describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
+  // 境界の持ち回り（3 日以内）を確かめるため、時計だけを索引の日に合わせる（タイマーは本物のまま）
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(jst('13:00:00')))
+    seedWorld()
+    // 索引より後の動画は、テストごとに足す
+    videos = videos.filter((v) => v.indexed)
+    nvapiStatus = 200
+    pageStatus = 200
+    shortsPageStatus = 200
+    boundaryStatus = 200
+    snapshotPageStatus = 200
+    calls = []
+    fakeFetch.mockClear()
+    clearFreshCache()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const BOUNDARY = '2026-09-22T04:00:01+09:00'
+
+  /**
+   * 境界の後の 04:30 から 5 秒おきに count 本の長尺を足す（sm700000 から。新しいほど番号が大きい）。
+   * 新しい方から notIndexed 本は、nvapi の索引にまだ無い（反映の遅れ）
+   */
+  const addLongUploads = (count: number, notIndexed = 0): string[] => {
+    const added: FakeVideo[] = []
+    for (let i = 0; i < count; i++) {
+      added.push({ id: `sm${700000 + i}`, at: isoAt(ms(jst('04:30:00')) + i * 5000), kind: 'long', indexed: false, nvapi: i < count - notIndexed })
+    }
+    videos.push(...added)
+    return added.map((v) => v.id).reverse()
+  }
+
+  const indexedNewestFirst = (): string[] => videos.filter((v) => v.indexed).sort(byNewest).map((v) => v.id)
+
+  /** 画面と同じく、前の応答の境界と新着件数を次のページに渡しながら 1 ページ目から読む */
+  async function readPages(query: string, pages: number): Promise<Array<SearchBody & { nvapiCalls: number }>> {
+    const bodies: Array<SearchBody & { nvapiCalls: number }> = []
+    let hint = ''
+    for (let page = 1; page <= pages; page++) {
+      calls = []
+      const { status, body } = await search(`${query}${page > 1 ? `&page=${page}${hint}` : ''}`)
+      expect(status).toBe(200)
+      bodies.push({ ...body, nvapiCalls: callsTo('nvapi.nicovideo.jp').length })
+      hint = `${body.realtimeCount > 0 ? `&rtCount=${body.realtimeCount}` : ''}&boundary=${encodeURIComponent(body.boundary)}`
+    }
+    return bodies
+  }
+
+  it('新着が 300 件を超えても、ページ送りに合わせて nvapi の続きを取り、境界まで欠かさずに索引へつなぐ', async () => {
+    const uploads = addLongUploads(400)
+    const bodies = await readPages('q=x&sort=-startTime', 10)
+    const listed = bodies.flatMap(ids)
+    expect(listed).toEqual([...uploads, ...indexedNewestFirst()])
+    expect(bodies[0]?.realtimeCount).toBe(400)
+    expect(bodies[0]?.totalCount).toBe(400 + indexedNewestFirst().length)
+    expect(bodies.every((body) => body.realtimeGap === undefined)).toBe(true)
+    expect(bodies.every((body) => body.boundary === BOUNDARY)).toBe(true)
+    // 1 回の検索で nvapi へは 3 回まで（先頭のページと、このページが要るページだけ）
+    expect(Math.max(...bodies.map((body) => body.nvapiCalls))).toBeLessThanOrEqual(3)
+    expect(bodies[0]?.nvapiCalls).toBe(1)
+  })
+
+  it('再生時間の範囲は nvapi 側で絞り、深いページも同じように取る', async () => {
+    const uploads = addLongUploads(300)
+    // 偶数番目の新着だけを長い動画にする
+    const longOnes = new Set(uploads.filter((_, i) => i % 2 === 0))
+    for (const v of videos) if (longOnes.has(v.id)) v.duration = 900
+    const bodies = await readPages('q=x&sort=-startTime&durationMin=600', 3)
+    expect(bodies.flatMap(ids)).toEqual(uploads.filter((id) => longOnes.has(id)))
+    const nvapi = calls.filter((u) => u.hostname === 'nvapi.nicovideo.jp')
+    expect(nvapi.every((u) => u.searchParams.get('minDuration') === '600')).toBe(true)
+  })
+
+  it('nvapi の索引が遅れて本家ページが nvapi の最新まで届かないときは、そのあいだを realtimeGap で知らせる', async () => {
+    // 新しい方から 150 本が nvapi に未反映。本家ページは 96 本（3 ページ）まで
+    const uploads = addLongUploads(200, 150)
+    const { body } = await search('q=x&sort=-startTime')
+    expect(body.source).toBe('merged')
+    const at = (id: string | undefined): number => ms(videos.find((v) => v.id === id)?.at ?? '')
+    expect(ms(body.realtimeGap?.from ?? '')).toBe(at(uploads[150]))
+    expect(ms(body.realtimeGap?.to ?? '')).toBe(at(uploads[95]))
+    expect(ids(body)).toEqual(uploads.slice(0, 50))
+  })
+
+  it('nvapi が返せる深さ（5,000 件）を超える新着は、そこまでを新着区間にし、区間の終わりのページから realtimeGap で知らせる', async () => {
+    const uploads = addLongUploads(5100)
+    const first = await search('q=x&sort=-startTime')
+    expect(first.body.realtimeCount).toBe(5000)
+    expect(first.body.realtimeGap).toBeUndefined()
+    const hint = `&rtCount=5000&boundary=${encodeURIComponent(BOUNDARY)}`
+    const last = await search(`q=x&sort=-startTime&page=100${hint}`)
+    expect(ids(last.body)).toEqual(uploads.slice(4950, 5000))
+    expect(last.body.realtimeGap?.from).toBe(BOUNDARY)
+    expect(ms(last.body.realtimeGap?.to ?? '')).toBe(ms(videos.find((v) => v.id === uploads[4999])?.at ?? ''))
+    const after = await search(`q=x&sort=-startTime&page=101${hint}`)
+    expect(ids(after.body)).toEqual(indexedNewestFirst().slice(0, 50))
+    expect(after.body.realtimeGap?.from).toBe(BOUNDARY)
   })
 })

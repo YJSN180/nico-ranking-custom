@@ -15,17 +15,16 @@ import {
 } from '@/lib/search/snapshot-search'
 import {
   assembleMergedPage,
-  fetchRealtimeSegment,
   isRealtimeCandidate,
+  isRealtimeEnabled,
   isRealtimeMergeable,
   parseRequestedBoundary,
   planMergedPage,
   resolveRealtimeBoundary,
-  type RealtimeSegment,
 } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
-import { fetchFreshSegment, mergeFreshIntoRealtime, type FreshSegment } from '@/lib/search/fresh-segment'
-import { isRealtimeEnabled } from '@/lib/search/realtime-search'
+import { fetchFreshSegment } from '@/lib/search/fresh-segment'
+import { fetchRealtimeWindow, type FreshOutcome, type RealtimeWindow } from '@/lib/search/realtime-window'
 import { applyServerNgContext, loadServerNgContext, type ServerNgContext } from '@/lib/ng-filter-server'
 import { anySignal, withTimeout } from '@/lib/abort-signal'
 import type { RankingItem } from '@/types/ranking'
@@ -148,27 +147,35 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // 実際の R とずれて窓が足りない場合だけ取り直す（新着が増えた直後のみ発生）。
   const rtCountHint = Math.max(0, parseInt(request.nextUrl.searchParams.get('rtCount') ?? '0', 10) || 0)
   const provisional = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, rtCountHint)
+  const pageFrom = (conditions.page - 1) * SEARCH_PAGE_SIZE
 
   // Snapshot 側は境界より前だけ（filters[startTime][lt]=T）を取り、新着側（nvapi の minRegisteredAt=T と
   // 本家ページの T 以降）と構成的に排他にする。これで dedup に頼らず offset 計算が厳密になり、ページ間の重複が起きない
   // 最新区間（本家ページ）は nvapi と並列に取り、失敗しても nvapi だけで続ける（隠れ依存にしない）。
   // ただしショートだけの検索では本家ページが唯一の新着の取得元なので、その失敗は新着の失敗として扱う
-  const [realtimeResult, snapshotResult, freshResult] = await Promise.all([
-    fetchRealtimeSegment(conditions, boundary, fetch, NVAPI_TIMEOUT_MS, anySignal([deadline, AbortSignal.timeout(REALTIME_BUDGET_MS)])).then(
-      (segment): { segment: RealtimeSegment; error?: undefined } => ({ segment }),
-      (error: unknown): { segment?: undefined; error: string } => ({
+  const freshPromise = fetchFreshSegment(conditions, boundary, { signal: deadline }).then(
+    (segment): FreshOutcome => ({ segment }),
+    (error: unknown): FreshOutcome => ({ error: error instanceof Error ? error.message : 'fresh_error' })
+  )
+  const [realtimeResult, snapshotResult] = await Promise.all([
+    // 新着区間のうちこのページが占める部分だけを取る（新着が多い語でも、ページ送りに合わせて nvapi の続きを取る）
+    fetchRealtimeWindow({
+      conditions,
+      boundary,
+      from: pageFrom,
+      to: pageFrom + SEARCH_PAGE_SIZE,
+      fresh: freshPromise,
+      timeoutMs: NVAPI_TIMEOUT_MS,
+      signal: anySignal([deadline, AbortSignal.timeout(REALTIME_BUDGET_MS)]),
+    }).then(
+      (realtimeWindow): { realtimeWindow: RealtimeWindow; error?: undefined } => ({ realtimeWindow }),
+      (error: unknown): { realtimeWindow?: undefined; error: string } => ({
         error: error instanceof Error ? error.message : 'realtime_error',
       })
     ),
     fetchSnapshotPage(conditions, provisional.snapshotOffset, SEARCH_PAGE_SIZE, deadline, boundary),
-    fetchFreshSegment(conditions, boundary, { signal: deadline }).then(
-      (fresh): { fresh: FreshSegment; error?: undefined } => ({ fresh }),
-      (error: unknown): { fresh: FreshSegment; error: string } => ({
-        fresh: { items: [], truncatedAt: {} },
-        error: error instanceof Error ? error.message : 'fresh_error',
-      })
-    ),
   ])
+  const freshResult = await freshPromise
 
   if (isFailure(snapshotResult)) {
     return NextResponse.json({ error: snapshotResult.error, detail: snapshotResult.detail }, { status: snapshotResult.status })
@@ -176,8 +183,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // 新着側が落ちたら Snapshot 単独に縮退（source ラベルで可視化＝隠れフォールバックにしない）。
   // 並列に取った Snapshot は境界より前だけなので使わず、境界なしで取り直す（境界以降の索引の動画を落とさない）
-  const realtimeError = realtimeResult.error ?? (conditions.contentType === 'short' ? freshResult.error : undefined)
-  if (!realtimeResult.segment || realtimeError) {
+  if (!realtimeResult.realtimeWindow) {
     const snapshot = await fetchSnapshotPage(conditions, (conditions.page - 1) * SEARCH_PAGE_SIZE, SEARCH_PAGE_SIZE, deadline)
     if (isFailure(snapshot)) {
       return NextResponse.json({ error: snapshot.error, detail: snapshot.detail }, { status: snapshot.status })
@@ -186,18 +192,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       source: 'snapshot',
       boundary,
       realtimeCount: 0,
-      realtimeError: realtimeError ?? 'realtime_error',
+      realtimeError: realtimeResult.error,
       cacheControl: 'public, s-maxage=30, stale-while-revalidate=60',
     })
   }
 
-  const segment = realtimeResult.segment
-  // 本家ページの最新動画（nvapi 未反映分）をリアルタイム区間に併合してから、ページを組み立てる
-  const freshError = freshResult.error ?? freshResult.fresh.error
-  const withFresh = mergeFreshIntoRealtime(freshResult.fresh.items, segment.items)
-  const gapUntil = realtimeGapUntil(conditions, segment, freshResult.fresh)
-  const realtimeItems = withFresh.items
-  const plan = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, realtimeItems.length)
+  const realtimeWindow = realtimeResult.realtimeWindow
+  const plan = planMergedPage(conditions.page, SEARCH_PAGE_SIZE, realtimeWindow.total)
   let snapshotItems = snapshotResult.items
   // 仮の窓 [provisional.offset, +PAGE) が実際に必要な窓を覆っていなければ取り直す
   const covers =
@@ -214,29 +215,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     snapshotItems = snapshotItems.slice(plan.snapshotOffset - provisional.snapshotOffset)
   }
 
-  const merged = assembleMergedPage(realtimeItems, snapshotItems, plan)
-  return await respond(merged, realtimeItems.length + snapshotResult.totalCount, conditions, ngContext, {
+  // 本家ページが落ちた（全体）か、動画とショートの片方だけ落ちた（一部）ときは、最新の投稿が欠けうることを知らせる
+  const freshError = freshResult.error ?? freshResult.segment?.error
+  const merged = assembleMergedPage(realtimeWindow.items, snapshotItems, plan)
+  return await respond(merged, realtimeWindow.total + snapshotResult.totalCount, conditions, ngContext, {
     source: 'merged',
     boundary,
-    realtimeCount: realtimeItems.length,
-    ...(gapUntil ? { realtimeGap: { from: boundary, to: gapUntil } } : {}),
-    freshCount: withFresh.added,
-    // 本家ページが落ちた（全体）か、動画とショートの片方だけ落ちた（一部）ときは、最新の投稿が欠けうることを知らせる
+    realtimeCount: realtimeWindow.total,
+    ...(realtimeWindow.gap ? { realtimeGap: realtimeWindow.gap } : {}),
+    freshCount: realtimeWindow.freshAdded,
     ...(freshError ? { freshError } : {}),
     cacheControl: 'public, s-maxage=30, stale-while-revalidate=60',
   })
-}
-
-/**
- * 新着区間を打ち切ったとき、取れた中で最も古い投稿時刻（境界からこの時刻までの投稿は欠けうる）。打ち切りが無ければ undefined。
- * 長尺は nvapi（上限 REALTIME_MAX_PAGES）、ショートは本家ページ（上限 FRESH_MAX_PAGES）だけが取得元なので、
- * 両方を見て遅い方を返す。長尺の本家ページの打ち切りは nvapi が受け持つ範囲なので数えない
- */
-function realtimeGapUntil(conditions: SearchConditions, segment: RealtimeSegment, fresh: FreshSegment): string | undefined {
-  const floors = [segment.truncated ? segment.floor : undefined, conditions.contentType !== 'long' ? fresh.truncatedAt.short : undefined]
-  return floors
-    .filter((at): at is string => typeof at === 'string' && Number.isFinite(new Date(at).getTime()))
-    .reduce<string | undefined>((latest, at) => (latest === undefined || new Date(at).getTime() > new Date(latest).getTime() ? at : latest), undefined)
 }
 
 interface RespondMeta {
@@ -244,7 +234,10 @@ interface RespondMeta {
   /** 索引と新着の境界。決められなかった（問い合わせに失敗した・対象外の条件）ときは無し */
   boundary?: string
   realtimeCount: number
-  /** 新着区間を打ち切ったとき、投稿が欠けうる範囲（from = 境界、to = 取れた中で最も古い投稿時刻） */
+  /**
+   * 新着区間のうち投稿が欠けうる範囲（nvapi の返せる深さや本家ページの読み足しの上限、nvapi の索引の遅れで
+   * 取れなかった範囲をまとめたもの）
+   */
   realtimeGap?: { from: string; to: string }
   /** 本家ページから足した最新動画の数（nvapi に未反映だった分） */
   freshCount?: number

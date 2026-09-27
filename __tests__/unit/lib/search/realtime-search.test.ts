@@ -279,11 +279,16 @@ describe('planMergedPage / assembleMergedPage', () => {
     const page = assembleMergedPage(rt, snap, planMergedPage(1, 3, 2))
     expect(page.map((i) => [i.id, i.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]])
   })
-  it('組み立て: 2ページ目は globalStart から rank を振る', () => {
-    const rt = [mk('a')]
+  it('組み立て: 2ページ目は globalStart から rank を振る（新着区間を過ぎたページは新着の動画を渡さない）', () => {
     const snap = [mk('x'), mk('y')]
-    const page = assembleMergedPage(rt, snap, planMergedPage(2, 2, 1))
+    const page = assembleMergedPage([], snap, planMergedPage(2, 2, 1))
     expect(page.map((i) => [i.id, i.rank])).toEqual([['x', 3], ['y', 4]])
+  })
+  it('組み立て: 新着区間はこのページの分だけを受け取り、その後に索引を続ける', () => {
+    // 区間 R=5、1 ページ 3 件の 2 ページ目は、区間の 4・5 件目と索引の先頭 1 件
+    const plan = planMergedPage(2, 3, 5)
+    const page = assembleMergedPage([mk('r4'), mk('r5')], [mk('s1'), mk('s2')], plan)
+    expect(page.map((i) => [i.id, i.rank])).toEqual([['r4', 4], ['r5', 5], ['s1', 6]])
   })
 })
 

@@ -12,8 +12,13 @@ import type { SearchConditions } from './snapshot-search'
 
 export const NVAPI_SEARCH_URL = 'https://nvapi.nicovideo.jp/v2/search/video'
 export const REALTIME_PAGE_SIZE = 100
-/** 区間が巨大なときの安全弁（100件×3ページ） */
+/**
+ * 再生数などの範囲を後から当てる検索で、区間の先頭から読む上限（100件×3ページ）。
+ * 後から絞ると区間の中の位置が先頭から読まないと決まらないので、どのページでもこの深さまでを読む
+ */
 export const REALTIME_MAX_PAGES = 3
+/** nvapi の動画検索が返せる深さ。page×pageSize が 5,000 件を超えると 400 になり、上限のページでは hasNext が false（2026-09-27 実測） */
+export const NVAPI_MAX_ITEMS = 5000
 /** Snapshot のインデックス確定時刻（JST） */
 export const SNAPSHOT_CUTOFF_HOUR_JST = 5
 
@@ -192,7 +197,18 @@ export function buildNvapiSearchUrl(conditions: SearchConditions, boundary: stri
       : boundary
   params.set('minRegisteredAt', from)
   if (conditions.dateTo) params.set('maxRegisteredAt', conditions.dateTo)
+  // 再生時間は nvapi 側で絞れる（端を含む。Snapshot の gte / lte と同じ。2026-09-27 実測）
+  if (conditions.durationMin !== undefined) params.set('minDuration', String(conditions.durationMin))
+  if (conditions.durationMax !== undefined) params.set('maxDuration', String(conditions.durationMax))
   return `${NVAPI_SEARCH_URL}?${params.toString()}`
+}
+
+/**
+ * nvapi で絞れず、取った後に当てる範囲の条件（再生数・コメント数・いいね数・マイリスト数）があるか。
+ * 投稿日時と再生時間は nvapi 側で絞れる
+ */
+export function hasPostFilters(c: SearchConditions): boolean {
+  return [c.viewsMin, c.viewsMax, c.commentsMin, c.commentsMax, c.likesMin, c.likesMax, c.mylistsMin, c.mylistsMax].some((v) => v !== undefined)
 }
 
 export interface NvapiVideo {
@@ -360,9 +376,9 @@ export function planMergedPage(page: number, pageSize: number, realtimeCount: nu
 }
 
 /**
- * ページを組み立てる。Snapshot 側にリアルタイム区間と同じ動画があれば
- * （インデックス確定時刻のズレ）Snapshot 側を落として重複を防ぐ。
- * snapshotItems は plan.snapshotOffset から始まる配列を渡す。
+ * ページを組み立てる。realtimeItems は新着区間のうちこのページの分（[plan.realtimeFrom, plan.realtimeTo)）、
+ * snapshotItems は plan.snapshotOffset から始まる索引の動画を渡す。
+ * 索引側に新着区間と同じ動画があれば（インデックス確定時刻のズレ）索引側を落として重複を防ぐ。
  */
 export function assembleMergedPage(
   realtimeItems: RankingItem[],
@@ -370,7 +386,6 @@ export function assembleMergedPage(
   plan: MergedPagePlan
 ): RankingItem[] {
   const realtimeIds = new Set(realtimeItems.map((it) => it.id))
-  const head = realtimeItems.slice(plan.realtimeFrom, plan.realtimeTo)
   const tail = snapshotItems.filter((it) => !realtimeIds.has(it.id)).slice(0, plan.snapshotLimit)
-  return [...head, ...tail].map((it, i) => ({ ...it, rank: plan.globalStart + i + 1 }))
+  return [...realtimeItems, ...tail].map((it, i) => ({ ...it, rank: plan.globalStart + i + 1 }))
 }
