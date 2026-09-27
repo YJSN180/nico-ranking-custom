@@ -4,7 +4,7 @@ import { unwrap } from 'idb'
 import type { IDBPDatabase } from 'idb'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
-import { importMylistData, type BackupData } from '@/lib/storage/backup'
+import { detectMylistConflicts, importMylistData, type BackupData } from '@/lib/storage/backup'
 
 // マイリストの復元（importMylistData）を実 IndexedDB 実装（fake-indexeddb）で確かめる。
 // データはすべて合成値。
@@ -92,6 +92,55 @@ describe('importMylistData', () => {
       const mylists = await manager.getAllMylists()
       expect(mylists.map((m) => m.id)).toEqual([existingId])
       expect((await manager.getVideosInMylist(existingId)).map((v) => v.id)).toEqual(['sm90000001'])
+    })
+  })
+
+  describe('ファイルの中身の検証（統合形式は readBackupFile の検証を通らない）', () => {
+    // 統合バックアップの data.mylists から組み立てたデータに、所属マイリスト ID の無い動画が混ざっている
+    const backupWithBrokenVideo = () =>
+      makeBackup({
+        mylists: [
+          { id: 'mylist-import-1', name: '取り込む合成リスト', createdAt: 1700000000000, updatedAt: 1700000000000, videoCount: 2 },
+        ],
+        mylistVideos: [
+          { id: 'sm90000101', mylistId: 'mylist-import-1', title: '合成動画', thumbURL: '', addedAt: 1700000000000 },
+          { id: 'sm90000102', title: '所属の無い合成動画', thumbURL: '', addedAt: 1700000000001 } as unknown as BackupData['mylistVideos'][number],
+        ],
+      })
+
+    it('ID の欠けたデータは取り込まず、一部だけ入った状態にもしない', async () => {
+      const result = await importMylistData(backupWithBrokenVideo(), 'safe_add')
+
+      expect(result.success).toBe(false)
+      expect(result.errors.join('\n')).toContain('無効なファイル形式')
+      expect(await manager.getAllMylists()).toEqual([])
+    })
+
+    it('追加日時が文字列の動画も、取り込み後に詳細の一覧へ出る', async () => {
+      const backup = makeBackup({
+        mylists: [
+          { id: 'mylist-import-1', name: '取り込む合成リスト', createdAt: 1700000000000, updatedAt: 1700000000000, videoCount: 1 },
+        ],
+        mylistVideos: [
+          { id: 'sm90000101', mylistId: 'mylist-import-1', title: '合成動画', thumbURL: '', addedAt: '2026-01-02T03:04:05.000Z' } as unknown as BackupData['mylistVideos'][number],
+        ],
+      })
+
+      const result = await importMylistData(backup, 'safe_add')
+
+      expect(result.success).toBe(true)
+      const videos = await manager.getVideosInMylist('mylist-import-1')
+      expect(videos.map((v) => v.id)).toEqual(['sm90000101'])
+      expect(videos[0].addedAt).toBe(Date.parse('2026-01-02T03:04:05.000Z'))
+    })
+
+    it('重複の検出でも ID の欠けたデータを受け付けない', async () => {
+      await manager.createMylist('取り込む合成リスト')
+      const backup = makeBackup({
+        mylists: [{ name: '取り込む合成リスト', createdAt: 1700000000000, updatedAt: 1700000000000, videoCount: 0 } as unknown as BackupData['mylists'][number]],
+      })
+
+      await expect(detectMylistConflicts(backup)).rejects.toThrow('無効なファイル形式')
     })
   })
 })

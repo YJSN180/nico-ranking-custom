@@ -12,6 +12,7 @@
 
 import { DBManager } from './db-manager'
 import type { Mylist, MylistVideo } from './types'
+import { INVALID_MYLIST_BACKUP_MESSAGE, parseMylistBackupContent } from './mylist-backup-schema'
 
 /**
  * エクスポート時の動画データ（統計情報を除外）
@@ -312,7 +313,13 @@ function generateUniqueMylistId(): string {
 /**
  * 重複と競合関係を検出
  */
-export async function detectMylistConflicts(importingData: BackupData): Promise<MylistConflictDetectionResult> {
+export async function detectMylistConflicts(backup: BackupData): Promise<MylistConflictDetectionResult> {
+  // 統合形式から組み立てたデータは readBackupFile の検証を通っていないので、ここで確かめる
+  const importingData = parseMylistBackupContent(backup)
+  if (!importingData) {
+    throw new Error(INVALID_MYLIST_BACKUP_MESSAGE)
+  }
+
   const dbManager = new DBManager()
   await dbManager.init()
   const db = dbManager.getDB()
@@ -452,6 +459,13 @@ export async function importMylistData(
   }
   const renamed: Array<{ original: string; renamed: string }> = []
   
+  // ID の欠けたレコードは、そのレコードだけ書き込みに失敗して一部だけ取り込まれた状態になる。
+  // 取り込む前にファイル全体を検証し、日時などの型もそろえる
+  const content = parseMylistBackupContent(data)
+  if (!content) {
+    return failedImportResult([INVALID_MYLIST_BACKUP_MESSAGE])
+  }
+  
   try {
     const dbManager = new DBManager()
     await dbManager.init()
@@ -477,7 +491,7 @@ export async function importMylistData(
     const existingNames = existingMylists.map(m => m.name)
     
     // マイリストをインポート
-    for (const importingMylist of data.mylists) {
+    for (const importingMylist of content.mylists) {
       try {
         let mylistToImport = { ...importingMylist }
         
@@ -534,7 +548,7 @@ export async function importMylistData(
     }
     
     // マイリスト動画をインポート
-    for (const importingVideo of data.mylistVideos) {
+    for (const importingVideo of content.mylistVideos) {
       try {
         let videoToImport = { ...importingVideo }
         
@@ -556,7 +570,7 @@ export async function importMylistData(
           }
           
           // マイリストIDの変更を反映（安全追加でIDが変更された場合）
-          const originalMylist = data.mylists.find(m => m.id === importingVideo.mylistId)
+          const originalMylist = content.mylists.find(m => m.id === importingVideo.mylistId)
           if (originalMylist) {
             const renamedEntry = renamed.find(r => r.original === originalMylist.name)
             if (renamedEntry) {
