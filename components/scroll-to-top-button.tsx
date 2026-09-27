@@ -38,6 +38,8 @@ export function ScrollToTopButton() {
   return (
     <button
       type="button"
+      // モバイルのドロワーを開いている間は globals.css で隠す
+      className="scroll-to-top-button"
       aria-label="ページ最上部へ戻る"
       onClick={() => {
         window.scrollTo({ top: 0, behavior: prefersReducedMotion ? 'auto' : 'smooth' })

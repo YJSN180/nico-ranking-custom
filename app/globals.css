@@ -402,6 +402,16 @@ button,
   }
 }
 
+/* モバイルのドロワー（body 直下の #navigation-menu。768px 以下で表示）を開いている間は
+   「▲」（z-index 1000）を隠す。ドロワー(40)と暗い覆い(30)より手前に出て押せてしまうため。
+   z-index を下げると設定モーダル・トースト・⋮メニューのモーダルとの重なりまで変わるので、
+   開いている間だけ隠す（PC のドロップダウンでは #navigation-menu は表示されない） */
+@media (max-width: 768px) {
+  body:has(#navigation-menu) .scroll-to-top-button {
+    visibility: hidden;
+  }
+}
+
 /* reduced-motion 環境ではすべてのアニメーション・トランジションを実質無効化 */
 @media (prefers-reduced-motion: reduce) {
   *,
