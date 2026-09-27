@@ -61,6 +61,13 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/changelog', label: '更新履歴', icon: <HistoryIcon />, section: 'info' },
 ]
 
+// ドロワーの中でフォーカスできる要素（Tab の順）
+function getDrawerFocusables(root: HTMLElement): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+  )
+}
+
 interface NavigationProps {
   /** メニューの開閉を親（ヘッダー）へ知らせる。ドロワーを開いている間はヘッダーを隠さないため */
   onOpenChange?: (open: boolean) => void
@@ -80,13 +87,26 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
   const menuRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   // モバイル/デスクトップ両方を常時レンダリングするため、参照は分ける
-  const mobileMenuRef = useRef<HTMLElement>(null)
+  const mobileMenuRef = useRef<HTMLElement | null>(null)
   const mobileButtonRef = useRef<HTMLButtonElement>(null)
+  // キーボードで開いたとき、描画されたドロワーの最初の操作へフォーカスを移す
+  const focusDrawerOnOpenRef = useRef(false)
+  const setMobileMenuRef = useCallback((element: HTMLElement | null) => {
+    mobileMenuRef.current = element
+    if (element && focusDrawerOnOpenRef.current) {
+      focusDrawerOnOpenRef.current = false
+      getDrawerFocusables(element)[0]?.focus()
+    }
+  }, [])
   
   // メニューを閉じる。モバイルのドロワーは退場アニメーション付き。
   // PC（769px 以上）のドロップダウンは main と同じく即座に閉じる
   const closeMenu = useCallback(() => {
     if (!isOpen || isClosing) return
+    // ドロワーの中の操作（閉じるボタン等）で閉じたら、フォーカスをメニューボタンへ戻す（中身ごと消えるため）
+    if (mobileMenuRef.current?.contains(document.activeElement)) {
+      mobileButtonRef.current?.focus()
+    }
     if (typeof window !== 'undefined' && window.matchMedia && !window.matchMedia('(max-width: 768px)').matches) {
       setIsOpen(false)
       return
@@ -165,7 +185,15 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
         {/* ハンバーガーメニューボタン */}
         <button
           ref={mobileButtonRef}
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={(e) => {
+            // キーボード（Enter / Space。click の detail が 0）で開いたときはドロワーの中へフォーカスを移す。
+            // ドロワーは body の末尾に描画するので、移さないと Tab が覆いの後ろのヘッダーへ進む。
+            // タップ・クリックでは動かさない（フォーカスリングを出さないため）
+            if (!isOpen && e.detail === 0) {
+              focusDrawerOnOpenRef.current = true
+            }
+            setIsOpen(!isOpen)
+          }}
           aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
           aria-expanded={isOpen}
           aria-controls="navigation-menu"
@@ -200,11 +228,26 @@ export function Navigation({ onOpenChange }: NavigationProps = {}) {
 
             {/* サイドメニュー */}
             <nav
-              ref={mobileMenuRef}
+              ref={setMobileMenuRef}
               id="navigation-menu"
               role="navigation"
               aria-label="メインナビゲーション"
               className={`${styles.drawer}${isClosing ? ` ${styles.drawerClosing}` : ''}`}
+              onKeyDown={(e) => {
+                // 開いている間の Tab / Shift+Tab はドロワーの中で回す（覆いの後ろのページへ出さない）
+                if (e.key !== 'Tab') return
+                const focusables = getDrawerFocusables(e.currentTarget)
+                const first = focusables[0]
+                const last = focusables[focusables.length - 1]
+                if (!first || !last) return
+                if (e.shiftKey && document.activeElement === first) {
+                  e.preventDefault()
+                  last.focus()
+                } else if (!e.shiftKey && document.activeElement === last) {
+                  e.preventDefault()
+                  first.focus()
+                }
+              }}
             >
               <div className={styles.drawerContent}>
                 <div className={styles.drawerHeader}>
