@@ -553,7 +553,8 @@ const handler = {
             value: '*/5 * * * *',
           },
           timezone: 'Asia/Tokyo',
-          checkinMargin: 2,
+          // Cron starts drift by about a minute; a run takes about 45 s. Allow one full interval of lateness.
+          checkinMargin: 5,
           maxRuntime: 10,
         },
       ),

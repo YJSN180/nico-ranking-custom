@@ -280,6 +280,20 @@ describe('Video Stats Updater Worker', () => {
         .toEqual(['in_progress', 'ok']);
     });
 
+    it('reports cron check-ins with a five-minute margin for the five-minute schedule', async () => {
+      generationFixture();
+      const sentryItems = captureSentry();
+      const fetchMock = global.fetch;
+      await runScheduled();
+      const [started] = sentryItems(fetchMock).filter((item) => item.monitor_slug === 'video-stats-updater');
+      expect(started.status).toBe('in_progress');
+      expect(started.monitor_config).toMatchObject({
+        schedule: { type: 'crontab', value: '*/5 * * * *' },
+        checkin_margin: 5,
+        max_runtime: 10,
+      });
+    });
+
     function triggerRequest() {
       env.WORKER_AUTH_KEY = 'test-only-key';
       return new Request('https://stats.example/trigger', { method: 'POST', headers: { Authorization: 'Bearer test-only-key' } });
