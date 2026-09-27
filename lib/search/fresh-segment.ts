@@ -49,6 +49,8 @@ export interface FreshSegment {
    * 取れた中で最も古い投稿時刻。境界からこの時刻までの投稿は欠けうる
    */
   truncatedAt: { long?: string; short?: string }
+  /** 動画とショートの両方を取る検索で、片方だけ取れなかったときの失敗（取れた方の動画は items に入る） */
+  error?: string
 }
 
 interface CacheEntry {
@@ -79,6 +81,7 @@ const oldestRegisteredAt = (videos: NicoPageVideo[]): string | undefined =>
  * 種別ごとに 1 ページ目を取り、全件が境界以降で続きがあるときだけ 2〜FRESH_MAX_PAGES ページ目を並列に読み足す。
  * 読み足しは途中のページが取れなければそこまでにする（穴のあいた区間を返さない）。1 ページ目の失敗は throw。
  * 最後に使ったページもまだ境界に届いていなければ、取れた中で最も古い投稿時刻を truncatedAt に返す。
+ * 読み足しに失敗したときは partial（キャッシュしない。次の検索で取り直す）
  */
 async function fetchKindPages(
   kind: NicoPageKind,
@@ -86,24 +89,32 @@ async function fetchKindPages(
   boundaryMs: number,
   fetchImpl: typeof fetch,
   signal?: AbortSignal
-): Promise<{ videos: NicoPageVideo[]; truncatedAt?: string }> {
+): Promise<{ videos: NicoPageVideo[]; truncatedAt?: string; partial: boolean }> {
   const first = await fetchNicoSearchPage(kind, query, 1, fetchImpl, FRESH_TIMEOUT_MS, signal)
-  if (!isSaturated(first, boundaryMs)) return { videos: first.items }
+  if (!isSaturated(first, boundaryMs)) return { videos: first.items, partial: false }
   const rest = await Promise.allSettled(
     Array.from({ length: FRESH_MAX_PAGES - 1 }, (_, i) => fetchNicoSearchPage(kind, query, i + 2, fetchImpl, FRESH_TIMEOUT_MS, signal))
   )
   const pages = [first]
+  let partial = false
   for (const result of rest) {
-    if (result.status !== 'fulfilled') break
+    if (result.status !== 'fulfilled') {
+      partial = true
+      break
+    }
     pages.push(result.value)
   }
   const videos = pages.flatMap((page) => page.items)
-  return isSaturated(pages[pages.length - 1], boundaryMs) ? { videos, truncatedAt: oldestRegisteredAt(videos) } : { videos }
+  const truncatedAt = isSaturated(pages[pages.length - 1], boundaryMs) ? oldestRegisteredAt(videos) : undefined
+  return { videos, partial, ...(truncatedAt ? { truncatedAt } : {}) }
 }
+
+const errorMessage = (reason: unknown): string => (reason instanceof Error ? reason.message : 'fresh_error')
 
 /**
  * 本家ページの 1 ページ目を取り、境界以降の動画だけを RankingItem にして返す（60 秒メモリキャッシュ）。
- * 条件が対象外なら空。失敗は throw する。
+ * 条件が対象外なら空。取る種類がすべて失敗したら throw し、一部だけ失敗したら取れた分と error を返す。
+ * 失敗を含む結果はキャッシュしない（穴のあいた区間を使い回さず、次の検索で取り直す）。
  */
 export async function fetchFreshSegment(
   conditions: SearchConditions,
@@ -120,6 +131,7 @@ export async function fetchFreshSegment(
   const cached = cache.get(key)
   let items: RankingItem[]
   let truncatedAt: FreshSegment['truncatedAt'] = {}
+  let error: string | undefined
   if (cached && now - cached.at < FRESH_CACHE_TTL_MS) {
     items = cached.items
     truncatedAt = cached.truncatedAt
@@ -133,24 +145,34 @@ export async function fetchFreshSegment(
         : conditions.contentType === 'short'
           ? [shortsKindOf(query.kind)]
           : [query.kind, shortsKindOf(query.kind)]
-    const results = await Promise.all(kinds.map((kind) => fetchKindPages(kind, query.query, boundaryMs, fetchImpl, options.signal)))
+    // 種類ごとに独立して扱う（ショートのページが落ちても、取れた動画の最新は使う）
+    const settled = await Promise.allSettled(kinds.map((kind) => fetchKindPages(kind, query.query, boundaryMs, fetchImpl, options.signal)))
+    const failure = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failure && settled.every((result) => result.status === 'rejected')) throw failure.reason
+    error = failure ? errorMessage(failure.reason) : undefined
     const seen = new Set<string>()
-    items = results
-      .flatMap((result) => result.videos)
+    let partial = failure !== undefined
+    const videos: NicoPageVideo[] = []
+    settled.forEach((result, i) => {
+      const kind = kinds[i]
+      if (result.status !== 'fulfilled' || kind === undefined) return
+      videos.push(...result.value.videos)
+      if (result.value.partial) partial = true
+      if (result.value.truncatedAt) truncatedAt[isShortsKind(kind) ? 'short' : 'long'] = result.value.truncatedAt
+    })
+    items = videos
       .filter((v) => (seen.has(v.id) ? false : (seen.add(v.id), true)))
       .map((v, i) => mapNvapiVideoToRankingItem(toNvapiVideo(v), i + 1))
-    kinds.forEach((kind, i) => {
-      const at = results[i]?.truncatedAt
-      if (at) truncatedAt[isShortsKind(kind) ? 'short' : 'long'] = at
-    })
-    if (cache.size >= FRESH_CACHE_MAX) {
-      const oldest = cache.keys().next().value
-      if (oldest !== undefined) cache.delete(oldest)
+    if (!partial) {
+      if (cache.size >= FRESH_CACHE_MAX) {
+        const oldest = cache.keys().next().value
+        if (oldest !== undefined) cache.delete(oldest)
+      }
+      cache.set(key, { at: now, items, truncatedAt })
     }
-    cache.set(key, { at: now, items, truncatedAt })
   }
   const newer = items.filter((it) => it.registeredAt !== undefined && new Date(it.registeredAt).getTime() >= boundaryMs)
-  return { items: applyRealtimeRangeFilters(applyDateFilters(newer, conditions), conditions), truncatedAt }
+  return { items: applyRealtimeRangeFilters(applyDateFilters(newer, conditions), conditions), truncatedAt, ...(error ? { error } : {}) }
 }
 
 /** 最新区間を nvapi のリアルタイム区間に併合する（ID で重複除外、投稿時刻の降順、rank 振り直し） */

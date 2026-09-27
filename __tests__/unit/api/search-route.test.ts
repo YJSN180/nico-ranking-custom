@@ -56,6 +56,8 @@ const isoAt = (msValue: number): string => formatJstIso(new Date(msValue))
 let videos: FakeVideo[] = []
 let nvapiStatus = 200
 let pageStatus = 200
+/** 本家のショートのページ（/search_shorts, /tag_shorts）だけの HTTP ステータス */
+let shortsPageStatus = 200
 /** Snapshot の境界の問い合わせ（新しい順・1 件）の HTTP ステータス */
 let boundaryStatus = 200
 /** Snapshot のページ取得（境界の問い合わせ以外）の HTTP ステータス。400 は本物と同じ JSON 本文で返す */
@@ -137,6 +139,7 @@ function nvapiResponse(url: URL): Response {
 function pageResponse(url: URL): Response {
   if (pageStatus !== 200) return new Response('', { status: pageStatus })
   const kind: Kind = url.pathname.startsWith('/search_shorts') || url.pathname.startsWith('/tag_shorts') ? 'short' : 'long'
+  if (kind === 'short' && shortsPageStatus !== 200) return new Response('', { status: shortsPageStatus })
   const page = Number(url.searchParams.get('page') ?? 1)
   const list = videos.filter((v) => v.kind === kind).sort(byNewest)
   const items = list.slice((page - 1) * 32, page * 32).map((v) => ({
@@ -204,6 +207,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    shortsPageStatus = 200
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
@@ -291,6 +295,14 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     expect(pages.every((u) => !u.searchParams.has('filters[startTime][lt]'))).toBe(true)
   })
 
+  it('ショートのページだけ取れなかったら、動画の最新（本家ページ）は使い、取れなかったことを知らせる', async () => {
+    shortsPageStatus = 503
+    const { body } = await search('q=x&sort=-startTime')
+    expect(body.source).toBe('merged')
+    expect(ids(body).slice(0, 4)).toEqual(['sm9103', 'sm9102', 'sm9101', 'sm1060'])
+    expect(body.freshError).toBe('nico_page_http_503')
+  })
+
   describe('ショートだけの検索', () => {
     it('本家ページ区間を先頭に、索引の最新のショートから続ける', async () => {
       const { body } = await search('q=x&sort=-startTime&contentType=short')
@@ -322,6 +334,7 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    shortsPageStatus = 200
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
@@ -363,6 +376,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    shortsPageStatus = 200
     boundaryStatus = 200
     snapshotPageStatus = 200
     snapshotPageHang = false
@@ -428,6 +442,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     seedWorld()
     nvapiStatus = 200
     pageStatus = 200
+    shortsPageStatus = 200
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []

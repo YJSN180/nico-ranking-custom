@@ -142,6 +142,25 @@ describe('fetchFreshSegment', () => {
       expect(segment.truncatedAt).toEqual({ short: minute(31) })
     })
 
+    it('途中のページが取れなかった結果はキャッシュしない（次の検索で取り直し、穴のあいた区間を 60 秒使い回さない）', async () => {
+      let failPage2 = true
+      const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+        const page = Number(new URL(String(url)).searchParams.get('page') ?? '1')
+        if (page === 2 && failPage2) return { ok: false, status: 503 } as unknown as Response
+        return { ok: true, text: async () => pageHtml(fullPage(page), true) } as unknown as Response
+      })
+      const first = await fetchFreshSegment(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+      expect(first.items).toHaveLength(32)
+      expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES)
+      failPage2 = false
+      const second = await fetchFreshSegment(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 2_000 })
+      expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES * 2)
+      expect(second.items).toHaveLength(32 * FRESH_MAX_PAGES)
+      // 全部取れた結果はキャッシュする
+      await fetchFreshSegment(base({ contentType: 'short' }), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 3_000 })
+      expect(fetchImpl).toHaveBeenCalledTimes(FRESH_MAX_PAGES * 2)
+    })
+
     it('境界まで届いていれば打ち切りなし（動画とショートを別々に判定する）', async () => {
       const fetchImpl = vi.fn(async (url: string | URL | Request) => {
         const u = new URL(String(url))
@@ -152,6 +171,24 @@ describe('fetchFreshSegment', () => {
       const segment = await fetchFreshSegment(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
       expect(segment.truncatedAt).toEqual({ short: minute(32 * FRESH_MAX_PAGES - 1) })
     })
+  })
+
+  it('動画とショートの両方を取る検索で片方だけ取れなかったら、取れた方を返して失敗を知らせ、キャッシュしない', async () => {
+    const boundary = '2026-09-21T04:28:31+09:00'
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (new URL(String(url)).pathname.startsWith('/search_shorts')) return { ok: false, status: 503 } as unknown as Response
+      return { ok: true, text: async () => pageHtml([item('long1', '2026-09-22T06:42:18+09:00')]) } as unknown as Response
+    })
+    const segment = await fetchFreshSegment(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000 })
+    expect(segment.items.map((it) => it.id)).toEqual(['long1'])
+    expect(segment.error).toBe('nico_page_http_503')
+    await fetchFreshSegment(base(), boundary, { fetchImpl: fetchImpl as unknown as typeof fetch, now: 2_000 })
+    expect(fetchImpl).toHaveBeenCalledTimes(4)
+  })
+
+  it('取る種類がすべて失敗したら投げる', async () => {
+    const down = vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response)
+    await expect(fetchFreshSegment(base(), '2026-09-21T04:28:31+09:00', { fetchImpl: down as unknown as typeof fetch })).rejects.toThrow('nico_page_http_503')
   })
 
   it('HTTP エラー・構造変化は投げる', async () => {

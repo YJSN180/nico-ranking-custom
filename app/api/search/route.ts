@@ -193,6 +193,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const segment = realtimeResult.segment
   // 本家ページの最新動画（nvapi 未反映分）をリアルタイム区間に併合してから、ページを組み立てる
+  const freshError = freshResult.error ?? freshResult.fresh.error
   const withFresh = mergeFreshIntoRealtime(freshResult.fresh.items, segment.items)
   const gapUntil = realtimeGapUntil(conditions, segment, freshResult.fresh)
   const realtimeItems = withFresh.items
@@ -220,7 +221,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     realtimeCount: realtimeItems.length,
     ...(gapUntil ? { realtimeGap: { from: boundary, to: gapUntil } } : {}),
     freshCount: withFresh.added,
-    ...(freshResult.error ? { freshError: freshResult.error } : {}),
+    // 本家ページが落ちた（全体）か、動画とショートの片方だけ落ちた（一部）ときは、最新の投稿が欠けうることを知らせる
+    ...(freshError ? { freshError } : {}),
     cacheControl: 'public, s-maxage=30, stale-while-revalidate=60',
   })
 }
