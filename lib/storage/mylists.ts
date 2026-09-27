@@ -242,14 +242,17 @@ export class MylistManager {
       throw new Error('Mylist not found')
     }
     
-    // 動画を削除
-    await tx.objectStore('mylistVideos').delete([mylistId, videoId])
-    
-    // マイリストの動画数と更新日時を更新
-    mylist.videoCount = Math.max(0, mylist.videoCount - 1)
-    mylist.updatedAt = Date.now()
-    await tx.objectStore('mylists').put(mylist)
-    
+    // 登録されていない動画（別タブで削除済み・二重操作）では件数を減らさない
+    const existingVideo = await tx.objectStore('mylistVideos').get([mylistId, videoId])
+    if (existingVideo) {
+      await tx.objectStore('mylistVideos').delete([mylistId, videoId])
+
+      // マイリストの動画数と更新日時を更新
+      mylist.videoCount = Math.max(0, mylist.videoCount - 1)
+      mylist.updatedAt = Date.now()
+      await tx.objectStore('mylists').put(mylist)
+    }
+
     await tx.done
   }
 
