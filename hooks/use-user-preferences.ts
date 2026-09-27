@@ -37,7 +37,9 @@ export function useUserPreferences() {
         return { ...defaultPreferences, ...cookiePrefs }
       }
       
-      // Cookieがない場合、localStorageから読み込む（PWA対応）
+      // Cookieがない場合、localStorageから読み込む（PWA対応）。
+      // 控えは消さない: app/layout.tsx の描画前スクリプトがテーマを当てるのに読み、
+      // Cookie がまた失効したとき（Safari は JS で書いた Cookie を 7 日で失効させる）の戻り先にもなる
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
@@ -46,7 +48,6 @@ export function useUserPreferences() {
           if (parsed.version === CURRENT_VERSION) {
             // Cookieにも同期を試みる
             setUserPreferencesCookieClient(parsed)
-            localStorage.removeItem(STORAGE_KEY)
             return parsed
           }
         }
@@ -132,9 +133,8 @@ export function getStoredPreferences(): Partial<UserPreferences> | null {
     if (stored) {
       const parsed = JSON.parse(stored)
       if (parsed.version === CURRENT_VERSION) {
-        // Cookieに同期を試みる
+        // Cookieに同期を試みる（localStorage の控えは残す）
         setUserPreferencesCookieClient(parsed)
-        localStorage.removeItem(STORAGE_KEY)
         return parsed
       }
     }
