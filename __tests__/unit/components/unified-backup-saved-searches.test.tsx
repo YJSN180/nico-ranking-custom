@@ -70,13 +70,13 @@ beforeEach(() => {
   localStorage.clear()
   toasts = []
   window.addEventListener(TOAST_EVENT, onToast)
-  delete (window as Partial<Window>).location
-  window.location = { ...originalLocation, reload } as Location
+  // 再読み込みを数えるため、location を差し替える
+  Object.defineProperty(window, 'location', { configurable: true, writable: true, value: { ...originalLocation, reload } })
 })
 
 afterEach(() => {
   window.removeEventListener(TOAST_EVENT, onToast)
-  window.location = originalLocation
+  Object.defineProperty(window, 'location', { configurable: true, writable: true, value: originalLocation })
   vi.useRealTimers()
   vi.restoreAllMocks()
 })

@@ -22,13 +22,17 @@ function renderSelector(video: RankingItem, onAdd = vi.fn()) {
 
 describe('PopoverNGSelector の投稿者の選択肢', () => {
   beforeEach(() => {
-    global.ResizeObserver = vi.fn().mockImplementation(function () {
-      return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() }
-    })
+    vi.stubGlobal(
+      'ResizeObserver',
+      vi.fn().mockImplementation(function () {
+        return { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() }
+      })
+    )
   })
 
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
   })
 
   it('投稿者名が分かる行では、投稿者名と投稿者 ID の両方を出し、名前で登録する', () => {
