@@ -283,10 +283,13 @@ function toSearchQuery(form: FormState, page: number): string {
   return buildSearchQuery(parseSearchConditions(buildQueryParams(form, page)))
 }
 
-/** URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する） */
+/**
+ * URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する）。
+ * 並び順・検索対象・ページも含める（キーワードなしで並び順だけ変えた検索も URL に残るため）
+ */
 const SEARCH_CONDITION_KEYS = [
-  'q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax',
-  'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot',
+  'q', 'targets', 'contentType', 'sort', 'genre', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax',
+  'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot', 'page',
 ] as const
 
 /** URLのクエリパラメータからフォーム状態を復元 */

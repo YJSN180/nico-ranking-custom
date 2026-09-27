@@ -254,6 +254,22 @@ describe('SearchClient', () => {
       expect(searchRequests()).toHaveLength(1)
     })
 
+    it.each([['sort=-startTime'], ['targets=tag'], ['page=2']])(
+      '並び順・検索対象・ページだけの URL（%s）に直接来ても検索する',
+      async (query) => {
+        nav.setQuery(query)
+        render(<SearchClient />)
+        await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      }
+    )
+
+    it('検索の条件を含まない URL（計測用のパラメータなど）では検索しない', async () => {
+      nav.setQuery('utm_source=x')
+      render(<SearchClient />)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(searchRequests()).toHaveLength(0)
+    })
+
     it('自分で書き換えた URL では検索し直さない', async () => {
       render(<SearchClient />)
       fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
