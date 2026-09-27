@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 
 // 利用者の設定（テーマ等）の保存を、jsdom の実 Cookie と localStorage で確かめる。データはすべて合成値。
@@ -31,5 +31,31 @@ describe('利用者の設定の保存', () => {
     expirePreferenceCookie()
     const second = renderHook(() => useUserPreferences())
     expect(second.result.current.preferences.theme).toBe('dark')
+  })
+
+  describe('画面の複数箇所で使うとき（ページ・設定モーダル・ナビ）', () => {
+    it('設定モーダルで変えたテーマが、ページ側のジャンル切り替えで元に戻らない', () => {
+      // app/client-page.tsx はページを開いたときの設定を持ったまま、ジャンル切り替えで保存する
+      const page = renderHook(() => useUserPreferences())
+      const settings = renderHook(() => useUserPreferences())
+
+      act(() => settings.result.current.updatePreferences({ theme: 'dark' }))
+      act(() => page.result.current.updatePreferences({ lastGenre: 'game', lastPeriod: '24h', lastTag: undefined }))
+
+      // 再読み込みした状態
+      const reloaded = renderHook(() => useUserPreferences())
+      expect(reloaded.result.current.preferences.theme).toBe('dark')
+      expect(reloaded.result.current.preferences.lastGenre).toBe('game')
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}').theme).toBe('dark')
+    })
+
+    it('ある箇所で変えたテーマが、開いている他の箇所の表示にも反映される', () => {
+      const navigation = renderHook(() => useUserPreferences())
+      const settings = renderHook(() => useUserPreferences())
+
+      act(() => settings.result.current.updatePreferences({ theme: 'darkblue' }))
+
+      expect(navigation.result.current.preferences.theme).toBe('darkblue')
+    })
   })
 })
