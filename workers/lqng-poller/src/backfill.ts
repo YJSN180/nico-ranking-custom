@@ -5,7 +5,10 @@
 //   ポーリングが冪等に合流する（判定表の書き手をポーリング 1 つにして、互いの更新を消し合わない）。
 // - 1 回の呼び出しは Snapshot ページ ≤ pages、ユーザー確認 ≤ usersPerCall、getthumbinfo ≤ thumbsPerCall
 //   に抑え、無料プランのサブリクエスト上限（50/実行）と CPU 時間に収める。
-// - ルール: B（タイトル）と HK（キーワード ∧ 頻度）は取り込み時に即判定。頻度 C に当たる投稿者だけ
+// - 判定は、同じ投稿者の前後の投稿を読み終えてから行う（投稿頻度 C を数え落とさない）。Snapshot は新しい順に
+//   読むので、読んだ位置より carryHours 以上新しい動画から判定する。pages（本家タグページ）はタグ×種別ごとに
+//   新しい順に読み直すので、全部のタグ×種別を読み終えてから判定する（それまで投稿頻度の記録を刈らない）。
+// - ルール: B（タイトル）と HK（キーワード ∧ 頻度）はタグなしで判定する。頻度 C に当たる投稿者だけ
 //   存在確認し、削除済みなら A∧C。ロックタグ群 D はタグ名の事前絞り込み（該当群のタグが閾値以上
 //   含まれる）に通った候補だけ getthumbinfo で補完して判定する。
 //   過去分は削除時刻が分からないため、A∧C の「投稿から 7 日以内の削除」は「現在削除済み」で代用する
@@ -22,7 +25,6 @@ import {
   fetchThumbInfoFromExt,
   fetchUserInfoFromNvapi,
   type SnapshotPage,
-  type SnapshotVideo,
   type ThumbResult,
   type UserInfo,
 } from './sources'
@@ -39,8 +41,9 @@ export const BACKFILL_LIMITS = {
   subrequestBudget: 40,
   /** Snapshot の 1 窓の幅（offset 上限 10 万件に収める） */
   windowDays: 30,
-  /** 投稿頻度 C の判定に持ち越す時間幅 */
+  /** 投稿頻度 C の判定に持ち越す時間幅（判定する動画の前後この時間の投稿を数える） */
   carryHours: 24,
+  /** Snapshot で投稿者ごとに持ち越す投稿の数 */
   carryPerAuthor: 12,
   pendingThumbsMax: 300,
   evidencePerAuthor: 3,
@@ -92,8 +95,18 @@ export interface BackfillPendingThumb {
   authorId: string
   title: string
   registeredAt: string
-  /** 投稿頻度の再評価用に、取り込み時点の投稿（ID と時刻）を写しておく */
+  /** 投稿頻度の判定用に、判定した時点の同じ投稿者の投稿（ID と時刻。前後 carryHours を読み終えたもの）を写しておく */
   posts: LqngPost[]
+}
+
+/** 読んだが、まだ判定していない動画（同じ投稿者の前後の投稿を読み終えるまで待つ） */
+export interface BackfillVideo {
+  id: string
+  title: string
+  authorId: string | null
+  registeredAt: string
+  /** Snapshot のタグ名（ロックタグ群の候補の絞り込みに使う。pages は空） */
+  tags: string[]
 }
 
 export interface BackfillStats {
@@ -107,7 +120,7 @@ export interface BackfillStats {
 }
 
 /** カーソルの形の版。持ち回りの途中で Worker が更新されたら、古い形のカーソルは受け付けない */
-export const BACKFILL_CURSOR_VERSION = 2
+export const BACKFILL_CURSOR_VERSION = 3
 
 /** 呼び出しの間で持ち回る走査状態（KV には置かない） */
 export interface BackfillCursor {
@@ -123,8 +136,13 @@ export interface BackfillCursor {
   offset: number
   /** これより前は走査しない */
   floor: string
-  /** 直近 carryHours 分の投稿者 → 投稿（C の判定用。動画 ID で重複を除く） */
+  /**
+   * 投稿者 → 投稿（C の判定用。動画 ID で重複を除く）。Snapshot は判定待ちの動画の前後 carryHours 分を、
+   * pages は走査の全部を持つ
+   */
   carry: Record<string, LqngPost[]>
+  /** 読んだが、まだ判定していない動画（読んだ順） */
+  unevaluated: BackfillVideo[]
   /** 存在確認済みの投稿者 */
   checked: Record<string, BackfillCheckedAuthor>
   pendingUsers: string[]
@@ -186,6 +204,7 @@ export function createBackfillCursor(now: Date, days: number | null | undefined,
     offset: 0,
     floor: new Date(floorMs).toISOString(),
     carry: {},
+    unevaluated: [],
     checked: {},
     pendingUsers: [],
     pendingThumbs: [],
@@ -315,57 +334,90 @@ class BackfillSession {
     if (list.length < BACKFILL_LIMITS.evidencePerAuthor && !list.some((x) => x.videoId === e.videoId)) list.push(e)
   }
 
-  ingestPage(videos: readonly SnapshotVideo[]): void {
-    let oldest: string | null = null
-    for (const v of videos) {
-      this.cursor.stats.videos++
-      if (!oldest || v.registeredAt < oldest) oldest = v.registeredAt
-      if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id]) continue
-      if (this.isAllowlisted(v)) continue
-
-      let posts: LqngPost[] = []
-      if (v.authorId) {
-        const list = (this.cursor.carry[v.authorId] ??= [])
-        if (!list.some((p) => p.id === v.id)) list.push({ id: v.id, at: v.registeredAt })
-        if (list.length > BACKFILL_LIMITS.carryPerAuthor) list.splice(0, list.length - BACKFILL_LIMITS.carryPerAuthor)
-        posts = list.slice()
-      }
-      const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null }
-      const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, posts), this.config)
-      const evidence: LqngEvidence = { videoId: v.id, title: v.title, registeredAt: v.registeredAt, rules: evaluation.reasons }
-      if (evaluation.ng) {
-        this.addVideoNg(v, evaluation.reasons)
-        if (evaluation.escalate && v.authorId) this.addAuthorNg(v.authorId, evaluation.escalateReasons, [evidence])
-        continue
-      }
-      if (!isUserId(v.authorId)) continue
-      const checked = this.cursor.checked[v.authorId]
-      if (evaluation.frequent) {
-        if (checked?.status === 'deleted') {
-          this.addAuthorNg(v.authorId, ['A_C'], [{ ...evidence, rules: ['A_C'] }])
-          continue
-        }
-        if (!checked) {
-          this.rememberEvidence(v.authorId, { ...evidence, rules: ['A_C'] })
-          if (!this.cursor.pendingUsers.includes(v.authorId)) this.cursor.pendingUsers.push(v.authorId)
-        }
-      }
-      const keyword = this.config.keywordNeedles.length > 0 && containsAnyNormalized(v.title, this.config.keywordNeedles)
-      const groupsMayMatch = this.cursor.source === 'pages' ? true : this.presentGroups(v.tags) >= this.config.lockGroupsMin
-      if ((evaluation.frequent || keyword) && groupsMayMatch && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
-        this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, posts })
-      }
-    }
-    if (oldest) this.pruneCarry(oldest)
+  /** 投稿を投稿頻度の記録（持ち越し）に足す（動画 ID で重複を除く） */
+  private remember(authorId: string, post: LqngPost): void {
+    const list = (this.cursor.carry[authorId] ??= [])
+    if (list.some((p) => p.id === post.id)) return
+    list.push(post)
+    // Snapshot は新しい順に読むので、先に読んだ（新しい）投稿から捨てる。pages はタグ×種別ごとに読み直すので捨てない
+    if (this.cursor.source === 'snapshot' && list.length > BACKFILL_LIMITS.carryPerAuthor) list.splice(0, list.length - BACKFILL_LIMITS.carryPerAuthor)
   }
 
-  /** 新しい順に進むので、現在位置より carryHours 以上新しい投稿時刻は二度と窓に入らない */
-  pruneCarry(oldestIso: string): void {
-    const limit = new Date(oldestIso).getTime() + BACKFILL_LIMITS.carryHours * HOUR_MS
+  /**
+   * 読んだ動画を投稿頻度の記録に足し、判定待ちに積む（判定はまだしない）。NG 済み・許可リストは読み飛ばす。
+   * 読んだ動画の最も古い投稿時刻（ミリ秒。Snapshot の読んだ位置）を返す
+   */
+  collect(videos: readonly BackfillVideo[]): number | null {
+    let oldest: number | null = null
+    const queued = new Set(this.cursor.unevaluated.map((v) => v.id))
+    for (const v of videos) {
+      this.cursor.stats.videos++
+      const atMs = new Date(v.registeredAt).getTime()
+      if (Number.isFinite(atMs) && (oldest === null || atMs < oldest)) oldest = atMs
+      if (this.isAuthorNg(v.authorId) || this.knownVideoNg(v.id) || this.deltas.videos[v.id] || this.isAllowlisted(v)) continue
+      if (v.authorId !== null) this.remember(v.authorId, { id: v.id, at: v.registeredAt })
+      // 同じ動画が複数のタグ・ページに出ても 1 回だけ判定する
+      if (queued.has(v.id)) continue
+      queued.add(v.id)
+      this.cursor.unevaluated.push({ id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tags: v.tags })
+    }
+    return oldest
+  }
+
+  /**
+   * Snapshot: 読んだ位置より carryHours 以上新しい動画を判定する（前後 carryHours の投稿を読み終えている）。
+   * 読んだ位置より 2×carryHours 以上新しい投稿は、判定待ちの動画の前後に入らないので記録から刈る
+   */
+  evaluateReady(oldestMs: number): void {
+    const readyFrom = oldestMs + BACKFILL_LIMITS.carryHours * HOUR_MS
+    const waiting: BackfillVideo[] = []
+    for (const v of this.cursor.unevaluated) {
+      if (new Date(v.registeredAt).getTime() >= readyFrom) this.evaluate(v)
+      else waiting.push(v)
+    }
+    this.cursor.unevaluated = waiting
+    const keepUntil = oldestMs + 2 * BACKFILL_LIMITS.carryHours * HOUR_MS
     for (const [authorId, posts] of Object.entries(this.cursor.carry)) {
-      const kept = posts.filter((p) => new Date(p.at).getTime() <= limit)
+      const kept = posts.filter((p) => new Date(p.at).getTime() <= keepUntil)
       if (kept.length === 0) delete this.cursor.carry[authorId]
       else this.cursor.carry[authorId] = kept
+    }
+  }
+
+  /** 走査を読み終えたあとで、残りの動画を判定する（pages はここで初めて判定する） */
+  evaluateRemaining(): void {
+    for (const v of this.cursor.unevaluated) this.evaluate(v)
+    this.cursor.unevaluated = []
+  }
+
+  /** 動画 1 本をタグなしで判定し、連投の投稿者を確認待ちに、ロックタグ群の候補を補完待ちに入れる */
+  private evaluate(v: BackfillVideo): void {
+    if (this.isAuthorNg(v.authorId) || this.deltas.videos[v.id]) return
+    const posts = v.authorId !== null ? [...(this.cursor.carry[v.authorId] ?? [])] : []
+    const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: null }
+    const evaluation = evaluateVideo(observation, this.authorObservation(v.authorId, posts), this.config)
+    const evidence: LqngEvidence = { videoId: v.id, title: v.title, registeredAt: v.registeredAt, rules: evaluation.reasons }
+    if (evaluation.ng) {
+      this.addVideoNg(v, evaluation.reasons)
+      if (evaluation.escalate && v.authorId) this.addAuthorNg(v.authorId, evaluation.escalateReasons, [evidence])
+      return
+    }
+    if (!isUserId(v.authorId)) return
+    const checked = this.cursor.checked[v.authorId]
+    if (evaluation.frequent) {
+      if (checked?.status === 'deleted') {
+        this.addAuthorNg(v.authorId, ['A_C'], [{ ...evidence, rules: ['A_C'] }])
+        return
+      }
+      if (!checked) {
+        this.rememberEvidence(v.authorId, { ...evidence, rules: ['A_C'] })
+        if (!this.cursor.pendingUsers.includes(v.authorId)) this.cursor.pendingUsers.push(v.authorId)
+      }
+    }
+    const keyword = this.config.keywordNeedles.length > 0 && containsAnyNormalized(v.title, this.config.keywordNeedles)
+    const groupsMayMatch = this.cursor.source === 'pages' ? true : this.presentGroups(v.tags) >= this.config.lockGroupsMin
+    if ((evaluation.frequent || keyword) && groupsMayMatch && this.cursor.pendingThumbs.length < BACKFILL_LIMITS.pendingThumbsMax) {
+      this.cursor.pendingThumbs.push({ id: v.id, authorId: v.authorId, title: v.title, registeredAt: v.registeredAt, posts })
     }
   }
 
@@ -529,16 +581,15 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
   for (let i = 0; i < pages && !windowsExhausted(cursor, tags.length) && session.budgetLeft(); i++) {
     session.subrequests++
     if (cursor.source === 'pages') {
-      // 本家タグページ: タグ×種別（動画/ショート）ごとに新しい順にページを進め、floor より古い動画が出たら次へ
+      // 本家タグページ: タグ×種別（動画/ショート）ごとに新しい順にページを進め、floor より古い動画が出たら次へ。
+      // 判定は全部のタグ×種別を読み終えてから（別のタグ・種別にある同じ投稿者の投稿も数える）
       const tag = tags[Math.floor(cursor.tagIndex / NICO_PAGE_KINDS.length)]!
       const kind = NICO_PAGE_KINDS[cursor.tagIndex % NICO_PAGE_KINDS.length]!
       const result = await deps.fetchTagPage(tag, cursor.page, kind)
       cursor.stats.pages++
       const floorMs = new Date(cursor.floor).getTime()
       const inRange = result.items.filter((v) => new Date(v.registeredAt).getTime() >= floorMs)
-      session.ingestPage(
-        inRange.map((v): SnapshotVideo => ({ id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, ownerVisibility: v.owner === null ? null : v.owner?.visibility === 'hidden' ? 'hidden' : 'visible', tags: [] }))
-      )
+      session.collect(inRange.map((v): BackfillVideo => ({ id: v.id, title: v.title, authorId: nicoPageOwnerId(v), registeredAt: v.registeredAt, tags: [] })))
       const reachedFloor = inRange.length < result.items.length
       // 続きの有無は hasNext で決める（形の崩れた項目を除くと 32 件未満になりうる）。空のページでは次のタグへ
       if (reachedFloor || !result.hasNext || result.items.length === 0) {
@@ -551,14 +602,16 @@ export async function runBackfillStep(kv: KvLike, deps: BackfillDeps, cursorIn: 
     }
     const page = await deps.fetchWindowPage(tags, cursor.windowStart, cursor.windowEnd, cursor.offset)
     cursor.stats.pages++
-    session.ingestPage(page.videos)
+    const oldest = session.collect(page.videos)
+    if (oldest !== null) session.evaluateReady(oldest)
     if (page.videos.length < SNAPSHOT_PAGE_SIZE || cursor.offset + SNAPSHOT_PAGE_SIZE >= page.totalCount) advanceWindow(cursor)
     else cursor.offset += SNAPSHOT_PAGE_SIZE
   }
+  if (windowsExhausted(cursor, tags.length)) session.evaluateRemaining()
   await session.checkUsers(deps)
   await session.enrichThumbs(deps)
 
-  const done = windowsExhausted(cursor, tags.length) && cursor.pendingUsers.length === 0 && cursor.pendingThumbs.length === 0
+  const done = windowsExhausted(cursor, tags.length) && cursor.unevaluated.length === 0 && cursor.pendingUsers.length === 0 && cursor.pendingThumbs.length === 0
   return { skipped: null, cursor, done, deltas: session.deltas, subrequests: session.subrequests, ...(session.note ? { note: session.note } : {}) }
 }
 

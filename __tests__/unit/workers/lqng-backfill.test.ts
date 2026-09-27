@@ -1,7 +1,18 @@
 import { describe, it, expect, vi } from 'vitest'
-import { BACKFILL_LIMITS, commitBackfill, createBackfillCursor, emptyDeltas, mergeDeltas, runBackfillStep, type BackfillDeps } from '@/workers/lqng-poller/src/backfill'
+import {
+  BACKFILL_LIMITS,
+  commitBackfill,
+  createBackfillCursor,
+  emptyDeltas,
+  mergeDeltas,
+  runBackfillStep,
+  type BackfillCursor,
+  type BackfillDeps,
+  type BackfillStepOptions,
+} from '@/workers/lqng-poller/src/backfill'
 import { InvalidInboxRefError, normalizeDeltas } from '@/workers/lqng-poller/src/inbox'
 import type { SnapshotVideo, ThumbResult, UserInfo } from '@/workers/lqng-poller/src/sources'
+import type { KvLike } from '@/workers/lqng-poller/src/state'
 import { LQNG_KV_KEYS } from '@/lib/lqng/config'
 import type { LqngConfig } from '@/lib/lqng/types'
 import { memoryKv } from './helpers/lqng-memory-kv'
@@ -39,6 +50,20 @@ const goneExceptControl = () => vi.fn(async (id: string): Promise<UserInfo> => (
 /** 窓の境界を無視して、与えた一覧を新しい順に 100 件ずつ返す */
 function pager(videos: SnapshotVideo[]) {
   return vi.fn(async (_tags: string[], _start: string, _end: string, offset: number) => ({ videos: videos.slice(offset, offset + 100), totalCount: videos.length }))
+}
+
+/** 走査を終えるまで呼び出しを続け、判定差分を駆動スクリプトと同じく足し合わせる */
+async function runSteps(kv: KvLike, d: BackfillDeps, options: BackfillStepOptions, maxCalls = 60) {
+  let cursor: BackfillCursor | null = null
+  const deltas = emptyDeltas()
+  for (let calls = 1; calls <= maxCalls; calls++) {
+    const r = await runBackfillStep(kv, d, cursor, options)
+    if (r.skipped) throw new Error(`skipped: ${r.skipped}`)
+    mergeDeltas(deltas, r.deltas)
+    cursor = r.cursor
+    if (r.done) return { deltas, cursor, calls }
+  }
+  throw new Error('the backfill did not finish')
 }
 
 function deps(over: Partial<BackfillDeps> = {}): BackfillDeps {
@@ -271,7 +296,35 @@ describe('runBackfillStep', () => {
 })
 
 describe('runBackfillStep（pages ソース: 本家タグページで直近を補完）', () => {
-  const pageItem = (id: string, authorId: string, minutesAgo: number) => ({ id, title: `t-${id}`, registeredAt: at(minutesAgo), owner: { ownerType: 'user', id: authorId, name: 'n', visibility: 'visible' } })
+  const pageItem = (id: string, authorId: string, minutesAgo: number, title = `t-${id}`) => ({ id, title, registeredAt: at(minutesAgo), owner: { ownerType: 'user', id: authorId, name: 'n', visibility: 'visible' } })
+  const empty = { items: [], totalCount: 0, hasNext: false }
+
+  it('タグや種別をまたぐ連投も投稿頻度に数える（全部のタグ×種別を読み終えるまで持ち越しを刈らない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // 6501 は 20 分のあいだに 3 本: tagA の動画・tagA のショート・tagB の動画に 1 本ずつ。
+    // tagA の動画は 30 時間前の別の投稿者の動画まで続く（読んだ位置から 24 時間より新しい記録を刈ると、先の 1 本が消える）
+    const fetchTagPage = vi.fn(async (tag: string, _page: number, kind: string) => {
+      if (tag === 'tagA' && kind === 'tag') return { items: [pageItem('sm6511', '6501', 1), pageItem('sm6512', '6502', 30 * 60)], totalCount: 2, hasNext: false }
+      if (tag === 'tagA' && kind === 'tag_shorts') return { items: [pageItem('ss6513', '6501', 12)], totalCount: 1, hasNext: false }
+      if (tag === 'tagB' && kind === 'tag') return { items: [pageItem('sm6514', '6501', 20)], totalCount: 1, hasNext: false }
+      return empty
+    })
+    const fetchUserInfo = vi.fn(async (id: string) => (id === '6501' ? deleted : existing(50)))
+    const r = await runSteps(m.kv, deps({ fetchTagPage, fetchUserInfo }), { pages: 8, source: 'pages' })
+    expect(r.deltas.authors['6501']?.reasons).toEqual(['A_C'])
+  })
+
+  it('先に読んだタグの動画も、後のタグで分かった連投と合わせて判定する（キーワード ∧ 連投 = HK）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    // 6601: tagA にキーワード入りの 1 本、tagB に普通の 2 本（10 分のあいだに 3 本）
+    const fetchTagPage = vi.fn(async (tag: string, _page: number, kind: string) => {
+      if (kind !== 'tag') return empty
+      if (tag === 'tagA') return { items: [pageItem('sm6611', '6601', 1, 'ほもと見る何か')], totalCount: 1, hasNext: false }
+      return { items: [pageItem('sm6612', '6601', 5), pageItem('sm6613', '6601', 10)], totalCount: 2, hasNext: false }
+    })
+    const r = await runSteps(m.kv, deps({ fetchTagPage }), { pages: 8, source: 'pages' })
+    expect(r.deltas.authors['6601']?.reasons).toContain('HK')
+  })
 
   it('タグごとにページを進め、floor より古い動画で次のタグへ。連投＋退会済みは A∧C', async () => {
     const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
