@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
 import Link from 'next/link'
+import { isImeComposing } from '@/lib/ime'
 
 interface MylistModalProps {
   mylists: Mylist[]
@@ -198,7 +199,8 @@ export function MylistModal({
                 value={newMylistName}
                 onChange={(e) => setNewMylistName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  // 日本語の変換を確定する Enter では作成しない
+                  if (e.key === 'Enter' && !e.shiftKey && !isImeComposing(e)) {
                     e.preventDefault()
                     handleCreateMylist()
                   }

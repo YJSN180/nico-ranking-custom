@@ -12,6 +12,7 @@ import { UnifiedBackup } from './unified-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
 import { lockViewportScroll } from '@/lib/scroll-lock'
+import { isImeComposing } from '@/lib/ime'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -92,6 +93,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // 日本語の変換中の Esc は変換の取り消し。モーダルは閉じない
+        if (isImeComposing(event)) return
         event.stopPropagation()
         handleCloseRef.current()
         return
@@ -633,7 +636,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     type="text"
                     value={inputVideoId}
                     onChange={(e) => setInputVideoId(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoId()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddVideoId()}
                     placeholder="sm12345678"
                   />
                   <button onClick={handleAddVideoId}>追加</button>
@@ -724,7 +727,7 @@ sm11111111`}
                     type="text"
                     value={inputVideoTitle}
                     onChange={(e) => setInputVideoTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoTitle()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddVideoTitle()}
                     placeholder="タイトルを入力"
                   />
                   <button onClick={handleAddVideoTitle}>追加</button>
@@ -786,7 +789,7 @@ sm11111111`}
                       type="text"
                       value={inputAuthorId}
                       onChange={(e) => setInputAuthorId(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorId()}
+                      onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddAuthorId()}
                       placeholder="投稿者ID（数字）"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
@@ -877,7 +880,7 @@ ch2625894`}
                       type="text"
                       value={inputAuthorName}
                       onChange={(e) => setInputAuthorName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorName()}
+                      onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddAuthorName()}
                       placeholder="投稿者名"
                     />
                     <button onClick={handleAddAuthorName}>追加</button>
