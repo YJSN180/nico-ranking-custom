@@ -48,8 +48,18 @@ vi.mock('next/navigation', async () => {
 vi.mock('@/components/ranking-item-responsive', async () => {
   const React = await import('react')
   return {
-    default: ({ item }: { item: RankingItem }) =>
-      React.createElement('div', { 'data-testid': 'result-item', 'data-id': item.id }, `${item.id} ${item.authorName ?? ''}`),
+    // 行の⋮メニューの「投稿者名」と同じく、名前が無ければ ID を値にして NG の追加を呼ぶボタンを置く
+    default: ({ item, onQuickNGAdd }: { item: RankingItem; onQuickNGAdd?: (video: RankingItem, type: 'author', value: string) => void }) =>
+      React.createElement(
+        'div',
+        { 'data-testid': 'result-item', 'data-id': item.id },
+        `${item.id} ${item.authorName ?? ''}`,
+        React.createElement(
+          'button',
+          { type: 'button', onClick: () => onQuickNGAdd?.(item, 'author', item.authorName || item.authorId || '') },
+          `author-ng-${item.id}`
+        )
+      ),
   }
 })
 vi.mock('@/components/video-context-menu', async () => {
@@ -368,6 +378,43 @@ describe('SearchClient', () => {
       expect(screen.getByLabelText('再生時間の上限（分）')).toHaveValue(1.5)
       // 1.67 分は 100 秒に戻る（丸めで条件が変わらない）
       expect(searchRequests()[0]?.searchParams.get('durationMin')).toBe('100')
+    })
+  })
+
+  describe('投稿者名の NG（名前の無い行）', () => {
+    const toasts: Array<{ message: string; type: string }> = []
+    const onToast = (event: Event): void => {
+      toasts.push((event as CustomEvent<{ message: string; type: string }>).detail)
+    }
+    const registeredNames = (): string[] =>
+      (JSON.parse(localStorage.getItem('user-ng-list') ?? '{}') as { authorNames?: { exact?: string[] } }).authorNames?.exact ?? []
+
+    beforeEach(() => {
+      toasts.length = 0
+      window.addEventListener('app:toast', onToast)
+    })
+    afterEach(() => {
+      window.removeEventListener('app:toast', onToast)
+    })
+
+    it('名前の分からない行では、ID を投稿者名として登録せず、投稿者 ID で NG にするよう案内する', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001' }])
+      handlers.owners = () => ({ users: {}, channels: {}, missing: [], failed: ['1001'] })
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      fireEvent.click(screen.getByRole('button', { name: 'author-ng-sm1' }))
+      expect(registeredNames()).not.toContain('1001')
+      expect(toasts).toEqual([{ message: '投稿者名が分からないため、投稿者名では NG にできません。投稿者 ID で NG にしてください。', type: 'error', action: undefined }])
+    })
+
+    it('名前の分かる行は、これまでどおり投稿者名で登録する', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'user-1001' }])
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      fireEvent.click(screen.getByRole('button', { name: 'author-ng-sm1' }))
+      expect(registeredNames()).toContain('user-1001')
     })
   })
 
