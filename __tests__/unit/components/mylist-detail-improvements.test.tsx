@@ -101,7 +101,9 @@ describe('MylistDetailClient 改善項目のTDDテスト', () => {
     mockDbManager = {
       init: vi.fn().mockResolvedValue(undefined),
     }
-    MockedDBManager.mockImplementation(() => mockDbManager)
+    MockedDBManager.mockImplementation(function () {
+      return mockDbManager
+    })
 
     // MylistManagerのモック設定
     mockMylistManager = {
@@ -114,7 +116,9 @@ describe('MylistDetailClient 改善項目のTDDテスト', () => {
       deleteMylist: vi.fn().mockResolvedValue(undefined),
       updateVideoOrder: vi.fn().mockResolvedValue(undefined),
     }
-    MockedMylistManager.mockImplementation(() => mockMylistManager)
+    MockedMylistManager.mockImplementation(function () {
+      return mockMylistManager
+    })
   })
 
   afterEach(() => {

@@ -147,6 +147,7 @@ scripts/*
 !scripts/record-pipeline-status.ts
 !scripts/sync-ranking-auxiliary.ts
 !scripts/manage-ranking-generations.ts
+!scripts/lighthouse-app-server.mjs
 !scripts/lib/
 scripts/lib/*
 !scripts/lib/r2-store.ts

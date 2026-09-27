@@ -83,19 +83,25 @@ describe('Security: Environment Variables', () => {
         'lib/update-ranking.ts',
         'app/api/cron/fetch/route.ts'
       ]
-      
+      // Cloudflare API トークンと同じ形（英数字・_・- の 40 文字）の文字列リテラル
+      const tokenLikeLiteral = /['"`][A-Za-z0-9_-]{40}['"`]/
+      // パターンが効くことを合成値で確かめる（本物のトークンはテストにも書かない）
+      expect(`const token = '${'x'.repeat(40)}'`).toMatch(tokenLikeLiteral)
+
       for (const file of filesToCheck) {
-        const filePath = path.join(process.cwd(), file)
+        let fileCode: string
         try {
-          const fileCode = await fs.readFile(filePath, 'utf-8')
-          // Cloudflare APIキーがハードコードされていないことを確認
-          expect(fileCode).not.toContain('ZfpisofOxDnrUx8MhJCOw8QG1TVO_Z236y6q5Jdj')
-          // 環境変数から読み込むようになっていることを確認
-          if (file.includes('cloudflare')) {
-            expect(fileCode).toContain('process.env.CLOUDFLARE_API_TOKEN')
-          }
+          fileCode = await fs.readFile(path.join(process.cwd(), file), 'utf-8')
         } catch (error) {
-          // ファイルが存在しない場合はスキップ
+          // ファイルが存在しない場合だけスキップする（アサーションの失敗は握りつぶさない）
+          if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue
+          throw error
+        }
+        // Cloudflare APIキーがハードコードされていないことを確認
+        expect(fileCode).not.toMatch(tokenLikeLiteral)
+        // 環境変数から読み込むようになっていることを確認
+        if (file.includes('cloudflare')) {
+          expect(fileCode).toContain('process.env.CLOUDFLARE_API_TOKEN')
         }
       }
     })

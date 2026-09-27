@@ -41,10 +41,8 @@ export default defineConfig({
         '__tests__/unit/genre-500-items-support.test.tsx',
         '__tests__/unit/ranking-numbering.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/cache-strategy.test.ts',  // Web API mocking issues in Node.js
-        '__tests__/unit/components/mylist-detail-improvements.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/ng-list-rank-recalculation.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/ng-list-instant-update.test.tsx',  // React concurrent mode conflicts
-        '__tests__/unit/hooks/use-mylist-operations-type-conversion.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/header-css-only.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/hooks/use-realtime-stats.test.ts',  // React concurrent mode conflicts
         'workers/video-stats-updater/test/index.test.js',  // Worker environment issues
@@ -60,7 +58,6 @@ export default defineConfig({
         '__tests__/unit/kv-optimization.test.ts',      // Import path mismatch for workers/kv-optimization
         // '__tests__/unit/ng-list-continuous-rank.test.tsx' - disabled by renaming to .disabled
         // Additional memory-intensive test exclusions for shard stability
-        '__tests__/unit/storage/backup-restore.test.ts',  // Large test file (676 lines) causing memory issues
         '__tests__/unit/popular-tags-display.test.tsx',  // Large test file (493 lines) causing memory issues
         '__tests__/unit/scraper-extended.test.ts',  // Large test file (465 lines) causing memory issues
         '__tests__/unit/video-context-menu.test.tsx',  // JSdom navigation error and memory issues
