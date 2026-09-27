@@ -252,6 +252,12 @@ export function UnifiedBackup() {
       }
     }
     
+    // 選んだ後にファイルが消えた・読めないときも「インポート中」のまま止めない
+    reader.onerror = () => {
+      setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
+      setIsImporting(false)
+    }
+    
     reader.readAsText(file)
     event.target.value = ''
   }
