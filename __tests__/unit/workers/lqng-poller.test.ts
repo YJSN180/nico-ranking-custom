@@ -1028,10 +1028,11 @@ describe('lqng-poller 保存の順番', () => {
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm98?.status).toBe('hold')
     expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
 
-    // 次の回は新着に出なくても、判定表の動画を追跡と補完待ちに戻して補完する（ロックタグ群で D）
+    // 次の回は新着に出なくても、判定表の動画を追跡と補完待ちに戻して補完する（ロックタグ群で D）。
+    // sm97 の投稿者は照合語で投稿者 NG 済みなので、追跡には戻すが補完はしない
     const thumb = vi.fn(async (id: string) => (id === 'sm98' ? okThumb(locked('g1', 'g2', 'g3')) : okThumb()))
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([])), fetchThumbInfo: thumb }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
-    expect(thumb.mock.calls.map((c) => c[0]).sort()).toEqual(['sm97', 'sm98'])
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm98'])
     const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
     expect(tracking.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm97'])
     expect(tracking.authors['1002']?.posts.map((p) => p.id)).toEqual(['sm98'])
@@ -1571,5 +1572,64 @@ describe('lqng-poller 刈り込みの境界', () => {
     const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
     expect(Object.keys(verdicts.videos).sort()).toEqual(['sm821', 'sm823'])
     expect(Object.keys(verdicts.authors)).toEqual(['2002'])
+  })
+})
+
+describe('lqng-poller 投稿者 NG 済みの投稿者の新着', () => {
+  const ngVerdicts = (): LqngVerdicts => ({
+    version: 1,
+    authors: { '1001': { status: 'ng', reasons: ['B'], since: '2026-01-01T00:00:00.000Z', evidence: [] } },
+    videos: {},
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  })
+
+  it('補完（getthumbinfo）の予算を使わず、動画ごとの判定も積まない（投稿者 NG で落ちる。追跡はして新着に数え直さない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: ngVerdicts() })
+    // NG 済みの 1001 が 3 本（うち 1 本は照合語に当たる）、まだ NG でない 1002 が 1 本
+    const uploads = [video({ id: 'sm901', title: 'て/す/と/ま/ん' }), video({ id: 'sm902', registeredAt: at(-2) }), video({ id: 'sm903', registeredAt: at(-3) }), video({ id: 'sm904', authorId: '1002' })]
+    const thumb = vi.fn(async (_id: string) => okThumb(locked('g1', 'g2', 'g3')))
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: thumb }), 'poll')
+    expect(r.newVideos).toBe(4)
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm904'])
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.videos)).toEqual(['sm904'])
+    expect(verdicts.authors['1001']?.evidence).toEqual([])
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.authors['1001']?.posts.map((p) => p.id).sort()).toEqual(['sm901', 'sm902', 'sm903'])
+    expect(tracking.pending).toEqual([])
+    // 重なり区間で同じ新着が返っても、新着に数え直さない
+    const again = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: thumb }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(again.newVideos).toBe(0)
+  })
+
+  it('存在確認は、まだ NG でない投稿者を先にする（NG 済みの連投者に予算を先取りさせない）', async () => {
+    const due = new Date(T0.getTime() - 7 * 3600_000).toISOString() // 定期確認（6 時間ごと）の時期を過ぎている
+    const tracked = (authorId: string, n: number): TrackedAuthor => ({
+      authorId,
+      firstSeenAt: due,
+      lastPostAt: at(-1),
+      posts: Array.from({ length: n }, (_, i) => ({ id: `sm${authorId}${i}`, title: 't', at: at(-1 - i), tagDetails: [], ownerVisibility: 'visible' as const })),
+      status: 'existing',
+      lastCheckedAt: due,
+      followerCount: 100,
+      nickname: 'n',
+      visibility: 'visible',
+      deletedObservedAt: null,
+    })
+    // NG 済みの連投者 12 人と、まだ NG でない 1 本だけの投稿者 1 人（1 回に確かめるのは 10 人まで）
+    const ngAuthors = Array.from({ length: 12 }, (_, i) => String(4100 + i))
+    const authors = Object.fromEntries([...ngAuthors.map((id) => [id, tracked(id, 5)]), ['4200', tracked('4200', 1)]])
+    const verdicts: LqngVerdicts = { version: 1, authors: Object.fromEntries(ngAuthors.map((id) => [id, { status: 'ng' as const, reasons: ['B' as const], since: due, evidence: [] }])), videos: {}, updatedAt: due }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: verdicts, [LQNG_KV_KEYS.tracking]: { ...emptyTracking(due), lastPollAt: at(-15), authors } })
+    const fetchUserInfo = vi.fn(async (_id: string) => existing(100))
+    await runPoll(m.kv, deps({ fetchUserInfo }), 'poll')
+    expect(fetchUserInfo.mock.calls[0]?.[0]).toBe('4200')
+  })
+
+  it('許可リストの投稿者は判定表に NG が残っていても NG 扱いにしない（補完して判定する）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['1001'], videoIds: [] } }, [LQNG_KV_KEYS.verdicts]: ngVerdicts() })
+    const thumb = vi.fn(async (_id: string) => okThumb())
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm911' })])), fetchThumbInfo: thumb }), 'poll')
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm911'])
   })
 })

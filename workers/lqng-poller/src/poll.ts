@@ -198,6 +198,14 @@ class Session {
     return this.subrequests + cost <= LIMITS.subrequestBudget
   }
 
+  /**
+   * 投稿者 NG 済み（許可リストでない）か。NG 済みの投稿者の動画は投稿者 NG で落ちるので、補完（getthumbinfo）の
+   * 予算も動画ごとの判定も使わない（受け箱の合流と同じ扱い）
+   */
+  isAuthorNg(authorId: string | null): boolean {
+    return authorId !== null && Object.hasOwn(this.state.verdicts.authors, authorId) && !this.config.allowlist.authorIds.includes(authorId)
+  }
+
   spend(cost = 1): void {
     this.subrequests += cost
   }
@@ -262,9 +270,11 @@ class Session {
 
   /** 動画 1 件を評価して判定テーブルを更新する（何度呼んでも同じ結果になる） */
   applyVideo(video: VideoObservation): void {
+    const current = this.state.verdicts.videos[video.id]
+    // 投稿者 NG 済みの投稿者の動画は投稿者 NG で落ちるので、動画ごとの判定を新たに積まない（判定表を太らせない）
+    if (!current && this.isAuthorNg(video.authorId)) return
     const author = video.authorId ? this.state.tracking.authors[video.authorId] : undefined
     const evaluation = evaluateVideo(video, toObservation(author), this.config)
-    const current = this.state.verdicts.videos[video.id]
     if (evaluation.ng) {
       const changed = !current || current.status !== 'ng' || current.reasons.join() !== evaluation.reasons.join()
       this.state.verdicts.videos[video.id] = {
@@ -427,7 +437,8 @@ class Session {
         author.posts.push({ id: v.id, title: v.title, at: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility })
         if (v.registeredAt > author.lastPostAt) author.lastPostAt = v.registeredAt
         if (v.ownerVisibility && !author.visibility) author.visibility = v.ownerVisibility
-        this.state.tracking.pending.push({ id: v.id, authorId: v.authorId, attempts: 0 })
+        // 追跡はする（重なり区間で新着に数え直さない）が、投稿者 NG 済みなら補完しない
+        if (!this.isAuthorNg(v.authorId)) this.state.tracking.pending.push({ id: v.id, authorId: v.authorId, attempts: 0 })
       } else {
         this.state.tracking.unattributed.push({ id: v.id, at: v.registeredAt })
       }
@@ -464,6 +475,7 @@ class Session {
       const author = item.authorId ? this.state.tracking.authors[item.authorId] : undefined
       const post = author?.posts.find((p) => p.id === item.id)
       if (!author || !post) continue // 追跡から外れた（期限切れなど）
+      if (this.isAuthorNg(item.authorId)) continue // 待つあいだに投稿者 NG になった
       processed++
       this.spend()
       let result: ThumbResult
@@ -519,6 +531,9 @@ class Session {
       return nowMs - new Date(author.deletionSuspectedAt).getTime() >= confirmMs && sinceChecked >= confirmMs ? 0 : null
     }
     if (sinceChecked < LIMITS.userRecheckHours * HOUR_MS) return null
+    // 投稿者 NG 済みの投稿者の定期確認は判定を変えないので、まだ NG でない投稿者の後に回す（連投中の NG 済み
+    // 投稿者に予算を先取りさせない）。退会の確定と退会扱いの再確認（上）は誤 NG に気づくためなので後回しにしない
+    if (this.isAuthorNg(author.authorId)) return 3
     // 連投中（C 該当）の投稿者を先にする。初回取り込みで待ち行列が長いときに、
     // 新しい連投の A∧C 判定が数時間後回しになるのを防ぐ
     return this.isFrequentAuthor(author.authorId) ? 1 : 2
@@ -719,7 +734,7 @@ class Session {
       const author = this.ensureAuthor(verdict.authorId)
       author.posts.push({ id, title: verdict.title, at: verdict.registeredAt, tagDetails: null, ownerVisibility: null })
       if (verdict.registeredAt > author.lastPostAt) author.lastPostAt = verdict.registeredAt
-      this.state.tracking.pending.push({ id, authorId: verdict.authorId, attempts: 0 })
+      if (!this.isAuthorNg(verdict.authorId)) this.state.tracking.pending.push({ id, authorId: verdict.authorId, attempts: 0 })
     }
   }
 
