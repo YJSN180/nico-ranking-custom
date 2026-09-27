@@ -212,6 +212,14 @@ describe('fetchRealtimeSegment', () => {
     expect(seg.upstreamTotal).toBe(2)
     expect(seg.truncated).toBe(false)
   })
+  it('ページのあいだで同じ動画が重なったら（取得中の新着でずれたとき）、動画 ID で 1 件にまとめる', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(mkResponse([{ id: 'a', title: 'a', registeredAt: '', count: { view: 1 } }, { id: 'b', title: 'b', registeredAt: '', count: { view: 1 } }], true, 3))
+      .mockResolvedValueOnce(mkResponse([{ id: 'b', title: 'b', registeredAt: '', count: { view: 1 } }, { id: 'c', title: 'c', registeredAt: '', count: { view: 1 } }], false, 3))
+    const seg = await fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)
+    expect(seg.items.map((i) => [i.id, i.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]])
+  })
   it('上限ページで打ち切り truncated=true', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(mkResponse([{ id: 'x', title: 'x', registeredAt: '', count: {} }], true, 999))
     const seg = await fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)

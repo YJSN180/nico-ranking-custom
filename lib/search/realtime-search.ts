@@ -251,6 +251,35 @@ export function applyRealtimeRangeFilters(items: RankingItem[], c: SearchConditi
   )
 }
 
+export interface NvapiPage {
+  /** 新しい順の動画（rank はページ内の通し番号） */
+  items: RankingItem[]
+  /** 条件に合う件数（区間の総数。取れる深さの上限とは別） */
+  totalCount: number | undefined
+  hasNext: boolean
+}
+
+/** nvapi の動画検索を 1 ページ取る（境界以降・新しい順）。上流エラーは throw */
+export async function fetchNvapiPage(
+  conditions: SearchConditions,
+  boundary: string,
+  page: number,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 4000,
+  overallSignal?: AbortSignal
+): Promise<NvapiPage> {
+  const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
+    headers: NVAPI_HEADERS,
+    cache: 'no-store',
+    signal: withTimeout(timeoutMs, overallSignal),
+  })
+  if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
+  const payload = (await res.json()) as NvapiSearchResponse
+  if (payload.meta?.status !== 200 || !payload.data) throw new Error('nvapi_invalid_response')
+  const items = (payload.data.items ?? []).map((video, index) => mapNvapiVideoToRankingItem(video, index + 1))
+  return { items, totalCount: payload.data.totalCount, hasNext: payload.data.hasNext === true }
+}
+
 export interface RealtimeSegment {
   items: RankingItem[]
   /** nvapi が返した区間総数（後付けフィルタ前） */
@@ -277,21 +306,19 @@ export async function fetchRealtimeSegment(
   // 最新区間（本家のショートページ、lib/search/fresh-segment.ts）だけがリアルタイム区間になる
   if (conditions.contentType === 'short') return { items: [], upstreamTotal: 0, truncated: false }
   const collected: RankingItem[] = []
+  const seen = new Set<string>()
   let upstreamTotal = 0
   let truncated = false
   for (let page = 1; page <= REALTIME_MAX_PAGES; page++) {
-    const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
-      headers: NVAPI_HEADERS,
-      cache: 'no-store',
-      signal: withTimeout(timeoutMs, overallSignal),
-    })
-    if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
-    const payload = (await res.json()) as NvapiSearchResponse
-    if (payload.meta?.status !== 200 || !payload.data) throw new Error('nvapi_invalid_response')
-    const items = payload.data.items ?? []
-    upstreamTotal = payload.data.totalCount ?? upstreamTotal
-    items.forEach((v) => collected.push(mapNvapiVideoToRankingItem(v, collected.length + 1)))
-    if (!payload.data.hasNext || items.length === 0) break
+    const result = await fetchNvapiPage(conditions, boundary, page, fetchImpl, timeoutMs, overallSignal)
+    upstreamTotal = result.totalCount ?? upstreamTotal
+    // 取得中に新着が入るとページがずれて、前のページの動画がもう一度来る。動画 ID で 1 件にまとめる
+    for (const item of result.items) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      collected.push({ ...item, rank: collected.length + 1 })
+    }
+    if (!result.hasNext || result.items.length === 0) break
     if (page === REALTIME_MAX_PAGES) truncated = true
   }
   const filtered = applyRealtimeRangeFilters(collected, conditions).map((it, i) => ({ ...it, rank: i + 1 }))
