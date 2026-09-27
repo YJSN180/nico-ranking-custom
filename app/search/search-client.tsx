@@ -526,6 +526,7 @@ export function SearchClient() {
             search_maintenance: '検索APIがメンテナンス中です。しばらくしてからお試しください。',
             search_timeout: '検索がタイムアウトしました。条件を絞ってお試しください。',
             search_query_error: '検索条件が不正です。条件を見直してください。',
+            rate_limited: 'アクセスが集中しています。少し待ってから、もう一度お試しください。',
           }
           setError(messages[body?.error ?? ''] ?? '検索中にエラーが発生しました。')
           setItems(null)

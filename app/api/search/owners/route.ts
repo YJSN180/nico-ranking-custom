@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { authorIdsMatchingNames, buildOwnersQuery, fetchOwnerInfo, sanitizeChannelVideoIds, sanitizeUserIds } from '@/lib/search/owner-info'
 import { getServerNGList } from '@/lib/ng-list-server'
 import { matchesAuthorNameNG } from '@/lib/ng-filter-core'
+import { enrichmentRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 
 export const revalidate = 0
 
@@ -27,6 +28,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (buildOwnersQuery({ userIds, channelVideoIds }) !== request.nextUrl.search.replace(/^\?/, '')) {
     return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
   }
+  // インスタンスごとの軽い流量制限（上流への問い合わせの急増を抑える。形の不正な問い合わせは数えない）
+  const retryAfter = enrichmentRateLimit.take()
+  if (retryAfter > 0) return tooManyRequests(retryAfter)
   const started = Date.now()
   const deadline = AbortSignal.timeout(OWNERS_DEADLINE_MS)
   // 管理者 NG は上流の問い合わせと並列に読む（失敗や期限切れでも投げず、直前の成功値か空で続く）

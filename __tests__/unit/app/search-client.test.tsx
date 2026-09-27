@@ -330,6 +330,15 @@ describe('SearchClient', () => {
     })
   })
 
+  describe('検索 API の流量制限の案内', () => {
+    it('混み合って断られた（rate_limited）なら、少し待つよう案内する', async () => {
+      handlers.search = () => json({ error: 'rate_limited' }, 429)
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('アクセスが集中しています。少し待ってから、もう一度お試しください。'))
+    })
+  })
+
   describe('サーバー側の NG を後から当てる（S-f）', () => {
     it('投稿者名の管理者 NG に当たる投稿者（owners の hiddenAuthorIds）の動画を隠す', async () => {
       handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001' }, { id: 'sm2', authorId: '1002' }, { id: 'so3', authorId: 'channel/ch3003' }])

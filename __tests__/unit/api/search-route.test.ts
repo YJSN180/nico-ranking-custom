@@ -24,6 +24,7 @@ import { GET } from '@/app/api/search/route'
 import { clearFreshCache } from '@/lib/search/fresh-segment'
 import { formatJstIso } from '@/lib/search/realtime-search'
 import { kv } from '@/lib/simple-kv'
+import { searchRateLimit } from '@/lib/search/rate-limit'
 
 type Kind = 'long' | 'short'
 
@@ -227,6 +228,7 @@ describe('/api/search: 索引の最新動画を欠かさない（H5）', () => {
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
+    searchRateLimit.reset()
     fakeFetch.mockClear()
     clearFreshCache()
     vi.stubGlobal('fetch', fakeFetch)
@@ -354,6 +356,7 @@ describe('/api/search: 受け付けるパラメータ（S-d）', () => {
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
+    searchRateLimit.reset()
     fakeFetch.mockClear()
     clearFreshCache()
     vi.stubGlobal('fetch', fakeFetch)
@@ -384,6 +387,50 @@ describe('/api/search: 受け付けるパラメータ（S-d）', () => {
   })
 })
 
+describe('/api/search: インスタンスごとの流量制限（S-d）', () => {
+  beforeEach(() => {
+    seedWorld()
+    nvapiStatus = 200
+    pageStatus = 200
+    shortsPageStatus = 200
+    boundaryStatus = 200
+    snapshotPageStatus = 200
+    calls = []
+    searchRateLimit.reset()
+    fakeFetch.mockClear()
+    clearFreshCache()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    searchRateLimit.reset()
+    vi.unstubAllGlobals()
+  })
+
+  const drain = (): void => {
+    for (let i = 0; i < 1000 && searchRateLimit.take() === 0; i++) {
+      // 上限まで使い切る
+    }
+  }
+
+  it('上限を超えたら、上流へ問い合わせずに 429 を返す（Retry-After 付き、CDN に置かない）', async () => {
+    drain()
+    const res = await GET(new NextRequest('http://localhost/api/search?q=x&sort=-startTime'))
+    expect(res.status).toBe(429)
+    expect(await res.json()).toMatchObject({ error: 'rate_limited' })
+    expect(Number(res.headers.get('retry-after'))).toBeGreaterThan(0)
+    expect(res.headers.get('cache-control')).toContain('no-store')
+    expect(calls).toHaveLength(0)
+  })
+
+  it('形の不正な問い合わせ（400）は上限を減らさない', async () => {
+    for (let i = 0; i < 100; i++) {
+      await GET(new NextRequest('http://localhost/api/search?q=x&_=1'))
+    }
+    expect((await search('q=x')).status).toBe(200)
+  })
+})
+
 describe('/api/search: 投稿日時の範囲（S-c）', () => {
   beforeEach(() => {
     seedWorld()
@@ -393,6 +440,7 @@ describe('/api/search: 投稿日時の範囲（S-c）', () => {
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
+    searchRateLimit.reset()
     fakeFetch.mockClear()
     clearFreshCache()
     vi.stubGlobal('fetch', fakeFetch)
@@ -437,6 +485,7 @@ describe('/api/search: 全体の期限（S-e）', () => {
     snapshotPageHang = false
     kvHang = false
     calls = []
+    searchRateLimit.reset()
     deadline = null
     fakeFetch.mockClear()
     vi.mocked(kv.getStrict).mockClear()
@@ -501,6 +550,7 @@ describe('/api/search: 新着区間の打ち切り（S-b）', () => {
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
+    searchRateLimit.reset()
     fakeFetch.mockClear()
     clearFreshCache()
     vi.stubGlobal('fetch', fakeFetch)
@@ -557,6 +607,7 @@ describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
     boundaryStatus = 200
     snapshotPageStatus = 200
     calls = []
+    searchRateLimit.reset()
     fakeFetch.mockClear()
     clearFreshCache()
     vi.stubGlobal('fetch', fakeFetch)
@@ -590,6 +641,7 @@ describe('/api/search: 新着が多い語のページ送り（S-b）', () => {
     let hint = ''
     for (let page = 1; page <= pages; page++) {
       calls = []
+    searchRateLimit.reset()
       const { status, body } = await search(`${query}${page > 1 ? `&page=${page}${hint}` : ''}`)
       expect(status).toBe(200)
       bodies.push({ ...body, nvapiCalls: callsTo('nvapi.nicovideo.jp').length })

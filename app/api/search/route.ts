@@ -27,6 +27,7 @@ import { fetchFreshSegment } from '@/lib/search/fresh-segment'
 import { fetchRealtimeWindow, type FreshOutcome, type RealtimeWindow } from '@/lib/search/realtime-window'
 import { applyServerNgContext, loadServerNgContext, type ServerNgContext } from '@/lib/ng-filter-server'
 import { anySignal, withTimeout } from '@/lib/abort-signal'
+import { searchRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 import type { RankingItem } from '@/types/ranking'
 
 export const revalidate = 0
@@ -100,6 +101,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
   }
   const { conditions, extras } = parsed
+  // インスタンスごとの軽い流量制限（上流への問い合わせの急増を抑える。形の不正な問い合わせは数えない）
+  const retryAfter = searchRateLimit.take()
+  if (retryAfter > 0) return tooManyRequests(retryAfter)
   const deadline = AbortSignal.timeout(SEARCH_DEADLINE_MS)
   // NG の読み取りは上流の問い合わせと並列に始める（後から始めると、残りの予算が少ないときに KV 待ちで期限を越える）。
   // 失敗や期限切れでも投げず、直前の成功値（無ければ空）で続く

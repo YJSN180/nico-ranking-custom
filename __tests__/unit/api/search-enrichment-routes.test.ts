@@ -14,6 +14,7 @@ import { GET as getOwners } from '@/app/api/search/owners/route'
 import { GET as getRealtimeTags } from '@/app/api/search/realtime-tags/route'
 import { buildOwnersQuery, clearOwnerInfoCache } from '@/lib/search/owner-info'
 import { buildRealtimeTagsQuery } from '@/lib/search/realtime-tags'
+import { enrichmentRateLimit } from '@/lib/search/rate-limit'
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -60,6 +61,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 全体の期限（S-
     deadline = null
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
     // 1 件ごとのタイムアウトは発火させず、8 秒の全体の期限だけをテストから切る
     vi.spyOn(AbortSignal, 'timeout').mockImplementation((ms: number) => {
@@ -112,6 +114,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 検索で効かな�
     kvStore.clear()
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
   })
 
@@ -177,6 +180,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 受け付けるパ�
     kvStore.clear()
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
   })
 
@@ -215,5 +219,35 @@ describe('/api/search/owners と /api/search/realtime-tags: 受け付けるパ�
     expect(owners.status).toBe(200)
     const tags = await getRealtimeTags(new NextRequest(`http://localhost/api/search/realtime-tags?${buildRealtimeTagsQuery(['sm12', 'sm11'])}`))
     expect(tags.status).toBe(200)
+  })
+})
+
+describe('/api/search/owners と /api/search/realtime-tags: インスタンスごとの流量制限（S-d）', () => {
+  beforeEach(() => {
+    hangIds = new Set()
+    tagItemsById = {}
+    kvStore.clear()
+    fakeFetch.mockClear()
+    clearOwnerInfoCache()
+    enrichmentRateLimit.reset()
+    vi.stubGlobal('fetch', fakeFetch)
+  })
+
+  afterEach(() => {
+    enrichmentRateLimit.reset()
+    vi.unstubAllGlobals()
+  })
+
+  it('上限を超えたら、上流へ問い合わせずに 429 を返す（CDN に置かない）', async () => {
+    for (let i = 0; i < 1000 && enrichmentRateLimit.take() === 0; i++) {
+      // 上限まで使い切る
+    }
+    const owners = await getOwners(new NextRequest('http://localhost/api/search/owners?users=1001'))
+    const tags = await getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11'))
+    for (const res of [owners, tags]) {
+      expect(res.status).toBe(429)
+      expect(res.headers.get('cache-control')).toContain('no-store')
+    }
+    expect(fakeFetch).not.toHaveBeenCalled()
   })
 })

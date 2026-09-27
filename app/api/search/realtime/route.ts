@@ -6,6 +6,7 @@ import { parseSearchApiQuery } from '@/lib/search/snapshot-search'
 import { fetchRealtimeSegment, getRealtimeBoundary, isRealtimeEnabled, isRealtimeMergeable } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { searchRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 
 export const revalidate = 0
 
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
   }
   const conditions = parsed.conditions
+  const retryAfter = searchRateLimit.take()
+  if (retryAfter > 0) return tooManyRequests(retryAfter)
   const boundary = getRealtimeBoundary()
   const mergeable = isRealtimeMergeable(conditions, boundary)
   if (!mergeable) {
