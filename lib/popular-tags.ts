@@ -2,7 +2,6 @@
 // 動的取得が失敗した場合のフォールバック用
 // 最新のデータはgetPopularTags関数で取得すること
 
-import { scrapeRankingPage } from './scraper'
 import { kv } from './simple-kv'
 import { POPULAR_TAGS_LATEST_KEY, type PopularTagsLatest } from './pipeline/popular-tags-latest'
 import type { RankingGenre } from '../types/ranking-config'
@@ -12,7 +11,7 @@ export type { PopularTagsLatest } from './pipeline/popular-tags-latest'
 
 // パイプライン（scripts/sync-ranking-auxiliary.ts）が公開成功後に書き出す人気タグだけの小キー。
 // ランキング本体（数百KB〜）を丸読みしていた /api/popular-tags の遅さ（1〜3s）を解消する。
-// 未生成・不正・読取失敗のときは従来経路（ゲートウェイ → スクレイパー）へ落ちる。
+// 未生成・不正・読取失敗・古いときは従来経路（ゲートウェイ）へ落ちる。
 const POPULAR_TAGS_CACHE_TTL_MS = 5 * 60 * 1000
 
 // 小キーの鮮度。updatedAt は公開した世代の収集開始時刻（collectedAt）で、正常でも公開までの時間と
@@ -120,54 +119,18 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
     }
   }
   
-  try {
-    // 1. 公開済みR2世代をAPI gateway経由で取得
-    const cfData = await getGenreRanking(genre, period)
-    if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
-      return cfData.popularTags
-    }
-  } catch (error) {
-    // Gateway unavailable; try the existing scraper fallback.
-  }
-  
-  try {
-    // 2. 動的に人気タグを取得（フォールバック）
-    const data = await scrapeRankingPage(genre, period)
-    
-    if (data.popularTags && data.popularTags.length > 0) {
-      return data.popularTags
-    }
-  } catch (error) {
-    // Failed to fetch popular tags dynamically - returning empty array
-  }
-  
-  // 3. 最終フォールバック：空配列を返す
-  return []
+  return getPopularTagsForGenre(genre, period)
 }
 
-// 個別ジャンルの人気タグを取得（内部用、allジャンルの集計で使用）
+// 個別ジャンルの人気タグ（公開済みの R2 世代をゲートウェイ経由で読む）。取れなければ空。
+// 以前はさらに nvapi のランキング（lib/scraper.ts）へ落ちていたが、そちらは人気タグを返さない
+// （タグ API の廃止で常に空）うえ、ジャンルをエンコードせずに URL のパスへ入れ、タイムアウトも無かった
 async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
   try {
-    // 1. 公開済みR2世代をAPI gateway経由で取得
     const cfData = await getGenreRanking(genre, period)
-    if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
-      return cfData.popularTags
-    }
-  } catch (error) {
-    // Gateway unavailable; try the existing scraper fallback.
+    if (cfData.popularTags.length > 0) return cfData.popularTags
+  } catch {
+    // ゲートウェイが使えなければ空（呼び出し元は空配列で縮退する）
   }
-  
-  try {
-    // 2. 動的に人気タグを取得（フォールバック）
-    const data = await scrapeRankingPage(genre, period)
-    
-    if (data.popularTags && data.popularTags.length > 0) {
-      return data.popularTags
-    }
-  } catch (error) {
-    // Failed to fetch popular tags dynamically - returning empty array
-  }
-  
-  // 3. 最終フォールバック：空配列を返す
   return []
 }
