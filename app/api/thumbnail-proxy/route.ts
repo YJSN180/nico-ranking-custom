@@ -18,9 +18,10 @@ export async function GET(request: NextRequest) {
     }
     
     // URLの検証（ニコニコ動画のCDNからのみ許可。/api/hd-thumbnail が返す URL と同じ一覧）
-    const url = new URL(imageUrl)
+    // 解析できない URL も入力の誤りとして 400（500 にしない）
+    const url = URL.canParse(imageUrl) ? new URL(imageUrl) : null
     
-    if (!THUMBNAIL_HOSTS.has(url.hostname)) {
+    if (!url || !THUMBNAIL_HOSTS.has(url.hostname)) {
       return NextResponse.json(
         { error: 'Invalid image URL' },
         { status: 400 }

@@ -39,7 +39,10 @@ describe('Thumbnail Proxy API', () => {
       const response = await GET(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500) // URL parsing throws
+      // 解析できない URL は利用者の入力の誤り（上流へは問い合わせない）
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Invalid image URL')
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
     it('should proxy image from allowed nicovideo.cdn.nimg.jp host', async () => {
