@@ -83,6 +83,9 @@ jobs:
       - name: Install worker test dependencies
         run: npm ci --prefix workers/video-stats-updater
 
+      - name: Admin gateway security regression gate
+        run: npm run test:admin-security
+
       - name: Typecheck workers
         run: npm run typecheck:workers
 

@@ -198,3 +198,6 @@ workers/video-stats-updater/src/*-backup.js
 workers/video-stats-updater/src/*-fixed.js
 workers/video-stats-updater/test-debug.js
 workers/video-stats-updater/wrangler-debug.toml
+
+!scripts/validate-worker-target.mjs
+!scripts/check-admin-gateway.mjs
