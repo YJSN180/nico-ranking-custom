@@ -106,6 +106,8 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
   
   const resolveBaseUrl = () => {
+    // Generated Vercel deployment URLs require authentication under Deployment Protection.
+    if (process.env.VERCEL_ENV === 'production') return process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
     const vercelUrl = process.env.VERCEL_URL
@@ -123,7 +125,8 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   try {
     const headers: HeadersInit = {
       'Accept-Encoding': 'gzip, deflate, br',
-      Accept: 'application/json'
+      Accept: 'application/json',
+      'User-Agent': 'nico-ranking-web/1.0',
     }
     const logEmpty = (meta: Record<string, unknown>) => {
       if (process.env.NODE_ENV !== 'production') {
@@ -204,9 +207,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       },
     })
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
-    }
+    console.error('[SSR] Ranking request failed', {
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+      httpStatus: error instanceof Error ? /^HTTP (\d{3}):/.exec(error.message)?.[1] : undefined,
+    })
   }
 
   // エラーの場合は空のデータを返す
