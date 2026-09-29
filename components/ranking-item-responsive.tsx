@@ -232,7 +232,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                   aspectRatio: '16 / 9'
                 }}
                 loading={item.rank <= 3 ? undefined : "lazy"}
-                priority={item.rank <= 3}
+                // 高優先（fetchpriority="high"）は先頭の 1 枚（LCP の候補）だけ。上位 3 件は遅延読み込みにしない
+                priority={item.rank === 1}
               />
             </a>
             {/* 再生時間オーバーレイ */}
@@ -382,25 +383,29 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
             </div>
           </div>
           
-          {/* 統計情報 */}
-          <div 
+          {/* 統計情報（アイコンは読み上げず、何の数かは画面に出さないラベルで伝える） */}
+          <div
             className="ranking-item-responsive__stats"
             data-testid="video-stats"
           >
             <span className="ranking-item-responsive__stat">
               <span aria-hidden="true">▶️</span>{' '}
+              <span className="ranking-item-responsive__stat-label">再生数</span>
               <StatValue value={item.views} />
             </span>
             <span className="ranking-item-responsive__stat">
               <span aria-hidden="true">💬</span>{' '}
+              <span className="ranking-item-responsive__stat-label">コメント数</span>
               <StatValue value={item.comments || 0} />
             </span>
             <span className="ranking-item-responsive__stat">
               <span aria-hidden="true">❤️</span>{' '}
+              <span className="ranking-item-responsive__stat-label">いいね数</span>
               <StatValue value={item.likes || 0} />
             </span>
             <span className="ranking-item-responsive__stat">
               <span aria-hidden="true">📁</span>{' '}
+              <span className="ranking-item-responsive__stat-label">マイリスト数</span>
               <StatValue value={item.mylists || 0} />
             </span>
           </div>

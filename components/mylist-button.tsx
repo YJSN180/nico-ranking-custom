@@ -124,6 +124,7 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
       return (
         <button
           type="button"
+          role="menuitem"
           data-testid="mylist-button-placeholder"
           className="item-action-menu__item"
           disabled
@@ -146,7 +147,14 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
     <>
       <button
         data-testid="mylist-button"
-        aria-label={isInMylist ? "マイリストから削除" : "マイリストに追加"}
+        // ⋮メニューの項目は表示している文言（登録済み / 追加）をそのまま名前にする。
+        // 押すと選択モーダルが開く（登録済みでも削除はしない）
+        {...(asMenuItem
+          ? { role: 'menuitem', 'aria-haspopup': 'dialog' as const }
+          : {
+              'aria-label': isInMylist ? 'マイリストから削除' : 'マイリストに追加',
+              title: isInMylist ? 'マイリストから削除' : 'マイリストに追加',
+            })}
         onClick={handleClick}
         onTouchStart={(e) => {
           // 親のVideoContextMenuの長押し検出を防ぐ
@@ -164,7 +172,6 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
                 isInMylist ? 'mylist-button--active' : 'mylist-button--normal'
               } ${isProcessing ? 'mylist-button--processing' : ''}`
         }
-        title={isInMylist ? "マイリストから削除" : "マイリストに追加"}
       >
         {asMenuItem ? (
           <>
@@ -201,12 +208,10 @@ export function MylistButton({ video, asMenuItem = false }: MylistButtonProps) {
             }
           }}
           onClose={() => {
+            // 行の背景は CSS（通常色・ホバー色）に任せる。以前はここで行にインラインの背景色を
+            // 書いており、CSS より強いためその行だけホバーの色が出なくなり、背景が透明の行
+            // （検索ページのフラット表示）に色が残っていた
             setShowModal(false)
-            // モーダルを閉じるときに親要素のホバー状態をリセット
-            const rankingItem = document.querySelector(`[data-video-id="${video.id}"]`) as HTMLElement
-            if (rankingItem && !('ontouchstart' in window)) {
-              rankingItem.style.backgroundColor = 'var(--surface-color)'
-            }
           }}
           onCreateMylist={async (name, description) => {
             const newMylistId = await createMylist(name, description)

@@ -83,6 +83,9 @@ describe('RankingItemResponsive の統計表示', () => {
   it('PC の表示は main と同じく「アイコン 数値」の間に空白を入れる', () => {
     const { container } = renderItem()
     const stat = container.querySelectorAll('.ranking-item-responsive__stat')[2]
-    expect(stat?.textContent).toBe('❤️ 5.6万')
+    // 読み上げ用のラベル（画面には出ない）を除いた、見えている文字
+    const visible = stat?.cloneNode(true) as HTMLElement
+    visible.querySelectorAll('.ranking-item-responsive__stat-label').forEach((label) => label.remove())
+    expect(visible.textContent).toBe('❤️ 5.6万')
   })
 })

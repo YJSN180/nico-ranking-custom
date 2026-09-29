@@ -166,7 +166,7 @@ describe('QuickNG Integration Test', () => {
     expect(screen.getAllByTestId('mylist-button')).toHaveLength(2)
     
     // NG設定 → タイトルで NG 追加
-    fireEvent.click(screen.getByRole('button', { name: 'NG設定' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'NG設定' }))
     fireEvent.click(screen.getByTestId('menu-ng-title'))
     
     expect(mockOnQuickNGAdd).toHaveBeenCalledWith(mockVideo, 'title', 'Test Video Title')

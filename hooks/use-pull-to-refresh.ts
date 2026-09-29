@@ -3,6 +3,21 @@
 import { useEffect, useState } from 'react'
 import { isPWA } from '@/lib/pwa-utils'
 
+// public/sw.js のオフラインページ用キャッシュ（OFFLINE_CACHE）の接頭辞
+export const OFFLINE_CACHE_PREFIX = 'nr-offline-'
+
+/**
+ * 再読み込みの前にキャッシュを消す。オフラインページのキャッシュは残す
+ * （SW がインストール時にだけ作るので、消すと SW の更新まで戻らず、
+ * 電波の無いときの再読み込みで「オフラインです」の素の文字だけになる）
+ */
+export async function clearCachesForReload(): Promise<void> {
+  const names = await caches.keys()
+  await Promise.all(
+    names.filter(name => !name.startsWith(OFFLINE_CACHE_PREFIX)).map(name => caches.delete(name))
+  )
+}
+
 export function usePullToRefresh() {
   const [isPulling, setIsPulling] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
@@ -57,13 +72,10 @@ export function usePullToRefresh() {
         
         // キャッシュクリアとリロード
         if ('caches' in window) {
-          caches.keys().then(names => {
-            Promise.all(names.map(name => caches.delete(name)))
-              .then(() => {
-                setTimeout(() => {
-                  window.location.reload()
-                }, 500)
-              })
+          clearCachesForReload().then(() => {
+            setTimeout(() => {
+              window.location.reload()
+            }, 500)
           })
         } else {
           setTimeout(() => {

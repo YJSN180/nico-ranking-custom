@@ -10,6 +10,7 @@ import { OfflineIndicator } from '@/components/offline-indicator'
 import { ToastViewport } from '@/components/toast-viewport'
 import { BottomNav } from '@/components/bottom-nav'
 import { ServiceWorkerManager } from '@/components/sw-manager'
+import { THEME_INIT_SCRIPT } from '@/lib/theme-init-script'
 import './globals.css'
 
 // Inter（可変・latin サブセットのみ）をセルフホスト。next/font/google 版は latin-ext /
@@ -99,20 +100,11 @@ export default function RootLayout({
   return (
     <html lang="ja" data-theme="light" suppressHydrationWarning>
       <head>
-        {/* クライアントでテーマ適用（サーバー側での cookies 参照を排除） */}
+        {/* クライアントでテーマ適用（サーバー側での cookies 参照を排除）。
+            Cookie → localStorage の順に、設定の読み込みと同じ条件で決める（lib/theme-init-script.ts） */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `
-              try {
-                const pref = localStorage.getItem('user-preferences')
-                if (pref) {
-                  const { theme } = JSON.parse(pref)
-                  if (theme) document.documentElement.setAttribute('data-theme', theme)
-                }
-              } catch (e) {
-                // noop
-              }
-            `
+            __html: THEME_INIT_SCRIPT
           }}
         />
         <link rel="manifest" href="/manifest.json" />
@@ -154,7 +146,8 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <a href="#main-content" className="skip-link">本文へスキップ</a>
+        {/* 飛び先はヘッダー（ナビ）の直後（components/header-with-settings.tsx） */}
+        <a href="#content-start" className="skip-link">本文へスキップ</a>
         <ServiceWorkerManager />
         <ThemeProvider>
           <MylistOperationsProvider>

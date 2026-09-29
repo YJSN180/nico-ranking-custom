@@ -93,7 +93,7 @@ describe('RankingItemResponsive: ⋮メニューのクリックで動画を開�
   it('NG 選択ビューの見出しをクリックしても動画を開かない', () => {
     renderRow()
     fireEvent.click(screen.getByRole('button', { name: 'その他の操作' }))
-    fireEvent.click(screen.getByRole('button', { name: /NG設定/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /NG設定/ }))
     fireEvent.click(screen.getByText('NGリストに追加'))
     expect(openSpy).not.toHaveBeenCalled()
   })
@@ -102,7 +102,7 @@ describe('RankingItemResponsive: ⋮メニューのクリックで動画を開�
     const onQuickNGAdd = vi.fn()
     renderRow(onQuickNGAdd)
     fireEvent.click(screen.getByRole('button', { name: 'その他の操作' }))
-    fireEvent.click(screen.getByRole('button', { name: /NG設定/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /NG設定/ }))
     fireEvent.click(screen.getByTestId('menu-ng-video-id'))
     expect(onQuickNGAdd).toHaveBeenCalledWith(item, 'videoId', item.id)
     expect(openSpy).not.toHaveBeenCalled()
@@ -111,7 +111,7 @@ describe('RankingItemResponsive: ⋮メニューのクリックで動画を開�
   it('メニューから開いたマイリストのモーダル（portal）の背景をクリックしても動画を開かない', async () => {
     renderRow()
     fireEvent.click(screen.getByRole('button', { name: 'その他の操作' }))
-    fireEvent.click(await within(screen.getByRole('menu')).findByRole('button', { name: /マイリストに追加/ }))
+    fireEvent.click(await within(screen.getByRole('menu')).findByRole('menuitem', { name: /マイリストに追加/ }))
     const overlay = await screen.findByTestId('modal-overlay')
     // モーダルは body 直下（行の DOM の外）に描画される
     expect(overlay.closest('[data-testid="ranking-item"]')).toBeNull()
