@@ -8,12 +8,17 @@
 import type { RankingItem } from '@/types/ranking'
 import { withTimeout } from '../abort-signal'
 import { nicoPageOwnerId } from './nico-page-search'
-import type { SearchConditions } from './snapshot-search'
+import { formatJstIso, type SearchConditions } from './snapshot-search'
 
 export const NVAPI_SEARCH_URL = 'https://nvapi.nicovideo.jp/v2/search/video'
 export const REALTIME_PAGE_SIZE = 100
-/** 区間が巨大なときの安全弁（100件×3ページ） */
+/**
+ * 再生数などの範囲を後から当てる検索で、区間の先頭から読む上限（100件×3ページ）。
+ * 後から絞ると区間の中の位置が先頭から読まないと決まらないので、どのページでもこの深さまでを読む
+ */
 export const REALTIME_MAX_PAGES = 3
+/** nvapi の動画検索が返せる深さ。page×pageSize が 5,000 件を超えると 400 になり、上限のページでは hasNext が false（2026-09-27 実測） */
+export const NVAPI_MAX_ITEMS = 5000
 /** Snapshot のインデックス確定時刻（JST） */
 export const SNAPSHOT_CUTOFF_HOUR_JST = 5
 
@@ -72,17 +77,16 @@ export function getRealtimeBoundary(now: Date = new Date()): string {
 
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
-/** クライアントが持ち回る境界として受け付ける上限（これより古い値は捨てて決め直す） */
-export const REALTIME_BOUNDARY_MAX_AGE_DAYS = 60
+/**
+ * クライアントが持ち回る境界として受け付ける上限（これより古い値は捨てて決め直す）。
+ * 索引は毎朝更新されるので、正しい境界は通常 1 日以内。古い境界で新着区間を広げさせない
+ */
+export const REALTIME_BOUNDARY_MAX_AGE_DAYS = 3
 /** Snapshot に 1 件も無い条件で使う既定の遡り幅 */
 export const REALTIME_BOUNDARY_FALLBACK_HOURS = 48
 
-/** Date を +09:00 表記の ISO 文字列にする（Snapshot の filters と nvapi の minRegisteredAt の両方が受け付ける形） */
-export function formatJstIso(date: Date): string {
-  const jst = new Date(date.getTime() + JST_OFFSET_MS)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth() + 1)}-${pad(jst.getUTCDate())}T${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}:${pad(jst.getUTCSeconds())}+09:00`
-}
+/** +09:00 表記の ISO 文字列（検索条件の正規形と共通なので snapshot-search に置く） */
+export { formatJstIso }
 
 export interface FreshQuery {
   kind: 'keyword' | 'tag'
@@ -189,7 +193,18 @@ export function buildNvapiSearchUrl(conditions: SearchConditions, boundary: stri
       : boundary
   params.set('minRegisteredAt', from)
   if (conditions.dateTo) params.set('maxRegisteredAt', conditions.dateTo)
+  // 再生時間は nvapi 側で絞れる（端を含む。Snapshot の gte / lte と同じ。2026-09-27 実測）
+  if (conditions.durationMin !== undefined) params.set('minDuration', String(conditions.durationMin))
+  if (conditions.durationMax !== undefined) params.set('maxDuration', String(conditions.durationMax))
   return `${NVAPI_SEARCH_URL}?${params.toString()}`
+}
+
+/**
+ * nvapi で絞れず、取った後に当てる範囲の条件（再生数・コメント数・いいね数・マイリスト数）があるか。
+ * 投稿日時と再生時間は nvapi 側で絞れる
+ */
+export function hasPostFilters(c: SearchConditions): boolean {
+  return [c.viewsMin, c.viewsMax, c.commentsMin, c.commentsMax, c.likesMin, c.likesMax, c.mylistsMin, c.mylistsMax].some((v) => v !== undefined)
 }
 
 export interface NvapiVideo {
@@ -248,6 +263,35 @@ export function applyRealtimeRangeFilters(items: RankingItem[], c: SearchConditi
   )
 }
 
+export interface NvapiPage {
+  /** 新しい順の動画（rank はページ内の通し番号） */
+  items: RankingItem[]
+  /** 条件に合う件数（区間の総数。取れる深さの上限とは別） */
+  totalCount: number | undefined
+  hasNext: boolean
+}
+
+/** nvapi の動画検索を 1 ページ取る（境界以降・新しい順）。上流エラーは throw */
+export async function fetchNvapiPage(
+  conditions: SearchConditions,
+  boundary: string,
+  page: number,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 4000,
+  overallSignal?: AbortSignal
+): Promise<NvapiPage> {
+  const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
+    headers: NVAPI_HEADERS,
+    cache: 'no-store',
+    signal: withTimeout(timeoutMs, overallSignal),
+  })
+  if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
+  const payload = (await res.json()) as NvapiSearchResponse
+  if (payload.meta?.status !== 200 || !payload.data) throw new Error('nvapi_invalid_response')
+  const items = (payload.data.items ?? []).map((video, index) => mapNvapiVideoToRankingItem(video, index + 1))
+  return { items, totalCount: payload.data.totalCount, hasNext: payload.data.hasNext === true }
+}
+
 export interface RealtimeSegment {
   items: RankingItem[]
   /** nvapi が返した区間総数（後付けフィルタ前） */
@@ -274,21 +318,19 @@ export async function fetchRealtimeSegment(
   // 最新区間（本家のショートページ、lib/search/fresh-segment.ts）だけがリアルタイム区間になる
   if (conditions.contentType === 'short') return { items: [], upstreamTotal: 0, truncated: false }
   const collected: RankingItem[] = []
+  const seen = new Set<string>()
   let upstreamTotal = 0
   let truncated = false
   for (let page = 1; page <= REALTIME_MAX_PAGES; page++) {
-    const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
-      headers: NVAPI_HEADERS,
-      cache: 'no-store',
-      signal: withTimeout(timeoutMs, overallSignal),
-    })
-    if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
-    const payload = (await res.json()) as NvapiSearchResponse
-    if (payload.meta?.status !== 200 || !payload.data) throw new Error('nvapi_invalid_response')
-    const items = payload.data.items ?? []
-    upstreamTotal = payload.data.totalCount ?? upstreamTotal
-    items.forEach((v) => collected.push(mapNvapiVideoToRankingItem(v, collected.length + 1)))
-    if (!payload.data.hasNext || items.length === 0) break
+    const result = await fetchNvapiPage(conditions, boundary, page, fetchImpl, timeoutMs, overallSignal)
+    upstreamTotal = result.totalCount ?? upstreamTotal
+    // 取得中に新着が入るとページがずれて、前のページの動画がもう一度来る。動画 ID で 1 件にまとめる
+    for (const item of result.items) {
+      if (seen.has(item.id)) continue
+      seen.add(item.id)
+      collected.push({ ...item, rank: collected.length + 1 })
+    }
+    if (!result.hasNext || result.items.length === 0) break
     if (page === REALTIME_MAX_PAGES) truncated = true
   }
   const filtered = applyRealtimeRangeFilters(collected, conditions).map((it, i) => ({ ...it, rank: i + 1 }))
@@ -330,9 +372,9 @@ export function planMergedPage(page: number, pageSize: number, realtimeCount: nu
 }
 
 /**
- * ページを組み立てる。Snapshot 側にリアルタイム区間と同じ動画があれば
- * （インデックス確定時刻のズレ）Snapshot 側を落として重複を防ぐ。
- * snapshotItems は plan.snapshotOffset から始まる配列を渡す。
+ * ページを組み立てる。realtimeItems は新着区間のうちこのページの分（[plan.realtimeFrom, plan.realtimeTo)）、
+ * snapshotItems は plan.snapshotOffset から始まる索引の動画を渡す。
+ * 索引側に新着区間と同じ動画があれば（インデックス確定時刻のズレ）索引側を落として重複を防ぐ。
  */
 export function assembleMergedPage(
   realtimeItems: RankingItem[],
@@ -340,7 +382,6 @@ export function assembleMergedPage(
   plan: MergedPagePlan
 ): RankingItem[] {
   const realtimeIds = new Set(realtimeItems.map((it) => it.id))
-  const head = realtimeItems.slice(plan.realtimeFrom, plan.realtimeTo)
   const tail = snapshotItems.filter((it) => !realtimeIds.has(it.id)).slice(0, plan.snapshotLimit)
-  return [...head, ...tail].map((it, i) => ({ ...it, rank: plan.globalStart + i + 1 }))
+  return [...realtimeItems, ...tail].map((it, i) => ({ ...it, rank: plan.globalStart + i + 1 }))
 }

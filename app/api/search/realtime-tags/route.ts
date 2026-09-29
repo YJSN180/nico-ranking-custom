@@ -4,9 +4,10 @@
 // タグ表示トグル・粗悪除外のタグ条件がリアルタイム区間でも機能する。
 // ロック情報が分かったここで自動 NG のロックタグ規則 D を当て、該当する動画を hiddenIds で返す（画面で隠す）。
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchTagDetailsForVideos, sanitizeVideoIds } from '@/lib/search/realtime-tags'
+import { buildRealtimeTagsQuery, fetchTagDetailsForVideos, sanitizeVideoIds } from '@/lib/search/realtime-tags'
 import { getLqngConfig, isLqngEnabled } from '@/lib/lqng/server'
 import { lockTagRuleHits } from '@/lib/lqng/request-rules'
+import { enrichmentRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 
 export const revalidate = 0
 
@@ -18,8 +19,15 @@ const KV_READ_TIMEOUT_MS = 3000
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const ids = sanitizeVideoIds(request.nextUrl.searchParams.get('ids'))
   if (ids.length === 0) {
-    return NextResponse.json({ error: 'no_ids' }, { status: 400 })
+    return NextResponse.json({ error: 'no_ids' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
   }
+  // 受け付けるのは画面が組み立てる正規形だけ（知らないキー・並べ替え・形式不正の ID・上限超えで CDN のキャッシュを外させない）
+  if (buildRealtimeTagsQuery(ids) !== request.nextUrl.search.replace(/^\?/, '')) {
+    return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+  }
+  // インスタンスごとの軽い流量制限（上流への問い合わせの急増を抑える。形の不正な問い合わせは数えない）
+  const retryAfter = enrichmentRateLimit.take()
+  if (retryAfter > 0) return tooManyRequests(retryAfter)
   const started = Date.now()
   const deadline = AbortSignal.timeout(REALTIME_TAGS_DEADLINE_MS)
   // 自動 NG の設定は上流の問い合わせと並列に読む（失敗や期限切れでも投げず、直前の成功値か無効で続く）

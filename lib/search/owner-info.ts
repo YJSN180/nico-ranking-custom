@@ -7,7 +7,7 @@
 //   - チャンネル: ID から引ける API は見つからず（nvapi /v1/channels/{id} 等は 404）。
 //     watch v3_guest の data.channel.{id,name,thumbnail} から取れるので、チャンネルごとに
 //     代表動画 1 件を叩いて解決する。
-import { buildV3GuestUrl } from '@/lib/search/realtime-tags'
+import { buildV3GuestUrl, compareIds, isVideoId } from '@/lib/search/realtime-tags'
 import { withTimeout } from '../abort-signal'
 
 /**
@@ -20,6 +20,14 @@ const DEFAULT_CONCURRENCY = 8
 const DEFAULT_PER_REQUEST_TIMEOUT_MS = 2500
 /** 名前・アイコンは滅多に変わらないので長めにメモする（Vercel インスタンス内） */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+/**
+ * 退会済みの記憶は短くする。nvapi は経路の誤りにも同じ 404 と NOT_FOUND を返す（2026-09-27 実測）ので、
+ * API の変更や障害で退会と見分けられなかったときに、長く固定しない
+ */
+const MISSING_CACHE_TTL_MS = 60 * 60 * 1000
+/** メモリキャッシュの上限件数（未認証の呼び出しでインスタンスのメモリを使い切らせない） */
+const USER_CACHE_MAX = 5000
+const CHANNEL_CACHE_MAX = 2000
 
 const NVAPI_HEADERS: Record<string, string> = {
   'X-Frontend-Id': '6',
@@ -34,9 +42,23 @@ const V3_GUEST_HEADERS: Record<string, string> = {
   'Accept-Language': 'ja,en;q=0.9',
 }
 
-const USER_ID_PATTERN = /^\d{1,12}$/
-/** チャンネルの代表動画にはショート（ss）も来る */
-const VIDEO_ID_PATTERN = /^(sm|so|nm|ss)\d{1,12}$/
+/** 番号の先頭に 0 は付かない（同じ投稿者を別の書き方で問い合わせられないようにする） */
+const USER_ID_PATTERN = /^[1-9]\d{0,11}$/
+
+export const isUserId = (id: string): boolean => USER_ID_PATTERN.test(id)
+
+/**
+ * 投稿者情報の問い合わせの正規形（ID は重複なし・昇順。ユーザー → チャンネルの代表動画の順）。
+ * 画面はこれで組み立て、サーバーはこれと同じ形だけを受け付ける（並べ替えや書き換えで CDN のキャッシュを外せないようにする）
+ */
+export function buildOwnersQuery(input: { userIds: string[]; channelVideoIds: string[] }): string {
+  const params = new URLSearchParams()
+  const users = Array.from(new Set(input.userIds)).sort(compareIds)
+  const videos = Array.from(new Set(input.channelVideoIds)).sort(compareIds)
+  if (users.length > 0) params.set('users', users.join(','))
+  if (videos.length > 0) params.set('videos', videos.join(','))
+  return params.toString()
+}
 
 export interface OwnerInfo {
   name: string
@@ -66,13 +88,13 @@ export function authorIdsMatchingNames(result: OwnerInfoResult, matches: (name: 
   return [...users, ...channels]
 }
 
-function sanitizeIds(raw: string | null, pattern: RegExp, max: number): string[] {
+function sanitizeIds(raw: string | null, isValid: (id: string) => boolean, max: number): string[] {
   if (!raw) return []
   const seen = new Set<string>()
   const ids: string[] = []
   for (const part of raw.split(',')) {
     const id = part.trim()
-    if (!pattern.test(id) || seen.has(id)) continue
+    if (!isValid(id) || seen.has(id)) continue
     seen.add(id)
     ids.push(id)
     if (ids.length >= max) break
@@ -81,11 +103,12 @@ function sanitizeIds(raw: string | null, pattern: RegExp, max: number): string[]
 }
 
 export function sanitizeUserIds(raw: string | null, max = OWNER_INFO_MAX_USERS): string[] {
-  return sanitizeIds(raw, USER_ID_PATTERN, max)
+  return sanitizeIds(raw, isUserId, max)
 }
 
 export function sanitizeChannelVideoIds(raw: string | null, max = OWNER_INFO_MAX_CHANNEL_VIDEOS): string[] {
-  return sanitizeIds(raw, VIDEO_ID_PATTERN, max)
+  // チャンネルの代表動画にはショート（ss）も来る
+  return sanitizeIds(raw, isVideoId, max)
 }
 
 export function buildUserInfoUrl(userId: string): string {
@@ -116,24 +139,51 @@ export function parseChannelInfo(payload: unknown): { id: string; info: OwnerInf
   return { id: channel.id, info: { name: channel.name, icon: typeof icon === 'string' ? icon : undefined } }
 }
 
-interface CacheEntry<T> {
-  value: T
-  expiresAt: number
+/** 上限件数つきの期限つきキャッシュ。上限を超えたら、入れた順に古いものから捨てる */
+export class BoundedTtlCache<T> {
+  private readonly entries = new Map<string, { value: T; expiresAt: number }>()
+
+  constructor(private readonly maxEntries: number) {}
+
+  get size(): number {
+    return this.entries.size
+  }
+
+  get(key: string, now: number): T | undefined {
+    const entry = this.entries.get(key)
+    if (!entry) return undefined
+    if (entry.expiresAt <= now) {
+      this.entries.delete(key)
+      return undefined
+    }
+    return entry.value
+  }
+
+  set(key: string, value: T, expiresAt: number): void {
+    // 入れ直したものは新しい扱いにする（Map は入れた順を保つ）
+    this.entries.delete(key)
+    while (this.entries.size >= this.maxEntries) {
+      const oldest = this.entries.keys().next().value
+      if (oldest === undefined) break
+      this.entries.delete(oldest)
+    }
+    this.entries.set(key, { value, expiresAt })
+  }
+
+  clear(): void {
+    this.entries.clear()
+  }
 }
 
-const userCache = new Map<string, CacheEntry<OwnerInfo>>()
-/** 退会済みは戻らないので、こちらも同じ TTL でメモして再照会を避ける */
-const missingUserCache = new Map<string, CacheEntry<true>>()
-const channelByVideoCache = new Map<string, CacheEntry<{ id: string; info: OwnerInfo }>>()
+const userCache = new BoundedTtlCache<OwnerInfo>(USER_CACHE_MAX)
+/** 退会済みも覚えて再照会を避ける（期限は MISSING_CACHE_TTL_MS） */
+const missingUserCache = new BoundedTtlCache<true>(USER_CACHE_MAX)
+const channelByVideoCache = new BoundedTtlCache<{ id: string; info: OwnerInfo }>(CHANNEL_CACHE_MAX)
 
-function readCache<T>(cache: Map<string, CacheEntry<T>>, key: string, now: number): T | undefined {
-  const entry = cache.get(key)
-  if (!entry) return undefined
-  if (entry.expiresAt <= now) {
-    cache.delete(key)
-    return undefined
-  }
-  return entry.value
+/** nvapi の 404 が退会済み（本文が meta.errorCode = NOT_FOUND）か */
+function isNotFoundBody(body: unknown): boolean {
+  const meta = (body as { meta?: { status?: unknown; errorCode?: unknown } } | null)?.meta
+  return meta?.errorCode === 'NOT_FOUND'
 }
 
 export function clearOwnerInfoCache(): void {
@@ -167,20 +217,22 @@ export async function fetchOwnerInfo(
 
   const pendingUsers: string[] = []
   for (const id of input.userIds) {
-    const cached = readCache(userCache, id, now)
+    const cached = userCache.get(id, now)
     if (cached) result.users[id] = cached
-    else if (readCache(missingUserCache, id, now)) result.missing.push(id)
+    else if (missingUserCache.get(id, now)) result.missing.push(id)
     else pendingUsers.push(id)
   }
   const pendingVideos: string[] = []
   for (const id of input.channelVideoIds) {
-    const cached = readCache(channelByVideoCache, id, now)
+    const cached = channelByVideoCache.get(id, now)
     if (cached) result.channels[cached.id] = cached.info
     else pendingVideos.push(id)
   }
 
   const fetchJson = async (url: string, headers: Record<string, string>): Promise<{ status: number; body: unknown | null }> => {
     const res = await fetchImpl(url, { headers, cache: 'no-store', signal: withTimeout(timeoutMs, options.signal) })
+    // 404 は本文で退会かどうかを確かめる。本文が JSON でない（CDN・プロキシの応答など）ときは null
+    if (res.status === 404) return { status: res.status, body: await res.json().catch(() => null) }
     if (!res.ok) return { status: res.status, body: null }
     return { status: res.status, body: await res.json() }
   }
@@ -188,10 +240,10 @@ export async function fetchOwnerInfo(
   const fetchUser = async (id: string): Promise<void> => {
     try {
       const { status, body } = await fetchJson(buildUserInfoUrl(id), NVAPI_HEADERS)
-      if (status === 404) {
-        // 退会済み。一時的な失敗（5xx・タイムアウト）とは区別して表示側で明示する
+      if (status === 404 && isNotFoundBody(body)) {
+        // 退会済み。一時的な失敗（5xx・タイムアウト・本文の無い 404）とは区別して表示側で明示する
         result.missing.push(id)
-        missingUserCache.set(id, { value: true, expiresAt: now + CACHE_TTL_MS })
+        missingUserCache.set(id, true, now + MISSING_CACHE_TTL_MS)
         return
       }
       const info = parseUserInfo(body)
@@ -200,7 +252,7 @@ export async function fetchOwnerInfo(
         return
       }
       result.users[id] = info
-      userCache.set(id, { value: info, expiresAt: now + CACHE_TTL_MS })
+      userCache.set(id, info, now + CACHE_TTL_MS)
     } catch {
       result.failed.push(id)
     }
@@ -214,7 +266,7 @@ export async function fetchOwnerInfo(
         return
       }
       result.channels[channel.id] = channel.info
-      channelByVideoCache.set(videoId, { value: channel, expiresAt: now + CACHE_TTL_MS })
+      channelByVideoCache.set(videoId, channel, now + CACHE_TTL_MS)
     } catch {
       result.failed.push(videoId)
     }

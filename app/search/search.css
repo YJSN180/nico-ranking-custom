@@ -103,7 +103,6 @@
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 14px;
-  overflow: hidden;
 }
 
 .search-form__saved-load {
@@ -131,6 +130,19 @@
 .search-form__saved-load:hover,
 .search-form__saved-delete:hover {
   color: var(--primary-color, #0066cc);
+}
+
+/* キーボードで選んだときのリング。チップの丸みに合わせ、内側に描いて切れないようにする */
+.search-form__saved-load:focus-visible {
+  outline: 2px solid var(--primary-color, #0066cc);
+  outline-offset: -2px;
+  border-radius: 13px 0 0 13px;
+}
+
+.search-form__saved-delete:focus-visible {
+  outline: 2px solid var(--primary-color, #0066cc);
+  outline-offset: -2px;
+  border-radius: 0 13px 13px 0;
 }
 
 .search-form__actions {
@@ -516,4 +528,40 @@
   background: var(--surface-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
+}
+
+/* スマートフォン・タッチ操作の端末 */
+@media (max-width: 640px), (pointer: coarse) {
+  /* iOS の Safari は 16px 未満の入力欄にフォーカスすると画面を拡大するので、入力欄と選択欄を 16px にする */
+  .search-form__number,
+  .search-form__date,
+  .search-form__sort {
+    font-size: 16px;
+  }
+
+  /*
+   * 適用中の条件の ✕ を指で押しやすくする。✕ の見た目はそのままで、タップ領域を ✕ を中心に 44px 四方に広げる。
+   * チップを 32px にして上下左右の間を 12px にし、上下の行の ✕ の領域と重ねず、左右のはみ出しはチップの間に収める
+   */
+  .search-results__chips {
+    gap: 12px;
+  }
+
+  .search-results__chip {
+    min-height: 32px;
+  }
+
+  .search-results__chip button {
+    position: relative;
+  }
+
+  .search-results__chip button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
+  BoundedTtlCache,
   sanitizeUserIds,
   sanitizeChannelVideoIds,
   parseUserInfo,
@@ -50,7 +51,10 @@ describe('fetchOwnerInfo', () => {
       calls.push(url)
       if (url.includes('/v1/users/')) {
         const id = url.split('/').pop()!
-        if (id === '2') return { ok: false, status: 404 } as unknown as Response
+        // 退会済み: nvapi は 404 と NOT_FOUND の本文を返す（2026-09-27 実測）
+        if (id === '2') return { ok: false, status: 404, json: async () => ({ meta: { status: 404, errorCode: 'NOT_FOUND' } }) } as unknown as Response
+        // 本文の無い 404（CDN やプロキシの応答など）
+        if (id === '7') return { ok: false, status: 404, json: async () => { throw new SyntaxError('not json') } } as unknown as Response
         if (id === '3') throw new Error('network')
         return { ok: true, json: async () => ({ data: { user: { nickname: `user-${id}`, icons: { small: `https://i/${id}.jpg` } } } }) } as unknown as Response
       }
@@ -71,6 +75,26 @@ describe('fetchOwnerInfo', () => {
     expect(result.missing).toEqual(['2'])
     expect(result.failed.sort()).toEqual(['3', 'so9'])
     expect(calls).toHaveLength(5)
+  })
+
+  it('404 は本文で NOT_FOUND を確かめてから退会扱いにし、本文の無い 404 は失敗（failed）にして覚えない', async () => {
+    const calls: string[] = []
+    const fetchImpl = makeFetch(calls) as unknown as typeof fetch
+    const first = await fetchOwnerInfo({ userIds: ['7'], channelVideoIds: [] }, { fetchImpl })
+    expect(first.missing).toEqual([])
+    expect(first.failed).toEqual(['7'])
+    await fetchOwnerInfo({ userIds: ['7'], channelVideoIds: [] }, { fetchImpl })
+    expect(calls).toHaveLength(2)
+  })
+
+  it('退会済みの記憶は 1 時間で捨てて問い合わせ直す（404 の本文は経路の誤りでも同じなので、長く固定しない）', async () => {
+    const calls: string[] = []
+    const fetchImpl = makeFetch(calls) as unknown as typeof fetch
+    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 0 })
+    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 59 * 60 * 1000 })
+    expect(calls).toHaveLength(1)
+    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 61 * 60 * 1000 })
+    expect(calls).toHaveLength(2)
   })
 
   it('退会済み(404)もメモし、再照会しない', async () => {
@@ -134,5 +158,31 @@ describe('authorIdsMatchingNames', () => {
       failed: [],
     }
     expect(authorIdsMatchingNames(result, (name) => name.startsWith('ng-'))).toEqual(['1002', 'channel/ch3003'])
+  })
+})
+
+describe('BoundedTtlCache（投稿者情報のメモリキャッシュ）', () => {
+  it('上限を超えたら古いものから捨てる', () => {
+    const cache = new BoundedTtlCache<string>(2)
+    cache.set('a', 'A', 100)
+    cache.set('b', 'B', 100)
+    cache.set('c', 'C', 100)
+    expect(cache.get('a', 0)).toBeUndefined()
+    expect(cache.get('b', 0)).toBe('B')
+    expect(cache.get('c', 0)).toBe('C')
+    expect(cache.size).toBe(2)
+  })
+
+  it('期限を過ぎたものは返さずに捨てる。入れ直すと新しい扱いになる', () => {
+    const cache = new BoundedTtlCache<string>(2)
+    cache.set('a', 'A', 10)
+    expect(cache.get('a', 10)).toBeUndefined()
+    expect(cache.size).toBe(0)
+    cache.set('x', 'X', 100)
+    cache.set('y', 'Y', 100)
+    cache.set('x', 'X2', 100)
+    cache.set('z', 'Z', 100)
+    expect(cache.get('y', 0)).toBeUndefined()
+    expect(cache.get('x', 0)).toBe('X2')
   })
 })

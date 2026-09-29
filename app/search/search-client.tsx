@@ -17,20 +17,24 @@ import {
   loadSavedSearches,
   persistSavedSearches,
   removeSavedSearch,
+  SavedSearchError,
   type SavedSearch,
 } from '@/lib/search/saved-searches'
 import {
   SEARCH_CONTENT_TYPE_OPTIONS,
   SEARCH_GENRES,
+  SEARCH_MAX_OFFSET,
   SEARCH_PAGE_SIZE,
   SEARCH_SORT_OPTIONS,
+  buildSearchQuery,
+  parseSearchConditions,
   parseSearchContentType,
   type SearchContentType,
   type SearchTagCondition,
   type SearchTagOperator,
 } from '@/lib/search/snapshot-search'
-import { REALTIME_TAGS_MAX_VIDEOS } from '@/lib/search/realtime-tags'
-import { OWNER_INFO_MAX_CHANNEL_VIDEOS, OWNER_INFO_MAX_USERS } from '@/lib/search/owner-info'
+import { REALTIME_TAGS_MAX_VIDEOS, buildRealtimeTagsQuery, isVideoId } from '@/lib/search/realtime-tags'
+import { OWNER_INFO_MAX_CHANNEL_VIDEOS, OWNER_INFO_MAX_USERS, buildOwnersQuery, isUserId } from '@/lib/search/owner-info'
 import type { OwnerInfo } from '@/lib/search/owner-info'
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
@@ -231,7 +235,9 @@ function formatDateInput(d: Date): string {
   return jst.toISOString().slice(0, 10)
 }
 
-/** フォーム状態からAPI/URL用のクエリパラメータを構築 */
+/**
+ * フォーム状態をクエリパラメータにする（入力のまま。正規形にするのは toSearchQuery）
+ */
 function buildQueryParams(form: FormState, page: number): URLSearchParams {
   const params = new URLSearchParams()
   if (form.q) params.set('q', form.q)
@@ -271,20 +277,37 @@ function buildQueryParams(form: FormState, page: number): URLSearchParams {
   return params
 }
 
-/** URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する） */
+/**
+ * フォーム状態を検索条件の正規形の URL クエリにする。画面の URL・保存した検索・/api/search に使う
+ * （サーバーと同じ読み方で読み直すので、サーバーが受け付ける形と一致する）
+ */
+function toSearchQuery(form: FormState, page: number): string {
+  return buildSearchQuery(parseSearchConditions(buildQueryParams(form, page)))
+}
+
+/**
+ * URL にこのどれかがあれば検索条件あり（直接アクセスや戻る・進むで自動検索する）。
+ * 並び順・検索対象・ページも含める（キーワードなしで並び順だけ変えた検索も URL に残るため）
+ */
 const SEARCH_CONDITION_KEYS = [
-  'q', 'genre', 'contentType', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax',
-  'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot',
+  'q', 'targets', 'contentType', 'sort', 'genre', 'viewsMin', 'viewsMax', 'dateFrom', 'dateTo', 'durationMin', 'durationMax',
+  'likesMin', 'likesMax', 'mylistsMin', 'mylistsMax', 'commentsMin', 'commentsMax', 'tagAnd', 'tagOr', 'tagNot', 'page',
 ] as const
 
 /** URLのクエリパラメータからフォーム状態を復元 */
 function parseFormFromUrl(params: URLSearchParams): { form: FormState; page: number } {
+  // 秒を分に戻す。小数第 2 位までにすると、どの整数秒も分→秒の丸めで同じ秒に戻る（1.5 分 = 90 秒、100 秒 = 1.67 分）
   const secToMin = (v: string | null): string => {
     if (!v) return ''
     const n = Number(v)
-    return Number.isFinite(n) && n >= 0 ? String(Math.round(n / 60)) : ''
+    return Number.isFinite(n) && n >= 0 ? String(Math.round((n / 60) * 100) / 100) : ''
   }
-  const isoToDate = (v: string | null): string => (v ? v.slice(0, 10) : '')
+  // 日付は日本時間の日にする（+09:00 以外の表記の URL でも日がずれないように）
+  const isoToDate = (v: string | null): string => {
+    if (!v) return ''
+    const d = new Date(v)
+    return Number.isFinite(d.getTime()) ? formatDateInput(d) : ''
+  }
   const genres = params.getAll('genre').filter((g) => (SEARCH_GENRES as readonly string[]).includes(g))
   const sort = params.get('sort') ?? '-viewCounter'
 
@@ -344,11 +367,25 @@ export function SearchClient() {
   const [detailsOpen, setDetailsOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const resultsRef = useRef<HTMLDivElement | null>(null)
+  const detailsRef = useRef<HTMLDetailsElement | null>(null)
+  const submitRef = useRef<HTMLButtonElement | null>(null)
   const hasSearchedRef = useRef(false)
   /** runSearch が書き換えたが、まだ searchParams に届いていない URL クエリ（古い順）。届いたら読み捨てる */
   const pendingUrlWritesRef = useRef<string[]>([])
   /** いま表示中（または取得中）の検索の URL クエリ。同じ URL への変化では検索し直さない */
   const currentQueryRef = useRef<string | null>(null)
+
+  // ページを離れたら、検索と補完（投稿者情報・タグ）の問い合わせを止める（補完は検索と同じシグナルで動く）。
+  // 開発時の StrictMode は付け外しを 2 回行うので、覚えている URL も忘れて、付け直しのときに検索し直させる
+  useEffect(
+    () => () => {
+      abortRef.current?.abort()
+      abortRef.current = null
+      currentQueryRef.current = null
+      pendingUrlWritesRef.current = []
+    },
+    []
+  )
 
   // 保存済み検索と詳細条件の開閉状態を復元
   useEffect(() => {
@@ -373,13 +410,13 @@ export function SearchClient() {
     // 早期 return より前に採番し、新しい検索が来たら（結果がマージでなくても）古い補完を無効化する
     const requestId = ++tagsRequestIdRef.current
     if (data.source !== 'merged' || !data.realtimeCount) return
-    const targets = data.items.filter((it) => it.tags === undefined && it.tagDetails === undefined).map((it) => it.id)
+    const targets = data.items.filter((it) => it.tags === undefined && it.tagDetails === undefined && isVideoId(it.id)).map((it) => it.id)
     if (targets.length === 0) return
     try {
-      // サーバー側の1リクエスト上限に合わせて分割し、順に取得（区間は通常数件〜数十件）
+      // サーバー側の1リクエスト上限に合わせて分割し、順に取得（区間は通常数件〜数十件）。問い合わせは正規形（ID を昇順）
       for (let i = 0; i < targets.length; i += REALTIME_TAGS_MAX_VIDEOS) {
         const chunk = targets.slice(i, i + REALTIME_TAGS_MAX_VIDEOS)
-        const res = await fetch(`/api/search/realtime-tags?ids=${encodeURIComponent(chunk.join(','))}`, { signal })
+        const res = await fetch(`/api/search/realtime-tags?${buildRealtimeTagsQuery(chunk)}`, { signal })
         if (!res.ok) return
         const body = (await res.json()) as { tagDetails?: Record<string, Array<{ name: string; isLocked: boolean }>>; hiddenIds?: string[] }
         if (requestId !== tagsRequestIdRef.current || !body.tagDetails) return
@@ -414,8 +451,8 @@ export function SearchClient() {
       if (it.authorName || !it.authorId) continue
       if (it.authorId.startsWith('channel/')) {
         const channelId = it.authorId.slice('channel/'.length)
-        if (!channelVideos.has(channelId)) channelVideos.set(channelId, it.id)
-      } else if (/^\d+$/.test(it.authorId)) {
+        if (!channelVideos.has(channelId) && isVideoId(it.id)) channelVideos.set(channelId, it.id)
+      } else if (isUserId(it.authorId)) {
         userIds.add(it.authorId)
       }
     }
@@ -445,14 +482,15 @@ export function SearchClient() {
       )
     }
 
+    // 問い合わせは正規形（ID を昇順）。サーバーはそれ以外の形を受け付けない
     const requests: string[] = []
     const userList = Array.from(userIds)
     for (let i = 0; i < userList.length; i += OWNER_INFO_MAX_USERS) {
-      requests.push(`users=${encodeURIComponent(userList.slice(i, i + OWNER_INFO_MAX_USERS).join(','))}`)
+      requests.push(buildOwnersQuery({ userIds: userList.slice(i, i + OWNER_INFO_MAX_USERS), channelVideoIds: [] }))
     }
     const videoList = Array.from(channelVideos.values())
     for (let i = 0; i < videoList.length; i += OWNER_INFO_MAX_CHANNEL_VIDEOS) {
-      requests.push(`videos=${encodeURIComponent(videoList.slice(i, i + OWNER_INFO_MAX_CHANNEL_VIDEOS).join(','))}`)
+      requests.push(buildOwnersQuery({ userIds: [], channelVideoIds: videoList.slice(i, i + OWNER_INFO_MAX_CHANNEL_VIDEOS) }))
     }
 
     await Promise.all(
@@ -484,11 +522,12 @@ export function SearchClient() {
       setIsLoading(true)
       setError(null)
       hasSearchedRef.current = true
-      setLastForm(searchForm)
 
-      const params = buildQueryParams(searchForm, searchPage)
-      const queryString = params.toString()
-      const conditionKey = buildQueryParams(searchForm, 1).toString()
+      // 条件は正規形にしてから使う（URL・API・適用中のチップのどれも、実際に検索した条件と一致させる）
+      const conditions = parseSearchConditions(buildQueryParams(searchForm, searchPage))
+      const queryString = buildSearchQuery(conditions)
+      const conditionKey = buildSearchQuery({ ...conditions, page: 1 })
+      setLastForm(parseFormFromUrl(new URLSearchParams(queryString)).form)
       currentQueryRef.current = queryString
       if (queryString !== new URLSearchParams(window.location.search).toString()) {
         pendingUrlWritesRef.current.push(queryString)
@@ -497,27 +536,33 @@ export function SearchClient() {
 
       // 2ページ目以降は、直前に表示した結果と同じ条件のときだけ境界とリアルタイム件数のヒントを渡す
       // （件数のヒントでサーバーが Snapshot を並列取得できる）
-      const apiParams = new URLSearchParams(params)
       const hint = pagingHintRef.current
-      if (searchPage > 1 && hint && hint.conditionKey === conditionKey) {
-        if (hint.realtimeCount > 0) apiParams.set('rtCount', String(hint.realtimeCount))
-        if (hint.boundary) apiParams.set('boundary', hint.boundary)
-      }
+      const sameConditions = conditions.page > 1 && hint !== null && hint.conditionKey === conditionKey
+      const apiQuery = buildSearchQuery(
+        conditions,
+        sameConditions ? { rtCount: hint.realtimeCount, boundary: hint.boundary ?? undefined } : {}
+      )
 
       try {
-        const res = await fetch(`/api/search?${apiParams.toString()}`, { signal: controller.signal })
+        const res = await fetch(`/api/search?${apiQuery}`, { signal: controller.signal })
         if (!res.ok) {
           const body = (await res.json().catch(() => null)) as { error?: string } | null
+          // 新しい検索に置き換えられた（または離れた）後の応答は捨てる
+          if (controller.signal.aborted) return
           const messages: Record<string, string> = {
             search_maintenance: '検索APIがメンテナンス中です。しばらくしてからお試しください。',
             search_timeout: '検索がタイムアウトしました。条件を絞ってお試しください。',
             search_query_error: '検索条件が不正です。条件を見直してください。',
+            rate_limited: 'アクセスが集中しています。少し待ってから、もう一度お試しください。',
+            // 画面は正規形だけを送るので、起きるのはサイトの更新をまたいで古い画面のまま検索したときなど
+            invalid_params: '検索できませんでした。ページを再読み込みしてから、もう一度お試しください。',
           }
           setError(messages[body?.error ?? ''] ?? '検索中にエラーが発生しました。')
           setItems(null)
           return
         }
         const data = (await res.json()) as SearchApiResponse
+        if (controller.signal.aborted) return
         setItems(data.items)
         setTotalCount(data.totalCount)
         setPage(data.page)
@@ -537,7 +582,8 @@ export function SearchClient() {
         void enrichRealtimeTags(data, controller.signal)
         void enrichOwners(data, controller.signal)
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return
+        // 置き換えられた検索の失敗（中断を含む）で、新しい検索の表示を上書きしない
+        if (controller.signal.aborted || (err instanceof Error && err.name === 'AbortError')) return
         setError('検索中にエラーが発生しました。ネットワークをご確認ください。')
         setItems(null)
       } finally {
@@ -594,6 +640,22 @@ export function SearchClient() {
     [form, runSearch]
   )
 
+  // タグ欄の Enter でも検索する（候補を選ぶ Enter は欄が受け持つ）。日本語の変換を確定する Enter では送らない。
+  // 送信ボタンを押したのと同じ扱いにして、入力の検証も通す
+  const handleTagKeyPress = useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return
+    submitRef.current?.click()
+  }, [])
+
+  // 詳細条件を閉じたままだと、ブラウザは不正な値の欄を見せられず、送信が無反応になる。
+  // 送信を止めた欄が詳細条件の中にあれば、開いてブラウザがその欄と理由を示せるようにする
+  const handleInvalid = useCallback((event: React.FormEvent<HTMLFormElement>) => {
+    const details = detailsRef.current
+    if (!details || details.open || !(event.target instanceof Node) || !details.contains(event.target)) return
+    details.open = true
+    setDetailsOpen(true)
+  }, [])
+
   // ページ送り（ランキング画面と同じ配置・挙動）: 上部からは位置を保ち、下部からは結果一覧の先頭へ戻す。
   // 送るのは実行済みの条件（lastForm）。入力欄で編集中の、まだ送信していない条件は使わない
   const handlePageChangeTop = useCallback(
@@ -620,7 +682,8 @@ export function SearchClient() {
   }, [items, ngList])
 
   const ngHiddenCount = items && filteredItems ? items.length - filteredItems.length : 0
-  const totalPages = Math.max(1, Math.ceil(Math.min(totalCount, 100000) / SEARCH_PAGE_SIZE))
+  // 件数は「検索結果 N 件」とページ送りの「全 N 件中」で同じ総数を出す。送れるのは索引が返せる深さ（10 万件）まで
+  const totalPages = Math.max(1, Math.ceil(Math.min(totalCount, SEARCH_MAX_OFFSET) / SEARCH_PAGE_SIZE))
 
   // クイックNG追加（client-page と同じセマンティクス: title/author は完全一致）
   const handleQuickNGAdd = useCallback(
@@ -628,6 +691,12 @@ export function SearchClient() {
       const stringValue = Array.isArray(value) ? value[0] : value
       const trimmedValue = stringValue?.trim()
       if (!trimmedValue) return
+      // 名前の分からない行（名前の補完前・補完に失敗した行）の「投稿者名」は ID になっている。
+      // 名前として登録しても効かないので登録せず、投稿者 ID で NG にするよう案内する（行の⋮メニューはまだ出す）
+      if (type === 'author' && !video.authorName?.trim()) {
+        showToast('投稿者名が分からないため、投稿者 ID で NG にしてください。', 'error')
+        return
+      }
 
       const updated: ExtendedUserNGList = { ...ngList, updatedAt: new Date().toISOString() }
       let wasAdded = false
@@ -689,7 +758,7 @@ export function SearchClient() {
 
   // 検索条件の保存・復元・削除
   const handleSaveCurrent = useCallback(() => {
-    const query = buildQueryParams(form, 1).toString()
+    const query = toSearchQuery(form, 1)
     if (!query) {
       showToast('保存する条件がありません。キーワードや詳細条件を指定してください。', 'error')
       return
@@ -698,10 +767,16 @@ export function SearchClient() {
       form.q.trim() || form.tagConditions.find((c) => c.tag.trim())?.tag || '無題の検索'
     const name = window.prompt('この検索条件の名前を入力してください', defaultName)
     if (!name?.trim()) return
-    const next = addSavedSearch(savedSearches, name, query)
-    setSavedSearches(next)
-    persistSavedSearches(next)
-    showToast(`検索条件「${name.trim()}」を保存しました`)
+    // 上限に達している・ブラウザに保存できないときは、保存したことにせず理由を知らせる
+    try {
+      const next = addSavedSearch(savedSearches, name, query)
+      persistSavedSearches(next)
+      setSavedSearches(next)
+      showToast(`検索条件「${name.trim()}」を保存しました`)
+    } catch (err) {
+      if (!(err instanceof SavedSearchError)) throw err
+      showToast(err.message, 'error')
+    }
   }, [form, savedSearches])
 
   const handleLoadSaved = useCallback(
@@ -717,8 +792,15 @@ export function SearchClient() {
     (saved: SavedSearch) => {
       if (!window.confirm(`保存した検索「${saved.name}」を削除しますか？`)) return
       const next = removeSavedSearch(savedSearches, saved.id)
+      // 保存できなければ一覧も消さない（再読み込みで戻ってくるのに消えたように見せない）
+      try {
+        persistSavedSearches(next)
+      } catch (err) {
+        if (!(err instanceof SavedSearchError)) throw err
+        showToast(err.message, 'error')
+        return
+      }
       setSavedSearches(next)
-      persistSavedSearches(next)
       showToast(`保存した検索「${saved.name}」を削除しました`, 'info')
     },
     [savedSearches]
@@ -745,7 +827,7 @@ export function SearchClient() {
     <div className="search-page">
       <h1 className="search-page__title">動画検索</h1>
 
-      <form className="search-form" onSubmit={handleSubmit}>
+      <form className="search-form" onSubmit={handleSubmit} onInvalidCapture={handleInvalid}>
         <div className="search-form__row">
           <input
             type="search"
@@ -755,7 +837,8 @@ export function SearchClient() {
             placeholder={form.targets === 'tag' ? 'タグを入力（完全一致）' : 'キーワードを入力'}
             aria-label="検索キーワード"
           />
-          <button type="submit" className="search-form__submit" disabled={isLoading}>
+          {/* 読み込み中も押せる（条件を直してすぐ検索し直せる。前の検索は止める）。無効にすると入力欄の Enter でも送れない */}
+          <button ref={submitRef} type="submit" className="search-form__submit">
             {isLoading ? '検索中…' : '検索'}
           </button>
         </div>
@@ -858,6 +941,7 @@ export function SearchClient() {
         )}
 
         <details
+          ref={detailsRef}
           className="search-form__details"
           open={detailsOpen}
           onToggle={(e) => {
@@ -943,6 +1027,7 @@ export function SearchClient() {
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   className="search-form__number"
                   value={form.durationMin}
                   onChange={(e) => updateField('durationMin', e.target.value)}
@@ -953,6 +1038,7 @@ export function SearchClient() {
                 <input
                   type="number"
                   min="0"
+                  step="any"
                   className="search-form__number"
                   value={form.durationMax}
                   onChange={(e) => updateField('durationMax', e.target.value)}
@@ -991,6 +1077,7 @@ export function SearchClient() {
                 <TagAutocompleteInput
                   className="search-form__number search-form__tag-input"
                   value={condition.tag}
+                  onKeyPress={handleTagKeyPress}
                   onChange={(value) =>
                     updateField(
                       'tagConditions',
@@ -1146,7 +1233,7 @@ export function SearchClient() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={Math.min(totalCount, 100000)}
+            totalItems={totalCount}
             itemsPerPage={SEARCH_PAGE_SIZE}
             onPageChange={handlePageChangeTop}
           />
@@ -1176,7 +1263,7 @@ export function SearchClient() {
           <Pagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={Math.min(totalCount, 100000)}
+            totalItems={totalCount}
             itemsPerPage={SEARCH_PAGE_SIZE}
             onPageChange={handlePageChangeBottom}
           />

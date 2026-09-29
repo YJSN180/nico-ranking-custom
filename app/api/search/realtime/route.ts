@@ -2,10 +2,11 @@
 // /api/search のマージ実装(S3)前に、Vercel からの nvapi 到達性と区間取得を
 // プレビューで実測するための内部ルート。S3 以降もデバッグ用に残す。
 import { NextRequest, NextResponse } from 'next/server'
-import { parseSearchConditions } from '@/lib/search/snapshot-search'
+import { parseSearchApiQuery } from '@/lib/search/snapshot-search'
 import { fetchRealtimeSegment, getRealtimeBoundary, isRealtimeEnabled, isRealtimeMergeable } from '@/lib/search/realtime-search'
 import { applyExclusionRules } from '@/lib/search/exclusion-rules'
 import { filterRankingItemsServer } from '@/lib/ng-filter-server'
+import { searchRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 
 export const revalidate = 0
 
@@ -14,7 +15,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (process.env.VERCEL_ENV === 'production' || !isRealtimeEnabled()) {
     return new NextResponse(null, { status: 404 })
   }
-  const conditions = parseSearchConditions(request.nextUrl.searchParams)
+  // /api/search と同じく、正規形の問い合わせだけを受け付ける
+  const parsed = parseSearchApiQuery(request.nextUrl.searchParams, request.nextUrl.search.replace(/^\?/, ''))
+  if (!parsed) {
+    return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+  }
+  const conditions = parsed.conditions
+  const retryAfter = searchRateLimit.take()
+  if (retryAfter > 0) return tooManyRequests(retryAfter)
   const boundary = getRealtimeBoundary()
   const mergeable = isRealtimeMergeable(conditions, boundary)
   if (!mergeable) {

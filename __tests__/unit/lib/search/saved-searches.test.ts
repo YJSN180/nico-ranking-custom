@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   addSavedSearch,
+  loadSavedSearches,
   mergeSavedSearches,
+  persistSavedSearches,
   removeSavedSearch,
   sanitizeSavedSearches,
+  SavedSearchError,
   MAX_SAVED_SEARCHES,
   type SavedSearch,
 } from '@/lib/search/saved-searches'
@@ -39,9 +42,16 @@ describe('sanitizeSavedSearches', () => {
     expect(result.map((s) => s.name)).toEqual(['valid', 'valid2'])
   })
 
-  it('上限を超えるエントリは切り捨てる', () => {
+  it('読み込み（loadSavedSearches）では上限を超えるエントリを切り捨てる', () => {
     const many = Array.from({ length: MAX_SAVED_SEARCHES + 10 }, (_, i) => makeSearch(`s${i}`))
-    expect(sanitizeSavedSearches({ version: 1, searches: many })).toHaveLength(MAX_SAVED_SEARCHES)
+    localStorage.setItem('saved-searches', JSON.stringify({ version: 1, searches: many }))
+    expect(loadSavedSearches()).toHaveLength(MAX_SAVED_SEARCHES)
+    localStorage.clear()
+  })
+
+  it('取り込み用の整形（sanitizeSavedSearches）では切り捨てない（上限を超えたことを取り込みで知らせるため）', () => {
+    const many = Array.from({ length: MAX_SAVED_SEARCHES + 10 }, (_, i) => makeSearch(`s${i}`))
+    expect(sanitizeSavedSearches({ version: 1, searches: many })).toHaveLength(MAX_SAVED_SEARCHES + 10)
   })
 })
 
@@ -87,5 +97,44 @@ describe('mergeSavedSearches（バックアップインポート）', () => {
     )
     expect(importedCount).toBe(1)
     expect(merged.map((s) => s.name)).toEqual(['ok'])
+  })
+})
+
+describe('上限と保存の失敗を成功にしない', () => {
+  const many = (count: number, prefix = 's'): SavedSearch[] => Array.from({ length: count }, (_, i) => makeSearch(`${prefix}${i}`))
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    localStorage.clear()
+  })
+
+  it('上限に達していたら、新しい名前は追加せずに知らせる（古いものを黙って消さない）', () => {
+    const full = many(MAX_SAVED_SEARCHES)
+    expect(() => addSavedSearch(full, '新しい検索', 'q=new')).toThrow(SavedSearchError)
+    // 同じ名前の上書きは件数が増えないので受け付ける
+    expect(addSavedSearch(full, 's3', 'q=updated').find((s) => s.name === 's3')?.query).toBe('q=updated')
+  })
+
+  it('取り込むと上限を超えるなら、何も取り込まずに知らせる（切り捨てたまま「インポート」と数えない）', () => {
+    const existing = many(45, 'local')
+    const imported = many(10, 'imported')
+    expect(() => mergeSavedSearches(existing, imported)).toThrow(SavedSearchError)
+    expect(() => mergeSavedSearches(existing, imported)).toThrow(/50 件まで.*55 件/)
+    // 同じ名前の上書きを含めて上限に収まるなら取り込む
+    const { merged, importedCount } = mergeSavedSearches(existing, [...many(5, 'local'), ...many(5, 'imported')])
+    expect(merged).toHaveLength(MAX_SAVED_SEARCHES)
+    expect(importedCount).toBe(10)
+  })
+
+  it('ブラウザに保存できなければ知らせる（保存したことにしない）', () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('quota', 'QuotaExceededError')
+    })
+    expect(() => persistSavedSearches([makeSearch('a')])).toThrow(SavedSearchError)
+  })
+
+  it('保存できたものは読み直せる', () => {
+    persistSavedSearches([makeSearch('a')])
+    expect(loadSavedSearches().map((s) => s.name)).toEqual(['a'])
   })
 })

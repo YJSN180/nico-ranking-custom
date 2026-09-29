@@ -94,11 +94,14 @@ describe('境界の決定（Snapshot の索引の実際の最新時刻に合わ�
     expect(isRealtimeCandidate(base({ contentType: 'short', tagConditions: [{ tag: 'a', operator: 'AND' }] }))).toBe(false)
   })
 
-  it('parseRequestedBoundary は不正・未来・60 日超を捨てる', () => {
+  it('parseRequestedBoundary は不正・未来・3 日より古い値を捨てる', () => {
     expect(parseRequestedBoundary(null, now)).toBeNull()
     expect(parseRequestedBoundary('x', now)).toBeNull()
     expect(parseRequestedBoundary('2026-09-22T12:00:00+09:00', now)).toBeNull()
     expect(parseRequestedBoundary('2026-06-01T00:00:00+09:00', now)).toBeNull()
+    // now は 2026-09-22 06:50 JST。3 日前（09-19 06:50）より古い境界は受け付けない
+    expect(parseRequestedBoundary('2026-09-19T06:49:59+09:00', now)).toBeNull()
+    expect(parseRequestedBoundary('2026-09-19T06:50:00+09:00', now)).toBe('2026-09-19T06:50:00+09:00')
     expect(parseRequestedBoundary('2026-09-21T04:28:31+09:00', now)).toBe('2026-09-21T04:28:31+09:00')
   })
 
@@ -209,6 +212,14 @@ describe('fetchRealtimeSegment', () => {
     expect(seg.upstreamTotal).toBe(2)
     expect(seg.truncated).toBe(false)
   })
+  it('ページのあいだで同じ動画が重なったら（取得中の新着でずれたとき）、動画 ID で 1 件にまとめる', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(mkResponse([{ id: 'a', title: 'a', registeredAt: '', count: { view: 1 } }, { id: 'b', title: 'b', registeredAt: '', count: { view: 1 } }], true, 3))
+      .mockResolvedValueOnce(mkResponse([{ id: 'b', title: 'b', registeredAt: '', count: { view: 1 } }, { id: 'c', title: 'c', registeredAt: '', count: { view: 1 } }], false, 3))
+    const seg = await fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)
+    expect(seg.items.map((i) => [i.id, i.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]])
+  })
   it('上限ページで打ち切り truncated=true', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(mkResponse([{ id: 'x', title: 'x', registeredAt: '', count: {} }], true, 999))
     const seg = await fetchRealtimeSegment(base(), T, fetchImpl as unknown as typeof fetch)
@@ -268,11 +279,16 @@ describe('planMergedPage / assembleMergedPage', () => {
     const page = assembleMergedPage(rt, snap, planMergedPage(1, 3, 2))
     expect(page.map((i) => [i.id, i.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]])
   })
-  it('組み立て: 2ページ目は globalStart から rank を振る', () => {
-    const rt = [mk('a')]
+  it('組み立て: 2ページ目は globalStart から rank を振る（新着区間を過ぎたページは新着の動画を渡さない）', () => {
     const snap = [mk('x'), mk('y')]
-    const page = assembleMergedPage(rt, snap, planMergedPage(2, 2, 1))
+    const page = assembleMergedPage([], snap, planMergedPage(2, 2, 1))
     expect(page.map((i) => [i.id, i.rank])).toEqual([['x', 3], ['y', 4]])
+  })
+  it('組み立て: 新着区間はこのページの分だけを受け取り、その後に索引を続ける', () => {
+    // 区間 R=5、1 ページ 3 件の 2 ページ目は、区間の 4・5 件目と索引の先頭 1 件
+    const plan = planMergedPage(2, 3, 5)
+    const page = assembleMergedPage([mk('r4'), mk('r5')], [mk('s1'), mk('s2')], plan)
+    expect(page.map((i) => [i.id, i.rank])).toEqual([['r4', 4], ['r5', 5], ['s1', 6]])
   })
 })
 

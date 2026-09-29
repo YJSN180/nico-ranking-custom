@@ -48,8 +48,18 @@ vi.mock('next/navigation', async () => {
 vi.mock('@/components/ranking-item-responsive', async () => {
   const React = await import('react')
   return {
-    default: ({ item }: { item: RankingItem }) =>
-      React.createElement('div', { 'data-testid': 'result-item', 'data-id': item.id }, `${item.id} ${item.authorName ?? ''}`),
+    // 行の⋮メニューの「投稿者名」と同じく、名前が無ければ ID を値にして NG の追加を呼ぶボタンを置く
+    default: ({ item, onQuickNGAdd }: { item: RankingItem; onQuickNGAdd?: (video: RankingItem, type: 'author', value: string) => void }) =>
+      React.createElement(
+        'div',
+        { 'data-testid': 'result-item', 'data-id': item.id },
+        `${item.id} ${item.authorName ?? ''}`,
+        React.createElement(
+          'button',
+          { type: 'button', onClick: () => onQuickNGAdd?.(item, 'author', item.authorName || item.authorId || '') },
+          `author-ng-${item.id}`
+        )
+      ),
   }
 })
 vi.mock('@/components/video-context-menu', async () => {
@@ -65,33 +75,82 @@ vi.mock('@/components/initial-ranking-skeleton', () => ({ default: () => null })
 vi.mock('@/components/tag-autocomplete-input', async () => {
   const React = await import('react')
   return {
-    TagAutocompleteInput: (props: { value: string; onChange: (value: string) => void; placeholder?: string }) =>
-      React.createElement('input', { value: props.value, placeholder: props.placeholder, onChange: (e: { target: { value: string } }) => props.onChange(e.target.value) }),
+    // 本物と同じく、候補を選んでいない Enter は既定の動作（フォームの送信）を止めて onKeyPress に渡す
+    TagAutocompleteInput: (props: {
+      value: string
+      onChange: (value: string) => void
+      onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+      placeholder?: string
+    }) =>
+      React.createElement('input', {
+        value: props.value,
+        placeholder: props.placeholder,
+        onChange: (e: { target: { value: string } }) => props.onChange(e.target.value),
+        onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          props.onKeyPress?.(e)
+        },
+      }),
   }
 })
 
 import { SearchClient } from '@/app/search/search-client'
+import { parseSearchApiQuery } from '@/lib/search/snapshot-search'
+import { buildOwnersQuery, sanitizeChannelVideoIds, sanitizeUserIds } from '@/lib/search/owner-info'
+import { buildRealtimeTagsQuery, sanitizeVideoIds } from '@/lib/search/realtime-tags'
 
 type Json = Record<string, unknown>
 interface Handlers {
-  search: (url: URL) => Json
+  /** 応答の本文（200）か、状態コードを決めた Response */
+  search: (url: URL) => Json | Response
   owners: (url: URL) => Json
   tags: (url: URL) => Json
 }
 
 let handlers: Handlers
 const requests: URL[] = []
+/** サーバーが 400（invalid_params）にする形の問い合わせ。画面は正規形だけを送る */
+const nonCanonical: string[] = []
 
-const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+const rawQuery = (url: URL): string => url.search.replace(/^\?/, '')
+function checkCanonical(url: URL): void {
+  const raw = rawQuery(url)
+  const ok =
+    url.pathname === '/api/search'
+      ? parseSearchApiQuery(url.searchParams, raw) !== null
+      : url.pathname === '/api/search/owners'
+        ? buildOwnersQuery({ userIds: sanitizeUserIds(url.searchParams.get('users')), channelVideoIds: sanitizeChannelVideoIds(url.searchParams.get('videos')) }) === raw
+        : buildRealtimeTagsQuery(sanitizeVideoIds(url.searchParams.get('ids'))) === raw
+  if (!ok) nonCanonical.push(`${url.pathname}?${raw}`)
+}
 
-const fetchMock = vi.fn(async (input: string | URL | Request): Promise<Response> => {
+const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+
+/** 設定されている間、/api/search の応答をこの Promise が解けるまで返さない（中断されたら AbortError） */
+let searchGate: Promise<void> | null = null
+const waitForGate = (signal?: AbortSignal | null): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (!searchGate) return resolve()
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+    signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true })
+    void searchGate.then(() => resolve())
+  })
+
+const defaultFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://localhost')
   requests.push(url)
-  if (url.pathname === '/api/search') return json(handlers.search(url))
+  checkCanonical(url)
+  if (url.pathname === '/api/search') {
+    await waitForGate(init?.signal)
+    const result = handlers.search(url)
+    return result instanceof Response ? result : json(result)
+  }
   if (url.pathname === '/api/search/owners') return json(handlers.owners(url))
   if (url.pathname === '/api/search/realtime-tags') return json(handlers.tags(url))
   throw new Error(`unexpected fetch: ${url.href}`)
-})
+}
+const fetchMock = vi.fn(defaultFetch)
 
 /** /api/search の応答。page は要求どおりに返す */
 const searchBody = (url: URL, items: Array<Partial<RankingItem> & { id: string }>, extra: Json = {}): Json => ({
@@ -116,6 +175,8 @@ describe('SearchClient', () => {
   beforeEach(() => {
     localStorage.clear()
     requests.length = 0
+    nonCanonical.length = 0
+    searchGate = null
     fetchMock.mockClear()
     nav.router.replace.mockClear()
     nav.setQuery('')
@@ -130,6 +191,40 @@ describe('SearchClient', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    // どのテストでも、画面が送った問い合わせはサーバーが受け付ける正規形
+    expect(nonCanonical).toEqual([])
+  })
+
+  describe('問い合わせの正規形（S-d）', () => {
+    it('入力の順や空白によらず、正規形で検索し、URL も正規形にする', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: '  x  ' } })
+      fireEvent.click(screen.getByRole('button', { name: '＋ タグ条件を追加' }))
+      fireEvent.click(screen.getByRole('button', { name: '＋ タグ条件を追加' }))
+      const operators = screen.getAllByLabelText(/タグ条件\dの演算子/)
+      fireEvent.change(operators[0] as HTMLElement, { target: { value: 'NOT' } })
+      const tagInputs = screen.getAllByPlaceholderText('タグ名（入力で候補表示）')
+      fireEvent.change(tagInputs[0] as HTMLElement, { target: { value: 'n1' } })
+      fireEvent.change(tagInputs[1] as HTMLElement, { target: { value: 'a1' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(rawQuery(searchRequests()[0] as URL)).toBe('q=x&tagAnd=a1&tagNot=n1')
+      expect(nav.getQuery()).toBe('q=x&tagAnd=a1&tagNot=n1')
+    })
+
+    it('投稿者情報とタグの補完も正規形（ID を昇順）で問い合わせる', async () => {
+      handlers.search = (url) =>
+        searchBody(url, [{ id: 'sm9', authorId: '1002' }, { id: 'sm8', authorId: '1001' }, { id: 'so7', authorId: 'channel/ch3003' }], {
+          source: 'merged',
+          realtimeCount: 2,
+        })
+      nav.setQuery('q=x&sort=-startTime')
+      render(<SearchClient />)
+      await waitFor(() => expect(requests.filter((u) => u.pathname !== '/api/search')).toHaveLength(3))
+      const owners = requests.filter((u) => u.pathname === '/api/search/owners').map(rawQuery).sort()
+      expect(owners).toEqual(['users=1001%2C1002', 'videos=so7'])
+      expect(requests.filter((u) => u.pathname === '/api/search/realtime-tags').map(rawQuery)).toEqual(['ids=sm8%2Csm9%2Cso7'])
+    })
   })
 
   describe('ページ送り（U-a）', () => {
@@ -197,6 +292,22 @@ describe('SearchClient', () => {
       expect(searchRequests()).toHaveLength(1)
     })
 
+    it.each([['sort=-startTime'], ['targets=tag'], ['page=2']])(
+      '並び順・検索対象・ページだけの URL（%s）に直接来ても検索する',
+      async (query) => {
+        nav.setQuery(query)
+        render(<SearchClient />)
+        await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      }
+    )
+
+    it('検索の条件を含まない URL（計測用のパラメータなど）では検索しない', async () => {
+      nav.setQuery('utm_source=x')
+      render(<SearchClient />)
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(searchRequests()).toHaveLength(0)
+    })
+
     it('自分で書き換えた URL では検索し直さない', async () => {
       render(<SearchClient />)
       fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
@@ -261,6 +372,261 @@ describe('SearchClient', () => {
       render(<SearchClient />)
       await waitFor(() => expect(shownIds()).toEqual(['sm1']))
       expect(notices()).toEqual([])
+    })
+  })
+
+  describe('詳細条件の数値欄', () => {
+    const details = (): HTMLDetailsElement => document.querySelector('details.search-form__details') as HTMLDetailsElement
+
+    it('閉じた詳細条件の中に不正な値があれば、詳細条件を開いてその欄を見せる（無反応にしない）', async () => {
+      render(<SearchClient />)
+      expect(details().open).toBe(false)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.change(screen.getByLabelText('再生数の下限'), { target: { value: '-5' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(details().open).toBe(true))
+      expect(searchRequests()).toHaveLength(0)
+    })
+
+    it('再生時間は小数の分も入れられ、秒にして検索し、条件の表示も小数のまま', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.change(screen.getByLabelText('再生時間の下限（分）'), { target: { value: '1.5' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(searchRequests()[0]?.searchParams.get('durationMin')).toBe('90')
+      expect(screen.getByText('再生時間: 1.5分〜')).toBeInTheDocument()
+    })
+
+    it('URL の秒は、小数の分に戻して入力欄に入れる', async () => {
+      nav.setQuery('q=x&durationMin=100&durationMax=90')
+      render(<SearchClient />)
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(screen.getByLabelText('再生時間の下限（分）')).toHaveValue(1.67)
+      expect(screen.getByLabelText('再生時間の上限（分）')).toHaveValue(1.5)
+      // 1.67 分は 100 秒に戻る（丸めで条件が変わらない）
+      expect(searchRequests()[0]?.searchParams.get('durationMin')).toBe('100')
+    })
+  })
+
+  describe('投稿者名の NG（名前の無い行）', () => {
+    const toasts: Array<{ message: string; type: string }> = []
+    const onToast = (event: Event): void => {
+      toasts.push((event as CustomEvent<{ message: string; type: string }>).detail)
+    }
+    const registeredNames = (): string[] =>
+      (JSON.parse(localStorage.getItem('user-ng-list') ?? '{}') as { authorNames?: { exact?: string[] } }).authorNames?.exact ?? []
+
+    beforeEach(() => {
+      toasts.length = 0
+      window.addEventListener('app:toast', onToast)
+    })
+    afterEach(() => {
+      window.removeEventListener('app:toast', onToast)
+    })
+
+    it('名前の分からない行では、ID を投稿者名として登録せず、投稿者 ID で NG にするよう案内する', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001' }])
+      handlers.owners = () => ({ users: {}, channels: {}, missing: [], failed: ['1001'] })
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      fireEvent.click(screen.getByRole('button', { name: 'author-ng-sm1' }))
+      expect(registeredNames()).not.toContain('1001')
+      expect(toasts).toEqual([{ message: '投稿者名が分からないため、投稿者 ID で NG にしてください。', type: 'error', action: undefined }])
+    })
+
+    it('名前の分かる行は、これまでどおり投稿者名で登録する', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'user-1001' }])
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      fireEvent.click(screen.getByRole('button', { name: 'author-ng-sm1' }))
+      expect(registeredNames()).toContain('user-1001')
+    })
+  })
+
+  describe('読み込み中の操作とページを離れたとき', () => {
+    const openGate = (): (() => void) => {
+      let release: () => void = () => undefined
+      searchGate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return () => {
+        searchGate = null
+        release()
+      }
+    }
+    const searchSignals = (): Array<AbortSignal | undefined> =>
+      fetchMock.mock.calls
+        .filter(([input]) => new URL(String(input), 'http://localhost').pathname === '/api/search')
+        .map(([, init]) => init?.signal ?? undefined)
+
+    it('読み込み中でも条件を変えて検索し直せる（前の検索は止める）', async () => {
+      const release = openGate()
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.click(screen.getByRole('button', { name: '検索' }))
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'y' } })
+      const submit = screen.getByRole('button', { name: '検索中…' })
+      expect(submit).toBeEnabled()
+      fireEvent.click(submit)
+      await waitFor(() => expect(searchRequests()).toHaveLength(2))
+      expect(searchRequests()[1]?.searchParams.get('q')).toBe('y')
+      expect(searchSignals()[0]?.aborted).toBe(true)
+      release()
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      expect(nav.getQuery()).toBe('q=y')
+    })
+
+    it('タグ欄で Enter を押すと検索する（日本語の変換を確定する Enter では送らない）', async () => {
+      render(<SearchClient />)
+      fireEvent.click(screen.getByRole('button', { name: '＋ タグ条件を追加' }))
+      const tagInput = screen.getByPlaceholderText('タグ名（入力で候補表示）')
+      fireEvent.change(tagInput, { target: { value: 't1' } })
+      fireEvent.keyDown(tagInput, { key: 'Enter', isComposing: true })
+      fireEvent.keyDown(tagInput, { key: 'Enter', keyCode: 229 })
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(searchRequests()).toHaveLength(0)
+      fireEvent.keyDown(tagInput, { key: 'Enter' })
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      expect(searchRequests()[0]?.searchParams.getAll('tagAnd')).toEqual(['t1'])
+    })
+
+    it('ページを離れたら、検索の問い合わせを止める', async () => {
+      openGate()
+      nav.setQuery('q=x')
+      const { unmount } = render(<SearchClient />)
+      await waitFor(() => expect(searchRequests()).toHaveLength(1))
+      unmount()
+      expect(searchSignals()[0]?.aborted).toBe(true)
+    })
+
+    it('ページを離れたら、投稿者情報とタグの補完の問い合わせも止める', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm9', authorId: '1002' }], { source: 'merged', realtimeCount: 1 })
+      const pendingSignals: Array<AbortSignal | undefined> = []
+      const enrichmentGate = new Promise<void>(() => undefined)
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+        const url = new URL(String(input), 'http://localhost')
+        requests.push(url)
+        if (url.pathname === '/api/search') return json(handlers.search(url))
+        pendingSignals.push(init?.signal ?? undefined)
+        await Promise.race([enrichmentGate, new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))))])
+        return json({})
+      })
+      try {
+        nav.setQuery('q=x&sort=-startTime')
+        const { unmount } = render(<SearchClient />)
+        await waitFor(() => expect(pendingSignals).toHaveLength(2))
+        unmount()
+        expect(pendingSignals.every((signal) => signal?.aborted === true)).toBe(true)
+      } finally {
+        fetchMock.mockReset()
+        fetchMock.mockImplementation(defaultFetch)
+      }
+    })
+  })
+
+  describe('保存した検索の保存と削除（失敗を成功にしない）', () => {
+    const toasts: Array<{ message: string; type: string }> = []
+    const onToast = (event: Event): void => {
+      toasts.push((event as CustomEvent<{ message: string; type: string }>).detail)
+    }
+    const savedChipNames = (): string[] => Array.from(document.querySelectorAll('.search-form__saved-load')).map((el) => el.textContent ?? '')
+    const storeSaved = (count: number): void => {
+      localStorage.setItem(
+        'saved-searches',
+        JSON.stringify({
+          version: 1,
+          searches: Array.from({ length: count }, (_, i) => ({ id: `id${i}`, name: `保存${i}`, query: 'q=x', createdAt: 't', updatedAt: 't' })),
+        })
+      )
+    }
+
+    beforeEach(() => {
+      toasts.length = 0
+      window.addEventListener('app:toast', onToast)
+      vi.spyOn(window, 'prompt').mockReturnValue('新しい保存')
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+    })
+    afterEach(() => {
+      window.removeEventListener('app:toast', onToast)
+      vi.restoreAllMocks()
+    })
+
+    it('上限（50 件）に達していたら保存せず、そのことを知らせる', async () => {
+      storeSaved(50)
+      render(<SearchClient />)
+      await waitFor(() => expect(savedChipNames()).toHaveLength(50))
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      fireEvent.click(screen.getByRole('button', { name: '☆ この条件を保存' }))
+      expect(toasts.at(-1)).toMatchObject({ type: 'error', message: '保存できる検索条件は 50 件までです。不要なものを削除してから保存してください。' })
+      expect(savedChipNames()).toHaveLength(50)
+      expect(savedChipNames()).not.toContain('新しい保存')
+    })
+
+    it('ブラウザに保存できなければ、保存したことにしない', async () => {
+      render(<SearchClient />)
+      fireEvent.change(screen.getByLabelText('検索キーワード'), { target: { value: 'x' } })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('quota', 'QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: '☆ この条件を保存' }))
+      expect(toasts.at(-1)?.type).toBe('error')
+      expect(savedChipNames()).toEqual([])
+    })
+
+    it('削除を保存できなければ、一覧から消さずに知らせる', async () => {
+      storeSaved(1)
+      render(<SearchClient />)
+      await waitFor(() => expect(savedChipNames()).toEqual(['保存0']))
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('quota', 'QuotaExceededError')
+      })
+      fireEvent.click(screen.getByRole('button', { name: '保存した検索「保存0」を削除' }))
+      expect(toasts.at(-1)?.type).toBe('error')
+      expect(savedChipNames()).toEqual(['保存0'])
+    })
+  })
+
+  describe('件数の表示', () => {
+    it('結果の総数と、ページ送りの「全 N 件中」をそろえる（送れるのは索引の上限の 2000 ページまで）', async () => {
+      handlers.search = (url) => searchBody(url, [{ id: 'sm1', authorId: '1001', authorName: 'n' }], { totalCount: 250000 })
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(shownIds()).toEqual(['sm1']))
+      expect(screen.getByText(/検索結果 250,000 件/)).toBeInTheDocument()
+      expect(screen.getAllByText('1〜50件を表示 (全250000件中)')).toHaveLength(2)
+      expect(screen.getAllByRole('button', { name: 'ページ 2000' })).toHaveLength(2)
+      expect(screen.queryByRole('button', { name: 'ページ 5000' })).toBeNull()
+    })
+  })
+
+  describe('検索 API のエラーの案内', () => {
+    it('条件が不正（search_query_error）なら、条件を見直す案内を出す', async () => {
+      handlers.search = () => json({ error: 'search_query_error', detail: 'synthetic parse error' }, 400)
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('検索条件が不正です。条件を見直してください。'))
+    })
+  })
+
+  describe('受け付けられない問い合わせの案内', () => {
+    it('invalid_params（画面とサーバーの版がずれたときなど）なら、再読み込みを案内する', async () => {
+      handlers.search = () => json({ error: 'invalid_params' }, 400)
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('検索できませんでした。ページを再読み込みしてから、もう一度お試しください。'))
+    })
+  })
+
+  describe('検索 API の流量制限の案内', () => {
+    it('混み合って断られた（rate_limited）なら、少し待つよう案内する', async () => {
+      handlers.search = () => json({ error: 'rate_limited' }, 429)
+      nav.setQuery('q=x')
+      render(<SearchClient />)
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('アクセスが集中しています。少し待ってから、もう一度お試しください。'))
     })
   })
 
