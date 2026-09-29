@@ -119,6 +119,15 @@ function TagToggleButton() {
   )
 }
 
+// リンクのクリックで、このページ自体が移動するか（新しいタブ・ウィンドウに開くときは false）
+function navigatesThisPage(link: HTMLAnchorElement, event: MouseEvent): boolean {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+    return false
+  }
+  return link.target === '' || link.target === '_self'
+}
+
+
 // リロード検出用のユーティリティ（コンポーネント外で定義）
 const detectPageReload = (): boolean => {
   if (typeof window === 'undefined') return false
@@ -372,13 +381,14 @@ export default function ClientPage({
     // PWA環境での追加イベント対応
     window.addEventListener('pagehide', saveCurrentState)
     
-    // iOSでのPWA対応
-    window.addEventListener('blur', () => {
-      // PWAモードでアプリが非アクティブになった時に保存
+    // iOSでのPWA対応: PWAモードでアプリが非アクティブになった時に保存
+    // （名前を付けて登録し、片付けで同じ関数を外す。無名だとアンマウント後も残り続ける）
+    const handleBlur = () => {
       if (isPWA()) {
         saveCurrentState()
       }
-    })
+    }
+    window.addEventListener('blur', handleBlur)
     
     // 外部リンククリック時に状態を保存
     const handleExternalNavigation = (e: MouseEvent) => {
@@ -388,7 +398,12 @@ export default function ClientPage({
       // 外部リンク（ニコニコ動画など）の場合に状態を保存
       if (link && link.href && (link.href.includes('nicovideo.jp') || link.href.includes('niconico.jp') || link.href.includes('ch.nicovideo.jp') || link.href.includes('com.nicovideo.jp'))) {
         saveCurrentState()
-        setIsNavigating(true)
+        // 行を無効にする（移動中）のは、このページ自体が移動するときだけ。新しいタブ（target=_blank）や
+        // Cmd / Ctrl / Shift で別のタブ・ウィンドウに開いたときはこのページに残る。裏のタブで開くと
+        // visibilitychange も focus も来ないので、無効のまま戻らず次の動画も開けなくなっていた
+        if (navigatesThisPage(link, e)) {
+          setIsNavigating(true)
+        }
       }
       
       // 内部リンク（メニューページ）の場合も状態を保存
@@ -421,7 +436,7 @@ export default function ClientPage({
     return () => {
       window.removeEventListener('beforeunload', saveCurrentState)
       window.removeEventListener('pagehide', saveCurrentState)
-      window.removeEventListener('blur', saveCurrentState)
+      window.removeEventListener('blur', handleBlur)
       document.removeEventListener('click', handleExternalNavigation)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('focus', handleFocus)
