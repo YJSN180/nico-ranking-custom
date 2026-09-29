@@ -6,12 +6,15 @@
 
 import type { RankingItem, TagDetail } from '../types/ranking'
 import { kv } from './simple-kv'
+import { reportPipelineProgress } from './pipeline/stall-watchdog'
 import {
   TAG_CACHE_TTL_SECONDS,
   type TagCacheByShard,
   type TagCacheEntry,
   type TagCacheShard,
   type TagSource,
+  describeStorageError,
+  getShardIdFromKey,
   getShardKeyForVideoId,
   getTagCacheBackend,
   readTagCacheShard,
@@ -93,6 +96,16 @@ const DEFAULT_THUMB_CONCURRENCY = parseInt(process.env.TAG_FETCH_GETTHUMB_CONCUR
 const DEFAULT_THUMB_MIN_INTERVAL_MS = parseInt(process.env.TAG_FETCH_GETTHUMB_MIN_INTERVAL_MS || '150', 10)
 const DEFAULT_NICOLOG_TIMEOUT_MS = parseInt(process.env.TAG_FETCH_NICOLOG_TIMEOUT_MS || '8000', 10)
 const DEFAULT_THUMB_TIMEOUT_MS = parseInt(process.env.TAG_FETCH_GETTHUMB_TIMEOUT_MS || '5000', 10)
+
+// A healthy full load takes 1-2 minutes even sequentially; past this, continue without the rest.
+const DEFAULT_TAG_CACHE_LOAD_BUDGET_MS = 3 * 60_000
+const DEFAULT_TAG_CACHE_LOAD_CONCURRENCY = 4
+const TAG_CACHE_LOAD_PROGRESS_INTERVAL_MS = 10_000
+
+function readPositiveIntEnv(name: string, fallback: number): number {
+  const value = Number.parseInt(process.env[name] ?? '', 10)
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
 
 let currentTagFetchContext: string | null = null
 
@@ -200,12 +213,106 @@ function createRateLimitedQueue(concurrency: number, minIntervalMs: number) {
 }
 
 /**
+ * Reads shards with bounded concurrency. Once the load budget is spent, returns what was
+ * read so far; results that arrive later are ignored.
+ */
+async function readShardsWithinBudget(shardKeys: string[]): Promise<Map<string, TagCacheShard>> {
+  const budgetMs = readPositiveIntEnv('TAG_CACHE_LOAD_BUDGET_MS', DEFAULT_TAG_CACHE_LOAD_BUDGET_MS)
+  const concurrency = Math.min(
+    readPositiveIntEnv('TAG_CACHE_LOAD_CONCURRENCY', DEFAULT_TAG_CACHE_LOAD_CONCURRENCY),
+    shardKeys.length,
+  )
+  const startedAt = Date.now()
+  const loaded = new Map<string, TagCacheShard>()
+  const inFlight = new Map<string, number>()
+  const counts = { found: 0, missing: 0, failed: 0, entries: 0 }
+  let nextIndex = 0
+  let budgetReached = false
+
+  const describeProgress = (): string => {
+    const now = Date.now()
+    const settled = counts.found + counts.missing + counts.failed
+    const oldest = [...inFlight.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, 3)
+      .map(([shardKey, since]) => `shard ${getShardIdFromKey(shardKey)} ${Math.round((now - since) / 1000)}s`)
+    return `${settled}/${shardKeys.length} shards settled ` +
+      `(found ${counts.found}, missing ${counts.missing}, failed ${counts.failed}), ${counts.entries} entries, ` +
+      `${inFlight.size} in flight${oldest.length > 0 ? ` (waiting on ${oldest.join(', ')})` : ''}, ` +
+      `${((now - startedAt) / 1000).toFixed(1)}s elapsed`
+  }
+
+  const readNextShards = async (): Promise<void> => {
+    while (!budgetReached && nextIndex < shardKeys.length) {
+      const shardKey = shardKeys[nextIndex]
+      nextIndex += 1
+      inFlight.set(shardKey, Date.now())
+      try {
+        const shard = await readTagCacheShard(shardKey)
+        if (budgetReached) return
+        if (shard) {
+          loaded.set(shardKey, shard)
+          counts.found += 1
+          counts.entries += Object.keys(shard).length
+        } else {
+          counts.missing += 1
+        }
+      } catch (error: unknown) {
+        if (budgetReached) return
+        counts.failed += 1
+        console.warn(
+          `[Tag Cache] Shard ${getShardIdFromKey(shardKey)} could not be loaded (${describeStorageError(error)}); ` +
+          'its videos use the normal tag fetch path',
+        )
+      } finally {
+        inFlight.delete(shardKey)
+        reportPipelineProgress(`tag cache shard ${getShardIdFromKey(shardKey)}`)
+      }
+    }
+  }
+
+  const progressTimer = setInterval(() => {
+    console.warn(`[Tag Cache] Loading: ${describeProgress()}`)
+  }, TAG_CACHE_LOAD_PROGRESS_INTERVAL_MS)
+  progressTimer.unref()
+  let budgetTimer: ReturnType<typeof setTimeout> | undefined
+  const budgetSpent = new Promise<void>((resolve) => {
+    budgetTimer = setTimeout(() => {
+      budgetReached = true
+      resolve()
+    }, budgetMs)
+  })
+
+  try {
+    await Promise.race([
+      Promise.all(Array.from({ length: concurrency }, () => readNextShards())),
+      budgetSpent,
+    ])
+  } finally {
+    clearTimeout(budgetTimer)
+    clearInterval(progressTimer)
+  }
+
+  if (budgetReached) {
+    console.warn(
+      `[Tag Cache] Load budget of ${Math.round(budgetMs / 1000)}s reached: continuing with ${loaded.size}/${shardKeys.length} shards; ` +
+      `${inFlight.size} in flight and ${shardKeys.length - nextIndex} not started use the normal tag fetch path (${describeProgress()})`,
+    )
+    reportPipelineProgress('tag cache load budget reached')
+  } else {
+    console.warn(`[Tag Cache] Loaded: ${describeProgress()}`)
+  }
+  return loaded
+}
+
+/**
  * KVからタグキャッシュを読み込む（シャード単位）
  */
 async function loadTagCacheForItems(items: RankingItem[]): Promise<{ cacheByShard: TagCacheByShard; shardKeys: string[] }> {
   const now = Date.now()
   const shardKeys = Array.from(new Set(items.map(item => getShardKey(item.id))))
   const cacheByShard: TagCacheByShard = {}
+  const shardKeysToRead: string[] = []
 
   for (const shardKey of shardKeys) {
     const loadedAt = memoryCacheLoadedAt[shardKey]
@@ -215,17 +322,16 @@ async function loadTagCacheForItems(items: RankingItem[]): Promise<{ cacheByShar
       (getTagCacheBackend() === 'r2-aggregate' || (now - loadedAt) < MEMORY_CACHE_MAX_AGE_MS)
     ) {
       cacheByShard[shardKey] = memoryCacheByShard[shardKey]
-      continue
+    } else {
+      shardKeysToRead.push(shardKey)
     }
+  }
 
-    try {
-      const shard = await readTagCacheShard(shardKey)
-      memoryCacheByShard[shardKey] = shard || {}
-      memoryCacheLoadedAt[shardKey] = now
-      cacheByShard[shardKey] = memoryCacheByShard[shardKey]
-    } catch (error) {
-      console.warn('[Tag Cache] Failed to load shard from KV:', error)
-      memoryCacheByShard[shardKey] = {}
+  if (shardKeysToRead.length > 0) {
+    const loaded = await readShardsWithinBudget(shardKeysToRead)
+    for (const shardKey of shardKeysToRead) {
+      // Missing or unreadable shards start empty for this run, as failed reads always have.
+      memoryCacheByShard[shardKey] = loaded.get(shardKey) ?? {}
       memoryCacheLoadedAt[shardKey] = now
       cacheByShard[shardKey] = memoryCacheByShard[shardKey]
     }
@@ -660,6 +766,10 @@ export async function enrichRankingItemsWithTagDetails(
         tags: []
       }
     })
+
+    const progressLabel = `tag details ${currentTagFetchContext ?? 'batch'}`
+    const markProgress = (): void => reportPipelineProgress(progressLabel)
+    for (const promise of batchPromises) void promise.then(markProgress, markProgress)
 
     const batchResults = await Promise.all(batchPromises)
     enrichedItems.push(...batchResults)

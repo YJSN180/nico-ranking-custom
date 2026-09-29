@@ -151,6 +151,7 @@ scripts/*
 scripts/lib/*
 !scripts/lib/r2-store.ts
 !scripts/lib/verify-ranking-response.ts
+!scripts/lib/wait-for-published-stats.ts
 !scripts/emergency-rollback.js
 !scripts/blue-green-switch.sh
 !scripts/emergency-rollback.sh
