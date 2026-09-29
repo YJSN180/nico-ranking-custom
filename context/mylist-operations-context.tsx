@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react'
+import { usePathname } from 'next/navigation'
 import { DBManager } from '@/lib/storage/db-manager'
 import { MylistManager } from '@/lib/storage/mylists'
 import type { Mylist, MylistVideo } from '@/lib/storage/types'
@@ -85,6 +86,30 @@ export function MylistOperationsProvider({ children }: MylistOperationsProviderP
       mounted = false
     }
   }, [])
+
+  // この Provider はルートの layout にあり、クライアント遷移では作り直されない。
+  // 画面を移ったら一覧を読み直し、/mylists で作成・削除したマイリストを追加モーダルに反映する
+  const pathname = usePathname()
+  useEffect(() => {
+    const manager = mylistManagerRef.current
+    if (!manager) return
+
+    let cancelled = false
+    manager.getAllMylists()
+      .then((allMylists) => {
+        if (!cancelled && Array.isArray(allMylists)) {
+          setMylists(allMylists)
+        }
+      })
+      .catch((error: unknown) => {
+        // 読み直せなければ今の一覧のまま
+        // eslint-disable-next-line no-console
+        console.error('Failed to reload mylists:', error)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pathname])
 
   const addVideoToMylist = async (mylistId: string, video: Partial<MylistVideo>): Promise<boolean> => {
     // テスト環境ではモック動作

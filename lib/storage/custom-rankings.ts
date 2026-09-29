@@ -58,6 +58,38 @@ export class CustomRankingManager {
   }
 
   /**
+   * ID を指定してランキングと条件を書き込む（同じ ID があれば置き換える）。
+   * 条件の ID は `${ランキングID}:${順番}` に固定するので、同じ内容を何度書いても増えない
+   * （旧形式からの移行が重なって走っても重複しないようにするため）
+   */
+  async putRankingWithConditions(
+    ranking: CustomRankingIndexedDB,
+    conditions: Omit<CustomRankingConditionIndexedDB, 'id' | 'rankingId' | 'orderIndex'>[]
+  ): Promise<void> {
+    const db = this.dbManager.getDB()
+    const tx = db.transaction(['customRankings', 'customRankingConditions'], 'readwrite')
+    const conditionStore = tx.objectStore('customRankingConditions')
+
+    let cursor = await conditionStore.index('rankingId').openCursor(ranking.id)
+    while (cursor) {
+      await cursor.delete()
+      cursor = await cursor.continue()
+    }
+
+    for (const [index, condition] of conditions.entries()) {
+      await conditionStore.put({
+        ...condition,
+        id: `${ranking.id}:${index}`,
+        rankingId: ranking.id,
+        orderIndex: index
+      })
+    }
+
+    await tx.objectStore('customRankings').put(ranking)
+    await tx.done
+  }
+
+  /**
    * カスタムランキングを更新
    */
   async updateRanking(rankingId: string, updates: UpdateCustomRankingData): Promise<void> {

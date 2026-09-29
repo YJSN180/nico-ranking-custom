@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { ExtendedUserNGList } from '../types/ng-list-extended'
-import { migrateToExtendedNGList, createEmptyTagNGList } from '../lib/ng-list-migration-extended'
+import { migrateToExtendedNGList, createEmptyTagNGList, calculateTotalCountWithTags } from '../lib/ng-list-migration-extended'
+import { sanitizeNGListEntries } from '../lib/ng-list-sanitize'
 
 const STORAGE_KEY = 'user-ng-list'
 const CURRENT_VERSION = 2
@@ -22,6 +23,16 @@ const defaultNGList: ExtendedUserNGList = {
   updatedAt: new Date().toISOString(),
 }
 
+// 以前に取り込まれた空文字・文字列でない要素で、絞り込みが落ちたり全件が消えたりしないようにする
+const sanitizeLoadedNGList = (list: ExtendedUserNGList): ExtendedUserNGList => {
+  const sanitized = sanitizeNGListEntries(list)
+  // 取り除いた・直した要素があるときだけ件数を数え直す（きれいなデータはそのまま）
+  if (JSON.stringify(sanitized) === JSON.stringify(list)) {
+    return list
+  }
+  return { ...sanitized, totalCount: calculateTotalCountWithTags(sanitized) }
+}
+
 // localStorageから初期データを読み込む関数（useEffect不要）
 const loadInitialNGList = (): ExtendedUserNGList => {
   if (typeof window === 'undefined') return defaultNGList
@@ -33,13 +44,13 @@ const loadInitialNGList = (): ExtendedUserNGList => {
       
       // バージョン1の場合はマイグレーション
       if (parsed.version === 1) {
-        const migrated = migrateToExtendedNGList(parsed) as ExtendedUserNGList
+        const migrated = sanitizeLoadedNGList(migrateToExtendedNGList(parsed) as ExtendedUserNGList)
         migrated.version = CURRENT_VERSION
         // マイグレーションしたデータを保存
         localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated))
         return migrated
       } else if (parsed.version === CURRENT_VERSION) {
-        return parsed
+        return sanitizeLoadedNGList(parsed)
       }
     }
   } catch (error) {
@@ -68,7 +79,7 @@ export function useUserNGListExtended() {
       try {
         const parsed = JSON.parse(event.newValue)
         if (parsed.version === CURRENT_VERSION) {
-          setNGList(parsed)
+          setNGList(sanitizeLoadedNGList(parsed))
         }
       } catch {
         // ストレージエラーは無視

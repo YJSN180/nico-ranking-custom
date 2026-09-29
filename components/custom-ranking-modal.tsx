@@ -5,6 +5,7 @@ import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
 import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
 import { TagIcon } from './tag-icon'
 import { captureBrowserRateLimit } from '@/lib/sentry/capture'
+import { isImeComposing } from '@/lib/ime'
 import styles from './custom-ranking-modal.module.css'
 
 // 演算子の自然言語ラベル
@@ -247,7 +248,8 @@ export function CustomRankingModal({
     if (!isOpen) return
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // 日本語の変換中の Esc は変換の取り消し。閉じると作成途中の内容が消える
+      if (e.key === 'Escape' && !isImeComposing(e)) {
         onClose()
       }
     }
@@ -465,6 +467,8 @@ export function CustomRankingModal({
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={(e) => {
+                      // 日本語の変換中の Enter（確定）・Esc（取り消し）は入力欄に任せる
+                      if (isImeComposing(e)) return
                       if (e.key === 'Enter') {
                         e.preventDefault()
                         if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < tagSuggestions.length) {
@@ -477,7 +481,11 @@ export function CustomRankingModal({
                           handleAddTag()
                         }
                       } else if (e.key === 'Escape') {
-                        // オートコンプリートを閉じる
+                        // オートコンプリートを閉じる。候補が出ているときはモーダルまで閉じない
+                        // （閉じると作成途中の内容が消える）
+                        if (showSuggestions) {
+                          e.stopPropagation()
+                        }
                         setShowSuggestions(false)
                         setSelectedSuggestionIndex(-1)
                       } else if (e.key === 'ArrowDown' && showSuggestions) {

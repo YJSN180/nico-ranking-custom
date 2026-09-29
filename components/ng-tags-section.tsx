@@ -184,6 +184,7 @@ export function NGTagsSection({
           </span>
           <button 
             onClick={() => handleRemoveTag(tagInfo.type, tagInfo.matchType, categoryIndex)}
+            aria-label={`${tagInfo.name} (${tagInfo.displayType}) を削除`}
           >
             ×
           </button>

@@ -12,6 +12,7 @@
 
 import { DBManager } from './db-manager'
 import type { Mylist, MylistVideo } from './types'
+import { INVALID_MYLIST_BACKUP_MESSAGE, parseMylistBackupContent } from './mylist-backup-schema'
 
 /**
  * エクスポート時の動画データ（統計情報を除外）
@@ -312,7 +313,13 @@ function generateUniqueMylistId(): string {
 /**
  * 重複と競合関係を検出
  */
-export async function detectMylistConflicts(importingData: BackupData): Promise<MylistConflictDetectionResult> {
+export async function detectMylistConflicts(backup: BackupData): Promise<MylistConflictDetectionResult> {
+  // 統合形式から組み立てたデータは readBackupFile の検証を通っていないので、ここで確かめる
+  const importingData = parseMylistBackupContent(backup)
+  if (!importingData) {
+    throw new Error(INVALID_MYLIST_BACKUP_MESSAGE)
+  }
+
   const dbManager = new DBManager()
   await dbManager.init()
   const db = dbManager.getDB()
@@ -452,6 +459,13 @@ export async function importMylistData(
   }
   const renamed: Array<{ original: string; renamed: string }> = []
   
+  // ID の欠けたレコードは、そのレコードだけ書き込みに失敗して一部だけ取り込まれた状態になる。
+  // 取り込む前にファイル全体を検証し、日時などの型もそろえる
+  const content = parseMylistBackupContent(data)
+  if (!content) {
+    return failedImportResult([INVALID_MYLIST_BACKUP_MESSAGE])
+  }
+  
   try {
     const dbManager = new DBManager()
     await dbManager.init()
@@ -461,34 +475,42 @@ export async function importMylistData(
       throw new Error('Database not initialized')
     }
     
-    // 既存データを取得
-    let tx = db.transaction(['mylists', 'mylistVideos'], 'readonly')
-    const existingMylists = await tx.objectStore('mylists').getAll()
-    const existingMylistVideos = await tx.objectStore('mylistVideos').getAll()
-    await tx.done
-    
+    // 既存データの読み取り・（完全上書きなら）全削除・取り込みを 1 つのトランザクションで行う。
+    // 取り込みが途中で失敗・中断しても削除ごと取り消され、既存のマイリストは残る
+    const importTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
+    const existingMylists = await importTx.objectStore('mylists').getAll()
+
     // 完全上書きモードの場合、全データを削除
     if (conflictResolution === 'complete_overwrite') {
-      const deleteTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
-      await deleteTx.objectStore('mylists').clear()
-      await deleteTx.objectStore('mylistVideos').clear()
-      await deleteTx.done
+      await importTx.objectStore('mylists').clear()
+      await importTx.objectStore('mylistVideos').clear()
     }
-    
-    // インポート用トランザクション開始
-    const importTx = db.transaction(['mylists', 'mylistVideos'], 'readwrite')
-    
+
     // 既存の名前リストを構築（リネーム検出用）
     const existingNames = existingMylists.map(m => m.name)
     
+    // 書き込んだマイリスト（あとで件数を実数にそろえる）
+    const touchedMylistIds = new Set<string>()
+    const putMylist = async (mylist: Mylist): Promise<void> => {
+      await importTx.objectStore('mylists').put(mylist)
+      touchedMylistIds.add(mylist.id)
+    }
+    const putVideo = async (video: MylistVideo): Promise<void> => {
+      await importTx.objectStore('mylistVideos').put(video)
+      touchedMylistIds.add(video.mylistId)
+    }
+    
+    // ファイル上のマイリスト ID → 実際に保存した ID（安全追加で新しい ID にした複製へ動画を入れるため）
+    const storedMylistIds = new Map<string, string>()
+    
     // マイリストをインポート
-    for (const importingMylist of data.mylists) {
+    for (const importingMylist of content.mylists) {
       try {
-        let mylistToImport = { ...importingMylist }
+        const mylistToImport = { ...importingMylist }
         
         if (conflictResolution === 'complete_overwrite') {
           // 完全上書き：そのまま追加
-          await importTx.objectStore('mylists').put(mylistToImport)
+          await putMylist(mylistToImport)
           importedMylists++
           createdMylists++
         } else {
@@ -498,20 +520,21 @@ export async function importMylistData(
           if (existingMylist) {
             // ID重複あり
             if (conflictResolution === 'safe_add') {
-              // 安全追加：新IDで作成
+              // 安全追加：既存には手を付けず、新IDの複製として追加する。
+              // 同名（同じ ID の既存を含む）があれば改名して見分けられるようにする
               mylistToImport.id = generateUniqueMylistId()
-              if (nameConflict) {
+              if (existingNames.includes(importingMylist.name)) {
                 const newName = generateUniqueMylistName(importingMylist.name, existingNames)
                 mylistToImport.name = newName
                 renamed.push({ original: importingMylist.name, renamed: newName })
                 existingNames.push(newName)
               }
-              await importTx.objectStore('mylists').put(mylistToImport)
+              await putMylist(mylistToImport)
               importedMylists++
               createdMylists++
             } else if (conflictResolution === 'smart_merge') {
               // スマートマージ：既存を上書き
-              await importTx.objectStore('mylists').put(mylistToImport)
+              await putMylist(mylistToImport)
               importedMylists++
               overwrittenMylists++
             }
@@ -522,97 +545,85 @@ export async function importMylistData(
               mylistToImport.name = newName
               renamed.push({ original: importingMylist.name, renamed: newName })
               existingNames.push(newName)
-              await importTx.objectStore('mylists').put(mylistToImport)
+              await putMylist(mylistToImport)
               importedMylists++
               createdMylists++
             }
           } else {
             // 重複なし：そのまま追加
-            await importTx.objectStore('mylists').put(mylistToImport)
+            await putMylist(mylistToImport)
             importedMylists++
             createdMylists++
           }
         }
+        storedMylistIds.set(importingMylist.id, mylistToImport.id)
       } catch (error) {
         errors.push(`マイリスト「${importingMylist.name}」のインポートに失敗: ${error}`)
       }
     }
     
     // マイリスト動画をインポート
-    for (const importingVideo of data.mylistVideos) {
+    for (const importingVideo of content.mylistVideos) {
       try {
-        let videoToImport = { ...importingVideo }
+        const targetMylistId = storedMylistIds.get(importingVideo.mylistId)
+        if (!targetMylistId) {
+          // 所属するマイリストがファイルに無い（または取り込めなかった）動画は、どこにも表示されないので入れない
+          skipped.videos++
+          skipped.reason.push(`動画「${importingVideo.title}」は所属するマイリストが見つからないため取り込みませんでした`)
+          continue
+        }
+        const videoToImport = { ...importingVideo, mylistId: targetMylistId }
+        const existingVideo = await importTx.objectStore('mylistVideos').get([targetMylistId, importingVideo.id])
         
-        if (conflictResolution === 'complete_overwrite') {
-          // 完全上書き：そのまま追加
-          await importTx.objectStore('mylistVideos').put(videoToImport)
-          importedVideos++
-          createdVideos++
+        if (existingVideo && conflictResolution === 'safe_add') {
+          // 同一マイリスト内重複はスキップ
+          skipped.videos++
+          skipped.reason.push(`動画「${importingVideo.title}」は既に同じマイリストに存在します`)
+          continue
+        }
+        
+        // 完全上書き・スマートマージは上書き、重複なしはそのまま追加
+        await putVideo(videoToImport)
+        importedVideos++
+        if (existingVideo) {
+          overwrittenVideos++
         } else {
-          // 既存動画の検索（プライマリキーでの検索を試行）
-          let existingVideo = existingMylistVideos.find(v => v.id === importingVideo.id)
-          if (!existingVideo) {
-            // メモリ上で見つからない場合は直接DBから検索
-            try {
-              existingVideo = await importTx.objectStore('mylistVideos').get(importingVideo.id)
-            } catch (error) {
-              // 検索エラーは無視
-            }
-          }
-          
-          // マイリストIDの変更を反映（安全追加でIDが変更された場合）
-          const originalMylist = data.mylists.find(m => m.id === importingVideo.mylistId)
-          if (originalMylist) {
-            const renamedEntry = renamed.find(r => r.original === originalMylist.name)
-            if (renamedEntry) {
-              // 新しいマイリストIDを見つける - getAll()を使用してから検索
-              const allMylists = await importTx.objectStore('mylists').getAll()
-              const newMylist = allMylists.find(m => m.name === renamedEntry.renamed)
-              if (newMylist) {
-                videoToImport.mylistId = newMylist.id
-              }
-            }
-          }
-          
-          if (existingVideo) {
-            // 動画重複あり
-            if (conflictResolution === 'safe_add') {
-              // 安全追加：重複を許可（異なるマイリストの場合）
-              if (existingVideo.mylistId !== videoToImport.mylistId) {
-                await importTx.objectStore('mylistVideos').put(videoToImport)
-                importedVideos++
-                createdVideos++
-              } else {
-                // 同一マイリスト内重複はスキップ
-                skipped.videos++
-                skipped.reason.push(`動画「${importingVideo.title}」は既に同じマイリストに存在します`)
-              }
-            } else if (conflictResolution === 'smart_merge') {
-              // スマートマージ：同一マイリスト内は除去、異なるマイリスト間は許可
-              if (existingVideo.mylistId === videoToImport.mylistId) {
-                // 同一マイリスト内：上書き
-                await importTx.objectStore('mylistVideos').put(videoToImport)
-                importedVideos++
-                overwrittenVideos++
-              } else {
-                // 異なるマイリスト間：重複許可
-                await importTx.objectStore('mylistVideos').put(videoToImport)
-                importedVideos++
-                createdVideos++
-              }
-            }
-          } else {
-            // 重複なし：そのまま追加
-            await importTx.objectStore('mylistVideos').put(videoToImport)
-            importedVideos++
-            createdVideos++
-          }
+          createdVideos++
         }
       } catch (error) {
         errors.push(`動画関連データのインポートに失敗: ${error}`)
       }
     }
-    
+
+    // 件数はファイルの値ではなく、実際に入っている動画の数にそろえる
+    // （スマートマージで残る既存の動画や、中身と合わない件数のファイルでも表示がずれない）
+    try {
+      for (const mylistId of touchedMylistIds) {
+        const stored = await importTx.objectStore('mylists').get(mylistId)
+        if (!stored) continue
+        const actualCount = await importTx.objectStore('mylistVideos').index('mylistId').count(mylistId)
+        if (stored.videoCount !== actualCount) {
+          await importTx.objectStore('mylists').put({ ...stored, videoCount: actualCount })
+        }
+      }
+    } catch (error) {
+      errors.push(`マイリストの件数の更新に失敗: ${error}`)
+    }
+
+    // 完全上書きは一部だけ入った状態で既存を消さない。1 件でも書けなければ全体を取り消す
+    if (conflictResolution === 'complete_overwrite' && errors.length > 0) {
+      try {
+        importTx.abort()
+      } catch {
+        // 既に中断されている
+      }
+      await importTx.done.catch(() => undefined)
+      return failedImportResult([
+        ...errors,
+        '完全上書きを中止しました。既存のマイリストは変更していません。'
+      ])
+    }
+
     await importTx.done
     
     const message = conflictResolution === 'complete_overwrite' 
@@ -643,30 +654,37 @@ export async function importMylistData(
       message
     }
   } catch (error) {
-    return {
-      success: false,
-      imported: {
-        mylists: 0,
-        videos: 0
-      },
-      created: {
-        mylists: 0,
-        videos: 0
-      },
-      overwritten: {
-        mylists: 0,
-        videos: 0
-      },
-      skipped: {
-        mylists: 0,
-        videos: 0,
-        reason: []
-      },
-      renamed: {
-        mylists: []
-      },
-      errors: [`インポート処理中にエラーが発生しました: ${error}`]
-    }
+    return failedImportResult([`インポート処理中にエラーが発生しました: ${error}`])
+  }
+}
+
+/**
+ * 何も取り込まなかったときの結果
+ */
+function failedImportResult(errors: string[]): MylistImportResult {
+  return {
+    success: false,
+    imported: {
+      mylists: 0,
+      videos: 0
+    },
+    created: {
+      mylists: 0,
+      videos: 0
+    },
+    overwritten: {
+      mylists: 0,
+      videos: 0
+    },
+    skipped: {
+      mylists: 0,
+      videos: 0,
+      reason: []
+    },
+    renamed: {
+      mylists: []
+    },
+    errors
   }
 }
 

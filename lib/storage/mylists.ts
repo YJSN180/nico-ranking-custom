@@ -196,15 +196,17 @@ export class MylistManager {
     // 既存の動画を確認
     const existingVideo = await tx.objectStore('mylistVideos').get([mylistId, video.id!])
     const isNewVideo = !existingVideo
-    
-    // 動画データを作成
+
+    // 動画データを作成。登録済みの動画を追加し直す場合（別タブの古い画面など）は、
+    // 利用者が付けたメモ・並び順と最初の追加日時を残し、動画の情報だけを新しくする
     const mylistVideo: MylistVideo = {
       id: video.id!,
       mylistId,
       title: video.title!,
       thumbURL: video.thumbURL!,
-      addedAt: Date.now(),
-      memo: video.memo,
+      addedAt: existingVideo?.addedAt ?? Date.now(),
+      memo: video.memo ?? existingVideo?.memo,
+      ...(existingVideo?.orderIndex !== undefined && { orderIndex: existingVideo.orderIndex }),
       views: video.views,
       comments: video.comments,
       mylists: video.mylists,
@@ -242,14 +244,17 @@ export class MylistManager {
       throw new Error('Mylist not found')
     }
     
-    // 動画を削除
-    await tx.objectStore('mylistVideos').delete([mylistId, videoId])
-    
-    // マイリストの動画数と更新日時を更新
-    mylist.videoCount = Math.max(0, mylist.videoCount - 1)
-    mylist.updatedAt = Date.now()
-    await tx.objectStore('mylists').put(mylist)
-    
+    // 登録されていない動画（別タブで削除済み・二重操作）では件数を減らさない
+    const existingVideo = await tx.objectStore('mylistVideos').get([mylistId, videoId])
+    if (existingVideo) {
+      await tx.objectStore('mylistVideos').delete([mylistId, videoId])
+
+      // マイリストの動画数と更新日時を更新
+      mylist.videoCount = Math.max(0, mylist.videoCount - 1)
+      mylist.updatedAt = Date.now()
+      await tx.objectStore('mylists').put(mylist)
+    }
+
     await tx.done
   }
 

@@ -12,6 +12,7 @@ import { UnifiedBackup } from './unified-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
 import { lockViewportScroll } from '@/lib/scroll-lock'
+import { isImeComposing } from '@/lib/ime'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -92,6 +93,8 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // 日本語の変換中の Esc は変換の取り消し。モーダルは閉じない
+        if (isImeComposing(event)) return
         event.stopPropagation()
         handleCloseRef.current()
         return
@@ -476,11 +479,10 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
   
-  // オーバーレイクリック時の処理（ドラッグ中は閉じない）
+  // オーバーレイクリック時の処理。× や Esc と同じく、ドラッグ中は閉じず、
+  // 未適用の変更があれば破棄してよいか確かめる（背景に触れただけで編集が消えないように）
   const handleOverlayClick = () => {
-    if (!isDragging) {
-      onClose()
-    }
+    handleClose()
   }
 
   // Escape ハンドラ（early return より上の effect）から最新の handleClose を呼べるようにする
@@ -624,7 +626,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                   {tempNGList.videoIds.map((id) => (
                     <div key={id} className={styles.listItem}>
                       <span>{id}</span>
-                      <button onClick={() => removeVideoId(id)}>×</button>
+                      <button onClick={() => removeVideoId(id)} aria-label={`${id} を削除`}>×</button>
                     </div>
                   ))}
                 </div>
@@ -633,7 +635,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     type="text"
                     value={inputVideoId}
                     onChange={(e) => setInputVideoId(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoId()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddVideoId()}
                     placeholder="sm12345678"
                   />
                   <button onClick={handleAddVideoId}>追加</button>
@@ -709,13 +711,13 @@ sm11111111`}
                   {tempNGList.videoTitles.exact.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (完全)</span>
-                      <button onClick={() => removeVideoTitle(title, 'exact')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'exact')} aria-label={`${title} (完全) を削除`}>×</button>
                     </div>
                   ))}
                   {tempNGList.videoTitles.partial.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (部分)</span>
-                      <button onClick={() => removeVideoTitle(title, 'partial')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'partial')} aria-label={`${title} (部分) を削除`}>×</button>
                     </div>
                   ))}
                 </div>
@@ -724,7 +726,7 @@ sm11111111`}
                     type="text"
                     value={inputVideoTitle}
                     onChange={(e) => setInputVideoTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoTitle()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddVideoTitle()}
                     placeholder="タイトルを入力"
                   />
                   <button onClick={handleAddVideoTitle}>追加</button>
@@ -777,7 +779,7 @@ sm11111111`}
                     {tempNGList.authorIds.map((id) => (
                       <div key={id} className={styles.listItem}>
                         <span>ID: {id}</span>
-                        <button onClick={() => removeAuthorId(id)}>×</button>
+                        <button onClick={() => removeAuthorId(id)} aria-label={`ID: ${id} を削除`}>×</button>
                       </div>
                     ))}
                   </div>
@@ -786,7 +788,7 @@ sm11111111`}
                       type="text"
                       value={inputAuthorId}
                       onChange={(e) => setInputAuthorId(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorId()}
+                      onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddAuthorId()}
                       placeholder="投稿者ID（数字）"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
@@ -862,13 +864,13 @@ ch2625894`}
                     {tempNGList.authorNames.exact.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (完全)</span>
-                        <button onClick={() => removeAuthorName(name, 'exact')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'exact')} aria-label={`名前: ${name} (完全) を削除`}>×</button>
                       </div>
                     ))}
                     {tempNGList.authorNames.partial.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (部分)</span>
-                        <button onClick={() => removeAuthorName(name, 'partial')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'partial')} aria-label={`名前: ${name} (部分) を削除`}>×</button>
                       </div>
                     ))}
                   </div>
@@ -877,7 +879,7 @@ ch2625894`}
                       type="text"
                       value={inputAuthorName}
                       onChange={(e) => setInputAuthorName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorName()}
+                      onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddAuthorName()}
                       placeholder="投稿者名"
                     />
                     <button onClick={handleAddAuthorName}>追加</button>
