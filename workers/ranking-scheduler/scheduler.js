@@ -27,48 +27,76 @@ export async function dispatchRanking(env, github, now = Date.now()) {
       if (auxiliary?.generation === manifest.generation && !auxiliary.failed)
         return { state: 'published', slot }
     }
-    const { workflow_runs: runs } = await github(
+    const key = 'pipeline/dispatch-state.json'
+    const saved = await env.R2_BUCKET.get(key)
+    const old = saved ? await saved.json() : null
+    const running = async (run) => {
+      if (now - Date.parse(run.created_at) > 100 * 60_000)
+        throw new Error(`Ranking run stalled: ${run.id}`)
+      if (old?.runId !== run.id) {
+        await lease.assertOwned()
+        await env.R2_BUCKET.put(key, JSON.stringify({ ...old, runId: run.id }))
+      }
+      return { state: 'running', runId: run.id, slot }
+    }
+    // A run can temporarily disappear from the history listing. Once seen, follow its
+    // exact ID across ticks and hourly slots; a failed lookup must not authorize dispatch.
+    const observed = Number.isSafeInteger(old?.runId)
+      ? await github(`actions/runs/${old.runId}`)
+      : null
+    if (observed && observed.status !== 'completed')
+      return await running(observed)
+
+    const { workflow_runs: history } = await github(
       `actions/workflows/${WORKFLOW}/runs?branch=main&per_page=100`,
     )
-    if (!Array.isArray(runs)) throw new Error('Missing GitHub run history')
+    if (!Array.isArray(history)) throw new Error('Missing GitHub run history')
+    const runs = observed
+      ? [...history.filter((run) => run.id !== observed.id), observed]
+      : history
     const active = runs.find((run) => run.status !== 'completed')
-    if (active) {
-      if (now - Date.parse(active.created_at) > 100 * 60_000)
-        throw new Error(`Ranking run stalled: ${active.id}`)
-      return { state: 'running', runId: active.id, slot }
-    }
+    if (active) return await running(active)
     const matching = runs.filter(
       (run) => run.display_title === `Ranking ${slot}`,
     )
     if (matching.some((run) => run.conclusion === 'success'))
       return { state: 'complete', slot }
-    const key = 'pipeline/dispatch-state.json'
-    const saved = await env.R2_BUCKET.get(key)
-    const old = saved ? await saved.json() : null
     const state = old?.slot === slot ? old : { slot, attempts: 0, sentAt: 0 }
     if (now - state.sentAt < 15 * 60_000) return { state: 'awaiting-run', slot }
     if (state.attempts >= 2)
       throw new Error(`Ranking dispatch exhausted for ${slot}`)
-    await lease.assertOwned()
-    // Persist before sending: lost HTTP responses must not cause a dispatch storm.
-    await env.R2_BUCKET.put(
-      key,
-      JSON.stringify({ slot, attempts: state.attempts + 1, sentAt: now }),
-    )
     const failed = matching.find(
       (run) =>
         run.conclusion === 'failure' &&
         now - Date.parse(run.created_at) < 90 * 60_000,
     )
+    await lease.assertOwned()
+    // Persist before sending: lost HTTP responses must not cause a dispatch storm.
+    const next = {
+      slot,
+      attempts: state.attempts + 1,
+      sentAt: now,
+      runId: failed?.id,
+    }
+    await env.R2_BUCKET.put(key, JSON.stringify(next))
     if (failed) {
       await github(`actions/runs/${failed.id}/rerun-failed-jobs`, 'POST')
       return { state: 'retrying', slot, runId: failed.id }
     }
-    await github(`actions/workflows/${WORKFLOW}/dispatches`, 'POST', {
-      ref: 'main',
-      inputs: { slot },
-    })
-    return { state: 'dispatched', slot }
+    const dispatched = await github(
+      `actions/workflows/${WORKFLOW}/dispatches`,
+      'POST',
+      {
+        ref: 'main',
+        inputs: { slot },
+      },
+    )
+    const runId = dispatched?.workflow_run_id
+    if (!Number.isSafeInteger(runId) || runId <= 0)
+      throw new Error('Missing GitHub dispatch run ID')
+    await lease.assertOwned()
+    await env.R2_BUCKET.put(key, JSON.stringify({ ...next, runId }))
+    return { state: 'dispatched', slot, runId }
   } finally {
     await lease.release()
   }
