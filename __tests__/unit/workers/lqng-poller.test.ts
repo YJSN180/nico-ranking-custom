@@ -51,6 +51,8 @@ function deps(over: Partial<PollDeps> = {}, now: Date = T0): PollDeps {
     fetchThumbInfo: vi.fn(async () => okThumb()),
     fetchUserInfo: vi.fn(async () => existing(100)),
     fetchSweepVideos: vi.fn(async () => []),
+    // 既定は索引が実行時刻まで更新済み（前日分を含む）
+    fetchSweepNewestStartTime: vi.fn(async () => now.toISOString()),
     ...over,
   }
 }
@@ -1026,10 +1028,11 @@ describe('lqng-poller 保存の順番', () => {
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm98?.status).toBe('hold')
     expect(m.store.has(LQNG_KV_KEYS.tracking)).toBe(false)
 
-    // 次の回は新着に出なくても、判定表の動画を追跡と補完待ちに戻して補完する（ロックタグ群で D）
+    // 次の回は新着に出なくても、判定表の動画を追跡と補完待ちに戻して補完する（ロックタグ群で D）。
+    // sm97 の投稿者は照合語で投稿者 NG 済みなので、追跡には戻すが補完はしない
     const thumb = vi.fn(async (id: string) => (id === 'sm98' ? okThumb(locked('g1', 'g2', 'g3')) : okThumb()))
     await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([])), fetchThumbInfo: thumb }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
-    expect(thumb.mock.calls.map((c) => c[0]).sort()).toEqual(['sm97', 'sm98'])
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm98'])
     const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
     expect(tracking.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm97'])
     expect(tracking.authors['1002']?.posts.map((p) => p.id)).toEqual(['sm98'])
@@ -1275,8 +1278,7 @@ describe('lqng-poller 判定表を壊さない', () => {
       videos: {},
       updatedAt: 's',
     })
-    const tracking = emptyTracking(T0.toISOString())
-    const baseline = captureBaseline({ verdicts: verdicts(['1', '2']), tracking, events: emptyEvents() })
+    const baseline = captureBaseline({ verdicts: verdicts(['1', '2']), events: emptyEvents() })
     expect(verdictsWriteProblem(baseline, verdicts(['1']))).toBe('verdicts_shrank: 2>1')
     expect(verdictsWriteProblem(baseline, verdicts(['1', '2']))).toBeNull()
     expect(verdictsWriteProblem(baseline, verdicts(['1', '2', '3']))).toBeNull()
@@ -1337,5 +1339,310 @@ describe('lqng-poller 追跡期間より古い動画', () => {
     expect(tracked.status).toBe('deleted')
     expect(tracked.posts.map((p) => p.id)).toEqual(['sm710'])
     expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.authors['1001']).toBeUndefined()
+  })
+})
+
+describe('lqng-poller 日次スイープ（索引の更新と持ち越し）', () => {
+  /** JST の日時 */
+  const jst = (dateTime: string): Date => new Date(`${dateTime}+09:00`)
+  const readTracking = (m: ReturnType<typeof memoryKv>): LqngTracking | null => m.read<LqngTracking>(LQNG_KV_KEYS.tracking)
+  const trackingWith = (lastSweepDate: string | null): LqngTracking => ({ ...emptyTracking('2026-01-20T00:00:00.000Z'), lastSweepDate })
+  /** 指定した日の夜に投稿された、照合語に当たる動画 */
+  const uploadOn = (date: string, n: number): SourceVideo => video({ id: `sm9${n}`, title: 'て/す/と/ま/ん', authorId: String(3100 + n), registeredAt: jst(`${date}T21:00:00`).toISOString() })
+
+  it('索引が前日分を含むまで（最新の投稿が前日の 24 時より前）はスイープせず、完了も記録しない', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const sweep = vi.fn(async () => [uploadOn('2026-01-31', 1)])
+    // 05:10 の時点で索引の最新は前日の 04:28（毎朝の更新が遅れている）
+    const r1 = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => '2026-01-31T04:28:00+09:00') }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(r1.skipped).toBe('sweep_index_not_ready')
+    expect(sweep).not.toHaveBeenCalled()
+    expect(m.puts).toEqual([])
+    // 1 時間後の回に索引が更新されていれば、前日分を取り込んで記録する
+    const r2 = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => '2026-02-01T04:59:30+09:00') }, jst('2026-02-01T06:10:00')), 'sweep')
+    expect(r2.skipped).toBeNull()
+    expect(sweep).toHaveBeenCalledWith('genreX', '2026-01-31')
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-31')
+    expect(m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)?.videos.sm91?.reasons).toEqual(['B'])
+  })
+
+  it('索引の最新がちょうど翌日 0 時（JST）なら前日分は索引に入っている。1 秒前なら入っていない', async () => {
+    const run = async (newest: string) => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const sweep = vi.fn(async () => [])
+      const r = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => newest) }, jst('2026-02-01T05:10:00')), 'sweep')
+      return { r, sweep }
+    }
+    const exact = await run('2026-02-01T00:00:00+09:00')
+    expect(exact.r.skipped).toBeNull()
+    expect(exact.sweep).toHaveBeenCalledWith('genreX', '2026-01-31')
+    const before = await run('2026-01-31T23:59:59+09:00')
+    expect(before.r.skipped).toBe('sweep_index_not_ready')
+    expect(before.sweep).not.toHaveBeenCalled()
+  })
+
+  it('スイープの対象は JST の前日（UTC 14:59:59 は同じ JST 日、15:00 で日付が変わる）', async () => {
+    const sweptDate = async (now: Date): Promise<string | undefined> => {
+      const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+      const sweep = vi.fn(async (_genre: string, _date: string) => [])
+      await runPoll(m.kv, deps({ fetchSweepVideos: sweep }, now), 'sweep')
+      return sweep.mock.calls[0]?.[1]
+    }
+    expect(await sweptDate(new Date('2026-02-01T14:59:59.999Z'))).toBe('2026-01-31')
+    expect(await sweptDate(new Date('2026-02-01T15:00:00.000Z'))).toBe('2026-02-01')
+    // 月・年をまたぐ
+    expect(await sweptDate(jst('2027-01-01T05:10:00'))).toBe('2026-12-31')
+    expect(await sweptDate(jst('2026-03-01T05:10:00'))).toBe('2026-02-28')
+  })
+
+  it('取得に失敗した日は完了にせず、次の回に取り直す（失敗は記録する）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const failing = vi.fn(async (): Promise<SourceVideo[]> => {
+      throw new Error('snapshot_http_503')
+    })
+    const r1 = await runPoll(m.kv, deps({ fetchSweepVideos: failing }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(r1.skipped).toBeNull()
+    expect(r1.note).toContain('sweep_failed')
+    expect(readTracking(m)?.lastSweepDate ?? null).toBeNull()
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note?.includes('sweep_failed'))).toBe(true)
+    const ok = vi.fn(async () => [uploadOn('2026-01-31', 2)])
+    await runPoll(m.kv, deps({ fetchSweepVideos: ok }, jst('2026-02-01T06:10:00')), 'sweep')
+    expect(ok).toHaveBeenCalledWith('genreX', '2026-01-31')
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-31')
+  })
+
+  it('未処理の日を古い順に持ち越して取り、索引に入った日までで止める。遡るのは 3 日までで、それより古い日は諦めて記録する', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith('2026-01-25') })
+    const sweep = vi.fn(async (_genre: string, date: string) => [uploadOn(date, Number(date.slice(-2)))])
+    // 索引は 1/29 分まで（最新が 1/30 04:50）
+    await runPoll(m.kv, deps({ fetchSweepVideos: sweep, fetchSweepNewestStartTime: vi.fn(async () => '2026-01-30T04:50:00+09:00') }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(sweep.mock.calls.map((c) => c[1])).toEqual(['2026-01-29'])
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-29')
+    expect(m.read<LqngEvents>(LQNG_KV_KEYS.events)?.items.some((e) => e.kind === 'error' && e.note === 'sweep_skipped: 2026-01-26..2026-01-28')).toBe(true)
+    // 次の回に索引が追いつけば、残りの日を古い順に取る
+    sweep.mockClear()
+    await runPoll(m.kv, deps({ fetchSweepVideos: sweep }, jst('2026-02-01T06:10:00')), 'sweep')
+    expect(sweep.mock.calls.map((c) => c[1])).toEqual(['2026-01-30', '2026-01-31'])
+    expect(readTracking(m)?.lastSweepDate).toBe('2026-01-31')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.videos).sort()).toEqual(['sm929', 'sm930', 'sm931'])
+  })
+
+  it('スイープ済みの回は設定と追跡表だけを読んで抜ける（判定表・履歴を読まず、外部にも問い合わせない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: trackingWith('2026-01-31') })
+    const newest = vi.fn(async () => T0.toISOString())
+    const r = await runPoll(m.kv, deps({ fetchSweepNewestStartTime: newest }, jst('2026-02-01T07:10:00')), 'sweep')
+    expect(r.skipped).toBe('already_swept')
+    expect(newest).not.toHaveBeenCalled()
+    expect(m.ops).toEqual([`get ${LQNG_KV_KEYS.config}`, `get ${LQNG_KV_KEYS.tracking}`])
+  })
+
+  it('索引の更新を確かめられなければスイープせず、監視に出す（書き込みなし）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const reportError = vi.fn()
+    const sweep = vi.fn(async () => [])
+    const r = await runPoll(m.kv, deps({ fetchSweepVideos: sweep, reportError, fetchSweepNewestStartTime: vi.fn(async (): Promise<string | null> => { throw new Error('snapshot_http_500') }) }, jst('2026-02-01T05:10:00')), 'sweep')
+    expect(r.skipped).toBe('sweep_index_unavailable')
+    expect(sweep).not.toHaveBeenCalled()
+    expect(reportError).toHaveBeenCalledTimes(1)
+    expect(m.puts).toEqual([])
+  })
+})
+
+describe('lqng-poller 判定表の文字列化・パース（CPU 時間）', () => {
+  /** 大きい判定表（合成。投稿者 NG 3,000 件で約 0.8MB） */
+  const BIG = 300_000
+  const bigVerdicts = (): LqngVerdicts => {
+    const authors: LqngVerdicts['authors'] = {}
+    for (let i = 0; i < 3000; i++) {
+      authors[String(500_000 + i)] = {
+        status: 'ng',
+        reasons: ['B'],
+        since: '2026-01-01T00:00:00.000Z',
+        evidence: [{ videoId: `sm${800_000 + i}`, title: `合成の長めのタイトル${i}・`.repeat(4), registeredAt: '2026-01-01T00:00:00.000Z', rules: ['B'] }],
+        nickname: null,
+        followerCount: null,
+        visibility: null,
+        deletedObservedAt: null,
+      }
+    }
+    return { version: 1, authors, videos: {}, updatedAt: '2026-01-02T00:00:00.000Z' }
+  }
+  /** runPoll の間だけ、大きい文字列の JSON.parse と、大きい文字列を返す JSON.stringify を数える */
+  const countBigJson = async (run: () => Promise<unknown>): Promise<{ parses: number; stringifies: number }> => {
+    const parse = vi.spyOn(JSON, 'parse')
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      await run()
+      return {
+        parses: parse.mock.calls.filter(([text]) => typeof text === 'string' && text.length > BIG).length,
+        stringifies: stringify.mock.results.filter((r) => r.type === 'return' && typeof r.value === 'string' && r.value.length > BIG).length,
+      }
+    } finally {
+      parse.mockRestore()
+      stringify.mockRestore()
+    }
+  }
+
+  it('定常の回は判定表を 1 回だけパースし、書かないので文字列化も比較の 1 回だけ', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: bigVerdicts() })
+    const raw = m.store.get(LQNG_KV_KEYS.verdicts)
+    expect(raw!.length).toBeGreaterThan(BIG)
+    const counts = await countBigJson(() => runPoll(m.kv, deps(), 'poll'))
+    expect(counts).toEqual({ parses: 1, stringifies: 1 })
+    expect(m.puts).toEqual([LQNG_KV_KEYS.tracking])
+    expect(m.store.get(LQNG_KV_KEYS.verdicts)).toBe(raw)
+  })
+
+  it('判定が変わった回も、判定表のパースと文字列化はそれぞれ 1 回（比較に使った文字列をそのまま書く）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: bigVerdicts() })
+    const counts = await countBigJson(() => runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm990', authorId: '9901', title: 'て/す/と/ま/ん' })])) }), 'poll'))
+    expect(counts).toEqual({ parses: 1, stringifies: 1 })
+    // 書いた判定表は JSON として読め、内容と更新時刻が正しい
+    const saved = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(saved.version).toBe(1)
+    expect(Object.keys(saved.authors)).toHaveLength(3001)
+    expect(saved.authors['9901']?.reasons).toEqual(['B'])
+    expect(saved.videos.sm990?.status).toBe('ng')
+    expect(saved.updatedAt).toBe(T0.toISOString())
+    expect(Object.keys(saved)).toEqual(['version', 'authors', 'videos', 'updatedAt'])
+  })
+
+  it('この Worker が書いた形と違う判定表（キーの並びが違う）は、内容が同じでも 1 回だけ書き直して、その後は書かない', async () => {
+    const { version, authors, videos, updatedAt } = bigVerdicts()
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    m.store.set(LQNG_KV_KEYS.verdicts, JSON.stringify({ updatedAt, version, videos, authors }))
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.puts).toContain(LQNG_KV_KEYS.verdicts)
+    m.reset()
+    await runPoll(m.kv, deps({}, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(m.puts).toEqual([LQNG_KV_KEYS.tracking])
+  })
+})
+
+describe('lqng-poller 刈り込みの境界', () => {
+  const DAY = 24 * 3600_000
+  const ago = (ms: number): string => new Date(T0.getTime() - ms).toISOString()
+  const trackedAuthor = (posts: Array<{ id: string; at: string }>): TrackedAuthor => ({
+    authorId: '1001',
+    firstSeenAt: ago(8 * DAY),
+    lastPostAt: posts[0]?.at ?? ago(8 * DAY),
+    posts: posts.map((p) => ({ ...p, title: 't', tagDetails: [], ownerVisibility: 'visible' })),
+    status: 'existing',
+    // 直近に確かめ済み（この回は存在確認をしない）
+    lastCheckedAt: ago(60_000),
+    followerCount: 100,
+    nickname: 'n',
+    visibility: 'visible',
+    deletedObservedAt: null,
+  })
+
+  it('追跡期間（7 日）ちょうど前の投稿は残し、1 ミリ秒でも古ければ刈り込む', async () => {
+    const tracking: LqngTracking = { ...emptyTracking(ago(15 * 60_000)), lastPollAt: ago(15 * 60_000), authors: { '1001': trackedAuthor([{ id: 'sm801', at: ago(7 * DAY) }, { id: 'sm802', at: ago(7 * DAY + 1) }]) } }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.tracking]: tracking })
+    await runPoll(m.kv, deps(), 'poll')
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm801'])
+  })
+
+  it('新着の取り込みも同じ境界（ちょうど 7 日前の動画は取り込み、それより古ければ取り込まない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config })
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm811', registeredAt: ago(7 * DAY) }), video({ id: 'sm812', registeredAt: ago(7 * DAY + 1) })])) }), 'poll')
+    expect(r.newVideos).toBe(1)
+    expect(m.read<LqngTracking>(LQNG_KV_KEYS.tracking)?.authors['1001']?.posts.map((p) => p.id)).toEqual(['sm811'])
+  })
+
+  it('動画の判定は 90 日（解放は 7 日）ちょうどまで残し、1 ミリ秒でも古ければ消す。投稿者 NG は消さない', async () => {
+    const old = ago(200 * DAY) // 追跡期間の外（追跡には戻さない）
+    const videoVerdict = (status: 'ng' | 'released', since: string) => ({ status, reasons: status === 'ng' ? ['D'] : [], authorId: '2001', title: 't', registeredAt: old, since })
+    const m = memoryKv({
+      [LQNG_KV_KEYS.config]: config,
+      [LQNG_KV_KEYS.verdicts]: {
+        version: 1,
+        authors: { '2002': { status: 'ng', reasons: ['B'], since: ago(400 * DAY), evidence: [] } },
+        videos: {
+          sm821: videoVerdict('ng', ago(90 * DAY)),
+          sm822: videoVerdict('ng', ago(90 * DAY + 1)),
+          sm823: videoVerdict('released', ago(7 * DAY)),
+          sm824: videoVerdict('released', ago(7 * DAY + 1)),
+        },
+        updatedAt: old,
+      },
+    })
+    await runPoll(m.kv, deps(), 'poll')
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.videos).sort()).toEqual(['sm821', 'sm823'])
+    expect(Object.keys(verdicts.authors)).toEqual(['2002'])
+  })
+})
+
+describe('lqng-poller 投稿者 NG 済みの投稿者の新着', () => {
+  const ngVerdicts = (): LqngVerdicts => ({
+    version: 1,
+    authors: { '1001': { status: 'ng', reasons: ['B'], since: '2026-01-01T00:00:00.000Z', evidence: [] } },
+    videos: {},
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  })
+
+  it('補完（getthumbinfo）の予算を使わず、動画ごとの判定も積まない（投稿者 NG で落ちる。追跡はして新着に数え直さない）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: ngVerdicts() })
+    // NG 済みの 1001 が 3 本（うち 1 本は照合語に当たる）、まだ NG でない 1002 が 1 本
+    const uploads = [video({ id: 'sm901', title: 'て/す/と/ま/ん' }), video({ id: 'sm902', registeredAt: at(-2) }), video({ id: 'sm903', registeredAt: at(-3) }), video({ id: 'sm904', authorId: '1002' })]
+    const thumb = vi.fn(async (_id: string) => okThumb(locked('g1', 'g2', 'g3')))
+    const r = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: thumb }), 'poll')
+    expect(r.newVideos).toBe(4)
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm904'])
+    const verdicts = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(verdicts.videos)).toEqual(['sm904'])
+    expect(verdicts.authors['1001']?.evidence).toEqual([])
+    const tracking = m.read<LqngTracking>(LQNG_KV_KEYS.tracking)!
+    expect(tracking.authors['1001']?.posts.map((p) => p.id).sort()).toEqual(['sm901', 'sm902', 'sm903'])
+    expect(tracking.pending).toEqual([])
+    // 重なり区間で同じ新着が返っても、新着に数え直さない
+    const again = await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: thumb }, new Date(T0.getTime() + 15 * 60_000)), 'poll')
+    expect(again.newVideos).toBe(0)
+  })
+
+  it('存在確認は、まだ NG でない投稿者を先にする（NG 済みの連投者に予算を先取りさせない）', async () => {
+    const due = new Date(T0.getTime() - 7 * 3600_000).toISOString() // 定期確認（6 時間ごと）の時期を過ぎている
+    const tracked = (authorId: string, n: number): TrackedAuthor => ({
+      authorId,
+      firstSeenAt: due,
+      lastPostAt: at(-1),
+      posts: Array.from({ length: n }, (_, i) => ({ id: `sm${authorId}${i}`, title: 't', at: at(-1 - i), tagDetails: [], ownerVisibility: 'visible' as const })),
+      status: 'existing',
+      lastCheckedAt: due,
+      followerCount: 100,
+      nickname: 'n',
+      visibility: 'visible',
+      deletedObservedAt: null,
+    })
+    // NG 済みの連投者 12 人と、まだ NG でない 1 本だけの投稿者 1 人（1 回に確かめるのは 10 人まで）
+    const ngAuthors = Array.from({ length: 12 }, (_, i) => String(4100 + i))
+    const authors = Object.fromEntries([...ngAuthors.map((id) => [id, tracked(id, 5)]), ['4200', tracked('4200', 1)]])
+    const verdicts: LqngVerdicts = { version: 1, authors: Object.fromEntries(ngAuthors.map((id) => [id, { status: 'ng' as const, reasons: ['B' as const], since: due, evidence: [] }])), videos: {}, updatedAt: due }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: verdicts, [LQNG_KV_KEYS.tracking]: { ...emptyTracking(due), lastPollAt: at(-15), authors } })
+    const fetchUserInfo = vi.fn(async (_id: string) => existing(100))
+    await runPoll(m.kv, deps({ fetchUserInfo }), 'poll')
+    expect(fetchUserInfo.mock.calls[0]?.[0]).toBe('4200')
+  })
+
+  it('チャンネル（channel/chNNN）の投稿者 NG は、ランキングの投稿者 ID（chNNN）と形が違って当たらないことがあるので、動画ごとの判定と補完を続ける', async () => {
+    const verdicts: LqngVerdicts = { version: 1, authors: { 'channel/ch55': { status: 'ng', reasons: ['B'], since: '2026-01-01T00:00:00.000Z', evidence: [] } }, videos: {}, updatedAt: '2026-01-01T00:00:00.000Z' }
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: config, [LQNG_KV_KEYS.verdicts]: verdicts })
+    // キーワード入りを 10 分のあいだに 3 本（キーワード ∧ 連投 = HK）
+    const uploads = [0, 5, 10].map((min, i) => video({ id: `so92${i}`, authorId: 'channel/ch55', title: 'ほもと見る何か', registeredAt: at(-1 - min) }))
+    const thumb = vi.fn(async (_id: string) => okThumb())
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages(uploads)), fetchThumbInfo: thumb }), 'poll')
+    const saved = m.read<LqngVerdicts>(LQNG_KV_KEYS.verdicts)!
+    expect(Object.keys(saved.videos).sort()).toEqual(['so920', 'so921', 'so922'])
+    expect(saved.videos.so920?.reasons).toContain('HK')
+    expect(thumb).toHaveBeenCalledTimes(3)
+  })
+
+  it('許可リストの投稿者は判定表に NG が残っていても NG 扱いにしない（補完して判定する）', async () => {
+    const m = memoryKv({ [LQNG_KV_KEYS.config]: { ...config, allowlist: { authorIds: ['1001'], videoIds: [] } }, [LQNG_KV_KEYS.verdicts]: ngVerdicts() })
+    const thumb = vi.fn(async (_id: string) => okThumb())
+    await runPoll(m.kv, deps({ fetchNewVideos: vi.fn(async () => pages([video({ id: 'sm911' })])), fetchThumbInfo: thumb }), 'poll')
+    expect(thumb.mock.calls.map((c) => c[0])).toEqual(['sm911'])
   })
 })

@@ -28,7 +28,10 @@ function positiveInt(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback
 }
 
-/** 投稿者の追跡日数の下限。日次スイープ（05:10 JST に前日分）が取り込む動画は投稿から最大 1 日余り経っているので 2 日 */
+/**
+ * 投稿者の追跡日数の下限。日次スイープ（05:10〜14:10 JST に前日分）が取り込む動画は投稿から 1 日余り経っているので 2 日。
+ * 索引の更新が遅れて持ち越した日は、追跡日数より古い動画が取り込まれない（スイープが遡る日数も追跡日数までにする）
+ */
 export const LQNG_TRACK_DAYS_MIN = 2
 
 /** ユーザー ID（数字 1〜12 桁） */

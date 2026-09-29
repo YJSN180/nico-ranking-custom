@@ -1,7 +1,7 @@
 // 外部データ源（nvapi 新着検索 / getthumbinfo / ユーザー情報 API / Snapshot）
 // poll.ts からは PollDeps インターフェース越しに使い、テストではモックに差し替える。
 import type { OwnerVisibility } from '../../../lib/lqng/types'
-import { fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
+import { decodeHtmlAttribute, fetchNicoSearchPage, nicoPageOwnerId, type NicoPageKind, type NicoPageResult, type NicoPageVideo } from '../../../lib/search/nico-page-search'
 import type { TagDetail } from '../../../types/ranking'
 
 export interface SourceVideo {
@@ -70,6 +70,8 @@ export interface PollDeps {
   fetchThumbInfo: (videoId: string) => Promise<ThumbResult>
   fetchUserInfo: (userId: string) => Promise<UserInfo>
   fetchSweepVideos: (genre: string, dateJst: string) => Promise<SourceVideo[]>
+  /** 日次スイープのジャンルで、Snapshot の索引が持つ最新の投稿時刻（索引が前日分を含むかの確認に使う）。無ければ null */
+  fetchSweepNewestStartTime: (genre: string) => Promise<string | null>
   /** 実行は続けるが監視に上げたい失敗（主経路と予備の両方で新着を取れなかったなど） */
   reportError?: (error: unknown, context: string) => void
 }
@@ -200,17 +202,9 @@ export async function fetchNewVideosFromNvapi(tags: string[], sinceIso: string, 
   return out
 }
 
-// 1 パスで復号する（&amp; を先に戻す逐次 replace は &amp;lt; → < の二重復号になる）
-const XML_ENTITIES = new Map<string, string>([
-  ['amp', '&'],
-  ['lt', '<'],
-  ['gt', '>'],
-  ['quot', '"'],
-  ['apos', "'"],
-  ['#39', "'"],
-])
-const decodeXml = (s: string): string =>
-  s.replace(/&(amp|lt|gt|quot|apos|#39);/g, (match, name: string) => XML_ENTITIES.get(name) ?? match)
+// 実体参照は 1 パスで復号する（&amp; を先に戻す逐次 replace は &amp;lt; → < の二重復号になる）。
+// 数値参照は &#039;（0 埋め）や &#x27;（16 進）でも来うるので、本家ページの属性と同じ復号を使う
+const decodeXml = decodeHtmlAttribute
 
 function pickXml(xml: string, tag: string): string | undefined {
   const m = xml.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`))
@@ -359,6 +353,28 @@ export async function fetchSweepVideosFromSnapshot(genre: string, dateJst: strin
   return out
 }
 
+/**
+ * Snapshot: 指定ジャンル（日次スイープと同じ条件）で索引が持つ最新の投稿時刻を 1 件だけ取る。
+ * 索引は毎朝の更新で丸ごと入れ替わり、更新が遅れる日もある（2026-09-22 実測）。最新の投稿がある日の
+ * 24 時（JST）以降なら、その日の分は索引に入っている
+ */
+export async function fetchSweepNewestStartTimeFromSnapshot(genre: string, fetchImpl: typeof fetch = fetch): Promise<string | null> {
+  const params = new URLSearchParams({
+    q: genre,
+    targets: 'genre',
+    fields: 'startTime',
+    _sort: '-startTime',
+    _limit: '1',
+    _context: 'nico-rank.com lqng-poller',
+  })
+  const res = await fetchImpl(`${SNAPSHOT_URL}?${params.toString()}`, { headers: { 'User-Agent': 'nico-rank.com lqng-poller' }, signal: AbortSignal.timeout(TIMEOUT_MS) })
+  if (!res.ok) throw new Error(`snapshot_http_${res.status}`)
+  const json = (await res.json()) as { meta?: { status?: number }; data?: Array<{ startTime?: unknown }> }
+  if (json.meta?.status !== 200 || !Array.isArray(json.data)) throw new Error('snapshot_invalid_response')
+  const startTime = json.data[0]?.startTime
+  return typeof startTime === 'string' ? startTime : null
+}
+
 export function createLiveDeps(fetchImpl: typeof fetch = fetch): PollDeps {
   return {
     now: () => new Date(),
@@ -367,5 +383,6 @@ export function createLiveDeps(fetchImpl: typeof fetch = fetch): PollDeps {
     fetchThumbInfo: (id) => fetchThumbInfoFromExt(id, fetchImpl),
     fetchUserInfo: (id) => fetchUserInfoFromNvapi(id, fetchImpl),
     fetchSweepVideos: (genre, date) => fetchSweepVideosFromSnapshot(genre, date, fetchImpl),
+    fetchSweepNewestStartTime: (genre) => fetchSweepNewestStartTimeFromSnapshot(genre, fetchImpl),
   }
 }

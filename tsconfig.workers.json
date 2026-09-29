@@ -15,6 +15,7 @@
     "workers/smart-router-20250706.ts",
     "workers/api-gateway-green-20250726.ts",
     "workers/utils/**/*.ts",
+    "workers/lqng-poller/src/**/*.ts",
     "workers/types.d.ts"
   ],
   "exclude": [

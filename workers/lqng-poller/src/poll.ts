@@ -21,8 +21,9 @@ import {
 import {
   captureBaseline,
   EVENTS_MAX,
-  loadEnabled,
+  loadConfig,
   loadState,
+  loadTracking,
   pushEvent,
   saveState,
   verdictsWriteProblem,
@@ -43,9 +44,14 @@ export const LIMITS = {
   subrequestBudget: 40,
   /** 新着取得に使うタグの上限。本家タグページは タグ × 種別 2（動画/ショート）× 最大 2 ページ = 最大 12 リクエスト */
   pollTagsMax: LQNG_POLL_TAGS_MAX,
-  /** 予備（nvapi）・日次スイープ（Snapshot）は送ったページ数を返さないので、最大ページ数で見積もる */
+  /** 予備（nvapi）・日次スイープ（Snapshot）は送ったページ数を返さないので、最大ページ数で見積もる（スイープは 1 日分ごと） */
   fallbackCost: MAX_PAGES,
   sweepCost: MAX_PAGES,
+  /**
+   * 日次スイープで遡る日数の上限。索引の更新が遅れた日や取得に失敗した日は次の回に持ち越し、
+   * 前日からこの日数より前になった日は諦めて履歴に残す（追跡日数より前の動画は取り込まないので、追跡日数でも抑える）
+   */
+  sweepMaxLagDays: 3,
   /** 現存投稿者を再確認する間隔 */
   userRecheckHours: 6,
   /** 退会の確定に要る、1 回目の 404 から 2 回目の確認までの間隔 */
@@ -62,7 +68,7 @@ export const LIMITS = {
   pendingMaxTransient: 8,
   /**
    * 差分取得の重なり。nvapi の検索インデックスには投稿から数十分以上の反映遅れがあり、
-   * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は isKnownVideo で
+   * 10 分の重なりでは新着を取りこぼした（実測 2026-09-22）。既知の動画は trackedVideoIds で
    * 除外されるので、6 時間まで広げても取得ページ数（最大 3）は変わらない
    */
   sinceOverlapMinutes: 6 * 60,
@@ -192,19 +198,30 @@ class Session {
     return this.subrequests + cost <= LIMITS.subrequestBudget
   }
 
+  /**
+   * 投稿者 NG 済み（許可リストでない）のユーザーか。NG 済みの投稿者の動画は投稿者 NG で落ちるので、補完（getthumbinfo）の
+   * 予算も動画ごとの判定も使わない（受け箱の合流と同じ扱い）。チャンネル（channel/chNNN）は対象外: ランキングの項目は
+   * 投稿者 ID を chNNN の形で持ち、投稿者 NG が当たらない場所があるので、動画ごとの判定を続ける
+   */
+  isAuthorNg(authorId: string | null): boolean {
+    return authorId !== null && isUserId(authorId) && Object.hasOwn(this.state.verdicts.authors, authorId) && !this.config.allowlist.authorIds.includes(authorId)
+  }
+
   spend(cost = 1): void {
     this.subrequests += cost
   }
 
   /**
-   * 追跡している動画か（投稿・補完待ち・投稿者 ID の無い動画）。判定表は見ない: 判定表を書けて追跡表の前で
-   * 落ちた回の動画や、バックフィルで判定だけ入った動画を、新着に出たときに追跡へ戻すため
+   * 追跡している動画の ID（投稿・補完待ち・投稿者 ID の無い動画）。判定表は見ない: 判定表を書けて追跡表の前で
+   * 落ちた回の動画や、バックフィルで判定だけ入った動画を、新着に出たときに追跡へ戻すため。
+   * 取り込みのたびに作り直す（動画ごとに追跡表全体をなめない）
    */
-  isKnownVideo(id: string): boolean {
-    if (this.state.tracking.pending.some((p) => p.id === id)) return true
-    if (this.state.tracking.unattributed.some((u) => u.id === id)) return true
-    for (const author of Object.values(this.state.tracking.authors)) if (author.posts.some((p) => p.id === id)) return true
-    return false
+  trackedVideoIds(): Set<string> {
+    const ids = new Set<string>()
+    for (const author of Object.values(this.state.tracking.authors)) for (const post of author.posts) ids.add(post.id)
+    for (const item of this.state.tracking.pending) ids.add(item.id)
+    for (const item of this.state.tracking.unattributed) ids.add(item.id)
+    return ids
   }
 
   ensureAuthor(authorId: string): TrackedAuthor {
@@ -254,9 +271,11 @@ class Session {
 
   /** 動画 1 件を評価して判定テーブルを更新する（何度呼んでも同じ結果になる） */
   applyVideo(video: VideoObservation): void {
+    const current = this.state.verdicts.videos[video.id]
+    // 投稿者 NG 済みの投稿者の動画は投稿者 NG で落ちるので、動画ごとの判定を新たに積まない（判定表を太らせない）
+    if (!current && this.isAuthorNg(video.authorId)) return
     const author = video.authorId ? this.state.tracking.authors[video.authorId] : undefined
     const evaluation = evaluateVideo(video, toObservation(author), this.config)
-    const current = this.state.verdicts.videos[video.id]
     if (evaluation.ng) {
       const changed = !current || current.status !== 'ng' || current.reasons.join() !== evaluation.reasons.join()
       this.state.verdicts.videos[video.id] = {
@@ -377,15 +396,41 @@ class Session {
     return complete
   }
 
+  /**
+   * 日次スイープ: 索引に入った日（古い順）の動画を、ポーリングと同じく追跡に取り込む（差分取得の取りこぼしに
+   * 対する日次の安全網）。取り込み済みの動画は除外されるので、通常は少数だけが新たに追跡される。
+   * 取れなかった日で止めてスイープ済みの日を進めず、その日から次の回に取り直す。取り込めた日を返す
+   */
+  async sweepDays(genre: string, dates: readonly string[]): Promise<string[]> {
+    const swept: string[] = []
+    for (const date of dates) {
+      this.spend(LIMITS.sweepCost)
+      let videos: SourceVideo[]
+      try {
+        videos = await this.deps.fetchSweepVideos(genre, date)
+      } catch (error) {
+        this.recordIssue('sweep', date, `sweep_failed: ${date} ${messageOf(error)}`, 'error', error)
+        return swept
+      }
+      this.ingest(videos)
+      this.state.tracking.lastSweepDate = date
+      swept.push(date)
+    }
+    if (dates.length > 0) this.resolveIssue('sweep')
+    return swept
+  }
+
   /** 新着を追跡に取り込み、タイトルと可視性だけで先に判定する */
   ingest(videos: SourceVideo[]): void {
     const nowMs = this.now.getTime()
     const trackMs = this.config.trackDays * DAY_MS
+    const known = this.trackedVideoIds()
     for (const v of videos) {
       // 追跡期間より古い動画は取り込まない（取り込んでも次の刈り込みで消え、取り込み直すたびに
       // 古い連投を投稿頻度に数えてしまう）
       if (nowMs - new Date(v.registeredAt).getTime() > trackMs) continue
-      if (this.isKnownVideo(v.id)) continue
+      if (known.has(v.id)) continue
+      known.add(v.id)
       this.newVideos++
       const observation: VideoObservation = { id: v.id, title: v.title, authorId: v.authorId, registeredAt: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility }
       if (v.authorId) {
@@ -393,7 +438,8 @@ class Session {
         author.posts.push({ id: v.id, title: v.title, at: v.registeredAt, tagDetails: null, ownerVisibility: v.ownerVisibility })
         if (v.registeredAt > author.lastPostAt) author.lastPostAt = v.registeredAt
         if (v.ownerVisibility && !author.visibility) author.visibility = v.ownerVisibility
-        this.state.tracking.pending.push({ id: v.id, authorId: v.authorId, attempts: 0 })
+        // 追跡はする（重なり区間で新着に数え直さない）が、投稿者 NG 済みなら補完しない
+        if (!this.isAuthorNg(v.authorId)) this.state.tracking.pending.push({ id: v.id, authorId: v.authorId, attempts: 0 })
       } else {
         this.state.tracking.unattributed.push({ id: v.id, at: v.registeredAt })
       }
@@ -430,6 +476,7 @@ class Session {
       const author = item.authorId ? this.state.tracking.authors[item.authorId] : undefined
       const post = author?.posts.find((p) => p.id === item.id)
       if (!author || !post) continue // 追跡から外れた（期限切れなど）
+      if (this.isAuthorNg(item.authorId)) continue // 待つあいだに投稿者 NG になった
       processed++
       this.spend()
       let result: ThumbResult
@@ -443,7 +490,8 @@ class Session {
         }
         result = { ok: false, reason: 'unavailable' } // 通信失敗・タイムアウト
       }
-      if (!result.ok && result.reason === 'unavailable') {
+      // ok を === で比べる（strict でない型チェックでも判別共用体を絞り込めるように）
+      if (result.ok === false && result.reason === 'unavailable') {
         // 上流の一時的な不調は試行回数に数えず、末尾に回して持ち越す（上限を超えたら諦める）。
         // 続くようなら障害とみなして打ち切る
         const transient = (item.transient ?? 0) + 1
@@ -456,7 +504,7 @@ class Session {
         continue
       }
       unavailableInRow = 0
-      if (result.ok) {
+      if (result.ok === true) {
         post.tagDetails = result.info.tagDetails
         post.ownerVisibility = result.info.ownerVisibility
         author.visibility = result.info.ownerVisibility
@@ -484,6 +532,9 @@ class Session {
       return nowMs - new Date(author.deletionSuspectedAt).getTime() >= confirmMs && sinceChecked >= confirmMs ? 0 : null
     }
     if (sinceChecked < LIMITS.userRecheckHours * HOUR_MS) return null
+    // 投稿者 NG 済みの投稿者の定期確認は判定を変えないので、まだ NG でない投稿者の後に回す（連投中の NG 済み
+    // 投稿者に予算を先取りさせない）。退会の確定と退会扱いの再確認（上）は誤 NG に気づくためなので後回しにしない
+    if (this.isAuthorNg(author.authorId)) return 3
     // 連投中（C 該当）の投稿者を先にする。初回取り込みで待ち行列が長いときに、
     // 新しい連投の A∧C 判定が数時間後回しになるのを防ぐ
     return this.isFrequentAuthor(author.authorId) ? 1 : 2
@@ -672,10 +723,7 @@ class Session {
   restoreUntrackedVerdicts(): void {
     const nowMs = this.now.getTime()
     const trackMs = this.config.trackDays * DAY_MS
-    const tracked = new Set<string>()
-    for (const author of Object.values(this.state.tracking.authors)) for (const post of author.posts) tracked.add(post.id)
-    for (const item of this.state.tracking.pending) tracked.add(item.id)
-    for (const item of this.state.tracking.unattributed) tracked.add(item.id)
+    const tracked = this.trackedVideoIds()
     for (const [id, verdict] of Object.entries(this.state.verdicts.videos)) {
       if (tracked.has(id) || verdict.status === 'released') continue
       const atMs = new Date(verdict.registeredAt).getTime()
@@ -687,7 +735,7 @@ class Session {
       const author = this.ensureAuthor(verdict.authorId)
       author.posts.push({ id, title: verdict.title, at: verdict.registeredAt, tagDetails: null, ownerVisibility: null })
       if (verdict.registeredAt > author.lastPostAt) author.lastPostAt = verdict.registeredAt
-      this.state.tracking.pending.push({ id, authorId: verdict.authorId, attempts: 0 })
+      if (!this.isAuthorNg(verdict.authorId)) this.state.tracking.pending.push({ id, authorId: verdict.authorId, attempts: 0 })
     }
   }
 
@@ -741,29 +789,87 @@ async function refuseSave(kv: KvLike, deps: PollDeps, loadedEvents: readonly Lqn
   return 1
 }
 
+const JST_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
 function yesterdayJst(now: Date): string {
   const jst = new Date(now.getTime() + 9 * HOUR_MS)
   jst.setUTCDate(jst.getUTCDate() - 1)
   return jst.toISOString().slice(0, 10)
 }
 
+/** JST の日付（YYYY-MM-DD）を暦で days 日ずらす */
+function shiftJstDate(date: string, days: number): string {
+  const [y, m, d] = date.split('-').map(Number) as [number, number, number]
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
+}
+
+interface SweepPlan {
+  /** スイープする日（古い順） */
+  due: string[]
+  /** 遡る上限より古く、諦める日の範囲 */
+  skipped: { from: string; to: string } | null
+}
+
+/**
+ * スイープする日を決める。前回スイープした日の翌日から前日（JST）まで、古い順。
+ * 遡るのは maxLagDays 日までで、それより古い日は諦める（初回は前日だけ）
+ */
+function planSweep(lastSweepDate: string | null, now: Date, maxLagDays: number): SweepPlan {
+  const yesterday = yesterdayJst(now)
+  const last = lastSweepDate !== null && JST_DATE_PATTERN.test(lastSweepDate) ? lastSweepDate : null
+  if (last !== null && last >= yesterday) return { due: [], skipped: null }
+  const oldest = shiftJstDate(yesterday, -(Math.max(1, maxLagDays) - 1))
+  const start = last === null ? yesterday : shiftJstDate(last, 1)
+  const due: string[] = []
+  for (let date = start > oldest ? start : oldest; date <= yesterday; date = shiftJstDate(date, 1)) due.push(date)
+  return { due, skipped: start < oldest ? { from: start, to: shiftJstDate(oldest, -1) } : null }
+}
+
+/**
+ * 索引がその日（JST）の分を含むか。索引は毎朝まとめて入れ替わるので、最新の投稿がその日の 24 時（JST）以降なら、
+ * その日の投稿はすべて索引に入っている
+ */
+function isIndexedThrough(date: string, newestStartTime: string | null): boolean {
+  if (newestStartTime === null) return false
+  const newest = new Date(newestStartTime).getTime()
+  return Number.isFinite(newest) && newest >= new Date(`${shiftJstDate(date, 1)}T00:00:00+09:00`).getTime()
+}
+
+const formatDateRange = (range: { from: string; to: string }): string => (range.from === range.to ? range.from : `${range.from}..${range.to}`)
+
 export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promise<RunResult> {
   const now = deps.now()
   const nowIso = now.toISOString()
   const base: RunResult = { mode, skipped: null, newVideos: 0, enriched: 0, usersChecked: 0, subrequests: 0, kvWrites: 0 }
   // 無効時は設定だけ読んで抜ける（KV は書かない）
-  if (!(await loadEnabled(kv))) return { ...base, skipped: 'disabled' }
-  const state = await loadState(kv, nowIso)
-  if (!state.config.enabled) return { ...base, skipped: 'disabled' }
+  const config = await loadConfig(kv)
+  if (!config.enabled) return { ...base, skipped: 'disabled' }
+  let sweep: { genre: string; ready: string[]; skipped: SweepPlan['skipped'] } | null = null
+  let tracking: LoadedState['tracking'] | undefined
+  if (mode === 'sweep') {
+    if (!config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
+    // 済んだ日か・索引が前日分を含むかを、判定表など大きいキーを読む前に確かめる（済んでいれば KV は 2 回読むだけ）
+    tracking = await loadTracking(kv, nowIso)
+    const plan = planSweep(tracking.lastSweepDate, now, Math.min(LIMITS.sweepMaxLagDays, config.trackDays))
+    if (plan.due.length === 0 && plan.skipped === null) return { ...base, skipped: 'already_swept' }
+    let newest: string | null
+    try {
+      newest = await deps.fetchSweepNewestStartTime(config.sweepGenre)
+    } catch (error) {
+      // 確かめられない回は取らずに次の回（1 時間後）へ回す。書き込みはしない
+      deps.reportError?.(error, 'sweep_index')
+      return { ...base, subrequests: 1, skipped: 'sweep_index_unavailable', note: `sweep_index_unavailable: ${messageOf(error)}` }
+    }
+    // 索引に入った日だけを取る（古い順に並んでいるので、入っていない日より後の日も入っていない）
+    const ready = plan.due.filter((date) => isIndexedThrough(date, newest))
+    if (ready.length === 0 && plan.skipped === null) return { ...base, subrequests: 1, skipped: 'sweep_index_not_ready' }
+    sweep = { genre: config.sweepGenre, ready, skipped: plan.skipped }
+  }
+  const state = await loadState(kv, nowIso, { config, ...(tracking ? { tracking } : {}) })
   // 判定表が読めないときは空として扱わない（空で上書きすると投稿者 NG をすべて失う）
   if (!state.verdictsReadable) {
     const kvWrites = await refuseSave(kv, deps, state.events.items, state.events.lastRun, nowIso, 'verdicts_unreadable')
     return { ...base, skipped: 'verdicts_unreadable', kvWrites, note: 'verdicts_unreadable' }
-  }
-  const sweepDate = yesterdayJst(now)
-  if (mode === 'sweep') {
-    if (!state.config.sweepGenre) return { ...base, skipped: 'no_sweep_genre' }
-    if (state.tracking.lastSweepDate === sweepDate) return { ...base, skipped: 'already_swept' }
   }
   const baseline = captureBaseline(state)
   /** 読み込み時の履歴（判定表を書けない回は、この回に積んだ出来事を捨ててエラーだけを残す） */
@@ -778,15 +884,22 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
   session.expireAndPrune()
   session.reevaluateDeletedAuthors()
 
-  if (mode === 'sweep' && state.config.sweepGenre) {
-    session.spend(LIMITS.sweepCost)
-    const videos = await deps.fetchSweepVideos(state.config.sweepGenre, sweepDate)
-    // 前日分をポーリングと同じく追跡に取り込む（差分取得の取りこぼしに対する日次の安全網）。
-    // 取り込み済みの動画は除外されるので、通常は少数だけが新たに追跡される
-    session.ingest(videos)
+  if (sweep) {
+    session.spend() // 索引の確認
+    if (sweep.skipped) {
+      // 遡る上限より古い未処理の日は取らない（取り込んでも追跡期間の外）。諦めたことを履歴に残す
+      const note = `sweep_skipped: ${formatDateRange(sweep.skipped)}`
+      pushEvent(state.events, { at: nowIso, kind: 'error', note })
+      session.addNote(note)
+      state.tracking.lastSweepDate = sweep.skipped.to
+    }
+    const swept = await session.sweepDays(sweep.genre, sweep.ready)
     await session.enrichPending()
     await session.checkAuthors()
-    state.tracking.lastSweepDate = sweepDate
+    // 定常の poll の要約は履歴に積まない（追跡表の lastRun に置く）。日次スイープは取り込んだ回だけ残す
+    if (swept.length > 0) {
+      pushEvent(state.events, { at: nowIso, kind: 'sweep', note: `dates=${swept.join(',')} new=${session.newVideos} enriched=${session.enriched} users=${session.usersChecked}` })
+    }
   } else {
     const fromLastPoll = state.tracking.lastPollAt
       ? new Date(state.tracking.lastPollAt).getTime() - LIMITS.sinceOverlapMinutes * MINUTE_MS
@@ -800,8 +913,6 @@ export async function runPoll(kv: KvLike, deps: PollDeps, mode: RunMode): Promis
     if (fetched) state.tracking.lastPollAt = nowIso
   }
 
-  // 定常の poll の要約は履歴に積まない（追跡表の lastRun に置く）。日次スイープは 1 日 1 件だけ残す
-  if (mode === 'sweep') pushEvent(state.events, { at: nowIso, kind: 'sweep', note: `new=${session.newVideos} enriched=${session.enriched} users=${session.usersChecked}` })
   const summary = {
     newVideos: session.newVideos,
     enriched: session.enriched,

@@ -485,6 +485,38 @@
   font-size: 13px;
 }
 
+/* 例のタイトルは 1 行で省略する。フォーム（grid）の幅を広げないよう、中身の最小幅に合わせない */
+.impact {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px 14px;
+}
+
+.impactSummary {
+  margin: 0 0 10px;
+}
+
+.impactRules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.impactRules > li {
+  min-width: 0;
+}
+
+.impactRule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .allowGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
