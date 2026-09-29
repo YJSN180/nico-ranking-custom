@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { DBManager } from '@/lib/storage/db-manager'
 import { CustomRankingManager } from '@/lib/storage/custom-rankings'
-import { CustomRankingMigrator } from '@/lib/storage/custom-ranking-migrator'
+import { migrateLegacyCustomRankingsOnce } from '@/lib/storage/custom-ranking-migrator'
 import type { 
   CustomRankingWithConditions, 
   CreateCustomRankingData, 
@@ -60,11 +60,10 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
         if (!mounted) return
 
-        // マイグレーションチェック
-        const migrator = new CustomRankingMigrator(managerRef.current)
-        if (await migrator.needsMigration()) {
-          console.log('Starting custom ranking migration...')
-          const result = await migrator.migrate()
+        // マイグレーションチェック（メイン画面ではこのフックが複数同時に動くため、
+        // 同じタブの移行は 1 回にまとめる）
+        const result = await migrateLegacyCustomRankingsOnce(managerRef.current)
+        if (result && mounted) {
           setMigrationStatus(result)
           
           if (result.success) {

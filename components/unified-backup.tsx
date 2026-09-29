@@ -16,7 +16,10 @@ import {
 } from '@/lib/storage/ng-backup-extended'
 import { exportMylistData, importMylistData, detectMylistConflicts } from '@/lib/storage/backup'
 import { CustomRankingManager } from '@/lib/storage/custom-rankings'
+import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/lib/storage/custom-ranking-backup-schema'
 import styles from './genre-order-backup.module.css'
+import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
+import { INVALID_GENRE_ORDER_MESSAGE, isValidGenreOrder } from '@/lib/storage/genre-order-validation'
 
 // 統合バックアップデータ構造
 interface UnifiedBackupData {
@@ -31,6 +34,14 @@ interface UnifiedBackupData {
   }
 }
 
+function hasStoredNGList(): boolean {
+  try {
+    return localStorage.getItem('user-ng-list') !== null
+  } catch {
+    return false
+  }
+}
+
 export function UnifiedBackup() {
   const { ngList } = useUserNGListExtended()
   const { items: genreOrderItems } = useGenreOrderV2()
@@ -40,7 +51,7 @@ export function UnifiedBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string, needsReload?: boolean } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<UnifiedBackupData | null>(null)
   const [availableDataTypes, setAvailableDataTypes] = useState<string[]>([])
 
@@ -55,13 +66,19 @@ export function UnifiedBackup() {
         data: {}
       }
       
-      // 各データを個別にエクスポート（エラーが発生しても他のデータは保存）
+      // 各データを個別にエクスポート（エラーが発生しても他のデータは保存）。
+      // 書き出せなかったデータは、欠けたファイルだと気づけるよう保存後に知らせる
+      const failedSections: string[] = []
       try {
         const ngListData = exportExtendedNGListData()
         data.data.ngList = ngListData
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Failed to export NG list:', error)
+        // NG リストを一度も保存していない（書き出すものが無い）ときは失敗ではない
+        if (hasStoredNGList()) {
+          failedSections.push('NGリスト')
+        }
       }
       
       try {
@@ -85,6 +102,7 @@ export function UnifiedBackup() {
         // eslint-disable-next-line no-console
         console.error('Failed to export mylist data:', error)
         // マイリストのエクスポートに失敗した場合でも続行
+        failedSections.push('マイリスト')
       }
       
       // エクスポート可能なデータがあるか確認
@@ -112,6 +130,10 @@ export function UnifiedBackup() {
       // eslint-disable-next-line no-console
       console.log(`エクスポート完了: ${exportedTypes.join(', ')}`)
       setExportConfirmOpen(false)
+
+      if (failedSections.length > 0) {
+        alert(`${failedSections.join('・')}を書き出せませんでした。保存したファイルには含まれていません`)
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to export unified backup:', error)
@@ -135,6 +157,13 @@ export function UnifiedBackup() {
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    // 大きすぎるファイルは読み込まない（丸ごと読むとタブが固まる・落ちる）
+    if (isBackupFileTooLarge(file)) {
+      setImportMessage({ type: 'error', text: BACKUP_FILE_TOO_LARGE_MESSAGE })
+      event.target.value = ''
+      return
+    }
 
     setIsImporting(true)
     setImportMessage(null)
@@ -206,6 +235,12 @@ export function UnifiedBackup() {
       }
     }
     
+    // 選んだ後にファイルが消えた・読めないときも「インポート中」のまま止めない
+    reader.onerror = () => {
+      setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
+      setIsImporting(false)
+    }
+
     reader.readAsText(file)
     event.target.value = ''
   }
@@ -223,7 +258,12 @@ export function UnifiedBackup() {
         try {
           const conflicts = detectExtendedConflicts(ngList, pendingImportData.data.ngList.ngList)
           const result = await importExtendedNGListData(pendingImportData.data.ngList, 'merge')
-          results.push(`✅ NGリスト: ${result.imported.totalItems}件インポート`)
+          // 取り込み関数は失敗を throw せず success: false で返す
+          if (result.success) {
+            results.push(`✅ NGリスト: ${result.imported.totalItems}件インポート`)
+          } else {
+            errors.push(`❌ NGリスト: ${result.errors.join(' / ') || 'エラー'}`)
+          }
         } catch (error) {
           errors.push(`❌ NGリスト: ${error instanceof Error ? error.message : 'エラー'}`)
         }
@@ -232,6 +272,10 @@ export function UnifiedBackup() {
       // ジャンル並び替えのインポート
       if (pendingImportData.data.genreOrder) {
         try {
+          // 個別のジャンル並び替えのインポートと同じ検証。形の違うデータで今の並び順を上書きしない
+          if (!isValidGenreOrder(pendingImportData.data.genreOrder)) {
+            throw new Error(INVALID_GENRE_ORDER_MESSAGE)
+          }
           localStorage.setItem('nicoRankingGenreOrder', JSON.stringify(pendingImportData.data.genreOrder))
           results.push(`✅ ジャンル並び替え: ${pendingImportData.data.genreOrder.length}件設定`)
         } catch (error) {
@@ -242,34 +286,30 @@ export function UnifiedBackup() {
       // カスタムランキングのインポート
       if (pendingImportData.data.customRankings) {
         try {
+          // 文字列でないタグや未知の演算子・ジャンルは、保存するとそのランキングの表示で落ちるため取り込まない
+          const importable = parseCustomRankingsForImport(pendingImportData.data.customRankings)
+          if (!importable) {
+            throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
+          }
+
           const dbManager = new DBManager()
           await dbManager.init()
           const rankingManager = new CustomRankingManager(dbManager)
           
           let importedCount = 0
-          for (const ranking of pendingImportData.data.customRankings) {
+          for (const ranking of importable) {
             const existing = customRankings.find(r => r.title === ranking.title)
             if (existing) {
               await rankingManager.updateRanking(existing.id, {
                 title: ranking.title,
                 baseGenre: ranking.baseGenre,
-                conditions: ranking.conditions.map(c => ({
-                  tag: c.tag,
-                  operator: c.operator,
-                  tagType: c.tagType,
-                  orderIndex: c.orderIndex
-                }))
+                conditions: ranking.conditions
               })
             } else {
               await rankingManager.createRanking({
                 title: ranking.title,
                 baseGenre: ranking.baseGenre,
-                conditions: ranking.conditions.map(c => ({
-                  tag: c.tag,
-                  operator: c.operator,
-                  tagType: c.tagType,
-                  orderIndex: c.orderIndex
-                }))
+                conditions: ranking.conditions
               })
             }
             importedCount++
@@ -285,7 +325,14 @@ export function UnifiedBackup() {
         try {
           const conflicts = await detectMylistConflicts(pendingImportData.data.mylists)
           const result = await importMylistData(pendingImportData.data.mylists, 'safe_add')
-          results.push(`✅ マイリスト: ${result.created.mylists}件, 動画${result.created.videos}件インポート`)
+          // 取り込み関数は失敗を throw せず success: false で返す（一部だけ入った場合も含む）
+          const importedCount = result.created.mylists + result.created.videos
+          if (result.success || importedCount > 0) {
+            results.push(`✅ マイリスト: ${result.created.mylists}件, 動画${result.created.videos}件インポート`)
+          }
+          if (!result.success) {
+            errors.push(`❌ マイリスト: ${result.errors.join(' / ') || 'エラー'}`)
+          }
         } catch (error) {
           errors.push(`❌ マイリスト: ${error instanceof Error ? error.message : 'エラー'}`)
         }
@@ -300,6 +347,7 @@ export function UnifiedBackup() {
       } else if (results.length > 0) {
         setImportMessage({ 
           type: 'error', 
+          needsReload: true,
           text: `一部インポート完了:\n${results.join('\n')}\n\nエラー:\n${errors.join('\n')}` 
         })
       } else {
@@ -312,8 +360,8 @@ export function UnifiedBackup() {
       setImportConfirmOpen(false)
       setPendingImportData(null)
       
-      // リロード確認
-      if (results.length > 0) {
+      // 失敗内容は再読み込みで消さず、利用者が確認できるよう残す
+      if (results.length > 0 && errors.length === 0) {
         setTimeout(() => {
           if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
             window.location.reload()
@@ -481,6 +529,17 @@ export function UnifiedBackup() {
           style={{ whiteSpace: 'pre-line' }}
         >
           {importMessage.text}
+          {importMessage.needsReload && (
+            <div style={{ marginTop: '12px' }}>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className={`${styles.dialogButton} ${styles.confirmButton}`}
+              >
+                再読み込み
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
