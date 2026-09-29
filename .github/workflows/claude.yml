@@ -29,6 +29,7 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
+      github.event.issue.state == 'open' &&
       contains(github.event.comment.body, '@claude') &&
       github.event.comment.author_association != 'OWNER' &&
       github.event.comment.author_association != 'MEMBER' &&
@@ -52,12 +53,15 @@ jobs:
     if: |
       (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
+        github.event.issue.state == 'open' &&
         contains(github.event.comment.body, '@claude') &&
         (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')) ||
       (github.event_name == 'pull_request_review_comment' &&
+        github.event.pull_request.state == 'open' &&
         contains(github.event.comment.body, '@claude') &&
         (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')) ||
       (github.event_name == 'pull_request_review' &&
+        github.event.pull_request.state == 'open' &&
         contains(github.event.review.body, '@claude') &&
         (github.event.review.author_association == 'OWNER' || github.event.review.author_association == 'MEMBER' || github.event.review.author_association == 'COLLABORATOR'))
     runs-on: ubuntu-latest
@@ -73,7 +77,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify PR is still open
+        id: eligibility
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const number = context.payload.issue?.number || context.payload.pull_request?.number
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number })
+            core.setOutput('open', pr.state === 'open' && !pr.merged)
+
       - name: Run Claude Code Action
+        if: steps.eligibility.outputs.open == 'true'
         uses: grll/claude-code-action@eaa832e2642dfd5ecf723e5d99fc72c8f291c9bc
         with:
           # OAuth認証（Claude Max subscription）
@@ -87,11 +101,11 @@ jobs:
           secrets_admin_pat: ${{ secrets.SECRETS_ADMIN_PAT }}
 
           # タイムアウト設定
-          timeout_minutes: "60"
+          timeout_minutes: '60'
 
           # 許可するツール
           # - 基本: Bash, Read, Write, Edit, MultiEdit, Glob, Grep
           # - タスク管理: TodoRead, TodoWrite
           # - Web: WebFetch
           # - サブエージェント: Task (複雑なタスクの分割・並列処理)
-          allowed_tools: "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,TodoRead,TodoWrite,WebFetch,Task"
+          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,TodoRead,TodoWrite,WebFetch,Task'

@@ -57,13 +57,13 @@ on:
 
   # workflow_runでunified-ciの失敗を検知
   workflow_run:
-    workflows: ["Unified CI Pipeline"]
+    workflows: ['Unified CI Pipeline']
     types: [completed]
 
 # 同一PRへの並行実行を防止（ただし進行中の修正はキャンセルしない）
 concurrency:
-  group: claude-ci-fix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}
-  cancel-in-progress: false  # 修正作業中のジョブをキャンセルしないため
+  group: claude-ci-fix-${{ github.event.issue.number || github.event.workflow_run.pull_requests[0].number || github.event.inputs.pr_number || github.run_id }}
+  cancel-in-progress: false # 修正作業中のジョブをキャンセルしないため
 
 jobs:
   external-comment-guidance:
@@ -72,8 +72,8 @@ jobs:
     if: |
       github.event_name == 'issue_comment' &&
       github.event.issue.pull_request &&
-      contains(github.event.comment.body, '@claude') &&
-      contains(github.event.comment.body, 'fix') &&
+      github.event.issue.state == 'open' &&
+      startsWith(github.event.comment.body, '@claude fix') &&
       github.event.comment.author_association != 'OWNER' &&
       github.event.comment.author_association != 'MEMBER' &&
       github.event.comment.author_association != 'COLLABORATOR'
@@ -103,8 +103,8 @@ jobs:
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure' && github.event.workflow_run.pull_requests[0]) ||
       (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
-        contains(github.event.comment.body, '@claude') &&
-        contains(github.event.comment.body, 'fix') &&
+        github.event.issue.state == 'open' &&
+        startsWith(github.event.comment.body, '@claude fix') &&
         (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'COLLABORATOR')) ||
       (github.event_name == 'workflow_dispatch')
 
@@ -113,6 +113,7 @@ jobs:
       failure_type: ${{ steps.analyze.outputs.failure_type }}
       failure_logs: ${{ steps.analyze.outputs.failure_logs }}
       run_id: ${{ steps.context.outputs.run_id }}
+      head_sha: ${{ steps.context.outputs.head_sha }}
       should_fix: ${{ steps.analyze.outputs.should_fix }}
       attempt: ${{ steps.context.outputs.attempt }}
       is_dependabot: ${{ steps.context.outputs.is_dependabot }}
@@ -124,84 +125,22 @@ jobs:
       pull-requests: read
 
     steps:
-      - name: Collect context
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Collect current failure context
         id: context
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
-          WF_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
-          WF_RUN_ID: ${{ github.event.workflow_run.id }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          INPUT_PR_NUMBER: ${{ github.event.inputs.pr_number }}
-          INPUT_RUN_ID: ${{ github.event.inputs.run_id }}
-          INPUT_ATTEMPT: ${{ github.event.inputs.attempt }}
-        run: |
-          # イベントタイプに応じてPR番号とRun IDを取得
-          if [ "$EVENT_NAME" == "workflow_run" ]; then
-            PR_NUMBER="$WF_RUN_PR_NUMBER"
-            RUN_ID="$WF_RUN_ID"
-            ATTEMPT="1"
-          elif [ "$EVENT_NAME" == "issue_comment" ]; then
-            PR_NUMBER="$ISSUE_NUMBER"
-            ATTEMPT="1"
-
-            # ブランチ名を取得して最新の失敗したワークフロー実行を検索
-            if ! BRANCH_FOR_RUN=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefName -q .headRefName 2>&1); then
-              echo "::warning::Failed to get branch name for PR #$PR_NUMBER: $BRANCH_FOR_RUN"
-              RUN_ID=""
-            else
-              if ! RUN_ID=$(gh run list --repo "$REPO" --workflow=unified-ci.yml --branch="$BRANCH_FOR_RUN" --status=failure --limit=1 --json databaseId -q '.[0].databaseId' 2>&1); then
-                echo "::warning::Failed to list workflow runs for branch $BRANCH_FOR_RUN: $RUN_ID"
-                RUN_ID=""
-              elif [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-                echo "::notice::No failed runs found for branch $BRANCH_FOR_RUN"
-                RUN_ID=""
-              fi
-            fi
-          else
-            PR_NUMBER="$INPUT_PR_NUMBER"
-            RUN_ID="$INPUT_RUN_ID"
-            ATTEMPT="$INPUT_ATTEMPT"
-          fi
-
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
-          echo "attempt=${ATTEMPT:-1}" >> $GITHUB_OUTPUT
-
-          # Dependabot PR検出（単一API呼び出しで効率化）
-          IS_DEPENDABOT="false"
-          PR_AUTHOR=""
-          PR_BRANCH=""
-
-          if [ -n "$PR_NUMBER" ]; then
-            # author.loginとheadRefNameを1回のAPI呼び出しで取得
-            if ! PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author,headRefName 2>&1); then
-              echo "::warning::Failed to retrieve PR info for #$PR_NUMBER: $PR_INFO"
-              echo "::warning::Dependabot detection will default to false"
-              # エラー時はデフォルト値を維持（IS_DEPENDABOT=false）
-            else
-              # jqでJSONをパース
-              PR_AUTHOR=$(echo "$PR_INFO" | jq -r '.author.login // empty')
-              PR_BRANCH=$(echo "$PR_INFO" | jq -r '.headRefName // empty')
-
-              # dependabot[bot]が作者、またはブランチ名がdependabot/で始まる場合
-              if [ "$PR_AUTHOR" = "dependabot[bot]" ] || [[ "$PR_BRANCH" == dependabot/* ]]; then
-                IS_DEPENDABOT="true"
-              fi
-            fi
-          fi
-
-          echo "is_dependabot=$IS_DEPENDABOT" >> $GITHUB_OUTPUT
-          echo "pr_author=$PR_AUTHOR" >> $GITHUB_OUTPUT
-
-          echo "Collected context:"
-          echo "  PR: #$PR_NUMBER"
-          echo "  Run ID: $RUN_ID"
-          echo "  Attempt: $ATTEMPT"
-          echo "  Is Dependabot: $IS_DEPENDABOT"
-          echo "  PR Author: $PR_AUTHOR"
-          echo "  PR Branch: $PR_BRANCH"
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+        with:
+          script: |
+            const { resolveContext } = require('./.github/scripts/claude-ci-context.cjs')
+            const eligible = await resolveContext({ github, context })
+            if (!eligible) {
+              core.notice('No current failed CI on an eligible open PR; skipping repair.')
+              return
+            }
+            for (const [key, value] of Object.entries(eligible)) core.setOutput(key, value)
 
       - name: Analyze failure
         id: analyze
@@ -312,7 +251,18 @@ jobs:
           FAILURE_LOGS: ${{ needs.detect-and-collect.outputs.failure_logs }}
           ATTEMPT: ${{ needs.detect-and-collect.outputs.attempt }}
           REPO: ${{ github.repository }}
+          EXPECTED_HEAD: ${{ needs.detect-and-collect.outputs.head_sha }}
+          EXPECTED_RUN: ${{ needs.detect-and-collect.outputs.run_id }}
         run: |
+          # Recheck immediately before posting: the PR may have closed or CI may have recovered.
+          PR_INFO=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state,headRefOid)
+          if [ "$(echo "$PR_INFO" | jq -r .state)" != "OPEN" ] || [ "$(echo "$PR_INFO" | jq -r .headRefOid)" != "$EXPECTED_HEAD" ]; then
+            exit 0
+          fi
+          LATEST=$(gh run list --repo "$REPO" --workflow unified-ci.yml --commit "$EXPECTED_HEAD" --limit 1 --json databaseId,status,conclusion)
+          if ! echo "$LATEST" | jq -e --arg run "$EXPECTED_RUN" '.[0] | (.databaseId | tostring) == $run and .status == "completed" and .conclusion == "failure"' > /dev/null; then
+            exit 0
+          fi
           # ログを3000文字に制限（PRコメントサイズとClaudeコンテキスト最適化のため）
           # セキュリティ: FAILURE_LOGSはenv:経由で渡されるため、シェルインジェクション安全
           TRUNCATED_LOGS="${FAILURE_LOGS:0:3000}"
