@@ -2,7 +2,6 @@
 // 動的取得が失敗した場合のフォールバック用
 // 最新のデータはgetPopularTags関数で取得すること
 
-import { scrapeRankingPage } from './scraper'
 import type { RankingGenre } from '../types/ranking-config'
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
@@ -38,10 +37,10 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
     try {
       const genres: RankingGenre[] = ['game', 'anime', 'entertainment', 'technology', 'voicesynthesis', 'other']
       const tagCountMap = new Map<string, number>()
-      
-      // 各ジャンルの人気タグを取得して集計
-      for (const g of genres) {
-        const tags = await getPopularTagsForGenre(g, period)
+
+      // 各ジャンルの人気タグを並列に取得し（直列だと各 10 秒の期限が積み重なる）、従来と同じジャンル順で集計
+      const tagLists = await Promise.all(genres.map((g) => getPopularTagsForGenre(g, period)))
+      for (const tags of tagLists) {
         tags.forEach((tag, index) => {
           // 順位が高いタグほど高いスコアを付与（15位から1位へ）
           const score = tags.length - index
@@ -62,54 +61,18 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
     }
   }
   
-  try {
-    // 1. 公開済みR2世代をAPI gateway経由で取得
-    const cfData = await getGenreRanking(genre, period)
-    if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
-      return cfData.popularTags
-    }
-  } catch (error) {
-    // Gateway unavailable; try the existing scraper fallback.
-  }
-  
-  try {
-    // 2. 動的に人気タグを取得（フォールバック）
-    const data = await scrapeRankingPage(genre, period)
-    
-    if (data.popularTags && data.popularTags.length > 0) {
-      return data.popularTags
-    }
-  } catch (error) {
-    // Failed to fetch popular tags dynamically - returning empty array
-  }
-  
-  // 3. 最終フォールバック：空配列を返す
-  return []
+  return getPopularTagsForGenre(genre, period)
 }
 
-// 個別ジャンルの人気タグを取得（内部用、allジャンルの集計で使用）
+// 個別ジャンルの人気タグ（公開済みの R2 世代をゲートウェイ経由で読む）。取れなければ空。
+// 以前はさらに nvapi のランキング（lib/scraper.ts）へ落ちていたが、そちらは人気タグを返さない
+// （タグ API の廃止で常に空）うえ、ジャンルをエンコードせずに URL のパスへ入れ、タイムアウトも無かった
 async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
   try {
-    // 1. 公開済みR2世代をAPI gateway経由で取得
     const cfData = await getGenreRanking(genre, period)
-    if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
-      return cfData.popularTags
-    }
-  } catch (error) {
-    // Gateway unavailable; try the existing scraper fallback.
+    if (cfData.popularTags.length > 0) return cfData.popularTags
+  } catch {
+    // ゲートウェイが使えなければ空（呼び出し元は空配列で縮退する）
   }
-  
-  try {
-    // 2. 動的に人気タグを取得（フォールバック）
-    const data = await scrapeRankingPage(genre, period)
-    
-    if (data.popularTags && data.popularTags.length > 0) {
-      return data.popularTags
-    }
-  } catch (error) {
-    // Failed to fetch popular tags dynamically - returning empty array
-  }
-  
-  // 3. 最終フォールバック：空配列を返す
   return []
 }

@@ -1,4 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isThumbnailCdnUrl } from '@/lib/thumbnail-hosts'
+
+// 1 か所の取得（本文の読み取りを含む）の期限。ミラーが遅くても nicovideo.jp を読む時間を残す
+const SOURCE_TIMEOUT_MS = 4_000
+
+// .M / .L を外し、.original を付けて最大サイズの URL にする
+function toOriginalSizeUrl(thumbnailUrl: string): string {
+  const [urlBase = '', urlQuery] = thumbnailUrl.split('?')
+  let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
+  if (!originalUrl.includes('.original')) {
+    originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
+  }
+  return urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
+}
+
+/**
+ * og:image（無ければ thumbnail の meta）から HD サムネイルの URL を取り出す。
+ * ページの値は信用しない: ニコニコの画像 CDN の https URL でなければ採用しない
+ * （利用者はこの URL をプロキシ経由で保存し、だめなら新しいタブで開く）
+ */
+function extractHdThumbnailUrl(html: string): string | null {
+  // og:image メタタグから1280x720サムネイルURL取得
+  // 属性の順序が異なる場合も対応（content が先にくる場合）
+  const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
+  const ogImage = ogImageMatch ? ogImageMatch[1] || ogImageMatch[2] : undefined
+
+  if (ogImage && isThumbnailCdnUrl(ogImage)) {
+    // eslint-disable-next-line no-console
+    console.log(`[HD Thumbnail] Found og:image: ${ogImage}`)
+    // サムネイルURLの検証（1280x720であることを確認）
+    if (ogImage.includes('1280x720') || ogImage.includes('.original')) {
+      return ogImage
+    }
+    // フォールバック: .original サフィックスで最大サイズ取得を試行
+    return toOriginalSizeUrl(ogImage)
+  }
+
+  // フォールバック: og:imageが（使える形で）見つからない場合
+  const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
+  const thumbnail = thumbnailMatch?.[1]
+  if (thumbnail && isThumbnailCdnUrl(thumbnail)) {
+    // .original サフィックス追加で最大サイズ化
+    return toOriginalSizeUrl(thumbnail)
+  }
+
+  return null
+}
 
 /**
  * HD サムネイル取得API (1280x720)
@@ -22,7 +69,7 @@ export async function GET(
     // eslint-disable-next-line no-console
     console.log(`[HD Thumbnail] Fetching HD thumbnail for ${videoId}`)
     
-    let html = ''
+    let hdThumbnailUrl: string | null = null
     let source = 'nicovideo.gay'
     
     // Try nicovideo.gay first for non-so videos
@@ -36,11 +83,12 @@ export async function GET(
             'Accept-Language': 'ja,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          }
+          },
+          signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS)
         })
         
         if (response.ok) {
-          html = await response.text()
+          hdThumbnailUrl = extractHdThumbnailUrl(await response.text())
         }
       } catch (error) {
         // eslint-disable-next-line no-console
@@ -49,7 +97,8 @@ export async function GET(
     }
     
     // Fallback to direct nicovideo.jp access for "so" videos or when nicovideo.gay fails
-    if (!html || videoId.startsWith('so')) {
+    // （失敗・期限切れのほか、使える URL が無かったときも。ミラーの 200 の空ページで諦めない）
+    if (!hdThumbnailUrl) {
       const nicovideoUrl = `https://www.nicovideo.jp/watch/${videoId}`
       source = 'nicovideo.jp'
       
@@ -59,58 +108,15 @@ export async function GET(
           'Accept-Language': 'ja,en;q=0.9',
           'Accept-Encoding': 'gzip, deflate, br',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        }
+        },
+        signal: AbortSignal.timeout(SOURCE_TIMEOUT_MS)
       })
       
       if (!response.ok) {
         throw new Error(`Failed to fetch from nicovideo.jp: ${response.status}`)
       }
       
-      html = await response.text()
-    }
-    
-    // og:image メタタグから1280x720サムネイルURL取得
-    // 属性の順序が異なる場合も対応（content が先にくる場合）
-    const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
-    let hdThumbnailUrl = null
-    
-    if (ogImageMatch) {
-      hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]
-      // eslint-disable-next-line no-console
-      console.log(`[HD Thumbnail] Found og:image: ${hdThumbnailUrl}`)
-      
-      // サムネイルURLの検証（1280x720であることを確認）
-      if (hdThumbnailUrl.includes('1280x720') || hdThumbnailUrl.includes('.original')) {
-        // eslint-disable-next-line no-console
-        console.log(`[HD Thumbnail] Confirmed HD size for ${videoId}`)
-      } else {
-        // フォールバック: .original サフィックスで最大サイズ取得を試行
-        const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
-        let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
-        if (!originalUrl.includes('.original')) {
-          originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
-        }
-        hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-        // eslint-disable-next-line no-console
-        console.log(`[HD Thumbnail] Fallback to original: ${hdThumbnailUrl}`)
-      }
-    }
-    
-    // フォールバック: og:imageが見つからない場合
-    if (!hdThumbnailUrl) {
-      const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
-      if (thumbnailMatch) {
-        hdThumbnailUrl = thumbnailMatch[1]
-        // .original サフィックス追加で最大サイズ化
-        const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
-        let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
-        if (!originalUrl.includes('.original')) {
-          originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
-        }
-        hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-        // eslint-disable-next-line no-console
-        console.log(`[HD Thumbnail] Fallback thumbnail with original: ${hdThumbnailUrl}`)
-      }
+      hdThumbnailUrl = extractHdThumbnailUrl(await response.text())
     }
     
     const result = {

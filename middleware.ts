@@ -2,16 +2,61 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
 import { getCacheHeaders, CACHE_DURATIONS } from './lib/cache-durations'
+import { timingSafeEqual } from './lib/timing-safe-equal'
 // Note: Edge Runtime対応のため、直接process.envを使用
 // import { config } from './lib/config'
 
 // Rate limiting completely removed - relying on Cloudflare's built-in protection
 
+// 管理 API への書き込みの CSRF 対策
+// Basic 認証の資格情報はブラウザがクロスサイトの送信にも付けるため、書き込みは同一オリジンからだけ受け付ける
+const ADMIN_WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
+// 公開ドメイン（Cloudflare Worker 経由では Host が Vercel のドメインになるため、Origin と Host が一致しない）
+const PUBLIC_SITE_HOST = 'nico-rank.com'
+// JSON 本文だけを受け付ける管理 API。/api/admin/update と /api/admin/mfa は本文なしの POST を送る
+// 既存の画面があるため対象外（同一オリジンの判定は全管理 API に掛ける）
+const JSON_ONLY_ADMIN_PREFIXES = ['/api/admin/lqng', '/api/admin/ng-list']
+
+function isCrossOriginWrite(request: NextRequest): boolean {
+  // ブラウザが付ける Sec-Fetch-Site を優先する（ページとリクエスト先の関係なので、プロキシで Host が変わっても正しい）
+  const fetchSite = request.headers.get('sec-fetch-site')
+  if (fetchSite) return fetchSite !== 'same-origin'
+  // 古いブラウザは Origin で判定する。どちらも無いのはブラウザ以外の呼び出し（CSRF の経路にならない）
+  const origin = request.headers.get('origin')
+  if (!origin) return false
+  let originHost: string
+  try {
+    originHost = new URL(origin).host
+  } catch {
+    return true // 'null'（opaque origin）など
+  }
+  const allowedHosts = new Set([request.nextUrl.host.toLowerCase(), PUBLIC_SITE_HOST])
+  const host = request.headers.get('host')
+  if (host) allowedHosts.add(host.toLowerCase())
+  return !allowedHosts.has(originHost)
+}
+
+function isJsonContentType(request: NextRequest): boolean {
+  const contentType = request.headers.get('content-type') ?? ''
+  return contentType.split(';')[0].trim().toLowerCase() === 'application/json'
+}
+
+/** 管理 API への書き込みを検査し、拒否するときだけ応答を返す（Basic 認証より先に判定する） */
+function guardAdminWrite(request: NextRequest, pathname: string): NextResponse | null {
+  if (isCrossOriginWrite(request)) {
+    return NextResponse.json({ error: 'Cross-origin request blocked' }, { status: 403 })
+  }
+  if (JSON_ONLY_ADMIN_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)) && !isJsonContentType(request)) {
+    return NextResponse.json({ error: 'Content-Type must be application/json' }, { status: 415 })
+  }
+  return null
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const host = request.headers.get('host')
   const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
-  
+
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
 
@@ -57,24 +102,31 @@ const noStorePaths: string[] = []
     response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
     return response
   }
-  
+
+  // 管理 API への書き込みは、同一オリジン以外（403）と JSON 以外の本文（415）を認証より先に拒否する。
+  // 開発環境でも掛ける（読み取りの GET は対象外）
+  if (pathname.startsWith('/api/admin') && ADMIN_WRITE_METHODS.has(request.method.toUpperCase())) {
+    const rejected = guardAdminWrite(request, pathname)
+    if (rejected) return rejected
+  }
+
   // 開発環境は認証チェックをスキップ
   if (process.env.VERCEL_ENV === 'development') {
     return NextResponse.next()
   }
-  
+
   // 本番環境のWorker認証チェック
   const cfWorkerKey = request.headers.get('X-Worker-Auth')
   const expectedKey = process.env.WORKER_AUTH_KEY
-  
-  // Workersからの認証チェック
-  if (cfWorkerKey && expectedKey && cfWorkerKey === expectedKey) {
+
+  // Workersからの認証チェック（共有キーは定数時間で比べる）
+  if (cfWorkerKey && expectedKey && await timingSafeEqual(cfWorkerKey, expectedKey)) {
     // 管理系パスはWorker認証があってもBasic認証を要求
     if (!isAdminPath) {
       return NextResponse.next()
     }
   }
-  
+
   // 緊急修復：リダイレクトロジックを一時的に無効化
   // Vercel URLへの直接アクセスチェックを無効化（無限リダイレクト対策）
   // if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
@@ -86,7 +138,7 @@ const noStorePaths: string[] = []
   //     return NextResponse.redirect('https://nico-rank.com' + pathname)
   //   }
   // }
-  
+
   // プレビューデプロイメントの保護を無効化
   // Vercelのスタンダードプロテクションに依存
   // if (process.env.VERCEL_ENV === 'preview') {
@@ -107,7 +159,7 @@ const noStorePaths: string[] = []
   // /admin配下のすべてのパスで認証を要求
   if (isAdminPath) {
     const authHeader = request.headers.get('authorization')
-    
+
     // 通常のページアクセスの場合
     // 認証ヘッダーがない場合
     if (!authHeader || !authHeader.startsWith('Basic ')) {
@@ -118,23 +170,32 @@ const noStorePaths: string[] = []
         },
       })
     }
-    
+
     // 認証情報をチェック
     try {
       const base64Credentials = authHeader.split(' ')[1]
       const credentials = atob(base64Credentials!)
-      const [username, password] = credentials.split(':')
-      
+      // ユーザー ID は : を含めないが、パスワードは含められる（RFC 7617）ので、最初の : だけで分ける
+      const separator = credentials.indexOf(':')
+      const username = separator === -1 ? credentials : credentials.slice(0, separator)
+      const password = separator === -1 ? '' : credentials.slice(separator + 1)
+
       // 環境変数が設定されていない場合はエラー
       if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
         // ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set
         return new NextResponse('Server configuration error', { status: 500 })
       }
-      
+
       const validUsername = process.env.ADMIN_USERNAME
       const validPassword = process.env.ADMIN_PASSWORD
-      
-      if (username !== validUsername || password !== validPassword) {
+
+      // 定数時間で比べる。ユーザー名が違ってもパスワードの比較を省かない（どちらが違ったかを時間で漏らさない）
+      const [usernameMatches, passwordMatches] = await Promise.all([
+        timingSafeEqual(username, validUsername),
+        timingSafeEqual(password, validPassword),
+      ])
+
+      if (!usernameMatches || !passwordMatches) {
         SecurityLogger.logAuthFailure(
           'admin',
           ip,
@@ -149,7 +210,7 @@ const noStorePaths: string[] = []
           },
         })
       }
-      
+
       // 認証成功時、クッキーを設定
       const response = NextResponse.next()
       response.cookies.set('admin-auth', 'authenticated', {
@@ -169,7 +230,7 @@ const noStorePaths: string[] = []
       })
     }
   }
-  
+
   // 特定パスはここで即返し、ヘッダーを強制上書き
   if (noStorePaths.some(p => pathname.startsWith(p))) {
     const res = NextResponse.next()
@@ -180,7 +241,7 @@ const noStorePaths: string[] = []
   }
 
   const response = NextResponse.next()
-  
+
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
@@ -192,7 +253,7 @@ const noStorePaths: string[] = []
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
     ].join(', '))
   }
-  
+
   // APIルートの最適化
   // /api/ranking: no-store を強制（古いデータ問題の根本原因だったため）
   // CDNキャッシュは Cloudflare Workers 側で管理するため、Vercel側はキャッシュしない
@@ -209,7 +270,7 @@ const noStorePaths: string[] = []
     response.headers.set('CDN-Cache-Control', 'no-store')
     response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   }
-  
+
   // 静的アセットの長期キャッシュ設定
   if (request.nextUrl.pathname.startsWith('/fonts/')) {
     // フォントファイル: 1年キャッシュ + immutable
@@ -230,19 +291,19 @@ const noStorePaths: string[] = []
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
   }
-  
+
   // セキュリティヘッダーを追加
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-XSS-Protection', '1; mode=block')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  
+
   // 本番環境でのみHSTSを有効化
   if (process.env.VERCEL_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   }
-  
+
   return response
 }
 
