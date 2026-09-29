@@ -28,12 +28,14 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
+import { timingSafeEqual } from 'node:crypto'
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
 import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
 import { currentGeneration, rankingKey } from './utils/ranking-generation.js'
+import { R2_SERVER_ERROR_CODES, withR2Retry } from './utils/r2-retry.js'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -42,7 +44,8 @@ interface Env {
   MAINTENANCE_FLAGS: KVNamespace
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
-  RATE_LIMITER: any // Cloudflare Rate Limiting binding
+  RATE_LIMITER: RateLimit // Cloudflare Rate Limiting binding
+  SEARCH_RATE_LIMITER?: RateLimit // /api/search 系専用（workers/wrangler-green.toml）
   SENTRY_WORKER_DSN?: string
   ENVIRONMENT?: string
   CF_VERSION_METADATA?: {
@@ -77,11 +80,32 @@ const securityHeaders = {
 
 // CORSヘッダーは ./utils/cors-config.ts で統一管理
 
+// R2 の一時障害（10001 内部エラー / 10043 一時停止）は、短い間隔で 2 回まで読み直す
+const R2_READ_RETRY = { retryableCodes: R2_SERVER_ERROR_CODES, delaysMs: [50, 150] }
+
+function readR2(bucket: R2Bucket, key: string): Promise<R2ObjectBody | null> {
+  return withR2Retry(() => bucket.get(key), R2_READ_RETRY)
+}
+
+/** currentGeneration に渡す、再試行付きの読み取り口 */
+function retryingR2Reader(bucket: R2Bucket): { get: (key: string) => Promise<R2ObjectBody | null> } {
+  return { get: (key) => readR2(bucket, key) }
+}
+
 /**
- * IP別レート制限チェック（サムネイル取得API用）
- * 10リクエスト/分の制限を適用
+ * IP×エンドポイントごとのレート制限チェック。上限は各バインディングの設定（wrangler の simple.limit）。
+ * 制限に掛かったときは 429 の応答を、通すときは null を返す
  */
-async function checkRateLimit(request: Request, env: Env, endpoint: string = 'general'): Promise<{ success: boolean; error?: Response }> {
+async function checkRateLimit(
+  request: Request,
+  limiter: RateLimit,
+  endpoint: string = 'general',
+  workerAuthKey?: string,
+): Promise<Response | null> {
+  // サイトのサーバー（SSR・/api/ranking/full など）は Vercel の少数の送信元 IP から来るため、IP では数えない
+  if (hasWorkerKey(request, workerAuthKey)) {
+    return null
+  }
   try {
     // クライアントIPを取得（Cloudflare経由）
     const clientIP = request.headers.get('CF-Connecting-IP') || 
@@ -91,8 +115,8 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
     // レート制限キー（IP + エンドポイント）
     const limitKey = `${clientIP}:${endpoint}`
     
-    // Rate Limiting APIを使用（20req/分制限）
-    const { success } = await env.RATE_LIMITER.limit({
+    // Rate Limiting API（上限はバインディングごとの wrangler 設定）
+    const { success } = await limiter.limit({
       key: limitKey
     })
     
@@ -117,11 +141,10 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
       
       // Apply CORS headers to rate limit error
       const origin = request.headers.get('Origin')
-      const corsRateLimitError = applyCORSHeaders(rateLimitErrorResponse, origin, {})
-      return { success: false, error: corsRateLimitError }
+      return applyCORSHeaders(rateLimitErrorResponse, origin, {})
     }
     
-    return { success: true }
+    return null
   } catch (error) {
     console.error('Rate limit check failed:', error)
     captureWorkerException(error, {
@@ -134,8 +157,115 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
       },
     })
     // レート制限エラーの場合はリクエストを通す（フェイルオープン）
-    return { success: true }
+    return null
   }
+}
+
+// ニコニコ動画のサムネイル画像を配る CDN。サイト側 lib/thumbnail-hosts.ts の THUMBNAIL_HOSTS と同じ値にする
+// （Worker からは import できないため値を揃えて持つ）。/api/hd-thumbnail が返してよい URL はこれに限る
+const THUMBNAIL_HOSTS: ReadonlySet<string> = new Set([
+  'nicovideo.cdn.nimg.jp',
+  'img.cdn.nimg.jp',
+  'tn.smilevideo.jp',
+  'tn-skr1.smilevideo.jp',
+  'tn-skr2.smilevideo.jp',
+  'tn-skr3.smilevideo.jp',
+  'tn-skr4.smilevideo.jp',
+])
+
+// HD サムネイルの 1 か所の取得（本文の読み取りを含む）の期限。ミラーが遅くても nicovideo.jp を読む時間を残す
+const HD_THUMBNAIL_SOURCE_TIMEOUT_MS = 4_000
+
+/** https で、サムネイルの CDN を指す URL か（外部のページから得た URL を利用者へ返す前に確かめる） */
+function isThumbnailCdnUrl(value: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    return false
+  }
+  return parsed.protocol === 'https:' && THUMBNAIL_HOSTS.has(parsed.hostname)
+}
+
+/** .M / .L を外し、.original を付けて最大サイズの URL にする */
+function toOriginalSizeUrl(thumbnailUrl: string): string {
+  const [urlBase = '', urlQuery] = thumbnailUrl.split('?')
+  let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
+  if (!originalUrl.includes('.original')) {
+    originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
+  }
+  return urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
+}
+
+/**
+ * og:image（無ければ thumbnail の meta）から HD サムネイルの URL を取り出す。
+ * ページの値は信用しない: サムネイル CDN の https URL でなければ採用しない
+ * （利用者はこの URL をプロキシ経由で保存し、だめなら新しいタブで開く）
+ */
+function extractHdThumbnailUrl(html: string): string | null {
+  // 属性の順序が異なる場合も対応（content が先にくる場合）
+  const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
+  const ogImage = ogImageMatch ? ogImageMatch[1] || ogImageMatch[2] : undefined
+  if (ogImage && isThumbnailCdnUrl(ogImage)) {
+    // 1280x720 / .original はそのまま、それ以外は .original で最大サイズを試す
+    return ogImage.includes('1280x720') || ogImage.includes('.original') ? ogImage : toOriginalSizeUrl(ogImage)
+  }
+
+  const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
+  const thumbnail = thumbnailMatch?.[1]
+  if (thumbnail && isThumbnailCdnUrl(thumbnail)) {
+    return toOriginalSizeUrl(thumbnail)
+  }
+
+  return null
+}
+
+// タグ候補の件数（クライアントは 10 件を指定する）。サイト側 app/api/tags/autocomplete と同じく、
+// 不正な値（数でない・1 未満）は既定の 10、大きすぎる値は 50 に丸める
+const AUTOCOMPLETE_DEFAULT_LIMIT = 10
+const AUTOCOMPLETE_MAX_LIMIT = 50
+
+function parseAutocompleteLimit(value: string | null): number {
+  const limit = Number.parseInt(value ?? '', 10)
+  if (!Number.isFinite(limit) || limit < 1) return AUTOCOMPLETE_DEFAULT_LIMIT
+  return Math.min(limit, AUTOCOMPLETE_MAX_LIMIT)
+}
+
+/**
+ * ログ用の R2 キー。console の出力は Sentry のパンくずにも載るため、利用者が入力したタグ名は伏せる
+ */
+function loggableRankingKey(key: string): string {
+  return key.replace(/\/tags\/[^/]+\.json$/, '/tags/<tag>.json')
+}
+
+/**
+ * サイトのサーバーからの要求か（X-Worker-Auth が WORKER_AUTH_KEY と一致するか。比較は一定時間で行う）。
+ * Authorization は別オリジンへのリダイレクトで落とされるため、301 を追うサイトの取得でも残る X-Worker-Auth を使う
+ */
+function hasWorkerKey(request: Request, workerAuthKey?: string): boolean {
+  const presented = request.headers.get('X-Worker-Auth')
+  if (!workerAuthKey || !presented) return false
+  const expected = new TextEncoder().encode(workerAuthKey)
+  const actual = new TextEncoder().encode(presented)
+  return actual.byteLength === expected.byteLength && timingSafeEqual(actual, expected)
+}
+
+/**
+ * /api/search 系のレート制限キー（エンドポイント名）。検索 1 回で owners / realtime-tags が
+ * 数回ずつ呼ばれるため、エンドポイントごとに数える。%xx や重複スラッシュで制限を外せないよう正規化する
+ */
+function searchRateLimitEndpoint(pathname: string): string | null {
+  let path = pathname
+  try {
+    path = decodeURIComponent(pathname)
+  } catch {
+    // 不正な %xx はそのまま扱う
+  }
+  path = path.replace(/\/{2,}/g, '/').replace(/\/+$/, '')
+  if (path === '/api/search/owners') return 'search-owners'
+  if (path === '/api/search/realtime-tags') return 'search-realtime-tags'
+  if (path === '/api/search' || path.startsWith('/api/search/')) return 'search'
+  return null
 }
 
 /**
@@ -299,8 +429,8 @@ const handler: ExportedHandler<Env> = {
     // /api/metadata パスの処理
     if (url.pathname === '/api/metadata' && env.R2_BUCKET) {
       try {
-        const manifest = await currentGeneration(env.R2_BUCKET)
-        const metadataObject = await env.R2_BUCKET.get(rankingKey(manifest, 'rankings/metadata.json'))
+        const manifest = await currentGeneration(retryingR2Reader(env.R2_BUCKET))
+        const metadataObject = await readR2(env.R2_BUCKET, rankingKey(manifest, 'rankings/metadata.json'))
         if (metadataObject) {
           const { cacheControl } = calculateDynamicTTL()
           const { text: metadataText } = await readR2Json(metadataObject)
@@ -368,7 +498,7 @@ const handler: ExportedHandler<Env> = {
         }
 
         // R2からタグ累積データを取得
-        const tagAccumulationObject = await env.R2_BUCKET.get('tag-accumulation.json')
+        const tagAccumulationObject = await readR2(env.R2_BUCKET, 'tag-accumulation.json')
         
         if (!tagAccumulationObject) {
           // タグ累積データが存在しない場合
@@ -428,7 +558,7 @@ const handler: ExportedHandler<Env> = {
 
         // プレフィックス検索を実行
         const lowerQuery = query.toLowerCase()
-        const maxResults = parseInt(url.searchParams.get('limit') || '10')
+        const maxResults = parseAutocompleteLimit(url.searchParams.get('limit'))
         const suggestions = (tagData.tags || [])
           .filter((tag: string) => tag.toLowerCase().startsWith(lowerQuery))
           .slice(0, maxResults)
@@ -491,9 +621,9 @@ const handler: ExportedHandler<Env> = {
     // /api/ranking パスの処理 - Cache API対応
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       // レート制限チェック（ランキングAPI用）
-      const rateLimitCheck = await checkRateLimit(request, env, 'ranking')
-      if (!rateLimitCheck.success) {
-        return rateLimitCheck.error!
+      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'ranking', env.WORKER_AUTH_KEY)
+      if (rateLimited) {
+        return rateLimited
       }
 
       // Cache APIを使用した処理
@@ -502,23 +632,23 @@ const handler: ExportedHandler<Env> = {
         const period = url.searchParams.get('period') || '24h'
         const tag = url.searchParams.get('tag') || ''
 
-        console.log(`[Worker v2.0 + Cache] Request processing - Genre: ${genre}, Period: ${period}, Tag: ${tag}`)
+        console.log(`[Worker v2.0 + Cache] Request processing - Genre: ${genre}, Period: ${period}, hasTag: ${Boolean(tag)}`)
 
         try {
         // R2からデータを取得
-        const manifest = await currentGeneration(env.R2_BUCKET)
+        const manifest = await currentGeneration(retryingR2Reader(env.R2_BUCKET))
         const legacyKey = tag
           ? `rankings/${genre}/${period}/tags/${encodeURIComponent(tag)}.json`
           : `rankings/${genre}/${period}/all.json`
         const r2Key = rankingKey(manifest, legacyKey)
         
-        console.log(`[Worker v2.0] Fetching from R2: ${r2Key}`)
-        const r2Object = await env.R2_BUCKET.get(r2Key)
+        console.log(`[Worker v2.0] Fetching from R2: ${loggableRankingKey(r2Key)}`)
+        const r2Object = await readR2(env.R2_BUCKET, r2Key)
         
         if (!r2Object) {
           if (tag) {
             // タグ別データが存在しない場合は空の結果を返す
-            console.log(`[Worker v2.0] Tag data not found for ${r2Key}, returning empty result`)
+            console.log(`[Worker v2.0] Tag data not found for ${loggableRankingKey(r2Key)}, returning empty result`)
             const emptyResponse = {
               items: [],
               popularTags: [],
@@ -783,9 +913,9 @@ const handler: ExportedHandler<Env> = {
         }
         
         // レート制限チェック（サムネイル取得API用）
-        const rateLimitCheck = await checkRateLimit(request, env, 'thumbnail')
-        if (!rateLimitCheck.success) {
-          return rateLimitCheck.error!
+        const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'thumbnail', env.WORKER_AUTH_KEY)
+        if (rateLimited) {
+          return rateLimited
         }
         
         // ニコニコ動画から動画ページを取得（キャッシュなし）
@@ -965,76 +1095,59 @@ const handler: ExportedHandler<Env> = {
       }
       
       // レート制限チェック（HDサムネイル取得API用）
-      const rateLimitCheck = await checkRateLimit(request, env, 'hd-thumbnail')
-      if (!rateLimitCheck.success) {
-        return rateLimitCheck.error!
+      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'hd-thumbnail', env.WORKER_AUTH_KEY)
+      if (rateLimited) {
+        return rateLimited
       }
       
       try {
-        // nicovideo.gay から高解像度サムネイル取得
         console.log(`[HD Thumbnail] Fetching HD thumbnail for ${videoId}`)
-        const nicogayUrl = `https://www.nicovideo.gay/watch/${videoId}`
-        
-        const response = await fetch(nicogayUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-            'Accept-Language': 'ja,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-          }
-        })
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch from nicovideo.gay: ${response.status}`)
-        }
-        
-        const html = await response.text()
-        
-        // og:image メタタグから1280x720サムネイルURL取得
-        // 属性の順序が異なる場合も対応（content が先にくる場合）
-        const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
-        let hdThumbnailUrl = null
-        
-        if (ogImageMatch) {
-          hdThumbnailUrl = ogImageMatch[1] || ogImageMatch[2]
-          console.log(`[HD Thumbnail] Found og:image: ${hdThumbnailUrl}`)
-          
-          // サムネイルURLの検証（1280x720であることを確認）
-          if (hdThumbnailUrl.includes('1280x720') || hdThumbnailUrl.includes('.original')) {
-            console.log(`[HD Thumbnail] Confirmed HD size for ${videoId}`)
-          } else {
-            // フォールバック: .original サフィックスで最大サイズ取得を試行
-            const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
-            let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
-            if (!originalUrl.includes('.original')) {
-              originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
+        let hdThumbnailUrl: string | null = null
+        let source = 'nicovideo.gay'
+
+        // ミラー（nicovideo.gay）を先に試す。so 動画はサイト側と同じく nicovideo.jp から直接取る
+        if (!videoId.startsWith('so')) {
+          try {
+            const response = await fetch(`https://www.nicovideo.gay/watch/${videoId}`, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'Accept-Language': 'ja,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+              },
+              signal: AbortSignal.timeout(HD_THUMBNAIL_SOURCE_TIMEOUT_MS)
+            })
+            if (response.ok) {
+              hdThumbnailUrl = extractHdThumbnailUrl(await response.text())
             }
-            hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-            console.log(`[HD Thumbnail] Fallback to original: ${hdThumbnailUrl}`)
+          } catch (error) {
+            console.warn(`[HD Thumbnail] nicovideo.gay failed for ${videoId}, trying nicovideo.jp`, error)
           }
         }
-        
-        // フォールバック: og:imageが見つからない場合
+
+        // 失敗・期限切れのほか、使える URL が無かったときも nicovideo.jp を読む（og:image は img.cdn.nimg.jp）
         if (!hdThumbnailUrl) {
-          const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
-          if (thumbnailMatch) {
-            hdThumbnailUrl = thumbnailMatch[1]
-            // .original サフィックス追加で最大サイズ化
-            const [urlBase, urlQuery] = hdThumbnailUrl.split('?')
-            let originalUrl = urlBase.replace(/\.(M|L)($|\/)/g, '$2')
-            if (!originalUrl.includes('.original')) {
-              originalUrl = originalUrl.replace(/(\.\d+)($|\/)/g, '$1.original$2')
-            }
-            hdThumbnailUrl = urlQuery ? `${originalUrl}?${urlQuery}` : originalUrl
-            console.log(`[HD Thumbnail] Fallback thumbnail with original: ${hdThumbnailUrl}`)
+          source = 'nicovideo.jp'
+          const response = await fetch(`https://www.nicovideo.jp/watch/${videoId}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Language': 'ja,en;q=0.9',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            },
+            signal: AbortSignal.timeout(HD_THUMBNAIL_SOURCE_TIMEOUT_MS)
+          })
+          if (!response.ok) {
+            throw new Error(`Failed to fetch from nicovideo.jp: ${response.status}`)
           }
+          hdThumbnailUrl = extractHdThumbnailUrl(await response.text())
         }
-        
+
         const result = {
           videoId,
           thumbnail: hdThumbnailUrl,
           resolution: hdThumbnailUrl ? '1280x720 (HD)' : 'Not available',
-          source: 'nicovideo.gay og:image',
+          source: `${source} og:image`,
           timestamp: new Date().toISOString()
         }
         
@@ -1043,7 +1156,7 @@ const handler: ExportedHandler<Env> = {
           headers: {
             'Content-Type': 'application/json',
             'Cache-Control': 'public, max-age=3600, s-maxage=86400',
-            'X-HD-Source': 'nicovideo.gay',
+            'X-HD-Source': source,
             'X-Worker-Version': 'green-20250726-unified-cors'
           }
         })
@@ -1079,6 +1192,15 @@ const handler: ExportedHandler<Env> = {
       }
     }
     
+    // /api/search 系は上流でニコニコの検索 API を呼ぶため、Vercel へ渡す前に IP ごとに制限する
+    const searchEndpoint = searchRateLimitEndpoint(url.pathname)
+    if (searchEndpoint && env.SEARCH_RATE_LIMITER) {
+      const rateLimited = await checkRateLimit(request, env.SEARCH_RATE_LIMITER, searchEndpoint, env.WORKER_AUTH_KEY)
+      if (rateLimited) {
+        return rateLimited
+      }
+    }
+
     // 静的ファイルのリクエストをチェック（先にR2から試す）
     const pathname = url.pathname
     const staticFiles = ['/icon.png', '/icon-192.png', '/icon-512.png', '/og-image.png', '/manifest.json', '/robots.txt'];
@@ -1088,7 +1210,7 @@ const handler: ExportedHandler<Env> = {
       try {
         const r2Key = pathname.startsWith('/') ? `static${pathname}` : `static/${pathname}`
         console.log(`[Static File 20250726] Trying to fetch from R2: ${r2Key}`)
-        const object = await env.R2_BUCKET.get(r2Key)
+        const object = await readR2(env.R2_BUCKET, r2Key)
         
         if (object) {
           const extension = pathname.split('.').pop()?.toLowerCase() || ''
@@ -1168,11 +1290,10 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   headers.set('X-Forwarded-Host', url.hostname)
   headers.set('X-Forwarded-Proto', 'https')
   headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
-  
-  if (env.WORKER_AUTH_KEY) {
-    headers.set('X-Worker-Auth', env.WORKER_AUTH_KEY)
-  }
-  
+  // Worker の秘密は上流へ渡さない。現行の middleware は /api/* でこの値を使わず、
+  // 2026-01 より前のビルドでは /api/admin/* の Basic 認証を飛ばす鍵として働いてしまう
+  headers.delete('X-Worker-Auth')
+
   const proxyRequest = new Request(proxyUrl.toString(), {
     method: request.method,
     headers,
@@ -1186,12 +1307,13 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     // 30xリダイレクトの処理（無限ループ防止）
     if (response.status === 307 || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 308) {
       const location = response.headers.get('Location')
-      console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location}`)
+      console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location ? sanitizeUrlForSentry(location) : 'none'}`)
       
       if (location) {
         const loc = new URL(location, url)
-        // 同一ホストへのリダイレクトは追跡せずそのまま返す（自身に戻るループを防止）
-        if (loc.hostname === url.hostname) {
+        // 追跡するのは上流デプロイ内のリダイレクトだけ。公開ホスト（自身に戻るループ）や
+        // 他のホストへは、クライアントの Cookie / Authorization を付けて取りに行かずそのまま返す
+        if (loc.hostname !== targetHost) {
           const origin = request.headers.get('Origin')
           const safeHeaders = new Headers(response.headers)
           Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))
