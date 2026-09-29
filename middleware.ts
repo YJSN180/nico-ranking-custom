@@ -14,7 +14,38 @@ export async function middleware(request: NextRequest) {
   
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
-  
+
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+             request.headers.get('x-real-ip') ||
+             'unknown'
+
+  // デバッグ・検証用のエンドポイントを本番ビルド（プレビューを含む）で無効化。開発時は判定しない
+  // 公開APIの早期returnより前に置く（後ろにあると admin 以外の /api/* に効かない）
+  if (process.env.NODE_ENV === 'production' && pathname.startsWith('/api/')) {
+    const dangerousEndpoints = [
+      '/api/debug',
+      '/api/test',
+      '/api/debug-sensitive',
+      '/api/internal-proxy',
+      '/api/env-check',
+      '/api/debug-env',
+      '/api/test-scraping',
+      '/api/test-hybrid-scrape',
+      '/api/test-hourly-scrape',
+      '/api/debug-genre'
+    ]
+
+    if (dangerousEndpoints.some(path => pathname.startsWith(path))) {
+      SecurityLogger.log({
+        event: SecurityEventType.DEBUG_ENDPOINT_ACCESS,
+        ip,
+        path: pathname,
+        userAgent: request.headers.get('user-agent') || undefined
+      })
+      return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+    }
+  }
+
   // SECURITY FIX: /api/admin/* は認証チェックを通す
   // 一般的な公開APIのみ認証をスキップ
   // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
@@ -72,40 +103,7 @@ const noStorePaths: string[] = []
   //     })
   //   }
   // }
-  
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
-             request.headers.get('x-real-ip') || 
-             'unknown'
 
-  // APIエンドポイントのレート制限
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    // デバッグエンドポイントを本番環境で無効化
-    const dangerousEndpoints = [
-      '/api/debug',
-      '/api/test',
-      '/api/debug-sensitive',
-      '/api/internal-proxy',
-      '/api/env-check',
-      '/api/debug-env',
-      '/api/test-scraping',
-      '/api/test-hybrid-scrape',
-      '/api/test-hourly-scrape',
-      '/api/debug-genre'
-    ]
-    
-    if (process.env.VERCEL_ENV === 'production' && 
-        dangerousEndpoints.some(path => request.nextUrl.pathname.startsWith(path))) {
-      SecurityLogger.log({
-        event: SecurityEventType.DEBUG_ENDPOINT_ACCESS,
-        ip,
-        path: request.nextUrl.pathname,
-        userAgent: request.headers.get('user-agent') || undefined
-      })
-      return NextResponse.json({ error: 'Not Found' }, { status: 404 })
-    }
-    
-    // Rate limiting removed - rely on Cloudflare's DDoS protection
-  }
   // /admin配下のすべてのパスで認証を要求
   if (isAdminPath) {
     const authHeader = request.headers.get('authorization')

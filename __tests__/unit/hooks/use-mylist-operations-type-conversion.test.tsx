@@ -71,7 +71,9 @@ describe('use-mylist-operations - Type Conversion Fix', () => {
       init: vi.fn().mockResolvedValue(undefined),
       getDB: vi.fn().mockReturnValue({})
     }
-    MockedDBManager.mockImplementation(() => mockDbManager)
+    MockedDBManager.mockImplementation(function () {
+      return mockDbManager
+    })
 
     // MylistManager mock
     mockMylistManager = {
@@ -82,7 +84,9 @@ describe('use-mylist-operations - Type Conversion Fix', () => {
       getVideosInMylist: vi.fn().mockResolvedValue([]),
       isVideoInAnyMylist: vi.fn().mockResolvedValue({ inMylist: false, mylistIds: [] })
     }
-    MockedMylistManager.mockImplementation(() => mockMylistManager)
+    MockedMylistManager.mockImplementation(function () {
+      return mockMylistManager
+    })
   })
 
   afterEach(() => {
