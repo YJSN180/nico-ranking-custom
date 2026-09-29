@@ -21,11 +21,13 @@ export async function githubClient(env) {
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
+        'X-GitHub-Api-Version': '2026-03-10',
         'User-Agent': 'nico-ranking-scheduler',
         'Content-Type': 'application/json',
       },
       body: body ? JSON.stringify(body) : undefined,
+      // Dispatch decisions must use current run state, never a cached history response.
+      cache: 'no-store',
       signal: AbortSignal.timeout(15_000),
     })
     if (!response.ok)

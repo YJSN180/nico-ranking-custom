@@ -172,32 +172,44 @@ describe('complete publication contract', () => {
 })
 
 describe('generation publication', () => {
-  it.each([false, true])('omits unavailable tags without publishing empty replacements (generations=%s)', async (generations) => {
-    const { store, entries } = memoryStore()
-    const previous = aggregateArtifacts(artifacts(), '100')
-    const oldManifest = await publishRanking(store, previous, generations)
-    const oldTagKey = generations
-      ? rankingKey(oldManifest, 'rankings/all/hour/tags/tag.json')
-      : 'rankings/all/hour/tags/tag.json'
-    const oldTag = structuredClone(entries.get(oldTagKey))
-    const input = artifacts()
-    input[0].results[0].data.hour.popularTags = []
-    input[0].results[0].data.hour.tags = {}
-    const next = aggregateArtifacts(input, '100')
-    next.publication.generation = '101-1'
-    next.publication.collectedAt = new Date().toISOString()
-    next.metadata.updatedAt = next.publication.collectedAt
-    const manifest = await publishRanking(store, next, generations)
-    const key = (canonical: string) => generations ? rankingKey(manifest, canonical) : canonical
-    expect(entries.get(key('rankings/all/hour/all.json'))?.data.popularTags).toEqual([])
-    expect(entries.get(key('rankings/metadata.json'))?.data.tagsByGenrePeriod['all/hour'].tags).toEqual([])
-    expect(entries.get(key('rankings/all/24h/tags/tag.json'))?.data.items).toHaveLength(1)
-    expect(entries.get(oldTagKey)).toEqual(oldTag)
-    if (generations) {
-      expect(entries.has(key('rankings/all/hour/tags/tag.json'))).toBe(false)
-      expect(entries.get(CURRENT_KEY)?.data.generation).toBe('101-1')
-    }
-  })
+  it.each([false, true])(
+    'omits unavailable tags without publishing empty replacements (generations=%s)',
+    async (generations) => {
+      const { store, entries } = memoryStore()
+      const previous = aggregateArtifacts(artifacts(), '100')
+      const oldManifest = await publishRanking(store, previous, generations)
+      const oldTagKey = generations
+        ? rankingKey(oldManifest, 'rankings/all/hour/tags/tag.json')
+        : 'rankings/all/hour/tags/tag.json'
+      const oldTag = structuredClone(entries.get(oldTagKey))
+      const input = artifacts()
+      input[0].results[0].data.hour.popularTags = []
+      input[0].results[0].data.hour.tags = {}
+      const next = aggregateArtifacts(input, '100')
+      next.publication.generation = '101-1'
+      next.publication.collectedAt = new Date().toISOString()
+      next.metadata.updatedAt = next.publication.collectedAt
+      const manifest = await publishRanking(store, next, generations)
+      const key = (canonical: string) =>
+        generations ? rankingKey(manifest, canonical) : canonical
+      expect(
+        entries.get(key('rankings/all/hour/all.json'))?.data.popularTags,
+      ).toEqual([])
+      expect(
+        entries.get(key('rankings/metadata.json'))?.data.tagsByGenrePeriod[
+          'all/hour'
+        ].tags,
+      ).toEqual([])
+      expect(
+        entries.get(key('rankings/all/24h/tags/tag.json'))?.data.items,
+      ).toHaveLength(1)
+      expect(entries.get(oldTagKey)).toEqual(oldTag)
+      if (generations) {
+        expect(entries.has(key('rankings/all/hour/tags/tag.json'))).toBe(false)
+        expect(entries.get(CURRENT_KEY)?.data.generation).toBe('101-1')
+      }
+    },
+  )
 
   it('allows dots inside tag names but rejects traversal segments', () => {
     const manifest = {
@@ -393,6 +405,44 @@ describe('scheduler and independent freshness', () => {
     expect((await dispatchRanking(env, github)).state).toBe('awaiting-run')
     expect(github.mock.calls.filter((c) => c[1] === 'POST')).toHaveLength(1)
   })
+  it('tracks the dispatched run immediately even when history never lists it', async () => {
+    const b = bucket(),
+      now = Date.now()
+    const github = vi.fn(async (path: string, method?: string) => {
+      if (method === 'POST') return { workflow_run_id: 22 }
+      if (path === 'actions/runs/22')
+        return {
+          id: 22,
+          status: 'in_progress',
+          created_at: new Date(now).toISOString(),
+        }
+      return { workflow_runs: [] }
+    })
+    const env = { R2_BUCKET: b, DISPATCH_ENABLED: 'true' }
+    expect(await dispatchRanking(env, github, now)).toMatchObject({
+      state: 'dispatched',
+      runId: 22,
+    })
+    expect(
+      (await (await b.get('pipeline/dispatch-state.json'))!.json()).runId,
+    ).toBe(22)
+    expect(await dispatchRanking(env, github, now + 16 * 60_000)).toMatchObject(
+      { state: 'running', runId: 22 },
+    )
+    expect(github.mock.calls.filter((c) => c[1] === 'POST')).toHaveLength(1)
+  })
+  it('retains the resend delay when dispatch returns no usable run ID', async () => {
+    const b = bucket()
+    const github = vi.fn(async (_path: string, method?: string) =>
+      method === 'POST' ? null : { workflow_runs: [] },
+    )
+    const env = { R2_BUCKET: b, DISPATCH_ENABLED: 'true' }
+    await expect(dispatchRanking(env, github)).rejects.toThrow(
+      'Missing GitHub dispatch run ID',
+    )
+    expect((await dispatchRanking(env, github)).state).toBe('awaiting-run')
+    expect(github.mock.calls.filter((c) => c[1] === 'POST')).toHaveLength(1)
+  })
   it('does not cancel or accumulate work while a collection is running', async () => {
     const github = vi.fn(async () => ({
       workflow_runs: [
@@ -413,6 +463,130 @@ describe('scheduler and independent freshness', () => {
     expect(
       (await dispatchRanking({ DISPATCH_ENABLED: 'false' }, null)).state,
     ).toBe('shadow')
+  })
+  it('follows an observed run when history later omits it beyond the resend delay', async () => {
+    const now = Date.now(),
+      b = bucket()
+    const run = {
+      id: 17,
+      status: 'in_progress',
+      created_at: new Date(now).toISOString(),
+    }
+    let omitHistory = false
+    const github = vi.fn(async (path: string) =>
+      path === 'actions/runs/17'
+        ? run
+        : { workflow_runs: omitHistory ? [] : [run] },
+    )
+    const env = { R2_BUCKET: b, DISPATCH_ENABLED: 'true' }
+    await dispatchRanking(env, github, now)
+    omitHistory = true
+    expect(await dispatchRanking(env, github, now + 16 * 60_000)).toMatchObject(
+      { state: 'running', runId: 17 },
+    )
+    expect(github.mock.calls.at(-1)?.[0]).toBe('actions/runs/17')
+    expect(github).toHaveBeenCalledTimes(2)
+  })
+  it('keeps tracking a running collection across an hourly slot boundary', async () => {
+    const now = Date.now(),
+      b = bucket()
+    await b.put(
+      'pipeline/dispatch-state.json',
+      JSON.stringify({ slot: scheduledSlot(now - 60 * 60_000), runId: 18 }),
+    )
+    const github = vi.fn(async () => ({
+      id: 18,
+      status: 'in_progress',
+      created_at: new Date(now - 30 * 60_000).toISOString(),
+    }))
+    expect(
+      await dispatchRanking(
+        { R2_BUCKET: b, DISPATCH_ENABLED: 'true' },
+        github,
+        now,
+      ),
+    ).toMatchObject({ state: 'running', runId: 18 })
+    expect(github).toHaveBeenCalledTimes(1)
+  })
+  it('does not dispatch if the observed run cannot be checked', async () => {
+    const b = bucket()
+    await b.put('pipeline/dispatch-state.json', JSON.stringify({ runId: 19 }))
+    const github = vi.fn(async () => {
+      throw new Error('GitHub unavailable')
+    })
+    await expect(
+      dispatchRanking({ R2_BUCKET: b, DISPATCH_ENABLED: 'true' }, github),
+    ).rejects.toThrow('GitHub unavailable')
+    expect(github).toHaveBeenCalledExactlyOnceWith('actions/runs/19')
+  })
+  it('uses the exact run result instead of stale in-progress history', async () => {
+    const now = Date.now(),
+      slot = scheduledSlot(now),
+      b = bucket()
+    const completed = {
+      id: 20,
+      status: 'completed',
+      conclusion: 'success',
+      display_title: `Ranking ${slot}`,
+    }
+    await b.put(
+      'pipeline/dispatch-state.json',
+      JSON.stringify({ slot, runId: 20 }),
+    )
+    const github = vi.fn(async (path: string) =>
+      path === 'actions/runs/20'
+        ? completed
+        : { workflow_runs: [{ ...completed, status: 'in_progress' }] },
+    )
+    expect(
+      await dispatchRanking(
+        { R2_BUCKET: b, DISPATCH_ENABLED: 'true' },
+        github,
+        now,
+      ),
+    ).toMatchObject({ state: 'complete' })
+    expect(github).toHaveBeenCalledTimes(2)
+  })
+  it('retries the observed failed run even when the history listing omits it', async () => {
+    const now = Date.now(),
+      slot = scheduledSlot(now),
+      b = bucket()
+    await b.put(
+      'pipeline/dispatch-state.json',
+      JSON.stringify({
+        slot,
+        attempts: 1,
+        sentAt: now - 20 * 60_000,
+        runId: 21,
+      }),
+    )
+    const github = vi.fn(async (path: string, method?: string) =>
+      method === 'POST'
+        ? null
+        : path === 'actions/runs/21'
+          ? {
+              id: 21,
+              status: 'completed',
+              conclusion: 'failure',
+              display_title: `Ranking ${slot}`,
+              created_at: new Date(now - 20 * 60_000).toISOString(),
+            }
+          : { workflow_runs: [] },
+    )
+    expect(
+      await dispatchRanking(
+        { R2_BUCKET: b, DISPATCH_ENABLED: 'true' },
+        github,
+        now,
+      ),
+    ).toMatchObject({ state: 'retrying', runId: 21 })
+    expect(github).toHaveBeenCalledWith(
+      'actions/runs/21/rerun-failed-jobs',
+      'POST',
+    )
+    expect(
+      (await (await b.get('pipeline/dispatch-state.json'))!.json()).runId,
+    ).toBe(21)
   })
   it('caps dispatch attempts and retries failed jobs rather than recollecting successful groups', async () => {
     const b = bucket(),
