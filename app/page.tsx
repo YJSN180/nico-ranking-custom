@@ -14,6 +14,7 @@ import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
 import { captureWebException } from '@/lib/sentry/capture'
+import { fetchWithTransientRetry } from '@/lib/fetch-with-transient-retry'
 // 動的レンダリング強制: CDNキャッシュが古いデータを返す問題を防ぐ
 // キャッシュは Cloudflare Workers 側で管理し、Vercel側は常に最新データを取得
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,10 @@ export const preferredRegion = 'auto'
 
 // SSRでHTMLに埋め込むランキング件数（=1ページ分。client-page の ITEMS_PER_PAGE と揃える）
 const EMBED_ITEMS_COUNT = 100
+
+// SSR のランキング取得の全体の期限（一時障害の再試行・空のときの取り直し・本文の読み取りを含む）。
+// 上流が止まっても関数の上限まで待たず、従来の失敗時と同じ表示に落とす
+const RANKING_FETCH_BUDGET_MS = 8_000
 
 // ClientPage の key。条件（ジャンル・期間・タグ）かランキングの中身が変わったら作り直す。
 // ホーム・ロゴでの遷移では同じ画面のまま props だけが替わる。同じインスタンスのままだと
@@ -85,13 +90,21 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
     description += '最新の人気動画をチェック！'
   }
   
+  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）。
+  // なお Next.js は描画時、パスが / の og:url をオリジンだけにする（クエリは出力されない）
+  const ogQuery = new URLSearchParams()
+  if (params.genre) ogQuery.set('genre', genre)
+  if (params.period) ogQuery.set('period', period)
+  if (tag) ogQuery.set('tag', tag)
+  const ogSearch = ogQuery.toString()
+  
   return {
     title,
     description,
     openGraph: {
       title,
       description,
-      url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      url: ogSearch ? `https://nico-rank.com/?${ogSearch}` : 'https://nico-rank.com',
       images: [{
         url: '/og-image.png',
         alt: title,
@@ -140,6 +153,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   const apiUrl = `${proxyBase}/api/ranking?${params.toString()}`
 
   try {
+    const deadline = AbortSignal.timeout(RANKING_FETCH_BUDGET_MS)
     const headers: HeadersInit = {
       'Accept-Encoding': 'gzip, deflate, br',
       Accept: 'application/json'
@@ -150,8 +164,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       }
     }
 
+    // R2 の一時障害などの 5xx・通信エラーは 1 回だけ再試行する（1 回の失敗で別ページへ飛ばさない）
     const doFetch = async (url: string, options?: RequestInit) => {
-      const res = await fetch(url, options)
+      const res = await fetchWithTransientRetry(url, { ...options, signal: deadline })
       const meta = {
         status: res.status,
         statusText: res.statusText,

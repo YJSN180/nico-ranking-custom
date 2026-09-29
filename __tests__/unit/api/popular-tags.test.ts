@@ -53,13 +53,31 @@ describe('Popular Tags API', () => {
       const mockTags = ['ゲーム', 'RTA', 'speedrun']
       ;(getPopularTags as ReturnType<typeof vi.fn>).mockResolvedValue(mockTags)
 
-      const request = new NextRequest('http://localhost/api/popular-tags?period=total')
+      const request = new NextRequest('http://localhost/api/popular-tags?period=hour')
       const response = await GET(request)
       const data = await response.json()
 
       expect(response.status).toBe(200)
       expect(data.tags).toEqual(mockTags)
-      expect(getPopularTags).toHaveBeenCalledWith('all', 'total')
+      expect(getPopularTags).toHaveBeenCalledWith('all', 'hour')
+    })
+
+    // 人気タグがあるのはパイプラインが集める 23 ジャンルと 24h/hour だけ。
+    // それ以外は上流（KV・ゲートウェイ）に問い合わせず、失敗時と同じ形（200 の空配列）で返す
+    it.each([
+      ['period', 'genre=game&period=total'],
+      ['genre', 'genre=zzz'],
+      ['genre（パス）', 'genre=..%2F..%2Fv1%2Fusers%2Fme'],
+      ['genre（プロトタイプのキー）', 'genre=__proto__'],
+      ['genre（カスタムランキング）', 'genre=custom'],
+    ])('does not query upstream for an unsupported %s', async (_label, query) => {
+      ;(getPopularTags as ReturnType<typeof vi.fn>).mockResolvedValue(['上流のタグ'])
+
+      const response = await GET(new NextRequest(`http://localhost/api/popular-tags?${query}`))
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toEqual({ tags: [] })
+      expect(getPopularTags).not.toHaveBeenCalled()
     })
 
     it('should accept both genre and period parameters', async () => {

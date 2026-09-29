@@ -19,6 +19,16 @@ interface TagAccumulationData {
   }
 }
 
+// 候補の件数（クライアントは 10 件を指定する）。不正な値は既定、大きすぎる値は上限に丸める
+const DEFAULT_LIMIT = 10
+const MAX_LIMIT = 50
+
+function parseLimit(value: string | null): number {
+  const limit = Number.parseInt(value ?? '', 10)
+  if (!Number.isFinite(limit) || limit < 1) return DEFAULT_LIMIT
+  return Math.min(limit, MAX_LIMIT)
+}
+
 // タグ累積データをメモリにキャッシュ（開発時のパフォーマンス向上）
 let cachedTagData: string[] | null = null
 let cacheTimestamp = 0
@@ -54,7 +64,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q') || ''
-    const limit = parseInt(searchParams.get('limit') || '10')
+    const limit = parseLimit(searchParams.get('limit'))
 
     // クエリが空または2文字未満の場合は空の結果を返す
     if (!query || query.trim().length < 2) {

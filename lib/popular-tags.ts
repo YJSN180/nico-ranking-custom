@@ -2,7 +2,6 @@
 // 動的取得が失敗した場合のフォールバック用
 // 最新のデータはgetPopularTags関数で取得すること
 
-import { scrapeRankingPage } from './scraper'
 import { kv } from './simple-kv'
 import { POPULAR_TAGS_LATEST_KEY, type PopularTagsLatest } from './pipeline/popular-tags-latest'
 import type { RankingGenre } from '../types/ranking-config'
@@ -12,8 +11,18 @@ export type { PopularTagsLatest } from './pipeline/popular-tags-latest'
 
 // パイプライン（scripts/sync-ranking-auxiliary.ts）が公開成功後に書き出す人気タグだけの小キー。
 // ランキング本体（数百KB〜）を丸読みしていた /api/popular-tags の遅さ（1〜3s）を解消する。
-// 未生成・不正・読取失敗のときは従来経路（ゲートウェイ → スクレイパー）へ落ちる。
+// 未生成・不正・読取失敗・古いときは従来経路（ゲートウェイ）へ落ちる。
 const POPULAR_TAGS_CACHE_TTL_MS = 5 * 60 * 1000
+
+// 小キーの鮮度。updatedAt は公開した世代の収集開始時刻（collectedAt）で、正常でも公開までの時間と
+// 毎時の間隔の分だけ古い。書き手（補助同期）は失敗しても公開を止めないため、取り残された値を
+// 見分ける。Worker の監視が ranking-source-stale とみなす 150 分（workers/utils/ranking-generation.js）
+// より古いものは使わず、ゲートウェイ経路（公開中の世代）で代替する
+const POPULAR_TAGS_LATEST_MAX_AGE_MS = 150 * 60 * 1000
+// 書き手と読み手の時計のずれとして許す未来方向の幅
+const POPULAR_TAGS_LATEST_MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+// 小キーの読み取りの期限（1 回だけ試す）。読めなければ従来経路で応答する
+const POPULAR_TAGS_LATEST_READ_TIMEOUT_MS = 3_000
 
 let popularTagsLatestCache: { value: PopularTagsLatest | null; fetchedAt: number } | null = null
 
@@ -27,19 +36,32 @@ function isPopularTagsLatest(value: unknown): value is PopularTagsLatest {
   return typeof genres === 'object' && genres !== null && typeof all === 'object' && all !== null
 }
 
+function isFreshPopularTagsLatest(latest: PopularTagsLatest, now: number): boolean {
+  const updatedAt: unknown = latest.updatedAt
+  if (typeof updatedAt !== 'string') return false
+  const age = now - Date.parse(updatedAt)
+  // Date.parse が読めないと NaN になり、どちらの比較も偽になる
+  return age <= POPULAR_TAGS_LATEST_MAX_AGE_MS && age >= -POPULAR_TAGS_LATEST_MAX_CLOCK_SKEW_MS
+}
+
 async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
   const cacheEnabled = process.env.NODE_ENV !== 'test'
   if (cacheEnabled && popularTagsLatestCache && Date.now() - popularTagsLatestCache.fetchedAt < POPULAR_TAGS_CACHE_TTL_MS) {
     return popularTagsLatestCache.value
   }
+  let value: PopularTagsLatest | null = null
   try {
-    const value = await kv.get<unknown>(POPULAR_TAGS_LATEST_KEY)
-    const valid = isPopularTagsLatest(value) ? value : null
-    if (cacheEnabled) popularTagsLatestCache = { value: valid, fetchedAt: Date.now() }
-    return valid
+    // kv.get は失敗時に 3 回・各 20 秒まで待つ（最悪 1 分超）ため、1 回だけ短い期限で読む
+    const raw = await kv.getStrict<unknown>(POPULAR_TAGS_LATEST_KEY, {
+      attempts: 1,
+      timeoutMs: POPULAR_TAGS_LATEST_READ_TIMEOUT_MS,
+    })
+    value = isPopularTagsLatest(raw) ? raw : null
   } catch {
-    return null
+    // 読めないときも未生成と同じく従来経路へ。メモの間は読み直さない（障害中にリクエストのたび待たない）
   }
+  if (cacheEnabled) popularTagsLatestCache = { value, fetchedAt: Date.now() }
+  return value
 }
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
@@ -68,9 +90,9 @@ async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
 
 // ジャンルの人気タグを取得（キャッシュ付き）
 export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
-  // 0. 小キー（1読み・5分メモ）。未生成/不正なら従来経路へフォールバック
+  // 0. 小キー（1読み・5分メモ）。未生成/不正/古いなら従来経路へフォールバック（古いタグは返さない）
   const latest = await getPopularTagsLatest()
-  if (latest) {
+  if (latest && isFreshPopularTagsLatest(latest, Date.now())) {
     const tags = genre === 'all' ? latest.all[period] : latest.genres[genre]?.[period]
     if (Array.isArray(tags) && tags.length > 0) return tags
   }
@@ -80,10 +102,10 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
     try {
       const genres: RankingGenre[] = ['game', 'anime', 'entertainment', 'technology', 'voicesynthesis', 'other']
       const tagCountMap = new Map<string, number>()
-      
-      // 各ジャンルの人気タグを取得して集計
-      for (const g of genres) {
-        const tags = await getPopularTagsForGenre(g, period)
+
+      // 各ジャンルの人気タグを並列に取得し（直列だと各 10 秒の期限が積み重なる）、従来と同じジャンル順で集計
+      const tagLists = await Promise.all(genres.map((g) => getPopularTagsForGenre(g, period)))
+      for (const tags of tagLists) {
         tags.forEach((tag, index) => {
           // 順位が高いタグほど高いスコアを付与（15位から1位へ）
           const score = tags.length - index
@@ -104,54 +126,18 @@ export async function getPopularTags(genre: RankingGenre, period: '24h' | 'hour'
     }
   }
   
-  try {
-    // 1. 公開済みR2世代をAPI gateway経由で取得
-    const cfData = await getGenreRanking(genre, period)
-    if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
-      return cfData.popularTags
-    }
-  } catch (error) {
-    // Gateway unavailable; try the existing scraper fallback.
-  }
-  
-  try {
-    // 2. 動的に人気タグを取得（フォールバック）
-    const data = await scrapeRankingPage(genre, period)
-    
-    if (data.popularTags && data.popularTags.length > 0) {
-      return data.popularTags
-    }
-  } catch (error) {
-    // Failed to fetch popular tags dynamically - returning empty array
-  }
-  
-  // 3. 最終フォールバック：空配列を返す
-  return []
+  return getPopularTagsForGenre(genre, period)
 }
 
-// 個別ジャンルの人気タグを取得（内部用、allジャンルの集計で使用）
+// 個別ジャンルの人気タグ（公開済みの R2 世代をゲートウェイ経由で読む）。取れなければ空。
+// 以前はさらに nvapi のランキング（削除した lib/scraper.ts）へ落ちていたが、そちらは人気タグを返さない
+// （タグ API の廃止で常に空）うえ、ジャンルをエンコードせずに URL のパスへ入れ、タイムアウトも無かった
 async function getPopularTagsForGenre(genre: RankingGenre, period: '24h' | 'hour' = '24h'): Promise<string[]> {
   try {
-    // 1. 公開済みR2世代をAPI gateway経由で取得
     const cfData = await getGenreRanking(genre, period)
-    if (cfData && cfData.popularTags && cfData.popularTags.length > 0) {
-      return cfData.popularTags
-    }
-  } catch (error) {
-    // Gateway unavailable; try the existing scraper fallback.
+    if (cfData.popularTags.length > 0) return cfData.popularTags
+  } catch {
+    // ゲートウェイが使えなければ空（呼び出し元は空配列で縮退する）
   }
-  
-  try {
-    // 2. 動的に人気タグを取得（フォールバック）
-    const data = await scrapeRankingPage(genre, period)
-    
-    if (data.popularTags && data.popularTags.length > 0) {
-      return data.popularTags
-    }
-  } catch (error) {
-    // Failed to fetch popular tags dynamically - returning empty array
-  }
-  
-  // 3. 最終フォールバック：空配列を返す
   return []
 }

@@ -7,12 +7,12 @@ vi.mock('../../workers/sentry.js', () => ({
   captureWorkerException: vi.fn(),
   sanitizeUrlForSentry: vi.fn(),
 }))
-vi.mock('../../lib/scraper', () => ({ scrapeRankingPage: vi.fn() }))
 // 人気タグの小キー（POPULAR_TAGS_LATEST）が未生成でも、ゲートウェイ経路だけで動くことを検証する
-vi.mock('../../lib/simple-kv', () => ({ kv: { get: vi.fn(async () => null) } }))
+vi.mock('../../lib/simple-kv', () => ({
+  kv: { get: vi.fn(async () => null), getStrict: vi.fn(async () => null) },
+}))
 import worker from '../../workers/api-gateway-green-20250726'
 import { getPopularTags } from '../../lib/popular-tags'
-import { scrapeRankingPage } from '../../lib/scraper'
 const fetchWorker = worker.fetch as unknown as (
   request: Request,
   env: unknown,
@@ -105,7 +105,8 @@ describe('active generation readers', () => {
         },
       }),
     )
-    expect(scrapeRankingPage).not.toHaveBeenCalled()
+    // ゲートウェイ以外（nvapi など）へは問い合わせない
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it.each(['preview.vercel.app', 'https://preview.vercel.app'])(
@@ -121,7 +122,8 @@ describe('active generation readers', () => {
         new URL('https://preview.vercel.app/api/ranking?genre=game&period=hour'),
         expect.any(Object),
       )
-      expect(scrapeRankingPage).not.toHaveBeenCalled()
+      // ゲートウェイ以外（nvapi など）へは問い合わせない
+      expect(fetch).toHaveBeenCalledTimes(1)
     },
   )
 })
