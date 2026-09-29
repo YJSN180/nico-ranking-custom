@@ -7,8 +7,15 @@ const MAX_REDIRECTS = 3
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 
 /** 代理取得してよい URL か（http(s) で、ニコニコのサムネイル CDN のホスト） */
-function isAllowedImageUrl(url: URL): boolean {
-  return (url.protocol === 'https:' || url.protocol === 'http:') && THUMBNAIL_HOSTS.has(url.hostname)
+function allowedImageTarget(url: URL): URL | null {
+  const host = Array.from(THUMBNAIL_HOSTS).find(allowed => allowed === url.hostname)
+  if (!host || !['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.port) return null
+  // ホストは入力値を再利用せず、許可一覧の値から組み立てる。
+  const target = new URL(`https://${host}`)
+  if (url.protocol === 'http:') target.protocol = 'http:'
+  target.pathname = url.pathname
+  target.search = url.search
+  return target
 }
 
 /**
@@ -29,9 +36,9 @@ export async function GET(request: NextRequest) {
 
     // URLの検証（ニコニコ動画のCDNからのみ許可。/api/hd-thumbnail が返す URL と同じ一覧）
     // 解析できない URL も入力の誤りとして 400（500 にしない）
-    const url = URL.canParse(imageUrl) ? new URL(imageUrl) : null
+    const url = URL.canParse(imageUrl) ? allowedImageTarget(new URL(imageUrl)) : null
 
-    if (!url || !isAllowedImageUrl(url)) {
+    if (!url) {
       return NextResponse.json(
         { error: 'Invalid image URL' },
         { status: 400 }
@@ -54,8 +61,8 @@ export async function GET(request: NextRequest) {
 
       await imageResponse.body?.cancel()
       const location = imageResponse.headers.get('location')
-      const next = location && URL.canParse(location, target) ? new URL(location, target) : null
-      if (!next || !isAllowedImageUrl(next) || redirects >= MAX_REDIRECTS) {
+      const next = location && URL.canParse(location, target) ? allowedImageTarget(new URL(location, target)) : null
+      if (!next || redirects >= MAX_REDIRECTS) {
         return NextResponse.json(
           { error: 'Failed to fetch image' },
           { status: 502 }

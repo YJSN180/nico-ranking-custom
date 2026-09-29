@@ -75,7 +75,10 @@
   "overrides": {
     "rollup": "^4.60.2",
     "postcss": "^8.5.28",
-    "serialize-javascript": "^7.0.5"
+    "serialize-javascript": "^7.0.5",
+    "miniflare": {
+      "undici": "7.29.1"
+    }
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260920.1",

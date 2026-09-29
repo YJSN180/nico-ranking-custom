@@ -30,5 +30,10 @@
     "vitest": "~4.1.11",
     "wrangler": "^4.135.0"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "overrides": {
+    "miniflare": {
+      "undici": "7.29.1"
+    }
+  }
 }

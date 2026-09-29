@@ -229,7 +229,7 @@ describe('Video Stats Updater Worker', () => {
     function captureSentry() {
       env.SENTRY_WORKER_DSN = 'https://public@example.ingest.us.sentry.io/1';
       return (fetchMock) => fetchMock.mock.calls
-        .filter(([url]) => String(url).includes('.ingest.us.sentry.io'))
+        .filter(([url]) => new URL(String(url)).hostname === 'example.ingest.us.sentry.io')
         .flatMap(([, init]) => (typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body))
           .split('\n').filter(Boolean).map((line) => JSON.parse(line)));
     }
