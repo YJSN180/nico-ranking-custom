@@ -63,3 +63,17 @@ describe('buildProxyRequestInit', () => {
     await expect(readReplayableBody(request)).resolves.toBeNull()
   })
 })
+
+describe('readReplayableBody limits', () => {
+  it('rejects a body larger than the given limit', async () => {
+    const request = new Request('https://nico-rank.com/api/x', { method: 'POST', body: 'x'.repeat(11) })
+
+    await expect(readReplayableBody(request, 10)).rejects.toThrow('Request body too large')
+  })
+
+  it('accepts a body at the limit', async () => {
+    const request = new Request('https://nico-rank.com/api/x', { method: 'POST', body: 'x'.repeat(10) })
+
+    expect(new TextDecoder().decode(await readReplayableBody(request, 10))).toBe('x'.repeat(10))
+  })
+})

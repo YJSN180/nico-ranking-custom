@@ -46,3 +46,67 @@ describe('smart router upstream', () => {
     )
   })
 })
+
+describe('smart router request bodies', () => {
+  const MB = 1024 * 1024
+
+  function streamOf(chunks: number, chunkBytes: number): ReadableStream<Uint8Array> {
+    let sent = 0
+    return new ReadableStream({
+      pull(controller) {
+        if (sent++ < chunks) controller.enqueue(new Uint8Array(chunkBytes))
+        else controller.close()
+      },
+    })
+  }
+
+  it('answers 413 for a declared body over the limit without forwarding it', async () => {
+    const env = routerEnv()
+    const request = new Request('https://nico-rank.com/api/admin/ng-list', {
+      method: 'POST',
+      body: 'synthetic',
+      headers: { 'Content-Length': String(6 * MB) },
+    })
+
+    const response = await fetchRouter(request, env, { waitUntil: vi.fn() })
+
+    expect(response.status).toBe(413)
+    expect((env.WORKER_GREEN as { fetch: ReturnType<typeof vi.fn> }).fetch).not.toHaveBeenCalled()
+  })
+
+  it('stops reading a streamed body once it passes the limit', async () => {
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    const env = routerEnv()
+    const request = new Request('https://nico-rank.com/_vercel/insights/view', {
+      method: 'POST',
+      body: streamOf(64, MB),
+      duplex: 'half',
+    } as RequestInit)
+
+    const response = await fetchRouter(request, env, { waitUntil: vi.fn() })
+
+    expect(response.status).toBe(413)
+    expect(upstream).not.toHaveBeenCalled()
+  })
+
+  it('still forwards an ordinary POST body unchanged to the admin origin', async () => {
+    const upstream = vi.fn(async (_request: Request) => new Response('ok'))
+    vi.stubGlobal('fetch', upstream)
+    const env = routerEnv()
+    const body = JSON.stringify({ videoIds: ['sm1'], authorIds: [], videoTitles: [], authorNames: [] })
+
+    const response = await fetchRouter(
+      new Request('https://nico-rank.com/api/admin/ng-list', { method: 'POST', body }),
+      env,
+      { waitUntil: vi.fn() },
+    )
+
+    expect(response.status).toBe(200)
+    expect((env.WORKER_GREEN as { fetch: ReturnType<typeof vi.fn> }).fetch).not.toHaveBeenCalled()
+    expect(upstream).toHaveBeenCalledTimes(1)
+    const forwarded = upstream.mock.calls[0][0] as Request
+    expect(new URL(forwarded.url).pathname).toBe('/api/admin/ng-list')
+    expect(await forwarded.text()).toBe(body)
+  })
+})

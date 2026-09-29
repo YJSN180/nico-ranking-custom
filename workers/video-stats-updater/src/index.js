@@ -7,7 +7,8 @@ import {
 import { readR2Text } from '../../utils/r2-json.js';
 import { currentGeneration, rankingKey, STATS_SOURCE_KEY } from '../../utils/ranking-generation.js';
 import { acquireLease } from '../../utils/r2-lease.js';
-import { Sentry, captureWorkerException, createWorkerSentryOptions } from '../../sentry.js';
+import { R2_SERVER_ERROR_CODES, R2_TOO_MUCH_CONCURRENCY, withR2Retry } from '../../utils/r2-retry.js';
+import { Sentry, captureWorkerException, captureWorkerMessage, createWorkerSentryOptions } from '../../sentry.js';
 
 import { isWorkerAuthorized, verifyRanking } from './verify-ranking.js';
 
@@ -15,6 +16,14 @@ import { isWorkerAuthorized, verifyRanking } from './verify-ranking.js';
 const STATS_KEY = 'VIDEO_STATS_LATEST';
 const BATCH_SIZE = 50; // Snapshot API batch size
 const SNAPSHOT_CONCURRENCY = 6;
+// Every refresh (cron or /trigger, legacy or generation layout) holds this lease, so two refreshes never overlap.
+const STATS_LEASE_KEY = 'pipeline/stats-lease.json';
+const STATS_LEASE_MS = 5 * 60_000;
+// 10058: another listing of the same objects is in flight. Back off and resume from the same cursor.
+const R2_LIST_RETRY = {
+  retryableCodes: [R2_TOO_MUCH_CONCURRENCY, ...R2_SERVER_ERROR_CODES],
+  delaysMs: [1_000, 2_000, 4_000],
+};
 
 // Default metadata when not found in R2
 const DEFAULT_METADATA = {
@@ -155,11 +164,11 @@ async function discoverAvailableData(r2Bucket) {
 
     // Historical tag objects can fill a page before later genres appear.
     while (true) {
-      const list = await r2Bucket.list({
+      const list = await withR2Retry(() => r2Bucket.list({
         prefix: 'rankings/',
         limit: 1000,
         ...(cursor ? { cursor } : {}),
-      });
+      }), R2_LIST_RETRY);
       for (const object of list.objects) {
         const parts = object.key.split('/');
         if (parts.length === 4 && parts[3] === 'all.json') {
@@ -398,75 +407,111 @@ async function fetchVideoStats(videoIds, apiKey) {
   return allStats;
 }
 
+const GENERATION_CHANGED = 'Ranking generation changed during stats refresh';
+// A publication can land during a refresh (about 45 s). Refresh once more from the new generation; if it
+// changes again, skip this run instead of publishing stats for a generation that is no longer current.
+const MAX_GENERATION_ATTEMPTS = 2;
+
+function readPublishedManifest(env) {
+  return currentGeneration(env.R2_BUCKET).catch(error => {
+    reportR2ReadFailure(error, { upstreamKind: 'r2-metadata', r2Key: 'rankings/current.json', parseStage: 'manifest-read' });
+    throw new Error('Failed to fetch ranking metadata manifest', { cause: error });
+  });
+}
+
+/**
+ * Reads the rankings of one generation (or the legacy layout) and fetches their stats.
+ */
+async function collectVideoStats(env, manifest) {
+  // 1. Fetch ranking metadata from R2
+  const metadata = await fetchRankingMetadata(env.R2_BUCKET, manifest);
+  console.log(`Using metadata - Genres: ${metadata.genres.join(', ')}, Periods: ${metadata.periods.join(', ')}`);
+
+  // 2. Fetch all ranking data from R2
+  const rankingData = await fetchRankingData(env.R2_BUCKET, metadata);
+
+  // 3. Extract unique video IDs
+  const videoIds = extractUniqueVideoIds(rankingData);
+  console.log(`Found ${videoIds.length} unique videos to update`);
+
+  if (videoIds.length === 0) {
+    throw new Error(
+      `No videos found in ranking data (availablePaths=${rankingData.metadata.availablePathsCount}, totalItems=${rankingData.metadata.totalItems})`
+    );
+  }
+
+  // 4. Fetch video stats from Snapshot API
+  const videoStats = await fetchVideoStats(videoIds, env.SNAPSHOT_API_KEY);
+
+  // 5. Create stats data structure
+  return {
+    stats: videoStats,
+    metadata: {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      totalVideos: Object.keys(videoStats).length,
+    },
+  };
+}
+
 /**
  * Process video stats update logic
+ * @param {string} endpointFamily - 'scheduled' for cron runs, '/trigger' for manual runs (Sentry tag)
  */
-async function processVideoStatsUpdate(env) {
+async function processVideoStatsUpdate(env, endpointFamily = 'scheduled') {
   console.log('=== Starting video stats update ===');
   console.log(`Time: ${new Date().toISOString()}`);
   
   let lease;
   try {
-      const manifest = await currentGeneration(env.R2_BUCKET).catch(error => {
-        reportR2ReadFailure(error, { upstreamKind: 'r2-metadata', r2Key: 'rankings/current.json', parseStage: 'manifest-read' });
-        throw new Error('Failed to fetch ranking metadata manifest', { cause: error });
-      });
-      if (manifest) {
-        lease = await acquireLease(env.R2_BUCKET, 'pipeline/stats-lease.json', 5 * 60_000);
-        if (!lease) return { success: false, skipped: 'already-running' };
-      }
-      // 1. Fetch ranking metadata from R2
-      const metadata = await fetchRankingMetadata(env.R2_BUCKET, manifest);
-      console.log(`Using metadata - Genres: ${metadata.genres.join(', ')}, Periods: ${metadata.periods.join(', ')}`);
-      
-      // 2. Fetch all ranking data from R2
-      const rankingData = await fetchRankingData(env.R2_BUCKET, metadata);
-      
-      // 3. Extract unique video IDs
-      const videoIds = extractUniqueVideoIds(rankingData);
-      console.log(`Found ${videoIds.length} unique videos to update`);
+      let manifest = await readPublishedManifest(env);
+      lease = await acquireLease(env.R2_BUCKET, STATS_LEASE_KEY, STATS_LEASE_MS);
+      if (!lease) return { success: false, skipped: 'already-running' };
 
-      if (videoIds.length === 0) {
-        throw new Error(
-          `No videos found in ranking data (availablePaths=${rankingData.metadata.availablePathsCount}, totalItems=${rankingData.metadata.totalItems})`
-        );
-      }
+      for (let attempt = 1; ; attempt++) {
+        const statsData = await collectVideoStats(env, manifest);
 
-      // 4. Fetch video stats from Snapshot API
-      const videoStats = await fetchVideoStats(videoIds, env.SNAPSHOT_API_KEY);
-      
-      // 5. Create stats data structure
-      const statsData = {
-        stats: videoStats,
-        metadata: {
-          version: 1,
-          updatedAt: new Date().toISOString(),
-          totalVideos: Object.keys(videoStats).length,
-        },
-      };
+        // Stats of a generation that is no longer published are discarded before any check or write.
+        const published = await readPublishedManifest(env);
+        if (published?.generation !== manifest?.generation) {
+          if (attempt < MAX_GENERATION_ATTEMPTS) {
+            console.warn(`${GENERATION_CHANGED}; refreshing again from ${published?.generation ?? 'the legacy layout'}`);
+            manifest = published;
+            continue;
+          }
+          console.warn(`${GENERATION_CHANGED} again; skipping this run`);
+          captureWorkerMessage(`${GENERATION_CHANGED} twice; skipped this run`, 'warning', {
+            tags: {
+              runtime: 'cloudflare-worker',
+              surface: 'video-stats-updater',
+              endpoint_family: endpointFamily,
+              upstream_kind: 'stats-update',
+              worker_version: 'video-stats-updater',
+            },
+          });
+          return { success: false, skipped: 'generation-changed' };
+        }
 
-      // 6. Write to KV
-      const previous = await env.STATS_KV.get(STATS_KEY, 'json');
-      if (!statsData.metadata.totalVideos || (previous?.metadata?.totalVideos > 0 &&
-          statsData.metadata.totalVideos < previous.metadata.totalVideos * 0.5)) throw new Error('Video stats count dropped below 50%');
-      if (manifest) {
+        // 6. Write to KV
+        const previous = await env.STATS_KV.get(STATS_KEY, 'json');
+        if (!statsData.metadata.totalVideos || (previous?.metadata?.totalVideos > 0 &&
+            statsData.metadata.totalVideos < previous.metadata.totalVideos * 0.5)) throw new Error('Video stats count dropped below 50%');
         await lease.assertOwned();
-        if ((await currentGeneration(env.R2_BUCKET))?.generation !== manifest.generation) throw new Error('Ranking generation changed during stats refresh');
+        await env.STATS_KV.put(STATS_KEY, JSON.stringify(statsData));
+        if (manifest) await env.R2_BUCKET.put(STATS_SOURCE_KEY, JSON.stringify({
+          generation: manifest.generation, collectedAt: manifest.collectedAt,
+          updatedAt: statsData.metadata.updatedAt, totalVideos: statsData.metadata.totalVideos,
+        }));
+
+        console.log(`✓ Successfully updated stats for ${statsData.metadata.totalVideos} videos`);
+        console.log('=== Video stats update completed ===');
+
+        return {
+          success: true,
+          totalVideos: statsData.metadata.totalVideos,
+          updatedAt: statsData.metadata.updatedAt
+        };
       }
-      await env.STATS_KV.put(STATS_KEY, JSON.stringify(statsData));
-      if (manifest) await env.R2_BUCKET.put(STATS_SOURCE_KEY, JSON.stringify({
-        generation: manifest.generation, collectedAt: manifest.collectedAt,
-        updatedAt: statsData.metadata.updatedAt, totalVideos: statsData.metadata.totalVideos,
-      }));
-
-      console.log(`✓ Successfully updated stats for ${statsData.metadata.totalVideos} videos`);
-      console.log('=== Video stats update completed ===');
-
-      return {
-        success: true,
-        totalVideos: statsData.metadata.totalVideos,
-        updatedAt: statsData.metadata.updatedAt
-      };
     } catch (error) {
       console.error('Failed to update video stats:', error);
       console.error('Stack trace:', error.stack);
@@ -474,7 +519,7 @@ async function processVideoStatsUpdate(env) {
         tags: {
           runtime: 'cloudflare-worker',
           surface: 'video-stats-updater',
-          endpoint_family: 'scheduled',
+          endpoint_family: endpointFamily,
           upstream_kind: 'stats-update',
           worker_version: 'video-stats-updater',
         },
@@ -508,14 +553,15 @@ const handler = {
             value: '*/5 * * * *',
           },
           timezone: 'Asia/Tokyo',
-          checkinMargin: 2,
+          // Cron starts drift by about a minute; a run takes about 45 s. Allow one full interval of lateness.
+          checkinMargin: 5,
           maxRuntime: 10,
         },
       ),
     );
   },
   
-  async fetch(request, env, _ctx) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === '/verify-ranking') {
@@ -529,19 +575,18 @@ const handler = {
         return new Response('Unauthorized', { status: 401 });
       }
       
+      // The refresh holds the R2 lease until it ends. Registering it with waitUntil keeps it running if the
+      // caller disconnects first, so it can still finish and release the lease (the runtime allows up to
+      // 30 s after the disconnect). The answer below is unchanged; failures are reported inside the refresh.
+      const refresh = processVideoStatsUpdate(env, '/trigger');
+      ctx.waitUntil(refresh.then(() => undefined, () => undefined));
       try {
-        const result = await processVideoStatsUpdate(env);
+        const result = await refresh;
+        if (result.skipped === 'generation-changed') {
+          return Response.json({ error: GENERATION_CHANGED }, { status: 500 });
+        }
         return Response.json(result);
       } catch (error) {
-        captureWorkerException(error, {
-          tags: {
-            runtime: 'cloudflare-worker',
-            surface: 'video-stats-updater',
-            endpoint_family: '/trigger',
-            upstream_kind: 'manual-trigger',
-            worker_version: 'video-stats-updater',
-          },
-        });
         return Response.json({ error: error.message }, { status: 500 });
       }
     }
