@@ -1,3 +1,4 @@
+import { fetchUpstream, isAdminPath, isSafeMethod, noStore } from './utils/upstream-proxy'
 /**
  * Smart Router - Blue/Green Deployment Router
  * KVからアクティブWorkerを取得してリクエストを転送
@@ -132,22 +133,8 @@ async function proxyToVercel(
   env: Env,
   replayableBody: ArrayBuffer | null,
 ): Promise<Response> {
-  const url = new URL(request.url)
   const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
-  const target = new URL(url.pathname + url.search, targetBase)
-
-  // Hostヘッダーはfetchに任せ、オリジナルHost情報だけ伝える
-  const headers = new Headers(request.headers)
-  headers.set('X-Forwarded-Host', url.hostname)
-  headers.set('X-Forwarded-Proto', 'https')
-
-  const proxiedRequest = new Request(
-    target.toString(),
-    buildProxyRequestInit(request, headers, 'follow', replayableBody),
-  )
-
-  const response = await fetch(proxiedRequest)
-  return response
+  return fetchUpstream(buildReplayableRequest(request.url, request, replayableBody, 'manual'), targetBase)
 }
 
 const handler: ExportedHandler<Env> = {
@@ -184,6 +171,15 @@ const handler: ExportedHandler<Env> = {
         },
       })
       return applyCORSHeaders(tooLargeResponse, request.headers.get('Origin'), securityHeaders)
+    }
+
+    // Admin requests have one origin and no blue/green failover. Never replay writes.
+    if (isAdminPath(url.pathname)) {
+      try {
+        return noStore(await proxyToVercel(request, env, replayableBody))
+      } catch {
+        return noStore(new Response('Gateway Error', { status: 502 }))
+      }
     }
 
     try {
@@ -285,6 +281,10 @@ const handler: ExportedHandler<Env> = {
         },
       })
       
+      if (!isSafeMethod(request.method)) {
+        return noStore(new Response('Gateway Error', { status: 502 }))
+      }
+
       // フォールバック: Blue Workerを使用
       try {
         const fallbackResponse = await env.WORKER_BLUE.fetch(

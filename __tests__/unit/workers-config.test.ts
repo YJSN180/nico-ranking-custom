@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
@@ -23,6 +24,21 @@ describe('worker upstream configuration', () => {
     expect(green).toEqual([router[0]])
     expect(green[0]).not.toMatch(PINNED_DEPLOYMENT)
   })
+})
+
+it('legacy green config paths describe the same deployment, never the router', () => {
+  for (const file of ['wrangler-green.toml', 'workers/wrangler.toml']) {
+    expect(quotedValues(file, 'name')[0]).toBe('nico-ranking-api-gateway-green')
+    expect(quotedValues(file, 'VERCEL_DEPLOYMENT_URL')).toEqual(quotedValues('workers/wrangler-green.toml', 'VERCEL_DEPLOYMENT_URL'))
+    expect(quotedValues(file, 'compatibility_date')).toEqual(['2024-12-01'])
+  }
+})
+
+it('deployment guard rejects mismatched sources/configs and accepts the canonical target', () => {
+  const run = (...args: string[]) => spawnSync(process.execPath, ['scripts/validate-worker-target.mjs', ...args], { encoding: 'utf8' })
+  expect(run('nico-ranking-api-gateway-green', 'workers/api-gateway-green-20250726.ts', 'workers/wrangler-green.toml').status).toBe(0)
+  expect(run('nico-ranking-api-gateway-green', 'workers/api-gateway-green-20250726.ts', 'workers/wrangler.toml').status).toBe(1)
+  expect(run('nico-ranking-api-gateway', 'workers/api-gateway-green-20250726.ts', 'wrangler.toml').status).toBe(1)
 })
 
 function bindingBlock(file: string, name: string): string | undefined {

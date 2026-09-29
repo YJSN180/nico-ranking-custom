@@ -1,5 +1,6 @@
 import { MetadataRoute } from 'next'
 import { RANKING_GENRES } from '@/types/ranking-config'
+import { buildRankingConfigUrl } from '@/lib/ranking-url'
 
 // URLをXML用にエスケープする関数
 function escapeXmlUrl(url: string): string {
@@ -57,29 +58,27 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ]
 
-  // ジャンル別ページ
-  const genrePages = RANKING_GENRES.map((genre) => ({
-    url: escapeXmlUrl(`${baseUrl}?genre=${genre.value}`),
+  // ランキングページの URL はサイト内のリンクと同じ形にする（総合・24時間は省略）。
+  // 同じ中身を別の URL で重ねて載せない。custom は端末ごとの設定なので、クローラーには空に見える
+  const rankingGenres = RANKING_GENRES.filter((genre) => genre.value !== 'custom')
+
+  // ジャンル別ページ（24時間）。総合・24時間はトップページと同じなので除く
+  const genrePages = rankingGenres
+    .filter((genre) => genre.value !== 'all')
+    .map((genre) => ({
+      url: escapeXmlUrl(`${baseUrl}${buildRankingConfigUrl({ genre: genre.value, period: '24h' })}`),
+      lastModified: currentDate,
+      changeFrequency: 'hourly' as const,
+      priority: 0.8,
+    }))
+
+  // 毎時ページ
+  const periodPages = rankingGenres.map((genre) => ({
+    url: escapeXmlUrl(`${baseUrl}${buildRankingConfigUrl({ genre: genre.value, period: 'hour' })}`),
     lastModified: currentDate,
     changeFrequency: 'hourly' as const,
-    priority: 0.8,
+    priority: 0.7,
   }))
-
-  // 期間別ページ（24h/hour）
-  const periodPages = RANKING_GENRES.flatMap((genre) => [
-    {
-      url: escapeXmlUrl(`${baseUrl}?genre=${genre.value}&period=24h`),
-      lastModified: currentDate,
-      changeFrequency: 'hourly' as const,
-      priority: 0.7,
-    },
-    {
-      url: escapeXmlUrl(`${baseUrl}?genre=${genre.value}&period=hour`),
-      lastModified: currentDate,
-      changeFrequency: 'hourly' as const,
-      priority: 0.7,
-    },
-  ])
 
   return [...staticPages, ...genrePages, ...periodPages]
 }

@@ -90,7 +90,9 @@ describe('smart router request bodies', () => {
     expect(upstream).not.toHaveBeenCalled()
   })
 
-  it('still forwards an ordinary POST body unchanged', async () => {
+  it('still forwards an ordinary POST body unchanged to the admin origin', async () => {
+    const upstream = vi.fn(async (_request: Request) => new Response('ok'))
+    vi.stubGlobal('fetch', upstream)
     const env = routerEnv()
     const body = JSON.stringify({ videoIds: ['sm1'], authorIds: [], videoTitles: [], authorNames: [] })
 
@@ -101,7 +103,10 @@ describe('smart router request bodies', () => {
     )
 
     expect(response.status).toBe(200)
-    const forwarded = (env.WORKER_GREEN as { fetch: ReturnType<typeof vi.fn> }).fetch.mock.calls[0][0] as Request
+    expect((env.WORKER_GREEN as { fetch: ReturnType<typeof vi.fn> }).fetch).not.toHaveBeenCalled()
+    expect(upstream).toHaveBeenCalledTimes(1)
+    const forwarded = upstream.mock.calls[0][0] as Request
+    expect(new URL(forwarded.url).pathname).toBe('/api/admin/ng-list')
     expect(await forwarded.text()).toBe(body)
   })
 })

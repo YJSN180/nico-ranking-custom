@@ -57,14 +57,40 @@ export async function middleware(request: NextRequest) {
   const host = request.headers.get('host')
   const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
 
-  // デバッグ用ルートは本番では公開しない
-  if (pathname.startsWith('/test-') && process.env.NODE_ENV === 'production') {
-    return new NextResponse(null, { status: 404 })
-  }
-  
   // キャッシュ禁止対象パス
 const noStorePaths: string[] = []
-  
+
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ||
+             request.headers.get('x-real-ip') ||
+             'unknown'
+
+  // デバッグ・検証用のエンドポイントを本番ビルド（プレビューを含む）で無効化。開発時は判定しない
+  // 公開APIの早期returnより前に置く（後ろにあると admin 以外の /api/* に効かない）
+  if (process.env.NODE_ENV === 'production' && pathname.startsWith('/api/')) {
+    const dangerousEndpoints = [
+      '/api/debug',
+      '/api/test',
+      '/api/debug-sensitive',
+      '/api/internal-proxy',
+      '/api/env-check',
+      '/api/debug-env',
+      '/api/test-scraping',
+      '/api/test-hybrid-scrape',
+      '/api/test-hourly-scrape',
+      '/api/debug-genre'
+    ]
+
+    if (dangerousEndpoints.some(path => pathname.startsWith(path))) {
+      SecurityLogger.log({
+        event: SecurityEventType.DEBUG_ENDPOINT_ACCESS,
+        ip,
+        path: pathname,
+        userAgent: request.headers.get('user-agent') || undefined
+      })
+      return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+    }
+  }
+
   // SECURITY FIX: /api/admin/* は認証チェックを通す
   // 一般的な公開APIのみ認証をスキップ
   // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
@@ -93,11 +119,11 @@ const noStorePaths: string[] = []
   if (process.env.VERCEL_ENV === 'development') {
     return NextResponse.next()
   }
-  
+
   // 本番環境のWorker認証チェック
   const cfWorkerKey = request.headers.get('X-Worker-Auth')
   const expectedKey = process.env.WORKER_AUTH_KEY
-  
+
   // Workersからの認証チェック（共有キーは定数時間で比べる）
   if (cfWorkerKey && expectedKey && await timingSafeEqual(cfWorkerKey, expectedKey)) {
     // 管理系パスはWorker認証があってもBasic認証を要求
@@ -105,7 +131,7 @@ const noStorePaths: string[] = []
       return NextResponse.next()
     }
   }
-  
+
   // 緊急修復：リダイレクトロジックを一時的に無効化
   // Vercel URLへの直接アクセスチェックを無効化（無限リダイレクト対策）
   // if (host?.includes('vercel.app') && request.method !== 'OPTIONS' && process.env.VERCEL_ENV !== 'preview') {
@@ -117,7 +143,7 @@ const noStorePaths: string[] = []
   //     return NextResponse.redirect('https://nico-rank.com' + pathname)
   //   }
   // }
-  
+
   // プレビューデプロイメントの保護を無効化
   // Vercelのスタンダードプロテクションに依存
   // if (process.env.VERCEL_ENV === 'preview') {
@@ -134,44 +160,11 @@ const noStorePaths: string[] = []
   //     })
   //   }
   // }
-  
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
-             request.headers.get('x-real-ip') || 
-             'unknown'
 
-  // APIエンドポイントのレート制限
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    // デバッグエンドポイントを本番環境で無効化
-    const dangerousEndpoints = [
-      '/api/debug',
-      '/api/test',
-      '/api/debug-sensitive',
-      '/api/internal-proxy',
-      '/api/env-check',
-      '/api/debug-env',
-      '/api/test-scraping',
-      '/api/test-hybrid-scrape',
-      '/api/test-hourly-scrape',
-      '/api/debug-genre'
-    ]
-    
-    if (process.env.VERCEL_ENV === 'production' && 
-        dangerousEndpoints.some(path => request.nextUrl.pathname.startsWith(path))) {
-      SecurityLogger.log({
-        event: SecurityEventType.DEBUG_ENDPOINT_ACCESS,
-        ip,
-        path: request.nextUrl.pathname,
-        userAgent: request.headers.get('user-agent') || undefined
-      })
-      return NextResponse.json({ error: 'Not Found' }, { status: 404 })
-    }
-    
-    // Rate limiting removed - rely on Cloudflare's DDoS protection
-  }
   // /admin配下のすべてのパスで認証を要求
   if (isAdminPath) {
     const authHeader = request.headers.get('authorization')
-    
+
     // 通常のページアクセスの場合
     // 認証ヘッダーがない場合
     if (!authHeader || !authHeader.startsWith('Basic ')) {
@@ -182,7 +175,7 @@ const noStorePaths: string[] = []
         },
       })
     }
-    
+
     // 認証情報をチェック
     try {
       const base64Credentials = authHeader.split(' ')[1]
@@ -191,22 +184,22 @@ const noStorePaths: string[] = []
       const separator = credentials.indexOf(':')
       const username = separator === -1 ? credentials : credentials.slice(0, separator)
       const password = separator === -1 ? '' : credentials.slice(separator + 1)
-      
+
       // 環境変数が設定されていない場合はエラー
       if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD) {
         // ADMIN_USERNAME or ADMIN_PASSWORD environment variables are not set
         return new NextResponse('Server configuration error', { status: 500 })
       }
-      
+
       const validUsername = process.env.ADMIN_USERNAME
       const validPassword = process.env.ADMIN_PASSWORD
-      
+
       // 定数時間で比べる。ユーザー名が違ってもパスワードの比較を省かない（どちらが違ったかを時間で漏らさない）
       const [usernameMatches, passwordMatches] = await Promise.all([
         timingSafeEqual(username, validUsername),
         timingSafeEqual(password, validPassword),
       ])
-      
+
       if (!usernameMatches || !passwordMatches) {
         SecurityLogger.logAuthFailure(
           'admin',
@@ -222,7 +215,7 @@ const noStorePaths: string[] = []
           },
         })
       }
-      
+
       // 認証成功時、クッキーを設定
       const response = NextResponse.next()
       response.cookies.set('admin-auth', 'authenticated', {
@@ -242,7 +235,7 @@ const noStorePaths: string[] = []
       })
     }
   }
-  
+
   // 特定パスはここで即返し、ヘッダーを強制上書き
   if (noStorePaths.some(p => pathname.startsWith(p))) {
     const res = NextResponse.next()
@@ -253,7 +246,7 @@ const noStorePaths: string[] = []
   }
 
   const response = NextResponse.next()
-  
+
   // パフォーマンス最適化ヘッダー
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
@@ -265,7 +258,7 @@ const noStorePaths: string[] = []
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
     ].join(', '))
   }
-  
+
   // APIルートの最適化
   // /api/ranking: no-store を強制（古いデータ問題の根本原因だったため）
   // CDNキャッシュは Cloudflare Workers 側で管理するため、Vercel側はキャッシュしない
@@ -282,7 +275,7 @@ const noStorePaths: string[] = []
     response.headers.set('CDN-Cache-Control', 'no-store')
     response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   }
-  
+
   // 静的アセットの長期キャッシュ設定
   if (request.nextUrl.pathname.startsWith('/fonts/')) {
     // フォントファイル: 1年キャッシュ + immutable
@@ -310,19 +303,19 @@ const noStorePaths: string[] = []
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
   }
-  
+
   // セキュリティヘッダーを追加
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-XSS-Protection', '1; mode=block')
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
-  
+
   // 本番環境でのみHSTSを有効化
   if (process.env.VERCEL_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   }
-  
+
   return response
 }
 

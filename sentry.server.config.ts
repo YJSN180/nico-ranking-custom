@@ -18,6 +18,8 @@ Sentry.init({
   enabled: isSentryEnabled(dsn, environment),
   environment,
   sendDefaultPii: false,
+  // trace のヘッダー（sentry-trace・baggage）は自サイトの API にだけ付ける。本家や Cloudflare の API には送らない
+  tracePropagationTargets: [/^https:\/\/nico-rank\.com\/api\//],
   tracesSampler: (samplingContext) => {
     if (!isProductionSentryEnvironment(environment)) {
       return 1

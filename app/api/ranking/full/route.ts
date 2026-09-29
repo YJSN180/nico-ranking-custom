@@ -22,10 +22,12 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({ genre, period })
   if (tag) params.set('tag', tag)
 
-  // SSR(page.tsx)と同じく同一オリジンの /api/ranking を経由する。
-  // preview では既存プロキシ（許可済みUA）、本番では301追従でゲートウェイに届く。
-  // ゲートウェイ直フェッチは Cloudflare 側の保護で 403 になる（実測）
-  const upstreamUrl = new URL('/api/ranking', request.nextUrl.origin)
+  // 本番は SSR と同じ設定済みゲートウェイを使う。保護されたデプロイ URL に戻らない。
+  // プレビューは既存の同一オリジンプロキシを使う。
+  const upstreamBase = process.env.VERCEL_ENV === 'production'
+    ? process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
+    : request.nextUrl.origin
+  const upstreamUrl = new URL('/api/ranking', upstreamBase)
   params.forEach((value, key) => upstreamUrl.searchParams.set(key, value))
 
   try {
@@ -35,7 +37,8 @@ export async function GET(request: NextRequest) {
       // ヘッダーはSSR(page.tsx)のフェッチと同一にする（実績のある組み合わせ）
       headers: {
         Accept: 'application/json',
-        'Accept-Encoding': 'gzip, deflate, br'
+        'Accept-Encoding': 'gzip, deflate, br',
+        'User-Agent': 'nico-ranking-web/1.0'
       },
       cache: 'no-store',
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS)

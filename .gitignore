@@ -149,6 +149,7 @@ scripts/*
 !scripts/record-pipeline-status.ts
 !scripts/sync-ranking-auxiliary.ts
 !scripts/manage-ranking-generations.ts
+!scripts/lighthouse-app-server.mjs
 !scripts/lib/
 scripts/lib/*
 !scripts/lib/r2-store.ts
@@ -207,3 +208,5 @@ workers/video-stats-updater/wrangler-debug.toml
 
 # ローカル実験（公開リポジトリに出さない: 個人IDや名前を含む判定データ・スクリプト）
 scripts/experiments/
+!scripts/validate-worker-target.mjs
+!scripts/check-admin-gateway.mjs

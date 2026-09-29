@@ -1,3 +1,4 @@
+import { fetchUpstream, isAdminPath, noStore } from './utils/upstream-proxy'
 /**
  * Cloudflare Worker - Green Worker 20250726 with Dynamic TTL & ETag Support
  * Smart Router用Green Worker（動的TTL & ETag対応、2025-07-26版）
@@ -379,6 +380,13 @@ function isETagMatch(currentETag: string, ifNoneMatch: string | null): boolean {
 const handler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
+    if (isAdminPath(url.pathname)) {
+      try {
+        return noStore(await fetchUpstream(request, env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'))
+      } catch {
+        return noStore(new Response('Gateway Error', { status: 502 }))
+      }
+    }
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
@@ -1282,70 +1290,9 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url)
   const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
   
-  const targetHost = new URL(targetUrl).hostname
-  const proxyUrl = new URL(url.pathname + url.search, targetUrl)
-  
-  const headers = new Headers(request.headers)
-  // Hostはfetchに任せる（明示するとリダイレクトループの原因になる）
-  headers.set('X-Forwarded-Host', url.hostname)
-  headers.set('X-Forwarded-Proto', 'https')
-  headers.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
-  // Worker の秘密は上流へ渡さない。現行の middleware は /api/* でこの値を使わず、
-  // 2026-01 より前のビルドでは /api/admin/* の Basic 認証を飛ばす鍵として働いてしまう
-  headers.delete('X-Worker-Auth')
-
-  const proxyRequest = new Request(proxyUrl.toString(), {
-    method: request.method,
-    headers,
-    body: request.body,
-    redirect: 'manual'
-  })
-  
   try {
-    const response = await fetch(proxyRequest)
-    
-    // 30xリダイレクトの処理（無限ループ防止）
-    if (response.status === 307 || response.status === 301 || response.status === 302 || response.status === 303 || response.status === 308) {
-      const location = response.headers.get('Location')
-      console.warn(`[Green Worker] Redirect detected: ${response.status} to ${location ? sanitizeUrlForSentry(location) : 'none'}`)
-      
-      if (location) {
-        const loc = new URL(location, url)
-        // 追跡するのは上流デプロイ内のリダイレクトだけ。公開ホスト（自身に戻るループ）や
-        // 他のホストへは、クライアントの Cookie / Authorization を付けて取りに行かずそのまま返す
-        if (loc.hostname !== targetHost) {
-          const origin = request.headers.get('Origin')
-          const safeHeaders = new Headers(response.headers)
-          Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))
-          return applyCORSHeaders(new Response(response.body, {
-            status: response.status,
-            statusText: response.statusText,
-            headers: safeHeaders
-          }), origin, {})
-        }
-        
-        // ループを避けるため、Hostヘッダーを外した状態で追跡
-        const followHeaders = new Headers(request.headers)
-        followHeaders.delete('Host')
-        followHeaders.set('X-Forwarded-Host', url.hostname)
-        followHeaders.set('X-Forwarded-Proto', 'https')
-        followHeaders.set('X-Real-IP', request.headers.get('CF-Connecting-IP') || '')
-        const followed = await fetch(loc.toString(), {
-          method: 'GET',
-          headers: followHeaders,
-          redirect: 'follow'
-        })
-        const origin = request.headers.get('Origin')
-        const safeHeaders = new Headers(followed.headers)
-        Object.entries(securityHeaders).forEach(([key, value]) => safeHeaders.set(key, value))
-        return applyCORSHeaders(new Response(followed.body, {
-          status: followed.status,
-          statusText: followed.statusText,
-          headers: safeHeaders
-        }), origin, {})
-      }
-    }
-    
+    const response = await fetchUpstream(request, targetUrl)
+
     // 通常のレスポンス処理
     const responseHeaders = new Headers(response.headers)
     
@@ -1362,7 +1309,7 @@ async function proxyToVercel(request: Request, env: Env): Promise<Response> {
     })
     
     const origin = request.headers.get('Origin')
-    return applyCORSHeaders(normalProxyResponse, origin, {})
+    return isAdminPath(url.pathname) ? noStore(normalProxyResponse) : applyCORSHeaders(normalProxyResponse, origin, {})
   } catch (error) {
     console.error('Proxy error:', error)
     captureWorkerException(error, {

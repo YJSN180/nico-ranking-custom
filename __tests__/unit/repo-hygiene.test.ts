@@ -21,7 +21,30 @@ const removedArtifactPaths = [
   'workers/video-stats-updater/wrangler-debug.toml',
 ]
 
+// public/ の検証用ファイル（test-*.html、*-test.html、check-*.html、sw-custom.js）
+const verificationPublicFilePattern = /(^|-)(test|debug|check)[-.]|^sw-custom\./
+
+// 開発時だけ動き、本番ビルドでは 404 を返すルート（__tests__/unit/api/debug-log.test.ts）
+const devOnlyRoutes = ['api/debug-log']
+
 describe('repo hygiene', () => {
+  it('keeps verification pages out of what production serves', () => {
+    const appDir = path.join(repoRoot, 'app')
+    const routes = [
+      ...fs.readdirSync(appDir),
+      ...fs.readdirSync(path.join(appDir, 'api')).map((name) => `api/${name}`),
+    ]
+    const verificationRoutes = routes.filter(
+      (route) => /^(api\/)?(test|debug)/.test(route) && !devOnlyRoutes.includes(route),
+    )
+    const verificationPublicFiles = fs
+      .readdirSync(path.join(repoRoot, 'public'))
+      .filter((name) => verificationPublicFilePattern.test(name))
+
+    expect(verificationRoutes).toEqual([])
+    expect(verificationPublicFiles).toEqual([])
+  })
+
   it('keeps transient backup/debug artifacts out of the repository', () => {
     const existingArtifacts = removedArtifactPaths.filter((artifactPath) =>
       fs.existsSync(path.join(repoRoot, artifactPath)),

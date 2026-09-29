@@ -139,46 +139,70 @@ describe('Security Middleware', () => {
   })
   
   describe('Debug Endpoints', () => {
-    it('should block debug endpoints in production', async () => {
-      process.env.VERCEL_ENV = 'production'
-      process.env.WORKER_AUTH_KEY = 'secret-key'
-      
-      const debugPaths = [
-        '/api/debug/test',
-        '/api/debug-sensitive',
-        '/api/internal-proxy',
-        '/api/env-check',
-        '/api/test-scraping/test'
-      ]
-      
-      for (const path of debugPaths) {
-        const request = new NextRequest(`https://nico-rank.com${path}`, {
-          headers: {
-            'host': 'nico-rank.com',
-            'X-Worker-Auth': 'secret-key'
-          }
-        })
-        
-        const response = await middleware(request as any)
-        
-        // API paths are always allowed first, but debug endpoints are blocked
-        expect(response.status).toBe(200) // NextResponse.next() returns 200
+    const debugPaths = [
+      '/api/debug-log',
+      '/api/debug/test',
+      '/api/debug-sensitive',
+      '/api/internal-proxy',
+      '/api/env-check',
+      '/api/test-scraping/test'
+    ]
+
+    it.each(['production', 'preview'])(
+      'should block debug endpoints in production builds (VERCEL_ENV=%s)',
+      async (vercelEnv) => {
+        vi.stubEnv('NODE_ENV', 'production')
+        process.env.VERCEL_ENV = vercelEnv
+        process.env.WORKER_AUTH_KEY = 'secret-key'
+
+        for (const path of debugPaths) {
+          const request = new NextRequest(`https://nico-rank.com${path}`, {
+            method: 'POST',
+            headers: {
+              'host': 'nico-rank.com',
+              'X-Worker-Auth': 'secret-key'
+            }
+          })
+
+          const response = await middleware(request)
+
+          expect(response.status).toBe(404)
+        }
       }
-    })
-    
-    it('should allow debug endpoints in development', async () => {
-      process.env.VERCEL_ENV = 'development'
-      
-      const request = new NextRequest('https://localhost:3000/api/debug/test', {
+    )
+
+    it('should let /api/debug-log through during development', async () => {
+      vi.stubEnv('NODE_ENV', 'development')
+
+      const request = new NextRequest('http://localhost:3000/api/debug-log', {
+        method: 'POST',
         headers: {
           'host': 'localhost:3000'
         }
       })
-      
-      const response = await middleware(request as any)
-      
-      // Should pass through
+
+      const response = await middleware(request)
+
       expect(response.status).toBe(200)
+      expect(response.headers.get('Cache-Control')).toBe('no-store, must-revalidate')
+    })
+
+    it('should keep the no-store headers on the public API in production builds', async () => {
+      vi.stubEnv('NODE_ENV', 'production')
+      process.env.VERCEL_ENV = 'production'
+
+      const request = new NextRequest('https://nico-rank.com/api/ranking', {
+        headers: {
+          'host': 'nico-rank.com'
+        }
+      })
+
+      const response = await middleware(request)
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('Cache-Control')).toBe('no-store, must-revalidate')
+      expect(response.headers.get('CDN-Cache-Control')).toBe('no-store')
+      expect(response.headers.get('Vercel-CDN-Cache-Control')).toBe('no-store')
     })
   })
   

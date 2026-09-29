@@ -51,7 +51,20 @@ describe('/api/ranking/full と上流の一時障害', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
+  })
+
+  it('本番では保護されたデプロイ URL ではなく SSR ゲートウェイから取得する', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking-gateway.example')
+    fetchMock.mockResolvedValue(json(200, { items }))
+    const response = await GET(new NextRequest('https://protected.example/api/ranking/full?genre=game&period=hour&tag=tag'))
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://ranking-gateway.example/api/ranking?genre=game&period=hour&tag=tag',
+      expect.objectContaining({ headers: expect.objectContaining({ 'User-Agent': 'nico-ranking-web/1.0' }) })
+    )
   })
 
   it('上流が一度だけ 5xx（R2 の一時障害）なら再試行して全件を返す', async () => {

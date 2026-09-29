@@ -11,6 +11,7 @@ vi.mock('@sentry/nextjs', () => ({
 }))
 
 type InitOptions = {
+  tracePropagationTargets?: Array<string | RegExp>
   dsn?: string
   enabled?: boolean
   environment?: string
@@ -52,6 +53,30 @@ async function loadInitOptions(load: () => Promise<unknown>): Promise<InitOption
   expect(initMock).toHaveBeenCalledTimes(1)
   return initMock.mock.calls[0][0] as InitOptions
 }
+
+describe('Sentry trace propagation on the server', () => {
+  beforeEach(() => {
+    stubSentryEnv({ NEXT_PUBLIC_SENTRY_DSN: DSN, VERCEL_ENV: 'production' })
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it.each(CONFIGS.filter((config) => config.runtime === 'server'))(
+    '$name only sends trace headers to the site API',
+    async ({ load }) => {
+      const targets = (await loadInitOptions(load)).tracePropagationTargets ?? []
+      const matches = (url: string) => targets.some((target) => (typeof target === 'string' ? url.includes(target) : target.test(url)))
+
+      expect(targets.length).toBeGreaterThan(0)
+      expect(matches('https://nico-rank.com/api/ranking?genre=all')).toBe(true)
+      expect(matches('https://nvapi.nicovideo.jp/v2/search/video?keyword=x')).toBe(false)
+      expect(matches('https://www.nicovideo.jp/tag/x')).toBe(false)
+      expect(matches('https://api.cloudflare.com/client/v4/accounts/x')).toBe(false)
+    },
+  )
+})
 
 describe('Sentry init options', () => {
   beforeEach(() => {

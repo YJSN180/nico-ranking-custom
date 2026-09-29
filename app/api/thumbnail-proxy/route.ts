@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const imageUrl = searchParams.get('url')
-    
+
     if (!imageUrl) {
       return NextResponse.json(
         { error: 'URL parameter is required' },
@@ -70,10 +70,10 @@ export async function GET(request: NextRequest) {
         { status: imageResponse.status }
       )
     }
-    
+
     const contentType = imageResponse.headers.get('content-type') || 'image/jpeg'
     const imageBuffer = await imageResponse.arrayBuffer()
-    
+
     // 画像を返す
     return new NextResponse(imageBuffer, {
       status: 200,
@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
         'X-Content-Type-Options': 'nosniff'
       }
     })
-    
+
   } catch (error) {
     console.error('Thumbnail proxy error:', error)
     return NextResponse.json(
