@@ -117,8 +117,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
 
   const resolveBaseUrl = () => {
+    if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
     // Generated Vercel deployment URLs require authentication under Deployment Protection.
-    if (process.env.VERCEL_ENV === 'production') return process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
+    if (process.env.VERCEL_ENV === 'production') return 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
     const vercelUrl = process.env.VERCEL_URL

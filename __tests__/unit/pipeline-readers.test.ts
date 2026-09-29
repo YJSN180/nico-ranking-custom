@@ -24,6 +24,16 @@ afterEach(() => {
 })
 
 describe('active generation readers', () => {
+  it('protected previews use their explicitly configured SSR gateway for popular tags', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('VERCEL_URL', 'protected-preview.vercel.app')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking.example.test')
+    const fetch = vi.fn(async () => Response.json({ popularTags: ['tag'] }))
+    vi.stubGlobal('fetch', fetch)
+    expect(await getPopularTags('game', 'hour')).toEqual(['tag'])
+    expect(fetch).toHaveBeenCalledWith(new URL('https://ranking.example.test/api/ranking?genre=game&period=hour'), expect.any(Object))
+  })
+
   it.each([undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'])(
     'production SSR avoids the protected deployment URL with gateway %s', async (gateway) => {
     vi.stubEnv('VERCEL_ENV', 'production')

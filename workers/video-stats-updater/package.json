@@ -32,8 +32,6 @@
   },
   "dependencies": {},
   "overrides": {
-    "miniflare": {
-      "undici": "7.29.1"
-    }
+    "undici": "7.29.1"
   }
 }

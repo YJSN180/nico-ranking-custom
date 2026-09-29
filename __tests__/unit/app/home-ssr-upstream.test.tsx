@@ -89,6 +89,17 @@ describe('app/page.tsx: ランキング取得の一時障害', () => {
   afterEach(() => {
     global.fetch = originalFetch
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+  })
+
+  it('protected previews use the explicitly configured SSR gateway', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('VERCEL_URL', 'protected-preview.vercel.app')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking.example.test')
+    fetchMock.mockResolvedValue(json(200, { items }))
+    const tree = await Home({ searchParams: Promise.resolve({ genre: 'game' }) })
+    expect(embeddedItems(tree)).toHaveLength(3)
+    expect(new URL(String(fetchMock.mock.calls[0][0])).origin).toBe('https://ranking.example.test')
   })
 
   it('上流が一度だけ 5xx なら再試行して表示し、ジャンルのページから別ページへ飛ばさない', async () => {
