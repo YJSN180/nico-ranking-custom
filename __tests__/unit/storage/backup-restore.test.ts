@@ -180,7 +180,9 @@ describe('Export Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await exportMylistData()
     
@@ -203,7 +205,9 @@ describe('Export Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(null)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     await expect(exportMylistData()).rejects.toThrow('Database not initialized')
   })
@@ -220,7 +224,9 @@ describe('Export Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     await expect(exportMylistData()).rejects.toThrow('Transaction failed')
   })
@@ -347,24 +353,9 @@ describe('Download Backup Data Tests', () => {
 
 describe('Import Mylist Data Tests', () => {
   it('should import mylist data successfully', async () => {
-    // トランザクションカウンター（読み取り用と書き込み用を区別）
-    let transactionCount = 0
-    
-    const mockDB = {
+const mockDB = {
       transaction: vi.fn().mockImplementation((stores, mode) => {
-        transactionCount++
-        
-        // 最初のトランザクションは既存データ読み取り用
-        if (transactionCount === 1) {
-          return {
-            objectStore: vi.fn(() => ({
-              getAll: vi.fn().mockResolvedValue([]) // 既存データなし
-            })),
-            done: Promise.resolve()
-          }
-        }
-        
-        // 2番目以降は書き込み用トランザクション
+        // 読み取りと書き込みは同じトランザクションで行う
         return {
           objectStore: vi.fn((storeName) => ({
             get: vi.fn().mockResolvedValue(null),
@@ -382,7 +373,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     
@@ -395,10 +388,7 @@ describe('Import Mylist Data Tests', () => {
   })
   
   it('should detect and count overwritten mylists', async () => {
-    // トランザクションカウンター
-    let transactionCount = 0
-    
-    // 既存のデータ（test-mylist-1が既に存在）
+// 既存のデータ（test-mylist-1が既に存在）
     const existingMylists = [
       { id: 'test-mylist-1', name: '既存のマイリスト1', videoCount: 2 }
     ]
@@ -406,21 +396,7 @@ describe('Import Mylist Data Tests', () => {
     
     const mockDB = {
       transaction: vi.fn().mockImplementation((stores, mode) => {
-        transactionCount++
-        
-        // 最初のトランザクションは既存データ読み取り用
-        if (transactionCount === 1) {
-          return {
-            objectStore: vi.fn((storeName) => ({
-              getAll: vi.fn().mockResolvedValue(
-                storeName === 'mylists' ? existingMylists : existingVideos
-              )
-            })),
-            done: Promise.resolve()
-          }
-        }
-        
-        // 2番目以降は書き込み用トランザクション
+        // 読み取りと書き込みは同じトランザクションで行う
         return {
           objectStore: vi.fn((storeName) => ({
             get: vi.fn().mockResolvedValue(null),
@@ -440,7 +416,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     // smart_mergeモードで実行（既存データを上書き）
     const result = await importMylistData(validBackupData, 'smart_merge')
@@ -454,24 +432,9 @@ describe('Import Mylist Data Tests', () => {
   })
   
   it('should handle partial import with errors', async () => {
-    // トランザクションカウンター
-    let transactionCount = 0
-    
-    const mockDB = {
+const mockDB = {
       transaction: vi.fn().mockImplementation((stores, mode) => {
-        transactionCount++
-        
-        // 最初のトランザクションは既存データ読み取り用
-        if (transactionCount === 1) {
-          return {
-            objectStore: vi.fn(() => ({
-              getAll: vi.fn().mockResolvedValue([]) // 既存データなし
-            })),
-            done: Promise.resolve()
-          }
-        }
-        
-        // 2番目以降は書き込み用トランザクション
+        // 読み取りと書き込みは同じトランザクションで行う
         return {
           objectStore: vi.fn((storeName) => ({
             get: vi.fn().mockResolvedValue(null),
@@ -499,13 +462,16 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(mockDB)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     
     expect(result.success).toBe(false)
     expect(result.imported.mylists).toBe(1) // 1つだけ成功
-    expect(result.imported.videos).toBe(2)   // 2つだけ成功
+    expect(result.imported.videos).toBe(1) // 所属リストの取り込みが失敗した動画は保存しない
+    expect(result.skipped.videos).toBe(1)
     expect(result.errors).toHaveLength(2)
     expect(result.errors[0]).toContain('テストマイリスト2')
     expect(result.errors[1]).toContain('動画関連データ')
@@ -519,7 +485,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn().mockReturnValue(null)
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     
@@ -538,7 +506,9 @@ describe('Import Mylist Data Tests', () => {
       getDB: vi.fn()
     }
     
-    vi.mocked(DBManager).mockImplementation(() => mockDBManager as any)
+    vi.mocked(DBManager).mockImplementation(function () {
+      return mockDBManager as unknown as DBManager
+    })
     
     const result = await importMylistData(validBackupData)
     

@@ -16,6 +16,17 @@ describe('Thumbnail Proxy API', () => {
   })
 
   describe('GET /api/thumbnail-proxy', () => {
+    it.each([
+      'https://nicovideo.cdn.nimg.jp.evil.example/image.jpg',
+      'https://user:password@nicovideo.cdn.nimg.jp/image.jpg',
+      'https://nicovideo.cdn.nimg.jp:8443/image.jpg',
+      'https://127.0.0.1/image.jpg',
+    ])('rejects unsafe origin %s without fetching', async (imageUrl) => {
+      const response = await GET(new NextRequest(`http://localhost/api/thumbnail-proxy?url=${encodeURIComponent(imageUrl)}`))
+      expect(response.status).toBe(400)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     it('should return 400 when URL parameter is missing', async () => {
       const request = new NextRequest('http://localhost/api/thumbnail-proxy')
       const response = await GET(request)
@@ -39,7 +50,10 @@ describe('Thumbnail Proxy API', () => {
       const response = await GET(request)
       const data = await response.json()
 
-      expect(response.status).toBe(500) // URL parsing throws
+      // 解析できない URL は利用者の入力の誤り（上流へは問い合わせない）
+      expect(response.status).toBe(400)
+      expect(data.error).toBe('Invalid image URL')
+      expect(mockFetch).not.toHaveBeenCalled()
     })
 
     it('should proxy image from allowed nicovideo.cdn.nimg.jp host', async () => {
@@ -157,6 +171,89 @@ describe('Thumbnail Proxy API', () => {
 
       expect(response.status).toBe(200)
       expect(response.headers.get('Content-Type')).toBe('image/jpeg')
+    })
+  })
+
+  // 許可ホストのリダイレクトで外（任意のホストや内部アドレス）へ出ないよう、各ホップの行き先を確かめて自前で追う
+  describe('GET /api/thumbnail-proxy のリダイレクト', () => {
+    const imageUrl = 'https://tn.smilevideo.jp/smile?i=12345'
+    const redirectTo = (location: string | null, status = 302) => ({
+      ok: false,
+      status,
+      headers: new Headers(location === null ? {} : { location }),
+      body: null,
+    })
+    const image = () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'image/jpeg' }),
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+    })
+    const proxy = () => GET(new NextRequest(`http://localhost/api/thumbnail-proxy?url=${encodeURIComponent(imageUrl)}`))
+    const requestedUrls = () => mockFetch.mock.calls.map(([url]) => String(url))
+
+    beforeEach(() => {
+      mockFetch.mockReset()
+    })
+
+    it('fetch に自動では追わせない（redirect: manual）', async () => {
+      mockFetch.mockResolvedValue(image())
+
+      await proxy()
+
+      expect(mockFetch).toHaveBeenCalledWith(imageUrl, expect.objectContaining({ redirect: 'manual' }))
+    })
+
+    it.each([301, 302, 303, 307, 308])('%i で許可ホストへ向かうなら追う', async (status) => {
+      const cdn = 'https://nicovideo.cdn.nimg.jp/thumbnails/12345/12345'
+      mockFetch.mockResolvedValueOnce(redirectTo(cdn, status)).mockResolvedValueOnce(image())
+
+      const response = await proxy()
+
+      expect(response.status).toBe(200)
+      expect(requestedUrls()).toEqual([imageUrl, cdn])
+    })
+
+    it('相対の Location は今の URL を基準に解決して追う', async () => {
+      mockFetch.mockResolvedValueOnce(redirectTo('/smile?i=12345&size=L')).mockResolvedValueOnce(image())
+
+      const response = await proxy()
+
+      expect(response.status).toBe(200)
+      expect(requestedUrls()).toEqual([imageUrl, 'https://tn.smilevideo.jp/smile?i=12345&size=L'])
+    })
+
+    it.each([
+      ['許可ホスト以外', 'https://tracker.example/thumbnail.jpg'],
+      ['内部アドレス', 'http://169.254.169.254/latest/meta-data/'],
+      ['許可ホストに似た別ホスト', 'https://nicovideo.cdn.nimg.jp.example/thumbnail.jpg'],
+      ['http(s) 以外', 'ftp://nicovideo.cdn.nimg.jp/thumbnail.jpg'],
+    ])('%s へのリダイレクトは追わずに 502', async (_label, location) => {
+      mockFetch.mockResolvedValueOnce(redirectTo(location)).mockResolvedValue(image())
+
+      const response = await proxy()
+
+      expect(response.status).toBe(502)
+      expect(await response.json()).toEqual({ error: 'Failed to fetch image' })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('Location の無いリダイレクトは 502', async () => {
+      mockFetch.mockResolvedValueOnce(redirectTo(null)).mockResolvedValue(image())
+
+      const response = await proxy()
+
+      expect(response.status).toBe(502)
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
+    it('リダイレクトは 3 回まで（4 回目は追わずに 502）', async () => {
+      mockFetch.mockResolvedValue(redirectTo('https://nicovideo.cdn.nimg.jp/thumbnails/12345/loop'))
+
+      const response = await proxy()
+
+      expect(response.status).toBe(502)
+      expect(mockFetch).toHaveBeenCalledTimes(4)
     })
   })
 

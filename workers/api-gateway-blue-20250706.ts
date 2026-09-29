@@ -1,3 +1,4 @@
+import { fetchUpstream, isAdminPath, noStore } from './utils/upstream-proxy'
 /**
  * Blue Worker - Original API Gateway Implementation
  * R2から直接ランキングデータを配信 (Blue/Green用)
@@ -95,6 +96,13 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
+    if (isAdminPath(url.pathname)) {
+      try {
+        return noStore(await fetchUpstream(request, env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'))
+      } catch {
+        return noStore(new Response('Gateway Error', { status: 502 }))
+      }
+    }
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {

@@ -178,8 +178,8 @@ describe('useUserPreferences', () => {
     // Cookieに移行される
     expect(cookieMock.set).toHaveBeenCalled()
     
-    // localStorageから削除される
-    expect(localStorageMock.removeItem).toHaveBeenCalledWith('user-preferences')
+    // localStorage の控えは消さない（描画前のテーマ適用と、Cookie 失効時の戻り先）
+    expect(localStorageMock.removeItem).not.toHaveBeenCalledWith('user-preferences')
   })
 
   it('設定をリセットできる', () => {

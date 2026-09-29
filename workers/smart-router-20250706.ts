@@ -1,3 +1,4 @@
+import { fetchUpstream, isAdminPath, isSafeMethod, noStore } from './utils/upstream-proxy'
 /**
  * Smart Router - Blue/Green Deployment Router
  * KVからアクティブWorkerを取得してリクエストを転送
@@ -63,14 +64,58 @@ export function buildProxyRequestInit(
   }
 }
 
-export async function readReplayableBody(request: Request): Promise<ArrayBuffer | null> {
+// 再送用に本文をメモリへ読むため上限を設ける。Vercel の関数は 4.5MB を超える本文を受け付けないので、
+// これより大きい本文は転送しても失敗する。上限が無いと大きな POST 1 件で isolate のメモリ上限（128MB）に届き、
+// 同じ isolate の他のリクエストもまとめて落ちる
+const MAX_REPLAYABLE_BODY_BYTES = 5 * 1024 * 1024
+
+class RequestBodyTooLargeError extends Error {
+  constructor() {
+    super('Request body too large')
+    this.name = 'RequestBodyTooLargeError'
+  }
+}
+
+export async function readReplayableBody(
+  request: Request,
+  maxBytes: number = MAX_REPLAYABLE_BODY_BYTES,
+): Promise<ArrayBuffer | null> {
   const method = request.method.toUpperCase()
 
   if (method === 'GET' || method === 'HEAD') {
     return null
   }
 
-  return request.clone().arrayBuffer()
+  const declaredLength = Number(request.headers.get('Content-Length'))
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new RequestBodyTooLargeError()
+  }
+  if (!request.body) {
+    return new ArrayBuffer(0)
+  }
+
+  // clone() せずに直接読む（tee で同じ本文をもう一つ溜めない）。以降は読み取った ArrayBuffer だけを使う
+  const reader = request.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw new RequestBodyTooLargeError()
+    }
+    chunks.push(value)
+  }
+
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return body.buffer
 }
 
 function buildReplayableRequest(
@@ -88,29 +133,14 @@ async function proxyToVercel(
   env: Env,
   replayableBody: ArrayBuffer | null,
 ): Promise<Response> {
-  const url = new URL(request.url)
-  const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-2ezx48med-yjsns-projects.vercel.app'
-  const target = new URL(url.pathname + url.search, targetBase)
-
-  // Hostヘッダーはfetchに任せ、オリジナルHost情報だけ伝える
-  const headers = new Headers(request.headers)
-  headers.set('X-Forwarded-Host', url.hostname)
-  headers.set('X-Forwarded-Proto', 'https')
-
-  const proxiedRequest = new Request(
-    target.toString(),
-    buildProxyRequestInit(request, headers, 'follow', replayableBody),
-  )
-
-  const response = await fetch(proxiedRequest)
-  return response
+  const targetBase = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
+  return fetchUpstream(buildReplayableRequest(request.url, request, replayableBody, 'manual'), targetBase)
 }
 
 const handler: ExportedHandler<Env> = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     void ctx
     const url = new URL(request.url)
-    const replayableBody = await readReplayableBody(request)
     
     // OPTIONS リクエストの処理
     if (request.method === 'OPTIONS') {
@@ -127,6 +157,29 @@ const handler: ExportedHandler<Env> = {
         },
       })
       return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
+    }
+
+    let replayableBody: ArrayBuffer | null
+    try {
+      replayableBody = await readReplayableBody(request)
+    } catch (error) {
+      if (!(error instanceof RequestBodyTooLargeError)) throw error
+      const tooLargeResponse = new Response('Payload Too Large', {
+        status: 413,
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      })
+      return applyCORSHeaders(tooLargeResponse, request.headers.get('Origin'), securityHeaders)
+    }
+
+    // Admin requests have one origin and no blue/green failover. Never replay writes.
+    if (isAdminPath(url.pathname)) {
+      try {
+        return noStore(await proxyToVercel(request, env, replayableBody))
+      } catch {
+        return noStore(new Response('Gateway Error', { status: 502 }))
+      }
     }
 
     try {
@@ -228,6 +281,10 @@ const handler: ExportedHandler<Env> = {
         },
       })
       
+      if (!isSafeMethod(request.method)) {
+        return noStore(new Response('Gateway Error', { status: 502 }))
+      }
+
       // フォールバック: Blue Workerを使用
       try {
         const fallbackResponse = await env.WORKER_BLUE.fetch(

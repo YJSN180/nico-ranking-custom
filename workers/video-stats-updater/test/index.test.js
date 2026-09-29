@@ -147,6 +147,40 @@ describe('Video Stats Updater Worker', () => {
       expect(env.STATS_KV._storage.get('VIDEO_STATS_LATEST')).toBe(previous);
     });
 
+    it('does not list R2 while another refresh holds the stats lease (legacy layout)', async () => {
+      paginatedLegacyFixture();
+      env.R2_BUCKET._storage.set('pipeline/stats-lease.json', { owner: 'other-refresh', expiresAt: Date.now() + 60_000 });
+      await runScheduled();
+      expect(env.R2_BUCKET.list).not.toHaveBeenCalled();
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('waits and resumes from the same cursor when R2 rejects a listing for concurrent access (10058)', async () => {
+      paginatedLegacyFixture();
+      const busy = () => new Error('list: Reduce your concurrent request rate for the same object. (10058)');
+      env.R2_BUCKET.list.mockReset()
+        .mockResolvedValueOnce({
+          objects: [{ key: 'rankings/all/24h/all.json' }, { key: 'rankings/all/hour/all.json' }],
+          truncated: true,
+          cursor: 'page-2',
+        })
+        .mockRejectedValueOnce(busy())
+        .mockRejectedValueOnce(busy())
+        .mockResolvedValueOnce({ objects: [{ key: 'rankings/nature/hour/all.json' }], truncated: false });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true });
+      try {
+        const run = runScheduled();
+        await vi.advanceTimersByTimeAsync(30_000);
+        await run;
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(env.R2_BUCKET.list).toHaveBeenCalledTimes(4);
+      expect(env.R2_BUCKET.list.mock.calls.slice(1).map(([options]) => options.cursor)).toEqual(['page-2', 'page-2', 'page-2']);
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(stats.stats).toHaveProperty('sm4');
+    });
+
     it.each([undefined, 'repeated'])('rejects invalid discovery cursor %s instead of publishing a partial list', async (cursor) => {
       paginatedLegacyFixture();
       env.R2_BUCKET.list.mockReset().mockResolvedValue({
@@ -157,16 +191,47 @@ describe('Video Stats Updater Worker', () => {
       expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
-    function generationFixture() {
-      const manifest = { version: 1, generation: '123-1', counts: { 'all/24h': 2, 'all/hour': 2 },
+    function storeGeneration(generation) {
+      const manifest = { version: 1, generation, counts: { 'all/24h': 2, 'all/hour': 2 },
         collectedAt: new Date().toISOString(), publishedAt: new Date().toISOString() };
-      env.R2_BUCKET._storage.set('rankings/current.json', manifest);
-      env.R2_BUCKET._storage.set('rankings/generations/123-1/metadata.json',
+      env.R2_BUCKET._storage.set(`rankings/generations/${generation}/metadata.json`,
         { version: 1, updatedAt: manifest.collectedAt, tagsByGenrePeriod: { 'all/24h': {}, 'all/hour': {} } });
-      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/24h/all.json', mockRankingData);
-      env.R2_BUCKET._storage.set('rankings/generations/123-1/all/hour/all.json', mockRankingDataHour);
+      env.R2_BUCKET._storage.set(`rankings/generations/${generation}/all/24h/all.json`, mockRankingData);
+      env.R2_BUCKET._storage.set(`rankings/generations/${generation}/all/hour/all.json`, mockRankingDataHour);
+      return manifest;
+    }
+
+    function generationFixture() {
+      const manifest = storeGeneration('123-1');
+      env.R2_BUCKET._storage.set('rankings/current.json', manifest);
       setupSnapshotAPIMock({ 'sm1,sm2,sm3': { data: ['sm1', 'sm2', 'sm3'].map(contentId => ({ contentId })) } });
       return manifest;
+    }
+
+    /** Publishes a new generation whenever the Snapshot API is called, like a pipeline run finishing mid-refresh. */
+    function publishDuringSnapshot({ times }) {
+      const snapshot = global.fetch;
+      let next = 124;
+      global.fetch = vi.fn(async (url, init) => {
+        if (String(url).includes('snapshot.search.nicovideo.jp') && times-- > 0) {
+          env.R2_BUCKET._storage.set('rankings/current.json', storeGeneration(`${next++}-1`));
+        }
+        return snapshot(url, init);
+      });
+      return global.fetch;
+    }
+
+    function snapshotCalls(fetchMock) {
+      return fetchMock.mock.calls.filter(([url]) => String(url).includes('snapshot.search.nicovideo.jp')).length;
+    }
+
+    /** Sends Sentry envelopes to the fetch mock and returns every parsed envelope line sent so far. */
+    function captureSentry() {
+      env.SENTRY_WORKER_DSN = 'https://public@example.ingest.us.sentry.io/1';
+      return (fetchMock) => fetchMock.mock.calls
+        .filter(([url]) => new URL(String(url)).hostname === 'example.ingest.us.sentry.io')
+        .flatMap(([, init]) => (typeof init.body === 'string' ? init.body : new TextDecoder().decode(init.body))
+          .split('\n').filter(Boolean).map((line) => JSON.parse(line)));
     }
 
     it('reads only the pinned generation and records its stats source', async () => {
@@ -187,14 +252,104 @@ describe('Video Stats Updater Worker', () => {
       expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 
-    it('rejects a generation switch during a stats fetch', async () => {
-      const manifest = generationFixture();
-      const fetchStats = global.fetch;
-      global.fetch = vi.fn(async (...args) => {
-        env.R2_BUCKET._storage.set('rankings/current.json', { ...manifest, generation: '124-1' });
-        return fetchStats(...args);
+    it('refreshes again from a generation published during the run', async () => {
+      generationFixture();
+      const fetchMock = publishDuringSnapshot({ times: 1 });
+      await runScheduled();
+      expect(snapshotCalls(fetchMock)).toBe(2);
+      expect(env.R2_BUCKET.get).toHaveBeenCalledWith('rankings/generations/124-1/all/24h/all.json');
+      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
+      const source = JSON.parse(env.R2_BUCKET._storage.get('pipeline/video-stats-source.json'));
+      const stats = JSON.parse(env.STATS_KV._storage.get('VIDEO_STATS_LATEST'));
+      expect(source.generation).toBe('124-1');
+      expect(source.updatedAt).toBe(stats.metadata.updatedAt);
+    });
+
+    it('skips with a warning, not an error, if the generation changes again', async () => {
+      generationFixture();
+      const sentryItems = captureSentry();
+      const fetchMock = publishDuringSnapshot({ times: 2 });
+      await runScheduled();
+      expect(snapshotCalls(fetchMock)).toBe(2);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+      expect(env.R2_BUCKET._storage.has('pipeline/video-stats-source.json')).toBe(false);
+      const items = sentryItems(fetchMock);
+      expect(items.filter((item) => item.level === 'error')).toEqual([]);
+      expect(items.some((item) => item.level === 'warning' && JSON.stringify(item).includes('generation'))).toBe(true);
+      expect(items.filter((item) => item.monitor_slug === 'video-stats-updater').map((item) => item.status))
+        .toEqual(['in_progress', 'ok']);
+    });
+
+    it('reports cron check-ins with a five-minute margin for the five-minute schedule', async () => {
+      generationFixture();
+      const sentryItems = captureSentry();
+      const fetchMock = global.fetch;
+      await runScheduled();
+      const [started] = sentryItems(fetchMock).filter((item) => item.monitor_slug === 'video-stats-updater');
+      expect(started.status).toBe('in_progress');
+      expect(started.monitor_config).toMatchObject({
+        schedule: { type: 'crontab', value: '*/5 * * * *' },
+        checkin_margin: 5,
+        max_runtime: 10,
       });
-      await expect(runScheduled()).rejects.toThrow('generation changed');
+    });
+
+    function triggerRequest() {
+      env.WORKER_AUTH_KEY = 'test-only-key';
+      return new Request('https://stats.example/trigger', { method: 'POST', headers: { Authorization: 'Bearer test-only-key' } });
+    }
+
+    it('hands a triggered refresh to waitUntil before it finishes, so a disconnect cannot strand the lease', async () => {
+      generationFixture();
+      const snapshot = global.fetch;
+      let releaseSnapshot;
+      const snapshotGate = new Promise((resolve) => { releaseSnapshot = resolve; });
+      global.fetch = vi.fn(async (url, init) => {
+        await snapshotGate;
+        return snapshot(url, init);
+      });
+
+      const pending = worker.fetch(triggerRequest(), env, ctx);
+      await vi.waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      expect(ctx.waitUntil).toHaveBeenCalledTimes(1);
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+
+      releaseSnapshot();
+      await ctx.waitUntil.mock.calls[0][0];
+      expect(env.STATS_KV.put).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(env.R2_BUCKET._storage.get('pipeline/stats-lease.json')).expiresAt).toBe(0);
+
+      const response = await pending;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true, totalVideos: 3, updatedAt: expect.any(String) });
+    });
+
+    it('keeps the /trigger answer for a held lease and for a failure', async () => {
+      generationFixture();
+      env.R2_BUCKET._storage.set('pipeline/stats-lease.json', { owner: 'cron-refresh', expiresAt: Date.now() + 60_000 });
+      const busy = await worker.fetch(triggerRequest(), env, ctx);
+      expect(busy.status).toBe(200);
+      expect(await busy.json()).toEqual({ success: false, skipped: 'already-running' });
+
+      env.R2_BUCKET._storage.delete('pipeline/stats-lease.json');
+      global.fetch = vi.fn(async () => ({ ok: false, status: 503, statusText: 'Unavailable' }));
+      const failed = await worker.fetch(triggerRequest(), env, ctx);
+      expect(failed.status).toBe(500);
+      expect(await failed.json()).toEqual({ error: 'Failed to fetch video stats' });
+      expect(env.STATS_KV.put).not.toHaveBeenCalled();
+    });
+
+    it('answers /trigger with a 500 when the generation keeps changing', async () => {
+      generationFixture();
+      env.WORKER_AUTH_KEY = 'test-only-key';
+      publishDuringSnapshot({ times: 2 });
+      const response = await worker.fetch(
+        new Request('https://stats.example/trigger', { method: 'POST', headers: { Authorization: 'Bearer test-only-key' } }),
+        env,
+        ctx,
+      );
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: expect.stringContaining('generation') });
       expect(env.STATS_KV.put).not.toHaveBeenCalled();
     });
 

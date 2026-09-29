@@ -21,6 +21,8 @@ function shouldUseApiGateway(): boolean {
 }
 
 function resolveApiGatewayBase(): string {
+  if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
+  if (process.env.VERCEL_ENV === 'production') return DEFAULT_API_GATEWAY
   const explicitGateway = process.env.NEXT_PUBLIC_API_GATEWAY_URL
   if (explicitGateway && explicitGateway.startsWith('http')) {
     return explicitGateway.replace(/\/$/, '')

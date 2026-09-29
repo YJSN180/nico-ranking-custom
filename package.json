@@ -45,7 +45,8 @@
     "test:kv-api": "vitest run __tests__/unit/cloudflare-kv.test.ts",
     "test:kv-optimization": "vitest run __tests__/integration/workers-kv-optimization.test.ts",
     "generate-tag-accumulation": "tsx scripts/generate-tag-accumulation.ts",
-    "upload-tag-accumulation": "tsx scripts/upload-tag-accumulation.ts"
+    "upload-tag-accumulation": "tsx scripts/upload-tag-accumulation.ts",
+    "test:admin-security": "vitest run --config vitest.admin-security.config.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
@@ -74,7 +75,8 @@
   "overrides": {
     "rollup": "^4.60.2",
     "postcss": "^8.5.28",
-    "serialize-javascript": "^7.0.5"
+    "serialize-javascript": "^7.0.5",
+    "undici": "7.29.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260920.1",

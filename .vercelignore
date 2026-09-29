@@ -1,0 +1,17 @@
+# Agent instructions and local tooling are not deployment inputs.
+**/AGENTS.md
+**/CLAUDE.md
+**/CLAUDE.local.md
+.claude/
+.codex/
+.worktrees/
+.zen_venv/
+
+# Local investigation output and credentials must stay on the workstation.
+tmp/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+.wrangler/
+*.log

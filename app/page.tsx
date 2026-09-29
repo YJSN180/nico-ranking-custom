@@ -14,6 +14,7 @@ import { RANKING_GENRES } from '@/types/ranking-config'
 import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
 import { captureWebException } from '@/lib/sentry/capture'
+import { fetchWithTransientRetry } from '@/lib/fetch-with-transient-retry'
 // 動的レンダリング強制: CDNキャッシュが古いデータを返す問題を防ぐ
 // キャッシュは Cloudflare Workers 側で管理し、Vercel側は常に最新データを取得
 export const dynamic = 'force-dynamic'
@@ -23,6 +24,9 @@ export const revalidate = 0
 
 // Prefetch hints
 export const preferredRegion = 'auto'
+
+// ランキング取得の期限（再試行と本文読み取りを含む）
+const RANKING_FETCH_BUDGET_MS = 8_000
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
@@ -41,38 +45,45 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   const period = (params.period as RankingPeriod) || '24h'
   const tag = params.tag as string | undefined
   const page = parseInt((params.page as string) || '1', 10)
-  
+
   const genreInfo = RANKING_GENRES.find(g => g.value === genre)
   let genreName = genreInfo?.label || '総合'
   const periodName = period === '24h' ? '24時間' : '毎時'
-  
+
   // カスタムジャンルの場合はカスタムランキング名を使用（SSRではlocalStorageが使えないため、仮の名前を使用）
   if (genre === 'custom') {
     genreName = 'カスタム'
   }
-  
+
   // デフォルト（総合・24時間・タグなし）の場合はシンプルなタイトルと説明
   const isDefault = genre === 'all' && period === '24h' && !tag
-  
+
   let title = isDefault ? 'ニコラン(Re:turn) - ニコニコ動画のランキングを快適に表示' : `${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
   let description = isDefault ? 'ニコニコ動画の人気動画ランキングを快適に閲覧。毎時・24時間のランキングを各ジャンルごとに表示。話題の動画を見逃さずチェック！' : `ニコニコ動画の${genreName}ジャンル ${periodName}ランキング。`
-  
+
   if (tag && !tag.startsWith('custom:')) {
     title = `「${tag}」タグ ${genreName} ${periodName}ランキング - ニコラン(Re:turn)`
     description = `ニコニコ動画の「${tag}」タグが付いた${genreName}動画の${periodName}ランキング。`
   }
-  
+
   if (!isDefault) {
     description += '最新の人気動画をチェック！'
   }
-  
+
+  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）
+  const ogQuery = new URLSearchParams()
+  if (params.genre) ogQuery.set('genre', genre)
+  if (params.period) ogQuery.set('period', period)
+  if (tag) ogQuery.set('tag', tag)
+  const ogSearch = ogQuery.toString()
+
   return {
     title,
     description,
     openGraph: {
       title,
       description,
-      url: `https://nico-rank.com${params.genre ? `?genre=${genre}` : ''}${params.period ? `&period=${period}` : ''}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`,
+      url: ogSearch ? `https://nico-rank.com/?${ogSearch}` : 'https://nico-rank.com',
       images: [{
         url: '/og-image.png',
         alt: title,
@@ -90,7 +101,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   items: RankingItem[]
   popularTags?: string[]
 }> {
-  
+
   // genre='custom'の場合、tagからカスタムランキングIDを取得してbaseGenreを使用
   let actualGenre = genre
   let actualTag = tag
@@ -99,13 +110,16 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     // クライアントサイドでデータ取得される
     return { items: [], popularTags: [] }
   }
-  
+
   const params = new URLSearchParams()
   params.set('genre', actualGenre)
   params.set('period', period)
   if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
-  
+
   const resolveBaseUrl = () => {
+    if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
+    // Generated Vercel deployment URLs require authentication under Deployment Protection.
+    if (process.env.VERCEL_ENV === 'production') return 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
     const vercelUrl = process.env.VERCEL_URL
@@ -121,9 +135,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   const apiUrl = `${proxyBase}/api/ranking?${params.toString()}`
 
   try {
+    const deadline = AbortSignal.timeout(RANKING_FETCH_BUDGET_MS)
     const headers: HeadersInit = {
       'Accept-Encoding': 'gzip, deflate, br',
-      Accept: 'application/json'
+      Accept: 'application/json',
+      'User-Agent': 'nico-ranking-web/1.0',
     }
     const logEmpty = (meta: Record<string, unknown>) => {
       if (process.env.NODE_ENV !== 'production') {
@@ -131,8 +147,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       }
     }
 
+    // R2 の一時障害などの 5xx・通信エラーは 1 回だけ再試行する（1 回の失敗で別ページへ飛ばさない）
     const doFetch = async (url: string, options?: RequestInit) => {
-      const res = await fetch(url, options)
+      const res = await fetchWithTransientRetry(url, { ...options, signal: deadline })
       const meta = {
         status: res.status,
         statusText: res.statusText,
@@ -204,9 +221,10 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       },
     })
 
-    if (process.env.NODE_ENV !== 'production') {
-      console.error('[SSR] API error:', error instanceof Error ? error.message : String(error))
-    }
+    console.error('[SSR] Ranking request failed', {
+      errorType: error instanceof Error ? error.name : 'UnknownError',
+      httpStatus: error instanceof Error ? /^HTTP (\d{3}):/.exec(error.message)?.[1] : undefined,
+    })
   }
 
   // エラーの場合は空のデータを返す
@@ -219,14 +237,14 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 export default async function Home({ searchParams }: PageProps) {
   // 並列でPromiseを解決してTTFBを改善
   const params = await searchParams
-  
+
   // URLパラメータが優先、なければCookieから、それもなければデフォルト値
   let genre = params.genre as string
   let period = params.period as string
   let tag = params.tag as string | undefined
   let ranking = params.ranking as string | undefined
   let page = parseInt((params.page as string) || '1', 10)
-  
+
   // デフォルト値を設定（カスタムランキングの場合はgenreを維持）
   if (!genre) {
     // tagがcustom:で始まる場合はgenreをcustomに設定
@@ -238,10 +256,10 @@ export default async function Home({ searchParams }: PageProps) {
   }
   period = period || '24h'
   page = Math.max(1, page || 1) // ページは最低1
-  
+
   try {
     // console.log(`[SSR] Attempting to fetch: genre=${genre}, period=${period}, tag=${tag}`)
-    
+
     const { items: rankingData, popularTags = [] } = await fetchRankingData(genre, period, tag)
 
     // カスタムジャンルの場合は、データが空でも通常のページをレンダリング
@@ -255,14 +273,14 @@ export default async function Home({ searchParams }: PageProps) {
         const redirectUrl = params.toString() ? `/?${params.toString()}` : '/'
         redirect(redirectUrl)
       }
-      
+
       // ジャンル自体のデータがない場合は総合ランキングへリダイレクト
       // ただし、カスタムジャンルは除外（データがなくても正常）
       if (genre !== 'all' && genre !== 'custom') {
         const { redirect } = await import('next/navigation')
         redirect('/')
       }
-      
+
       // 総合ランキングでもデータがない場合のみエラーページを表示
       const EmptyRankingPage = (await import('@/components/empty-ranking-page')).default
       return <EmptyRankingPage tag={tag} />
@@ -281,7 +299,7 @@ export default async function Home({ searchParams }: PageProps) {
         <HeaderWithSettings />
         {/* ブラウザ推奨案内（SSR対応） */}
         <BrowserRecommendationSSR />
-        
+
         <div 
           className="main-container-responsive"
           style={{ 
@@ -330,7 +348,7 @@ export default async function Home({ searchParams }: PageProps) {
         },
       },
     })
-    
+
     // その他のエラーの場合はエラーページを表示
     // eslint-disable-next-line no-console
     console.error('[SSR] Unexpected error:', error instanceof Error ? error.message : String(error))

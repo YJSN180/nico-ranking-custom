@@ -27,6 +27,58 @@ const defaultPreferences: UserPreferences = {
   updatedAt: new Date().toISOString(),
 }
 
+// 同じタブでこのフックを使う他の箇所（ページ・設定モーダル・ナビ・テーマ）へ保存した設定を知らせる
+const PREFERENCES_UPDATED_EVENT = 'userPreferencesUpdated'
+
+function isCurrentPreferences(value: unknown): value is Partial<UserPreferences> {
+  return typeof value === 'object' && value !== null && 'version' in value && value.version === CURRENT_VERSION
+}
+
+/**
+ * 保存済みの設定を読む（Cookie、なければ localStorage の控え）。どちらも無ければ null
+ */
+function readStoredPreferences(): UserPreferences | null {
+  if (typeof window === 'undefined') return null
+
+  const cookiePrefs = getUserPreferencesCookieClient()
+  if (isCurrentPreferences(cookiePrefs)) {
+    return { ...defaultPreferences, ...cookiePrefs }
+  }
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const parsed: unknown = JSON.parse(stored)
+      if (isCurrentPreferences(parsed)) {
+        return { ...defaultPreferences, ...parsed }
+      }
+    }
+  } catch {
+    // 読めなければ保存なしとして扱う
+  }
+  return null
+}
+
+/**
+ * Cookie と localStorage の控えに保存し、同じタブの他の箇所に知らせる
+ */
+function persistPreferences(prefs: UserPreferences): void {
+  try {
+    setUserPreferencesCookieClient(prefs)
+  } catch {
+    // Cookie save error - silent fail
+  }
+
+  // localStorageにも保存（PWA環境のフォールバック）
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+  } catch {
+    // localStorage save error - silent fail
+  }
+
+  window.dispatchEvent(new CustomEvent<UserPreferences>(PREFERENCES_UPDATED_EVENT, { detail: prefs }))
+}
+
 export function useUserPreferences() {
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
     // 初期化時にCookie/localStorageから読み込み
@@ -37,7 +89,9 @@ export function useUserPreferences() {
         return { ...defaultPreferences, ...cookiePrefs }
       }
       
-      // Cookieがない場合、localStorageから読み込む（PWA対応）
+      // Cookieがない場合、localStorageから読み込む（PWA対応）。
+      // 控えは消さない: app/layout.tsx の描画前スクリプトがテーマを当てるのに読み、
+      // Cookie がまた失効したとき（Safari は JS で書いた Cookie を 7 日で失効させる）の戻り先にもなる
       try {
         const stored = localStorage.getItem(STORAGE_KEY)
         if (stored) {
@@ -46,7 +100,6 @@ export function useUserPreferences() {
           if (parsed.version === CURRENT_VERSION) {
             // Cookieにも同期を試みる
             setUserPreferencesCookieClient(parsed)
-            localStorage.removeItem(STORAGE_KEY)
             return parsed
           }
         }
@@ -57,53 +110,49 @@ export function useUserPreferences() {
     return defaultPreferences
   })
 
-  // 設定を更新
-  const updatePreferences = useCallback((updates: Partial<UserPreferences>) => {
-    setPreferences(prev => {
-      const newPrefs = {
-        ...prev,
-        ...updates,
-        updatedAt: new Date().toISOString(),
+  // 他の箇所（同じタブ）や他のタブで保存された設定に追従する
+  useEffect(() => {
+    const handleUpdated = (event: Event): void => {
+      if (event instanceof CustomEvent && isCurrentPreferences(event.detail)) {
+        setPreferences({ ...defaultPreferences, ...event.detail })
       }
-      
-      // Cookieに保存
-      try {
-        setUserPreferencesCookieClient(newPrefs)
-      } catch {
-        // Cookie save error - silent fail
+    }
+    const handleStorage = (event: StorageEvent): void => {
+      if (event.key !== STORAGE_KEY || !event.newValue) return
+      const stored = readStoredPreferences()
+      if (stored) {
+        setPreferences(stored)
       }
+    }
 
-      // localStorageにも保存（PWA環境のフォールバック）
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
-      } catch {
-        // localStorage save error - silent fail
-      }
-      
-      return newPrefs
-    })
+    window.addEventListener(PREFERENCES_UPDATED_EVENT, handleUpdated)
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      window.removeEventListener(PREFERENCES_UPDATED_EVENT, handleUpdated)
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [])
 
+  // 設定を更新。このインスタンスが持つ値ではなく保存済みの最新値に重ねる
+  // （ページ・設定モーダル・ナビがそれぞれこのフックを持つため、古い値で他の箇所の変更を上書きしない）
+  const updatePreferences = useCallback((updates: Partial<UserPreferences>): void => {
+    const newPrefs: UserPreferences = {
+      ...(readStoredPreferences() ?? preferences),
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    }
+    setPreferences(newPrefs)
+    persistPreferences(newPrefs)
+  }, [preferences])
+
   // 設定をリセット
-  const resetPreferences = useCallback(() => {
+  const resetPreferences = useCallback((): void => {
     const newPrefs = {
       ...defaultPreferences,
       updatedAt: new Date().toISOString(),
     }
     setPreferences(newPrefs)
-    
-    try {
-      setUserPreferencesCookieClient(newPrefs)
-    } catch (error) {
-      // エラーは無視
-    }
-    
-    // localStorageもリセット
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs))
-    } catch (error) {
-      // エラーは無視
-    }
+    persistPreferences(newPrefs)
   }, [])
 
   return {
@@ -132,9 +181,8 @@ export function getStoredPreferences(): Partial<UserPreferences> | null {
     if (stored) {
       const parsed = JSON.parse(stored)
       if (parsed.version === CURRENT_VERSION) {
-        // Cookieに同期を試みる
+        // Cookieに同期を試みる（localStorage の控えは残す）
         setUserPreferencesCookieClient(parsed)
-        localStorage.removeItem(STORAGE_KEY)
         return parsed
       }
     }

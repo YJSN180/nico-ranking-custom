@@ -9,9 +9,14 @@ import {
   resetTagFetchRunStats,
 } from '../lib/tag-fetcher-simple'
 import {
+  closeTagCacheR2Client,
   resetTagCacheDelta,
   writeTagCacheDeltaArtifact,
 } from '../lib/tag-cache-store'
+import {
+  reportPipelineProgress,
+  startGroupStallWatchdog,
+} from '../lib/pipeline/stall-watchdog'
 import { createCoreNgFilter } from '../lib/pipeline/ng-filter'
 import { buildGenreRanking, type GenreRankingResult } from '../lib/pipeline/run-update'
 import { validateNGLists } from '../lib/pipeline/ng-contract'
@@ -272,8 +277,11 @@ async function processGenre(
       dedupe: false,
       stopWhenPageItemsLessThan: 100,
       onError: 'throw',
-      fetchPage: (genre, period, tag, page) =>
-        fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP),
+      fetchPage: async (genre, period, tag, page) => {
+        const result = await fetchRankingPageWithRetry(genre, period, tag, page, 3, GENRE_ID_MAP)
+        reportPipelineProgress(`ranking ${genre}/${period}/${tag === undefined ? 'main' : 'tag'} page ${page}`)
+        return result
+      },
       normalizeItems: (items) => items,
       filterItems: async (items) => ngFilter(items),
       onDerivedIds: (newDerivedIds, context) => {
@@ -528,6 +536,8 @@ if (process.argv[2] === '--group') {
       console.error(`Group ${groupId} exceeded its 65 minute deadline`)
       process.exit(1)
     }, 65 * 60_000)
+    // Fails well before the deadline when nothing progresses, printing what the process waits on.
+    const stallWatchdog = startGroupStallWatchdog(groupId)
     process.once('beforeExit', () => {
       if (!collectionComplete) { console.error(`Group ${groupId} exited before writing its artifact`); process.exitCode = 1 }
     })
@@ -542,6 +552,7 @@ if (process.argv[2] === '--group') {
     // Process each genre sequentially within group
     const results = []
     for (const genre of groupGenres) {
+      reportPipelineProgress(`genre ${genre} start`)
       const result = await processGenre(genre, ngList)
       results.push(result)
 
@@ -620,6 +631,8 @@ if (process.argv[2] === '--group') {
       )
       process.exit(1)
     }
+    closeTagCacheR2Client()
+    stallWatchdog.stop()
     clearTimeout(deadline)
   })().catch((error) => {
     console.error(`Group ${groupId} failed catastrophically:`, error)

@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import type { GenreItem } from '@/types/genre-order'
 import styles from './genre-order-backup.module.css'
+import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
+import { INVALID_GENRE_ORDER_MESSAGE, isValidGenreOrder } from '@/lib/storage/genre-order-validation'
 
 interface BackupData {
   version: number
@@ -51,6 +53,13 @@ export function GenreOrderBackup() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    // 大きすぎるファイルは読み込まない（丸ごと読むとタブが固まる・落ちる）
+    if (isBackupFileTooLarge(file)) {
+      setImportMessage({ type: 'error', text: BACKUP_FILE_TOO_LARGE_MESSAGE })
+      event.target.value = ''
+      return
+    }
+
     setIsImporting(true)
     setImportMessage(null)
 
@@ -89,10 +98,8 @@ export function GenreOrderBackup() {
         }
 
         // 各アイテムのバリデーション
-        for (const item of genreOrderData) {
-          if (!item.id || typeof item.isVisible !== 'boolean' || typeof item.order !== 'number') {
-            throw new Error('無効なジャンルデータが含まれています')
-          }
+        if (!isValidGenreOrder(genreOrderData)) {
+          throw new Error(INVALID_GENRE_ORDER_MESSAGE)
         }
 
         // 確認ダイアログを表示
@@ -109,6 +116,12 @@ export function GenreOrderBackup() {
       }
     }
     
+    // 選んだ後にファイルが消えた・読めないときも「インポート中」のまま止めない
+    reader.onerror = () => {
+      setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
+      setIsImporting(false)
+    }
+
     reader.readAsText(file)
     
     // ファイル選択をリセット

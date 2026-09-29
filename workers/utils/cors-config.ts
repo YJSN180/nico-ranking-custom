@@ -25,30 +25,10 @@ export function isAllowedOrigin(origin: string | null): boolean {
   
   try {
     const url = new URL(origin)
-    const hostname = url.hostname
-    
-    // 本番ドメイン
-    if (hostname === 'nico-rank.com') {
-      return true
-    }
-    
-    // Vercel環境（プロジェクト名ベースで安全に制限）
-    if (hostname.endsWith('.vercel.app')) {
-      // プロジェクト名とアカウント名で制限
-      if (hostname.includes('nico-ranking-custom') && 
-          hostname.includes('yjsns-projects')) {
-        return true
-      }
-    }
-    
-    // 開発環境（localhostのみ）
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return true
-    }
-    
-    return false
-  } catch (error) {
-    // 無効なURLの場合は拒否
+    if (origin !== url.origin) return false
+    if (['https://nico-rank.com', 'https://nico-ranking-custom-yjsns-projects.vercel.app'].includes(origin)) return true
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)
+  } catch {
     return false
   }
 }

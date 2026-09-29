@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import type { CustomRankingWithConditions } from '@/lib/storage/types'
 import styles from './genre-order-backup.module.css'
+import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
+import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/lib/storage/custom-ranking-backup-schema'
 
 interface BackupData {
   version: number
@@ -52,6 +54,13 @@ export function CustomRankingBackup() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    // 大きすぎるファイルは読み込まない（丸ごと読むとタブが固まる・落ちる）
+    if (isBackupFileTooLarge(file)) {
+      setImportMessage({ type: 'error', text: BACKUP_FILE_TOO_LARGE_MESSAGE })
+      event.target.value = ''
+      return
+    }
+
     setIsImporting(true)
     setImportMessage(null)
 
@@ -81,20 +90,10 @@ export function CustomRankingBackup() {
           throw new Error('カスタムランキングデータが含まれていません')
         }
 
-        // 各ランキングのバリデーション
-        for (const ranking of customRankingsData) {
-          if (!ranking.id || !ranking.title || !ranking.baseGenre) {
-            throw new Error('無効なカスタムランキングデータが含まれています')
-          }
-          
-          // 条件のバリデーション
-          if (ranking.conditions && Array.isArray(ranking.conditions)) {
-            for (const condition of ranking.conditions) {
-              if (!condition.tag || !condition.operator || !condition.tagType) {
-                throw new Error('無効なタグ条件が含まれています')
-              }
-            }
-          }
+        // 各ランキングのバリデーション。文字列でないタグや未知の演算子・ジャンルは、
+        // 保存するとそのランキングの表示で落ちる・効かないため取り込まない
+        if (!parseCustomRankingsForImport(customRankingsData)) {
+          throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
         }
 
         // 重複タイトルをチェック
@@ -121,6 +120,12 @@ export function CustomRankingBackup() {
       }
     }
     
+    // 選んだ後にファイルが消えた・読めないときも「インポート中」のまま止めない
+    reader.onerror = () => {
+      setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
+      setIsImporting(false)
+    }
+
     reader.readAsText(file)
     
     // ファイル選択をリセット
@@ -143,7 +148,10 @@ export function CustomRankingBackup() {
       let importedCount = 0
       let updatedCount = 0
       
-      for (const ranking of pendingImportData.customRankings) {
+      const importable = parseCustomRankingsForImport(pendingImportData.customRankings)
+      if (!importable) throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
+
+      for (const ranking of importable) {
         // Check if ranking with same title exists
         const existing = rankings.find(r => r.title === ranking.title)
         

@@ -9,6 +9,16 @@ export const runtime = 'edge'
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
 
+// プレビュー用プロキシの期限（上流の応答と本文の読み取りを含む）。Edge Function は最初の応答を
+// 25 秒以内に返す必要があるため、それより前に打ち切って自前のエラー応答を返す
+const PREVIEW_PROXY_TIMEOUT_MS = 20_000
+
+/** ログ用の失敗の要約。URL（クエリの値を含む）は伏せる。詳細は Sentry へ送る */
+function describeProxyError(error: unknown): string {
+  if (!(error instanceof Error)) return 'unknown error'
+  return `${error.name}: ${error.message.replace(/https?:\/\/\S+/gi, '<url>')}`
+}
+
 // プレビュー環境ではプロキシとして動作し、本番環境ではCloudflare Workerにリダイレクトします。
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -47,17 +57,24 @@ export async function GET(request: NextRequest) {
       }
       
       // Cloudflare Workerにリクエストを転送（タイムアウト付き）
+      // 期限は本文の読み取りまで掛ける（ヘッダー受信で外すと、本文が止まったときに Edge の上限まで待つ）
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒タイムアウト
+      const timeoutId = setTimeout(() => controller.abort(), PREVIEW_PROXY_TIMEOUT_MS)
       
-      const response = await fetch(url.toString(), {
-        headers,
-        signal: controller.signal,
-        // キャッシュ無効化: ISRキャッシュによる古いデータ問題を防ぐ
-        cache: 'no-store'
-      }).finally(() => {
+      let response: Response
+      let data: string | null
+      try {
+        response = await fetch(url.toString(), {
+          headers,
+          signal: controller.signal,
+          // キャッシュ無効化: ISRキャッシュによる古いデータ問題を防ぐ
+          cache: 'no-store'
+        })
+        // レスポンスボディを取得（自動的に解凍される）。304 には本文が無い
+        data = response.status === 304 ? null : await response.text()
+      } finally {
         clearTimeout(timeoutId)
-      })
+      }
       
       // 304 Not Modifiedの場合はそのまま返す（ただしキャッシュ禁止）
       if (response.status === 304) {
@@ -70,9 +87,6 @@ export async function GET(request: NextRequest) {
           }
         })
       }
-      
-      // レスポンスボディを取得（自動的に解凍される）
-      const data = await response.text()
       
       // レスポンスヘッダーをコピー（最小限に）
       const responseHeaders = new Headers()
@@ -101,9 +115,8 @@ export async function GET(request: NextRequest) {
         headers: responseHeaders
       })
     } catch (error) {
-      console.error('[API/ranking] Proxy error:', error)
-      console.error('[API/ranking] Target URL:', 'https://nico-rank.com/api/ranking')
-      console.error('[API/ranking] Preview host:', host)
+      // ログには失敗の種類だけを残す（URL・クエリの値・ホストは出さない）
+      console.error('[API/ranking] Proxy error:', describeProxyError(error))
 
       captureWebException(error, {
         tags: {
@@ -124,13 +137,10 @@ export async function GET(request: NextRequest) {
         },
       })
       
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      const isTimeout = errorMessage.includes('abort') || errorMessage.includes('timeout')
-      
+      // 本文にはエラーの詳細を入れない
       return NextResponse.json(
         { 
           error: 'Failed to fetch ranking data',
-          details: isTimeout ? 'Request timeout (30s)' : errorMessage,
           type: 'proxy_error'
         },
         { status: 500 }

@@ -105,7 +105,7 @@ jobs:
     needs: [prepare, fetch-rankings]
     if: always() && needs.prepare.outputs.should_run == 'true' && (needs.fetch-rankings.result == 'success' || (inputs.resume_run_id != '' && needs.prepare.result == 'success'))
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       RANKING_GENERATIONS_ENABLED: ${{ vars.RANKING_GENERATIONS_ENABLED || 'false' }}
       RESUME_RUN_ID: ${{ inputs.resume_run_id }}
@@ -150,12 +150,6 @@ jobs:
       - name: Publish ranking
         id: publish
         run: npx tsx scripts/write-to-r2.ts
-      - name: Verify published generation and stats
-        id: verify
-        env:
-          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
-          VERIFY_OUTPUT_PATH: ./tmp/post-publish/verify-r2-contract.json
-        run: npx tsx scripts/verify-r2-contract.ts
       - name: Synchronize auxiliary KV copies and derived NG
         id: kv
         if: always() && steps.publish.outcome == 'success'
@@ -173,6 +167,14 @@ jobs:
         env:
           AUXILIARY_FAILED: ${{ steps.tags.outcome == 'failure' || steps.kv.outcome == 'failure' || steps.cache.outcome == 'failure' }}
         run: npx tsx scripts/record-pipeline-status.ts
+      # 統計が追いつくまで最大12分待つので最後に置く（補助同期とタグキャッシュの統合を待たせない）
+      - name: Verify published generation and stats
+        id: verify
+        if: always() && steps.publish.outcome == 'success'
+        env:
+          WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
+          VERIFY_OUTPUT_PATH: ./tmp/post-publish/verify-r2-contract.json
+        run: npx tsx scripts/verify-r2-contract.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
