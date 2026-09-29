@@ -46,7 +46,11 @@ fixture.listen(fixturePort, '127.0.0.1', () => {
   const nextBin = createRequire(import.meta.url).resolve('next/dist/bin/next')
   const app = spawn(process.execPath, [nextBin, 'start', '-p', appPort], {
     stdio: 'inherit',
-    env: { ...process.env, NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${fixturePort}` },
+    env: {
+      ...process.env,
+      NEXT_PUBLIC_SITE_URL: `http://127.0.0.1:${fixturePort}`,
+      RANKING_SSR_GATEWAY_URL: `http://127.0.0.1:${fixturePort}`,
+    },
   })
   const stop = () => app.kill('SIGTERM')
   process.on('SIGINT', stop)
