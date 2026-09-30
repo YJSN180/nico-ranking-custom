@@ -3,8 +3,10 @@
 Run from the repository root with existing dependencies and Chromium installed:
 
 ```sh
-node --test tests/monitoring/*.test.cjs
+node --test tests/monitoring/*.regression.cjs
 ```
+
+The `.regression.cjs` names keep these Node test-runner files out of Vitest discovery.
 
 These tests use loopback HTTP fixtures and a mocked GitHub client. They do not
 contact production or create issues. Browser probes check both healthy content
