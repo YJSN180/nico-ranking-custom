@@ -229,11 +229,11 @@ const handler: ExportedHandler<Env> = {
         buildReplayableRequest(request.url, request, replayableBody, 'follow'),
       )
       
-      // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）
+      // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）。
+      // タグ候補は Green の Cache-Control（5 分）をそのまま返す
       const forceNoStore =
         url.pathname.startsWith('/api/ranking') ||
-        url.pathname.startsWith('/api/metadata') ||
-        url.pathname.startsWith('/api/tags/autocomplete')
+        url.pathname.startsWith('/api/metadata')
       
       if (forceNoStore) {
         const headers = new Headers(response.headers)

@@ -110,3 +110,41 @@ describe('smart router request bodies', () => {
     expect(await forwarded.text()).toBe(body)
   })
 })
+
+describe('smart router cache headers', () => {
+  const cachedGreenAnswer = () =>
+    Response.json(
+      { suggestions: [] },
+      { headers: { 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' } },
+    )
+
+  it('passes the tag autocomplete Cache-Control from green through to the browser', async () => {
+    const env = routerEnv({ WORKER_GREEN: { fetch: vi.fn(async () => cachedGreenAnswer()) } })
+
+    const response = await fetchRouter(
+      new Request('https://nico-rank.com/api/tags/autocomplete?q=syn&limit=10', {
+        headers: { Origin: 'https://nico-rank.com' },
+      }),
+      env,
+      { waitUntil: vi.fn() },
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
+    expect(response.headers.get('CDN-Cache-Control')).toBeNull()
+    expect(response.headers.get('X-Active-Worker')).toBe('green')
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://nico-rank.com')
+  })
+
+  it.each(['/api/ranking?genre=all&period=24h', '/api/metadata'])('still forces no-store on %s', async (path) => {
+    const env = routerEnv({ WORKER_GREEN: { fetch: vi.fn(async () => cachedGreenAnswer()) } })
+
+    const response = await fetchRouter(new Request(`https://nico-rank.com${path}`), env, { waitUntil: vi.fn() })
+
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(response.headers.get('CDN-Cache-Control')).toBe('no-store')
+    expect(response.headers.get('Vercel-CDN-Cache-Control')).toBe('no-store')
+    expect(response.headers.get('X-Active-Worker')).toBe('green')
+  })
+})
