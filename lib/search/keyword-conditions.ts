@@ -163,20 +163,34 @@ export function describeKeywordConditions(
   return { text, warning: false }
 }
 
-/** 語を欄に加える。どこかの欄に同じ語があれば加えず、その欄を返す（呼び出し側で知らせる） */
+/** すでにある同じ語（大文字・小文字の違いは同じ語とみなす）と、その欄 */
+export interface KeywordDuplicate {
+  group: KeywordGroup
+  word: string
+}
+
+/**
+ * 語を欄に加える。どこかの欄に同じ語があれば加えず、その語を返す（呼び出し側で知らせる）。
+ * normalize は欄の用途に合わせて差し替える（カスタムランキングのタグ名は引用符も残す）
+ */
 export function addKeyword(
   conditions: KeywordConditions,
   group: KeywordGroup,
   raw: string,
-): { conditions: KeywordConditions; duplicateIn: KeywordGroup | null } {
-  const word = normalizeKeyword(raw)
-  if (!word) return { conditions, duplicateIn: null }
-  const duplicateIn =
-    KEYWORD_GROUPS.find((g) => conditions[g].includes(word)) ?? null
-  if (duplicateIn) return { conditions, duplicateIn }
+  normalize: (raw: string) => string = normalizeKeyword,
+): { conditions: KeywordConditions; duplicate: KeywordDuplicate | null } {
+  const word = normalize(raw)
+  if (!word) return { conditions, duplicate: null }
+  const key = word.toLowerCase()
+  for (const g of KEYWORD_GROUPS) {
+    const existing = conditions[g].find((w) => w.toLowerCase() === key)
+    if (existing !== undefined) {
+      return { conditions, duplicate: { group: g, word: existing } }
+    }
+  }
   return {
     conditions: { ...conditions, [group]: [...conditions[group], word] },
-    duplicateIn: null,
+    duplicate: null,
   }
 }
 
@@ -196,9 +210,11 @@ export const EMPTY_KEYWORD_DRAFTS: KeywordDrafts = { all: '', any: '', not: '' }
 export function commitKeywordDrafts(
   conditions: KeywordConditions,
   drafts: KeywordDrafts,
+  normalize: (raw: string) => string = normalizeKeyword,
 ): KeywordConditions {
   return KEYWORD_GROUPS.reduce(
-    (next, group) => addKeyword(next, group, drafts[group]).conditions,
+    (next, group) =>
+      addKeyword(next, group, drafts[group], normalize).conditions,
     conditions,
   )
 }

@@ -38,6 +38,16 @@ describe('設定モーダル', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('タグ候補を閉じた Esc（既定の動作が止められている）では閉じない', () => {
+    const onClose = vi.fn()
+    render(<SettingsModal isOpen={true} onClose={onClose} />)
+    // 本番ではページ全体で React がイベントを受けるため、候補を閉じた Esc も document まで届く
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    handled.preventDefault()
+    document.dispatchEvent(handled)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
   it('変換を確定する Enter では、入力途中の語を NG に追加しない', () => {
     render(<SettingsModal isOpen={true} onClose={vi.fn()} />)
     const input = screen.getByPlaceholderText('sm12345678')
@@ -59,7 +69,7 @@ describe('カスタムランキング作成モーダル', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '次へ' }))
     })
-    return screen.getByPlaceholderText('タグを入力')
+    return screen.getByRole('combobox', { name: 'すべて含むタグを追加' })
   }
 
   it('変換中の Esc では閉じない（作成途中の内容が消えない）', async () => {
@@ -75,11 +85,11 @@ describe('カスタムランキング作成モーダル', () => {
 
     fireEvent.change(input, { target: { value: 'げーむ' } })
     fireEvent.keyDown(input, { key: 'Enter', ...composing })
-    expect(screen.queryByText('現在の条件:')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'げーむを削除' })).toBeNull()
 
     fireEvent.change(input, { target: { value: '合成タグ' } })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(screen.getByText('現在の条件:')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '合成タグを削除' })).toBeInTheDocument()
   })
 })
 
@@ -92,7 +102,8 @@ describe('カスタムランキング作成モーダルのタグ候補', () => {
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '次へ' }))
     })
-    const input = screen.getByPlaceholderText('タグを入力')
+    const input = screen.getByRole('combobox', { name: 'すべて含むタグを追加' })
+    act(() => input.focus())
 
     fireEvent.change(input, { target: { value: '合成' } })
     await screen.findByText('合成タグ候補', undefined, { timeout: 2000 })

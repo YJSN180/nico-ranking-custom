@@ -73,14 +73,24 @@ describe('keyword-conditions', () => {
 
     it('どこかの欄に同じ語があれば加えず、その欄を返す', () => {
       const start = { all: ['A'], any: [], not: [] }
-      expect(addKeyword(start, 'not', 'A')).toEqual({ conditions: start, duplicateIn: 'all' })
-      expect(addKeyword(start, 'any', ' B ')).toEqual({ conditions: { all: ['A'], any: ['B'], not: [] }, duplicateIn: null })
+      expect(addKeyword(start, 'not', 'A')).toEqual({ conditions: start, duplicate: { group: 'all', word: 'A' } })
+      expect(addKeyword(start, 'any', ' B ')).toEqual({ conditions: { all: ['A'], any: ['B'], not: [] }, duplicate: null })
+      // 大文字・小文字の違いだけの語は同じ語として、すでにある語を返す
+      expect(addKeyword(start, 'any', 'a').duplicate).toEqual({ group: 'all', word: 'A' })
     })
 
     it('空の語では何も変えない（同じオブジェクトを返す）', () => {
       const start = { all: ['A'], any: [], not: [] }
       expect(addKeyword(start, 'all', '   ').conditions).toBe(start)
       expect(commitKeywordDrafts(start, { all: '', any: ' ', not: '' })).toBe(start)
+    })
+
+    it('整え方を差し替えられる（カスタムランキングのタグ名は引用符を残す）', () => {
+      const keep = (raw: string): string => raw.trim()
+      const start = { all: [], any: [], not: [] }
+      expect(addKeyword(start, 'all', ' "x" ', keep).conditions.all).toEqual(['"x"'])
+      expect(addKeyword(start, 'all', ' "x" ').conditions.all).toEqual(['x'])
+      expect(commitKeywordDrafts(start, { all: '"y"', any: '', not: '' }, keep).all).toEqual(['"y"'])
     })
 
     it('打ちかけの語を各欄に加える', () => {
