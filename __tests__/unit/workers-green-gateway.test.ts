@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../../workers/search-budget', () => ({ SearchBudget: class {} }))
 
 vi.mock('../../workers/sentry.js', () => ({
   Sentry: { withSentry: (_options: unknown, handler: unknown) => handler },
@@ -22,6 +23,8 @@ const ctx = { waitUntil: vi.fn() }
 function greenEnv(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     R2_BUCKET: { get: vi.fn(async () => null) },
+    RANKING_DATA: { get: vi.fn(async () => ({ enabled: true, perMinute: 180, perDay: 30000 })) },
+    SEARCH_BUDGET: { getByName: () => ({ take: vi.fn(async () => ({ allowed: true, retryAfter: 0 })) }) },
     RATE_LIMITER: { limit: vi.fn(async () => ({ success: true })) },
     VERCEL_DEPLOYMENT_URL: 'https://upstream.example',
     WORKER_AUTH_KEY: 'test-only-worker-key',

@@ -89,7 +89,7 @@ describe('GenreOrderCustomizer v2 - Drag and Drop', () => {
     render(<GenreOrderCustomizer />)
     
     // ドラッグハンドルアイコンを探す
-    const dragHandles = screen.getAllByText('☰')
+    const dragHandles = document.querySelectorAll('[data-genre] .lucide-grip-vertical')
     expect(dragHandles.length).toBe(4)
   })
 

@@ -86,6 +86,9 @@ export function filterWithNGListCore(
       return false
     }
 
+    // 表示設定は派生NGに積まない。オフにすれば元の動画を再表示できる。
+    if (ngList.hideDeletedAuthors === true && item.authorDeleted === true) return false
+
     if (autoVideoIdSet.has(item.id)) {
       return false
     }

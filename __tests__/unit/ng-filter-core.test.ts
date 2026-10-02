@@ -237,3 +237,15 @@ describe('matchesAuthorNameNG（検索の投稿者名の後付けでも使う規
     expect(kept).toEqual(items.filter((it) => !matchesAuthorNameNG(it.authorName ?? '', authorNames)).map((it) => it.authorName))
   })
 })
+
+
+describe('退会済み投稿者の表示設定', () => {
+  it('初期オフ・不明は表示し、オンでも派生NGへ追加せず解除で戻る', () => {
+    const items = [makeItem({ id: 'sm1', authorDeleted: true }), makeItem({ id: 'sm2', authorDeleted: false }), makeItem({ id: 'sm3' })]
+    expect(filterWithNGListCore(items, baseNgList).filteredItems).toHaveLength(3)
+    const hidden = filterWithNGListCore(items, { ...baseNgList, hideDeletedAuthors: true })
+    expect(hidden.filteredItems.map((item) => item.id)).toEqual(['sm2', 'sm3'])
+    expect(hidden.newDerivedIds).toEqual([])
+    expect(filterWithNGListCore(items, { ...baseNgList, hideDeletedAuthors: false }).filteredItems).toHaveLength(3)
+  })
+})

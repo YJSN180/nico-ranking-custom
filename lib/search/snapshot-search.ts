@@ -1,9 +1,9 @@
+import { shareSearchRequest } from './shared-request'
 // スナップショット検索API v2 のリクエスト構築とレスポンス変換
 // https://site.nicovideo.jp/search-api-docs/snapshot
 // 注意: このAPIはCORS非対応のため、必ずサーバー側（app/api/search）から呼ぶこと
 
 import type { RankingItem } from '@/types/ranking'
-import { withTimeout } from '../abort-signal'
 
 export const SNAPSHOT_API_URL =
   'https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search'
@@ -36,19 +36,19 @@ export const SEARCH_GENRES = [
 // ソート指定（スナップショットAPIの _sort 値をそのまま使用）
 export const SEARCH_SORT_OPTIONS = [
   { value: '-viewCounter', label: '再生数が多い順' },
+  { value: '-startTime', label: '投稿日時が新しい順' },
+  { value: '-likeCounter', label: 'いいね！数が多い順' },
+  { value: '-mylistCounter', label: 'マイリスト数が多い順' },
+  { value: '-lastCommentTime', label: 'コメントが新しい順' },
+  { value: '+lastCommentTime', label: 'コメントが古い順' },
   { value: '+viewCounter', label: '再生数が少ない順' },
   { value: '-commentCounter', label: 'コメント数が多い順' },
   { value: '+commentCounter', label: 'コメント数が少ない順' },
-  { value: '-likeCounter', label: 'いいね！数が多い順' },
   { value: '+likeCounter', label: 'いいね！数が少ない順' },
-  { value: '-mylistCounter', label: 'マイリスト数が多い順' },
   { value: '+mylistCounter', label: 'マイリスト数が少ない順' },
-  { value: '-startTime', label: '投稿日時が新しい順' },
   { value: '+startTime', label: '投稿日時が古い順' },
   { value: '-lengthSeconds', label: '再生時間が長い順' },
   { value: '+lengthSeconds', label: '再生時間が短い順' },
-  { value: '-lastCommentTime', label: 'コメントが新しい順' },
-  { value: '+lastCommentTime', label: 'コメントが古い順' },
 ] as const
 
 /**
@@ -167,7 +167,8 @@ function parseDate(value: string | null): string | undefined {
 }
 
 const MAX_TAG_CONDITIONS = 10
-const MAX_QUERY_LENGTH = 200
+/** 検索語（q）の最大文字数。超えた分は正規化で切り捨てるので、条件入力では超える前に知らせる */
+export const SEARCH_MAX_QUERY_LENGTH = 200
 const MAX_TAG_LENGTH = 100
 const DEFAULT_SORT = '-viewCounter'
 
@@ -208,7 +209,7 @@ export function parseSearchConditions(params: URLSearchParams): SearchConditions
   const page = parsePositiveInt(params.get('page')) ?? 1
 
   return {
-    q: normalizeText(params.get('q') ?? '', MAX_QUERY_LENGTH),
+    q: normalizeText(params.get('q') ?? '', SEARCH_MAX_QUERY_LENGTH),
     targets: params.get('targets') === 'tag' ? 'tag' : 'keyword',
     contentType: parseSearchContentType(params.get('contentType')),
     sort: VALID_SORT_VALUES.has(sort) ? sort : DEFAULT_SORT,
@@ -307,6 +308,11 @@ function parseSearchApiExtras(params: URLSearchParams): SearchApiExtras {
   }
 }
 
+/** 開始・終了の片方だけ、同じ日付/時刻は有効。逆順だけを拒否する。 */
+export function isSearchDateRangeReversed({ dateFrom, dateTo }: { dateFrom?: string; dateTo?: string }): boolean {
+  return Boolean(dateFrom && dateTo && Date.parse(dateFrom) > Date.parse(dateTo))
+}
+
 /**
  * /api/search の問い合わせ（先頭の ? を除いた rawQuery）を読む。知らないキーを含むか、正規形（buildSearchQuery）と
  * 違う書き方なら null。同じ条件を別の URL にして CDN のキャッシュを外し、上流への問い合わせを増やせないようにする
@@ -320,6 +326,7 @@ export function parseSearchApiQuery(
   }
   const conditions = parseSearchConditions(params)
   const extras = parseSearchApiExtras(params)
+  if (isSearchDateRangeReversed(conditions)) return null
   return buildSearchQuery(conditions, extras) === rawQuery ? { conditions, extras } : null
 }
 
@@ -454,16 +461,18 @@ export async function fetchSnapshotNewestStartTime(
     { ...conditions, sort: '-startTime', page: 1, dateFrom: undefined, dateTo: undefined },
     { offset: 0, limit: 1 }
   )
-  const res = await fetchImpl(url, {
-    headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
-    cache: 'no-store',
-    signal: withTimeout(timeoutMs, signal),
+  return shareSearchRequest(fetchImpl, url, timeoutMs, signal, async (sharedSignal) => {
+    const res = await fetchImpl(url, {
+      headers: { 'User-Agent': 'nico-rank.com (Re:turn) search' },
+      cache: 'no-store',
+      signal: sharedSignal,
+    })
+    if (!res.ok) throw new Error(`snapshot_http_${res.status}`)
+    const payload = (await res.json()) as { meta?: { status?: number }; data?: Array<{ startTime?: unknown }> }
+    if (payload.meta?.status !== 200 || !Array.isArray(payload.data)) throw new Error('snapshot_invalid_response')
+    const startTime = payload.data[0]?.startTime
+    return typeof startTime === 'string' ? startTime : null
   })
-  if (!res.ok) throw new Error(`snapshot_http_${res.status}`)
-  const payload = (await res.json()) as { meta?: { status?: number }; data?: Array<{ startTime?: unknown }> }
-  if (payload.meta?.status !== 200 || !Array.isArray(payload.data)) throw new Error('snapshot_invalid_response')
-  const startTime = payload.data[0]?.startTime
-  return typeof startTime === 'string' ? startTime : null
 }
 
 /** スナップショットAPIのレスポンスを RankingItem に変換 */

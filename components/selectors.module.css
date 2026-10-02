@@ -131,16 +131,7 @@
 
 /* ボタン共通スタイル */
 .button {
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  border: 1px solid var(--border-color);
-  background: var(--surface-color);
-  color: var(--text-primary);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  composes: button from './control.module.css';
   flex-shrink: 0;
 }
 
@@ -150,32 +141,59 @@
 
 /* 選択されたボタン */
 .buttonSelected {
-  border-color: var(--primary-color);
-  background: var(--primary-color);
+  border-color: var(--control-accent);
+  background: var(--control-accent);
   color: var(--button-text-active);
 }
 
-/* ジャンルボタン - モバイル用の丸いスタイル */
-@media (max-width: 640px) {
-  .genreButton {
-    border-radius: 20px;
-    /* CSS Scroll Snap - 各ボタンを中央にスナップ */
-    scroll-snap-align: center;
-  }
+/* 検索と同じ寸法。単一選択は既存の塗りで示す。 */
+.genreScrollContainer {
+  gap: var(--genre-chip-gap);
+}
 
-  .genreButtonSelected {
-    padding: 10px 20px;
-    font-size: 15px;
-    /* scale での拡大は禁止: overflow-x: auto のスクロールコンテナ内では
-       レイアウト外の拡大分が上下左右で切り取られ、カプセルの形が欠ける。
-       強調は padding / font-size の拡大（レイアウトに含まれる）で行う */
+.button.genreButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--genre-chip-height);
+  padding: 5px var(--genre-chip-padding-inline);
+  border-radius: var(--genre-chip-radius);
+  font-family: inherit;
+  font-size: var(--genre-chip-font-size);
+  font-weight: 400;
+  line-height: var(--genre-chip-line-height);
+  border-color: color-mix(in srgb, var(--text-secondary) 68%, var(--background-color));
+  color: var(--text-secondary);
+  transition: background-color var(--genre-chip-motion), border-color var(--genre-chip-motion), color var(--genre-chip-motion);
+}
+
+.button.genreButtonSelected {
+  border-color: var(--primary-color);
+  color: var(--button-text-active);
+}
+
+.button.genreButton:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button.genreButton {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .button.genreButton,
+  .button.genreButtonSelected {
     scroll-snap-align: center;
   }
 }
 
 /* タグボタン */
-.tagButton {
-  padding: 6px 12px;
+.button.tagButton {
+  min-height: var(--genre-chip-height);
+  padding: 5px var(--genre-chip-padding-inline);
   font-size: 13px;
   border-radius: 20px;
   max-width: 200px;
@@ -185,18 +203,15 @@
 }
 
 @media (max-width: 640px) {
-  .tagButton {
+  .button.tagButton {
     /* CSS Scroll Snap - 各タグボタンを中央にスナップ */
     scroll-snap-align: center;
-    max-width: 150px; /* モバイルではより狭い幅に制限 */
+    max-width: 180px;
+    min-height: 44px; /* 選択状態によらずサイズと操作領域を維持 */
   }
 
-  .tagButtonSelected {
-    padding: 8px 16px;
-    font-size: 14px;
-    /* scale 禁止（genreButtonSelected と同じ理由: スクロールコンテナで欠ける） */
+  .button.tagButtonSelected {
     scroll-snap-align: center;
-    max-width: 180px; /* 選択時は少し広めに */
   }
 }
 
@@ -217,6 +232,7 @@
 }
 
 .tagHeader {
+  min-height: 28px; /* クリアボタンの出現で見出し行を動かさない */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -242,20 +258,6 @@
   border-radius: 4px;
   cursor: pointer;
   color: var(--text-secondary);
-}
-
-.selectedTag {
-  font-size: 12px;
-  color: var(--text-secondary);
-  background: var(--surface-hover);
-  padding: 4px 8px;
-  border-radius: 4px;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  margin-bottom: 12px;
-  display: inline-block;
 }
 
 /* ジャンル非表示時のメッセージ */
@@ -383,4 +385,23 @@
   .actionButton {
     padding: 6px 10px;
   }
+}
+
+/* 色は連続的に切り替え、押下反応はレイアウトに影響しないtransformで行う。 */
+.button.genreButton,
+.button.tagButton {
+  transition: background-color var(--genre-chip-motion), border-color var(--genre-chip-motion), color var(--genre-chip-motion), transform 140ms ease-out;
+}
+.button.genreButton:active,
+.button.tagButton:active { transform: scale(0.97); }
+.button.genreButtonSelected,
+.button.tagButtonSelected { animation: pillSelect 180ms ease-out; }
+@keyframes pillSelect {
+  from { transform: scale(0.97); }
+  to { transform: scale(1); }
+}
+.button.genreButton:focus-visible,
+.button.tagButton:focus-visible { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .button.genreButton, .button.tagButton { transition: none; animation: none; transform: none; }
 }

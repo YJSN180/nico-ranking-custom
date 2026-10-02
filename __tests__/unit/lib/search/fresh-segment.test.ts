@@ -16,6 +16,14 @@ const freshItems = async (...args: Parameters<typeof fetchFreshSegment>): Promis
 describe('fetchFreshSegment', () => {
   beforeEach(() => clearFreshCache())
 
+  it('同じ条件のcold検索2件は本家ページ3回を共有する（6回に増幅しない）', async () => {
+    const fetchImpl = vi.fn(async () => new Response(pageHtml([item('ss1', '2026-09-22T06:00:00+09:00')], true)))
+    const input = base({ contentType: 'short' })
+    const [first, second] = await Promise.all([1, 2].map(() => fetchFreshSegment(input, '2026-09-21T04:28:32+09:00', { fetchImpl })))
+    expect(first).toEqual(second)
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+  })
+
   it('境界より新しい動画だけを返し、60 秒はキャッシュから返す', async () => {
     const fetchImpl = vi.fn(async () => ({ ok: true, text: async () => pageHtml([item('new1', '2026-09-22T06:42:18+09:00'), item('old1', '2026-09-21T04:00:00+09:00')]) }) as unknown as Response)
     const boundary = '2026-09-21T04:28:31+09:00'
@@ -110,8 +118,8 @@ describe('fetchFreshSegment', () => {
       signals.push(init?.signal)
       return { ok: true, text: async () => pageHtml([item('n1', '2026-09-22T06:42:18+09:00')]) } as unknown as Response
     })
-    await freshItems(base(), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000, signal: deadline.signal })
-    expect(signals).toHaveLength(2)
+    await expect(freshItems(base(), '2026-09-21T04:28:32+09:00', { fetchImpl: fetchImpl as unknown as typeof fetch, now: 1_000, signal: deadline.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(signals).toHaveLength(0)
     expect(signals.every((signal) => signal?.aborted === true)).toBe(true)
   })
 

@@ -88,7 +88,22 @@ describe('app/page.tsx: ランキング取得の一時障害', () => {
 
   afterEach(() => {
     global.fetch = originalFetch
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
+  })
+
+  it.each(['production', 'preview'])('%sのSSRは保護された自己URLを呼ばずランキングを表示する', async (environment) => {
+    vi.stubEnv('VERCEL_ENV', environment)
+    vi.stubEnv('VERCEL_URL', 'protected.vercel.app')
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://protected.vercel.app')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', environment === 'preview' ? 'https://restricted-gateway.example' : undefined)
+    const expectedOrigin = environment === 'preview' ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev' : 'https://nico-rank.com'
+    fetchMock.mockImplementation(async (url: string) => new URL(url).origin === expectedOrigin
+      ? json(200, { items })
+      : json(401, { error: 'Authentication required' }))
+    const tree = await Home({ searchParams: Promise.resolve({ genre: 'game' }) })
+    expect(embeddedItems(tree)).toHaveLength(3)
+    expect(fetchMock).toHaveBeenCalledWith(`${expectedOrigin}/api/ranking?genre=game&period=24h`, expect.any(Object))
   })
 
   it('上流が一度だけ 5xx なら再試行して表示し、ジャンルのページから別ページへ飛ばさない', async () => {

@@ -1,3 +1,4 @@
+import { shareSearchRequest } from './shared-request'
 // リアルタイム検索（検索リアルタイム統合計画 S2）
 // Snapshot API のインデックスは毎朝 5 時前後の更新で止まるため、それ以降の区間だけを
 // ニコニコ公式フロントが使う nvapi v2 search から取得し、Snapshot結果の先頭にマージする。
@@ -6,7 +7,6 @@
 // 索引の最新の動画は索引側（T より前）に入るので、新着の取得元に無い動画（ショートなど）でも欠けない。
 // nvapi は非公開APIだが、既存の lib/scraper.ts と同じヘッダーで既に依存している。
 import type { RankingItem } from '@/types/ranking'
-import { withTimeout } from '../abort-signal'
 import { nicoPageOwnerId } from './nico-page-search'
 import { formatJstIso, type SearchConditions } from './snapshot-search'
 
@@ -280,16 +280,18 @@ export async function fetchNvapiPage(
   timeoutMs = 4000,
   overallSignal?: AbortSignal
 ): Promise<NvapiPage> {
-  const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
-    headers: NVAPI_HEADERS,
-    cache: 'no-store',
-    signal: withTimeout(timeoutMs, overallSignal),
+  return shareSearchRequest(fetchImpl, buildNvapiSearchUrl(conditions, boundary, page), timeoutMs, overallSignal, async (sharedSignal) => {
+    const res = await fetchImpl(buildNvapiSearchUrl(conditions, boundary, page), {
+      headers: NVAPI_HEADERS,
+      cache: 'no-store',
+      signal: sharedSignal,
+    })
+    if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
+    const payload = (await res.json()) as NvapiSearchResponse
+    if (payload.meta?.status !== 200 || !payload.data) throw new Error('nvapi_invalid_response')
+    const items = (payload.data.items ?? []).map((video, index) => mapNvapiVideoToRankingItem(video, index + 1))
+    return { items, totalCount: payload.data.totalCount, hasNext: payload.data.hasNext === true }
   })
-  if (!res.ok) throw new Error(`nvapi_http_${res.status}`)
-  const payload = (await res.json()) as NvapiSearchResponse
-  if (payload.meta?.status !== 200 || !payload.data) throw new Error('nvapi_invalid_response')
-  const items = (payload.data.items ?? []).map((video, index) => mapNvapiVideoToRankingItem(video, index + 1))
-  return { items, totalCount: payload.data.totalCount, hasNext: payload.data.hasNext === true }
 }
 
 export interface RealtimeSegment {

@@ -97,7 +97,7 @@ describe('middleware: 管理 API の書き込み保護', () => {
     })
 
     it('管理 API 以外は対象外', async () => {
-      const res = await middleware(request(`${SITE}/api/search`, 'POST', { 'sec-fetch-site': 'cross-site' }))
+      const res = await middleware(request(`${SITE}/api/popular-tags`, 'POST', { 'sec-fetch-site': 'cross-site' }))
       expect(passedThrough(res)).toBe(true)
     })
   })

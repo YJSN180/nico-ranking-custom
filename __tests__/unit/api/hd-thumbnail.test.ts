@@ -118,6 +118,17 @@ describe('/api/hd-thumbnail/[videoId]', () => {
     expect(requestedHosts()).toEqual(['www.nicovideo.jp'])
   })
 
+  it('ss 動画の公式 goptim サムネイルを署名・サイズ指定ごと保持する', async () => {
+    const thumbnail = 'https://goptim.video.nimg.jp/thumbnail/1280x720?i=46678223.20245450&s=blur&key=synthetic-key'
+    upstream(
+      () => page('<title>not found</title>'),
+      () => page(ogImage(thumbnail.replaceAll('&', '&amp;')))
+    )
+    const { body } = await callRoute('ss46678223')
+    expect(body.thumbnail).toBe(thumbnail)
+    expect(body.source).toBe('nicovideo.jp og:image')
+  })
+
   it('ミラーが応答を途中で止めても、期限で打ち切って nicovideo.jp から取る', async () => {
     const server: Server = createServer((_request, response) => {
       response.writeHead(200, { 'Content-Type': 'text/html' })

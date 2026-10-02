@@ -100,6 +100,7 @@ export function RankingSelector({ config, onConfigChange, customRankings }: Rank
                   key={genre}
                   // refを削除（CSS Scroll Snapに任せる）
                   onClick={() => handleGenreChange(genre)}
+                  aria-pressed={config.genre === genre}
                   className={`${styles.button} ${styles.genreButton} ${config.genre === genre ? `${styles.buttonSelected} ${styles.genreButtonSelected}` : ''}`}
                 >
                   {GENRE_LABELS[genre]}

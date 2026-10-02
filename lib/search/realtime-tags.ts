@@ -5,7 +5,8 @@
 // Accept: */* で 200（Accept: application/json だと406）。1件 0.27〜0.34s。
 // 検索応答のクリティカルパスには載せず、クライアントが結果表示後に非同期で呼ぶ。
 import type { TagDetail } from '@/types/ranking'
-import { withTimeout } from '../abort-signal'
+import { shareSearchRequest } from './shared-request'
+import { BoundedTtlCache } from './bounded-cache'
 
 /** 1リクエストあたりの上限。未認証で叩ける増幅器になるため小さく保つ（クライアントは分割して呼ぶ） */
 export const REALTIME_TAGS_MAX_VIDEOS = 10
@@ -99,6 +100,10 @@ export interface RealtimeTagsResult {
   failed: string[]
 }
 
+type TagMetadata = { tags: TagDetail[]; authorId: string | null }
+let caches = new WeakMap<typeof fetch, BoundedTtlCache<TagMetadata>>()
+export function clearTagMetadataCache(): void { caches = new WeakMap() }
+
 /**
  * 並列数を絞って v3_guest を叩き、タグ詳細を集める。
  * 1件でも失敗しても他は返す（部分成功）。
@@ -115,21 +120,28 @@ export async function fetchTagDetailsForVideos(
   const authorIds: Record<string, string> = {}
   const failed: string[] = []
 
+  let cache = caches.get(fetchImpl)
+  if (!cache) { cache = new BoundedTtlCache<TagMetadata>(2000); caches.set(fetchImpl, cache) }
+  const metadataCache = cache
   const fetchOne = async (id: string): Promise<void> => {
     try {
-      const res = await fetchImpl(buildV3GuestUrl(id), {
-        headers: V3_GUEST_HEADERS,
-        cache: 'no-store',
-        signal: withTimeout(timeoutMs, options.signal),
-      })
-      if (!res.ok) {
-        failed.push(id)
-        return
-      }
-      const payload: unknown = await res.json()
-      tagDetails[id] = parseTagDetails(payload)
-      const authorId = parseV3GuestAuthorId(payload)
-      if (authorId) authorIds[id] = authorId
+      const metadata = metadataCache.get(id, Date.now()) ?? await shareSearchRequest(
+        fetchImpl, `tags:${id}`, timeoutMs, options.signal, async (sharedSignal) => {
+          const res = await fetchImpl(buildV3GuestUrl(id), {
+            headers: V3_GUEST_HEADERS, cache: 'no-store', signal: sharedSignal,
+          })
+          if (!res.ok) throw new Error(`tags_http_${res.status}`)
+          const payload: unknown = await res.json()
+          const parsed = { tags: parseTagDetails(payload), authorId: parseV3GuestAuthorId(payload) }
+          // Only upstream metadata is cached. NG rules/allow lists are evaluated by the route.
+          if (!sharedSignal.aborted && Array.isArray((payload as V3GuestPayload)?.data?.tag?.items)) {
+            metadataCache.set(id, parsed, Date.now() + 60_000)
+          }
+          return parsed
+        }
+      )
+      tagDetails[id] = metadata.tags
+      if (metadata.authorId) authorIds[id] = metadata.authorId
     } catch {
       failed.push(id)
     }

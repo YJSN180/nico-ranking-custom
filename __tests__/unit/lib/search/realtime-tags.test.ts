@@ -59,8 +59,8 @@ describe('fetchTagDetailsForVideos: 全体の期限', () => {
     })
     const result = await fetchTagDetailsForVideos(['sm1', 'sm2', 'sm3', 'sm4'], { fetchImpl: fetchImpl as unknown as typeof fetch, concurrency: 2, signal: deadline.signal })
     expect(calls).toHaveLength(2)
-    expect(Object.keys(result.tagDetails).sort()).toEqual(['sm1', 'sm2'])
-    expect(result.failed.sort()).toEqual(['sm3', 'sm4'])
+    expect(Object.keys(result.tagDetails)).toEqual([])
+    expect(result.failed.sort()).toEqual(['sm1', 'sm2', 'sm3', 'sm4'])
   })
 })
 

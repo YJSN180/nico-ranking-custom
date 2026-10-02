@@ -1,6 +1,6 @@
 // リアルタイム区間の単独取得（検索リアルタイム統合計画 S2）
 // /api/search のマージ実装(S3)前に、Vercel からの nvapi 到達性と区間取得を
-// プレビューで実測するための内部ルート。S3 以降もデバッグ用に残す。
+// 実測するために作った内部ルート。現在はローカル開発専用。
 import { NextRequest, NextResponse } from 'next/server'
 import { parseSearchApiQuery } from '@/lib/search/snapshot-search'
 import { fetchRealtimeSegment, getRealtimeBoundary, isRealtimeEnabled, isRealtimeMergeable } from '@/lib/search/realtime-search'
@@ -11,8 +11,8 @@ import { searchRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 export const revalidate = 0
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  // 本番では公開しない（プレビュー/ローカル専用のデバッグルート）。kill switch も /api/search と共有
-  if (process.env.VERCEL_ENV === 'production' || !isRealtimeEnabled()) {
+  // 本番ビルド（プレビューを含む）では公開しない。kill switch も /api/search と共有
+  if (process.env.NODE_ENV === 'production' || !isRealtimeEnabled()) {
     return new NextResponse(null, { status: 404 })
   }
   // /api/search と同じく、正規形の問い合わせだけを受け付ける

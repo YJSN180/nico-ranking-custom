@@ -1,3 +1,4 @@
+import { searchAccessDenied } from './lib/search/access'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
@@ -97,7 +98,9 @@ const noStorePaths: string[] = []
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
     // 検索系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、CDN キャッシュで
     // 上流（ニコニコ）への増幅を抑える。ランキング系の no-store 方針はそのまま
-    if (pathname.startsWith('/api/search')) {
+    if (pathname === '/api/search' || pathname.startsWith('/api/search/')) {
+      const denied = await searchAccessDenied(request)
+      if (denied) return denied
       return NextResponse.next()
     }
     const response = NextResponse.next()

@@ -390,6 +390,7 @@ describe('/api/search: 受け付けるパラメータ（S-d）', () => {
   })
 
   it.each([
+    ['逆順の投稿期間', new URLSearchParams({ q: 'x', dateFrom: '2026-09-23T00:00:00+09:00', dateTo: '2026-09-22T23:59:59+09:00' }).toString()],
     ['知らないパラメータ（キャッシュ外し）', 'q=x&sort=-startTime&_=123'],
     ['並べ替え', 'sort=-startTime&q=x'],
     ['既定値の明示', 'q=x&sort=-viewCounter'],
@@ -538,6 +539,14 @@ describe('/api/search: 全体の期限（S-e）', () => {
     deadline?.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
   }
 
+  it('client abort before upstream dispatch performs no search fetch', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const response = await GET(new NextRequest('http://localhost/api/search?q=x', { signal: controller.signal }))
+    expect(response.status).toBe(504)
+    expect(fakeFetch).not.toHaveBeenCalled()
+  })
+
   it('Snapshot が応答しなくても、期限で打ち切って search_timeout（504）を返す', async () => {
     snapshotPageHang = true
     const pending = search('q=x')
@@ -561,6 +570,8 @@ describe('/api/search: 全体の期限（S-e）', () => {
 
   it('新着の取得にも全体の期限を渡す（期限切れなら索引へ縮退し、索引も取れなければ 504）', async () => {
     const pending = search('q=x&sort=-startTime')
+    // The route awaits the access guard before creating its deadline.
+    await Promise.resolve()
     expire()
     const { status } = await pending
     expect(status).toBe(504)

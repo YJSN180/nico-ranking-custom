@@ -139,6 +139,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
   const resolveBaseUrl = () => {
     // Generated Vercel deployment URLs require authentication under Deployment Protection.
+    if (process.env.VERCEL_ENV === 'preview') return 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
     if (process.env.VERCEL_ENV === 'production') return process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
@@ -150,7 +151,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     return process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://nico-ranking-custom.vercel.app'
   }
 
-  // すべての環境で同一オリジンの Next API を経由する（CORS/ドメイン差異による失敗を避ける）
+  // Vercelでは公開ランキングのゲートウェイを使い、保護された自己URLへの未認証通信を避ける。
   const proxyBase = resolveBaseUrl()
   const apiUrl = `${proxyBase}/api/ranking?${params.toString()}`
 

@@ -1,5 +1,7 @@
 'use client'
 
+import { Tags } from 'lucide-react'
+
 import { useState } from 'react'
 import type { ExtendedNGList } from '../types/ng-list-extended'
 import { TagIcon, getTagTypeLabel } from './tag-icon'
@@ -195,7 +197,7 @@ export function NGTagsSection({
 
   return (
     <section className={styles.section}>
-      <h3>🚫 タグ</h3>
+      <h3><Tags size={17} aria-hidden="true" />タグ</h3>
       
       {/* タグタイプ選択 */}
       <div className={styles.radioGroup}>

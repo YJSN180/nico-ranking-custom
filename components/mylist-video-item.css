@@ -44,6 +44,7 @@
   grid-template-columns: auto 1fr;
   grid-template-areas: 
     "thumbnail details"
+    "thumbnail stats"
     "actions actions";
   align-items: start;
   min-height: 80px;
@@ -252,6 +253,7 @@
     grid-template-columns: 120px 1fr;
     grid-template-areas:
       "thumbnail details"
+      "stats stats"
       "actions actions";
     gap: 8px;
     padding: 8px 0;
@@ -332,6 +334,7 @@
     grid-template-columns: 100px 1fr;
     grid-template-areas:
       "thumbnail details"
+      "stats stats"
       "actions actions";
     padding: 8px 0;
     gap: 6px;
@@ -390,6 +393,7 @@
       grid-template-columns: 120px 1fr;
       grid-template-areas:
         "thumbnail details"
+        "stats stats"
         "actions actions";
       gap: 8px;
       padding: 8px 0;
@@ -419,6 +423,7 @@
       grid-template-columns: 100px 1fr;
       grid-template-areas: 
         "thumbnail details"
+        "stats stats"
         "actions actions";
     }
     
@@ -431,3 +436,5 @@
   }
 }
 
+
+.mylist-video-item__stats { grid-area: stats; }

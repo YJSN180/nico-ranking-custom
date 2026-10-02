@@ -2,11 +2,11 @@
 
 import { memo, useRef, useEffect, useState } from 'react'
 import { OptimizedImage } from './optimized-image'
+import { VideoStats } from './video-stats'
 import { MylistButton } from './mylist-button'
-import { QuickNGButton } from './quick-ng-button'
 import { ItemActionMenu } from './item-action-menu'
 import { formatRegisteredDate, isWithin24Hours } from '@/lib/date-utils'
-import { formatNumberMobile, formatNumberCompact, formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
+import { formatTimeAgo, formatTimeCompact, formatDuration } from '@/lib/format-utils'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import { useTagDisplay } from '@/contexts/tag-display-context'
 import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
@@ -25,24 +25,10 @@ interface RankingItemProps {
   flat?: boolean
 }
 
-// 統計の数値。PC は main と同じ書式（12.3万）、モバイル（幅 640px 以下）は 1 行に収める
-// 圧縮表記（12万・1.2億）。書式が違うときだけ両方を出し、CSS で幅に応じて片方を表示する
-function StatValue({ value }: { value: number }) {
-  const desktop = formatNumberMobile(value)
-  const compact = formatNumberCompact(value)
-  if (desktop === compact) return <>{desktop}</>
-  return (
-    <>
-      <span className="ranking-item-responsive__stat-value--desktop">{desktop}</span>
-      <span className="ranking-item-responsive__stat-value--mobile">{compact}</span>
-    </>
-  )
-}
-
 // CSS-only レスポンシブ対応版ランキングアイテム
 // Media Queriesとflexbox/gridを活用してCLSを完全に回避
 // パフォーマンス最適化: Container Query → Media Query移行完了
-// HTML構造修正: VideoContextMenuは親コンポーネントで配置
+// 操作は明示的なボタンに集約し、ブラウザ標準の長押し・右クリックを妨げない。
 const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabled = false, onQuickNGAdd, hideRank = false, flat = false }: RankingItemProps) {
   const { showTags } = useTagDisplay()
   const { ngList, saveNGListDirectly } = useUserNGListExtended()
@@ -377,39 +363,13 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
                 </span>
               </div>
             </div>
-            {/* モバイル用3点ドットメニュー（CSSで表示制御） */}
-            <div className="ranking-item-responsive__menu">
-              <ItemActionMenu video={item} disabled={disabled} onNGAdded={handleNGAdded} />
-            </div>
           </div>
           
-          {/* 統計情報（アイコンは読み上げず、何の数かは画面に出さないラベルで伝える） */}
-          <div
+          <VideoStats
             className="ranking-item-responsive__stats"
-            data-testid="video-stats"
-          >
-            <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">▶️</span>{' '}
-              <span className="ranking-item-responsive__stat-label">再生数</span>
-              <StatValue value={item.views} />
-            </span>
-            <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">💬</span>{' '}
-              <span className="ranking-item-responsive__stat-label">コメント数</span>
-              <StatValue value={item.comments || 0} />
-            </span>
-            <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">❤️</span>{' '}
-              <span className="ranking-item-responsive__stat-label">いいね数</span>
-              <StatValue value={item.likes || 0} />
-            </span>
-            <span className="ranking-item-responsive__stat">
-              <span aria-hidden="true">📁</span>{' '}
-              <span className="ranking-item-responsive__stat-label">マイリスト数</span>
-              <StatValue value={item.mylists || 0} />
-            </span>
-          </div>
-          
+            counts={{ views: item.views, comments: item.comments || 0, likes: item.likes || 0, mylists: item.mylists || 0 }}
+          />
+
           {/* タグ情報 */}
           {showTags && ((item.tags && item.tags.length > 0) || (item.tagDetails && item.tagDetails.length > 0)) && (
             <div 
@@ -533,7 +493,8 @@ const RankingItemResponsive = memo(function RankingItemResponsive({ item, disabl
         {/* マイリストボタン・NGボタンエリア */}
         <div className="ranking-item-responsive__mylist-area">
           <MylistButton video={item} />
-          <QuickNGButton 
+          <ItemActionMenu
+            mylistOnMobile
             video={item} 
             disabled={disabled}
             onNGAdded={handleNGAdded}

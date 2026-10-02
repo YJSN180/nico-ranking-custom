@@ -13,123 +13,121 @@
 }
 
 .modal {
+  font-size: 14px;
+  line-height: 1.5;
   background: var(--surface-color);
   border-radius: 12px;
   width: 90%;
-  max-width: 600px;
-  height: 70vh; /* 固定高さを設定 */
-  max-height: 600px; /* 最大高さを制限 */
+  max-width: 640px;
+  height: 80vh;
+  height: 80dvh;
+  max-height: 640px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* マイリストモーダルと統一 */
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05); /* マイリストモーダルと統一 */
   animation: slideUp 0.3s ease-out;
 }
 
 /* ダークモード対応 */
-[data-theme="dark"] .modal {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+[data-theme='dark'] .modal {
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.3),
+    0 10px 10px -5px rgba(0, 0, 0, 0.2);
 }
 
-[data-theme="darkblue"] .modal {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+[data-theme='darkblue'] .modal {
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.4),
+    0 10px 10px -5px rgba(0, 0, 0, 0.3);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: 16px 20px;
+  flex-shrink: 0;
   border-bottom: 1px solid var(--border-color);
 }
 
 .header h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 20px;
   color: var(--text-primary);
 }
 
 .closeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
-  border: none;
-  font-size: 1.5rem;
+  border: 1px solid transparent;
+  width: 36px;
+  height: 36px;
   cursor: pointer;
   color: var(--text-secondary);
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  padding: 0;
+  border-radius: var(--control-radius);
+  transition: background-color var(--control-motion);
 }
 
 .closeButton:hover {
   background-color: var(--surface-hover);
 }
 
-/* タブ列が見切れる場合に「横スクロールできる」ことを示すグラデーション（モバイルのみ）。
-   PC は main と同じくタブ列がモーダルの直接の子として振る舞うよう、ラッパーの箱を作らない */
 .tabsWrapper {
-  display: contents;
-}
-
-@media (max-width: 640px) {
-  .tabsWrapper {
-    display: block;
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .tabsWrapper::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 1px; /* border-bottom は隠さない */
-    width: 28px;
-    background: linear-gradient(to left, var(--surface-color), transparent);
-    pointer-events: none;
-  }
+  display: block;
+  flex-shrink: 0;
 }
 
 .tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border-color);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
   padding: 0 20px;
-  overflow-x: auto;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none; /* IE/Edge */
+  border-bottom: 1px solid var(--border-color);
 }
-
-.tabs::-webkit-scrollbar {
-  display: none; /* Chrome/Safari/Opera */
-}
-
 .tab {
-  background: none;
-  border: none;
-  padding: 20px 24px;
-  font-size: 1rem;
-  cursor: pointer;
-  color: var(--text-secondary);
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-  white-space: nowrap;
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  min-width: fit-content;
-  line-height: 1.5;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 4px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color var(--control-motion),
+    border-color var(--control-motion),
+    background-color var(--control-motion);
 }
-
+.tab svg {
+  flex-shrink: 0;
+}
 .tab:hover {
+  background: var(--surface-hover);
   color: var(--text-primary);
 }
-
 .tab.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
+  color: var(--control-accent);
+  border-bottom-color: var(--control-accent);
 }
 
 .content {
-  height: 100%; /* 利用可能な高さをすべて使用（PC は main と同じ） */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding: 20px;
 }
@@ -146,30 +144,33 @@
 .ngListSettings {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .genreOrderSettings {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .ngBackupSettings {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
 }
 
 .section {
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 20px;
+  padding: 16px;
 }
 
 .section h3 {
   margin: 0 0 12px 0;
-  font-size: 1.1rem;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-primary);
 }
 
@@ -240,10 +241,12 @@
 
 .inputRow input {
   flex: 1;
+  min-width: 0;
+  min-height: 40px;
   padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 0.9rem;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  font-size: 14px;
   background: var(--surface-color);
   color: var(--text-primary);
 }
@@ -272,7 +275,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 12px 20px;
+  flex-shrink: 0;
+  gap: 12px;
   border-top: 1px solid var(--border-color);
 }
 
@@ -287,90 +292,64 @@
   gap: 8px;
 }
 
-.footer .closeButton {
-  background: var(--primary-color);
-  color: var(--button-text-active);
-  padding: 8px 24px;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-
-.footer .closeButton:hover {
-  background: var(--primary-color-hover);
-}
-
-/* 適用ボタン（変更があるときだけ表示される、この画面の実操作）。PC は main と同じ見た目 */
-.applyButton {
+.footer .closeButton,
+.applyButton,
+.bulkButton,
+.inputRow button {
+  width: auto;
+  height: auto;
+  border: 1px solid var(--control-border);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 40px;
   padding: 8px 16px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-/* 一括追加のトグル/実行。PC は main と同じ見た目（プライマリ色） */
-.bulkToggle {
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
   font-size: 14px;
+  line-height: 20px;
+  border-radius: var(--control-radius);
 }
-
+.applyButton,
+.inputRow button {
+  background: var(--control-accent);
+  border-color: var(--control-accent);
+  color: var(--button-text-active);
+}
+.applyButton:hover,
+.inputRow button:hover {
+  background: var(--control-accent-hover);
+}
+.bulkToggle {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--control-border);
+  padding: 5px 10px;
+  min-height: 32px;
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 20px;
+  transition: background-color var(--control-motion);
+}
+.bulkToggle:hover,
+.bulkButton:hover {
+  background: var(--surface-hover);
+}
 .bulkButton {
   margin-top: 8px;
-  padding: 8px 16px;
-  background: var(--primary-color);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
 }
 
-/* モバイル（≤640px）: 閉じる操作は右上×に一本化してフッターの「閉じる」は出さない。
-   一括追加はセカンダリ（プライマリの重みは単発「追加」と「適用」に残す） */
+/* モバイルでは閉じる操作を右上のボタンに集約する。 */
 @media (max-width: 640px) {
   .footer .closeButton {
     display: none;
   }
-
+  .inputRow input,
+  .inputRow button,
+  .bulkToggle,
+  .bulkButton,
   .applyButton {
-    padding: 8px 24px;
-    color: var(--button-text-active);
-    border-radius: 6px;
-    font-size: 1rem;
-    font-weight: 600;
-  }
-
-  .applyButton:hover {
-    background: var(--primary-color-hover);
-  }
-
-  .bulkToggle {
-    background: transparent;
-    color: var(--primary-color);
-    border: 1px solid var(--border-color);
-  }
-
-  .bulkToggle:hover {
-    background: var(--surface-hover);
-  }
-
-  .bulkButton {
-    background: var(--surface-secondary);
-    color: var(--text-primary);
-    border: 1px solid var(--border-color);
-    font-weight: 600;
-  }
-
-  .bulkButton:hover {
-    background: var(--surface-hover);
+    min-height: 44px;
   }
 }
 
@@ -433,14 +412,146 @@
   }
 }
 
-/* 小画面でのタブ調整 */
 @media (max-width: 480px) {
-  .tabs {
-    padding: 0 10px;
+  .header {
+    padding: 12px 16px;
   }
-  
+  .tabs {
+    padding: 0 12px;
+    gap: 0;
+  }
   .tab {
-    padding: 16px 16px;
-    font-size: 0.9rem;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 2px;
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .content {
+    padding: 16px;
+  }
+  .footer {
+    padding: 12px 16px;
+  }
+  .closeButton {
+    width: 44px;
+    height: 44px;
+  }
+  .inputRow input {
+    font-size: 16px;
+  }
+  .inputRow button,
+  .bulkButton,
+  .bulkToggle,
+  .applyButton {
+    min-height: 44px;
+  }
+}
+.deletedAuthorSetting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.deletedAuthorSetting input {
+  flex-shrink: 0;
+}
+
+.themeFieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.themeFieldset legend {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+.themeOptions {
+  display: grid;
+  gap: 10px;
+}
+.themeOption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  cursor: pointer;
+  transition:
+    background-color var(--control-motion),
+    border-color var(--control-motion);
+}
+.themeOption:has(input:checked) {
+  border-color: var(--control-accent);
+  background: color-mix(
+    in srgb,
+    var(--control-accent) 8%,
+    var(--surface-color)
+  );
+}
+.themeOption input,
+.themeOption svg {
+  flex-shrink: 0;
+}
+.themeOption input {
+  margin: 0;
+  accent-color: var(--control-accent);
+}
+.themeText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.themeName {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.themeDescription {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.modal :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--control-accent);
+  outline-offset: 2px;
+}
+.themeOption:has(input:focus-visible) {
+  outline: 2px solid var(--control-accent);
+  outline-offset: 2px;
+}
+.modal :is(input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--control-accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .modal {
+    animation: none;
+  }
+  .tab,
+  .themeOption,
+  .closeButton,
+  .bulkToggle {
+    transition: none;
+  }
+}
+
+.section h3 svg {
+  flex-shrink: 0;
+}
+.radioGroup label {
+  min-height: 32px;
+  cursor: pointer;
+}
+@media (max-width: 640px), (pointer: coarse) {
+  .radioGroup label {
+    min-height: 44px;
   }
 }

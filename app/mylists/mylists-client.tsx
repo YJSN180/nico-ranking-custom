@@ -1,5 +1,6 @@
 'use client'
 
+import { Folder } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -304,7 +305,7 @@ export function MylistsClient() {
             }}
           >
             <div className={styles.mylistInfo}>
-              <div className={styles.mylistIcon}>📁</div>
+              <div className={styles.mylistIcon}><Folder size={32} strokeWidth={1.5} fill="currentColor" style={{ color: 'var(--stat-mylists-color)' }} aria-hidden="true" /></div>
               <div className={styles.mylistDetails}>
                 <h3 className={styles.mylistName}>{mylist.name}</h3>
                 {mylist.description && (

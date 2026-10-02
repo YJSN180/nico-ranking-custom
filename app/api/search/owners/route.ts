@@ -1,3 +1,5 @@
+import { withTimeout } from '@/lib/abort-signal'
+import { searchAccessDenied } from '@/lib/search/access'
 // 検索結果の投稿者情報補完API
 // Snapshot API には投稿者名・アイコンが無いため、検索結果の表示後にクライアントが
 // 非同期で呼び、ランキング画面と同じ投稿者表示（名前・アイコン・リンク）にする。
@@ -10,6 +12,7 @@ import { getServerNGList } from '@/lib/ng-list-server'
 import { matchesAuthorNameNG } from '@/lib/ng-filter-core'
 import { enrichmentRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 
+export const preferredRegion = 'hnd1'
 export const revalidate = 0
 
 /** 全体の期限。関数の上限（vercel.json の maxDuration 15 秒）より前に、取れた分だけで応答する */
@@ -18,6 +21,8 @@ const OWNERS_DEADLINE_MS = 8000
 const KV_READ_TIMEOUT_MS = 3000
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const denied = await searchAccessDenied(request)
+  if (denied) return denied
   const params = request.nextUrl.searchParams
   const userIds = sanitizeUserIds(params.get('users'))
   const channelVideoIds = sanitizeChannelVideoIds(params.get('videos'))
@@ -32,7 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const retryAfter = enrichmentRateLimit.take()
   if (retryAfter > 0) return tooManyRequests(retryAfter)
   const started = Date.now()
-  const deadline = AbortSignal.timeout(OWNERS_DEADLINE_MS)
+  const deadline = withTimeout(OWNERS_DEADLINE_MS, request.signal)
   // 管理者 NG は上流の問い合わせと並列に読む（失敗や期限切れでも投げず、直前の成功値か空で続く）
   const ngListPromise = getServerNGList({ signal: deadline, timeoutMs: KV_READ_TIMEOUT_MS })
   const result = await fetchOwnerInfo({ userIds, channelVideoIds }, { signal: deadline })

@@ -1,3 +1,6 @@
+import { BoundedTtlCache } from './bounded-cache'
+export { BoundedTtlCache } from './bounded-cache'
+import { shareSearchRequest } from './shared-request'
 // 検索結果の投稿者情報補完
 // Snapshot API は userId / channelId しか返さず名前・アイコンのフィールドが無いため、
 // 結果表示後にクライアントが非同期で呼び、ランキング画面と同じ投稿者表示にする。
@@ -8,7 +11,6 @@
 //     watch v3_guest の data.channel.{id,name,thumbnail} から取れるので、チャンネルごとに
 //     代表動画 1 件を叩いて解決する。
 import { buildV3GuestUrl, compareIds, isVideoId } from '@/lib/search/realtime-tags'
-import { withTimeout } from '../abort-signal'
 
 /**
  * 1リクエストあたりの上限（未認証で叩ける増幅器になるため有界に保つ）。
@@ -70,7 +72,7 @@ export interface OwnerInfoResult {
   users: Record<string, OwnerInfo>
   /** チャンネルID（"ch1234" 形式） → 情報 */
   channels: Record<string, OwnerInfo>
-  /** 存在しなかったユーザーID（nvapi 404 = 退会済み）。failed とは区別する */
+  /** 正常なユーザー応答と同時に確認した404/NOT_FOUNDのユーザーID。判定不明はfailed */
   missing: string[]
   /** 失敗したユーザーID / 動画ID */
   failed: string[]
@@ -140,40 +142,6 @@ export function parseChannelInfo(payload: unknown): { id: string; info: OwnerInf
 }
 
 /** 上限件数つきの期限つきキャッシュ。上限を超えたら、入れた順に古いものから捨てる */
-export class BoundedTtlCache<T> {
-  private readonly entries = new Map<string, { value: T; expiresAt: number }>()
-
-  constructor(private readonly maxEntries: number) {}
-
-  get size(): number {
-    return this.entries.size
-  }
-
-  get(key: string, now: number): T | undefined {
-    const entry = this.entries.get(key)
-    if (!entry) return undefined
-    if (entry.expiresAt <= now) {
-      this.entries.delete(key)
-      return undefined
-    }
-    return entry.value
-  }
-
-  set(key: string, value: T, expiresAt: number): void {
-    // 入れ直したものは新しい扱いにする（Map は入れた順を保つ）
-    this.entries.delete(key)
-    while (this.entries.size >= this.maxEntries) {
-      const oldest = this.entries.keys().next().value
-      if (oldest === undefined) break
-      this.entries.delete(oldest)
-    }
-    this.entries.set(key, { value, expiresAt })
-  }
-
-  clear(): void {
-    this.entries.clear()
-  }
-}
 
 const userCache = new BoundedTtlCache<OwnerInfo>(USER_CACHE_MAX)
 /** 退会済みも覚えて再照会を避ける（期限は MISSING_CACHE_TTL_MS） */
@@ -183,7 +151,7 @@ const channelByVideoCache = new BoundedTtlCache<{ id: string; info: OwnerInfo }>
 /** nvapi の 404 が退会済み（本文が meta.errorCode = NOT_FOUND）か */
 function isNotFoundBody(body: unknown): boolean {
   const meta = (body as { meta?: { status?: unknown; errorCode?: unknown } } | null)?.meta
-  return meta?.errorCode === 'NOT_FOUND'
+  return meta?.status === 404 && meta.errorCode === 'NOT_FOUND'
 }
 
 export function clearOwnerInfoCache(): void {
@@ -215,6 +183,8 @@ export async function fetchOwnerInfo(
   const now = options.now ?? Date.now()
   const result: OwnerInfoResult = { users: {}, channels: {}, missing: [], failed: [] }
 
+  const missingCandidates: string[] = []
+  let liveUserResponse = false
   const pendingUsers: string[] = []
   for (const id of input.userIds) {
     const cached = userCache.get(id, now)
@@ -230,20 +200,21 @@ export async function fetchOwnerInfo(
   }
 
   const fetchJson = async (url: string, headers: Record<string, string>): Promise<{ status: number; body: unknown | null }> => {
-    const res = await fetchImpl(url, { headers, cache: 'no-store', signal: withTimeout(timeoutMs, options.signal) })
-    // 404 は本文で退会かどうかを確かめる。本文が JSON でない（CDN・プロキシの応答など）ときは null
-    if (res.status === 404) return { status: res.status, body: await res.json().catch(() => null) }
-    if (!res.ok) return { status: res.status, body: null }
-    return { status: res.status, body: await res.json() }
+    return shareSearchRequest(fetchImpl, `owner:${url.replace(/&actionTrackId=[^&]+/, '')}`, timeoutMs, options.signal, async (sharedSignal) => {
+      const res = await fetchImpl(url, { headers, cache: 'no-store', signal: sharedSignal })
+      // 404 は本文で退会かどうかを確かめる。本文が JSON でない（CDN・プロキシの応答など）ときは null
+      if (res.status === 404) return { status: res.status, body: await res.json().catch(() => null) }
+      if (!res.ok) return { status: res.status, body: null }
+      return { status: res.status, body: await res.json() }
+    })
   }
 
   const fetchUser = async (id: string): Promise<void> => {
     try {
       const { status, body } = await fetchJson(buildUserInfoUrl(id), NVAPI_HEADERS)
       if (status === 404 && isNotFoundBody(body)) {
-        // 退会済み。一時的な失敗（5xx・タイムアウト・本文の無い 404）とは区別して表示側で明示する
-        result.missing.push(id)
-        missingUserCache.set(id, true, now + MISSING_CACHE_TTL_MS)
+        // 同じ取得で正常なユーザー応答がなければ、API経路全体の障害と区別できない。
+        missingCandidates.push(id)
         return
       }
       const info = parseUserInfo(body)
@@ -251,6 +222,7 @@ export async function fetchOwnerInfo(
         result.failed.push(id)
         return
       }
+      liveUserResponse = true
       result.users[id] = info
       userCache.set(id, info, now + CACHE_TTL_MS)
     } catch {
@@ -283,6 +255,15 @@ export async function fetchOwnerInfo(
       break
     }
     await Promise.all(tasks.slice(i, i + concurrency).map((task) => task.run()))
+  }
+  for (const id of missingCandidates) {
+    if (liveUserResponse) {
+      result.missing.push(id)
+      missingUserCache.set(id, true, now + MISSING_CACHE_TTL_MS)
+    } else {
+      // 判定できないものを退会済みとして隠さず、次の照会で再試行できるようにする。
+      result.failed.push(id)
+    }
   }
   return result
 }

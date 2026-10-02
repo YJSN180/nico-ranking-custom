@@ -1,9 +1,10 @@
+import { decodeHtmlAttribute } from '../html-entities'
+import { shareSearchRequest } from './shared-request'
 // 本家 www.nicovideo.jp の検索ページ / タグページに埋め込まれた server-response（JSON）から新着動画を読む。
 // nvapi /v2/search/video の索引より反映が早く、投稿から数分の動画まで載る（2026-09-22 実測。
 // RSS は廃止済みで HTML が返る）。項目の形は nvapi の検索応答と同じ（$getSearchVideoV2）。
 // Next.js（/api/search）と Cloudflare Worker（lqng-poller）の両方から使うため、
 // fetch / 正規表現 / JSON だけで書き、パスエイリアス（@/）は使わない。
-import { withTimeout } from '../abort-signal'
 
 export const NICO_PAGE_SIZE = 32
 const NICO_SEARCH_BASE = 'https://www.nicovideo.jp'
@@ -59,32 +60,7 @@ export function buildNicoSearchPageUrl(kind: NicoPageKind, query: string, page =
   return `${NICO_SEARCH_BASE}/${PAGE_PATHS[kind]}/${encodeURIComponent(query.trim())}?${params.toString()}`
 }
 
-// 属性値の実体参照を 1 パスで復号する（&amp; を先に戻す逐次 replace は二重復号になる）
-const ENTITIES = new Map<string, string>([
-  ['quot', '"'],
-  ['amp', '&'],
-  ['lt', '<'],
-  ['gt', '>'],
-  ['apos', "'"],
-])
-
-// 数値参照は &#039; のような 0 埋めもあるので値で復号する。範囲外・サロゲート・NUL は残す
-function decodeCodePoint(codePoint: number): string | null {
-  if (!Number.isInteger(codePoint) || codePoint <= 0 || codePoint > 0x10ffff) return null
-  if (codePoint >= 0xd800 && codePoint <= 0xdfff) return null
-  return String.fromCodePoint(codePoint)
-}
-
-export function decodeHtmlAttribute(value: string): string {
-  return value.replace(
-    /&(?:#(\d{1,8})|#[xX]([0-9a-fA-F]{1,7})|([a-zA-Z]+));/g,
-    (match, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {
-      if (name !== undefined) return ENTITIES.get(name) ?? match
-      const codePoint = decimal !== undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex ?? '', 16)
-      return decodeCodePoint(codePoint) ?? match
-    },
-  )
-}
+export { decodeHtmlAttribute } from '../html-entities'
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
@@ -137,11 +113,13 @@ export async function fetchNicoSearchPage(
   timeoutMs = DEFAULT_TIMEOUT_MS,
   signal?: AbortSignal
 ): Promise<NicoPageResult> {
-  const res = await fetchImpl(buildNicoSearchPageUrl(kind, query, page), {
-    headers: PAGE_HEADERS,
-    cache: 'no-store',
-    signal: withTimeout(timeoutMs, signal),
+  return shareSearchRequest(fetchImpl, buildNicoSearchPageUrl(kind, query, page), timeoutMs, signal, async (sharedSignal) => {
+    const res = await fetchImpl(buildNicoSearchPageUrl(kind, query, page), {
+      headers: PAGE_HEADERS,
+      cache: 'no-store',
+      signal: sharedSignal,
+    })
+    if (!res.ok) throw new Error(`nico_page_http_${res.status}`)
+    return parseNicoSearchPage(await res.text())
   })
-  if (!res.ok) throw new Error(`nico_page_http_${res.status}`)
-  return parseNicoSearchPage(await res.text())
 }

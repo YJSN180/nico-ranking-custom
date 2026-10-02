@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { clearTagMetadataCache } from '@/lib/search/realtime-tags'
 // 検索結果の後付け API（/api/search/owners, /api/search/realtime-tags）のテスト。上流は合成した fetch で置き換える。
 // ユーザー ID・動画 ID・名前はすべて合成値。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -61,6 +62,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 全体の期限（S-
     deadline = null
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    clearTagMetadataCache()
     enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
     // 1 件ごとのタイムアウトは発火させず、8 秒の全体の期限だけをテストから切る
@@ -114,6 +116,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 検索で効かな�
     kvStore.clear()
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    clearTagMetadataCache()
     enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
   })
@@ -165,6 +168,17 @@ describe('/api/search/owners と /api/search/realtime-tags: 検索で効かな�
     expect(body.hiddenIds).toEqual(['sm11'])
   })
 
+  it('realtime-tags: cached metadata does not freeze the NG decision', async () => {
+    tagItemsById = { sm11: locked('g1', 'g2') }
+    kvStore.set('lqng:config', { enabled: false })
+    const read = () => getRealtimeTags(new NextRequest('http://localhost/api/search/realtime-tags?ids=sm11'))
+    expect(((await (await read()).json()) as { hiddenIds: string[] }).hiddenIds).toEqual([])
+    const upstreamCalls = fakeFetch.mock.calls.length
+    kvStore.set('lqng:config', { enabled: true, tagGroups: [['g1'], ['g2']], lockGroupsMin: 2 })
+    expect(((await (await read()).json()) as { hiddenIds: string[] }).hiddenIds).toEqual(['sm11'])
+    expect(fakeFetch.mock.calls).toHaveLength(upstreamCalls)
+  })
+
   it('realtime-tags: 自動 NG が無効なら何も隠さない', async () => {
     kvStore.set('lqng:config', { enabled: false, tagGroups: [['g1'], ['g2']], lockGroupsMin: 2 })
     tagItemsById = { sm11: locked('g1', 'g2') }
@@ -180,6 +194,7 @@ describe('/api/search/owners と /api/search/realtime-tags: 受け付けるパ�
     kvStore.clear()
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    clearTagMetadataCache()
     enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
   })
@@ -229,6 +244,7 @@ describe('/api/search/owners と /api/search/realtime-tags: インスタンス�
     kvStore.clear()
     fakeFetch.mockClear()
     clearOwnerInfoCache()
+    clearTagMetadataCache()
     enrichmentRateLimit.reset()
     vi.stubGlobal('fetch', fakeFetch)
   })

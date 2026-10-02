@@ -7,32 +7,40 @@ interface SuspenseWrapperProps {
   fallback?: React.ReactNode
 }
 
-export function SuspenseWrapper({ children, fallback }: SuspenseWrapperProps) {
-  const defaultFallback = (
-    <div>
+export function RankingPageSkeleton() {
+  return (
+    <div role="status" aria-label="ランキングを読み込み中" aria-busy="true">
       {/* セレクターエリアのスケルトン */}
       <div className="selectors-container" style={{ minHeight: '200px' }}>
-        <div className="skeleton-pulse" style={{ 
-          background: 'var(--surface-secondary)', 
-          height: '40px', 
-          borderRadius: '8px', 
-          marginBottom: '16px'
-        }} />
-        <div className="skeleton-pulse" style={{ 
-          background: 'var(--surface-secondary)', 
-          height: '40px', 
-          borderRadius: '8px'
-        }} />
+        <div
+          className="skeleton-pulse"
+          style={{
+            background: 'var(--surface-secondary)',
+            height: '40px',
+            borderRadius: '8px',
+            marginBottom: '16px',
+          }}
+        />
+        <div
+          className="skeleton-pulse"
+          style={{
+            background: 'var(--surface-secondary)',
+            height: '40px',
+            borderRadius: '8px',
+          }}
+        />
       </div>
-      
+
       {/* ランキングアイテムのスケルトン */}
       <InitialRankingSkeleton itemCount={5} />
     </div>
   )
-  
+}
+
+export function SuspenseWrapper({ children, fallback }: SuspenseWrapperProps) {
   return (
     <ErrorBoundary>
-      <Suspense fallback={fallback || defaultFallback}>
+      <Suspense fallback={fallback || <RankingPageSkeleton />}>
         {children}
       </Suspense>
     </ErrorBoundary>

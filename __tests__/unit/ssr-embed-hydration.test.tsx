@@ -198,7 +198,7 @@ describe('SSR埋め込み1ページ + 全件バックグラウンド補完', () 
     const deferred = { resolve: () => {} }
     installFetchMock(fullData, deferred)
 
-    const { container } = render(
+    render(
       <ClientPage
         initialData={{ items: fullData.slice(0, 100) }}
         initialTotalCount={300}
@@ -213,15 +213,15 @@ describe('SSR埋め込み1ページ + 全件バックグラウンド補完', () 
     // 補完（未解決のPromise）中に2ページ目へ
     fireEvent.click(screen.getAllByText('page-2')[0]!)
 
-    // 空状態ではなくローディング表示になる
-    await waitFor(() => {
-      expect(container.querySelector('.loading-container')).not.toBeNull()
-    })
+    // 空状態ではなくローディング表示（読み込み中を伝える status 領域）になる
+    const loadingStatus = await screen.findByRole('status', { name: 'ランキングを読み込み中' })
+    expect(loadingStatus).toHaveAttribute('aria-busy', 'true')
     expect(screen.queryByText('ランキングデータがありません')).toBeNull()
 
-    // 補完が完了すると2ページ目が表示される
+    // 補完が完了すると2ページ目が表示され、ローディング表示は消える
     deferred.resolve()
     expect(await screen.findByText('Test Video 101')).toBeInTheDocument()
+    expect(screen.queryByRole('status', { name: 'ランキングを読み込み中' })).toBeNull()
   })
 
 })

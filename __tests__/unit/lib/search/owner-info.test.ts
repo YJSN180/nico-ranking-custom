@@ -77,6 +77,16 @@ describe('fetchOwnerInfo', () => {
     expect(calls).toHaveLength(5)
   })
 
+ it('全件NOT_FOUNDなら経路障害と区別できず、非表示にも負キャッシュにも使わない', async () => {
+    clearOwnerInfoCache()
+    const calls: string[] = []
+    const fetchImpl = makeFetch(calls) as unknown as typeof fetch
+    const first = await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl })
+    expect(first.missing).toEqual([])
+    expect(first.failed).toEqual(['2'])
+    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl })
+    expect(calls).toHaveLength(2)
+  })
   it('404 は本文で NOT_FOUND を確かめてから退会扱いにし、本文の無い 404 は失敗（failed）にして覚えない', async () => {
     const calls: string[] = []
     const fetchImpl = makeFetch(calls) as unknown as typeof fetch
@@ -90,20 +100,20 @@ describe('fetchOwnerInfo', () => {
   it('退会済みの記憶は 1 時間で捨てて問い合わせ直す（404 の本文は経路の誤りでも同じなので、長く固定しない）', async () => {
     const calls: string[] = []
     const fetchImpl = makeFetch(calls) as unknown as typeof fetch
-    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 0 })
+    await fetchOwnerInfo({ userIds: ['1', '2'], channelVideoIds: [] }, { fetchImpl, now: 0 })
     await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 59 * 60 * 1000 })
-    expect(calls).toHaveLength(1)
-    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 61 * 60 * 1000 })
     expect(calls).toHaveLength(2)
+    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl, now: 61 * 60 * 1000 })
+    expect(calls).toHaveLength(3)
   })
 
   it('退会済み(404)もメモし、再照会しない', async () => {
     const calls: string[] = []
     const fetchImpl = makeFetch(calls) as unknown as typeof fetch
-    await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl })
+    await fetchOwnerInfo({ userIds: ['1', '2'], channelVideoIds: [] }, { fetchImpl })
     const second = await fetchOwnerInfo({ userIds: ['2'], channelVideoIds: [] }, { fetchImpl })
     expect(second.missing).toEqual(['2'])
-    expect(calls).toHaveLength(1)
+    expect(calls).toHaveLength(2)
   })
 
   it('取得済みの投稿者はメモリキャッシュから返し、再取得しない', async () => {
@@ -120,7 +130,7 @@ describe('fetchOwnerInfo', () => {
     const calls: string[] = []
     const inner = makeFetch(calls)
     const deadline = new AbortController()
-    // 最初の 2 件（1 回目の並列）を返したところで期限が切れる
+    // 最初の2件の本文を受け取る前に期限が切れる。実行中と待機中の両方を中断する。
     const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
       expect(init?.signal).toBeInstanceOf(AbortSignal)
       const res = await inner(url)
@@ -132,8 +142,8 @@ describe('fetchOwnerInfo', () => {
       { fetchImpl: fetchImpl as unknown as typeof fetch, concurrency: 2, signal: deadline.signal }
     )
     expect(calls).toHaveLength(2)
-    expect(Object.keys(result.users).sort()).toEqual(['1', '4'])
-    expect(result.failed.sort()).toEqual(['5', '6', 'so5'])
+    expect(Object.keys(result.users)).toEqual([])
+    expect(result.failed.sort()).toEqual(['1', '4', '5', '6', 'so5'])
   })
 
   it('1 回の呼び出しで上流へ問い合わせる件数は 25 件まで（関数の上限時間に収める）', () => {
@@ -185,4 +195,5 @@ describe('BoundedTtlCache（投稿者情報のメモリキャッシュ）', () =
     expect(cache.get('y', 0)).toBeUndefined()
     expect(cache.get('x', 0)).toBe('X2')
   })
+
 })

@@ -1,5 +1,6 @@
 'use client'
 
+import { Folder } from 'lucide-react'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import styles from './mylist-modal.module.css'
@@ -122,7 +123,7 @@ export function MylistModal({
             className={styles.navigationLink}
             onClick={(e) => e.stopPropagation()}
           >
-            📁 マイリスト一覧に移動
+            <Folder size={18} strokeWidth={1.5} fill="currentColor" style={{ color: 'var(--stat-mylists-color)', verticalAlign: 'middle' }} aria-hidden="true" /> マイリスト一覧に移動
           </Link>
         </div>
 
@@ -157,7 +158,7 @@ export function MylistModal({
                   data-testid="mylist-item-checkbox"
                 >
                   <div className={styles.mylistIcon}>
-                    {isSelected ? '✓' : '📁'}
+                    {isSelected ? '✓' : <Folder size={18} strokeWidth={1.5} fill="currentColor" style={{ color: 'var(--stat-mylists-color)' }} aria-hidden="true" />}
                   </div>
                   <div className={styles.mylistInfo}>
                     <div className={styles.mylistName}>

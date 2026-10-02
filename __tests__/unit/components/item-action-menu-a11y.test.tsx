@@ -71,7 +71,7 @@ describe('ItemActionMenu: role=menu の中身', () => {
   it('メニューの操作はすべて menuitem として公開する', () => {
     const menu = openWithKeyboard(renderMenu())
     const items = within(menu).getAllByRole('menuitem')
-    expect(items.map((item) => item.textContent?.trim())).toEqual(['＋マイリストに追加', '🚫NG設定'])
+    expect(items.map((item) => item.textContent?.trim())).toEqual(['＋マイリストに追加', 'サムネイルを保存', 'URLをコピー', 'タイトルをコピー', 'NG設定'])
     expect(within(menu).queryAllByRole('button')).toHaveLength(0)
   })
 
@@ -79,11 +79,11 @@ describe('ItemActionMenu: role=menu の中身', () => {
     const ngMenu = await openNGView(renderMenu())
     const names = within(ngMenu).getAllByRole('menuitem').map((item) => item.textContent?.replace(/\s+/g, ''))
     expect(names).toEqual([
-      '‹戻る',
-      '📹動画ID:sm90000201',
-      '📝タイトル:合成タイトル',
-      '👤投稿者名:合成投稿者',
-      '🆔投稿者ID:90000201'
+      '戻る',
+      '動画ID:sm90000201',
+      'タイトル:合成タイトル',
+      '投稿者名:合成投稿者',
+      '投稿者ID:90000201'
     ])
     expect(within(ngMenu).queryAllByRole('button')).toHaveLength(0)
   })
@@ -186,8 +186,16 @@ describe('RankingItemResponsive: 統計の数値のラベル', () => {
       </TagDisplayProvider>
     )
     const stats = screen.getByTestId('video-stats')
-    const spoken = Array.from(stats.querySelectorAll('.ranking-item-responsive__stat')).map((stat) => {
-      const clone = stat.cloneNode(true) as HTMLElement
+    // 統計は VideoStats が描画し、クラス名は CSS Modules 側にあるため、統計行の直下の要素を 1 指標ずつとして扱う
+    const metrics = Array.from(stats.children)
+    // アイコンは SVG で文字を持たないため、読み上げから外れていることを属性で確かめる
+    for (const metric of metrics) {
+      const icons = metric.querySelectorAll('svg')
+      expect(icons.length).toBeGreaterThan(0)
+      icons.forEach((icon) => expect(icon).toHaveAttribute('aria-hidden', 'true'))
+    }
+    const spoken = metrics.map((metric) => {
+      const clone = metric.cloneNode(true) as HTMLElement
       clone.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove())
       return clone.textContent?.replace(/\s+/g, '')
     })

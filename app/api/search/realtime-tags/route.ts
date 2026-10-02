@@ -1,3 +1,5 @@
+import { withTimeout } from '@/lib/abort-signal'
+import { searchAccessDenied } from '@/lib/search/access'
 // リアルタイム区間のタグ補完API（検索リアルタイム統合計画 S4）
 // 検索結果の表示後にクライアントが非同期で呼び、リアルタイム区間の動画に
 // tags / tagDetails（isLocked 含む）を後付けする。これによりタグ系のユーザーNG・
@@ -9,6 +11,7 @@ import { getLqngConfig, isLqngEnabled } from '@/lib/lqng/server'
 import { lockTagRuleHits } from '@/lib/lqng/request-rules'
 import { enrichmentRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 
+export const preferredRegion = 'hnd1'
 export const revalidate = 0
 
 /** 全体の期限。関数の上限（vercel.json の maxDuration 15 秒）より前に、取れた分だけで応答する */
@@ -17,6 +20,8 @@ const REALTIME_TAGS_DEADLINE_MS = 8000
 const KV_READ_TIMEOUT_MS = 3000
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const denied = await searchAccessDenied(request)
+  if (denied) return denied
   const ids = sanitizeVideoIds(request.nextUrl.searchParams.get('ids'))
   if (ids.length === 0) {
     return NextResponse.json({ error: 'no_ids' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
@@ -29,7 +34,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const retryAfter = enrichmentRateLimit.take()
   if (retryAfter > 0) return tooManyRequests(retryAfter)
   const started = Date.now()
-  const deadline = AbortSignal.timeout(REALTIME_TAGS_DEADLINE_MS)
+  const deadline = withTimeout(REALTIME_TAGS_DEADLINE_MS, request.signal)
   // 自動 NG の設定は上流の問い合わせと並列に読む（失敗や期限切れでも投げず、直前の成功値か無効で続く）
   const configPromise = isLqngEnabled()
     ? getLqngConfig({ signal: deadline, timeoutMs: KV_READ_TIMEOUT_MS }).catch(() => null)

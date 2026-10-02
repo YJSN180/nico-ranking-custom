@@ -1,6 +1,6 @@
 {
   "regions": [
-    "hnd1"
+    "iad1"
   ],
   "functions": {
     "app/api/admin/update/route.ts": {
@@ -13,6 +13,12 @@
       "maxDuration": 15
     },
     "app/api/search/owners/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/search/videos/route.ts": {
+      "maxDuration": 15
+    },
+    "app/api/search/users/route.ts": {
       "maxDuration": 15
     }
   },

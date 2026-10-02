@@ -297,25 +297,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             onReorderModeChange={setIsReorderingMode}
           />
           
-          {!isReorderingMode && config.tag && config.tag.startsWith('custom:') && (
-            <div style={{ marginTop: '24px', marginBottom: '16px' }}>
-              <span className={styles.selectedTag}>
-                選択中: {(() => {
-                  const customId = config.tag?.replace('custom:', '') || ''
-                  
-                  // まずrankings配列から検索
-                  const foundRanking = rankings.find(r => r.id === customId)
-                  
-                  // rankings配列で見つからない場合、selectedRankingを確認
-                  // (作成直後はselectedRankingに即座に反映されるため)
-                  const effectiveRanking = foundRanking || (selectedRanking?.id === customId ? selectedRanking : null)
-                  
-                  return effectiveRanking?.title || config.tag
-                })()}
-              </span>
-            </div>
-          )}
-
           {!isReorderingMode && (
             <div className={styles.scrollContainer}>
               <div 
@@ -341,6 +322,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                   <button
                     key={ranking.id}
                     onClick={() => handleCustomRankingSelect(ranking.id)}
+                    aria-pressed={config.tag === `custom:${ranking.id}`}
+                    title={ranking.title}
                     className={`${styles.button} ${styles.tagButton} ${
                       config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
                     }`}
@@ -487,14 +470,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         )}
       </div>
       
-      {config.tag && (
-        <div style={{ marginBottom: '12px' }}>
-          <span className={styles.selectedTag}>
-            選択中: {config.tag}
-          </span>
-        </div>
-      )}
-
       <div className={styles.scrollContainer}>
         <div 
           ref={scrollToSelectedTag}
@@ -503,6 +478,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           {/* 「すべて」タグを最初に表示 */}
           <button
             onClick={() => handleTagSelect('すべて')}
+            aria-pressed={!config.tag}
             className={`${styles.button} ${styles.tagButton} ${!config.tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
           >
             すべて
@@ -513,6 +489,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             <button
               key={tag}
               onClick={() => handleTagSelect(tag)}
+              aria-pressed={config.tag === tag}
+              title={tag}
               className={`${styles.button} ${styles.tagButton} ${config.tag === tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
             >
               {tag}

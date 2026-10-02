@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { describe, it, expect, vi } from 'vitest'
+import statsStyles from '@/components/video-stats.module.css'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
 import { TagDisplayProvider } from '@/contexts/tag-display-context'
 import { formatNumberMobile, formatNumberCompact } from '@/lib/format-utils'
@@ -68,8 +69,8 @@ describe('RankingItemResponsive の統計表示', () => {
 
   it('書式が違う数値は PC 用とモバイル用を出し分ける（CSS で幅により片方だけ表示）', () => {
     const { container } = renderItem()
-    const desktop = Array.from(container.querySelectorAll('.ranking-item-responsive__stat-value--desktop')).map((el) => el.textContent)
-    const mobile = Array.from(container.querySelectorAll('.ranking-item-responsive__stat-value--mobile')).map((el) => el.textContent)
+    const desktop = Array.from(container.querySelectorAll(`.${statsStyles.desktop}`)).map((el) => el.textContent)
+    const mobile = Array.from(container.querySelectorAll(`.${statsStyles.mobile}`)).map((el) => el.textContent)
     expect(desktop).toEqual(['12345.6万', '12.3万'])
     expect(mobile).toEqual(['1.2億', '12万'])
   })
@@ -80,12 +81,12 @@ describe('RankingItemResponsive の統計表示', () => {
     expect(screen.getAllByText('2,200')).toHaveLength(1)
   })
 
-  it('PC の表示は main と同じく「アイコン 数値」の間に空白を入れる', () => {
-    const { container } = renderItem()
-    const stat = container.querySelectorAll('.ranking-item-responsive__stat')[2]
-    // 読み上げ用のラベル（画面には出ない）を除いた、見えている文字
-    const visible = stat?.cloneNode(true) as HTMLElement
-    visible.querySelectorAll('.ranking-item-responsive__stat-label').forEach((label) => label.remove())
-    expect(visible.textContent).toBe('❤️ 5.6万')
+  it('数値の意味を読み上げ用ラベルで伝え、装飾アイコンは読み上げない', () => {
+    renderItem()
+    const stats = screen.getByTestId('video-stats')
+    expect(stats.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(4)
+    expect(stats.textContent).toContain('いいね数')
+    expect(stats.textContent).not.toMatch(/❤️|📁|💬|▶️/)
+    expect(screen.getByTitle('いいね数: 56,000').querySelector(`.${statsStyles.value}`)?.textContent).toBe('5.6万')
   })
 })

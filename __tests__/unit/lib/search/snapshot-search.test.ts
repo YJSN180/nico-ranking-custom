@@ -286,8 +286,8 @@ describe('fetchSnapshotNewestStartTime', () => {
       expect(init?.signal?.aborted).toBe(true)
       return { ok: true, json: async () => ({ meta: { status: 200 }, data: [] }) } as unknown as Response
     })
-    await fetchSnapshotNewestStartTime(conditions, fetchImpl as unknown as typeof fetch, 3000, deadline.signal)
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    await expect(fetchSnapshotNewestStartTime(conditions, fetchImpl as unknown as typeof fetch, 3000, deadline.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 
   it('該当なしは null、上流エラーは throw', async () => {

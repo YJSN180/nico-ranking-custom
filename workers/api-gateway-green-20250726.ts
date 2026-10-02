@@ -1,3 +1,6 @@
+export { SearchBudget } from './search-budget'
+import type { SearchBudget } from './search-budget'
+import { admitSearch } from './search-admission'
 import { fetchUpstream, isAdminPath, noStore } from './utils/upstream-proxy'
 /**
  * Cloudflare Worker - Green Worker 20250726 with Dynamic TTL & ETag Support
@@ -47,6 +50,7 @@ interface Env {
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
   RATE_LIMITER: RateLimit // Cloudflare Rate Limiting binding
+  SEARCH_BUDGET?: DurableObjectNamespace<SearchBudget>
   SEARCH_RATE_LIMITER?: RateLimit // /api/search 系専用（workers/wrangler-green.toml）
   SENTRY_WORKER_DSN?: string
   ENVIRONMENT?: string
@@ -1219,11 +1223,10 @@ const handler: ExportedHandler<Env> = {
     
     // /api/search 系は上流でニコニコの検索 API を呼ぶため、Vercel へ渡す前に IP ごとに制限する
     const searchEndpoint = searchRateLimitEndpoint(url.pathname)
-    if (searchEndpoint && env.SEARCH_RATE_LIMITER) {
-      const rateLimited = await checkRateLimit(request, env.SEARCH_RATE_LIMITER, searchEndpoint, env.WORKER_AUTH_KEY)
-      if (rateLimited) {
-        return rateLimited
-      }
+    if (searchEndpoint) {
+      const admission = await admitSearch(request, env, searchEndpoint)
+      if (admission instanceof Response) return applyCORSHeaders(admission, request.headers.get('Origin'))
+      return proxyToVercel(request, env, admission)
     }
 
     // 静的ファイルのリクエストをチェック（先にR2から試す）
@@ -1303,12 +1306,12 @@ function getContentType(extension: string): string {
 }
 
 // Vercelへのプロキシ関数（フォールバック用）
-async function proxyToVercel(request: Request, env: Env): Promise<Response> {
+async function proxyToVercel(request: Request, env: Env, searchGrant?: string): Promise<Response> {
   const url = new URL(request.url)
   const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
   
   try {
-    const response = await fetchUpstream(request, targetUrl)
+    const response = await fetchUpstream(request, targetUrl, searchGrant)
 
     // 通常のレスポンス処理
     const responseHeaders = new Headers(response.headers)

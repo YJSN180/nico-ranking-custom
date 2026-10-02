@@ -46,3 +46,17 @@ describe('NG リストの削除ボタンの名前', () => {
     expect(screen.getByRole('button', { name: '合成タグ (ロック・完全) を削除' })).toBeInTheDocument()
   })
 })
+
+
+it('退会済み投稿者の非表示は適用するまで保存せず、適用後の再表示で保持する', () => {
+  const { unmount } = render(<SettingsModal isOpen={true} onClose={vi.fn()} />)
+  const checkbox = screen.getByRole('checkbox', { name: '退会済み投稿者の動画を非表示にする' })
+  expect(checkbox).not.toBeChecked()
+  fireEvent.click(checkbox)
+  expect(localStorage.getItem('user-ng-list')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '適用', exact: true }))
+  expect(JSON.parse(localStorage.getItem('user-ng-list')!).hideDeletedAuthors).toBe(true)
+  unmount()
+  render(<SettingsModal isOpen={true} onClose={vi.fn()} />)
+  expect(screen.getByRole('checkbox', { name: '退会済み投稿者の動画を非表示にする' })).toBeChecked()
+})

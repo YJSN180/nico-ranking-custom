@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../../workers/search-budget', () => ({ SearchBudget: class {} }))
 import { gzipSync } from 'node:zlib'
 vi.mock('../../workers/sentry.js', () => ({
   Sentry: { withSentry: (_options: unknown, handler: unknown) => handler },
@@ -26,12 +27,14 @@ afterEach(() => {
 })
 
 describe('active generation readers', () => {
-  it.each([undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'])(
-    'production SSR avoids the protected deployment URL with gateway %s', async (gateway) => {
-    vi.stubEnv('VERCEL_ENV', 'production')
+  it.each(['production', 'preview'].flatMap(environment =>
+    [undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'].map(gateway => [environment, gateway])
+  ))(
+    '%s SSR avoids the protected deployment URL with gateway %s', async (environment, gateway) => {
+    vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('VERCEL_URL', 'protected-production.vercel.app')
     vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)
-    const expectedOrigin = gateway || 'https://nico-rank.com'
+    const expectedOrigin = environment === 'preview' ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev' : gateway || 'https://nico-rank.com'
     const fetch = vi.fn(async (url: unknown) => {
       if (new URL(String(url)).origin !== expectedOrigin) {
         return new Response('Authentication required', { status: 401 })

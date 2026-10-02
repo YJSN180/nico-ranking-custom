@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { RankingSelector } from '@/components/ranking-selector'
 import RankingItemResponsive from '@/components/ranking-item-responsive'
-import { VideoContextMenu } from '@/components/video-context-menu'
+import InitialRankingSkeleton from '@/components/initial-ranking-skeleton'
 import { useUserPreferences } from '@/hooks/use-user-preferences'
 import { generateNGListHash } from '@/lib/ng-list-hash'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
@@ -1476,22 +1476,11 @@ export default function ClientPage({
       </div>
       
       {(loading || waitingForFullData || (error === '読み込み中...')) && (
-        <div className="loading-container">
-          <div style={{ 
-            fontSize: '16px', 
-            color: 'var(--text-secondary)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '12px'
-          }}>
-            <div>読み込み中...</div>
-            {isRetrying && (
-              <div style={{ fontSize: '14px' }}>
-                再試行中 ({retryCount}/3)
-              </div>
-            )}
-          </div>
+        <div className="ranking-loading" role="status" aria-label="ランキングを読み込み中" aria-busy="true">
+          <InitialRankingSkeleton itemCount={8} />
+          {isRetrying && (
+            <p className="ranking-loading__retry">再試行中 ({retryCount}/3)</p>
+          )}
         </div>
       )}
       
@@ -1644,13 +1633,11 @@ export default function ClientPage({
           <ul key={`${ngListVersion}-${config.period}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <li key={item.id} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                <VideoContextMenu video={item}>
-                  <RankingItemResponsive 
-                    item={item}
-                    disabled={isNavigating}
-                    onQuickNGAdd={handleQuickNGAdd}
-                  />
-                </VideoContextMenu>
+                <RankingItemResponsive
+                  item={item}
+                  disabled={isNavigating}
+                  onQuickNGAdd={handleQuickNGAdd}
+                />
               </li>
             ))}
           </ul>

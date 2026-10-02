@@ -1,3 +1,5 @@
+import { searchAccessDenied } from '@/lib/search/access'
+import { shareSearchRequest } from '@/lib/search/shared-request'
 // 詳細検索API（検索リアルタイム統合計画 S3）
 // Snapshot 検索API v2（毎朝5時時点のインデックス・強力なフィルタ）を基本とし、
 // 条件がマージ可能なときは索引の最新より後の区間だけを新着の取得元（nvapi v2・本家の検索ページ）から
@@ -30,6 +32,7 @@ import { withTimeout } from '@/lib/abort-signal'
 import { searchRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
 import type { RankingItem } from '@/types/ranking'
 
+export const preferredRegion = 'hnd1'
 export const revalidate = 0
 
 /**
@@ -57,6 +60,17 @@ async function fetchSnapshotPage(
   limit: number,
   deadline: AbortSignal,
   startTimeBefore?: string
+): Promise<SnapshotPage | SnapshotFailure> {
+  try {
+    return await shareSearchRequest(fetch, `snapshot:${buildSnapshotSearchUrl(conditions, { offset, limit, startTimeBefore })}`,
+      FETCH_TIMEOUT_MS, deadline, (sharedSignal) => fetchSnapshotPageOnce(conditions, offset, limit, sharedSignal, startTimeBefore))
+  } catch (error) {
+    return { error: deadline.aborted || (error instanceof Error && error.name === 'TimeoutError') ? 'search_timeout' : 'search_unreachable', status: 504 }
+  }
+}
+
+async function fetchSnapshotPageOnce(
+  conditions: SearchConditions, offset: number, limit: number, deadline: AbortSignal, startTimeBefore?: string
 ): Promise<SnapshotPage | SnapshotFailure> {
   let response: Response
   try {
@@ -98,6 +112,8 @@ async function fetchSnapshotPage(
 const isFailure = (r: SnapshotPage | SnapshotFailure): r is SnapshotFailure => 'error' in r
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const denied = await searchAccessDenied(request)
+  if (denied) return denied
   // 受け付けるのは正規形の問い合わせだけ（知らないキーや書き換えで CDN のキャッシュを外し、上流への問い合わせを増やせないようにする）
   const parsed = parseSearchApiQuery(request.nextUrl.searchParams, request.nextUrl.search.replace(/^\?/, ''))
   if (!parsed) {
@@ -107,7 +123,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // インスタンスごとの軽い流量制限（上流への問い合わせの急増を抑える。形の不正な問い合わせは数えない）
   const retryAfter = searchRateLimit.take()
   if (retryAfter > 0) return tooManyRequests(retryAfter)
-  const deadline = AbortSignal.timeout(SEARCH_DEADLINE_MS)
+  const deadline = withTimeout(SEARCH_DEADLINE_MS, request.signal)
   // NG の読み取りは上流の問い合わせと並列に始める（後から始めると、残りの予算が少ないときに KV 待ちで期限を越える）。
   // 失敗や期限切れでも投げず、直前の成功値（無ければ空）で続く
   const ngContext = loadServerNgContext({ signal: deadline, timeoutMs: KV_READ_TIMEOUT_MS })

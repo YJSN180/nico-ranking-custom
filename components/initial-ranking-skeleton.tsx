@@ -1,6 +1,8 @@
 'use client'
 
 import { memo } from 'react'
+import { VideoStats } from './video-stats'
+import './ranking-item-responsive.css'
 
 interface InitialRankingSkeletonProps {
   itemCount?: number
@@ -13,7 +15,7 @@ interface InitialRankingSkeletonProps {
 // スケルトンスクリーン: 実際のランキングアイテムのレイアウトにマッチ
 const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount = 5, hideRank = false, flat = false }: InitialRankingSkeletonProps) {
   return (
-    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+    <ul aria-hidden="true" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {Array.from({ length: itemCount }, (_, index) => (
         <li
           key={index}
@@ -66,6 +68,7 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
             
             {/* コンテンツエリアスケルトン */}
             <div className="ranking-item-responsive__details">
+              <div className="ranking-item-responsive__title-row"><div className="ranking-item-responsive__title-stack">
               {/* タイトルスケルトン */}
               <div 
                 className="ranking-item-responsive__title skeleton-pulse"
@@ -110,23 +113,8 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
                 />
               </div>
               
-              {/* 統計情報スケルトン */}
-              <div className="ranking-item-responsive__stats">
-                {['▶️', '💬', '❤️', '📁'].map((emoji, statIndex) => (
-                  <div key={statIndex} className="ranking-item-responsive__stat" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span>{emoji}</span>
-                    <div
-                      className="skeleton-pulse"
-                      style={{
-                        width: '40px',
-                        height: '14px',
-                        background: 'var(--surface-secondary)',
-                        borderRadius: '4px'
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
+              </div></div>
+              <VideoStats loading className="ranking-item-responsive__stats" />
             </div>
           </div>
         </li>

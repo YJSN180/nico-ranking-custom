@@ -64,6 +64,9 @@ export function sanitizeNGListEntries(list: ExtendedUserNGList): ExtendedUserNGL
     authorIds: sanitizeEntries(list.authorIds),
     authorNames: sanitizeMatchLists(list.authorNames),
   }
+  if (list.hideDeletedAuthors !== undefined) {
+    sanitized.hideDeletedAuthors = list.hideDeletedAuthors === true
+  }
   if (list.tags !== undefined) {
     const tags: TagNGList = {
       locked: sanitizeMatchLists(list.tags?.locked),

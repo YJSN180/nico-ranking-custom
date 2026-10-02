@@ -528,6 +528,10 @@ export function importExtendedNGListData(
     
     // インポート処理
     const newNGList: ExtendedUserNGList = { ...existingNGList }
+    // 古いバックアップのマージでは現在の表示設定を保持。置き換えでは未指定をオフに戻す。
+    if (conflictResolution === 'overwrite' || importingNGList.hideDeletedAuthors !== undefined) {
+      newNGList.hideDeletedAuthors = importingNGList.hideDeletedAuthors === true
+    }
     
     if (conflictResolution === 'overwrite') {
       // 上書きモード：インポートデータで完全に置き換え

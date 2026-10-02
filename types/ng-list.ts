@@ -1,4 +1,6 @@
 export interface NGList {
+  /** 判定済みの退会済み投稿者だけを非表示にする。未指定はオフ */
+  hideDeletedAuthors?: boolean
   // 手動で設定したNGリスト
   videoIds: string[]      // 動画ID（例: "sm12345"）
   videoTitles: {          // 動画タイトル

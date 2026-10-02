@@ -2,6 +2,31 @@
 
 /* デフォルトとライトテーマ */
 :root {
+  /* 検索・ランキングの操作部品で共有する基準 */
+  --control-height: 44px;
+  --control-radius: 8px;
+  --control-font-size: 14px;
+  --control-line-height: 20px;
+  --control-border: color-mix(in srgb, var(--text-secondary) 68%, var(--background-color));
+  --control-motion: 160ms ease-out;
+  --control-accent: var(--primary-color);
+  --control-accent-hover: var(--primary-hover);
+
+  /* ランキング・検索のジャンル選択で共有する寸法 */
+  --genre-chip-height: 32px;
+  --genre-chip-radius: 999px;
+  --genre-chip-font-size: 13px;
+  --genre-chip-line-height: 20px;
+  --genre-chip-padding-inline: 12px;
+  --genre-chip-gap: 8px;
+  --genre-chip-motion: 180ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* 統計は色と形を併用し、数値は中立色に保つ。 */
+  --stat-views-color: #55779c;
+  --stat-comments-color: #647f8b;
+  --stat-likes-color: #ab687b;
+  --stat-mylists-color: #88764e;
+
   /* 基本色 */
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -68,6 +93,12 @@
 
 /* ダークテーマ - 継承 */
 [data-theme="dark"] {
+  --stat-views-color: #8ba9cc;
+  --stat-comments-color: #95b1bd;
+  --stat-likes-color: #d89aab;
+  --stat-mylists-color: #c4b184;
+  --control-accent: #596bd8;
+  --control-accent-hover: #4d5fc9;
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 20, 20, 20;
   --background-end-rgb: 0, 0, 0;
@@ -128,6 +159,12 @@
 
 /* ダークブルーテーマ (X/Twitter風) */
 [data-theme="darkblue"] {
+  --stat-views-color: #8ba9cc;
+  --stat-comments-color: #95b1bd;
+  --stat-likes-color: #d89aab;
+  --stat-mylists-color: #c4b184;
+  --control-accent: #1477b8;
+  --control-accent-hover: #10689f;
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 21, 32, 43;
   --background-end-rgb: 21, 32, 43;
@@ -421,5 +458,12 @@ button,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* 密度を優先するPCと、指で操作する画面の寸法を分ける。 */
+@media (max-width: 640px), (pointer: coarse) {
+  :root {
+    --genre-chip-height: 44px;
   }
 }

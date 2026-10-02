@@ -133,6 +133,7 @@
   gap: 6px;
   min-width: 0; /* text-overflow: ellipsis のため */
   justify-content: flex-start;
+  align-self: center;
   overflow: hidden;
 }
 
@@ -161,11 +162,6 @@
   overflow: hidden;
   margin-bottom: 6px;
   word-break: break-word;
-}
-
-/* モバイル用3点ドットメニュー（デスクトップでは非表示） */
-.ranking-item-responsive__menu {
-  display: none;
 }
 
 .ranking-item-responsive__title:visited {
@@ -227,42 +223,6 @@
   font-size: 13px;
 }
 
-/* 統計情報 */
-.ranking-item-responsive__stats {
-  display: flex;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--text-secondary);
-  user-select: none;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-top: 2px;
-}
-
-.ranking-item-responsive__stat {
-  flex-shrink: 0;
-}
-
-/* 統計の読み上げ用ラベル（再生数など）。画面には出さず、配置にも影響させない
-   （absolute なので flex の項目にも gap の対象にもならない） */
-.ranking-item-responsive__stat-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* 統計の数値: PC は main の書式、モバイルは圧縮表記（tsx の StatValue が書式の違うときだけ
-   両方を出す）。PC ではモバイル用を隠す */
-.ranking-item-responsive__stat-value--mobile {
-  display: none;
-}
-
 /* マイリストボタン・NGボタンエリア */
 .ranking-item-responsive__mylist-area {
   grid-area: mylist-button;
@@ -314,8 +274,8 @@
   
   .ranking-item-responsive__content {
     /* モバイルレイアウト: 2カラム（サムネイル + 詳細） */
-    grid-template-columns: var(--mobile-thumbnail-width) 1fr;
-    grid-template-areas: "thumbnail details";
+    grid-template-columns: var(--mobile-thumbnail-width) minmax(0, 1fr);
+    grid-template-areas: "thumbnail details" "stats stats";
     gap: var(--mobile-gap);
     padding: 8px 0;
     min-height: 0;
@@ -421,55 +381,31 @@
     font-size: 11.5px;
   }
 
-  /* 統計は1行固定（折り返すと行の高さが崩れるため） */
-  .ranking-item-responsive__stats {
-    font-size: 11px;
-    gap: 5px;
-    flex-wrap: nowrap;
-    overflow: hidden;
-    white-space: nowrap;
-    line-height: 1.3;
-  }
-
-  .ranking-item-responsive__stat {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .ranking-item-responsive__stat-value--desktop {
-    display: none;
-  }
-
-  .ranking-item-responsive__stat-value--mobile {
-    display: inline;
-  }
-
-  /* 統計アイコン（絵文字）を一回り小さくして横幅の安全マージンを確保 */
-  .ranking-item-responsive__stat > span[aria-hidden='true'] {
-    font-size: 10px;
-  }
+  /* 統計を全幅の下段へ。タイトル・投稿者はサムネイルの隣に維持する。 */
+  .ranking-item-responsive__details { display: contents; }
+  .ranking-item-responsive__title-row { grid-area: details; }
+  .ranking-item-responsive__stats { grid-area: stats; }
+  .ranking-item-responsive__tags { grid-column: 1 / -1; }
 
   /* モバイルでのマイリストエリア調整 */
   .ranking-item-responsive__mylist-area {
-    display: none; /* デスクトップ用エリアは非表示 */
+    display: flex;
+    position: absolute;
+    top: 2px;
+    right: 0;
+    padding: 0;
+    gap: 0;
+    grid-area: auto;
   }
 
-  /* モバイルで3点ドットメニューを表示（右上） */
-  .ranking-item-responsive__menu {
-    display: flex;
-    align-items: flex-start;
-    flex-shrink: 0;
-    margin: -6px -4px 0 0;
-  }
 }
 
 /* フェーズ2.5-3: 画面外の行の描画をスキップしてモバイルの初回描画・スクロールを軽くする。
    content-visibility の contain(layout/paint) は、行内から開くUI
-   （⋮ドロップダウン・タグ長押しメニュー）を行の箱に閉じ込めてしまうため、
+   （タグ長押しメニュー）を行の箱に閉じ込めてしまうため、
    :has() で「開いている行」だけ containment を解除する。
    :has 非対応ブラウザでは全体を有効化しない（@supports ゲート）。
-   デスクトップはNGポップオーバー(fixed)が行内にあるため適用しない */
+   ⋮メニューはbodyへのportalなのでcontainmentの対象外。 */
 @media (max-width: 640px) {
   @supports selector(:has(a)) {
     .ranking-item-responsive {
@@ -478,7 +414,6 @@
       contain-intrinsic-size: auto 87px;
     }
 
-    .ranking-item-responsive:has(.item-action-menu__dropdown),
     .ranking-item-responsive:has(.tag-context-menu) {
       content-visibility: visible;
     }
@@ -493,8 +428,8 @@
   }
 
   .ranking-item-responsive__content {
-    grid-template-columns: 116px 1fr;
-    grid-template-areas: "thumbnail details";
+    grid-template-columns: 116px minmax(0, 1fr);
+    grid-template-areas: "thumbnail details" "stats stats";
     padding: 8px 0;
     gap: 6px;
     min-height: 0;
@@ -527,17 +462,8 @@
     max-width: 60px;
   }
   
-  .ranking-item-responsive__stats {
-    font-size: 11px;
-    gap: 4px;
-  }
   
-  /* 超モバイルでもマイリスト数を表示 */
-  
-  /* 超モバイルでのマイリストエリア非表示 */
-  .ranking-item-responsive__mylist-area {
-    display: none;
-  }
+  /* 超モバイルでもマイリスト数と三点メニューを表示 */
 }
 
 /* ランク1-3位の特別スタイル（Container Query対応） */
@@ -580,3 +506,15 @@
 
 /* Container Query → Media Query最適化完了 */
 /* フォールバックは不要（Media Queriesは全ブラウザで対応済み） */
+
+/* A案: PCは従来の操作列に＋/⋮。スマホは右上の⋮だけに集約。 */
+@media (min-width: 641px) {
+  .ranking-item-responsive__mylist-area { gap: 4px; }
+  .ranking-item-responsive__mylist-area > .mylist-button,
+  .ranking-item-responsive__mylist-area > .mylist-button-placeholder { width: 44px; height: 44px; border-radius: 50%; }
+}
+@media (max-width: 640px) {
+  .ranking-item-responsive__title-row { padding-right: 32px; }
+  .ranking-item-responsive__mylist-area > .mylist-button,
+  .ranking-item-responsive__mylist-area > .mylist-button-placeholder { display: none; }
+}

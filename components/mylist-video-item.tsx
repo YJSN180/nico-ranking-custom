@@ -1,9 +1,10 @@
 'use client'
 
 import { memo } from 'react'
+import { VideoStats } from './video-stats'
 import { OptimizedImage } from './optimized-image'
 import { VideoContextMenu } from './video-context-menu'
-import { formatNumberMobile, formatDuration } from '@/lib/format-utils'
+import { formatDuration } from '@/lib/format-utils'
 import { convertMylistVideoToRankingItem } from '@/lib/adapters/video-type-adapter'
 import { getLinkTarget, navigateToVideo } from '@/lib/pwa-utils'
 import type { MylistVideo } from '@/lib/storage/types'
@@ -220,6 +221,8 @@ const MylistVideoItem = memo(function MylistVideoItem({
           )}
         </div>
         
+        <VideoStats counts={video} className="mylist-video-item__stats" />
+
         {/* アクションボタンエリア */}
         <div 
           className="mylist-video-item__actions"
