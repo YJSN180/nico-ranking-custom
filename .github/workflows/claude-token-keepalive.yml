@@ -85,61 +85,87 @@ jobs:
         env:
           REFRESH_TOKEN: ${{ secrets.CLAUDE_REFRESH_TOKEN }}
         run: |
-          echo "🔄 Refreshing OAuth token..."
-
-          if [ -z "$REFRESH_TOKEN" ]; then
-            echo "❌ REFRESH_TOKEN is not set"
-            echo "success=false" >> $GITHUB_OUTPUT
-            echo "error=refresh_token_not_set" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Anthropic OAuth token endpoint (JSON format, correct client_id from grll/claude-code-base-action)
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://console.anthropic.com/v1/oauth/token" \
-            -H "Content-Type: application/json" \
-            -d "{\"grant_type\":\"refresh_token\",\"refresh_token\":\"$REFRESH_TOKEN\",\"client_id\":\"9d1c250a-e61b-44d9-88ed-5944d1962f5e\"}")
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | sed '$d')
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "❌ Token refresh failed with HTTP $HTTP_CODE"
-            echo "Response: $BODY"
-            echo "success=false" >> $GITHUB_OUTPUT
-            echo "error=refresh_failed_$HTTP_CODE" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # Parse response
-          NEW_ACCESS_TOKEN=$(echo "$BODY" | jq -r '.access_token // empty')
-          NEW_REFRESH_TOKEN=$(echo "$BODY" | jq -r '.refresh_token // empty')
-          EXPIRES_IN=$(echo "$BODY" | jq -r '.expires_in // empty')
-
-          if [ -z "$NEW_ACCESS_TOKEN" ]; then
-            echo "❌ No access_token in response"
-            echo "success=false" >> $GITHUB_OUTPUT
-            echo "error=no_access_token" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # 新しい有効期限を計算（ミリ秒）
-          NOW=$(date +%s)
-          NEW_EXPIRES_AT=$(( (NOW + ${EXPIRES_IN:-3600}) * 1000 ))
-
-          echo "✅ Token refreshed successfully"
-          echo "  Expires in: ${EXPIRES_IN:-3600} seconds"
-
-          # マスクしてからoutputに保存
-          echo "::add-mask::$NEW_ACCESS_TOKEN"
-          if [ -n "$NEW_REFRESH_TOKEN" ]; then
-            echo "::add-mask::$NEW_REFRESH_TOKEN"
-          fi
-
-          echo "success=true" >> $GITHUB_OUTPUT
-          echo "new_access_token=$NEW_ACCESS_TOKEN" >> $GITHUB_OUTPUT
-          echo "new_refresh_token=${NEW_REFRESH_TOKEN:-$REFRESH_TOKEN}" >> $GITHUB_OUTPUT
-          echo "new_expires_at=$NEW_EXPIRES_AT" >> $GITHUB_OUTPUT
+          node --input-type=module <<'NODE'
+          const { appendFileSync } = await import('node:fs')
+          const output = (key, value) => appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`)
+          const fail = (reason) => {
+            output('success', 'false')
+            output('error', reason)
+            console.error(`OAuth refresh failed: ${reason}`)
+          }
+          const refreshToken = process.env.REFRESH_TOKEN
+          if (!refreshToken) {
+            fail('refresh_token_not_set')
+          } else {
+            // Retry only explicit rate limits. A network/5xx failure may have rotated
+            // the token already, so blindly replaying that POST is unsafe.
+            const deadline = Date.now() + 120_000
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              let response
+              try {
+                response = await fetch('https://console.anthropic.com/v1/oauth/token', {
+                  method: 'POST',
+                  redirect: 'error',
+                  signal: AbortSignal.timeout(30_000),
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    grant_type: 'refresh_token',
+                    refresh_token: refreshToken,
+                    client_id: '9d1c250a-e61b-44d9-88ed-5944d1962f5e',
+                  }),
+                })
+                if (response.status === 429) {
+                  const retryAfter = response.headers.get('retry-after')?.trim()
+                  let delay = 10_000 * 2 ** (attempt - 1)
+                  if (retryAfter) {
+                    const date = Date.parse(retryAfter)
+                    if (/^\d+$/.test(retryAfter)) delay = Number(retryAfter) * 1000
+                    else if (Number.isFinite(date)) delay = Math.max(0, date - Date.now())
+                  }
+                  await response.body?.cancel()
+                  // Do not shorten a server's Retry-After to fit our time budget.
+                  if (attempt === 3 || delay + 30_000 > deadline - Date.now()) {
+                    fail('rate_limited')
+                    break
+                  }
+                  console.log(`OAuth rate limited; retry ${attempt + 1}/3 after ${delay}ms`)
+                  await new Promise((resolve) => setTimeout(resolve, delay))
+                  continue
+                }
+                if (response.status !== 200) {
+                  await response.body?.cancel()
+                  fail(`refresh_failed_${response.status}`)
+                  break
+                }
+                const body = await response.json()
+                const access = body.access_token
+                const refresh = body.refresh_token ?? refreshToken
+                const expiresIn = body.expires_in ?? 3600
+                const validToken = (value) => typeof value === 'string' && value.length > 0 && !/[\r\n]/.test(value)
+                if (!validToken(access) || !validToken(refresh) ||
+                    !Number.isSafeInteger(expiresIn) || expiresIn <= 0 ||
+                    !Number.isSafeInteger(Date.now() + expiresIn * 1000)) {
+                  fail('invalid_refresh_response')
+                  break
+                }
+                // Never log the provider response (including error bodies).
+                const mask = (value) => console.log(`::add-mask::${value.replaceAll('%', '%25')}`)
+                mask(access)
+                mask(refresh)
+                output('new_access_token', access)
+                output('new_refresh_token', refresh)
+                output('new_expires_at', Date.now() + expiresIn * 1000)
+                output('success', 'true')
+                console.log('OAuth token refreshed successfully')
+                break
+              } catch {
+                // Do not emit exceptions: they can include the request or response.
+                fail(response?.status === 200 ? 'invalid_refresh_response' : 'refresh_transport_error')
+                break
+              }
+            }
+          }
+          NODE
 
       - name: Update GitHub Secrets
         if: steps.refresh.outputs.success == 'true'
@@ -190,7 +216,16 @@ jobs:
 
           echo "❌ Token refresh failed: $REFRESH_ERROR"
 
-          # Create issue for manual intervention
+          # A rate limit is not evidence that the refresh token is invalid.
+          if [ "$REFRESH_ERROR" = "rate_limited" ]; then
+            ACTION="The provider is rate limiting OAuth refresh. Bounded retries were exhausted or Retry-After exceeded the retry budget. Wait for the provider limit to clear before another run. Token validity is unknown; do not rotate credentials solely because of HTTP 429."
+          elif [ "$REFRESH_ERROR" = "refresh_failed_400" ] || [ "$REFRESH_ERROR" = "refresh_failed_401" ] || [ "$REFRESH_ERROR" = "refresh_token_not_set" ]; then
+            ACTION="Check the configured OAuth credentials and provider authentication status. If credentials are confirmed missing or invalid, an authorized maintainer must reauthenticate and update the GitHub Secrets."
+          else
+            ACTION="Check provider availability and the workflow failure category before retrying or changing credentials. A transport or malformed-response failure does not prove that credentials are invalid."
+          fi
+
+          # Preserve failure status and the existing issue deduplication.
           EXISTING=$(gh issue list --repo "$REPO" --state open --label "oauth-token" --json number -q '.[0].number' 2>/dev/null || echo "")
 
           if [ -z "$EXISTING" ]; then
@@ -199,9 +234,7 @@ jobs:
           The automatic token refresh failed with error: \`$REFRESH_ERROR\`
 
           ### Required Action
-          1. Run locally: \`npx claude-code-login\`
-          2. Update GitHub Secrets: CLAUDE_ACCESS_TOKEN, CLAUDE_REFRESH_TOKEN, CLAUDE_EXPIRES_AT
-          3. Manually trigger this workflow to verify
+          $ACTION
 
           🤖 Auto-generated by token keepalive workflow."
 
@@ -210,7 +243,7 @@ jobs:
               --title "🔑 Claude OAuth Token Refresh Failed" \
               --label "oauth-token,urgent" \
               --body "$BODY"
-            echo "Created issue for manual re-authentication"
+            echo "Created issue for OAuth refresh investigation"
           else
             echo "Issue #$EXISTING already exists"
           fi
