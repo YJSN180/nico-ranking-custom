@@ -37,6 +37,7 @@ import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
 import { currentGeneration, rankingKey } from './utils/ranking-generation.js'
 import { R2_SERVER_ERROR_CODES, withR2Retry } from './utils/r2-retry.js'
+import { TAG_SUGGEST_MAX_QUERY, TAG_SUGGEST_MIN_QUERY, buildTagIndex, suggestTags, type TagIndex } from './utils/tag-suggest'
 import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -51,18 +52,6 @@ interface Env {
   ENVIRONMENT?: string
   CF_VERSION_METADATA?: {
     id?: string
-  }
-}
-
-// タグ累積データの型定義
-interface TagAccumulationData {
-  tags: string[]
-  metadata: {
-    version: number
-    lastUpdated: string
-    totalUniqueTags: number
-    lastAccumulationSource: string
-    weeklyUpdateCount: number
   }
 }
 
@@ -230,6 +219,136 @@ function parseAutocompleteLimit(value: string | null): number {
   const limit = Number.parseInt(value ?? '', 10)
   if (!Number.isFinite(limit) || limit < 1) return AUTOCOMPLETE_DEFAULT_LIMIT
   return Math.min(limit, AUTOCOMPLETE_MAX_LIMIT)
+}
+
+// タグ候補の索引は isolate ごとに持ち、10 分ごとに R2 から読み直す（要求ごとに約 3.5MB を読まない）
+const TAG_INDEX_TTL_MS = 10 * 60 * 1000
+// 読み直しに失敗して古い索引を使い続けるとき、次に読み直すまでの間隔
+const TAG_INDEX_RETRY_MS = 60 * 1000
+// これより長く終わらない読み込みは待たずに読み直す（読み込みを始めた要求が打ち切られた場合など）
+const TAG_INDEX_LOAD_TIMEOUT_MS = 30 * 1000
+
+interface LoadedTagIndex {
+  index: TagIndex
+  lastUpdated: string | null
+  totalUniqueTags: number
+}
+
+type TagIndexResult =
+  | { kind: 'ready'; loaded: LoadedTagIndex }
+  | { kind: 'not-found' }
+  | { kind: 'parse-error' }
+  | { kind: 'read-error'; message: string }
+
+interface TagIndexState {
+  loaded: LoadedTagIndex | null
+  refreshAt: number
+  pending: Promise<TagIndexResult> | null
+  pendingSince: number
+}
+
+// バインディングごとに持つ（テストで別のバケットと状態を共有しない）
+const tagIndexStates = new WeakMap<R2Bucket, TagIndexState>()
+
+function captureTagAutocompleteError(error: unknown, upstreamKind: 'r2-read' | 'r2-parse'): void {
+  captureWorkerException(error, {
+    tags: {
+      runtime: 'cloudflare-worker',
+      surface: 'api-gateway-green',
+      endpoint_family: '/api/tags/autocomplete',
+      upstream_kind: upstreamKind,
+      worker_version: 'green-20250726',
+    },
+  })
+}
+
+/** タグ累積データの形を確かめて索引にする。tags が配列でなければ null */
+function toLoadedTagIndex(data: unknown): LoadedTagIndex | null {
+  if (typeof data !== 'object' || data === null) return null
+  const { tags, metadata } = data as { tags?: unknown; metadata?: unknown }
+  if (!Array.isArray(tags)) return null
+  const meta = (typeof metadata === 'object' && metadata !== null ? metadata : {}) as {
+    lastUpdated?: unknown
+    totalUniqueTags?: unknown
+  }
+  return {
+    index: buildTagIndex(tags),
+    lastUpdated: typeof meta.lastUpdated === 'string' && meta.lastUpdated !== '' ? meta.lastUpdated : null,
+    totalUniqueTags:
+      typeof meta.totalUniqueTags === 'number' && Number.isFinite(meta.totalUniqueTags) ? meta.totalUniqueTags : 0,
+  }
+}
+
+/** R2 のタグ累積データを読む。ログと Sentry には利用者のクエリを含めない（読み込みはクエリと無関係） */
+async function readTagIndex(bucket: R2Bucket): Promise<TagIndexResult> {
+  let object: R2ObjectBody | null
+  try {
+    object = await readR2(bucket, 'tag-accumulation.json')
+  } catch (error) {
+    console.error('Tag autocomplete error:', error)
+    captureTagAutocompleteError(error, 'r2-read')
+    return { kind: 'read-error', message: error instanceof Error ? error.message : String(error) }
+  }
+  if (!object) return { kind: 'not-found' }
+  try {
+    const { data } = await readR2Json(object)
+    const loaded = toLoadedTagIndex(data)
+    if (!loaded) throw new Error('Tag accumulation data has no tags array')
+    return { kind: 'ready', loaded }
+  } catch (parseError) {
+    console.error('Failed to parse tag accumulation data:', parseError)
+    captureTagAutocompleteError(parseError, 'r2-parse')
+    return { kind: 'parse-error' }
+  }
+}
+
+async function refreshTagIndex(bucket: R2Bucket, state: TagIndexState): Promise<TagIndexResult> {
+  const result = await readTagIndex(bucket)
+  if (result.kind === 'ready') {
+    state.loaded = result.loaded
+    state.refreshAt = Date.now() + TAG_INDEX_TTL_MS
+    return result
+  }
+  // 読み直しに失敗したら、古い索引があればそれを使い続ける
+  if (state.loaded) {
+    state.refreshAt = Date.now() + TAG_INDEX_RETRY_MS
+    return { kind: 'ready', loaded: state.loaded }
+  }
+  return result
+}
+
+function getTagIndex(bucket: R2Bucket, ctx: ExecutionContext): Promise<TagIndexResult> {
+  let state = tagIndexStates.get(bucket)
+  if (!state) {
+    state = { loaded: null, refreshAt: 0, pending: null, pendingSince: 0 }
+    tagIndexStates.set(bucket, state)
+  }
+  const now = Date.now()
+  if (state.loaded && now < state.refreshAt) {
+    return Promise.resolve({ kind: 'ready', loaded: state.loaded })
+  }
+  // 読み込み中に来た要求は同じ読み込みを待つ。始めた要求が切断されても止まらないよう waitUntil に載せる
+  if (!state.pending || now - state.pendingSince > TAG_INDEX_LOAD_TIMEOUT_MS) {
+    const loadState = state
+    const pending: Promise<TagIndexResult> = refreshTagIndex(bucket, loadState).finally(() => {
+      if (loadState.pending === pending) loadState.pending = null
+    })
+    state.pending = pending
+    state.pendingSince = now
+    ctx.waitUntil(pending)
+  }
+  return state.pending
+}
+
+function autocompleteResponse(request: Request, body: object, status: number, cacheControl: string): Response {
+  const response = new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': cacheControl,
+    },
+  })
+  return applyCORSHeaders(response, request.headers.get('Origin'), securityHeaders)
 }
 
 /**
@@ -482,148 +601,35 @@ const handler: ExportedHandler<Env> = {
 
     // タグオートコンプリートAPI
     if (url.pathname === '/api/tags/autocomplete' && env.R2_BUCKET) {
-      try {
-        const query = url.searchParams.get('q') || ''
-        
-        // クエリが空または2文字未満の場合は空の結果を返す
-        if (!query || query.trim().length < 2) {
-          const emptyResponse = new Response(JSON.stringify({
-            query,
-            suggestions: [],
-            metadata: {
-              total: 0,
-              source: 'query-too-short'
-            }
-          }), {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=300' // 5分キャッシュ
-            }
-          })
-          const origin = request.headers.get('Origin')
-          return applyCORSHeaders(emptyResponse, origin, securityHeaders)
-        }
+      const query = url.searchParams.get('q') || ''
+      const queryLength = query.trim().length
 
-        // R2からタグ累積データを取得
-        const tagAccumulationObject = await readR2(env.R2_BUCKET, 'tag-accumulation.json')
-        
-        if (!tagAccumulationObject) {
-          // タグ累積データが存在しない場合
-          const notFoundResponse = new Response(JSON.stringify({
-            query,
-            suggestions: [],
-            metadata: {
-              total: 0,
-              source: 'tag-data-not-found',
-              error: 'Tag accumulation data not available'
-            }
-          }), {
-            status: 200,
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'public, max-age=60' // 1分キャッシュ
-            }
-          })
-          const origin = request.headers.get('Origin')
-          return applyCORSHeaders(notFoundResponse, origin, securityHeaders)
-        }
-
-        // タグ累積データを解析
-        let tagData: TagAccumulationData
-        try {
-          const { data } = await readR2Json(tagAccumulationObject)
-          tagData = data as TagAccumulationData
-        } catch (parseError) {
-          console.error('Failed to parse tag accumulation data:', parseError)
-          captureWorkerException(parseError, {
-            tags: {
-              runtime: 'cloudflare-worker',
-              surface: 'api-gateway-green',
-              endpoint_family: '/api/tags/autocomplete',
-              upstream_kind: 'r2-parse',
-              worker_version: 'green-20250726',
-            },
-          })
-          const errorResponse = new Response(JSON.stringify({
-            query,
-            suggestions: [],
-            metadata: {
-              total: 0,
-              source: 'parse-error',
-              error: 'Failed to parse tag data'
-            }
-          }), {
-            status: 500,
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache'
-            }
-          })
-          const origin = request.headers.get('Origin')
-          return applyCORSHeaders(errorResponse, origin, securityHeaders)
-        }
-
-        // プレフィックス検索を実行
-        const lowerQuery = query.toLowerCase()
-        const maxResults = parseAutocompleteLimit(url.searchParams.get('limit'))
-        const suggestions = (tagData.tags || [])
-          .filter((tag: string) => tag.toLowerCase().startsWith(lowerQuery))
-          .slice(0, maxResults)
-
-        // レスポンスを構築
-        const autocompleteResponse = {
-          query,
-          suggestions,
-          metadata: {
-            total: suggestions.length,
-            maxResults,
-            source: 'r2-tag-accumulation',
-            lastUpdated: tagData.metadata?.lastUpdated || null,
-            totalUniqueTags: tagData.metadata?.totalUniqueTags || 0
-          }
-        }
-
-        const response = new Response(JSON.stringify(autocompleteResponse), {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'public, max-age=1800' // 30分キャッシュ（タグデータは比較的安定）
-          }
-        })
-        
-        const origin = request.headers.get('Origin')
-        return applyCORSHeaders(response, origin, securityHeaders)
-
-      } catch (error) {
-        console.error('Tag autocomplete error:', error)
-        captureWorkerException(error, {
-          tags: {
-            runtime: 'cloudflare-worker',
-            surface: 'api-gateway-green',
-            endpoint_family: '/api/tags/autocomplete',
-            upstream_kind: 'r2-read',
-            worker_version: 'green-20250726',
-          },
-        })
-        const errorResponse = new Response(JSON.stringify({
-          query: url.searchParams.get('q') || '',
-          suggestions: [],
-          metadata: {
-            total: 0,
-            source: 'error',
-            error: error.message
-          }
-        }), {
-          status: 500,
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache'
-          }
-        })
-        const origin = request.headers.get('Origin')
-        return applyCORSHeaders(errorResponse, origin, securityHeaders)
+      // 短すぎる・長すぎるクエリは R2 を読まずに空の結果を返す
+      if (queryLength < TAG_SUGGEST_MIN_QUERY || queryLength > TAG_SUGGEST_MAX_QUERY) {
+        const source = queryLength < TAG_SUGGEST_MIN_QUERY ? 'query-too-short' : 'query-too-long'
+        return autocompleteResponse(request, { query, suggestions: [], metadata: { total: 0, source } }, 200, 'public, max-age=300')
       }
+
+      const result = await getTagIndex(env.R2_BUCKET, ctx)
+      if (result.kind === 'not-found') {
+        const metadata = { total: 0, source: 'tag-data-not-found', error: 'Tag accumulation data not available' }
+        return autocompleteResponse(request, { query, suggestions: [], metadata }, 200, 'public, max-age=60')
+      }
+      if (result.kind === 'parse-error') {
+        const metadata = { total: 0, source: 'parse-error', error: 'Failed to parse tag data' }
+        return autocompleteResponse(request, { query, suggestions: [], metadata }, 500, 'no-cache')
+      }
+      if (result.kind === 'read-error') {
+        const metadata = { total: 0, source: 'error', error: result.message }
+        return autocompleteResponse(request, { query, suggestions: [], metadata }, 500, 'no-cache')
+      }
+
+      // 前方一致を先に、足りない分を部分一致で埋める（照合は NFKC + 小文字）
+      const { index, lastUpdated, totalUniqueTags } = result.loaded
+      const maxResults = parseAutocompleteLimit(url.searchParams.get('limit'))
+      const suggestions = suggestTags(index, query, maxResults)
+      const metadata = { total: suggestions.length, maxResults, source: 'r2-tag-accumulation', lastUpdated, totalUniqueTags }
+      return autocompleteResponse(request, { query, suggestions, metadata }, 200, 'public, max-age=300')
     }
     
     // /api/ranking パスの処理 - Cache API対応
