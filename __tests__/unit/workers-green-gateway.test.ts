@@ -423,11 +423,21 @@ describe('green tag autocomplete', () => {
 
   const tagBucket = () => sequenceBucket(accumulation(tags))
 
+  // waitUntil に載った読み込み（期限切れ後は応答の後で終わる）を集めておき、settle で待つ
+  const background: Promise<unknown>[] = []
+  const tagCtx = { waitUntil: (promise: Promise<unknown>) => void background.push(promise) }
+  const settle = async (): Promise<void> => {
+    await Promise.all(background.splice(0))
+  }
+  afterEach(() => {
+    background.length = 0
+  })
+
   function autocomplete(query: string, bucket: { get: ReturnType<typeof vi.fn> }, headers: Record<string, string> = {}) {
     return fetchWorker(
       new Request(`https://nico-rank.com/api/tags/autocomplete?${query}`, { headers }),
       greenEnv({ R2_BUCKET: bucket }),
-      ctx,
+      tagCtx,
     )
   }
 
@@ -467,6 +477,7 @@ describe('green tag autocomplete', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
+    expect(response.headers.get('Vary')).toBe('Origin')
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://nico-rank.com')
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
     expect(await response.json()).toEqual({
@@ -551,17 +562,41 @@ describe('green tag autocomplete', () => {
     expect(await suggestions('q=syn', second)).toEqual(['syn-second'])
   })
 
-  it('reloads the dictionary after the TTL', async () => {
+  it('reloads the dictionary after the TTL in the background', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
     const bucket = sequenceBucket(accumulation(['syn-old']), accumulation(['syn-new']))
 
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
     now.mockReturnValue(1_000_000 + TTL_MS - 1)
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+    await settle()
     expect(tagReads(bucket)).toBe(1)
 
+    // 期限切れ後の要求は古い索引ですぐに答え、読み直しは waitUntil の裏で進める
     now.mockReturnValue(1_000_000 + TTL_MS)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+    await settle()
+    expect(tagReads(bucket)).toBe(2)
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-new'])
+    expect(tagReads(bucket)).toBe(2)
+  })
+
+  it('keeps answering from the previous index while a refresh is stalled, with a single refresh', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(5_000_000)
+    let calls = 0
+    const bucket = {
+      get: vi.fn((key: string) => {
+        if (key !== TAG_KEY) return Promise.resolve(null)
+        calls++
+        // 期限切れ後の読み直し（2 回目）は終わらない
+        return calls === 1 ? Promise.resolve(tagObject(accumulation(['syn-old']))) : new Promise<never>(() => undefined)
+      }),
+    }
+
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+    now.mockReturnValue(5_000_000 + TTL_MS)
+    expect(await Promise.all([suggestions('q=syn', bucket), suggestions('q=syn', bucket)])).toEqual([['syn-old'], ['syn-old']])
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
     expect(tagReads(bucket)).toBe(2)
   })
 
@@ -582,6 +617,7 @@ describe('green tag autocomplete', () => {
     expect(await suggestions('q=syn-private', bucket)).toEqual([])
     now.mockReturnValue(2_000_000 + TTL_MS)
     const response = await autocomplete('q=syn-private', bucket)
+    await settle()
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
@@ -606,13 +642,33 @@ describe('green tag autocomplete', () => {
     await suggestions('q=syn', bucket)
     now.mockReturnValue(3_000_000 + TTL_MS)
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+    await settle()
     now.mockReturnValue(3_000_000 + TTL_MS + 59_999)
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+    await settle()
     expect(tagReads(bucket)).toBe(2)
 
     now.mockReturnValue(3_000_000 + TTL_MS + 60_000)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+    await settle()
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-fresh'])
     expect(tagReads(bucket)).toBe(3)
+  })
+
+  it.each(['HEAD', 'POST'])('answers %s with 405 without reading R2', async (method) => {
+    // HEAD は Sentry が計装していないバインディングで届くため、索引に触れると別の索引ができてしまう
+    const bucket = tagBucket()
+
+    const response = await fetchWorker(
+      new Request('https://nico-rank.com/api/tags/autocomplete?q=syn', { method }),
+      greenEnv({ R2_BUCKET: bucket }),
+      tagCtx,
+    )
+
+    expect(response.status).toBe(405)
+    expect(response.headers.get('Allow')).toBe('GET, OPTIONS')
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(bucket.get).not.toHaveBeenCalled()
   })
 
   it('answers tag-data-not-found with a 1 minute Cache-Control when there is no index yet', async () => {

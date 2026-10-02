@@ -327,7 +327,7 @@ function getTagIndex(bucket: R2Bucket, ctx: ExecutionContext): Promise<TagIndexR
   if (state.loaded && now < state.refreshAt) {
     return Promise.resolve({ kind: 'ready', loaded: state.loaded })
   }
-  // 読み込み中に来た要求は同じ読み込みを待つ。始めた要求が切断されても止まらないよう waitUntil に載せる
+  // 読み込みは同時に 1 つだけ。始めた要求が切断されても止まらないよう waitUntil に載せる
   if (!state.pending || now - state.pendingSince > TAG_INDEX_LOAD_TIMEOUT_MS) {
     const loadState = state
     const pending: Promise<TagIndexResult> = refreshTagIndex(bucket, loadState).finally(() => {
@@ -336,6 +336,10 @@ function getTagIndex(bucket: R2Bucket, ctx: ExecutionContext): Promise<TagIndexR
     state.pending = pending
     state.pendingSince = now
     ctx.waitUntil(pending)
+  }
+  // 古い索引があれば読み直しを待たずに答える（R2 が遅い・止まるときも候補を返せる）。待つのは最初の読み込みだけ
+  if (state.loaded) {
+    return Promise.resolve({ kind: 'ready', loaded: state.loaded })
   }
   return state.pending
 }
@@ -346,6 +350,8 @@ function autocompleteResponse(request: Request, body: object, status: number, ca
     headers: {
       'Content-Type': 'application/json',
       'Cache-Control': cacheControl,
+      // Access-Control-Allow-Origin は Origin ごとに変わるため、キャッシュも Origin ごとに分ける
+      Vary: 'Origin',
     },
   })
   return applyCORSHeaders(response, request.headers.get('Origin'), securityHeaders)
@@ -601,6 +607,11 @@ const handler: ExportedHandler<Env> = {
 
     // タグオートコンプリートAPI
     if (url.pathname === '/api/tags/autocomplete' && env.R2_BUCKET) {
+      // 索引を使うのは GET だけ。HEAD では Sentry が計装していないバインディングを渡すため、索引が別にもう 1 つできてしまう
+      if (request.method !== 'GET') {
+        const notAllowed = new Response(null, { status: 405, headers: { Allow: 'GET, OPTIONS', 'Cache-Control': 'no-store' } })
+        return applyCORSHeaders(notAllowed, request.headers.get('Origin'), securityHeaders)
+      }
       const query = url.searchParams.get('q') || ''
       const queryLength = query.trim().length
 

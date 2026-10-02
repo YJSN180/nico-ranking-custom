@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-// サイトの /api/tags/autocomplete は公開ゲートウェイ（本番と同じ辞書・照合）を中継する
+// サイトの /api/tags/autocomplete は Green の workers.dev（本番と同じ辞書・照合）を中継する
 const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
 
 type FetchCall = [input: string | URL | Request, init?: RequestInit]
@@ -60,6 +60,7 @@ describe('GET /api/tags/autocomplete', () => {
 
       expect(response.status).toBe(200)
       expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
+      expect(response.headers.get('Vary')).toBe('Origin')
       expect(body).toEqual({ query: echoed, suggestions: [], metadata: { total: 0, source: 'query-too-short' } })
       expect(fetchMock).not.toHaveBeenCalled()
     })
@@ -91,13 +92,15 @@ describe('GET /api/tags/autocomplete', () => {
   })
 
   describe('gateway selection', () => {
+    // 本番でここに来るのは Blue が API を受けているとき。nico-rank.com へ中継するとルーター → Blue → ここへ戻るため、
+    // 本番も Green の workers.dev を直接使う
     it.each([
-      ['production', 'https://ranking-gateway.example', 'https://ranking-gateway.example'],
-      ['production', undefined, 'https://nico-rank.com'],
-      ['preview', 'https://ranking-gateway.example', GREEN_GATEWAY],
-      ['development', undefined, GREEN_GATEWAY],
-      [undefined, undefined, GREEN_GATEWAY],
-    ])('VERCEL_ENV=%s with RANKING_SSR_GATEWAY_URL=%s uses %s', async (vercelEnv, gatewayUrl, expectedOrigin) => {
+      ['production', 'https://ranking-gateway.example'],
+      ['production', undefined],
+      ['preview', 'https://ranking-gateway.example'],
+      ['development', undefined],
+      [undefined, undefined],
+    ])('VERCEL_ENV=%s with RANKING_SSR_GATEWAY_URL=%s relays to green workers.dev', async (vercelEnv, gatewayUrl) => {
       vi.stubEnv('VERCEL_ENV', vercelEnv)
       vi.stubEnv('RANKING_SSR_GATEWAY_URL', gatewayUrl)
       fetchMock.mockResolvedValueOnce(upstreamAnswer(['VOCALOID']))
@@ -105,7 +108,7 @@ describe('GET /api/tags/autocomplete', () => {
       await get('?q=VOCA')
 
       const url = requestedUrl(fetchMock.mock.calls[0])
-      expect(url.origin).toBe(expectedOrigin)
+      expect(url.origin).toBe(GREEN_GATEWAY)
       expect(url.pathname).toBe('/api/tags/autocomplete')
     })
 
@@ -147,6 +150,7 @@ describe('GET /api/tags/autocomplete', () => {
 
       expect(response.status).toBe(200)
       expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
+      expect(response.headers.get('Vary')).toBe('Origin')
       expect(body).toEqual({
         query: 'VOCA',
         suggestions: ['VOCALOID', 'VOCALOID曲'],
@@ -237,6 +241,19 @@ describe('GET /api/tags/autocomplete', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
 
+    it('keeps at most 200 answers and drops the oldest first', async () => {
+      fetchMock.mockImplementation(async () => upstreamAnswer(['syn-a']))
+
+      for (let i = 0; i <= 200; i++) await get(`?q=syn${i}`)
+      expect(fetchMock).toHaveBeenCalledTimes(201)
+
+      // 201 件目を入れた時点で最初の答えは捨てられている
+      await get('?q=syn0')
+      expect(fetchMock).toHaveBeenCalledTimes(202)
+      await get('?q=syn200')
+      expect(fetchMock).toHaveBeenCalledTimes(202)
+    })
+
     it('does not keep a tag-data-not-found answer and caches it only briefly downstream', async () => {
       const notFound = () => upstreamAnswer([], { total: 0, source: 'tag-data-not-found', error: 'Tag accumulation data not available' })
       fetchMock.mockResolvedValueOnce(notFound()).mockResolvedValueOnce(notFound())
@@ -259,6 +276,11 @@ describe('GET /api/tags/autocomplete', () => {
       ['invalid JSON', () => Promise.resolve(new Response('<html>', { status: 200 }))],
       ['an answer without a suggestions array', () => Promise.resolve(Response.json({ suggestions: 'VOCALOID' }))],
       ['a JSON array', () => Promise.resolve(Response.json(['VOCALOID']))],
+      ['a JSON error answer (green parse-error 500)', () =>
+        Promise.resolve(Response.json(
+          { query: 'private-query', suggestions: [], metadata: { total: 0, source: 'parse-error', error: 'Failed to parse tag data' } },
+          { status: 500 },
+        ))],
     ])('answers 502 upstream-error with no-store on %s', async (_label, upstream) => {
       const warnings: string[] = []
       vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
@@ -273,6 +295,43 @@ describe('GET /api/tags/autocomplete', () => {
       expect(body).toEqual({ query: 'private-query', suggestions: [], metadata: { total: 0, source: 'upstream-error' } })
       // 利用者のクエリはログに残さない
       expect(warnings.join('\n')).not.toContain('private-query')
+    })
+
+    it('does not keep a JSON error answer from the gateway', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      fetchMock
+        .mockResolvedValueOnce(Response.json({ query: 'syn', suggestions: [], metadata: { total: 0, source: 'error' } }, { status: 500 }))
+        .mockResolvedValueOnce(upstreamAnswer(['syn-a']))
+
+      const failed = await get('?q=syn')
+      const recovered = await get('?q=syn')
+
+      expect(failed.response.status).toBe(502)
+      expect(failed.response.headers.get('Cache-Control')).toBe('no-store')
+      expect(recovered.response.status).toBe(200)
+      expect(recovered.body.suggestions).toEqual(['syn-a'])
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('gives up on the gateway after 5 seconds', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const deadline = new AbortController()
+      const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal)
+      // 応答しない上流。中断の合図が来たら失敗する
+      fetchMock.mockImplementationOnce((_input, init) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
+      }))
+
+      const pending = get('?q=syn')
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+      expect(timeout).toHaveBeenCalledWith(5000)
+      expect(fetchMock.mock.calls[0][1]?.signal).toBe(deadline.signal)
+      deadline.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+      const { response, body } = await pending
+
+      expect(response.status).toBe(502)
+      expect(response.headers.get('Cache-Control')).toBe('no-store')
+      expect(body.metadata.source).toBe('upstream-error')
     })
   })
 })
