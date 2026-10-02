@@ -115,7 +115,7 @@ describe('smart router cache headers', () => {
   const cachedGreenAnswer = () =>
     Response.json(
       { suggestions: [] },
-      { headers: { 'Cache-Control': 'public, max-age=300', 'Access-Control-Allow-Origin': '*' } },
+      { headers: { 'Cache-Control': 'public, max-age=300', Vary: 'Origin', 'Access-Control-Allow-Origin': '*' } },
     )
 
   it('passes the tag autocomplete Cache-Control from green through to the browser', async () => {
@@ -131,6 +131,7 @@ describe('smart router cache headers', () => {
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
+    expect(response.headers.get('Vary')).toBe('Origin')
     expect(response.headers.get('CDN-Cache-Control')).toBeNull()
     expect(response.headers.get('X-Active-Worker')).toBe('green')
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')

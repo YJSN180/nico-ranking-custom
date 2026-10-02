@@ -3,8 +3,9 @@ import { TAG_SUGGEST_MAX_QUERY, TAG_SUGGEST_MIN_QUERY, normalizeTagQuery } from 
 
 /**
  * タグ候補 API（Next.js 版）
- * 本番の nico-rank.com では Worker（Green）が R2 の辞書から直接答える。ここに来るのはプレビューとローカル開発で、
- * 本番と同じ辞書・同じ照合の結果にするため、公開ゲートウェイの /api/tags/autocomplete を中継する
+ * 本番の nico-rank.com では Worker（Green）が R2 の辞書から直接答える。ここに来るのはプレビュー・ローカル開発と、
+ * 本番で Blue が API を受けているとき（Blue は候補を Vercel へ転送する）。
+ * どの環境でも本番と同じ辞書・同じ照合の結果にするため、Green の /api/tags/autocomplete を直接中継する
  */
 
 export const preferredRegion = 'hnd1'
@@ -16,7 +17,9 @@ const MAX_TAG_LENGTH = 100
 const UPSTREAM_TIMEOUT_MS = 5_000
 const CACHE_TTL_MS = 5 * 60 * 1000
 const CACHE_MAX_ENTRIES = 200
-// 中継した要求の印。上流が Vercel へ戻した場合（Blue 稼働時など）に、もう一度中継して循環しないようにする
+// 中継先は固定（要求の Host などからは決めない）。nico-rank.com はルーター経由で Blue → ここへ戻り得るため使わない
+const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
+// 中継した要求の印。上流が Vercel へ戻した場合に、もう一度中継して循環しないようにする
 const PROXY_HOP_HEADER = 'X-Tag-Suggest-Proxy'
 
 interface UpstreamMetadata {
@@ -38,13 +41,6 @@ function parseLimit(value: string | null): number {
   const limit = Number.parseInt(value ?? '', 10)
   if (!Number.isFinite(limit) || limit < 1) return DEFAULT_LIMIT
   return Math.min(limit, MAX_LIMIT)
-}
-
-/** 中継先は固定（要求の Host などからは決めない）。本番以外はローカル開発も含めて Green の workers.dev */
-function gatewayBase(): string {
-  return process.env.VERCEL_ENV === 'production'
-    ? process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
-    : 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -96,7 +92,8 @@ function answer(query: string, limit: number, suggestions: string[], metadata: U
   const cacheControl = metadata.source === 'tag-data-not-found' ? 'public, max-age=60' : 'public, max-age=300'
   return NextResponse.json(
     { query, suggestions, metadata: { total: suggestions.length, maxResults: limit, ...metadata } },
-    { headers: { 'Cache-Control': cacheControl } },
+    // Blue 経由ではルーターが Origin ごとの Access-Control-Allow-Origin を付けるため、キャッシュも Origin ごとに分ける
+    { headers: { 'Cache-Control': cacheControl, Vary: 'Origin' } },
   )
 }
 
@@ -110,7 +107,7 @@ function upstreamError(query: string): NextResponse {
 /** 上流の答えを確かめて返す。使えない答えなら null（ログには利用者のクエリを残さない） */
 async function fetchFromGateway(query: string, limit: number): Promise<Omit<CachedAnswer, 'expiresAt'> | null> {
   try {
-    const upstreamUrl = new URL('/api/tags/autocomplete', gatewayBase())
+    const upstreamUrl = new URL('/api/tags/autocomplete', GREEN_GATEWAY)
     upstreamUrl.searchParams.set('q', query)
     upstreamUrl.searchParams.set('limit', String(limit))
     const response = await fetch(upstreamUrl, {
@@ -151,7 +148,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const source = query.length < TAG_SUGGEST_MIN_QUERY ? 'query-too-short' : 'query-too-long'
     return NextResponse.json(
       { query: rawQuery, suggestions: [], metadata: { total: 0, source } },
-      { headers: { 'Cache-Control': 'public, max-age=300' } },
+      { headers: { 'Cache-Control': 'public, max-age=300', Vary: 'Origin' } },
     )
   }
 

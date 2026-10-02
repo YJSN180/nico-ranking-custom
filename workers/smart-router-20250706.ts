@@ -230,7 +230,7 @@ const handler: ExportedHandler<Env> = {
       )
       
       // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）。
-      // タグ候補は Green の Cache-Control（5 分）をそのまま返す
+      // タグ候補は Green の Cache-Control（5 分）をそのまま返す。旧 Green は 30 分のため、Green を先にデプロイする
       const forceNoStore =
         url.pathname.startsWith('/api/ranking') ||
         url.pathname.startsWith('/api/metadata')
