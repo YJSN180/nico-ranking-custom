@@ -1,0 +1,39 @@
+name: Production Smoke Check
+
+# GitHub-hosted runner から公開サイトを読むだけのスモークチェック。
+# deploy-worker.yml の最終ステップと同じスクリプトを、デプロイせずに実行して runner が受け取る応答を確かめる。
+# シークレットは使わない。GET（公開 SSR）と HEAD（管理 API の 401 確認）だけを送り、管理 API の本文は読まない。
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/check-admin-gateway.mjs
+      - scripts/lib/gateway-check.mjs
+      - .github/workflows/production-smoke-check.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-smoke-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # 依存パッケージを使わないので npm ci は不要
+      - name: Check public gateway (read only)
+        run: node scripts/check-admin-gateway.mjs
