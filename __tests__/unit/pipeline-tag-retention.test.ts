@@ -244,6 +244,8 @@ describe('buildTagAccumulation', () => {
     expect(data).toEqual({
       tags: ['あ', 'い', 'う'],
       lastSeen: { day: TODAY, ages: '120' },
+      // 動画数を渡さなければ人気度はすべて 0
+      popularity: { base: -26, scores: '000000000' },
       metadata: {
         version: 8,
         lastUpdated: NOW.toISOString(),
@@ -253,6 +255,7 @@ describe('buildTagAccumulation', () => {
         retentionDays: 30,
         maxTags: 300_000,
         namesDecoded: true,
+        popularityVersion: 1,
       },
     })
     expect(stats.added).toBe(1)
@@ -263,7 +266,9 @@ describe('buildTagAccumulation', () => {
     const text = serializeTagAccumulation(data)
     expect(text).not.toContain('\n')
     expect(text).not.toMatch(/": |, "/)
-    expect(text).toBe(`{"tags":["あ","い","う"],"lastSeen":{"day":${TODAY},"ages":"120"},"metadata":${JSON.stringify(data.metadata)}}`)
+    expect(text).toBe(
+      `{"tags":["あ","い","う"],"lastSeen":{"day":${TODAY},"ages":"120"},"popularity":{"base":-26,"scores":"000000000"},"metadata":${JSON.stringify(data.metadata)}}`,
+    )
     expect(JSON.parse(text)).toEqual(data)
   })
 

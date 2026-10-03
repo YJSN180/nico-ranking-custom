@@ -36,7 +36,14 @@ import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
 import { currentGeneration, rankingKey } from './utils/ranking-generation.js'
 import { R2_SERVER_ERROR_CODES, withR2Retry } from './utils/r2-retry.js'
-import { TAG_SUGGEST_MAX_QUERY, TAG_SUGGEST_MIN_QUERY, buildTagIndex, suggestTags, type TagIndex } from './utils/tag-suggest'
+import {
+  TAG_POPULARITY_VERSION,
+  TAG_SUGGEST_MAX_QUERY,
+  TAG_SUGGEST_MIN_QUERY,
+  buildTagIndex,
+  suggestTags,
+  type TagIndex,
+} from './utils/tag-suggest'
 import { Sentry, captureWorkerException, captureWorkerMessage, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
@@ -225,7 +232,7 @@ const TAG_INDEX_LOAD_TIMEOUT_MS = 30 * 1000
 // 索引がないとき、要求が読み込みを待つ上限。過ぎたら空の候補を返す（読み込みは裏で続ける）
 const TAG_INDEX_WAIT_MS = 2_000
 // R2 上の辞書の大きさ（gzip のまま）がこれを超えたら本文を読まない。/api/ranking と同じ isolate の 128MB を守る。
-// 30 万件の辞書は約 2.7MB、今の上限のない旧形式（50 万件）は約 4MB で、どちらも通す（60 万件ほどで上限に当たる）
+// 30 万件の辞書は人気度を含めて約 3.1MB（人気度で最大 0.6MB 増える）、上限のない旧形式（50 万件）は約 4MB で、どちらも通す
 const TAG_DICTIONARY_MAX_BYTES = 4.5 * 1024 * 1024
 const TAG_DICTIONARY_KEY = 'tag-accumulation.json'
 
@@ -284,15 +291,21 @@ function reportTagDictionaryTooLarge(sizeBytes: number): void {
 /** タグ累積データの形を確かめて索引にする。tags が配列でなければ null */
 function toLoadedTagIndex(data: unknown, etag: string): LoadedTagIndex | null {
   if (typeof data !== 'object' || data === null) return null
-  // 使うのは tags と metadata だけ。lastSeen などほかの項目は索引から参照しない
-  const { tags, metadata } = data as { tags?: unknown; metadata?: unknown }
+  // 使うのは tags・popularity（人気度）・metadata だけ。lastSeen などほかの項目は索引から参照しない
+  const { tags, popularity, metadata } = data as { tags?: unknown; popularity?: unknown; metadata?: unknown }
   if (!Array.isArray(tags)) return null
   const meta = (typeof metadata === 'object' && metadata !== null ? metadata : {}) as {
     lastUpdated?: unknown
     totalUniqueTags?: unknown
+    popularityVersion?: unknown
   }
+  // 人気度は形式が分かるときだけ使う。ない・形が合わない辞書は、辞書の順で答える
+  const scores =
+    meta.popularityVersion === TAG_POPULARITY_VERSION && typeof popularity === 'object' && popularity !== null
+      ? (popularity as { scores?: unknown }).scores
+      : undefined
   return {
-    index: buildTagIndex(tags),
+    index: buildTagIndex(tags, scores),
     etag,
     lastUpdated: typeof meta.lastUpdated === 'string' && meta.lastUpdated !== '' ? meta.lastUpdated : null,
     totalUniqueTags:
@@ -696,7 +709,8 @@ const handler: ExportedHandler<Env> = {
         return autocompleteResponse(request, { query, suggestions: [], metadata }, 500, 'no-cache')
       }
 
-      // 前方一致を先に、足りない分を部分一致で埋める（照合は NFKC + 小文字）
+      // 人気度があれば、キーが同じタグ・前方一致・部分一致の順にそれぞれ人気の高い順で並べる。
+      // なければ前方一致を先に、足りない分を部分一致で埋める（どちらも照合は NFKC + 小文字）
       const { index, lastUpdated, totalUniqueTags } = result.loaded
       const maxResults = parseAutocompleteLimit(url.searchParams.get('limit'))
       const suggestions = suggestTags(index, query, maxResults)
