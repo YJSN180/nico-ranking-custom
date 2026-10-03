@@ -98,9 +98,10 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 
 ### 依存関係の監査
 
-- Unified CIのDependency AuditはPRでもrootとvideo-stats-updater双方のlockfileを監査し、moderate以上で失敗させる。開発依存も除外しない。
+- Unified CIのDependency AuditはPRでもrootとvideo-stats-updater双方のlockfileを監査し、moderate以上で失敗させる。開発依存も除外しない。rootは `node scripts/audit-dependencies.mjs` で判定し、修正版がないアドバイザリに限り `.github/audit-exceptions.json` の期限付き例外を認める。例外はアドバイザリとパッケージの組で登録し、lockfileで対象ノードがすべて `dev: true` の場合だけ有効にする。本番依存（`npm audit --omit=dev`）には例外を認めず、期限切れの例外があればCIを失敗させてアドバイザリの再確認を促す。期限はUTCの日付で、その日まで有効。設定できるのは判定日から最長45日先までで、それより先の日付はCIを失敗させる。
+- 監査例外の追加・延長と監査スクリプトの変更は、人がレビューするPRでだけ行う。CIの自動修正（`fix/ci-auto-fix-*`）のPRが `.github/audit-exceptions.json`、`scripts/audit-dependencies.mjs`、`scripts/lib/audit-dependencies.mjs` を変更した場合、`auto-merge-ci-fix.yml` は承認も自動マージもせず、有効にした自動マージも止める。自動修正の指示文でも、これらを変更せず人の判断を求めて止まるよう指定している。
 - Next.jsは15系を維持し修正版に更新。Vitestは4.1系へ移行し、コンストラクタモックは通常関数、fork設定はトップレベルに置く。Worker実ランタイムテストには `@cloudflare/vitest-plugin` を使用する。
-- ローカル監査は `npm audit` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
+- ローカル監査は `node scripts/audit-dependencies.mjs` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
 
 ```sh
 npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts

@@ -1,0 +1,9 @@
+[
+  {
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "reason": "braces <=3.0.3 に修正版がない（2026-10-02 に範囲拡大）。残る経路は eslint-config-next 15.5.25 → @next/eslint-plugin-next 15.5.25 が固定する fast-glob 3.3.1 → micromatch → braces で、lint 実行時だけ使う開発依存。本番依存（npm audit --omit=dev）は0件。期限までに修正版または eslint-config-next の更新を確認し、解消していれば削除する。",
+    "expires": "2026-11-04",
+    "scope": "dev"
+  }
+]

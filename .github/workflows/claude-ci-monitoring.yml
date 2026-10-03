@@ -425,7 +425,7 @@ jobs:
              git push
              \`\`\`
 
-          6. **CIパスを確認後、PRをApprove**
+          6. **CIパスを確認後、PRをApprove**（依存監査の例外・判定を変えていない場合だけ。下の「重要」を参照）
              \`\`\`bash
              gh pr review $PR_NUMBER --approve --body \"✅ unified-ci failures fixed and verified\"
              \`\`\`
@@ -466,6 +466,9 @@ jobs:
           - この修正はmainブランチに影響します
           - 破壊的な変更は避けてください
           - テストの期待値変更は慎重に行ってください
+          - 依存監査（Dependency Audit）の例外の追加・期限の延長と、監査の判定の変更は自動修正で行わないでください。
+            \`.github/audit-exceptions.json\`、\`scripts/audit-dependencies.mjs\`、\`scripts/lib/audit-dependencies.mjs\` は変更せず、
+            それ以外の方法で直せない場合は「人の判断が必要」とレポートして止まり、Approve・マージもしないでください。
           "
 
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT_BODY"

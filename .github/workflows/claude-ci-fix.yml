@@ -369,6 +369,9 @@ jobs:
           - 10回失敗した場合は手動対応が必要です
           - プロダクションコードの大規模な変更は避けてください
           - テストの期待値変更は慎重に行ってください
+          - 依存監査（Dependency Audit）の例外の追加・期限の延長と、監査の判定の変更は自動修正で行わないでください。
+            \`.github/audit-exceptions.json\`、\`scripts/audit-dependencies.mjs\`、\`scripts/lib/audit-dependencies.mjs\` は変更せず、
+            それ以外の方法で直せない場合は「人の判断が必要」とレポートして止まってください。
           "; then
             echo "::error::Failed to post Claude fix comment to PR #$PR_NUMBER"
             echo "::error::The Claude Code Action will not be triggered"
