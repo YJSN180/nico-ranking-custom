@@ -1,11 +1,22 @@
 name: Production Smoke Check
 
-# GitHub-hosted runner から公開サイトを読むだけのスモークチェック。
+# GitHub-hosted runner から本番を読むだけのスモークチェック。
 # deploy-worker.yml の最終ステップと同じスクリプトを、デプロイせずに実行して runner が受け取る応答を確かめる。
-# シークレットは使わない。GET（公開 SSR）と HEAD（管理 API の 401 確認）だけを送り、管理 API の本文は読まない。
+# 指定した Worker を workers.dev で直接確かめてから、公開ドメインを確かめる（チャレンジされたら警告）。
+# シークレットは使わない。GET（ランキング API・公開 SSR）と HEAD（管理 API の 401 確認）だけを送り、管理 API の本文は読まない。
 
 on:
   workflow_dispatch:
+    inputs:
+      worker_name:
+        description: 'workers.dev で直接確かめる Worker（ルーターは workers.dev が無いので公開側だけを確かめる）'
+        required: true
+        default: nico-ranking-api-gateway-green
+        type: choice
+        options:
+          - nico-ranking-api-gateway-green
+          - nico-ranking-blue-20250706
+          - nico-ranking-api-gateway
   pull_request:
     paths:
       - scripts/check-admin-gateway.mjs
@@ -34,6 +45,8 @@ jobs:
         with:
           node-version: '22'
 
-      # 依存パッケージを使わないので npm ci は不要
-      - name: Check public gateway (read only)
-        run: node scripts/check-admin-gateway.mjs
+      # 依存パッケージを使わないので npm ci は不要。pull_request では入力が無いので Green を確かめる
+      - name: Check the Worker and public gateway (read only)
+        env:
+          WORKER_NAME: ${{ inputs.worker_name || 'nico-ranking-api-gateway-green' }}
+        run: node scripts/check-admin-gateway.mjs --worker "$WORKER_NAME"

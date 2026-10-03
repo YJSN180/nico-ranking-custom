@@ -14,7 +14,12 @@ import {
   countVideoLinks,
   emptyRankingReason,
   adminDenialProblem,
+  isEdgeChallenge,
+  rankingPayloadProblem,
+  checkDeployedWorker,
   checkPublicGateway,
+  runSmokeCheck,
+  WORKERS_DEV_ORIGINS,
 } from '../../../scripts/lib/gateway-check.mjs'
 
 const response = (status, headers = {}, body = '') =>
@@ -354,7 +359,14 @@ describe('チェック全体（デプロイ後のゲート）', () => {
       .mockResolvedValueOnce(rankingPage())
       .mockResolvedValueOnce(adminDenial())
     const { log, result } = run(fetchImpl)
-    await expect(result).resolves.toBeUndefined()
+    await expect(result).resolves.toEqual({
+      verified: [
+        'Ranking SSR /',
+        'Ranking SSR /?genre=game&period=24h',
+        'Gateway check /api/admin/ng-list',
+      ],
+      challenged: [],
+    })
 
     expect(
       fetchImpl.mock.calls.map(([url, init]) => [String(url), init.method]),
@@ -423,7 +435,7 @@ describe('チェック全体（デプロイ後のゲート）', () => {
       .mockResolvedValueOnce(rankingPage())
       .mockResolvedValueOnce(adminDenial())
     const { log, result } = run(fetchImpl)
-    await expect(result).resolves.toBeUndefined()
+    await expect(result).resolves.toMatchObject({ challenged: [] })
 
     const warnings = log.mock.calls
       .map(([line]) => line)
@@ -432,6 +444,638 @@ describe('チェック全体（デプロイ後のゲート）', () => {
       '::warning::Ranking SSR /: attempt 1 failed; retrying in 2000 ms%0ADiscarded response: HTTP 429%0A  cf-ray: abc-NRT%0A  content-type: text/plain%0A  body: 100%25 busy',
       '::warning::Ranking SSR /?genre=game&period=24h: attempt 1 failed; retrying in 2000 ms%0ATypeError: fetch failed: read ECONNRESET',
     ])
+  })
+})
+
+describe('公開ドメインのチャレンジ（GitHub runner）', () => {
+  const rankingPage = () =>
+    response(
+      200,
+      { 'content-type': 'text/html' },
+      '<a href="https://www.nicovideo.jp/watch/sm45000001">a</a>',
+    )
+  const adminDenial = () =>
+    response(401, {
+      'www-authenticate': 'Basic realm="Admin Area"',
+      'cache-control': 'no-store',
+    })
+  // run 37133622281 で runner が受け取った応答と同じ形
+  const challenge = () =>
+    response(
+      403,
+      {
+        server: 'cloudflare',
+        'cf-ray': '8c0ffee-IAD',
+        'cf-mitigated': 'challenge',
+        'content-type': 'text/html; charset=UTF-8',
+      },
+      '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>',
+    )
+  const run = (fetchImpl) => {
+    const log = vi.fn()
+    return {
+      log,
+      result: checkPublicGateway({ fetchImpl, sleep: noSleep, log }),
+    }
+  }
+  const warningsOf = (log) =>
+    log.mock.calls
+      .map(([line]) => line)
+      .filter((line) => line.startsWith('::warning::'))
+
+  it('cf-mitigated の応答は失敗にせず、手動確認を促す警告を出して残りを確かめる', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(challenge())
+      .mockResolvedValueOnce(rankingPage())
+      .mockResolvedValueOnce(adminDenial())
+    const { log, result } = run(fetchImpl)
+
+    await expect(result).resolves.toEqual({
+      verified: [
+        'Ranking SSR /?genre=game&period=24h',
+        'Gateway check /api/admin/ng-list',
+      ],
+      challenged: ['Ranking SSR /'],
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    const warnings = warningsOf(log)
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toMatch(
+      /^::warning::Public edge not verified: Cloudflare challenged Ranking SSR \/ at the nico-rank.com edge, as it does for GitHub runners\. Verify https:\/\/nico-rank\.com manually from an unauthenticated browser or a residential network/,
+    )
+    expect(warnings[0]).toContain('%0ARanking SSR /: HTTP 403')
+    expect(warnings[0]).toContain('cf-ray: 8c0ffee-IAD')
+    expect(warnings[0]).not.toMatch(/[\r\n]/)
+  })
+
+  it('すべてチャレンジされても失敗にせず、確かめられなかったものを返す。チャレンジは再試行しない', async () => {
+    const fetchImpl = vi.fn(async () => challenge())
+    const { log, result } = run(fetchImpl)
+
+    await expect(result).resolves.toEqual({
+      verified: [],
+      challenged: [
+        'Ranking SSR /',
+        'Ranking SSR /?genre=game&period=24h',
+        'Gateway check /api/admin/ng-list',
+      ],
+    })
+    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(warningsOf(log)).toHaveLength(3)
+    // 管理 API の HEAD は本文を出さない
+    expect(warningsOf(log)[2]).not.toContain('body:')
+  })
+
+  it('cf-mitigated の無い 403 は従来どおり失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(403, { server: 'cloudflare', 'cf-ray': 'abc-NRT' }, 'denied'),
+      )
+      .mockImplementation(async () => rankingPage())
+    const { result } = run(fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      'Ranking SSR /: HTTP 403\n  server: cloudflare\n  cf-ray: abc-NRT\n  content-type: text/plain;charset=UTF-8\n  body: denied',
+    )
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('Vercel のチャレンジ（x-vercel-mitigated）は緩めずに失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(rankingPage())
+      .mockResolvedValueOnce(rankingPage())
+      .mockResolvedValueOnce(
+        response(403, { 'x-vercel-mitigated': 'challenge' }),
+      )
+    const { result } = run(fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      'Gateway check /api/admin/ng-list: expected HTTP 401',
+    )
+  })
+
+  it('チャレンジされなかった管理 API が 200 なら失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(challenge())
+      .mockResolvedValueOnce(challenge())
+      .mockResolvedValueOnce(response(200, { 'cache-control': 'no-store' }))
+    const { result } = run(fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      'Gateway check /api/admin/ng-list: expected HTTP 401',
+    )
+  })
+
+  it('403・cf-mitigated: challenge・x-router-version 無しだけをエッジのチャレンジとみなす', () => {
+    const router = { 'x-router-version': 'smart-router-20250706-bfcache-fix' }
+    expect(isEdgeChallenge(challenge())).toBe(true)
+    expect(
+      isEdgeChallenge(response(403, { 'cf-mitigated': 'Challenge' })),
+    ).toBe(true)
+    expect(isEdgeChallenge(response(403))).toBe(false)
+    // ルーターを通った応答（上流の cf-mitigated を引き継いだもの）
+    expect(
+      isEdgeChallenge(
+        response(403, { 'cf-mitigated': 'challenge', ...router }),
+      ),
+    ).toBe(false)
+    // 403 以外
+    for (const status of [200, 401, 429, 502, 503]) {
+      expect(
+        isEdgeChallenge(response(status, { 'cf-mitigated': 'challenge' })),
+      ).toBe(false)
+    }
+    // challenge 以外の値
+    expect(isEdgeChallenge(response(403, { 'cf-mitigated': 'block' }))).toBe(
+      false,
+    )
+  })
+
+  it('ルーターを通った cf-mitigated 付きの 403 は警告にせず失敗にし、ルーターより前とは書かない', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(
+          403,
+          {
+            'cf-mitigated': 'challenge',
+            'x-router-version': 'smart-router-20250706-bfcache-fix',
+          },
+          'Just a moment...',
+        ),
+      )
+      .mockImplementation(async () => rankingPage())
+    const { log, result } = run(fetchImpl)
+
+    const error = await result.then(
+      () => null,
+      (rejection) => rejection,
+    )
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toMatch(/^Ranking SSR \/: HTTP 403\n/)
+    expect(error.message).toContain(
+      'hint: cf-mitigated=challenge is present, but this is not a Cloudflare edge challenge',
+    )
+    expect(error.message).not.toContain('before the router Worker')
+    expect(warningsOf(log)).toEqual([])
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('cf-mitigated: block の 403 は警告にせず失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(403, { 'cf-mitigated': 'block' }, 'blocked'),
+      )
+      .mockImplementation(async () => rankingPage())
+    const { log, result } = run(fetchImpl)
+
+    await expect(result).rejects.toThrow(/^Ranking SSR \/: HTTP 403\n/)
+    expect(warningsOf(log)).toEqual([])
+  })
+
+  it('cf-mitigated が付いた 200 の空画面は空ランキングとして失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(
+          200,
+          {
+            'cf-mitigated': 'challenge',
+            'x-router-version': 'smart-router-20250706-bfcache-fix',
+          },
+          '<html>ランキングデータがありません</html>',
+        ),
+      )
+      .mockImplementation(async () => rankingPage())
+    const { log, result } = run(fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      'Ranking SSR / returned an empty ranking (shows the empty-ranking message): HTTP 200',
+    )
+    expect(warningsOf(log)).toEqual([])
+  })
+
+  it('ルーター経由の 502 や管理 API の 200 は、cf-mitigated が付いていても失敗にする', async () => {
+    const routed = {
+      'cf-mitigated': 'block',
+      'x-router-version': 'smart-router-20250706-bfcache-fix',
+    }
+    const ssr502 = vi.fn(async () => response(502, routed, 'Gateway Error'))
+    const ssr = run(ssr502)
+    await expect(ssr.result).rejects.toThrow(
+      /^Ranking SSR \/: HTTP 502\n[\s\S]*body: Gateway Error$/,
+    )
+    expect(warningsOf(ssr.log)).toEqual([])
+
+    // 認証が効かずに 200 が返った管理 API。ルーターは管理パスに x-router-version を付けない
+    const adminOpen = vi
+      .fn()
+      .mockResolvedValueOnce(rankingPage())
+      .mockResolvedValueOnce(rankingPage())
+      .mockResolvedValueOnce(
+        response(200, {
+          'cf-mitigated': 'challenge',
+          'cache-control': 'no-store',
+        }),
+      )
+    const admin = run(adminOpen)
+    await expect(admin.result).rejects.toThrow(
+      'Gateway check /api/admin/ng-list: expected HTTP 401: HTTP 200',
+    )
+    expect(warningsOf(admin.log)).toEqual([])
+  })
+})
+
+describe('ランキング API の JSON の判定', () => {
+  const payload = (overrides = {}) => ({
+    items: [{ id: 'sm45000001', title: 'a' }],
+    metadata: {
+      version: 1,
+      updatedAt: '2026-10-03T14:24:05.859Z',
+      genre: 'all',
+      period: '24h',
+    },
+    ...overrides,
+  })
+
+  it('動画が並び、metadata が要求と合えば合格', () => {
+    expect(rankingPayloadProblem(payload(), 'all', '24h')).toBeNull()
+  })
+
+  it('items が無い・空・動画 ID が無いものは不合格', () => {
+    expect(rankingPayloadProblem({}, 'all', '24h')).toBe(
+      'items is not an array',
+    )
+    expect(rankingPayloadProblem(null, 'all', '24h')).toBe(
+      'items is not an array',
+    )
+    expect(rankingPayloadProblem(payload({ items: [] }), 'all', '24h')).toBe(
+      'items is empty',
+    )
+    expect(
+      rankingPayloadProblem(payload({ items: [{ id: 42 }] }), 'all', '24h'),
+    ).toBe('items contain no video ids')
+  })
+
+  it('metadata が要求と違う・更新日時が読めないものは不合格', () => {
+    expect(
+      rankingPayloadProblem(payload({ metadata: undefined }), 'all', '24h'),
+    ).toBe('metadata does not match genre=all period=24h')
+    expect(
+      rankingPayloadProblem(
+        payload({
+          metadata: { genre: 'game', period: '24h', updatedAt: '2026-10-03' },
+        }),
+        'all',
+        '24h',
+      ),
+    ).toBe('metadata does not match genre=all period=24h')
+    expect(
+      rankingPayloadProblem(
+        payload({
+          metadata: { genre: 'all', period: '24h', updatedAt: 'soon' },
+        }),
+        'all',
+        '24h',
+      ),
+    ).toBe('metadata.updatedAt is not a date')
+  })
+})
+
+describe('配備した Worker の直接確認（workers.dev）', () => {
+  const GREEN = 'nico-ranking-api-gateway-green'
+  const GREEN_ORIGIN = WORKERS_DEV_ORIGINS[GREEN]
+  const rankingJson = (body) =>
+    response(200, { 'content-type': 'application/json' }, JSON.stringify(body))
+  const goodRanking = () =>
+    rankingJson({
+      items: [
+        { id: 'sm45000001', title: 'a' },
+        { id: 'so45000002', title: 'b' },
+      ],
+      metadata: {
+        version: 1,
+        updatedAt: '2026-10-03T14:24:05.859Z',
+        genre: 'all',
+        period: '24h',
+      },
+    })
+  const adminDenial = () =>
+    response(401, {
+      'www-authenticate': 'Basic realm="Admin Area"',
+      'cache-control': 'no-store, must-revalidate',
+    })
+  const run = (workerName, fetchImpl) => {
+    const log = vi.fn()
+    return {
+      log,
+      result: checkDeployedWorker(workerName, {
+        fetchImpl,
+        sleep: noSleep,
+        log,
+      }),
+    }
+  }
+
+  it('Green の workers.dev でランキング API と管理パスの拒否を確かめて合格する', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(goodRanking())
+      .mockResolvedValueOnce(adminDenial())
+    const { log, result } = run(GREEN, fetchImpl)
+
+    await expect(result).resolves.toBe('verified')
+    expect(GREEN_ORIGIN).toBe(
+      'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev',
+    )
+    expect(
+      fetchImpl.mock.calls.map(([url, init]) => [String(url), init.method]),
+    ).toEqual([
+      [`${GREEN_ORIGIN}/api/ranking?genre=all&period=24h`, undefined],
+      [`${GREEN_ORIGIN}/api/admin/ng-list`, 'HEAD'],
+    ])
+    expect(fetchImpl.mock.calls[1][1].redirect).toBe('manual')
+    expect(fetchImpl.mock.calls[0][1].headers['User-Agent']).toBe(
+      'nico-ranking-verification/1.0',
+    )
+    expect(log.mock.calls.map(([line]) => line)).toEqual([
+      `Verified ${GREEN} /api/ranking?genre=all&period=24h on workers.dev: 2 items, updated at 2026-10-03T14:24:05.859Z`,
+      `Verified ${GREEN} /api/admin/ng-list on workers.dev: 401 with authentication challenge and no-store`,
+    ])
+  })
+
+  it('ランキング API の 404 は本文付きで失敗にする（Blue も同じ判定）', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(
+          404,
+          { 'content-type': 'application/json' },
+          '{"error":"Data not found"}',
+        ),
+      )
+    const { result } = run('nico-ranking-blue-20250706', fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      'nico-ranking-blue-20250706 /api/ranking?genre=all&period=24h: HTTP 404\n  content-type: application/json\n  body: {"error":"Data not found"}',
+    )
+    expect(String(fetchImpl.mock.calls[0][0])).toBe(
+      'https://nico-ranking-blue-20250706.yjsn180180.workers.dev/api/ranking?genre=all&period=24h',
+    )
+  })
+
+  it('200 でも JSON でない・items が空なら失敗にする', async () => {
+    const notJson = run(
+      GREEN,
+      vi.fn().mockResolvedValueOnce(response(200, {}, '<html>oops</html>')),
+    )
+    await expect(notJson.result).rejects.toThrow(
+      `${GREEN} /api/ranking?genre=all&period=24h: body is not JSON`,
+    )
+
+    const empty = run(
+      GREEN,
+      vi.fn().mockResolvedValueOnce(
+        rankingJson({
+          items: [],
+          metadata: { genre: 'all', period: '24h', updatedAt: '2026-10-03' },
+        }),
+      ),
+    )
+    await expect(empty.result).rejects.toThrow(
+      `${GREEN} /api/ranking?genre=all&period=24h: items is empty`,
+    )
+  })
+
+  it('管理パスが拒否されなければ失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(goodRanking())
+      .mockResolvedValueOnce(
+        response(200, { 'content-type': 'application/json' }),
+      )
+    const { result } = run(GREEN, fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      `${GREEN} /api/admin/ng-list: expected HTTP 401`,
+    )
+  })
+
+  it('workers.dev ではチャレンジも緩めずに失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(403, { 'cf-mitigated': 'challenge' }, 'Just a moment...'),
+      )
+    const { result } = run(GREEN, fetchImpl)
+
+    await expect(result).rejects.toThrow(
+      `${GREEN} /api/ranking?genre=all&period=24h: HTTP 403`,
+    )
+  })
+
+  it('5xx は再試行せずに失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(response(503, {}, 'error code: 1102'))
+      .mockResolvedValueOnce(goodRanking())
+    const { result } = run(GREEN, fetchImpl)
+
+    await expect(result).rejects.toThrow('HTTP 503')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('ルーターは workers.dev が無いので、送信せずに理由を出して飛ばす', async () => {
+    const fetchImpl = vi.fn()
+    const { log, result } = run('nico-ranking-api-gateway', fetchImpl)
+
+    await expect(result).resolves.toBe('skipped')
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Skipped the direct check of nico-ranking-api-gateway: it has the nico-rank.com/* route, so its workers.dev URL is disabled',
+      ),
+    )
+  })
+
+  it('知らない Worker 名・名前なしは失敗にせず、警告を出して飛ばす', async () => {
+    const unknown = run('lqng-poller', vi.fn())
+    await expect(unknown.result).resolves.toBe('skipped')
+    expect(unknown.log).toHaveBeenCalledWith(
+      `::warning::Skipped the direct check of the deployed Worker: no workers.dev URL is known for "lqng-poller". Known: ${GREEN}, nico-ranking-blue-20250706`,
+    )
+
+    const fetchImpl = vi.fn()
+    const missing = run(undefined, fetchImpl)
+    await expect(missing.result).resolves.toBe('skipped')
+    expect(missing.log).toHaveBeenCalledWith(
+      expect.stringContaining('no worker name was given (--worker)'),
+    )
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe('スモークチェック全体の順序', () => {
+  const GREEN = 'nico-ranking-api-gateway-green'
+  const goodRanking = () =>
+    response(
+      200,
+      {},
+      JSON.stringify({
+        items: [{ id: 'sm45000001' }],
+        metadata: { genre: 'all', period: '24h', updatedAt: '2026-10-03' },
+      }),
+    )
+  const adminDenial = () =>
+    response(401, {
+      'www-authenticate': 'Basic realm="Admin Area"',
+      'cache-control': 'no-store',
+    })
+  const challenge = () => response(403, { 'cf-mitigated': 'challenge' })
+
+  it('配備した Worker を直接確かめてから公開ドメインを確かめ、要約を出す', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(goodRanking())
+      .mockResolvedValueOnce(adminDenial())
+      .mockImplementation(async () => challenge())
+    const log = vi.fn()
+
+    await expect(
+      runSmokeCheck({ workerName: GREEN, fetchImpl, sleep: noSleep, log }),
+    ).resolves.toBeUndefined()
+    expect(fetchImpl.mock.calls.map(([url]) => new URL(url).host)).toEqual([
+      'nico-ranking-api-gateway-green.yjsn180180.workers.dev',
+      'nico-ranking-api-gateway-green.yjsn180180.workers.dev',
+      'nico-rank.com',
+      'nico-rank.com',
+      'nico-rank.com',
+    ])
+    expect(log.mock.calls.at(-1)[0]).toBe(
+      `Summary: direct check of ${GREEN} verified; public edge verified 0 of 3, challenged 3`,
+    )
+  })
+
+  it('直接確認で失敗したら公開ドメインへは送らない', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(response(500, {}, 'boom'))
+
+    await expect(
+      runSmokeCheck({
+        workerName: GREEN,
+        fetchImpl,
+        sleep: noSleep,
+        log: vi.fn(),
+      }),
+    ).rejects.toThrow('HTTP 500')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('directOnly では公開ドメインへ送らない。直接確かめる先が無ければ失敗にする', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(goodRanking())
+      .mockResolvedValueOnce(adminDenial())
+    await expect(
+      runSmokeCheck({
+        workerName: GREEN,
+        directOnly: true,
+        fetchImpl,
+        sleep: noSleep,
+        log: vi.fn(),
+      }),
+    ).resolves.toBeUndefined()
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+
+    await expect(
+      runSmokeCheck({
+        workerName: 'nico-ranking-api-gateway',
+        directOnly: true,
+        fetchImpl: vi.fn(),
+        sleep: noSleep,
+        log: vi.fn(),
+      }),
+    ).rejects.toThrow('Nothing was checked')
+  })
+
+  it('何も確かめられなかった成功（ルーターのみ・全件チャレンジ）は、未確認の警告と手動確認の手順を残す', async () => {
+    const log = vi.fn()
+    const writeStepSummary = vi.fn()
+
+    await expect(
+      runSmokeCheck({
+        workerName: 'nico-ranking-api-gateway',
+        fetchImpl: vi.fn(async () => challenge()),
+        sleep: noSleep,
+        log,
+        writeStepSummary,
+      }),
+    ).resolves.toBeUndefined()
+    expect(log.mock.calls.at(-1)[0]).toMatch(
+      /^::warning::Deployment NOT verified/,
+    )
+    expect(writeStepSummary).toHaveBeenCalledTimes(1)
+    expect(writeStepSummary.mock.calls[0][0]).toContain(
+      '## Deployment NOT verified',
+    )
+  })
+
+  it('公開ドメインを 1 件でも確かめられたら、未確認の警告は出さない', async () => {
+    const writeStepSummary = vi.fn()
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response(200, {}, '<a href="https://www.nicovideo.jp/watch/sm1">v</a>'),
+      )
+      .mockImplementation(async () => challenge())
+    const log = vi.fn()
+
+    await runSmokeCheck({
+      workerName: 'nico-ranking-api-gateway',
+      fetchImpl,
+      sleep: noSleep,
+      log,
+      writeStepSummary,
+    })
+    expect(writeStepSummary).not.toHaveBeenCalled()
+    expect(
+      log.mock.calls.some(([line]) => line.includes('Deployment NOT verified')),
+    ).toBe(false)
+  })
+
+  it('応答の updatedAt はそのままログに出さず、ISO 形式に直して出す（ワークフローコマンドを作らせない）', async () => {
+    const injected = response(
+      200,
+      {},
+      JSON.stringify({
+        items: [{ id: 'sm45000001' }],
+        metadata: {
+          genre: 'all',
+          period: '24h',
+          updatedAt: 'Sat Oct 03 2026 00:00:00 GMT+0000 (\n::error::injected)',
+        },
+      }),
+    )
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(injected)
+      .mockResolvedValueOnce(adminDenial())
+    const log = vi.fn()
+
+    await runSmokeCheck({
+      workerName: GREEN,
+      directOnly: true,
+      fetchImpl,
+      sleep: noSleep,
+      log,
+    })
+    const lines = log.mock.calls.map(([line]) => line).join('\n')
+    expect(lines).toContain('updated at 2026-10-03T00:00:00.000Z')
+    expect(lines).not.toContain('::error::')
   })
 })
 

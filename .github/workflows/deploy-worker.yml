@@ -61,7 +61,10 @@ jobs:
 
       # Existing secrets are preserved; rotation is a separate operation.
 
-      - name: Record deployed version and check public gateway
+      # runner から nico-rank.com へのリクエストはゾーンの Bot 対策にチャレンジされる（403）。
+      # 配備した Worker は workers.dev（ゾーン外）で直接確かめ、公開ドメインはチャレンジされたら警告にとどめる。
+      # workers.dev が無いルーターは直接確かめられないので、公開側を未認証のブラウザか家庭回線で確かめる
+      - name: Record deployed version and check the deployed Worker
         env:
           WORKER_NAME: ${{ inputs.worker_name }}
           WORKER_FILE: ${{ inputs.worker_file }}
@@ -71,4 +74,4 @@ jobs:
         run: |
           echo "Worker deployed: $WORKER_NAME"
           npx wrangler deployments list --name "$WORKER_NAME" -c "$WORKER_CONFIG"
-          node scripts/check-admin-gateway.mjs
+          node scripts/check-admin-gateway.mjs --worker "$WORKER_NAME"
