@@ -65,11 +65,12 @@ async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
 }
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
-  // Protected deployments can use an explicitly configured public ranking gateway.
-  // Otherwise use the public gateway on Vercel; protected deployment URLs reject server-side requests.
-  const deployment = process.env.RANKING_SSR_GATEWAY_URL || (process.env.VERCEL_ENV === 'preview'
+  // プレビューは RANKING_SSR_GATEWAY_URL に関わらず常に公開の Green Worker から読む（SSR の app/page.tsx と同じ）。
+  // それ以外の環境では明示した RANKING_SSR_GATEWAY_URL を最優先し、本番はその次に nico-rank.com を使う。
+  // 保護されたデプロイ URL はサーバー間通信を拒む。
+  const deployment = process.env.VERCEL_ENV === 'preview'
     ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
-    : process.env.VERCEL_ENV === 'production'
+    : process.env.RANKING_SSR_GATEWAY_URL || (process.env.VERCEL_ENV === 'production'
       ? 'https://nico-rank.com'
       : process.env.VERCEL_URL)
   const base = deployment

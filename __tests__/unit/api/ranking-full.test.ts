@@ -26,6 +26,8 @@ const items: RankingItem[] = Array.from({ length: 3 }, (_, i) => ({
   views: 100 - i,
 }))
 
+const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
@@ -55,11 +57,13 @@ describe('/api/ranking/full と上流の一時障害', () => {
     vi.restoreAllMocks()
   })
 
+  // プレビューは RANKING_SSR_GATEWAY_URL に関わらず公開の Green Worker、それ以外は明示したゲートウェイ → 本番は nico-rank.com
   it.each([
     ['production', 'https://ranking-gateway.example', 'https://ranking-gateway.example'],
-    ['preview', 'https://ranking-gateway.example', 'https://ranking-gateway.example'],
+    ['preview', 'https://ranking-gateway.example', GREEN_GATEWAY],
     ['production', undefined, 'https://nico-rank.com'],
-    ['preview', undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'],
+    ['preview', undefined, GREEN_GATEWAY],
+    ['development', 'https://ranking-gateway.example', 'https://ranking-gateway.example'],
   ])('%sでは保護されたデプロイ URL ではなく SSR と同じゲートウェイ（RANKING_SSR_GATEWAY_URL=%s）から取得する', async (environment, gateway, expectedOrigin) => {
     vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)

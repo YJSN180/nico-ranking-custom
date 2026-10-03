@@ -20,6 +20,8 @@ const fetchWorker = worker.fetch as unknown as (
   ctx: { waitUntil: unknown },
 ) => Promise<Response>
 
+const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -27,24 +29,20 @@ afterEach(() => {
 })
 
 describe('active generation readers', () => {
-  it('protected previews use their explicitly configured SSR gateway for popular tags', async () => {
-    vi.stubEnv('VERCEL_ENV', 'preview')
-    vi.stubEnv('VERCEL_URL', 'protected-preview.vercel.app')
-    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking.example.test')
-    const fetch = vi.fn(async () => Response.json({ popularTags: ['tag'] }))
-    vi.stubGlobal('fetch', fetch)
-    expect(await getPopularTags('game', 'hour')).toEqual(['tag'])
-    expect(fetch).toHaveBeenCalledWith(new URL('https://ranking.example.test/api/ranking?genre=game&period=hour'), expect.any(Object))
-  })
-
-  it.each(['production', 'preview'].flatMap(environment =>
-    [undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'].map(gateway => [environment, gateway])
-  ))(
-    '%s SSR avoids the protected deployment URL with gateway %s', async (environment, gateway) => {
+  // プレビューは RANKING_SSR_GATEWAY_URL に関わらず公開の Green Worker、それ以外は明示したゲートウェイ → 本番は nico-rank.com
+  it.each([
+    ['preview', undefined, GREEN_GATEWAY],
+    ['preview', GREEN_GATEWAY, GREEN_GATEWAY],
+    ['preview', 'https://restricted-gateway.example', GREEN_GATEWAY],
+    ['production', undefined, 'https://nico-rank.com'],
+    ['production', GREEN_GATEWAY, GREEN_GATEWAY],
+    ['production', 'https://ranking.example.test', 'https://ranking.example.test'],
+    ['development', 'https://ranking.example.test', 'https://ranking.example.test'],
+  ])(
+    '%s SSR avoids the protected deployment URL with gateway %s', async (environment, gateway, expectedOrigin) => {
     vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('VERCEL_URL', 'protected-production.vercel.app')
     vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)
-    const expectedOrigin = environment === 'preview' ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev' : gateway || 'https://nico-rank.com'
     const fetch = vi.fn(async (url: unknown) => {
       if (new URL(String(url)).origin !== expectedOrigin) {
         return new Response('Authentication required', { status: 401 })

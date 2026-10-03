@@ -138,9 +138,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
 
   const resolveBaseUrl = () => {
-    if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
-    // Generated Vercel deployment URLs require authentication under Deployment Protection.
+    // プレビューは RANKING_SSR_GATEWAY_URL に関わらず常に公開の Green Worker から読む
+    // （生成されるデプロイ URL は Deployment Protection の認証が要り、プレビューの環境変数にも左右されない）。
     if (process.env.VERCEL_ENV === 'preview') return 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
+    // それ以外の環境では明示した RANKING_SSR_GATEWAY_URL を最優先し、本番はその次に nico-rank.com を使う。
+    if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
     if (process.env.VERCEL_ENV === 'production') return 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')

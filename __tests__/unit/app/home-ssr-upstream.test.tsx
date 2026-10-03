@@ -41,6 +41,8 @@ const items: RankingItem[] = Array.from({ length: 3 }, (_, i) => ({
   views: 100 - i,
 }))
 
+const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
@@ -92,22 +94,18 @@ describe('app/page.tsx: ランキング取得の一時障害', () => {
     vi.restoreAllMocks()
   })
 
-  it('protected previews use the explicitly configured SSR gateway', async () => {
-    vi.stubEnv('VERCEL_ENV', 'preview')
-    vi.stubEnv('VERCEL_URL', 'protected-preview.vercel.app')
-    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking.example.test')
-    fetchMock.mockResolvedValue(json(200, { items }))
-    const tree = await Home({ searchParams: Promise.resolve({ genre: 'game' }) })
-    expect(embeddedItems(tree)).toHaveLength(3)
-    expect(new URL(String(fetchMock.mock.calls[0][0])).origin).toBe('https://ranking.example.test')
-  })
-
-  it.each(['production', 'preview'])('%sのSSRは保護された自己URLを呼ばずランキングを表示する', async (environment) => {
+  // プレビューは RANKING_SSR_GATEWAY_URL に関わらず公開の Green Worker、それ以外は明示したゲートウェイ → 本番は nico-rank.com
+  it.each([
+    ['preview', 'https://restricted-gateway.example', GREEN_GATEWAY],
+    ['preview', undefined, GREEN_GATEWAY],
+    ['production', 'https://ranking.example.test', 'https://ranking.example.test'],
+    ['production', undefined, 'https://nico-rank.com'],
+    ['development', 'https://ranking.example.test', 'https://ranking.example.test'],
+  ])('%sのSSRは保護された自己URLを呼ばずランキングを表示する（RANKING_SSR_GATEWAY_URL=%s）', async (environment, gateway, expectedOrigin) => {
     vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('VERCEL_URL', 'protected.vercel.app')
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://protected.vercel.app')
-    vi.stubEnv('RANKING_SSR_GATEWAY_URL', undefined)
-    const expectedOrigin = environment === 'preview' ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev' : 'https://nico-rank.com'
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)
     fetchMock.mockImplementation(async (url: string) => new URL(url).origin === expectedOrigin
       ? json(200, { items })
       : json(401, { error: 'Authentication required' }))
