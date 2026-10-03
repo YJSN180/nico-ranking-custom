@@ -42,6 +42,26 @@ describe('cumulative tags', () => {
       metadata: { version: 5, weeklyUpdateCount: 5 },
     })
   })
+  it('reports names as decoded only when the saved metadata says so', async () => {
+    read.mockResolvedValue({
+      data: {
+        tags: ['a&amp;b'],
+        lastSeen: { day: 20364, ages: '0' },
+        metadata: { version: 5, weeklyUpdateCount: 5, namesDecoded: true },
+      },
+    })
+    expect((await getExistingTagsFromR2()).namesDecoded).toBe(true)
+    for (const namesDecoded of [undefined, false, 'true', 1]) {
+      read.mockResolvedValue({
+        data: {
+          tags: ['a&amp;b'],
+          lastSeen: { day: 20364, ages: '0' },
+          metadata: { version: 5, weeklyUpdateCount: 5, namesDecoded },
+        },
+      })
+      expect((await getExistingTagsFromR2()).namesDecoded).toBeUndefined()
+    }
+  })
   it('treats missing or misaligned lastSeen as legacy and logs no tag contents', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const broken: unknown[] = [

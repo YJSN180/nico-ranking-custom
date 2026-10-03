@@ -1,5 +1,6 @@
 import type { RankingGenre } from '../../types/ranking-config'
 import type { RankingItem } from '../../types/ranking'
+import { decodeHtmlEntities } from '../html-entities'
 
 const GOOGLEBOT_UA = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
 
@@ -88,14 +89,8 @@ export function extractServerResponseData(html: string): any {
     throw new Error('server-responseメタタグが見つかりません')
   }
 
-  const decodedData = metaMatch[1]
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'")
-
-  return JSON.parse(decodedData)
+  // 属性値のエスケープを 1 回だけ戻す（&amp;lt; は JSON 内の文字列 &lt; のまま残る）
+  return JSON.parse(decodeHtmlEntities(metaMatch[1]))
 }
 
 export function extractTrendTags(serverData: any): string[] {

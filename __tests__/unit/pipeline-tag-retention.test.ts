@@ -252,6 +252,7 @@ describe('buildTagAccumulation', () => {
         weeklyUpdateCount: 42,
         retentionDays: 30,
         maxTags: 300_000,
+        namesDecoded: true,
       },
     })
     expect(stats.added).toBe(1)
@@ -372,5 +373,194 @@ describe('writeTagAccumulationFile', () => {
 
     await expect(writeTagAccumulationFile(current, seen, NOW, 'partial-results', output)).rejects.toThrow('Refusing to save')
     await expect(stat(output)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+describe('HTML entities in accumulated tag names', () => {
+  it('decodes existing names once and merges decoded twins with the newest day', () => {
+    const result = mergeTagAccumulation(
+      {
+        tags: [
+          'ゲーム&amp;ウオッチ',
+          'ゲーム&ウオッチ',
+          'DAM&JOY配信中',
+          'DAM&amp;JOY配信中',
+          '&gt;&gt;1000',
+          'そのまま',
+        ],
+        lastSeenDays: [
+          TODAY - 2,
+          TODAY - 9,
+          TODAY - 7,
+          TODAY - 1,
+          TODAY - 4,
+          TODAY - 3,
+        ],
+      },
+      ['今回'],
+      TODAY,
+    )
+    expect(dayMap(result)).toEqual(
+      new Map([
+        ['ゲーム&ウオッチ', TODAY - 2],
+        ['DAM&JOY配信中', TODAY - 1],
+        ['>>1000', TODAY - 4],
+        ['そのまま', TODAY - 3],
+        ['今回', TODAY],
+      ]),
+    )
+    expect(result.stats).toMatchObject({
+      decoded: 3,
+      added: 1,
+      expired: 0,
+      capped: 0,
+    })
+    // 戻した名前も 50 音順に並び、lastSeenDays と揃っている
+    expect(result.tags).toEqual([...result.tags].sort(japaneseOrder))
+    expect(result.lastSeenDays).toHaveLength(result.tags.length)
+  })
+
+  it('counts a seen decoded tag as the same tag as its encoded existing name', () => {
+    const result = mergeTagAccumulation(
+      {
+        tags: ['ミク&amp;flowerリンク', 'ミク＆flowerリンク'],
+        lastSeenDays: [TODAY - 5, TODAY - 6],
+      },
+      ['ミク&flowerリンク'],
+      TODAY,
+    )
+    // 全角の＆は別のタグなのでまとめない
+    expect(dayMap(result)).toEqual(
+      new Map([
+        ['ミク&flowerリンク', TODAY],
+        ['ミク＆flowerリンク', TODAY - 6],
+      ]),
+    )
+    expect(result.stats).toMatchObject({ added: 0, decoded: 1, seen: 1 })
+  })
+
+  it('decodes double-encoded names only one level, like the source does', () => {
+    const result = mergeTagAccumulation(
+      {
+        tags: ['chage&amp;amp;aska', 'L&amp;#039;Arc～en～Ciel', '&amp;23'],
+        lastSeenDays: [TODAY - 1, TODAY - 1, TODAY - 1],
+      },
+      ['今回'],
+      TODAY,
+    )
+    expect(new Set(result.tags)).toEqual(
+      new Set(['chage&amp;aska', 'L&#039;Arc～en～Ciel', '&23', '今回']),
+    )
+  })
+
+  it('leaves names alone once the dictionary is marked decoded, and never decodes seen tags', () => {
+    const result = mergeTagAccumulation(
+      {
+        tags: ['chage&amp;aska', 'ゲーム&ウオッチ'],
+        lastSeenDays: [TODAY - 1, TODAY - 2],
+        namesDecoded: true,
+      },
+      ['爆走兄弟レッツ&amp;ゴー!!'],
+      TODAY,
+    )
+    expect(dayMap(result)).toEqual(
+      new Map([
+        ['chage&amp;aska', TODAY - 1],
+        ['ゲーム&ウオッチ', TODAY - 2],
+        ['爆走兄弟レッツ&amp;ゴー!!', TODAY],
+      ]),
+    )
+    expect(result.stats.decoded).toBe(0)
+  })
+
+  it('decodes legacy dictionaries without lastSeen and spreads them by the decoded name', () => {
+    const result = mergeTagAccumulation(
+      { tags: ['ゲーム&amp;ウオッチ', 'ゲーム&ウオッチ'] },
+      ['今回'],
+      TODAY,
+    )
+    expect(dayMap(result)).toEqual(
+      new Map([
+        ['ゲーム&ウオッチ', legacyDay('ゲーム&ウオッチ')],
+        ['今回', TODAY],
+      ]),
+    )
+    expect(result.stats).toMatchObject({ legacy: true, decoded: 1 })
+  })
+
+  it('applies the cap after merging decoded twins', () => {
+    const result = mergeTagAccumulation(
+      {
+        tags: ['A&amp;B', 'A&B', 'C', 'D'],
+        lastSeenDays: [TODAY - 1, TODAY - 3, TODAY - 2, TODAY - 4],
+      },
+      ['E'],
+      TODAY,
+      { maxTags: 3 },
+    )
+    expect(dayMap(result)).toEqual(
+      new Map([
+        ['A&B', TODAY - 1],
+        ['C', TODAY - 2],
+        ['E', TODAY],
+      ]),
+    )
+    expect(result.stats).toMatchObject({ capped: 1, decoded: 1 })
+  })
+
+  it('is idempotent across saves: the second run changes no names', () => {
+    const existing = {
+      tags: [
+        'chage&amp;amp;aska',
+        'ゲーム&amp;ウオッチ',
+        '〈物語〉シリーズ_オフ&amp;モンスターシーズン',
+        '&lt;br&gt;',
+        'あ',
+      ],
+      lastSeenDays: [TODAY - 3, TODAY - 4, TODAY - 5, TODAY - 6, TODAY - 7],
+      metadata: { version: 3, weeklyUpdateCount: 3 },
+    }
+    const first = buildTagAccumulation(
+      existing,
+      ['今回'],
+      NOW,
+      'partial-results',
+    )
+    expect(first.data.metadata.namesDecoded).toBe(true)
+    expect(first.stats.decoded).toBe(4)
+    expect(first.data.tags).toEqual(
+      [
+        'chage&amp;aska',
+        'ゲーム&ウオッチ',
+        '〈物語〉シリーズ_オフ&モンスターシーズン',
+        '<br>',
+        'あ',
+        '今回',
+      ].sort(japaneseOrder),
+    )
+
+    const saved = JSON.parse(serializeTagAccumulation(first.data)) as {
+      tags: string[]
+      lastSeen: unknown
+      metadata: {
+        version: number
+        weeklyUpdateCount: number
+        namesDecoded?: unknown
+      }
+    }
+    const second = buildTagAccumulation(
+      {
+        tags: saved.tags,
+        lastSeenDays: decodeLastSeen(saved.tags, saved.lastSeen) ?? undefined,
+        namesDecoded: saved.metadata.namesDecoded === true,
+        metadata: saved.metadata,
+      },
+      ['今回'],
+      NOW,
+      'partial-results',
+    )
+    expect(second.stats.decoded).toBe(0)
+    expect(second.data.tags).toEqual(first.data.tags)
+    expect(second.data.lastSeen).toEqual(first.data.lastSeen)
   })
 })

@@ -113,6 +113,38 @@ describe('upstream ranking responses', () => {
       fetchRankingPageWithRetry('nature', 'hour', 'waiting', 1, 1),
     ).rejects.toThrow('Fetch failed: 500')
   })
+
+  it('decodes the server-response attribute exactly once', async () => {
+    const data = ranking()
+    data.data.response.$getTeibanRanking.data.items = [
+      { ...item, title: "Batman & Robin <'2'>" },
+    ]
+    data.data.response.$getTeibanRankingFeaturedKeyAndTrendTags.data.trendTags =
+      ['ゲーム&ウオッチ', 'x&lt;y', 'chage&amp;aska', "It's"]
+    const attribute = JSON.stringify(data)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(`<meta name="server-response" content="${attribute}">`),
+        ),
+    )
+    const page = await fetchRankingPageWithRetry('nature', 'hour')
+    expect(page.items[0].title).toBe("Batman & Robin <'2'>")
+    // JSON の中の文字列としての &lt; や &amp; は、属性のエスケープを戻した後もそのまま残る
+    expect(page.popularTags).toEqual([
+      'ゲーム&ウオッチ',
+      'x&lt;y',
+      'chage&amp;aska',
+      "It's",
+    ])
+  })
 })
 
 function config(
