@@ -7,6 +7,7 @@ export default defineConfig({
     include: [
       '__tests__/unit/workers-upstream-security.test.ts',
       '__tests__/unit/workers-green-gateway.test.ts',
+      '__tests__/unit/workers-blue-gateway.test.ts',
       '__tests__/unit/workers-config.test.ts',
       '__tests__/unit/smart-router-*.test.ts',
     ],
