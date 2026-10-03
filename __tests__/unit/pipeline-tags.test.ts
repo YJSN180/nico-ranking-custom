@@ -26,5 +26,129 @@ describe('cumulative tags', () => {
     await expect(getExistingTagsFromR2()).rejects.toThrow('R2 500')
     read.mockResolvedValue({ data: { tags: [null] } })
     await expect(getExistingTagsFromR2()).rejects.toThrow('Invalid existing')
+    // lastSeen が揃っていても、タグが壊れていれば拒否する
+    read.mockResolvedValue({
+      data: { tags: ['ok', 3], lastSeen: { day: 20364, ages: '00' }, metadata: { version: 1, weeklyUpdateCount: 1 } },
+    })
+    await expect(getExistingTagsFromR2()).rejects.toThrow('Invalid existing')
+  })
+  it('decodes aligned lastSeen into days', async () => {
+    read.mockResolvedValue({
+      data: { tags: ['a', 'b', 'c'], lastSeen: { day: 20364, ages: '04t' }, metadata: { version: 5, weeklyUpdateCount: 5 } },
+    })
+    expect(await getExistingTagsFromR2()).toEqual({
+      tags: ['a', 'b', 'c'],
+      lastSeenDays: [20364, 20360, 20335],
+      metadata: { version: 5, weeklyUpdateCount: 5 },
+    })
+  })
+  it('reports names as decoded only when the saved metadata says so', async () => {
+    read.mockResolvedValue({
+      data: {
+        tags: ['a&amp;b'],
+        lastSeen: { day: 20364, ages: '0' },
+        metadata: { version: 5, weeklyUpdateCount: 5, namesDecoded: true },
+      },
+    })
+    expect((await getExistingTagsFromR2()).namesDecoded).toBe(true)
+    for (const namesDecoded of [undefined, false, 'true', 1]) {
+      read.mockResolvedValue({
+        data: {
+          tags: ['a&amp;b'],
+          lastSeen: { day: 20364, ages: '0' },
+          metadata: { version: 5, weeklyUpdateCount: 5, namesDecoded },
+        },
+      })
+      expect((await getExistingTagsFromR2()).namesDecoded).toBeUndefined()
+    }
+  })
+  it('decodes aligned popularity and keeps the previous save time', async () => {
+    read.mockResolvedValue({
+      data: {
+        tags: ['a', 'b'],
+        lastSeen: { day: 20364, ages: '00' },
+        popularity: { base: -26.0003, scores: '00a0zz' },
+        metadata: { version: 5, weeklyUpdateCount: 5, lastUpdated: '2026-10-03T10:20:00.000Z', popularityVersion: 1 },
+      },
+    })
+    const result = await getExistingTagsFromR2()
+    expect(result.metadata.lastUpdated).toBe('2026-10-03T10:20:00.000Z')
+    expect(result.popularity?.base).toBe(-26.0003)
+    expect(Array.from(result.popularity?.levels ?? [])).toEqual([10, 35 * 36 + 35])
+  })
+  it('treats unreadable popularity as zero with a warning that names no tags', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const unreadable: Array<{ popularity: unknown; popularityVersion: unknown }> = [
+      { popularity: { base: -26, scores: '00a' }, popularityVersion: 1 },
+      { popularity: { base: -26, scores: '00A0zz' }, popularityVersion: 1 },
+      { popularity: { base: -26, scores: '00a0zz' }, popularityVersion: 2 },
+      { popularity: { base: -26, scores: '00a0zz' }, popularityVersion: undefined },
+      { popularity: { base: -20, scores: '00a0zz' }, popularityVersion: 1 },
+      { popularity: { base: '-26', scores: '00a0zz' }, popularityVersion: 1 },
+      { popularity: { scores: '00a0zz' }, popularityVersion: 1 },
+      { popularity: '00a0zz', popularityVersion: 1 },
+      { popularity: undefined, popularityVersion: 1 },
+    ]
+    try {
+      for (const { popularity, popularityVersion } of unreadable) {
+        read.mockResolvedValue({
+          data: {
+            tags: ['秘密のタグ', '別のタグ'],
+            lastSeen: { day: 20364, ages: '00' },
+            popularity,
+            metadata: { version: 5, weeklyUpdateCount: 5, popularityVersion },
+          },
+        })
+        const result = await getExistingTagsFromR2()
+        expect(result.tags).toEqual(['秘密のタグ', '別のタグ'])
+        expect(result.lastSeenDays).toEqual([20364, 20364])
+        expect(result.popularity).toBeUndefined()
+      }
+      expect(warn).toHaveBeenCalledTimes(unreadable.length)
+      for (const call of warn.mock.calls) {
+        expect(call.join(' ')).toMatch(/popularity/)
+        expect(call.join(' ')).not.toMatch(/秘密のタグ|別のタグ/)
+      }
+      // 人気度のない旧形式は知らせない
+      warn.mockClear()
+      read.mockResolvedValue({
+        data: { tags: ['a'], lastSeen: { day: 20364, ages: '0' }, metadata: { version: 5, weeklyUpdateCount: 5 } },
+      })
+      expect((await getExistingTagsFromR2()).popularity).toBeUndefined()
+      expect(warn).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+  it('treats missing or misaligned lastSeen as legacy and logs no tag contents', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const broken: unknown[] = [
+      undefined,
+      'bad',
+      { day: 20364, ages: '0' },
+      { day: 20364, ages: '0-' },
+      { day: 20364, ages: '0A' },
+      { day: 20364.5, ages: '00' },
+      { day: '20364', ages: '00' },
+      { day: 20364, ages: [0, 0] },
+      { ages: '00' },
+    ]
+    try {
+      for (const lastSeen of broken) {
+        read.mockResolvedValue({
+          data: { tags: ['秘密のタグ', '別のタグ'], lastSeen, metadata: { version: 5, weeklyUpdateCount: 5 } },
+        })
+        const result = await getExistingTagsFromR2()
+        expect(result.tags).toEqual(['秘密のタグ', '別のタグ'])
+        expect(result.lastSeenDays).toBeUndefined()
+      }
+      expect(warn).toHaveBeenCalledTimes(broken.length)
+      for (const call of warn.mock.calls) {
+        expect(call.join(' ')).toMatch(/legacy/)
+        expect(call.join(' ')).not.toMatch(/秘密のタグ|別のタグ/)
+      }
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

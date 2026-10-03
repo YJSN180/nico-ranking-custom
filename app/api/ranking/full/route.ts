@@ -22,13 +22,13 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({ genre, period })
   if (tag) params.set('tag', tag)
 
-  // 本番・プレビューとも SSR と同じ公開ゲートウェイを使う。
+  // 本番・プレビューとも SSR（app/page.tsx）と同じ公開ゲートウェイを使う。明示した RANKING_SSR_GATEWAY_URL が最優先。
   // サーバー間通信にはブラウザのDeployment Protection認証が引き継がれない。
-  const upstreamBase = process.env.VERCEL_ENV === 'preview'
+  const upstreamBase = process.env.RANKING_SSR_GATEWAY_URL || (process.env.VERCEL_ENV === 'preview'
     ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
     : process.env.VERCEL_ENV === 'production'
-      ? process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
-      : request.nextUrl.origin
+      ? 'https://nico-rank.com'
+      : request.nextUrl.origin)
   const upstreamUrl = new URL('/api/ranking', upstreamBase)
   params.forEach((value, key) => upstreamUrl.searchParams.set(key, value))
 

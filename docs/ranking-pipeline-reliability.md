@@ -111,6 +111,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 ### 公開後のアプリケーション検証とBot対策
 
 - GitHub runnerから公開URLへ送る機械的なGETは、Bot Fight Modeによりチャレンジされることがある。WAF/Bot対策の無効化やUser-Agent偽装で回避しない。
+- `deploy-worker.yml` のデプロイ後チェック（`scripts/check-admin-gateway.mjs --worker <名前>`）は、配備したGreen/Blueをゾーン外のworkers.devで直接確かめる（ランキングAPIのJSONと管理パスの401）。公開ドメインへの確認がゾーンのエッジでチャレンジされたとき（403・`cf-mitigated: challenge`・`x-router-version` 無し）だけは失敗にせず警告を出すので、公開側は未認証のブラウザか家庭回線で確かめる。ルーターはrouteを持つためworkers.devが無効で、直接は確かめられない。
 - `video-stats-updater` の `GET /verify-ranking` を既存 `WORKER_AUTH_KEY` で認証し、`PRODUCTION_GATEWAY` service binding経由で本番ルーター `nico-ranking-api-gateway` の固定ランキングURLを読む。ルーターの現在のBlue/Green選択を通し、世代・件数・収集日時をR2/公開artifactと照合する。
 - このエンドポイントは任意URL、クエリ、書込メソッドを受け付けず、呼出元の認証情報をルーターへ転送しない。認証失敗、不正JSON、空ランキング、fallback応答では検証を失敗させる。KV/R2への書込は行わない。
 - 検証対象はアプリケーションと配信データの整合性であり、公開ホストのWAF、DNS、ブラウザ到達性の成功を意味しない。検証結果の `publicEdgeVerification` に未検査であることを記録する。公開UI/APIのブラウザ確認は別途行う。
@@ -119,9 +120,10 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 
 ### 依存関係の監査
 
-- Unified CIのDependency AuditはPRでもrootとvideo-stats-updater双方のlockfileを監査し、moderate以上で失敗させる。開発依存も除外しない。
+- Unified CIのDependency AuditはPRでもrootとvideo-stats-updater双方のlockfileを監査し、moderate以上で失敗させる。開発依存も除外しない。rootは `node scripts/audit-dependencies.mjs` で判定し、修正版がないアドバイザリに限り `.github/audit-exceptions.json` の期限付き例外を認める。例外はアドバイザリとパッケージの組で登録し、lockfileで対象ノードがすべて `dev: true` の場合だけ有効にする。本番依存（`npm audit --omit=dev`）には例外を認めず、期限切れの例外があればCIを失敗させてアドバイザリの再確認を促す。期限はUTCの日付で、その日まで有効。設定できるのは判定日から最長45日先までで、それより先の日付はCIを失敗させる。
+- 監査例外の追加・延長と監査スクリプトの変更は、人がレビューするPRでだけ行う。CIの自動修正（`fix/ci-auto-fix-*`）のPRが `.github/audit-exceptions.json`、`scripts/audit-dependencies.mjs`、`scripts/lib/audit-dependencies.mjs` を変更した場合、`auto-merge-ci-fix.yml` は承認も自動マージもせず、有効にした自動マージも止める。自動修正の指示文でも、これらを変更せず人の判断を求めて止まるよう指定している。
 - Next.jsは15系を維持し修正版に更新。Vitestは4.1系へ移行し、コンストラクタモックは通常関数、fork設定はトップレベルに置く。Worker実ランタイムテストには `@cloudflare/vitest-plugin` を使用する。
-- ローカル監査は `npm audit` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
+- ローカル監査は `node scripts/audit-dependencies.mjs` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
 
 ```sh
 npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts __tests__/unit/lib/tag-cache-store-r2-body.test.ts __tests__/unit/lib/simple-kv.test.ts __tests__/unit/lib/simple-kv-bounds.test.ts __tests__/unit/pipeline-r2-store.test.ts __tests__/unit/pipeline-stall-watchdog.test.ts __tests__/unit/pipeline-verification.test.ts __tests__/unit/scripts/tag-cache-scripts.test.ts __tests__/unit/pipeline-auto-ng.test.ts

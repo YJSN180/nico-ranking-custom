@@ -26,7 +26,7 @@ on:
 
 # Phase 0/1 optimizations integrated
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   NODE_OPTIONS: '--max-old-space-size=4096'  # Phase 0: Memory optimization - increased for CI tests
   PLAYWRIGHT_BASE_URL: 'http://localhost:3001'  # Phase 0: Port fix
   REGISTRY_URL: https://npm.pkg.github.com/
@@ -563,8 +563,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # moderate 以上で失敗。期限内・dev 専用の例外（.github/audit-exceptions.json）だけ許可する
       - name: Audit application dependencies
-        run: npm audit --audit-level moderate
+        run: node scripts/audit-dependencies.mjs
       - name: Audit Worker dependencies
         if: always()
         run: npm audit --prefix workers/video-stats-updater --audit-level moderate
@@ -594,7 +595,7 @@ jobs:
         run: npm ci
 
       - name: Security audit
-        run: npm audit --audit-level moderate
+        run: node scripts/audit-dependencies.mjs
 
       - name: Dependency review
         uses: actions/dependency-review-action@v4

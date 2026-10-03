@@ -92,11 +92,21 @@ describe('app/page.tsx: ランキング取得の一時障害', () => {
     vi.restoreAllMocks()
   })
 
+  it('protected previews use the explicitly configured SSR gateway', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+    vi.stubEnv('VERCEL_URL', 'protected-preview.vercel.app')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking.example.test')
+    fetchMock.mockResolvedValue(json(200, { items }))
+    const tree = await Home({ searchParams: Promise.resolve({ genre: 'game' }) })
+    expect(embeddedItems(tree)).toHaveLength(3)
+    expect(new URL(String(fetchMock.mock.calls[0][0])).origin).toBe('https://ranking.example.test')
+  })
+
   it.each(['production', 'preview'])('%sのSSRは保護された自己URLを呼ばずランキングを表示する', async (environment) => {
     vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('VERCEL_URL', 'protected.vercel.app')
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://protected.vercel.app')
-    vi.stubEnv('RANKING_SSR_GATEWAY_URL', environment === 'preview' ? 'https://restricted-gateway.example' : undefined)
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', undefined)
     const expectedOrigin = environment === 'preview' ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev' : 'https://nico-rank.com'
     fetchMock.mockImplementation(async (url: string) => new URL(url).origin === expectedOrigin
       ? json(200, { items })

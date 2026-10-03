@@ -1,6 +1,6 @@
 import type { RankingItem } from '@/types/ranking'
 import type { ExtendedNGList } from '@/types/ng-list-extended'
-import { filterByTags } from './filter-with-tags'
+import { matchesTagNGList, prepareTagNGList } from './filter-with-tags'
 import { isExtendedNGList } from './ng-list-migration-extended'
 import { filterWithNGListCore } from './ng-filter-core'
 
@@ -16,15 +16,15 @@ export interface ExtendedNGFilterResult {
  * @returns フィルタリング結果と新たに追加すべき派生ID
  */
 export function filterWithExtendedNGList(
-  items: RankingItem[], 
-  ngList: ExtendedNGList
+  items: RankingItem[],
+  ngList: ExtendedNGList,
 ): ExtendedNGFilterResult {
+  // タグの NG は比べる形に 1 回だけ直し、動画ごとには作り直さない
+  const tagNG =
+    isExtendedNGList(ngList) && ngList.tags
+      ? prepareTagNGList(ngList.tags)
+      : null
   return filterWithNGListCore(items, ngList, {
-    tagFilter: (item) => {
-      if (isExtendedNGList(ngList) && ngList.tags) {
-        return filterByTags(item, ngList.tags)
-      }
-      return false
-    }
+    tagFilter: (item) => tagNG !== null && matchesTagNGList(item, tagNG),
   })
 }

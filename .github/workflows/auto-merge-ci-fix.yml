@@ -7,6 +7,10 @@ name: Auto-merge CI Fix PRs
 # 2. PRをApprove
 # 3. --auto フラグでCIパス後に自動マージ
 #
+# 例外: 依存監査の方針（.github/audit-exceptions.json と監査スクリプト）を変えるPRは
+# 承認も自動マージもしない。開いた時点で有効にした自動マージも、追加コミットで止める。
+# 例外の延長は人が判断するため（期限切れの監査失敗を自動修正で延長させない）。
+#
 # メリット:
 # - GitHub標準機能なので安定・無料
 # - Claude待機ループ不要（止まるリスクなし）
@@ -36,9 +40,26 @@ jobs:
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_REF: ${{ github.head_ref }}
+          REPO: ${{ github.repository }}
         run: |
           echo "Processing CI fix PR #$PR_NUMBER"
           echo "Branch: $HEAD_REF"
+
+          # 変更ファイルを確かめられないときも承認しない（リネーム元も含めて見る）
+          if ! FILES=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)'); then
+            gh pr merge "$PR_URL" --disable-auto || true
+            echo "::error::Could not list the changed files of PR #$PR_NUMBER; not approving it"
+            exit 1
+          fi
+          AUDIT_POLICY=$(printf '%s\n' "$FILES" \
+            | grep -xE '\.github/audit-exceptions\.json|scripts/(lib/)?audit-dependencies\.mjs' || true)
+          if [ -n "$AUDIT_POLICY" ]; then
+            gh pr merge "$PR_URL" --disable-auto || true
+            echo "::error::PR #$PR_NUMBER changes the dependency audit policy; a person must review and merge it"
+            printf '%s\n' "$AUDIT_POLICY"
+            exit 1
+          fi
 
           # PRをApprove
           gh pr review "$PR_URL" --approve --body "Auto-approved: CI fix PR from automated workflow"

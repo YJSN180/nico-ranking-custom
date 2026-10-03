@@ -40,8 +40,15 @@ import { hasWorkerDebugAccess } from './utils/debug-auth'
 import { readR2Json } from './utils/r2-json.js'
 import { currentGeneration, rankingKey } from './utils/ranking-generation.js'
 import { R2_SERVER_ERROR_CODES, withR2Retry } from './utils/r2-retry.js'
-import { TAG_SUGGEST_MAX_QUERY, TAG_SUGGEST_MIN_QUERY, buildTagIndex, suggestTags, type TagIndex } from './utils/tag-suggest'
-import { Sentry, captureWorkerException, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
+import {
+  TAG_POPULARITY_VERSION,
+  TAG_SUGGEST_MAX_QUERY,
+  TAG_SUGGEST_MIN_QUERY,
+  buildTagIndex,
+  suggestTags,
+  type TagIndex,
+} from './utils/tag-suggest'
+import { Sentry, captureWorkerException, captureWorkerMessage, createWorkerSentryOptions, sanitizeUrlForSentry } from './sentry.js'
 
 interface Env {
   R2_BUCKET: R2Bucket
@@ -79,6 +86,11 @@ const R2_READ_RETRY = { retryableCodes: R2_SERVER_ERROR_CODES, delaysMs: [50, 15
 
 function readR2(bucket: R2Bucket, key: string): Promise<R2ObjectBody | null> {
   return withR2Retry(() => bucket.get(key), R2_READ_RETRY)
+}
+
+/** etag が一致する（変わっていない）ときは本文のない R2Object を返す、再試行付きの条件付き読み取り */
+function readR2IfChanged(bucket: R2Bucket, key: string, etag: string): Promise<R2ObjectBody | R2Object | null> {
+  return withR2Retry(() => bucket.get(key, { onlyIf: { etagDoesNotMatch: etag } }), R2_READ_RETRY)
 }
 
 /** currentGeneration に渡す、再試行付きの読み取り口 */
@@ -225,15 +237,23 @@ function parseAutocompleteLimit(value: string | null): number {
   return Math.min(limit, AUTOCOMPLETE_MAX_LIMIT)
 }
 
-// タグ候補の索引は isolate ごとに持ち、10 分ごとに R2 から読み直す（要求ごとに約 3.5MB を読まない）
+// タグ候補の索引は isolate ごとに持ち、10 分ごとに R2 の辞書が変わったかを確かめる（変わっていなければ本文を読まない）
 const TAG_INDEX_TTL_MS = 10 * 60 * 1000
-// 読み直しに失敗して古い索引を使い続けるとき、次に読み直すまでの間隔
+// 読み直しに失敗して古い索引を使い続けるとき・本文を読めなかった/解析できなかったとき、次に読み直すまでの間隔
 const TAG_INDEX_RETRY_MS = 60 * 1000
 // これより長く終わらない読み込みは待たずに読み直す（読み込みを始めた要求が打ち切られた場合など）
 const TAG_INDEX_LOAD_TIMEOUT_MS = 30 * 1000
+// 索引がないとき、要求が読み込みを待つ上限。過ぎたら空の候補を返す（読み込みは裏で続ける）
+const TAG_INDEX_WAIT_MS = 2_000
+// R2 上の辞書の大きさ（gzip のまま）がこれを超えたら本文を読まない。/api/ranking と同じ isolate の 128MB を守る。
+// 30 万件の辞書は人気度を含めて約 3.1MB（人気度で最大 0.6MB 増える）、上限のない旧形式（50 万件）は約 4MB で、どちらも通す
+const TAG_DICTIONARY_MAX_BYTES = 4.5 * 1024 * 1024
+const TAG_DICTIONARY_KEY = 'tag-accumulation.json'
 
 interface LoadedTagIndex {
   index: TagIndex
+  // 次の読み直しで「変わっていなければ本文を返さない」条件に使う
+  etag: string
   lastUpdated: string | null
   totalUniqueTags: number
 }
@@ -243,109 +263,198 @@ type TagIndexResult =
   | { kind: 'not-found' }
   | { kind: 'parse-error' }
   | { kind: 'read-error'; message: string }
+  | { kind: 'too-large' }
+  | { kind: 'loading' }
+
+// 索引がないまま辞書を使えなかったとき、refreshAt までは R2 を読まずに返す答え
+type HeldTagIndexFailure = 'too-large' | 'parse-error'
 
 interface TagIndexState {
   loaded: LoadedTagIndex | null
+  failure: HeldTagIndexFailure | null
   refreshAt: number
   pending: Promise<TagIndexResult> | null
   pendingSince: number
+  // 読み込みの通し番号。後から別の読み込みが始まったら、前の読み込みは状態を書き換えない
+  loadSeq: number
 }
 
 // バインディングごとに持つ（テストで別のバケットと状態を共有しない）
 const tagIndexStates = new WeakMap<R2Bucket, TagIndexState>()
 
+const TAG_AUTOCOMPLETE_SENTRY_TAGS = {
+  runtime: 'cloudflare-worker',
+  surface: 'api-gateway-green',
+  endpoint_family: '/api/tags/autocomplete',
+  worker_version: 'green-20250726',
+} as const
+
 function captureTagAutocompleteError(error: unknown, upstreamKind: 'r2-read' | 'r2-parse'): void {
-  captureWorkerException(error, {
-    tags: {
-      runtime: 'cloudflare-worker',
-      surface: 'api-gateway-green',
-      endpoint_family: '/api/tags/autocomplete',
-      upstream_kind: upstreamKind,
-      worker_version: 'green-20250726',
-    },
+  captureWorkerException(error, { tags: { ...TAG_AUTOCOMPLETE_SENTRY_TAGS, upstream_kind: upstreamKind } })
+}
+
+/** 辞書が大きすぎて読まなかったことを警告として送る（大きさだけを載せ、利用者の入力は含めない） */
+function reportTagDictionaryTooLarge(sizeBytes: number): void {
+  console.warn('Tag dictionary is too large to load:', sizeBytes, 'bytes')
+  captureWorkerMessage('Tag dictionary exceeds the size limit', 'warning', {
+    tags: { ...TAG_AUTOCOMPLETE_SENTRY_TAGS, upstream_kind: 'r2-size' },
+    contexts: { tag_dictionary: { size_bytes: sizeBytes, max_bytes: TAG_DICTIONARY_MAX_BYTES } },
   })
 }
 
 /** タグ累積データの形を確かめて索引にする。tags が配列でなければ null */
-function toLoadedTagIndex(data: unknown): LoadedTagIndex | null {
+function toLoadedTagIndex(data: unknown, etag: string): LoadedTagIndex | null {
   if (typeof data !== 'object' || data === null) return null
-  const { tags, metadata } = data as { tags?: unknown; metadata?: unknown }
+  // 使うのは tags・popularity（人気度）・metadata だけ。lastSeen などほかの項目は索引から参照しない
+  const { tags, popularity, metadata } = data as { tags?: unknown; popularity?: unknown; metadata?: unknown }
   if (!Array.isArray(tags)) return null
   const meta = (typeof metadata === 'object' && metadata !== null ? metadata : {}) as {
     lastUpdated?: unknown
     totalUniqueTags?: unknown
+    popularityVersion?: unknown
   }
+  // 人気度は形式が分かるときだけ使う。ない・形が合わない辞書は、辞書の順で答える
+  const scores =
+    meta.popularityVersion === TAG_POPULARITY_VERSION && typeof popularity === 'object' && popularity !== null
+      ? (popularity as { scores?: unknown }).scores
+      : undefined
   return {
-    index: buildTagIndex(tags),
+    index: buildTagIndex(tags, scores),
+    etag,
     lastUpdated: typeof meta.lastUpdated === 'string' && meta.lastUpdated !== '' ? meta.lastUpdated : null,
     totalUniqueTags:
       typeof meta.totalUniqueTags === 'number' && Number.isFinite(meta.totalUniqueTags) ? meta.totalUniqueTags : 0,
   }
 }
 
-/** R2 のタグ累積データを読む。ログと Sentry には利用者のクエリを含めない（読み込みはクエリと無関係） */
-async function readTagIndex(bucket: R2Bucket): Promise<TagIndexResult> {
-  let object: R2ObjectBody | null
+/** 条件付きの読み取りで条件が成り立たなかった（変わっていない）ときは本文がない */
+function hasBody(object: R2ObjectBody | R2Object): object is R2ObjectBody {
+  return 'body' in object
+}
+
+/** 読まない本文を閉じる（閉じられなくても索引の扱いは変えない） */
+function discardBody(object: R2ObjectBody): void {
+  object.body.cancel().catch(() => undefined)
+}
+
+/** 本文を JSON として読む。展開した文字列はここで手放し、索引を作る間は持たない */
+async function readTagDictionary(object: R2ObjectBody): Promise<unknown> {
+  const { data } = await readR2Json(object)
+  return data
+}
+
+function currentTagIndexResult(state: TagIndexState): TagIndexResult {
+  return state.loaded ? { kind: 'ready', loaded: state.loaded } : { kind: 'loading' }
+}
+
+/** 読み直しに失敗したとき、古い索引があれば少し後に読み直すことにして使い続ける */
+function keepPreviousTagIndex(state: TagIndexState, failure: TagIndexResult): TagIndexResult {
+  if (!state.loaded) return failure
+  state.refreshAt = Date.now() + TAG_INDEX_RETRY_MS
+  return { kind: 'ready', loaded: state.loaded }
+}
+
+/**
+ * R2 のタグ辞書を読んで索引にする。ログと Sentry には利用者のクエリを含めない（読み込みはクエリと無関係）。
+ * 変わった辞書は古い索引を手放してから読み、古い索引と新しい本文・解析結果を同時に持たない
+ */
+async function loadTagIndex(bucket: R2Bucket, state: TagIndexState, seq: number): Promise<TagIndexResult> {
+  // 古い索引は手元に置かず etag だけを持つ（本文を読む前に手放せるように）
+  const etag = state.loaded?.etag ?? ''
+  let object: R2ObjectBody | R2Object | null
   try {
-    object = await readR2(bucket, 'tag-accumulation.json')
+    object = etag !== '' ? await readR2IfChanged(bucket, TAG_DICTIONARY_KEY, etag) : await readR2(bucket, TAG_DICTIONARY_KEY)
   } catch (error) {
+    if (state.loadSeq !== seq) return currentTagIndexResult(state)
     console.error('Tag autocomplete error:', error)
     captureTagAutocompleteError(error, 'r2-read')
-    return { kind: 'read-error', message: error instanceof Error ? error.message : String(error) }
+    return keepPreviousTagIndex(state, { kind: 'read-error', message: error instanceof Error ? error.message : String(error) })
   }
-  if (!object) return { kind: 'not-found' }
+  // 後から別の読み込みが始まっていれば、この結果は使わない
+  if (state.loadSeq !== seq) {
+    if (object && hasBody(object)) discardBody(object)
+    return currentTagIndexResult(state)
+  }
+  if (!object) return keepPreviousTagIndex(state, { kind: 'not-found' })
+  // 変わっていない。索引はそのままで、次に確かめるのは TTL 後
+  if (!hasBody(object)) {
+    state.refreshAt = Date.now() + TAG_INDEX_TTL_MS
+    return currentTagIndexResult(state)
+  }
+  // 大きすぎる辞書は本文を読まない。索引があれば使い続け、TTL 後に確かめ直す
+  if (object.size > TAG_DICTIONARY_MAX_BYTES) {
+    discardBody(object)
+    reportTagDictionaryTooLarge(object.size)
+    state.failure = 'too-large'
+    state.refreshAt = Date.now() + TAG_INDEX_TTL_MS
+    return state.loaded ? { kind: 'ready', loaded: state.loaded } : { kind: 'too-large' }
+  }
+  // 古い索引を手放してから読む。この間の要求は読み込みを待つ
+  state.loaded = null
+  state.failure = null
   try {
-    const { data } = await readR2Json(object)
-    const loaded = toLoadedTagIndex(data)
+    const loaded = toLoadedTagIndex(await readTagDictionary(object), object.etag)
     if (!loaded) throw new Error('Tag accumulation data has no tags array')
+    if (state.loadSeq !== seq) return currentTagIndexResult(state)
+    state.loaded = loaded
+    state.refreshAt = Date.now() + TAG_INDEX_TTL_MS
     return { kind: 'ready', loaded }
   } catch (parseError) {
+    if (state.loadSeq !== seq) return currentTagIndexResult(state)
     console.error('Failed to parse tag accumulation data:', parseError)
     captureTagAutocompleteError(parseError, 'r2-parse')
+    // 要求ごとに辞書全体を読み直さないよう、少しの間は R2 を読まずに同じ答えを返す
+    state.failure = 'parse-error'
+    state.refreshAt = Date.now() + TAG_INDEX_RETRY_MS
     return { kind: 'parse-error' }
   }
 }
 
-async function refreshTagIndex(bucket: R2Bucket, state: TagIndexState): Promise<TagIndexResult> {
-  const result = await readTagIndex(bucket)
-  if (result.kind === 'ready') {
-    state.loaded = result.loaded
-    state.refreshAt = Date.now() + TAG_INDEX_TTL_MS
-    return result
+/** 読み込みを 1 つ始める。始めた要求が切断されても止まらないよう waitUntil に載せる */
+function startTagIndexLoad(bucket: R2Bucket, state: TagIndexState, ctx: ExecutionContext, now: number): Promise<TagIndexResult> {
+  const seq = ++state.loadSeq
+  const pending: Promise<TagIndexResult> = loadTagIndex(bucket, state, seq).finally(() => {
+    if (state.pending === pending) state.pending = null
+  })
+  state.pending = pending
+  state.pendingSince = now
+  ctx.waitUntil(pending)
+  return pending
+}
+
+/** 読み込みを TAG_INDEX_WAIT_MS まで待つ。終わらなければ読み込み中と答える */
+async function waitForTagIndex(pending: Promise<TagIndexResult>): Promise<TagIndexResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<TagIndexResult>((resolve) => {
+    timer = setTimeout(() => resolve({ kind: 'loading' }), TAG_INDEX_WAIT_MS)
+  })
+  try {
+    return await Promise.race([pending, timeout])
+  } finally {
+    clearTimeout(timer)
   }
-  // 読み直しに失敗したら、古い索引があればそれを使い続ける
-  if (state.loaded) {
-    state.refreshAt = Date.now() + TAG_INDEX_RETRY_MS
-    return { kind: 'ready', loaded: state.loaded }
-  }
-  return result
 }
 
 function getTagIndex(bucket: R2Bucket, ctx: ExecutionContext): Promise<TagIndexResult> {
   let state = tagIndexStates.get(bucket)
   if (!state) {
-    state = { loaded: null, refreshAt: 0, pending: null, pendingSince: 0 }
+    state = { loaded: null, failure: null, refreshAt: 0, pending: null, pendingSince: 0, loadSeq: 0 }
     tagIndexStates.set(bucket, state)
   }
   const now = Date.now()
-  if (state.loaded && now < state.refreshAt) {
-    return Promise.resolve({ kind: 'ready', loaded: state.loaded })
+  if (now < state.refreshAt) {
+    if (state.loaded) return Promise.resolve({ kind: 'ready', loaded: state.loaded })
+    if (state.failure) return Promise.resolve({ kind: state.failure })
   }
-  // 読み込みは同時に 1 つだけ。始めた要求が切断されても止まらないよう waitUntil に載せる
-  if (!state.pending || now - state.pendingSince > TAG_INDEX_LOAD_TIMEOUT_MS) {
-    const loadState = state
-    const pending: Promise<TagIndexResult> = refreshTagIndex(bucket, loadState).finally(() => {
-      if (loadState.pending === pending) loadState.pending = null
-    })
-    state.pending = pending
-    state.pendingSince = now
-    ctx.waitUntil(pending)
+  // 読み込みは同時に 1 つだけ
+  let pending = state.pending
+  if (!pending || now - state.pendingSince > TAG_INDEX_LOAD_TIMEOUT_MS) {
+    pending = startTagIndexLoad(bucket, state, ctx, now)
   }
-  // 古い索引があれば読み直しを待たずに答える（R2 が遅い・止まるときも候補を返せる）。待つのは最初の読み込みだけ
-  if (state.loaded) {
-    return Promise.resolve({ kind: 'ready', loaded: state.loaded })
-  }
-  return state.pending
+  // 古い索引があれば読み直しを待たずに答える（R2 が遅い・止まるときも候補を返せる）
+  if (state.loaded) return Promise.resolve({ kind: 'ready', loaded: state.loaded })
+  // 索引がない（最初の読み込み・変わった辞書の読み込み中）ときだけ、決まった時間まで待つ
+  return waitForTagIndex(pending)
 }
 
 function autocompleteResponse(request: Request, body: object, status: number, cacheControl: string): Response {
@@ -626,6 +735,11 @@ const handler: ExportedHandler<Env> = {
       }
 
       const result = await getTagIndex(env.R2_BUCKET, ctx)
+      if (result.kind === 'loading' || result.kind === 'too-large') {
+        // 一時的な空の答えなので、ブラウザにも CDN にも残さない
+        const source = result.kind === 'loading' ? 'tag-data-loading' : 'tag-data-too-large'
+        return autocompleteResponse(request, { query, suggestions: [], metadata: { total: 0, source } }, 200, 'no-store')
+      }
       if (result.kind === 'not-found') {
         const metadata = { total: 0, source: 'tag-data-not-found', error: 'Tag accumulation data not available' }
         return autocompleteResponse(request, { query, suggestions: [], metadata }, 200, 'public, max-age=60')
@@ -639,7 +753,8 @@ const handler: ExportedHandler<Env> = {
         return autocompleteResponse(request, { query, suggestions: [], metadata }, 500, 'no-cache')
       }
 
-      // 前方一致を先に、足りない分を部分一致で埋める（照合は NFKC + 小文字）
+      // 人気度があれば、キーが同じタグ・前方一致・部分一致の順にそれぞれ人気の高い順で並べる。
+      // なければ前方一致を先に、足りない分を部分一致で埋める（どちらも照合は NFKC + 小文字）
       const { index, lastUpdated, totalUniqueTags } = result.loaded
       const maxResults = parseAutocompleteLimit(url.searchParams.get('limit'))
       const suggestions = suggestTags(index, query, maxResults)

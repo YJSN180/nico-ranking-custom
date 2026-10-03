@@ -4,6 +4,7 @@ import { showToast } from '@/lib/toast'
 import { useState, useRef } from 'react'
 import type { TagDetail } from '@/types/ranking'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
+import { isSameTagName, tagNameForms } from '@/lib/tag-name-match'
 import './tag-context-menu.css'
 
 interface TagContextMenuProps {
@@ -66,6 +67,12 @@ export function TagContextMenu({ tagDetail, children, ngList, saveNGListDirectly
     }
   }
   
+  // 登録済みか。&amp; のまま登録した名前（修正前の候補・タグ詳細から追加したもの）も同じタグとみなす
+  const isRegistered = (list: readonly string[]): boolean => {
+    const name = tagNameForms(tagDetail.name)
+    return list.some((saved) => isSameTagName(tagNameForms(saved), name))
+  }
+
   // NGリストに追加（属性を考慮）
   const addToNGWithAttribute = () => {
     const updatedList = { ...ngList }
@@ -84,7 +91,7 @@ export function TagContextMenu({ tagDetail, children, ngList, saveNGListDirectly
       ? updatedList.tags.locked.exact 
       : updatedList.tags.user.exact
     
-    if (!targetArray.includes(tagDetail.name)) {
+    if (!isRegistered(targetArray)) {
       targetArray.push(tagDetail.name)
       saveNGListDirectly(updatedList)
       
@@ -116,7 +123,7 @@ export function TagContextMenu({ tagDetail, children, ngList, saveNGListDirectly
     }
     
     // 属性を無視してboth配列に追加
-    if (!updatedList.tags.both.exact.includes(tagDetail.name)) {
+    if (!isRegistered(updatedList.tags.both.exact)) {
       updatedList.tags.both.exact.push(tagDetail.name)
       saveNGListDirectly(updatedList)
       

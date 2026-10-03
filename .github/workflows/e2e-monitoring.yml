@@ -51,17 +51,12 @@ jobs:
           --reporter=json > test-results.json
       continue-on-error: true
 
-    - name: Check API health
+    # runner から nico-rank.com へのリクエストはゾーンの Bot 対策にチャレンジされる（403）ので、公開ドメインは見ない。
+    # 本番ランキング API の Green を workers.dev で直接確かめる（動画の並ぶ JSON と、管理パスの 401）。
+    # continue-on-error は、結果を Slack 通知へ渡すステップ（3a9361373 で削除）のためのもので、今は失敗を隠すだけなので外した
+    - name: Check Green API Worker health (workers.dev)
       id: api-health
-      run: |
-        # APIエンドポイントのヘルスチェック
-        response=$(curl -s -o /dev/null -w "%{http_code}" https://nico-rank.com/api/ranking?genre=all&period=24h)
-        echo "API_STATUS=$response" >> $GITHUB_OUTPUT
-        if [ "$response" != "200" ]; then
-          echo "API health check failed with status: $response"
-          exit 1
-        fi
-      continue-on-error: true
+      run: node scripts/check-admin-gateway.mjs --worker nico-ranking-api-gateway-green --direct-only
 
     - name: Performance check
       id: performance
@@ -102,24 +97,23 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title: '🚨 E2E Monitoring: Repeated Failures Detected',
-                body: |
-                  ## E2E Monitoring Alert
-                  
-                  The E2E monitoring tests have failed multiple times in the past 24 hours.
-
-                  ### Recent Failures
-                  - Smoke Tests: Failed
-                  - API Health: Failed
-
-                  
-                  ### Action Required
-                  1. Check the latest workflow run
-                  2. Review recent deployments
-                  3. Check Cloudflare KV and Workers status
-                  4. Verify API endpoints are responding correctly
-
-                  ### Automated Issue
-                  This issue was created automatically by the E2E monitoring workflow.
+                body: [
+                  '## E2E Monitoring Alert',
+                  '',
+                  'The E2E monitoring tests have failed multiple times in the past 24 hours.',
+                  '',
+                  '### Recent Failures',
+                  '- API health check (Green Worker on workers.dev): Failed',
+                  '',
+                  '### Action Required',
+                  '1. Check the latest workflow run',
+                  '2. Review recent deployments',
+                  '3. Check Cloudflare KV and Workers status',
+                  '4. Verify API endpoints are responding correctly',
+                  '',
+                  '### Automated Issue',
+                  'This issue was created automatically by the E2E monitoring workflow.',
+                ].join('\n'),
                 labels: ['e2e-monitoring', 'automated', 'bug']
               });
             }

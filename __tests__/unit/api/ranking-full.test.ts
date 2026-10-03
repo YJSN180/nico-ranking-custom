@@ -55,14 +55,19 @@ describe('/api/ranking/full と上流の一時障害', () => {
     vi.restoreAllMocks()
   })
 
-  it.each(['production', 'preview'])('%sでは保護されたデプロイ URL ではなく SSR ゲートウェイから取得する', async (environment) => {
+  it.each([
+    ['production', 'https://ranking-gateway.example', 'https://ranking-gateway.example'],
+    ['preview', 'https://ranking-gateway.example', 'https://ranking-gateway.example'],
+    ['production', undefined, 'https://nico-rank.com'],
+    ['preview', undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'],
+  ])('%sでは保護されたデプロイ URL ではなく SSR と同じゲートウェイ（RANKING_SSR_GATEWAY_URL=%s）から取得する', async (environment, gateway, expectedOrigin) => {
     vi.stubEnv('VERCEL_ENV', environment)
-    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking-gateway.example')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)
     fetchMock.mockResolvedValue(json(200, { items }))
     const response = await GET(new NextRequest('https://protected.example/api/ranking/full?genre=game&period=hour&tag=tag'))
     expect(response.status).toBe(200)
     expect(fetchMock).toHaveBeenCalledWith(
-      `${environment === 'preview' ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev' : 'https://ranking-gateway.example'}/api/ranking?genre=game&period=hour&tag=tag`,
+      `${expectedOrigin}/api/ranking?genre=game&period=hour&tag=tag`,
       expect.objectContaining({ headers: expect.objectContaining({ 'User-Agent': 'nico-ranking-web/1.0' }) })
     )
   })

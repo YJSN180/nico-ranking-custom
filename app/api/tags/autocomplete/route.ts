@@ -21,6 +21,8 @@ const CACHE_MAX_ENTRIES = 200
 const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
 // 中継した要求の印。上流が Vercel へ戻した場合に、もう一度中継して循環しないようにする
 const PROXY_HOP_HEADER = 'X-Tag-Suggest-Proxy'
+// Green が索引の読み込み中・辞書が大きすぎるときに返す一時的な空の答え（Green は no-store で返す）
+const TRANSIENT_SOURCES: ReadonlySet<string> = new Set(['tag-data-loading', 'tag-data-too-large'])
 
 interface UpstreamMetadata {
   source: string
@@ -87,9 +89,19 @@ function writeCache(key: string, entry: CachedAnswer): void {
   answers.set(key, entry)
 }
 
+/** 中継側で持ってよい答えか。辞書が見つからない答えと一時的な空の答えは持たない */
+function isCacheable(source: string): boolean {
+  return source !== 'tag-data-not-found' && !TRANSIENT_SOURCES.has(source)
+}
+
+function cacheControlFor(source: string): string {
+  // 一時的な空の答えはどこにも残さない。辞書が見つからない答えは Green と同じく短く持つ
+  if (TRANSIENT_SOURCES.has(source)) return 'no-store'
+  return source === 'tag-data-not-found' ? 'public, max-age=60' : 'public, max-age=300'
+}
+
 function answer(query: string, limit: number, suggestions: string[], metadata: UpstreamMetadata): NextResponse {
-  // 辞書が見つからない答えは Green と同じく短く持つ
-  const cacheControl = metadata.source === 'tag-data-not-found' ? 'public, max-age=60' : 'public, max-age=300'
+  const cacheControl = cacheControlFor(metadata.source)
   return NextResponse.json(
     { query, suggestions, metadata: { total: suggestions.length, maxResults: limit, ...metadata } },
     // Blue 経由ではルーターが Origin ごとの Access-Control-Allow-Origin を付けるため、キャッシュも Origin ごとに分ける
@@ -161,7 +173,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const upstream = await fetchFromGateway(query, limit)
   if (!upstream) return upstreamError(rawQuery)
-  if (upstream.metadata.source !== 'tag-data-not-found') {
+  if (isCacheable(upstream.metadata.source)) {
     writeCache(cacheKey, { ...upstream, expiresAt: Date.now() + CACHE_TTL_MS })
   }
   return answer(rawQuery, limit, upstream.suggestions, upstream.metadata)

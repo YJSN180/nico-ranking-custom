@@ -33,6 +33,17 @@ describe('Thumbnail Proxy API', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
+    it.each([
+      'https://nicovideo.cdn.nimg.jp.evil.example/image.jpg',
+      'https://user:password@nicovideo.cdn.nimg.jp/image.jpg',
+      'https://nicovideo.cdn.nimg.jp:8443/image.jpg',
+      'https://127.0.0.1/image.jpg',
+    ])('rejects unsafe origin %s without fetching', async (imageUrl) => {
+      const response = await GET(new NextRequest(`http://localhost/api/thumbnail-proxy?url=${encodeURIComponent(imageUrl)}`))
+      expect(response.status).toBe(400)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     it('should return 400 when URL parameter is missing', async () => {
       const request = new NextRequest('http://localhost/api/thumbnail-proxy')
       const response = await GET(request)

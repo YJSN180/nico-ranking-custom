@@ -65,12 +65,13 @@ async function getPopularTagsLatest(): Promise<PopularTagsLatest | null> {
 }
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
-  // Use the public gateway on Vercel; protected deployment URLs reject server-side requests.
-  const deployment = process.env.VERCEL_ENV === 'preview'
+  // Protected deployments can use an explicitly configured public ranking gateway.
+  // Otherwise use the public gateway on Vercel; protected deployment URLs reject server-side requests.
+  const deployment = process.env.RANKING_SSR_GATEWAY_URL || (process.env.VERCEL_ENV === 'preview'
     ? 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
     : process.env.VERCEL_ENV === 'production'
-      ? process.env.RANKING_SSR_GATEWAY_URL || 'https://nico-rank.com'
-      : process.env.VERCEL_URL
+      ? 'https://nico-rank.com'
+      : process.env.VERCEL_URL)
   const base = deployment
     ? deployment.startsWith('http') ? deployment : `https://${deployment}`
     : process.env.NEXT_PUBLIC_API_GATEWAY_URL || 'https://nico-rank.com'
