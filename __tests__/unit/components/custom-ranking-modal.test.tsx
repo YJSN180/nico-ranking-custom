@@ -279,3 +279,84 @@ describe('カスタムランキング作成: ダイアログの操作', () => {
     expect(screen.queryByText('カスタムランキングの名前を決めてください')).toBeNull()
   })
 })
+
+describe('カスタムランキング作成: 保存の結果', () => {
+  async function fillAndSave(onSave: (data: CustomRankingFormState) => Promise<boolean>, onClose = vi.fn()) {
+    render(<CustomRankingModal isOpen={true} onClose={onClose} onSave={onSave} />)
+    fireEvent.click(screen.getByLabelText('ゲーム'))
+    await next()
+    addTag('すべて含む', '合成A')
+    await next()
+    fireEvent.change(screen.getByPlaceholderText('例: レトロゲーム実況'), { target: { value: '合成' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    })
+    return onClose
+  }
+
+  it('保存できなかったら閉じずに知らせ、入力を残す。もう一度保存できる', async () => {
+    const onSave = vi.fn(async () => false)
+    const onClose = await fillAndSave(onSave)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('保存できませんでした')
+    expect(screen.getByPlaceholderText('例: レトロゲーム実況')).toHaveValue('合成')
+    // 失敗したあとも保存ボタンは押せるまま（無効にしてフォーカスを外さない）
+    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled()
+
+    onSave.mockResolvedValueOnce(true)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    })
+    expect(onSave).toHaveBeenCalledTimes(2)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('タイトルを直したら、前の失敗の知らせは消す', async () => {
+    await fillAndSave(vi.fn(async () => false))
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText('例: レトロゲーム実況'), { target: { value: '合成2' } })
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('保存の処理が例外を投げても、閉じずに知らせる', async () => {
+    const onClose = await fillAndSave(vi.fn(async () => { throw new Error('合成の失敗') }))
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+  })
+
+  it('保存を待つ間は保存ボタンを止め（二重に保存しない）、保存できたら閉じる', async () => {
+    let finish: (ok: boolean) => void = () => {}
+    const onSave = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve }))
+    const onClose = vi.fn()
+    render(<CustomRankingModal isOpen={true} onClose={onClose} onSave={onSave} />)
+    fireEvent.click(screen.getByLabelText('ゲーム'))
+    await next()
+    addTag('すべて含む', '合成A')
+    await next()
+    fireEvent.change(screen.getByPlaceholderText('例: レトロゲーム実況'), { target: { value: '合成' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    })
+    const save = screen.getByRole('button', { name: '保存' })
+    // 待つ間も disabled にはしない（押したボタンにフォーカスを残す）。aria-disabled で知らせ、二重には保存しない
+    expect(save).toHaveAttribute('aria-disabled', 'true')
+    expect(save).toBeEnabled()
+    fireEvent.click(save)
+    expect(onSave).toHaveBeenCalledTimes(1)
+    await act(async () => { finish(true) })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('フォーカスがモーダルの外にあるときの Tab は、モーダルの中へ戻す', () => {
+    render(
+      <>
+        <button type="button">ページのボタン</button>
+        <CustomRankingModal isOpen={true} onClose={vi.fn()} onSave={vi.fn()} />
+      </>,
+    )
+    const outside = screen.getByRole('button', { name: 'ページのボタン' })
+    outside.focus()
+    fireEvent.keyDown(document, { key: 'Tab' })
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
+  })
+})

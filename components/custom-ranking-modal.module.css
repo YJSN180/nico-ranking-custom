@@ -320,13 +320,19 @@
   color: white;
 }
 
-.nextButton:hover:not(:disabled) {
+.nextButton:hover:not(:disabled):not([aria-disabled='true']) {
   opacity: 0.9;
 }
 
 .nextButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 保存を待つ間（フォーカスを残すため disabled にはしない） */
+.nextButton[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 /* アニメーション */

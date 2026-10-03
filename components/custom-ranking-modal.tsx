@@ -35,7 +35,8 @@ import styles from './custom-ranking-modal.module.css'
 interface CustomRankingModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: CustomRankingFormState) => void
+  /** 保存する。false を返したら（または失敗したら）保存できなかったとして、画面を閉じずに知らせる */
+  onSave: (data: CustomRankingFormState) => void | boolean | Promise<void | boolean>
   existingTitles?: string[]
   /** 編集対象のランキング（新規作成では無し） */
   editingRanking?: Pick<CustomRanking, 'baseGenre' | 'conditions' | 'title'> | null
@@ -70,6 +71,9 @@ export function CustomRankingModal({
   const shownStep = useRef<ModalStep | null>(null)
   // 手順 2 の「次へ」で先読みを待つ間は進む操作を止める。待つ間に戻ったら、先読みのあとで進めない
   const [advancing, setAdvancing] = useState(false)
+  // 保存の結果を待つ間は保存ボタンを止め、失敗したら入力を残したまま知らせる
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const navigation = useRef(0)
   // Escape・フォーカスの effect を開くときだけ動かすため、閉じる処理は ref で最新を参照する
   const onCloseRef = useRef(onClose)
@@ -100,6 +104,8 @@ export function CustomRankingModal({
       }
       setDrafts(EMPTY_KEYWORD_DRAFTS)
       setAdvancing(false)
+      setSaving(false)
+      setSaveError(false)
       navigation.current++
     }
   }, [isOpen, editingRanking])
@@ -120,6 +126,13 @@ export function CustomRankingModal({
         return
       }
       if (event.key !== 'Tab') return
+      const modal = modalRef.current
+      // 何かの理由でフォーカスがモーダルの外（ページ本体など）にあるときは、モーダルの中へ戻す
+      if (modal && !modal.contains(document.activeElement)) {
+        event.preventDefault()
+        modal.focus()
+        return
+      }
       const focusables = modalRef.current?.querySelectorAll<HTMLElement>(
         'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea, [tabindex]:not([tabindex="-1"])',
       )
@@ -210,6 +223,7 @@ export function CustomRankingModal({
 
   // タイトル変更（Step 3）
   const handleTitleChange = (title: string) => {
+    setSaveError(false)
     setFormData(prev => ({ ...prev, title }))
   }
 
@@ -225,9 +239,23 @@ export function CustomRankingModal({
       setFormData((prev) => ({ ...prev, conditions: toTagConditions(committed) }))
     }
     if (currentStep === 3) {
-      // 保存処理
+      // 保存処理。保存できたときだけ閉じる（失敗したら入力を残して、もう一度保存できるようにする）
+      if (saving) return
       if (formData.title.trim() && !existingTitles.includes(formData.title.trim())) {
-        onSave({ ...formData, conditions: toTagConditions(tagConditions) })
+        setSaving(true)
+        setSaveError(false)
+        let saved = false
+        try {
+          saved = (await onSave({ ...formData, conditions: toTagConditions(tagConditions) })) !== false
+        } catch {
+          saved = false
+        } finally {
+          setSaving(false)
+        }
+        if (!saved) {
+          setSaveError(true)
+          return
+        }
         onClose()
       }
       return
@@ -388,6 +416,11 @@ export function CustomRankingModal({
                   このタイトルは既に使用されています
                 </p>
               )}
+              {saveError && (
+                <p className={styles.error} role="alert">
+                  保存できませんでした。もう一度「保存」を押してください。
+                </p>
+              )}
 
               {/* タグボタンスタイルのプレビュー */}
               {formData.title && (
@@ -415,7 +448,10 @@ export function CustomRankingModal({
             className={styles.nextButton}
             onClick={handleNext}
             disabled={!canProceed || advancing}
-            aria-busy={advancing || undefined}
+            // 保存を待つ間は押せなくするが、disabled にはしない（押したボタンからフォーカスが外れ、
+            // 失敗したあとキーボードでモーダルに戻れなくなるため）。二重の保存は handleNext で防ぐ
+            aria-disabled={saving || undefined}
+            aria-busy={advancing || saving || undefined}
           >
             {currentStep === 3 ? '保存' : '次へ'}
           </button>
