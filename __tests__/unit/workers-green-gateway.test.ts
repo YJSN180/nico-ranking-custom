@@ -1,15 +1,17 @@
 // @vitest-environment node
+import { gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../workers/sentry.js', () => ({
   Sentry: { withSentry: (_options: unknown, handler: unknown) => handler },
   createWorkerSentryOptions: vi.fn(),
   captureWorkerException: vi.fn(),
+  captureWorkerMessage: vi.fn(),
   sanitizeUrlForSentry: vi.fn(),
 }))
 
 import worker from '../../workers/api-gateway-green-20250726'
-import { captureWorkerException } from '../../workers/sentry.js'
+import { captureWorkerException, captureWorkerMessage } from '../../workers/sentry.js'
 
 const fetchWorker = worker.fetch as unknown as (
   request: Request,
@@ -253,28 +255,110 @@ describe('green tag autocomplete', () => {
   const tags = Array.from({ length: 80 }, (_, i) => `syn${String(i).padStart(2, '0')}`)
   const TAG_KEY = 'tag-accumulation.json'
   const TTL_MS = 10 * 60 * 1000
+  const WAIT_MS = 2_000
+  const MAX_BYTES = 4.5 * 1024 * 1024
+  const RETRY_MS = 60 * 1000
 
-  function tagObject(body: string) {
-    return { httpMetadata: {}, arrayBuffer: async () => new TextEncoder().encode(body).buffer }
+  interface TagObjectMock {
+    etag: string
+    size: number
+    httpMetadata: Record<string, never>
+    body?: { cancel: ReturnType<typeof vi.fn> }
+    arrayBuffer?: ReturnType<typeof vi.fn>
+  }
+
+  /** バイト列を、それだけを持つ ArrayBuffer にする */
+  function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+    const buffer = new ArrayBuffer(bytes.byteLength)
+    new Uint8Array(buffer).set(bytes)
+    return buffer
+  }
+
+  let etagCount = 0
+  /** 本文のある R2 オブジェクト（R2ObjectBody）を模す。etag は既定で読み取りごとに変わる */
+  function tagObject(body: string | Uint8Array, etag = `synthetic-etag-${++etagCount}`): TagObjectMock {
+    const bytes = typeof body === 'string' ? new TextEncoder().encode(body) : body
+    return {
+      etag,
+      size: bytes.byteLength,
+      httpMetadata: {},
+      body: { cancel: vi.fn(async () => undefined) },
+      arrayBuffer: vi.fn(async () => toArrayBuffer(bytes)),
+    }
+  }
+
+  /** 本文が上限より大きいオブジェクト。本文は読まれない前提 */
+  function oversizedObject(): TagObjectMock {
+    return {
+      etag: 'synthetic-oversized',
+      size: MAX_BYTES + 1,
+      httpMetadata: {},
+      body: { cancel: vi.fn(async () => undefined) },
+      arrayBuffer: vi.fn(async () => new ArrayBuffer(0)),
+    }
+  }
+
+  /** 本文の読み取りが finish を呼ぶまで終わらないオブジェクト。called は読み取りが始まると解決する */
+  function deferredObject(etag = 'synthetic-deferred') {
+    let finish: (body: string) => void = () => undefined
+    let markCalled: () => void = () => undefined
+    const called = new Promise<void>((resolve) => {
+      markCalled = resolve
+    })
+    const object: TagObjectMock = {
+      etag,
+      size: 1024,
+      httpMetadata: {},
+      body: { cancel: vi.fn(async () => undefined) },
+      arrayBuffer: vi.fn(
+        () =>
+          new Promise<ArrayBuffer>((resolve) => {
+            finish = (body) => resolve(toArrayBuffer(new TextEncoder().encode(body)))
+            markCalled()
+          }),
+      ),
+    }
+    return { object, called, finish: (body: string) => finish(body) }
   }
 
   function accumulation(list: unknown[], lastUpdated = '2026-01-01T00:00:00.000Z'): string {
     return JSON.stringify({ tags: list, metadata: { lastUpdated, totalUniqueTags: list.length } })
   }
 
-  /** 1 回目の get から順に、本文（文字列）・null（オブジェクトなし）・Error（読み取り失敗）を返す */
-  function sequenceBucket(...answers: Array<string | null | Error>) {
-    let last: string | null | Error = null
+  type BucketAnswer = string | null | Error | TagObjectMock
+
+  /** 1 回目の get から順に、本文（文字列）・null（オブジェクトなし）・Error（読み取り失敗）・用意したオブジェクトを返す */
+  function sequenceBucket(...answers: BucketAnswer[]) {
+    let last: BucketAnswer = null
     return {
-      get: vi.fn(async (key: string) => {
+      get: vi.fn(async (key: string, _options?: { onlyIf?: { etagDoesNotMatch?: string } }) => {
         if (key !== TAG_KEY) return null
         const next = answers.length > 0 ? answers.shift() ?? null : last
         last = next
         if (next instanceof Error) throw next
-        return next === null ? null : tagObject(next)
+        if (next === null) return null
+        return typeof next === 'string' ? tagObject(next) : next
       }),
     }
   }
+
+  /** etag が一致する条件付きの get には、本文のない R2Object（変わっていない）で答える */
+  function versionedBucket(body: string, etag: string) {
+    const objects: TagObjectMock[] = []
+    return {
+      objects,
+      get: vi.fn(async (key: string, options?: { onlyIf?: { etagDoesNotMatch?: string } }) => {
+        if (key !== TAG_KEY) return null
+        if (options?.onlyIf?.etagDoesNotMatch === etag) return { etag, size: 1024, httpMetadata: {} }
+        const object = tagObject(body, etag)
+        objects.push(object)
+        return object
+      }),
+    }
+  }
+
+  // 応答の前に、済ませられる処理（マイクロタスク）を済ませる
+  const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve))
 
   const tagBucket = () => sequenceBucket(accumulation(tags))
 
@@ -286,6 +370,8 @@ describe('green tag autocomplete', () => {
   }
   afterEach(() => {
     background.length = 0
+    vi.useRealTimers()
+    vi.mocked(captureWorkerMessage).mockClear()
   })
 
   function autocomplete(query: string, bucket: { get: ReturnType<typeof vi.fn> }, headers: Record<string, string> = {}) {
@@ -409,6 +495,66 @@ describe('green tag autocomplete', () => {
     expect(tagReads(bucket)).toBe(2)
   })
 
+  it('drops a superseded load that finishes late, without reading its body', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(4_500_000)
+    const stale = tagObject(accumulation(['syn-stale']))
+    let answerFirst: (object: TagObjectMock) => void = () => undefined
+    let calls = 0
+    const bucket = {
+      get: vi.fn((key: string) => {
+        if (key !== TAG_KEY) return Promise.resolve(null)
+        calls++
+        if (calls === 1) {
+          return new Promise<TagObjectMock>((resolve) => {
+            answerFirst = resolve
+          })
+        }
+        return Promise.resolve(tagObject(accumulation(['syn-retry'])))
+      }),
+    }
+
+    void autocomplete('q=syn', bucket)
+    await vi.waitFor(() => expect(tagReads(bucket)).toBe(1))
+    now.mockReturnValue(4_500_000 + 30_001)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-retry'])
+
+    // 打ち切った読み込みが後から終わっても、本文を読まず新しい索引を上書きしない
+    answerFirst(stale)
+    await settle()
+    expect(stale.arrayBuffer).not.toHaveBeenCalled()
+    expect(stale.body?.cancel).toHaveBeenCalledTimes(1)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-retry'])
+    expect(tagReads(bucket)).toBe(2)
+  })
+
+  it.each([
+    ['a valid dictionary', JSON.stringify({ tags: ['syn-stale'], metadata: {} })],
+    ['a broken dictionary', '{"tags": ['],
+  ])('drops a superseded load whose body finishes late with %s, keeping the newer index', async (_label, lateBody) => {
+    vi.mocked(captureWorkerException).mockClear()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const now = vi.spyOn(Date, 'now').mockReturnValue(4_700_000)
+    const stalled = deferredObject()
+    const bucket = sequenceBucket(accumulation(['syn-old']), stalled.object, accumulation(['syn-retry']))
+
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+    now.mockReturnValue(4_700_000 + TTL_MS)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+    // 読み直しは古い索引を手放し、本文の読み取りで止まる
+    await stalled.called
+
+    // 30 秒を過ぎたら新しい読み込みが始まり、その索引で答える
+    now.mockReturnValue(4_700_000 + TTL_MS + 30_001)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-retry'])
+
+    // 止まっていた読み込みが後から終わっても、新しい索引を書き換えず、失敗も記録しない
+    stalled.finish(lateBody)
+    await settle()
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-retry'])
+    expect(tagReads(bucket)).toBe(3)
+    expect(captureWorkerException).not.toHaveBeenCalled()
+  })
+
   it('does not share the index between R2 bindings', async () => {
     const first = sequenceBucket(accumulation(['syn-first']))
     const second = sequenceBucket(accumulation(['syn-second']))
@@ -457,8 +603,6 @@ describe('green tag autocomplete', () => {
 
   it.each([
     ['an R2 error', deniedError(), 'r2-read'],
-    ['unparsable JSON', '{"tags": [', 'r2-parse'],
-    ['data without a tags array', JSON.stringify({ tags: 'syn-broken' }), 'r2-parse'],
     ['a missing object', null, null],
   ])('keeps serving the previous index when a refresh hits %s', async (_label, failure, upstreamKind) => {
     vi.mocked(captureWorkerException).mockClear()
@@ -487,6 +631,275 @@ describe('green tag autocomplete', () => {
     }
     // 利用者のクエリはログに残さない
     expect(lines.join('\n')).not.toContain('syn-private')
+  })
+
+  it.each([
+    ['unparsable JSON', '{"tags": ['],
+    ['data without a tags array', JSON.stringify({ tags: 'syn-broken' })],
+  ])('answers parse-error like a first load after a changed dictionary with %s, and reads again only after a minute', async (_label, broken) => {
+    vi.mocked(captureWorkerException).mockClear()
+    const lines: string[] = []
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      lines.push(args.map(String).join(' '))
+    })
+    const now = vi.spyOn(Date, 'now').mockReturnValue(2_500_000)
+    const bucket = sequenceBucket(accumulation(['syn-old']), broken, accumulation(['syn-fresh']))
+
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+    now.mockReturnValue(2_500_000 + TTL_MS)
+    // 期限切れ後の要求は古い索引で答える。読み直しは古い索引を手放してから本文を読み、解析に失敗する
+    expect(await suggestions('q=syn-private', bucket)).toEqual([])
+    await settle()
+
+    // 古い索引はもうないので、最初の読み込みと同じく 500 を返す（キャッシュさせない）。1 分の間は R2 を読み直さない
+    for (const offset of [0, RETRY_MS - 1]) {
+      now.mockReturnValue(2_500_000 + TTL_MS + offset)
+      const response = await autocomplete('q=syn-private', bucket)
+      expect(response.status).toBe(500)
+      expect(response.headers.get('Cache-Control')).toBe('no-cache')
+      expect(((await response.json()) as { metadata: { source: string } }).metadata.source).toBe('parse-error')
+    }
+    expect(tagReads(bucket)).toBe(2)
+    expect(captureWorkerException).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(captureWorkerException).mock.calls[0][1]).toMatchObject({ tags: { upstream_kind: 'r2-parse' } })
+
+    // 1 分後に条件なしで読み直し、新しい辞書を読み込む
+    now.mockReturnValue(2_500_000 + TTL_MS + RETRY_MS)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-fresh'])
+    expect(tagReads(bucket)).toBe(3)
+    expect(bucket.get.mock.calls[2]).toEqual([TAG_KEY])
+    expect(lines.join('\n')).not.toContain('syn-private')
+  })
+
+  it('ignores lastSeen and other extra fields in compact JSON', async () => {
+    const compact = JSON.stringify({
+      tags: ['syn-a', 'syn-b', 'other'],
+      lastSeen: { day: 20729, ages: '012' },
+      metadata: { lastUpdated: '2026-10-03T00:00:00.000Z', totalUniqueTags: 3 },
+    })
+    const response = await autocomplete('q=syn', sequenceBucket(compact))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      query: 'syn',
+      suggestions: ['syn-a', 'syn-b'],
+      metadata: { total: 2, maxResults: 10, source: 'r2-tag-accumulation', lastUpdated: '2026-10-03T00:00:00.000Z', totalUniqueTags: 3 },
+    })
+  })
+
+  describe('dictionary size guard', () => {
+    it('does not read an oversized dictionary when there is no index, and answers tag-data-too-large without caching', async () => {
+      const warnings: string[] = []
+      vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+        warnings.push(args.map(String).join(' '))
+      })
+      const now = vi.spyOn(Date, 'now').mockReturnValue(7_000_000)
+      const oversized = oversizedObject()
+      const bucket = sequenceBucket(oversized, accumulation(['syn-small']))
+
+      const response = await autocomplete('q=syn-private', bucket, { Origin: 'https://nico-rank.com' })
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('Cache-Control')).toBe('no-store')
+      expect(response.headers.get('Vary')).toBe('Origin')
+      expect(await response.json()).toEqual({
+        query: 'syn-private',
+        suggestions: [],
+        metadata: { total: 0, source: 'tag-data-too-large' },
+      })
+      expect(oversized.arrayBuffer).not.toHaveBeenCalled()
+      expect(oversized.body?.cancel).toHaveBeenCalledTimes(1)
+      // 警告は大きさだけを載せ、利用者のクエリを含めない
+      expect(captureWorkerMessage).toHaveBeenCalledTimes(1)
+      const [message, level, options] = vi.mocked(captureWorkerMessage).mock.calls[0]
+      expect(level).toBe('warning')
+      expect(options).toMatchObject({
+        tags: { endpoint_family: '/api/tags/autocomplete', upstream_kind: 'r2-size' },
+        contexts: { tag_dictionary: { size_bytes: MAX_BYTES + 1, max_bytes: MAX_BYTES } },
+      })
+      expect(JSON.stringify([message, options])).not.toContain('syn-private')
+      expect(warnings.join('\n')).not.toContain('syn-private')
+
+      // TTL の間は R2 を読み直さず、警告も重ねない
+      now.mockReturnValue(7_000_000 + TTL_MS - 1)
+      const again = await autocomplete('q=syn', bucket)
+      expect(((await again.json()) as { metadata: { source: string } }).metadata.source).toBe('tag-data-too-large')
+      expect(tagReads(bucket)).toBe(1)
+      expect(captureWorkerMessage).toHaveBeenCalledTimes(1)
+
+      now.mockReturnValue(7_000_000 + TTL_MS)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-small'])
+      expect(tagReads(bucket)).toBe(2)
+    })
+
+    it('keeps serving the existing index when a refresh finds an oversized dictionary, and checks again after the TTL', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      const now = vi.spyOn(Date, 'now').mockReturnValue(8_000_000)
+      const oversized = oversizedObject()
+      const bucket = sequenceBucket(accumulation(['syn-kept']), oversized, accumulation(['syn-next']))
+
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+      now.mockReturnValue(8_000_000 + TTL_MS)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+      await settle()
+
+      expect(oversized.arrayBuffer).not.toHaveBeenCalled()
+      expect(oversized.body?.cancel).toHaveBeenCalledTimes(1)
+      expect(captureWorkerMessage).toHaveBeenCalledTimes(1)
+      // 失敗時の 1 分後ではなく、通常の TTL 後に確かめ直す
+      now.mockReturnValue(8_000_000 + 2 * TTL_MS - 1)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+      await settle()
+      expect(tagReads(bucket)).toBe(2)
+
+      now.mockReturnValue(8_000_000 + 2 * TTL_MS)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-kept'])
+      await settle()
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-next'])
+      expect(tagReads(bucket)).toBe(3)
+    })
+
+    it('still loads a dictionary of exactly 4.5 MiB', async () => {
+      const object = tagObject(accumulation(['syn-limit']))
+      object.size = MAX_BYTES
+
+      expect(await suggestions('q=syn', sequenceBucket(object))).toEqual(['syn-limit'])
+      expect(captureWorkerMessage).not.toHaveBeenCalled()
+    })
+
+    it('compares the stored gzip size, not the expanded JSON, with the limit', async () => {
+      // 展開すると上限を超えるが、R2 に置いた gzip のままでは小さい辞書は読む
+      const expanded = JSON.stringify({ tags: ['syn-gzip'], padding: 'x'.repeat(MAX_BYTES + 1), metadata: {} })
+      const object = tagObject(gzipSync(expanded))
+      expect(object.size).toBeLessThan(MAX_BYTES)
+
+      expect(await suggestions('q=syn', sequenceBucket(object))).toEqual(['syn-gzip'])
+      expect(captureWorkerMessage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('conditional refresh', () => {
+    it('asks R2 only for a changed dictionary and does not re-read an unchanged one', async () => {
+      const now = vi.spyOn(Date, 'now').mockReturnValue(9_000_000)
+      const bucket = versionedBucket(accumulation(['syn-same']), 'synthetic-v1')
+
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-same'])
+      // 最初の読み込みは条件なし
+      expect(bucket.get.mock.calls[0]).toEqual([TAG_KEY])
+
+      now.mockReturnValue(9_000_000 + TTL_MS)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-same'])
+      await settle()
+
+      expect(bucket.get.mock.calls[1]).toEqual([TAG_KEY, { onlyIf: { etagDoesNotMatch: 'synthetic-v1' } }])
+      // 変わっていなければ本文を読まない（読んだ本文は最初の 1 つだけ）
+      expect(bucket.objects).toHaveLength(1)
+      expect(bucket.objects[0].arrayBuffer).toHaveBeenCalledTimes(1)
+
+      // 次に確かめるのは TTL 後
+      now.mockReturnValue(9_000_000 + 2 * TTL_MS - 1)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-same'])
+      await settle()
+      expect(tagReads(bucket)).toBe(2)
+      now.mockReturnValue(9_000_000 + 2 * TTL_MS)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-same'])
+      await settle()
+      expect(tagReads(bucket)).toBe(3)
+      expect(bucket.objects).toHaveLength(1)
+    })
+
+    it.each([
+      ['the new index', accumulation(['syn-new']), 200, 'public, max-age=300', ['syn-new']],
+      ['parse-error', '{"tags": [', 500, 'no-cache', []],
+    ])('releases the old index before reading a changed dictionary; a request during the load waits for %s', async (
+      _label,
+      nextBody,
+      status,
+      cacheControl,
+      expected,
+    ) => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      const now = vi.spyOn(Date, 'now').mockReturnValue(10_000_000)
+      const changed = deferredObject()
+      const bucket = sequenceBucket(accumulation(['syn-old']), changed.object)
+
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+      now.mockReturnValue(10_000_000 + TTL_MS)
+      // 読み直しを始めた要求は、まだ持っている古い索引で答える
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+      await changed.called
+
+      // 本文を読んでいる間は古い索引を持たないため、この要求は読み込みを待つ
+      let settled = false
+      const waiting = autocomplete('q=syn', bucket).then((response) => {
+        settled = true
+        return response
+      })
+      await flush()
+      expect(settled).toBe(false)
+
+      changed.finish(nextBody)
+      const response = await waiting
+      expect(response.status).toBe(status)
+      expect(response.headers.get('Cache-Control')).toBe(cacheControl)
+      expect(((await response.json()) as { suggestions: string[] }).suggestions).toEqual(expected)
+      expect(tagReads(bucket)).toBe(2)
+    })
+
+    it('answers tag-data-loading without caching when a changed dictionary takes longer than the wait', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      const now = vi.spyOn(Date, 'now').mockReturnValue(11_000_000)
+      const changed = deferredObject()
+      const bucket = sequenceBucket(accumulation(['syn-old']), changed.object)
+
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+      now.mockReturnValue(11_000_000 + TTL_MS)
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-old'])
+      await changed.called
+
+      let settled = false
+      const waiting = autocomplete('q=syn', bucket, { Origin: 'https://nico-rank.com' }).then((response) => {
+        settled = true
+        return response
+      })
+      await flush()
+      await vi.advanceTimersByTimeAsync(WAIT_MS - 1)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+
+      const response = await waiting
+      expect(response.status).toBe(200)
+      expect(response.headers.get('Cache-Control')).toBe('no-store')
+      expect(response.headers.get('Vary')).toBe('Origin')
+      expect(await response.json()).toEqual({ query: 'syn', suggestions: [], metadata: { total: 0, source: 'tag-data-loading' } })
+
+      // 読み込みは裏で続き、終われば新しい索引で答える（読み込みは 1 つだけ）
+      changed.finish(accumulation(['syn-new']))
+      await settle()
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-new'])
+      expect(tagReads(bucket)).toBe(2)
+    })
+
+    it('answers tag-data-loading when the first load takes longer than the wait', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      vi.spyOn(Date, 'now').mockReturnValue(12_000_000)
+      const first = deferredObject()
+      const bucket = sequenceBucket(first.object)
+
+      const waiting = autocomplete('q=syn', bucket)
+      await flush()
+      await vi.advanceTimersByTimeAsync(WAIT_MS)
+      const response = await waiting
+
+      expect(response.status).toBe(200)
+      expect(response.headers.get('Cache-Control')).toBe('no-store')
+      expect(((await response.json()) as { metadata: { source: string } }).metadata.source).toBe('tag-data-loading')
+
+      first.finish(accumulation(['syn-first']))
+      await settle()
+      expect(await suggestions('q=syn', bucket)).toEqual(['syn-first'])
+      expect(tagReads(bucket)).toBe(1)
+    })
   })
 
   it('waits a minute before retrying after a failed refresh, then picks up new data', async () => {
@@ -534,16 +947,28 @@ describe('green tag autocomplete', () => {
     expect(((await response.json()) as { metadata: { source: string } }).metadata.source).toBe('tag-data-not-found')
   })
 
-  it('answers parse-error 500 without caching when there is no index yet', async () => {
+  it('answers parse-error 500 without caching when there is no index yet, and does not read R2 again for a minute', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     vi.mocked(captureWorkerException).mockClear()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(13_000_000)
+    const bucket = sequenceBucket('not json', accumulation(['syn-fixed']))
 
-    const response = await autocomplete('q=syn', sequenceBucket('not json'))
+    const response = await autocomplete('q=syn', bucket)
 
     expect(response.status).toBe(500)
     expect(response.headers.get('Cache-Control')).toBe('no-cache')
     expect(((await response.json()) as { metadata: { source: string } }).metadata.source).toBe('parse-error')
     expect(captureWorkerException).toHaveBeenCalledTimes(1)
+
+    // 要求ごとに辞書全体を読み直さない
+    now.mockReturnValue(13_000_000 + RETRY_MS - 1)
+    expect((await autocomplete('q=syn', bucket)).status).toBe(500)
+    expect(tagReads(bucket)).toBe(1)
+    expect(captureWorkerException).toHaveBeenCalledTimes(1)
+
+    now.mockReturnValue(13_000_000 + RETRY_MS)
+    expect(await suggestions('q=syn', bucket)).toEqual(['syn-fixed'])
+    expect(tagReads(bucket)).toBe(2)
   })
 
   it('answers 500 for an R2 error when there is no index yet', async () => {

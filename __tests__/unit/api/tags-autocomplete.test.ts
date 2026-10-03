@@ -266,6 +266,27 @@ describe('GET /api/tags/autocomplete', () => {
       expect(body.metadata.source).toBe('tag-data-not-found')
       expect(fetchMock).toHaveBeenCalledTimes(2)
     })
+
+    // Green は索引の読み込み中・辞書が大きすぎるとき、一時的な空の答えを no-store で返す
+    it.each(['tag-data-loading', 'tag-data-too-large'])('does not keep a temporary %s answer and passes it on with no-store', async (source) => {
+      const temporary = Response.json(
+        { query: 'syn', suggestions: [], metadata: { total: 0, source } },
+        { headers: { 'Cache-Control': 'no-store' } },
+      )
+      fetchMock.mockResolvedValueOnce(temporary).mockResolvedValueOnce(upstreamAnswer(['syn-a']))
+
+      const first = await get('?q=syn')
+      const second = await get('?q=syn')
+
+      expect(first.response.status).toBe(200)
+      expect(first.response.headers.get('Cache-Control')).toBe('no-store')
+      expect(first.body.suggestions).toEqual([])
+      expect(first.body.metadata.source).toBe(source)
+      // 次の要求は上流へ行き、読み込みが終わった後の候補を返す
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(second.response.headers.get('Cache-Control')).toBe('public, max-age=300')
+      expect(second.body.suggestions).toEqual(['syn-a'])
+    })
   })
 
   describe('gateway failures', () => {
