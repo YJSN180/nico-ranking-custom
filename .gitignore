@@ -209,3 +209,4 @@ workers/video-stats-updater/wrangler-debug.toml
 !scripts/static-asset-routing.mjs
 !scripts/lib/static-asset-routing.mjs
 !scripts/lib/static-asset-probe.mjs
+!scripts/lib/gateway-check.mjs

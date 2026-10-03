@@ -90,6 +90,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 ### 公開後のアプリケーション検証とBot対策
 
 - GitHub runnerから公開URLへ送る機械的なGETは、Bot Fight Modeによりチャレンジされることがある。WAF/Bot対策の無効化やUser-Agent偽装で回避しない。
+- `deploy-worker.yml` のデプロイ後チェック（`scripts/check-admin-gateway.mjs --worker <名前>`）は、配備したGreen/Blueをゾーン外のworkers.devで直接確かめる（ランキングAPIのJSONと管理パスの401）。公開ドメインへの確認がゾーンのエッジでチャレンジされたとき（403・`cf-mitigated: challenge`・`x-router-version` 無し）だけは失敗にせず警告を出すので、公開側は未認証のブラウザか家庭回線で確かめる。ルーターはrouteを持つためworkers.devが無効で、直接は確かめられない。
 - `video-stats-updater` の `GET /verify-ranking` を既存 `WORKER_AUTH_KEY` で認証し、`PRODUCTION_GATEWAY` service binding経由で本番ルーター `nico-ranking-api-gateway` の固定ランキングURLを読む。ルーターの現在のBlue/Green選択を通し、世代・件数・収集日時をR2/公開artifactと照合する。
 - このエンドポイントは任意URL、クエリ、書込メソッドを受け付けず、呼出元の認証情報をルーターへ転送しない。認証失敗、不正JSON、空ランキング、fallback応答では検証を失敗させる。KV/R2への書込は行わない。
 - 検証対象はアプリケーションと配信データの整合性であり、公開ホストのWAF、DNS、ブラウザ到達性の成功を意味しない。検証結果の `publicEdgeVerification` に未検査であることを記録する。公開UI/APIのブラウザ確認は別途行う。
