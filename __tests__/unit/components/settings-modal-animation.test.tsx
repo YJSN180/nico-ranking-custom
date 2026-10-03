@@ -42,17 +42,17 @@ describe('SettingsModal アニメーション', () => {
     render(<SettingsModal isOpen={true} onClose={onClose} />)
     
     // NGリストタブに切り替え（エスケープされた空白文字を使用）
-    const ngListTab = screen.getByRole('button', { name: /🚫\s*NGリスト/ })
+    const ngListTab = screen.getByRole('button', { name: 'NGリスト' })
     fireEvent.click(ngListTab)
     
-    const content1 = screen.getByText('🚫 動画ID').closest('.content')
+    const content1 = screen.getByText('動画ID').closest('.content')
     const height1 = content1?.clientHeight || 0
     
     // テーマタブに切り替え（エスケープされた空白文字を使用）
-    const displayTab = screen.getByRole('button', { name: /🎨\s*テーマ/ })
+    const displayTab = screen.getByRole('button', { name: 'テーマ' })
     fireEvent.click(displayTab)
     
-    const content2 = screen.getByText('🎨 テーマ設定').closest('.content')
+    const content2 = screen.getByText('テーマ設定').closest('.content')
     const height2 = content2?.clientHeight || 0
     
     // 両方のタブでコンテンツエリアが存在することを確認

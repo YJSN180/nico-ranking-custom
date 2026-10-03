@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import styles from './time-range-filter.module.css'
+import controlStyles from './control.module.css'
+import { Clock, ChevronDown, Check } from 'lucide-react'
 
 export type TimeRangeValue = '24h' | '1w' | '1m' | '6m' | '1y' | 'all'
 
@@ -87,7 +89,7 @@ export function TimeRangeFilter({
   return (
     <div className={styles.container} ref={dropdownRef}>
       <button
-        className={`${styles.button} ${isFiltered ? styles.active : ''} ${disabled ? styles.disabled : ''}`}
+        className={`${styles.button} ${controlStyles.compact} ${controlStyles.withChevron} ${isFiltered ? styles.active : ''} ${disabled ? styles.disabled : ''}`}
         onClick={toggleDropdown}
         onKeyDown={handleKeyDown}
         aria-expanded={isOpen}
@@ -96,11 +98,11 @@ export function TimeRangeFilter({
         disabled={disabled}
         type="button"
       >
-        <span className={styles.icon}>⏰</span>
+        <Clock size={16} className={styles.icon} aria-hidden="true" />
         <span className={styles.label}>
           {currentOption.label}
         </span>
-        <span className={styles.arrow}>▼</span>
+        <ChevronDown size={16} className={controlStyles.chevron} aria-hidden="true" />
       </button>
       
       {isOpen && (
@@ -114,7 +116,7 @@ export function TimeRangeFilter({
               aria-selected={option.value === value}
               type="button"
             >
-              {option.value === value && <span className={styles.check}>✓</span>}
+              <Check size={16} className={styles.check} aria-hidden="true" />
               <span className={styles.optionLabel}>
                 {option.label}
               </span>

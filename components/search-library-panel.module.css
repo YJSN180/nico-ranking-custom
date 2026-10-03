@@ -1,0 +1,388 @@
+/* 履歴・保存のパネル。通常入力では検索欄の真下、条件で入力ではボタンの下（スマホは下から出るシート） */
+.panel {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--control-radius);
+  background: var(--surface-color);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-primary);
+  overflow: hidden;
+  animation: appear 140ms ease-out;
+}
+/* 削除などのあとにフォーカスを預かるだけの入れ物なので、枠は出さない */
+.panel:focus {
+  outline: none;
+}
+/* 条件で入力ではフォームの外に出るので、フォームの規則に頼らずリングを出す（角はボタンの丸みに沿う） */
+.panel :is(button, input):focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+/* 親（検索欄の行）はグリッド。1 列目（検索欄）の幅に合わせる（絶対配置では終わりの線を省くと行の端まで伸びる） */
+.dropdown {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: min(480px, 70dvh);
+}
+.popover {
+  top: calc(100% + 8px);
+  right: 0;
+  width: 440px;
+  max-height: min(520px, 75dvh);
+  border-radius: 12px;
+}
+.scrim {
+  display: none;
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+}
+.heading {
+  margin: 6px 10px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--text-secondary);
+}
+
+.saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 8px 8px;
+}
+.savedChip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  background: var(--surface-color);
+  font-size: 13px;
+}
+.panel .savedRun {
+  max-width: 220px;
+  padding: 4px 2px 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.panel .savedRemove {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.panel .savedRemove:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.panel .saveCta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--control-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color var(--control-motion),
+    color var(--control-motion);
+}
+.panel .saveCta:hover {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+
+.saveForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 8px;
+}
+.saveName {
+  flex: 1;
+  min-width: 0;
+}
+.panel .saveSubmit {
+  min-height: var(--control-height);
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--control-radius);
+  background: var(--control-accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.panel .saveSubmit:hover:not(:disabled) {
+  background: var(--control-accent-hover);
+}
+.panel .saveSubmit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: var(--control-radius);
+  transition: background-color var(--control-motion);
+}
+.row:hover {
+  background: var(--surface-secondary);
+}
+.panel .pick {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panel .iconButton {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.panel .iconButton:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.empty {
+  margin: 0;
+  padding: 10px 10px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 8px 4px 14px;
+  border-top: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.error {
+  color: var(--error-color);
+}
+.panel .undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--primary-color);
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.panel .undo:hover {
+  background: var(--surface-secondary);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 6px 14px;
+  border-top: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.switch input {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--control-border);
+  appearance: none;
+  cursor: pointer;
+  transition: background-color var(--control-motion);
+}
+.switch input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.switch input:checked {
+  background: var(--control-accent);
+}
+.switch input:checked::after {
+  transform: translateX(14px);
+}
+.panel .textButton {
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.panel .textButton:hover:not(:disabled) {
+  background: var(--surface-secondary);
+  color: var(--text-primary);
+}
+.panel .textButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 640px) {
+  .dropdown {
+    grid-column: 1 / -1;
+  }
+  .popover {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 82dvh;
+    border-radius: 16px 16px 0 0;
+    animation: sheet-up 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .popover .foot {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+  .scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 39;
+    background: rgba(15, 20, 35, 0.32);
+    animation: fade 200ms ease-out;
+  }
+}
+/* タッチ操作の端末（幅の広いタブレットも）では押しやすい大きさにする */
+@media (max-width: 640px), (pointer: coarse) {
+  .savedChip {
+    min-height: 40px;
+  }
+  .panel .savedRemove {
+    width: 36px;
+    height: 36px;
+  }
+  .panel .iconButton,
+  .panel .textButton,
+  .switch {
+    min-height: 44px;
+  }
+  .panel .iconButton {
+    width: 44px;
+    height: 44px;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .scrim,
+  .row,
+  .switch input,
+  .switch input::after,
+  .panel .saveCta {
+    animation: none;
+    transition: none;
+  }
+}

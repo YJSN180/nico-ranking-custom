@@ -1,0 +1,279 @@
+/* 検索欄が 3 段に広がった条件入力。寸法と色は検索欄・共通操作部品のトークンに合わせる */
+.editor {
+  --chip-bg: color-mix(in srgb, var(--primary-color) 10%, var(--surface-color));
+  --chip-hover: color-mix(
+    in srgb,
+    var(--primary-color) 16%,
+    var(--surface-color)
+  );
+  --lane-focus: color-mix(
+    in srgb,
+    var(--primary-color) 5%,
+    var(--surface-color)
+  );
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  background: var(--surface-color);
+  color: var(--text-primary);
+  transition:
+    border-color var(--control-motion),
+    box-shadow var(--control-motion);
+}
+:global([data-theme='dark']) .editor,
+:global([data-theme='darkblue']) .editor {
+  --chip-bg: color-mix(in srgb, var(--primary-color) 20%, var(--surface-color));
+  --chip-hover: color-mix(
+    in srgb,
+    var(--primary-color) 28%,
+    var(--surface-color)
+  );
+  --lane-focus: color-mix(
+    in srgb,
+    var(--primary-color) 8%,
+    var(--surface-color)
+  );
+}
+.editor:focus-within {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--primary-color) 16%, transparent);
+}
+/* 通常入力（1 行の検索欄）の高さから下へ広がる */
+.animateIn {
+  animation: unroll 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes unroll {
+  from {
+    clip-path: inset(0 0 calc(100% - 46px) 0 round var(--control-radius));
+  }
+  to {
+    clip-path: inset(0 0 0 0 round var(--control-radius));
+  }
+}
+
+.lane {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  align-items: center;
+  min-height: 48px;
+  padding: 6px 10px 6px 16px;
+  border-top: 1px solid var(--border-color);
+  transition: background-color var(--control-motion);
+}
+.lane:first-child {
+  border-top: 0;
+  border-radius: var(--control-radius) var(--control-radius) 0 0;
+}
+.lane:focus-within {
+  background: var(--lane-focus);
+}
+/* 欄どうしの組み合わせ方（カスタムランキングの「または」）。欄の区切り線の代わりに置く */
+.join {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.join::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+.join + .lane {
+  border-top: 0;
+}
+/* 読み上げだけに伝える文（同じ語が既にあることの知らせ） */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+.body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 32px;
+  padding-left: 10px;
+  border-radius: 6px;
+  background: var(--chip-bg);
+  font-size: 14px;
+  line-height: 20px;
+  animation: chip-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes chip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+.flash {
+  animation: flash 700ms ease-out;
+}
+@keyframes flash {
+  0%,
+  30% {
+    background: var(--chip-hover);
+    box-shadow: 0 0 0 2px var(--primary-color);
+  }
+}
+.word {
+  padding: 4px 0;
+  overflow-wrap: anywhere;
+}
+.editor .remove {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background-color var(--control-motion),
+    color var(--control-motion);
+}
+.editor .remove:hover {
+  background: var(--chip-hover);
+  color: var(--text-primary);
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 140px;
+  min-width: 120px;
+  color: var(--text-muted);
+}
+.addIcon {
+  flex: none;
+}
+.addField {
+  flex: 1;
+}
+/* 検索フォーム全体の入力欄の枠（.search-form input）を、ここでは欄の中の素の入力に戻す */
+.editor .add .input {
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+}
+.editor .add .input:focus-visible {
+  outline: none;
+}
+.editor .add .input::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 10px 10px 16px;
+  border-top: 1px solid var(--border-color);
+}
+.description {
+  flex: 1;
+  min-width: 0;
+  max-width: 64ch;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+  word-break: auto-phrase;
+  overflow-wrap: anywhere;
+}
+.warning {
+  color: var(--error-color);
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* タッチ操作の端末（幅の広いタブレットも）: 押しやすい大きさと、iOS がフォーカスで拡大しない 16px */
+@media (max-width: 640px), (pointer: coarse) {
+  .chip {
+    min-height: 36px;
+  }
+  .editor .remove {
+    width: 32px;
+    height: 32px;
+  }
+  .editor .add .input {
+    min-height: 36px;
+    font-size: 16px;
+  }
+}
+@media (max-width: 640px) {
+  .lane {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    padding: 10px 10px 10px 12px;
+  }
+  .foot {
+    flex-wrap: wrap;
+    padding: 12px;
+  }
+  .description {
+    flex-basis: 100%;
+  }
+  .actions {
+    width: 100%;
+  }
+  .actions > :last-child {
+    flex: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor,
+  .lane,
+  .chip,
+  .flash,
+  .animateIn,
+  .editor .remove {
+    animation: none;
+    transition: none;
+  }
+}

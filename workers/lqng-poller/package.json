@@ -1,0 +1,12 @@
+{
+  "name": "lqng-poller",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloudflare Worker: polls new uploads and maintains the low-quality content auto-NG verdict table",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "../../scripts/wrangler-with-token.sh dev -c workers/lqng-poller/wrangler.toml --test-scheduled",
+    "deploy": "../../scripts/wrangler-with-token.sh deploy -c workers/lqng-poller/wrangler.toml",
+    "tail": "../../scripts/wrangler-with-token.sh tail lqng-poller --format pretty"
+  }
+}

@@ -13,6 +13,7 @@
     "scripts/verify-r2-contract.ts",
     "scripts/check-data-pipeline-health.ts",
     "scripts/check-ranking-gateway.ts",
+    "scripts/lqng-backfill-driver.ts",
     "scripts/lib/r2-store.ts",
     "lib/pipeline/**/*.ts"
   ],

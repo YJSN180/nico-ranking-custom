@@ -9,6 +9,14 @@ import type { GenreItem } from '@/types/genre-order'
 import type { CustomRankingWithConditions } from '@/lib/storage/types'
 import type { ExtendedNGListBackupData } from '@/lib/storage/ng-backup-extended'
 import type { BackupData as MylistBackupData } from '@/lib/storage/backup'
+import {
+  loadSavedSearches,
+  mergeSavedSearches,
+  persistSavedSearches,
+  sanitizeSavedSearches,
+  SAVED_SEARCHES_VERSION,
+  type SavedSearch,
+} from '@/lib/search/saved-searches'
 import { 
   exportExtendedNGListData, 
   importExtendedNGListData,
@@ -18,6 +26,7 @@ import { exportMylistData, importMylistData, detectMylistConflicts } from '@/lib
 import { CustomRankingManager } from '@/lib/storage/custom-rankings'
 import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/lib/storage/custom-ranking-backup-schema'
 import styles from './genre-order-backup.module.css'
+import { showToast } from '@/lib/toast'
 import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
 import { INVALID_GENRE_ORDER_MESSAGE, isValidGenreOrder } from '@/lib/storage/genre-order-validation'
 
@@ -31,6 +40,8 @@ interface UnifiedBackupData {
     genreOrder?: GenreItem[]
     customRankings?: CustomRankingWithConditions[]
     mylists?: MylistBackupData
+    // optionalセクションのため、旧バージョンのインポートでは単に無視される（前方互換）
+    savedSearches?: { version: number; searches: SavedSearch[] }
   }
 }
 
@@ -51,6 +62,7 @@ export function UnifiedBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
+  // needsReload: 一部だけ取り込めた（反映には再読み込みが要る）ときに「再読み込み」ボタンを出す
   const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string, needsReload?: boolean } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<UnifiedBackupData | null>(null)
   const [availableDataTypes, setAvailableDataTypes] = useState<string[]>([])
@@ -62,7 +74,7 @@ export function UnifiedBackup() {
       const data: UnifiedBackupData = {
         version: 1,
         exportDate: new Date().toISOString(),
-        appVersion: '1.0.0', // TODO: 実際のアプリバージョンを取得
+        appVersion: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
         data: {}
       }
       
@@ -104,7 +116,17 @@ export function UnifiedBackup() {
         // マイリストのエクスポートに失敗した場合でも続行
         failedSections.push('マイリスト')
       }
-      
+
+      try {
+        const savedSearches = loadSavedSearches()
+        if (savedSearches.length > 0) {
+          data.data.savedSearches = { version: SAVED_SEARCHES_VERSION, searches: savedSearches }
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to export saved searches:', error)
+      }
+
       // エクスポート可能なデータがあるか確認
       if (Object.keys(data.data).length === 0) {
         throw new Error('エクスポート可能なデータがありません')
@@ -126,19 +148,20 @@ export function UnifiedBackup() {
       if (data.data.genreOrder) exportedTypes.push('ジャンル並び替え')
       if (data.data.customRankings) exportedTypes.push('カスタムランキング')
       if (data.data.mylists) exportedTypes.push('マイリスト')
+      if (data.data.savedSearches) exportedTypes.push('保存した検索条件')
       
       // eslint-disable-next-line no-console
       console.log(`エクスポート完了: ${exportedTypes.join(', ')}`)
       setExportConfirmOpen(false)
 
       if (failedSections.length > 0) {
-        alert(`${failedSections.join('・')}を書き出せませんでした。保存したファイルには含まれていません`)
+        showToast(`${failedSections.join('・')}を書き出せませんでした。保存したファイルには含まれていません`, 'error')
       }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to export unified backup:', error)
       const errorMessage = error instanceof Error ? error.message : '不明なエラー'
-      alert(`統合バックアップのエクスポートに失敗しました: ${errorMessage}`)
+      showToast(`統合バックアップのエクスポートに失敗しました: ${errorMessage}`, 'error')
       
       // 詳細なエラー情報をコンソールに出力
       if (error instanceof Error) {
@@ -185,7 +208,7 @@ export function UnifiedBackup() {
           data = {
             version: 1,
             exportDate: new Date().toISOString(),
-            appVersion: '1.0.0',
+            appVersion: process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0',
             data: {}
           }
           
@@ -215,6 +238,9 @@ export function UnifiedBackup() {
         if (data.data.genreOrder) available.push('ジャンル並び替え')
         if (data.data.customRankings) available.push('カスタムランキング')
         if (data.data.mylists) available.push('マイリスト')
+        if (data.data.savedSearches && sanitizeSavedSearches(data.data.savedSearches).length > 0) {
+          available.push('保存した検索条件')
+        }
         
         if (available.length === 0) {
           throw new Error('インポート可能なデータが含まれていません')
@@ -240,7 +266,7 @@ export function UnifiedBackup() {
       setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
       setIsImporting(false)
     }
-
+    
     reader.readAsText(file)
     event.target.value = ''
   }
@@ -291,7 +317,7 @@ export function UnifiedBackup() {
           if (!importable) {
             throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
           }
-
+          
           const dbManager = new DBManager()
           await dbManager.init()
           const rankingManager = new CustomRankingManager(dbManager)
@@ -338,6 +364,20 @@ export function UnifiedBackup() {
         }
       }
 
+      // 保存した検索条件のインポート（同名はインポート側で上書き）
+      if (pendingImportData.data.savedSearches) {
+        try {
+          const imported = sanitizeSavedSearches(pendingImportData.data.savedSearches)
+          if (imported.length > 0) {
+            const { merged, importedCount } = mergeSavedSearches(loadSavedSearches(), imported)
+            persistSavedSearches(merged)
+            results.push(`✅ 保存した検索条件: ${importedCount}件インポート`)
+          }
+        } catch (error) {
+          errors.push(`❌ 保存した検索条件: ${error instanceof Error ? error.message : 'エラー'}`)
+        }
+      }
+
       // 結果メッセージの設定
       if (errors.length === 0) {
         setImportMessage({ 
@@ -347,8 +387,8 @@ export function UnifiedBackup() {
       } else if (results.length > 0) {
         setImportMessage({ 
           type: 'error', 
-          needsReload: true,
-          text: `一部インポート完了:\n${results.join('\n')}\n\nエラー:\n${errors.join('\n')}` 
+          text: `一部インポート完了:\n${results.join('\n')}\n\nエラー:\n${errors.join('\n')}`,
+          needsReload: true
         })
       } else {
         setImportMessage({ 
@@ -360,13 +400,13 @@ export function UnifiedBackup() {
       setImportConfirmOpen(false)
       setPendingImportData(null)
       
-      // 失敗内容は再読み込みで消さず、利用者が確認できるよう残す
+      // 全部成功したときだけ自動で再読み込みする（トースト+自動リロード、フェーズ5-4）。
+      // 一部が失敗したときは内容を読めるよう自動では再読み込みせず、「再読み込み」ボタンを出す
       if (results.length > 0 && errors.length === 0) {
+        showToast('インポートしました。反映のため再読み込みします…', 'success')
         setTimeout(() => {
-          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-            window.location.reload()
-          }
-        }, 1500)
+          window.location.reload()
+        }, 1800)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -496,7 +536,7 @@ export function UnifiedBackup() {
             </div>
 
             <p className={styles.dialogNote}>
-              インポート後、変更を反映するにはページのリロードが必要です。
+              インポート後、反映のため自動的に再読み込みされます。
             </p>
 
             <div className={styles.dialogActions}>

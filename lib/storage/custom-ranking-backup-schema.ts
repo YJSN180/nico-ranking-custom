@@ -19,11 +19,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function isNonBlankString(value: unknown): value is string {
+export function isNonBlankString(value: unknown): value is string {
   return typeof value === 'string' && value.trim() !== ''
 }
 
-function isBaseGenre(value: unknown): value is RankingGenre {
+export function isBaseGenre(value: unknown): value is RankingGenre {
   return typeof value === 'string' && value !== 'custom' && Object.prototype.hasOwnProperty.call(GENRE_LABELS, value)
 }
 
@@ -33,6 +33,29 @@ function isOperator(value: unknown): value is TagOperator {
 
 function isTagType(value: unknown): value is CustomRankingConditionIndexedDB['tagType'] {
   return typeof value === 'string' && TAG_TYPES.includes(value)
+}
+
+export type StorableCondition = Omit<CustomRankingConditionIndexedDB, 'id' | 'rankingId'>
+
+/**
+ * 保存する条件を確かめ、保存する値だけを持つ新しいオブジェクトにする（余分な値や複製できない値を持ち込まない）。
+ * 文字列でない・空白だけのタグ、未知の演算子・タグ種別が 1 件でもあれば null。順番は並び順どおりに振り直す
+ */
+export function sanitizeConditionsForStorage(value: unknown): StorableCondition[] | null {
+  if (!Array.isArray(value)) return null
+  const conditions: StorableCondition[] = []
+  for (const [index, condition] of value.entries()) {
+    if (
+      !isRecord(condition) ||
+      !isNonBlankString(condition.tag) ||
+      !isOperator(condition.operator) ||
+      !isTagType(condition.tagType)
+    ) {
+      return null
+    }
+    conditions.push({ tag: condition.tag, operator: condition.operator, tagType: condition.tagType, orderIndex: index })
+  }
+  return conditions
 }
 
 /**
@@ -55,18 +78,8 @@ export function parseCustomRankingsForImport(value: unknown): ImportableCustomRa
       return null
     }
 
-    const conditions: ImportableCustomRanking['conditions'] = []
-    for (const [index, condition] of raw.conditions.entries()) {
-      if (
-        !isRecord(condition) ||
-        !isNonBlankString(condition.tag) ||
-        !isOperator(condition.operator) ||
-        !isTagType(condition.tagType)
-      ) {
-        return null
-      }
-      conditions.push({ tag: condition.tag, operator: condition.operator, tagType: condition.tagType, orderIndex: index })
-    }
+    const conditions = sanitizeConditionsForStorage(raw.conditions)
+    if (!conditions) return null
 
     rankings.push({ title: raw.title, baseGenre: raw.baseGenre, conditions })
   }

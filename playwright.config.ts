@@ -47,6 +47,13 @@ export default defineConfig({
       testMatch: ['tests/e2e/perf-measure.spec.ts'],
       testIgnore: ['**/mobile.spec.ts'],
     },
+    // 検索ページ（API はブラウザ側で応答するので上流を呼ばない）。
+    // CI は perf-measure.spec.ts を指定して実行するため含まれない。`npx playwright test --project=search` で実行する
+    {
+      name: 'search',
+      use: { ...devices['Desktop Chrome'] },
+      testMatch: ['tests/e2e/search.spec.ts'],
+    },
     // WebKit除外 (ユーザー指示により失敗が予想されるため)
     // {
     //   name: 'webkit',

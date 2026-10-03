@@ -110,7 +110,7 @@ describe('MylistBackup', () => {
     })
   })
 
-  it('個別バックアップをインポートして成功表示とリロード確認を出す', async () => {
+  it('個別バックアップをインポートして成功表示と自動リロードを行う', async () => {
     const file = new File([JSON.stringify(baseBackupPayload)], 'backup.json', {
       type: 'application/json'
     })
@@ -140,15 +140,14 @@ describe('MylistBackup', () => {
       expect(screen.getByTestId('import-success-message')).toHaveTextContent('✅ インポート完了')
     })
 
+    // フェーズ5-4: confirmは廃止され、トースト表示ののち自動でリロードされる
     await waitFor(
       () => {
-        expect(mockConfirm).toHaveBeenCalledWith(
-          'インポートが完了しました。ページをリロードして変更を反映しますか？'
-        )
         expect(mockReload).toHaveBeenCalled()
       },
-      { timeout: 2500 }
+      { timeout: 3000 }
     )
+    expect(mockConfirm).not.toHaveBeenCalled()
 
     expect((fileInput as HTMLInputElement).value).toBe('')
   })

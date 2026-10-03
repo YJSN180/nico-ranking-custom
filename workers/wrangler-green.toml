@@ -20,6 +20,24 @@ namespace_id = "1001"
 # 20 requests per minute (1分間に20リクエスト)
 simple = { limit = 20, period = 60 }
 
+# /api/search・/api/search/owners・/api/search/realtime-tags 用（IP×エンドポイントごと）
+# 検索 1 ページで owners は最大 11 回、realtime-tags は最大 5 回呼ばれるため、20/分より緩くする
+# namespace_id はアカウント内で一意にする（1001 はランキング・サムネイル用）
+[[unsafe.bindings]]
+name = "SEARCH_RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }
+
 [vars]
 # 本番エイリアス（ルーターと同じ）。ハッシュ付きのデプロイURLは古いビルドに固定されるため使わない
 VERCEL_DEPLOYMENT_URL = "https://nico-ranking-custom-yjsns-projects.vercel.app"
+
+# Search-only global admission counter. Missing/disabled search:control keeps search off.
+[[durable_objects.bindings]]
+name = "SEARCH_BUDGET"
+class_name = "SearchBudget"
+
+[[migrations]]
+tag = "search-budget-v1"
+new_sqlite_classes = ["SearchBudget"]

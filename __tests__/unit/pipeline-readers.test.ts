@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../../workers/search-budget', () => ({ SearchBudget: class {} }))
 import { gzipSync } from 'node:zlib'
 vi.mock('../../workers/sentry.js', () => ({
   Sentry: { withSentry: (_options: unknown, handler: unknown) => handler },
@@ -7,15 +8,19 @@ vi.mock('../../workers/sentry.js', () => ({
   captureWorkerException: vi.fn(),
   sanitizeUrlForSentry: vi.fn(),
 }))
-vi.mock('../../lib/scraper', () => ({ scrapeRankingPage: vi.fn() }))
+// 人気タグの小キー（POPULAR_TAGS_LATEST）が未生成でも、ゲートウェイ経路だけで動くことを検証する
+vi.mock('../../lib/simple-kv', () => ({
+  kv: { get: vi.fn(async () => null), getStrict: vi.fn(async () => null) },
+}))
 import worker from '../../workers/api-gateway-green-20250726'
 import { getPopularTags } from '../../lib/popular-tags'
-import { scrapeRankingPage } from '../../lib/scraper'
 const fetchWorker = worker.fetch as unknown as (
   request: Request,
   env: unknown,
   ctx: { waitUntil: unknown },
 ) => Promise<Response>
+
+const GREEN_GATEWAY = 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -24,22 +29,20 @@ afterEach(() => {
 })
 
 describe('active generation readers', () => {
-  it('protected previews use their explicitly configured SSR gateway for popular tags', async () => {
-    vi.stubEnv('VERCEL_ENV', 'preview')
-    vi.stubEnv('VERCEL_URL', 'protected-preview.vercel.app')
-    vi.stubEnv('RANKING_SSR_GATEWAY_URL', 'https://ranking.example.test')
-    const fetch = vi.fn(async () => Response.json({ popularTags: ['tag'] }))
-    vi.stubGlobal('fetch', fetch)
-    expect(await getPopularTags('game', 'hour')).toEqual(['tag'])
-    expect(fetch).toHaveBeenCalledWith(new URL('https://ranking.example.test/api/ranking?genre=game&period=hour'), expect.any(Object))
-  })
-
-  it.each([undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'])(
-    'production SSR avoids the protected deployment URL with gateway %s', async (gateway) => {
-    vi.stubEnv('VERCEL_ENV', 'production')
+  // プレビューは RANKING_SSR_GATEWAY_URL に関わらず公開の Green Worker、それ以外は明示したゲートウェイ → 本番は nico-rank.com
+  it.each([
+    ['preview', undefined, GREEN_GATEWAY],
+    ['preview', GREEN_GATEWAY, GREEN_GATEWAY],
+    ['preview', 'https://restricted-gateway.example', GREEN_GATEWAY],
+    ['production', undefined, 'https://nico-rank.com'],
+    ['production', GREEN_GATEWAY, GREEN_GATEWAY],
+    ['production', 'https://ranking.example.test', 'https://ranking.example.test'],
+    ['development', 'https://ranking.example.test', 'https://ranking.example.test'],
+  ])(
+    '%s SSR avoids the protected deployment URL with gateway %s', async (environment, gateway, expectedOrigin) => {
+    vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('VERCEL_URL', 'protected-production.vercel.app')
     vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)
-    const expectedOrigin = gateway || 'https://nico-rank.com'
     const fetch = vi.fn(async (url: unknown) => {
       if (new URL(String(url)).origin !== expectedOrigin) {
         return new Response('Authentication required', { status: 401 })
@@ -133,7 +136,8 @@ describe('active generation readers', () => {
         },
       }),
     )
-    expect(scrapeRankingPage).not.toHaveBeenCalled()
+    // ゲートウェイ以外（nvapi など）へは問い合わせない
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it.each(['preview.vercel.app', 'https://preview.vercel.app'])(
@@ -149,7 +153,8 @@ describe('active generation readers', () => {
         new URL('https://preview.vercel.app/api/ranking?genre=game&period=hour'),
         expect.any(Object),
       )
-      expect(scrapeRankingPage).not.toHaveBeenCalled()
+      // ゲートウェイ以外（nvapi など）へは問い合わせない
+      expect(fetch).toHaveBeenCalledTimes(1)
     },
   )
 })

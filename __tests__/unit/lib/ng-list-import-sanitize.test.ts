@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
-import { importExtendedNGListData, type ExtendedNGListBackupData } from '@/lib/storage/ng-backup-extended'
+import { exportExtendedNGListData, importExtendedNGListData, type ExtendedNGListBackupData } from '@/lib/storage/ng-backup-extended'
 import { filterWithExtendedNGList } from '@/lib/filter-with-extended-ng-list'
 import { useUserNGListExtended } from '@/hooks/use-user-ng-list-extended'
 import type { ExtendedUserNGList } from '@/types/ng-list-extended'
@@ -134,5 +134,27 @@ describe('保存済みの NG リストの読み込み', () => {
 
     expect(() => filterWithExtendedNGList(items, result.current.ngList)).not.toThrow()
     expect(filterWithExtendedNGList(items, result.current.ngList).filteredItems).toHaveLength(2)
+  })
+})
+
+
+describe('退会済み投稿者の表示設定バックアップ', () => {
+  beforeEach(() => localStorage.clear())
+  it('設定のみでも書き出し・復元でき、NG件数には加算しない', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...emptyNGList(), hideDeletedAuthors: true }))
+    const backup = exportExtendedNGListData()
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(emptyNGList()))
+    await importExtendedNGListData(backup, 'overwrite')
+    expect(storedNGList().hideDeletedAuthors).toBe(true)
+    expect(storedNGList().totalCount).toBe(0)
+  })
+  it('旧データのマージは現在値を保持、上書きはオフ、文字列trueは有効化しない', async () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...emptyNGList(), hideDeletedAuthors: true }))
+    await importExtendedNGListData(backupOf(emptyNGList()), 'merge')
+    expect(storedNGList().hideDeletedAuthors).toBe(true)
+    await importExtendedNGListData(backupOf(emptyNGList()), 'overwrite')
+    expect(storedNGList().hideDeletedAuthors).toBe(false)
+    await importExtendedNGListData(backupOf({ ...emptyNGList(), hideDeletedAuthors: 'true' }), 'merge')
+    expect(storedNGList().hideDeletedAuthors).toBe(false)
   })
 })

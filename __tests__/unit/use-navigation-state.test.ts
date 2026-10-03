@@ -76,8 +76,10 @@ describe('useNavigationState', () => {
     vi.useRealTimers()
   })
 
-  it('PWA でないときは状態を保存しない', () => {
+  it('PWA でなくても状態を保存する（フェーズ3-3: 通常ブラウザの「戻る」にも適用）', () => {
     isPWASpy.mockReturnValue(false)
+    mockPathname.mockReturnValue('/test-path')
+    mockSearchParams.mockReturnValue(new URLSearchParams('param=value'))
 
     const { result } = renderHook(() => useNavigationState())
 
@@ -85,7 +87,10 @@ describe('useNavigationState', () => {
       result.current.saveState()
     })
 
-    expect(sessionStorageSetItem).not.toHaveBeenCalled()
+    expect(sessionStorageSetItem).toHaveBeenCalledWith(
+      'navigation-state',
+      expect.stringContaining('"pathname":"/test-path"')
+    )
   })
 
   it('PWA では現在状態を保存する', () => {

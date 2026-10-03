@@ -1,9 +1,12 @@
 'use client'
 
+import { Folder } from 'lucide-react'
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import styles from './mylist-modal.module.css'
 import type { Mylist } from '@/lib/storage/types'
 import Link from 'next/link'
+import { isImeComposing } from '@/lib/ime'
 
 interface MylistModalProps {
   mylists: Mylist[]
@@ -52,7 +55,10 @@ export function MylistModal({
     e.stopPropagation()
   }
 
-  return (
+  // Portalでbody直下に描画する。呼び出し元が backdrop-filter / transform を持つ
+  // 要素（例: 3点メニューのドロップダウン）の中でも、position: fixed が
+  // その要素基準に化けず、常にビューポート中央に表示されるようにするため
+  return createPortal(
     <>
       <div 
         className={styles.overlay} 
@@ -117,7 +123,7 @@ export function MylistModal({
             className={styles.navigationLink}
             onClick={(e) => e.stopPropagation()}
           >
-            📁 マイリスト一覧に移動
+            <Folder size={18} strokeWidth={1.5} fill="currentColor" style={{ color: 'var(--stat-mylists-color)', verticalAlign: 'middle' }} aria-hidden="true" /> マイリスト一覧に移動
           </Link>
         </div>
 
@@ -152,7 +158,7 @@ export function MylistModal({
                   data-testid="mylist-item-checkbox"
                 >
                   <div className={styles.mylistIcon}>
-                    {isSelected ? '✓' : '📁'}
+                    {isSelected ? '✓' : <Folder size={18} strokeWidth={1.5} fill="currentColor" style={{ color: 'var(--stat-mylists-color)' }} aria-hidden="true" />}
                   </div>
                   <div className={styles.mylistInfo}>
                     <div className={styles.mylistName}>
@@ -194,7 +200,8 @@ export function MylistModal({
                 value={newMylistName}
                 onChange={(e) => setNewMylistName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  // 日本語の変換を確定する Enter では作成しない
+                  if (e.key === 'Enter' && !e.shiftKey && !isImeComposing(e)) {
                     e.preventDefault()
                     handleCreateMylist()
                   }
@@ -232,6 +239,7 @@ export function MylistModal({
           )}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

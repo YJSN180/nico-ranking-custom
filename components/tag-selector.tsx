@@ -1,11 +1,18 @@
 'use client'
 
+import { showToast } from '@/lib/toast'
 import { useState, useRef, useCallback } from 'react'
 import type { RankingConfig, RankingGenre } from '@/types/ranking-config'
 import type { CustomRanking, CustomRankingFormState } from '@/types/custom-ranking'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import { useCustomRankingsOrder } from '@/hooks/use-custom-rankings-order'
-import { CustomRankingModal } from './custom-ranking-modal'
+import dynamic from 'next/dynamic'
+
+// カスタムランキング作成モーダルは開くまで不要なので初期バンドルから外す
+const CustomRankingModal = dynamic(
+  () => import('./custom-ranking-modal').then((mod) => ({ default: mod.CustomRankingModal })),
+  { ssr: false, loading: () => null }
+)
 import { DeleteConfirmationModal } from './delete-confirmation-modal'
 import { CustomRankingOrder } from './custom-ranking-order'
 import styles from './selectors.module.css'
@@ -98,81 +105,49 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
     onConfigChange(newConfig)
   }
 
-  const handleCreateCustomRanking = async (data: CustomRankingFormState) => {
+  /**
+   * 作成・編集の保存。保存できたら true を返し、作成画面を閉じてから表示の準備に進む。
+   * 保存できなかったら false（作成画面は開いたまま入力を残し、画面の中で知らせる）
+   */
+  const handleSaveRanking = async (data: CustomRankingFormState): Promise<boolean> => {
+    const baseGenre = data.baseGenre
+    if (!baseGenre) return false
+    const editing = editingRanking
+    const conditions = data.conditions.map((condition, index) => ({
+      ...condition,
+      orderIndex: index
+    }))
+    const savedId = editing
+      ? (await updateRanking(editing.id, { title: data.title, baseGenre, conditions })) ? editing.id : null
+      : await createRanking({ title: data.title, baseGenre, conditions })
+    if (!savedId) return false
+
+    if (editing) setEditingRanking(null)
+    void showSavedRanking(savedId, baseGenre, data)
+    return true
+  }
+
+  // 保存したランキングのデータを用意して表示する（保存とは別に失敗し得る）
+  const showSavedRanking = async (id: string, baseGenre: RankingGenre, data: CustomRankingFormState) => {
     try {
-      // ローディング表示用（オプション）
-      // eslint-disable-next-line no-console
-      console.log('[DEBUG] Creating custom ranking...')
-      
-      const newRanking = await createRanking({
-        title: data.title,
-        baseGenre: data.baseGenre,
-        conditions: data.conditions.map((condition, index) => ({
-          ...condition,
-          orderIndex: index
-        }))
-      })
-      
-      
-      // データの準備（フェッチとフィルタリング）
-      if (onCreateCustomRankingWithFilter && data.baseGenre) {
-        await onCreateCustomRankingWithFilter(newRanking, data.baseGenre, data.conditions, data.title)
+      if (onCreateCustomRankingWithFilter) {
+        await onCreateCustomRankingWithFilter(id, baseGenre, data.conditions, data.title)
       }
-      
       // React Routerを使用して内部遷移（リロードを避ける）
-      const newConfig = {
+      onConfigChange({
         ...config,
         genre: 'custom' as RankingGenre,
-        tag: `custom:${newRanking}`
-      }
-      onConfigChange(newConfig)
+        tag: `custom:${id}`
+      })
     } catch (error) {
-      console.error('[ERROR] Failed to create custom ranking:', error)
-      // エラー時は通常のフローで処理
-      alert('カスタムランキングの作成に失敗しました。もう一度お試しください。')
+      console.error('[ERROR] Failed to prepare saved custom ranking:', error)
+      showToast('保存しましたが、ランキングを表示できませんでした。一覧から選び直してください。', 'error')
     }
   }
 
   const handleEditRanking = (ranking: CustomRanking) => {
     setEditingRanking(ranking)
     setShowCustomModal(true)
-  }
-
-  const handleUpdateRanking = async (data: CustomRankingFormState) => {
-    if (editingRanking) {
-      try {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Updating custom ranking...')
-        
-        await updateRanking(editingRanking.id, {
-          title: data.title,
-          baseGenre: data.baseGenre,
-          conditions: data.conditions.map((condition, index) => ({
-            ...condition,
-            orderIndex: index
-          }))
-        })
-        setEditingRanking(null)
-        
-        // データの準備（フェッチとフィルタリング）
-        if (onCreateCustomRankingWithFilter && data.baseGenre) {
-          await onCreateCustomRankingWithFilter(editingRanking.id, data.baseGenre, data.conditions, data.title)
-        }
-        
-        // React Routerを使用して内部遷移（リロードを避ける）
-        const newConfig = {
-          ...config,
-          genre: 'custom' as RankingGenre,
-          tag: `custom:${editingRanking.id}`
-        }
-        onConfigChange(newConfig)
-      } catch (error) {
-        console.error('[ERROR] Failed to update custom ranking:', error)
-        alert('カスタムランキングの更新に失敗しました。もう一度お試しください。')
-      }
-    } else {
-      handleCreateCustomRanking(data)
-    }
   }
 
   const handleDeleteRanking = (ranking: CustomRanking) => {
@@ -295,25 +270,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             onReorderModeChange={setIsReorderingMode}
           />
           
-          {!isReorderingMode && config.tag && config.tag.startsWith('custom:') && (
-            <div style={{ marginTop: '24px', marginBottom: '16px' }}>
-              <span className={styles.selectedTag}>
-                選択中: {(() => {
-                  const customId = config.tag?.replace('custom:', '') || ''
-                  
-                  // まずrankings配列から検索
-                  const foundRanking = rankings.find(r => r.id === customId)
-                  
-                  // rankings配列で見つからない場合、selectedRankingを確認
-                  // (作成直後はselectedRankingに即座に反映されるため)
-                  const effectiveRanking = foundRanking || (selectedRanking?.id === customId ? selectedRanking : null)
-                  
-                  return effectiveRanking?.title || config.tag
-                })()}
-              </span>
-            </div>
-          )}
-
           {!isReorderingMode && (
             <div className={styles.scrollContainer}>
               <div 
@@ -339,6 +295,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
                   <button
                     key={ranking.id}
                     onClick={() => handleCustomRankingSelect(ranking.id)}
+                    aria-pressed={config.tag === `custom:${ranking.id}`}
+                    title={ranking.title}
                     className={`${styles.button} ${styles.tagButton} ${
                       config.tag === `custom:${ranking.id}` ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''
                     }`}
@@ -439,16 +397,18 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           </div>
         )}
         
-        {/* カスタムランキング作成・編集モーダル */}
-        <CustomRankingModal
-          isOpen={showCustomModal}
-          onClose={handleModalClose}
-          onSave={handleUpdateRanking}
-          existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
-          editingRanking={editingRanking}
-          onPrefetchData={onPrefetchData}
-          currentPeriod={currentPeriod}
-        />
+        {/* カスタムランキング作成・編集モーダル（開いた時だけマウント） */}
+        {showCustomModal && (
+          <CustomRankingModal
+            isOpen={showCustomModal}
+            onClose={handleModalClose}
+            onSave={handleSaveRanking}
+            existingTitles={rankings.filter(r => r.id !== editingRanking?.id).map(r => r.title)}
+            editingRanking={editingRanking}
+            onPrefetchData={onPrefetchData}
+            currentPeriod={currentPeriod}
+          />
+        )}
         
         {/* 削除確認モーダル */}
         <DeleteConfirmationModal
@@ -483,14 +443,6 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
         )}
       </div>
       
-      {config.tag && (
-        <div style={{ marginBottom: '12px' }}>
-          <span className={styles.selectedTag}>
-            選択中: {config.tag}
-          </span>
-        </div>
-      )}
-
       <div className={styles.scrollContainer}>
         <div 
           ref={scrollToSelectedTag}
@@ -499,6 +451,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
           {/* 「すべて」タグを最初に表示 */}
           <button
             onClick={() => handleTagSelect('すべて')}
+            aria-pressed={!config.tag}
             className={`${styles.button} ${styles.tagButton} ${!config.tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
           >
             すべて
@@ -509,6 +462,8 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
             <button
               key={tag}
               onClick={() => handleTagSelect(tag)}
+              aria-pressed={config.tag === tag}
+              title={tag}
               className={`${styles.button} ${styles.tagButton} ${config.tag === tag ? `${styles.buttonSelected} ${styles.tagButtonSelected}` : ''}`}
             >
               {tag}

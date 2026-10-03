@@ -23,12 +23,24 @@ export function formatNumber(num: number): string {
   return num.toLocaleString()
 }
 
-// モバイル用の数値フォーマット
+// ランキング行の統計の数値フォーマット（PC はこの書式。main と同じ: 12.3万 / 12345.6万）
 export function formatNumberMobile(num: number): string {
   if (num >= 10000) {
     return `${Math.floor(num / 1000) / 10}万`
   }
   return num.toLocaleString()
+}
+
+// モバイル（幅 640px 以下）の統計用の圧縮表記。統計行を 1 行に収めるため、
+// 大きい数値ほど桁を圧縮する（10万以上は小数省略: 33.3万 → 33万、1億以上は億表記）
+export function formatNumberCompact(num: number): string {
+  if (num >= 100000000) {
+    return `${Math.floor(num / 10000000) / 10}億`
+  }
+  if (num >= 100000) {
+    return `${Math.round(num / 10000)}万`
+  }
+  return formatNumberMobile(num)
 }
 
 // 時間のフォーマット（秒数から時:分:秒形式）

@@ -11,7 +11,7 @@ import type { NGList } from '@/types/ng-list'
  * @returns ハッシュ値（数値）
  */
 export function generateNGListHash(ngList: NGList): number {
-  let hash = 0
+  let hash = ngList.hideDeletedAuthors === true ? 1 : 0
   
   // 各配列のアイテム数をハッシュに含める
   hash = hash * 31 + (ngList.videoIds?.length || 0)

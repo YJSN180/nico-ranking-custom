@@ -164,280 +164,60 @@
   font-size: 0.875rem;
 }
 
-/* Step 2: タグ条件設定 */
-.currentConditions {
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
-}
-
-.currentConditions h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.conditionDescription {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: var(--surface-color);
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
-.conditionsList {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.conditionGroup {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.operatorLabel {
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 40px;
-}
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.tag {
+/* Step 2: タグ条件設定（欄は検索の「条件で入力」と共通。ここではタグ種別の選択だけ） */
+.scope {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  font-size: 0.875rem;
-}
-
-.removeTag {
-  background: none;
-  border: none;
-  cursor: pointer;
+  gap: 2px;
+  height: 24px;
+  margin-left: 6px;
+  padding: 0 4px 0 6px;
+  border-radius: 4px;
   color: var(--text-secondary);
-  font-size: 16px;
-  padding: 0;
-  margin-left: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  transition: background-color 0.2s;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color var(--control-motion);
 }
-
-.removeTag:hover {
-  background: var(--bg-hover);
+.scope:hover {
+  background: var(--surface-hover);
 }
-
-.tagInputSection h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
+.scope:has(select:focus-visible) {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 1px;
 }
-
-.helpText {
-  margin: -8px 0 12px 0;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.tagInputWrapper {
-  position: relative;
-  margin-bottom: 16px;
-}
-
-.tagInput {
-  width: 100%;
-  padding: 10px 12px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 14px;
-  color: var(--text-primary);
-  transition: border-color 0.2s;
-}
-
-.tagInput:focus {
-  outline: none;
-  border-color: var(--primary-color);
-}
-
-.suggestions {
+/* 表示の上に重ねた透明な選択欄。16px は iOS がフォーカスで画面を拡大しないため（見た目には出ない） */
+.scope select {
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 10;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-
-.suggestionItem {
-  display: block;
+  inset: 0;
   width: 100%;
-  padding: 10px 12px;
-  background: none;
-  border: none;
-  text-align: left;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
   cursor: pointer;
-  font-size: 14px;
+  appearance: none;
+}
+/* 全タグ以外を選んだタグは、種別が分かるように淡い地と太字で示す（文字色は本文と同じにして読みやすさを保つ） */
+.scopeSet {
   color: var(--text-primary);
-  transition: background-color 0.2s;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--primary-color) 18%, transparent);
 }
-
-.suggestionItem:hover {
-  background: var(--bg-hover);
+/* タッチ操作の端末では押しやすい高さにする */
+@media (max-width: 640px), (pointer: coarse) {
+  .scope {
+    height: 32px;
+    font-size: 13px;
+  }
 }
-
-.suggestionItemSelected {
-  background: var(--primary-color) !important;
-  color: white !important;
-}
-
-.loadingMessage,
-.noResultsMessage {
-  padding: 12px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-.loadingMessage {
-  color: var(--primary-color);
-}
-
-.operatorSelect {
-  margin-bottom: 16px;
-}
-
-.operatorSelect label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.operatorButtons {
-  display: flex;
-  gap: 8px;
-}
-
-.operatorButton {
-  flex: 1;
-  padding: 8px 16px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  transition: all 0.2s;
-}
-
-.operatorButton:hover {
-  background: var(--surface-hover);
-}
-
-.operatorButton.active {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
-}
-
-/* タグ種別選択 */
-.tagTypeSelect {
-  margin-bottom: 16px;
-}
-
-.tagTypeSelect label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-.tagTypeButtons {
-  display: flex;
-  gap: 8px;
-}
-
-.tagTypeButton {
-  flex: 1;
-  padding: 8px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.tagTypeButton:hover {
-  background: var(--surface-hover);
-}
-
-.tagTypeButton.active {
-  background: var(--secondary-color, #10b981);
-  border-color: var(--secondary-color, #10b981);
-  color: white;
-}
-
-.tagTypeIndicator {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-left: 4px;
-}
-
-.addButton {
-  width: 100%;
-  padding: 10px 16px;
-  background: var(--primary-color);
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.addButton:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.addButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+@media (prefers-reduced-motion: reduce) {
+  .scope {
+    transition: none;
+  }
 }
 
 /* Step 3: タイトル設定 */
@@ -540,13 +320,19 @@
   color: white;
 }
 
-.nextButton:hover:not(:disabled) {
+.nextButton:hover:not(:disabled):not([aria-disabled='true']) {
   opacity: 0.9;
 }
 
 .nextButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 保存を待つ間（フォーカスを残すため disabled にはしない） */
+.nextButton[aria-disabled='true'] {
+  opacity: 0.6;
+  cursor: progress;
 }
 
 /* アニメーション */

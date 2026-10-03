@@ -1,4 +1,5 @@
 import { DBManager } from './db-manager'
+import { isBaseGenre, isNonBlankString, sanitizeConditionsForStorage, type StorableCondition } from './custom-ranking-backup-schema'
 import type { 
   CustomRankingIndexedDB, 
   CustomRankingConditionIndexedDB,
@@ -8,52 +9,108 @@ import type {
   CustomRankingSortOrder 
 } from './types'
 
+/** 保存しようとした内容が使えない（空のタイトル・未知のジャンル・壊れた条件）。何も書き込まずに投げる */
+export class InvalidCustomRankingDataError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidCustomRankingDataError'
+  }
+}
+
+const newId = (): string =>
+  globalThis.crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+
+const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+
+function validConditions(value: unknown): StorableCondition[] {
+  const conditions = sanitizeConditionsForStorage(value)
+  if (!conditions) throw new InvalidCustomRankingDataError('タグ条件に使えない値が含まれています')
+  return conditions
+}
+
+function checkTitle(value: unknown): void {
+  if (!isNonBlankString(value)) throw new InvalidCustomRankingDataError('タイトルが空です')
+}
+
+function checkBaseGenre(value: unknown): void {
+  if (!isBaseGenre(value)) throw new InvalidCustomRankingDataError('ジャンルが正しくありません')
+}
+
+/** ランキングの記録を、決まった項目だけで作り直す（以前の更新で紛れ込んだ conditions などを持ち越さない） */
+function rankingRecord(ranking: CustomRankingIndexedDB): CustomRankingIndexedDB {
+  return {
+    id: ranking.id,
+    title: ranking.title,
+    baseGenre: ranking.baseGenre,
+    createdAt: ranking.createdAt,
+    updatedAt: ranking.updatedAt,
+    orderIndex: ranking.orderIndex,
+    isVisible: ranking.isVisible,
+  }
+}
+
+/**
+ * トランザクションの中の書き込みをまとめて行う。途中で失敗したら、それまでの書き込みも取り消す。
+ * IndexedDB は、書き込みの呼び出しが例外を投げた（複製できない値など）だけでは取り消さず、
+ * 残りの書き込みが無くなった時点で確定してしまう（条件だけ消えるなどの中途半端な保存になる）
+ */
+async function writeAtomically<T>(tx: { abort(): void; done: Promise<void> }, work: () => Promise<T>): Promise<T> {
+  // 中断したときに done が拒否されても、未処理の拒否として扱われないようにする（await した側には届く）
+  tx.done.catch(() => {})
+  try {
+    const result = await work()
+    await tx.done
+    return result
+  } catch (error) {
+    try {
+      tx.abort()
+    } catch {
+      // すでに確定・中断している
+    }
+    throw error
+  }
+}
+
 export class CustomRankingManager {
   constructor(private dbManager: DBManager) {}
 
   /**
-   * 新規カスタムランキングを作成
+   * 新規カスタムランキングを作成。ランキングと条件はすべて書けたときだけ残る
    */
   async createRanking(data: CreateCustomRankingData): Promise<string> {
+    checkTitle(data.title)
+    checkBaseGenre(data.baseGenre)
+    const conditions = validConditions(data.conditions)
     const db = this.dbManager.getDB()
     const now = Date.now()
-    const rankingId = crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    
-    // 次の表示順序を取得
-    const nextOrderIndex = await this.getNextOrderIndex()
-    
-    const ranking: CustomRankingIndexedDB = {
-      id: rankingId,
-      title: data.title,
-      baseGenre: data.baseGenre,
-      createdAt: now,
-      updatedAt: now,
-      orderIndex: nextOrderIndex,
-      isVisible: true
-    }
-    
-    const conditions: CustomRankingConditionIndexedDB[] = data.conditions.map((condition, index) => ({
-      id: crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      rankingId,
-      ...condition,
-      orderIndex: index
-    }))
-    
-    // 原子的操作でランキングと条件を作成
+    const rankingId = newId()
+
     const tx = db.transaction(['customRankings', 'customRankingConditions'], 'readwrite')
-    
     try {
-      await tx.objectStore('customRankings').add(ranking)
-      
-      for (const condition of conditions) {
-        await tx.objectStore('customRankingConditions').add(condition)
-      }
-      
-      await tx.done
-      return rankingId
+      return await writeAtomically(tx, async () => {
+        const rankings = tx.objectStore('customRankings')
+        // 表示順は同じトランザクションの中で決める（続けて作っても同じ順番にならない）
+        const last = await rankings.index('orderIndex').openCursor(null, 'prev')
+        const ranking: CustomRankingIndexedDB = {
+          id: rankingId,
+          title: data.title,
+          baseGenre: data.baseGenre,
+          createdAt: now,
+          updatedAt: now,
+          orderIndex: last ? last.value.orderIndex + 1 : 0,
+          isVisible: true
+        }
+        await rankings.add(ranking)
+        const conditionStore = tx.objectStore('customRankingConditions')
+        for (const condition of conditions) {
+          await conditionStore.add({ ...condition, id: newId(), rankingId })
+        }
+        return rankingId
+      })
     } catch (error) {
       console.error('Failed to create custom ranking:', error)
-      throw new Error(`Failed to create custom ranking: ${error.message}`)
+      if (error instanceof InvalidCustomRankingDataError) throw error
+      throw new Error(`Failed to create custom ranking: ${messageOf(error)}`)
     }
   }
 
@@ -68,107 +125,98 @@ export class CustomRankingManager {
   ): Promise<void> {
     const db = this.dbManager.getDB()
     const tx = db.transaction(['customRankings', 'customRankingConditions'], 'readwrite')
-    const conditionStore = tx.objectStore('customRankingConditions')
+    await writeAtomically(tx, async () => {
+      const conditionStore = tx.objectStore('customRankingConditions')
 
-    let cursor = await conditionStore.index('rankingId').openCursor(ranking.id)
-    while (cursor) {
-      await cursor.delete()
-      cursor = await cursor.continue()
-    }
+      let cursor = await conditionStore.index('rankingId').openCursor(ranking.id)
+      while (cursor) {
+        await cursor.delete()
+        cursor = await cursor.continue()
+      }
 
-    for (const [index, condition] of conditions.entries()) {
-      await conditionStore.put({
-        ...condition,
-        id: `${ranking.id}:${index}`,
-        rankingId: ranking.id,
-        orderIndex: index
-      })
-    }
+      for (const [index, condition] of conditions.entries()) {
+        await conditionStore.put({
+          tag: condition.tag,
+          operator: condition.operator,
+          tagType: condition.tagType,
+          id: `${ranking.id}:${index}`,
+          rankingId: ranking.id,
+          orderIndex: index
+        })
+      }
 
-    await tx.objectStore('customRankings').put(ranking)
-    await tx.done
+      await tx.objectStore('customRankings').put(rankingRecord(ranking))
+    })
   }
 
   /**
-   * カスタムランキングを更新
+   * カスタムランキングを更新。条件を差し替えるときは、古い条件の削除と新しい条件の追加が
+   * すべて成功したときだけ確定する（途中で失敗しても元の条件が残る）
    */
   async updateRanking(rankingId: string, updates: UpdateCustomRankingData): Promise<void> {
+    if (updates.title !== undefined) checkTitle(updates.title)
+    if (updates.baseGenre !== undefined) checkBaseGenre(updates.baseGenre)
+    const conditions = updates.conditions === undefined ? undefined : validConditions(updates.conditions)
     const db = this.dbManager.getDB()
     const tx = db.transaction(['customRankings', 'customRankingConditions'], 'readwrite')
-    
+
     try {
-      // 既存ランキングを取得
-      const ranking = await tx.objectStore('customRankings').get(rankingId)
-      if (!ranking) {
-        throw new Error('Custom ranking not found')
-      }
-      
-      // ランキングを更新
-      const updatedRanking: CustomRankingIndexedDB = {
-        ...ranking,
-        ...updates,
-        updatedAt: Date.now()
-      }
-      
-      // 条件が更新される場合、既存条件を削除して新規作成
-      if (updates.conditions) {
-        // 既存条件を削除
-        const conditionIndex = tx.objectStore('customRankingConditions').index('rankingId')
-        const conditionCursor = await conditionIndex.openCursor(rankingId)
-        
-        if (conditionCursor) {
-          await conditionCursor.delete()
-          while (await conditionCursor.continue()) {
-            await conditionCursor.delete()
+      await writeAtomically(tx, async () => {
+        const rankings = tx.objectStore('customRankings')
+        const ranking = await rankings.get(rankingId)
+        if (!ranking) {
+          throw new Error('Custom ranking not found')
+        }
+
+        const updatedRanking = rankingRecord({
+          ...ranking,
+          title: updates.title ?? ranking.title,
+          baseGenre: updates.baseGenre ?? ranking.baseGenre,
+          isVisible: updates.isVisible ?? ranking.isVisible,
+          updatedAt: Date.now()
+        })
+
+        if (conditions) {
+          const conditionStore = tx.objectStore('customRankingConditions')
+          let cursor = await conditionStore.index('rankingId').openCursor(rankingId)
+          while (cursor) {
+            await cursor.delete()
+            cursor = await cursor.continue()
+          }
+          for (const condition of conditions) {
+            await conditionStore.add({ ...condition, id: newId(), rankingId })
           }
         }
-        
-        // 新しい条件を追加
-        const newConditions: CustomRankingConditionIndexedDB[] = updates.conditions.map((condition, index) => ({
-          id: crypto?.randomUUID?.() ?? `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          rankingId,
-          ...condition,
-          orderIndex: index
-        }))
-        
-        for (const condition of newConditions) {
-          await tx.objectStore('customRankingConditions').add(condition)
-        }
-      }
-      
-      await tx.objectStore('customRankings').put(updatedRanking)
-      await tx.done
+
+        await rankings.put(updatedRanking)
+      })
     } catch (error) {
       console.error('Failed to update custom ranking:', error)
-      throw new Error(`Failed to update custom ranking: ${error.message}`)
+      if (error instanceof InvalidCustomRankingDataError) throw error
+      throw new Error(`Failed to update custom ranking: ${messageOf(error)}`)
     }
   }
 
   /**
-   * カスタムランキングを削除
+   * カスタムランキングを削除（条件とランキングは一緒に消えるか、どちらも残る）
    */
   async deleteRanking(rankingId: string): Promise<void> {
     const db = this.dbManager.getDB()
     const tx = db.transaction(['customRankings', 'customRankingConditions'], 'readwrite')
-    
+
     try {
-      // 関連する条件をすべて削除
-      const conditionIndex = tx.objectStore('customRankingConditions').index('rankingId')
-      const conditionCursor = await conditionIndex.openCursor(rankingId)
-      
-      if (conditionCursor) {
-        await conditionCursor.delete()
-        while (await conditionCursor.continue()) {
-          await conditionCursor.delete()
+      await writeAtomically(tx, async () => {
+        const conditionStore = tx.objectStore('customRankingConditions')
+        let cursor = await conditionStore.index('rankingId').openCursor(rankingId)
+        while (cursor) {
+          await cursor.delete()
+          cursor = await cursor.continue()
         }
-      }
-      
-      // ランキングを削除
-      await tx.objectStore('customRankings').delete(rankingId)
-      await tx.done
+        await tx.objectStore('customRankings').delete(rankingId)
+      })
     } catch (error) {
       console.error('Failed to delete custom ranking:', error)
-      throw new Error(`Failed to delete custom ranking: ${error.message}`)
+      throw new Error(`Failed to delete custom ranking: ${messageOf(error)}`)
     }
   }
 
@@ -241,26 +289,24 @@ export class CustomRankingManager {
   }
 
   /**
-   * カスタムランキングの表示順序を更新
+   * カスタムランキングの表示順序を更新（すべての順番が変わるか、どれも変わらない）
    */
   async updateRankingOrder(rankingOrders: { id: string; orderIndex: number }[]): Promise<void> {
     const db = this.dbManager.getDB()
     const tx = db.transaction('customRankings', 'readwrite')
-    
+
     try {
-      for (const { id, orderIndex } of rankingOrders) {
-        const ranking = await tx.store.get(id)
-        if (ranking) {
-          ranking.orderIndex = orderIndex
-          ranking.updatedAt = Date.now()
-          await tx.store.put(ranking)
+      await writeAtomically(tx, async () => {
+        for (const { id, orderIndex } of rankingOrders) {
+          const ranking = await tx.store.get(id)
+          if (ranking) {
+            await tx.store.put(rankingRecord({ ...ranking, orderIndex, updatedAt: Date.now() }))
+          }
         }
-      }
-      
-      await tx.done
+      })
     } catch (error) {
       console.error('Failed to update ranking order:', error)
-      throw new Error(`Failed to update ranking order: ${error.message}`)
+      throw new Error(`Failed to update ranking order: ${messageOf(error)}`)
     }
   }
 
@@ -270,20 +316,18 @@ export class CustomRankingManager {
   async toggleVisibility(rankingId: string): Promise<void> {
     const db = this.dbManager.getDB()
     const tx = db.transaction('customRankings', 'readwrite')
-    
+
     try {
-      const ranking = await tx.store.get(rankingId)
-      if (!ranking) {
-        throw new Error('Custom ranking not found')
-      }
-      
-      ranking.isVisible = !ranking.isVisible
-      ranking.updatedAt = Date.now()
-      await tx.store.put(ranking)
-      await tx.done
+      await writeAtomically(tx, async () => {
+        const ranking = await tx.store.get(rankingId)
+        if (!ranking) {
+          throw new Error('Custom ranking not found')
+        }
+        await tx.store.put(rankingRecord({ ...ranking, isVisible: !ranking.isVisible, updatedAt: Date.now() }))
+      })
     } catch (error) {
       console.error('Failed to toggle ranking visibility:', error)
-      throw new Error(`Failed to toggle ranking visibility: ${error.message}`)
+      throw new Error(`Failed to toggle ranking visibility: ${messageOf(error)}`)
     }
   }
 
@@ -299,28 +343,6 @@ export class CustomRankingManager {
     } catch (error) {
       console.error('Failed to check title uniqueness:', error)
       return false
-    }
-  }
-
-  /**
-   * 次の表示順序インデックスを取得
-   */
-  private async getNextOrderIndex(): Promise<number> {
-    const db = this.dbManager.getDB()
-    const tx = db.transaction('customRankings', 'readonly')
-    
-    try {
-      const index = tx.store.index('orderIndex')
-      const cursor = await index.openCursor(null, 'prev') // 降順で最初の1件
-      
-      if (cursor) {
-        return cursor.value.orderIndex + 1
-      }
-      
-      return 0 // 初回作成
-    } catch (error) {
-      console.error('Failed to get next order index:', error)
-      return 0
     }
   }
 

@@ -16,6 +16,23 @@ describe('Thumbnail Proxy API', () => {
   })
 
   describe('GET /api/thumbnail-proxy', () => {
+    it('proxies the official ss thumbnail host without changing its signed query', async () => {
+      const imageUrl = 'https://goptim.video.nimg.jp/thumbnail/1280x720?i=46678223.20245450&s=blur&key=synthetic-key'
+      mockFetch.mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), {
+        headers: { 'content-type': 'image/jpeg' },
+      }))
+      const response = await GET(new NextRequest(`http://localhost/api/thumbnail-proxy?url=${encodeURIComponent(imageUrl)}`))
+      expect(response.status).toBe(200)
+      expect(response.headers.get('Content-Type')).toBe('image/jpeg')
+      expect(mockFetch).toHaveBeenCalledWith(imageUrl, expect.any(Object))
+    })
+
+    it('rejects lookalike ss thumbnail hosts without fetching them', async () => {
+      const response = await GET(new NextRequest('http://localhost/api/thumbnail-proxy?url=https://goptim.video.nimg.jp.evil.example/image'))
+      expect(response.status).toBe(400)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     it.each([
       'https://nicovideo.cdn.nimg.jp.evil.example/image.jpg',
       'https://user:password@nicovideo.cdn.nimg.jp/image.jpg',

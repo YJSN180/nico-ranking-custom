@@ -24,6 +24,7 @@ export function MylistDetailClient() {
   const [videos, setVideos] = useState<MylistVideo[]>([])
   const [filteredVideos, setFilteredVideos] = useState<MylistVideo[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<SortOrder>('addedAt-desc')
   const [editingVideo, setEditingVideo] = useState<MylistVideo | null>(null)
@@ -91,6 +92,10 @@ export function MylistDetailClient() {
         })
         // eslint-disable-next-line no-console
         console.error('Failed to initialize mylist detail:', error)
+        // 読み込み失敗を「マイリストが見つかりません」と混同させない（フェーズ4-8）
+        if (mounted) {
+          setLoadError(true)
+        }
       } finally {
         if (mounted) {
           setIsLoading(false)
@@ -254,6 +259,31 @@ export function MylistDetailClient() {
     return (
       <div className={styles.container}>
         <div className={styles.loading}>読み込み中...</div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.notFound} role="alert">
+          <p>マイリストの読み込みに失敗しました。</p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              margin: '12px 0',
+              padding: '8px 20px',
+              background: 'var(--primary-color)',
+              color: 'var(--button-text-active)',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            再読み込み
+          </button>
+          <BackLink href="/mylists" text="マイリスト一覧に戻る" />
+        </div>
       </div>
     )
   }

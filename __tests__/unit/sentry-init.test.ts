@@ -4,12 +4,14 @@ const { initMock, clientOnMock } = vi.hoisted(() => ({ initMock: vi.fn(), client
 
 vi.mock('@sentry/nextjs', () => ({
   init: initMock,
-  getClient: () => ({ on: clientOnMock }),
+  // 初期化の前は未作成（ブラウザの遅延ローダーは二重初期化を避けるためにこれを見る）
+  getClient: () => (initMock.mock.calls.length > 0 ? { on: clientOnMock } : undefined),
   browserTracingIntegration: vi.fn((options: unknown) => ({ name: 'BrowserTracing', options })),
   captureRouterTransitionStart: vi.fn(),
 }))
 
 type InitOptions = {
+  tracePropagationTargets?: Array<string | RegExp>
   dsn?: string
   enabled?: boolean
   environment?: string
@@ -17,11 +19,15 @@ type InitOptions = {
   beforeSendTransaction?: (event: unknown, hint: unknown) => unknown
   beforeSendSpan?: (span: unknown) => unknown
   beforeBreadcrumb?: (breadcrumb: unknown, hint?: unknown) => unknown
-  tracePropagationTargets?: Array<string | RegExp>
 }
 
 const CONFIGS = [
-  { name: 'instrumentation-client', runtime: 'browser', load: () => import('@/instrumentation-client') },
+  // ブラウザは instrumentation-client.ts が読み込み後に遅延ローダー経由で初期化する
+  {
+    name: 'lib/sentry/client (browser)',
+    runtime: 'browser',
+    load: () => import('@/lib/sentry/client').then((loader) => loader.loadSentryClient()),
+  },
   { name: 'sentry.server.config', runtime: 'server', load: () => import('@/sentry.server.config') },
   { name: 'sentry.edge.config', runtime: 'server', load: () => import('@/sentry.edge.config') },
 ] as const

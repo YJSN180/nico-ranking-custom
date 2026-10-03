@@ -3,6 +3,10 @@ import { readFile, readdir } from 'node:fs/promises'
 import { GENRE_GROUPS } from '../types/ranking-config'
 import { compressForStorage } from '../lib/unified-compression'
 import { fetchChecked } from '../lib/pipeline/retry'
+import {
+  buildPopularTagsLatest,
+  POPULAR_TAGS_LATEST_KEY,
+} from '../lib/pipeline/popular-tags-latest'
 
 async function main() {
   const account = process.env.CLOUDFLARE_ACCOUNT_ID
@@ -64,6 +68,15 @@ async function main() {
         body: JSON.stringify(merged),
       })
   }
+  // 人気タグだけの小キー（lib/popular-tags.ts の高速パス）。公開済み世代と同じ集約データから作る。
+  // 失敗はこのステップの失敗として記録され、読み手はゲートウェイ経路へフォールバックする
+  await fetchChecked(`${base}${POPULAR_TAGS_LATEST_KEY}`, {
+    method: 'PUT',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(
+      buildPopularTagsLatest(data.genres, data.metadata.updatedAt),
+    ),
+  })
 }
 main().catch((error) => {
   console.error(error)

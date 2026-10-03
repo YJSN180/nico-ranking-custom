@@ -1,4 +1,6 @@
 export interface NGList {
+  /** 判定済みの退会済み投稿者だけを非表示にする。未指定はオフ */
+  hideDeletedAuthors?: boolean
   // 手動で設定したNGリスト
   videoIds: string[]      // 動画ID（例: "sm12345"）
   videoTitles: {          // 動画タイトル
@@ -13,6 +15,11 @@ export interface NGList {
   
   // 自動追加されたNGリスト（派生NG）は別キーで管理
   derivedVideoIds?: string[] // 互換性のため（オプショナル）
+
+  // 粗悪コンテンツ自動NG（lib/lqng）。Worker が書く判定テーブルから
+  // 許可リストを除いて合流される。手動リストより後に評価し、派生NGには積まない
+  autoAuthorIds?: string[]
+  autoVideoIds?: string[]
 }
 
 export interface NGFilterResult {

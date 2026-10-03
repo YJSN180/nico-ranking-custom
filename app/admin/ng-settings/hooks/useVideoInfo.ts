@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 interface VideoInfo {
   title: string
@@ -41,22 +41,33 @@ export function useVideoInfo(
   const ensureAbortControllerRef = useRef<AbortController | null>(null)
   const derivedCacheLoadedRef = useRef(false)
 
-  const updateCache = (entries: Record<string, VideoInfo>) => {
-    if (Object.keys(entries).length === 0) return
-    Object.entries(entries).forEach(([id, info]) => {
-      cacheRef.current.set(id, info)
+  // 注意: これらは下の useEffect の依存に入るため、毎レンダーで作り直すと
+  // effect が再実行 → setState → 再レンダー の無限ループになる（Maximum update depth exceeded）。
+  // useCallback で参照を固定し、既にキャッシュ済みで変化が無い場合は setState しない。
+  const updateCache = useCallback((entries: Record<string, VideoInfo>) => {
+    const ids = Object.keys(entries)
+    if (ids.length === 0) return
+    ids.forEach((id) => {
+      cacheRef.current.set(id, entries[id]!)
     })
-    setVideoInfo(prev => ({ ...prev, ...entries }))
-  }
+    setVideoInfo(prev => {
+      const changed = ids.some((id) => {
+        const before = prev[id]
+        const after = entries[id]!
+        return !before || before.title !== after.title || before.authorName !== after.authorName || before.isDeleted !== after.isDeleted
+      })
+      return changed ? { ...prev, ...entries } : prev
+    })
+  }, [])
 
-  const normalizeInfo = (info?: VideoInfoApiItem | null): VideoInfo => {
+  const normalizeInfo = useCallback((info?: VideoInfoApiItem | null): VideoInfo => {
     const isDeleted = info?.isDeleted ?? false
     return {
       title: info?.title || (isDeleted ? '削除された動画' : '情報未取得'),
       authorName: info?.authorName ?? null,
       isDeleted
     }
-  }
+  }, [])
 
   useEffect(() => {
     // Cancel previous request
@@ -252,7 +263,7 @@ export function useVideoInfo(
         ensureAbortControllerRef.current.abort()
       }
     }
-  }, [ensureIds])
+  }, [updateCache, normalizeInfo, ensureIds])
 
   return { videoInfo, isLoading: isLoading || isEnsuring, error }
 }

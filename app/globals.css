@@ -1,11 +1,32 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
 /* カスタムフォント定義はクリティカルCSS (layout.tsx) に移動済み */
 
 /* デフォルトとライトテーマ */
 :root {
+  /* 検索・ランキングの操作部品で共有する基準 */
+  --control-height: 44px;
+  --control-radius: 8px;
+  --control-font-size: 14px;
+  --control-line-height: 20px;
+  --control-border: color-mix(in srgb, var(--text-secondary) 68%, var(--background-color));
+  --control-motion: 160ms ease-out;
+  --control-accent: var(--primary-color);
+  --control-accent-hover: var(--primary-hover);
+
+  /* ランキング・検索のジャンル選択で共有する寸法 */
+  --genre-chip-height: 32px;
+  --genre-chip-radius: 999px;
+  --genre-chip-font-size: 13px;
+  --genre-chip-line-height: 20px;
+  --genre-chip-padding-inline: 12px;
+  --genre-chip-gap: 8px;
+  --genre-chip-motion: 180ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* 統計は色と形を併用し、数値は中立色に保つ。 */
+  --stat-views-color: #55779c;
+  --stat-comments-color: #647f8b;
+  --stat-likes-color: #ab687b;
+  --stat-mylists-color: #88764e;
+
   /* 基本色 */
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
@@ -72,6 +93,12 @@
 
 /* ダークテーマ - 継承 */
 [data-theme="dark"] {
+  --stat-views-color: #8ba9cc;
+  --stat-comments-color: #95b1bd;
+  --stat-likes-color: #d89aab;
+  --stat-mylists-color: #c4b184;
+  --control-accent: #596bd8;
+  --control-accent-hover: #4d5fc9;
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 20, 20, 20;
   --background-end-rgb: 0, 0, 0;
@@ -132,6 +159,12 @@
 
 /* ダークブルーテーマ (X/Twitter風) */
 [data-theme="darkblue"] {
+  --stat-views-color: #8ba9cc;
+  --stat-comments-color: #95b1bd;
+  --stat-likes-color: #d89aab;
+  --stat-mylists-color: #c4b184;
+  --control-accent: #1477b8;
+  --control-accent-hover: #10689f;
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 21, 32, 43;
   --background-end-rgb: 21, 32, 43;
@@ -195,14 +228,15 @@ body {
   background-color: var(--background-color);
   transition: background-color 0.3s ease, color 0.3s ease;
   min-height: 100vh;
-  /* 横スクロール防止 */
-  overflow-x: hidden;
+  /* 横スクロール防止。hidden はスクロールコンテナを作り、中の position: sticky
+     （モバイルのヘッダー）がビューポートに追従しなくなるため clip を使う */
+  overflow-x: clip;
   max-width: 100vw;
 }
 
-/* 横スクロール防止のための追加設定 */
+/* 横スクロール防止のための追加設定（body と同じ理由で clip） */
 html {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100vw;
 }
 
@@ -211,10 +245,10 @@ html {
   box-sizing: border-box;
 }
 
-/* コンテナの最大幅制限 */
+/* コンテナの最大幅制限（sticky を壊さないよう clip。body と同じ理由） */
 .container, main, body > div {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* グラデーション背景 */
@@ -339,5 +373,97 @@ button,
   }
   50% {
     opacity: 0.8;
+  }
+}
+/* モバイルの一覧系ページはコンテナ余白を詰めて情報幅を確保（案A: サムネ148px対応） */
+@media (max-width: 640px) {
+  .main-container-responsive {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* ===== モーショントークン（UX改善計画 フェーズ2） ===== */
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ===== フォーカス可視化（UX改善計画 フェーズ4-7） =====
+   キーボード操作時のみ表示されるフォーカスリング。
+   個別コンポーネントで :focus { outline: none } + border-color 代替を
+   持つものは既存の意図を尊重してそのまま（この規則より詳細度が高い） */
+:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* スキップリンク: キーボードフォーカス時のみ表示 */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 2000;
+  padding: 8px 16px;
+  background: var(--primary-color);
+  color: var(--button-text-active);
+  border-radius: 6px;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* スキップリンクの飛び先（ヘッダー直後の空の要素）。フォーカスは受けるが操作対象ではないので
+   枠は出さない（高さ 0 の要素に枠が付くと、ヘッダーの下に線が出る） */
+.skip-link-target:focus {
+  outline: none;
+}
+
+/* ===== ボトムナビゲーション（UX改善計画 フェーズ3-1） =====
+   モバイル(≤640px)でボトムナビが表示されている間、
+   コンテンツ最下部やフローティングボタンが隠れないように
+   オフセットを確保する。--bottom-nav-offset は ScrollToTopButton 等の
+   固定配置要素が参照する */
+:root {
+  --bottom-nav-offset: 0px;
+}
+
+@media (max-width: 640px) {
+  body:has(.bottom-nav) {
+    --bottom-nav-offset: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: var(--bottom-nav-offset);
+  }
+}
+
+/* モバイルのドロワー（body 直下の #navigation-menu。768px 以下で表示）を開いている間は
+   「▲」（z-index 1000）を隠す。ドロワー(40)と暗い覆い(30)より手前に出て押せてしまうため。
+   z-index を下げると設定モーダル・トースト・⋮メニューのモーダルとの重なりまで変わるので、
+   開いている間だけ隠す（PC のドロップダウンでは #navigation-menu は表示されない） */
+@media (max-width: 768px) {
+  body:has(#navigation-menu) .scroll-to-top-button {
+    visibility: hidden;
+  }
+}
+
+/* reduced-motion 環境ではすべてのアニメーション・トランジションを実質無効化 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 密度を優先するPCと、指で操作する画面の寸法を分ける。 */
+@media (max-width: 640px), (pointer: coarse) {
+  :root {
+    --genre-chip-height: 44px;
   }
 }

@@ -61,45 +61,9 @@ export function useRankingData({
   const [isRetrying, setIsRetrying] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
 
-  // SSRデータの同期用: initialDataが変わったことを検出するためのキー
-  // 最初のアイテムIDと件数の組み合わせでデータの変更を検出
-  const lastSyncedDataKeyRef = useRef<string>('')
-
-  // SSRから新しいデータが渡された時に状態を同期する
-  // これにより、ページリロード時やSSR後の再ハイドレーション時に
-  // 古いReact状態ではなく新しいSSRデータが表示される
-  useEffect(() => {
-    if (!initialData?.items || !Array.isArray(initialData.items) || initialData.items.length === 0) {
-      return
-    }
-
-    // 現在のデータを識別するキーを生成
-    const firstItemId = initialData.items[0]?.id || ''
-    const itemCount = initialData.items.length
-    const currentDataKey = `${firstItemId}-${itemCount}-${initialData.items[0]?.rank || 0}`
-
-    // 同じデータの場合は何もしない（無限ループ防止）
-    if (currentDataKey === lastSyncedDataKeyRef.current) {
-      return
-    }
-
-    // 新しいデータを検出、状態を同期
-    lastSyncedDataKeyRef.current = currentDataKey
-
-    const sortedData = [...initialData.items].sort((a, b) => a.rank - b.rank)
-    setFullRankingData(sortedData)
-    setRankingData(sortedData)
-
-    if (initialData.popularTags && Array.isArray(initialData.popularTags)) {
-      setCurrentPopularTags(initialData.popularTags)
-    }
-
-    serverLog.info('State synced with SSR initialData', {
-      dataKey: currentDataKey,
-      itemCount: sortedData.length,
-      firstItemTitle: sortedData[0]?.title?.substring(0, 30) || 'N/A'
-    })
-  }, [initialData])
+  // 注: initialData はマウント時の初期値としてだけ使う。SSR から新しい props が来たときは
+  // app/page.tsx が ClientPage の key を変えて作り直す（H6）。同じインスタンスで
+  // initialData（1ページ目だけの埋め込み）に置き換えると、全件が 100 件に縮むため同期しない
 
   // デバイスタイプを取得
   const deviceType = useDeviceType()

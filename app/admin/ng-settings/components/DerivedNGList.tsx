@@ -139,6 +139,8 @@ export function DerivedNGList({ initialData, onUpdate }: DerivedNGListProps) {
     try {
       const response = await fetch(`/api/admin/ng-list/derived/${videoId}`, {
         method: 'DELETE',
+        // 管理 API の書き込みは application/json 必須（middleware の CSRF 対策）
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         signal: controller.signal
       })

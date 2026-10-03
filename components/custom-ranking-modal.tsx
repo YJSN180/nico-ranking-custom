@@ -1,73 +1,45 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
-import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
-import { TagIcon } from './tag-icon'
-import { captureBrowserRateLimit } from '@/lib/sentry/capture'
+import type {
+  CustomRanking,
+  CustomRankingFormState,
+  ModalStep,
+} from '@/types/custom-ranking'
+import { KeywordConditionEditor } from '@/components/keyword-condition-editor'
+import {
+  EMPTY_CUSTOM_CONDITIONS,
+  TAG_SCOPES,
+  TAG_SCOPE_LABELS,
+  describeCustomConditions,
+  fromTagConditions,
+  hasCustomConditions,
+  isTagScope,
+  normalizeTagWord,
+  scopeOf,
+  toTagConditions,
+  withConditions,
+  withScope,
+  type CustomConditionState,
+} from '@/lib/custom-ranking-conditions'
+import {
+  EMPTY_KEYWORD_DRAFTS,
+  commitKeywordDrafts,
+  type KeywordDrafts,
+} from '@/lib/search/keyword-conditions'
+import { isImeComposing } from '@/lib/ime'
 import styles from './custom-ranking-modal.module.css'
-
-// 演算子の自然言語ラベル
-const OPERATOR_LABELS: Record<TagOperator, string> = {
-  'AND': 'すべて含む',
-  'OR': 'いずれかを含む',
-  'NOT': '除外する'
-}
-
-// タグタイプのラベル
-const TAG_TYPE_LABELS: Record<'lock' | 'user' | 'both', string> = {
-  'lock': 'ロックタグ',
-  'user': 'ユーザータグ',
-  'both': '全タグ'
-}
-
-// 条件を自然言語で説明する関数
-function generateConditionDescription(conditions: TagCondition[]): string {
-  if (conditions.length === 0) return ''
-  
-  // グループ化
-  const allAndConditions = conditions.filter(c => c.operator === 'AND')
-  const allOrConditions = conditions.filter(c => c.operator === 'OR')
-  const allNotConditions = conditions.filter(c => c.operator === 'NOT')
-  
-  let description = ''
-  
-  // AND条件とOR条件の組み合わせパターンを判定
-  if (allAndConditions.length > 0 && allOrConditions.length > 0) {
-    // 両方ある場合: (AND条件) または (OR条件)
-    const andTags = allAndConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    const orTags = allOrConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    
-    description = `${andTags.join('と')}をすべて含む動画、または、${orTags.join('もしくは')}のいずれかを含む動画`
-  } else if (allAndConditions.length > 0) {
-    // AND条件のみ
-    const andTags = allAndConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    description = `${andTags.join('と')}をすべて含む動画`
-  } else if (allOrConditions.length > 0) {
-    // OR条件のみ
-    const orTags = allOrConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    description = `${orTags.join('または')}のいずれかを含む動画`
-  }
-  
-  // NOT条件
-  if (allNotConditions.length > 0) {
-    const notTags = allNotConditions.map(c => `「${c.tag}」（${TAG_TYPE_LABELS[c.tagType]}）`)
-    if (description) {
-      description += `（ただし、${notTags.join('と')}を含まない）`
-    } else {
-      description = `${notTags.join('と')}を含まない動画`
-    }
-  }
-  
-  return description
-}
 
 interface CustomRankingModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: CustomRankingFormState) => void
+  /** 保存する。false を返したら（または失敗したら）保存できなかったとして、画面を閉じずに知らせる */
+  onSave: (data: CustomRankingFormState) => void | boolean | Promise<void | boolean>
   existingTitles?: string[]
-  editingRanking?: any // 編集対象のランキング
+  /** 編集対象のランキング（新規作成では無し） */
+  editingRanking?: Pick<CustomRanking, 'baseGenre' | 'conditions' | 'title'> | null
   onPrefetchData?: (baseGenre: RankingGenre, period: string) => Promise<void> // データプリフェッチ用
   currentPeriod?: string // 現在の期間設定
 }
@@ -88,131 +60,26 @@ export function CustomRankingModal({
     title: ''
   })
   
-  // タグ入力関連の状態
-  const [tagInput, setTagInput] = useState('')
-  const [tagOperator, setTagOperator] = useState<TagOperator>('AND')
-  const [tagType, setTagType] = useState<'lock' | 'user' | 'both'>('both')
-  const [tagSuggestions, setTagSuggestions] = useState<string[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
-  
+  // タグ条件は検索の「条件で入力」と同じ 3 つの欄で編集する（判定の意味はカスタムランキングのまま）
+  const [tagConditions, setTagConditions] = useState<CustomConditionState>(
+    EMPTY_CUSTOM_CONDITIONS,
+  )
+  const [drafts, setDrafts] = useState<KeywordDrafts>(EMPTY_KEYWORD_DRAFTS)
+
   const modalRef = useRef<HTMLDivElement>(null)
-  const tagInputRef = useRef<HTMLInputElement>(null)
-  const suggestionsAbortControllerRef = useRef<AbortController | null>(null)
-  const latestRequestIdRef = useRef(0)
-
-  // オートコンプリート用のAPIエンドポイント
-  const getAutocompleteEndpoint = () => {
-    // 本番環境とローカル開発環境でエンドポイントを切り替え
-    if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname
-      if (hostname === 'nico-rank.com') {
-        return 'https://nico-rank.com/api/tags/autocomplete'
-      } else if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        return '/api/tags/autocomplete'
-      } else if (hostname.includes('vercel.app')) {
-        return '/api/tags/autocomplete'
-      }
-    }
-    return '/api/tags/autocomplete'
-  }
-
-  // タグのオートコンプリート候補を取得
-  const fetchTagSuggestions = useCallback(async (query: string, requestId: number): Promise<string[]> => {
-    if (!query || query.trim().length < 2) {
-      return []
-    }
-
-    suggestionsAbortControllerRef.current?.abort()
-    const controller = new AbortController()
-    suggestionsAbortControllerRef.current = controller
-
-    try {
-      setIsLoadingSuggestions(true)
-      const endpoint = getAutocompleteEndpoint()
-      const url = new URL(endpoint, window.location.origin)
-      url.searchParams.set('q', query.trim())
-      url.searchParams.set('limit', '10')
-
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      })
-
-      if (requestId !== latestRequestIdRef.current) {
-        return []
-      }
-
-      if (response.status === 429) {
-        const retryAfterValue = response.headers.get('retry-after')
-        const retryAfterSeconds = retryAfterValue ? Number(retryAfterValue) : undefined
-
-        captureBrowserRateLimit({
-          surface: 'tag-autocomplete',
-          endpointFamily: '/api/tags/autocomplete',
-          fingerprint: ['browser-tag-autocomplete-429'],
-          retryAfterSeconds: Number.isFinite(retryAfterSeconds) ? retryAfterSeconds : undefined,
-        })
-        return []
-      }
-
-      if (!response.ok) {
-        console.warn('Failed to fetch tag suggestions:', response.status)
-        return []
-      }
-
-      const data = await response.json()
-      return data.suggestions || []
-    } catch (error) {
-      if ((error as Error).name === 'AbortError') {
-        return []
-      }
-      console.error('Error fetching tag suggestions:', error)
-      return []
-    } finally {
-      if (suggestionsAbortControllerRef.current === controller) {
-        suggestionsAbortControllerRef.current = null
-      }
-      if (requestId === latestRequestIdRef.current) {
-        setIsLoadingSuggestions(false)
-      }
-    }
-  }, [])
-
-  // デバウンス処理付きオートコンプリート
+  const contentRef = useRef<HTMLDivElement>(null)
+  const shownStep = useRef<ModalStep | null>(null)
+  // 手順 2 の「次へ」で先読みを待つ間は進む操作を止める。待つ間に戻ったら、先読みのあとで進めない
+  const [advancing, setAdvancing] = useState(false)
+  // 保存の結果を待つ間は保存ボタンを止め、失敗したら入力を残したまま知らせる
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+  const navigation = useRef(0)
+  // Escape・フォーカスの effect を開くときだけ動かすため、閉じる処理は ref で最新を参照する
+  const onCloseRef = useRef(onClose)
   useEffect(() => {
-    latestRequestIdRef.current += 1
-    suggestionsAbortControllerRef.current?.abort()
-
-    const timeoutId = setTimeout(async () => {
-      if (tagInput.trim().length >= 2) {
-        const requestId = ++latestRequestIdRef.current
-        const suggestions = await fetchTagSuggestions(tagInput, requestId)
-        if (requestId !== latestRequestIdRef.current) {
-          return
-        }
-        setTagSuggestions(suggestions)
-        setShowSuggestions(suggestions.length > 0)
-        setSelectedSuggestionIndex(-1) // 候補リストが更新されたら選択をリセット
-      } else {
-        latestRequestIdRef.current += 1
-        suggestionsAbortControllerRef.current?.abort()
-        setTagSuggestions([])
-        setShowSuggestions(false)
-        setSelectedSuggestionIndex(-1)
-        setIsLoadingSuggestions(false)
-      }
-    }, 300) // 300msデバウンス
-
-    return () => {
-      clearTimeout(timeoutId)
-      suggestionsAbortControllerRef.current?.abort()
-    }
-  }, [tagInput, fetchTagSuggestions])
+    onCloseRef.current = onClose
+  }, [onClose])
 
   // モーダルが開いた時にリセットまたは初期化
   useEffect(() => {
@@ -225,6 +92,7 @@ export function CustomRankingModal({
           conditions: editingRanking.conditions || [],
           title: editingRanking.title
         })
+        setTagConditions(fromTagConditions(editingRanking.conditions))
       } else {
         // 新規作成モードの場合はリセット
         setFormData({
@@ -232,29 +100,82 @@ export function CustomRankingModal({
           conditions: [],
           title: ''
         })
+        setTagConditions(EMPTY_CUSTOM_CONDITIONS)
       }
-      setTagInput('')
-      setTagOperator('AND')
-      setTagType('both')
-      setTagSuggestions([])
-      setShowSuggestions(false)
-      setSelectedSuggestionIndex(-1)
+      setDrafts(EMPTY_KEYWORD_DRAFTS)
+      setAdvancing(false)
+      setSaving(false)
+      setSaveError(false)
+      navigation.current++
     }
   }, [isOpen, editingRanking])
 
-  // ESCキーで閉じる
+  // ダイアログの操作: Escape で閉じる・フォーカスをモーダル内に留める・閉じたら開いたボタンへ戻す
   useEffect(() => {
     if (!isOpen) return
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    modalRef.current?.focus()
 
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // 日本語の変換中の Esc は変換の取り消し。タグ候補を閉じた Esc（defaultPrevented）でも閉じない。
+        // どちらも閉じると作成途中の内容が消える
+        if (isImeComposing(event) || event.defaultPrevented) return
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const modal = modalRef.current
+      // 何かの理由でフォーカスがモーダルの外（ページ本体など）にあるときは、モーダルの中へ戻す
+      if (modal && !modal.contains(document.activeElement)) {
+        event.preventDefault()
+        modal.focus()
+        return
+      }
+      const focusables = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea, [tabindex]:not([tabindex="-1"])',
+      )
+      const visible = Array.from(focusables ?? []).filter(
+        (element) => element.offsetParent !== null,
+      )
+      const first = visible[0]
+      const last = visible[visible.length - 1]
+      if (!first || !last) return
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || active === modalRef.current)) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault()
+        first.focus()
       }
     }
 
-    document.addEventListener('keydown', handleEscape)
-    return () => document.removeEventListener('keydown', handleEscape)
-  }, [isOpen, onClose])
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      previouslyFocused?.focus()
+    }
+  }, [isOpen])
+
+  // 手順が変わったら、その手順の最初の入力へフォーカスを移す（押したボタンが無効になって
+  // フォーカスがページへ抜けると、キーボードでモーダルに戻れない）
+  useEffect(() => {
+    if (!isOpen) {
+      shownStep.current = null
+      return
+    }
+    if (shownStep.current !== null && shownStep.current !== currentStep) {
+      const content = contentRef.current
+      const target =
+        content?.querySelector<HTMLElement>('input:checked') ??
+        content?.querySelector<HTMLElement>('input[role="combobox"]') ??
+        content?.querySelector<HTMLElement>('input, select, textarea, button')
+      target?.focus()
+    }
+    shownStep.current = currentStep
+  }, [isOpen, currentStep])
 
   if (!isOpen) return null
 
@@ -264,76 +185,107 @@ export function CustomRankingModal({
     setFormData(prev => ({ ...prev, baseGenre: genre }))
   }
 
-  // タグ追加（Step 2）
-  const handleAddTag = () => {
-    const tag = tagInput.trim()
-    if (!tag) return
+  // 欄に打ちかけのタグも条件に含める（Enter を押し忘れても取りこぼさない）。
+  // 説明文・「次へ」の可否・保存する条件は、すべてこの同じ内容から決める
+  const committedTagConditions = withConditions(
+    tagConditions,
+    commitKeywordDrafts(tagConditions.conditions, drafts, normalizeTagWord),
+  )
 
-    // 既存のタグと重複チェック
-    const exists = formData.conditions.some(c => c.tag.toLowerCase() === tag.toLowerCase())
-    if (exists) return
-
-    const newCondition: TagCondition = {
-      tag,
-      operator: tagOperator,
-      tagType: tagType
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      conditions: [...prev.conditions, newCondition]
-    }))
-
-    setTagInput('')
-    setShowSuggestions(false)
-  }
-
-  // タグ削除
-  const handleRemoveTag = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      conditions: prev.conditions.filter((_, i) => i !== index)
-    }))
+  const renderTagScope = (word: string): React.ReactNode => {
+    const scope = scopeOf(tagConditions.scopes, word)
+    return (
+      <span
+        className={`${styles.scope}${scope === 'both' ? '' : ` ${styles.scopeSet}`}`}
+      >
+        {/* 見えるのは小さな表示だけ。透明な選択欄を重ねて、操作・読み上げ・端末の選択画面は選択欄に任せる */}
+        <span aria-hidden="true">{TAG_SCOPE_LABELS[scope]}</span>
+        <ChevronDown size={12} aria-hidden="true" />
+        <select
+          aria-label={`「${word}」のタグ種別`}
+          value={scope}
+          onChange={(event) => {
+            const next = event.target.value
+            if (isTagScope(next)) {
+              setTagConditions((prev) => withScope(prev, word, next))
+            }
+          }}
+        >
+          {TAG_SCOPES.map((option) => (
+            <option key={option} value={option}>
+              {TAG_SCOPE_LABELS[option]}
+            </option>
+          ))}
+        </select>
+      </span>
+    )
   }
 
   // タイトル変更（Step 3）
   const handleTitleChange = (title: string) => {
+    setSaveError(false)
     setFormData(prev => ({ ...prev, title }))
   }
 
   // 次へ進む
   const handleNext = async () => {
+    if (advancing) return
     if (currentStep === 1 && !formData.baseGenre) return
-    if (currentStep === 2 && formData.conditions.length === 0) return
+    if (currentStep === 2) {
+      const committed = committedTagConditions
+      if (!hasCustomConditions(committed.conditions)) return
+      setTagConditions(committed)
+      setDrafts(EMPTY_KEYWORD_DRAFTS)
+      setFormData((prev) => ({ ...prev, conditions: toTagConditions(committed) }))
+    }
     if (currentStep === 3) {
-      // 保存処理
+      // 保存処理。保存できたときだけ閉じる（失敗したら入力を残して、もう一度保存できるようにする）
+      if (saving) return
       if (formData.title.trim() && !existingTitles.includes(formData.title.trim())) {
-        onSave(formData)
+        setSaving(true)
+        setSaveError(false)
+        let saved = false
+        try {
+          saved = (await onSave({ ...formData, conditions: toTagConditions(tagConditions) })) !== false
+        } catch {
+          saved = false
+        } finally {
+          setSaving(false)
+        }
+        if (!saved) {
+          setSaveError(true)
+          return
+        }
         onClose()
       }
       return
     }
     
+    // 進む先は押した時点の手順から決める（先読みの間に何度押しても 1 つだけ進む）
+    const target: ModalStep = currentStep === 1 ? 2 : 3
     // ステップ2で「次へ」を押した時、baseGenreのデータをプリフェッチ
     if (currentStep === 2 && formData.baseGenre && onPrefetchData) {
+      const token = ++navigation.current
+      setAdvancing(true)
       try {
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Prefetching data for baseGenre:', formData.baseGenre, 'period:', currentPeriod)
         await onPrefetchData(formData.baseGenre, currentPeriod)
-        // eslint-disable-next-line no-console
-        console.log('[DEBUG] Prefetch completed')
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('[DEBUG] Prefetch failed:', error)
         // エラーが発生しても次のステップには進む
+      } finally {
+        setAdvancing(false)
       }
+      // 待つ間に戻った・閉じたときは進めない
+      if (token !== navigation.current) return
     }
-    
-    setCurrentStep((prev) => (prev + 1) as ModalStep)
+
+    setCurrentStep(target)
   }
 
   // 戻る
   const handleBack = () => {
+    navigation.current++
     if (currentStep === 1) {
       onClose()
       return
@@ -344,15 +296,23 @@ export function CustomRankingModal({
   // タイトルの重複チェック
   const isTitleDuplicated = existingTitles.includes(formData.title.trim())
   const canProceed = currentStep === 1 ? !!formData.baseGenre 
-    : currentStep === 2 ? formData.conditions.length > 0
+    : currentStep === 2 ? hasCustomConditions(committedTagConditions.conditions)
     : formData.title.trim().length > 0 && !isTitleDuplicated
 
   return (
     <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
+      <div
+        className={styles.modal}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="custom-ranking-modal-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <h2 id="custom-ranking-modal-title">{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
+          <button className={styles.closeButton} onClick={onClose} aria-label="閉じる">×</button>
         </div>
 
         {/* ステップインジケーター */}
@@ -370,7 +330,7 @@ export function CustomRankingModal({
           </div>
         </div>
 
-        <div className={styles.content}>
+        <div className={styles.content} ref={contentRef}>
           {/* Step 1: ベースジャンル選択 */}
           {currentStep === 1 && (
             <div className={styles.stepContent}>
@@ -411,215 +371,21 @@ export function CustomRankingModal({
                 動画に含まれるタグで絞り込み条件を設定します
               </p>
 
-              {/* 現在の条件 */}
-              {formData.conditions.length > 0 && (
-                <div className={styles.currentConditions}>
-                  <h4>現在の条件:</h4>
-                  <div className={styles.conditionDescription}>
-                    {generateConditionDescription(formData.conditions)}
-                  </div>
-                  <div className={styles.conditionsList}>
-                    {(['AND', 'OR', 'NOT'] as TagOperator[]).map(op => {
-                      const conditions = formData.conditions.filter(c => c.operator === op)
-                      if (conditions.length === 0) return null
-                      return (
-                        <div key={op} className={styles.conditionGroup}>
-                          <span className={styles.operatorLabel}>{OPERATOR_LABELS[op]}:</span>
-                          <div className={styles.tags}>
-                            {conditions.map((condition, index) => {
-                              const originalIndex = formData.conditions.indexOf(condition)
-                              const tagTypeLabel = condition.tagType === 'lock' ? 'ロック' 
-                                : condition.tagType === 'user' ? 'ユーザー' 
-                                : '両方'
-                              return (
-                                <span key={originalIndex} className={styles.tag}>
-                                  {condition.tag}
-                                  <span className={styles.tagTypeIndicator}>
-                                    ({tagTypeLabel})
-                                  </span>
-                                  <button
-                                    className={styles.removeTag}
-                                    onClick={() => handleRemoveTag(originalIndex)}
-                                  >
-                                    ×
-                                  </button>
-                                </span>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* タグ入力 */}
-              <div className={styles.tagInputSection}>
-                <h4>新しい条件を追加:</h4>
-                {formData.conditions.length === 0 && (
-                  <p className={styles.helpText}>
-                    最初のタグの条件を設定してください
-                  </p>
-                )}
-                <div className={styles.tagInputWrapper}>
-                  <input
-                    ref={tagInputRef}
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < tagSuggestions.length) {
-                          // 選択された候補を使用
-                          setTagInput(tagSuggestions[selectedSuggestionIndex])
-                          setShowSuggestions(false)
-                          setSelectedSuggestionIndex(-1)
-                        } else {
-                          // 通常のタグ追加
-                          handleAddTag()
-                        }
-                      } else if (e.key === 'Escape') {
-                        // オートコンプリートを閉じる
-                        setShowSuggestions(false)
-                        setSelectedSuggestionIndex(-1)
-                      } else if (e.key === 'ArrowDown' && showSuggestions) {
-                        e.preventDefault()
-                        setSelectedSuggestionIndex(prev => 
-                          prev < tagSuggestions.length - 1 ? prev + 1 : 0
-                        )
-                      } else if (e.key === 'ArrowUp' && showSuggestions) {
-                        e.preventDefault()
-                        setSelectedSuggestionIndex(prev => 
-                          prev > 0 ? prev - 1 : tagSuggestions.length - 1
-                        )
-                      }
-                    }}
-                    placeholder="タグを入力"
-                    className={styles.tagInput}
-                  />
-                  {showSuggestions && (
-                    <div className={styles.suggestions}>
-                      {isLoadingSuggestions ? (
-                        <div className={styles.loadingMessage}>
-                          検索中...
-                        </div>
-                      ) : tagSuggestions.length > 0 ? (
-                        tagSuggestions.map((suggestion, index) => (
-                          <button
-                            key={suggestion}
-                            className={`${styles.suggestionItem} ${
-                              index === selectedSuggestionIndex ? styles.suggestionItemSelected : ''
-                            }`}
-                            onClick={() => {
-                              setTagInput(suggestion)
-                              setShowSuggestions(false)
-                              setSelectedSuggestionIndex(-1)
-                              tagInputRef.current?.focus()
-                            }}
-                            onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                          >
-                            {suggestion}
-                          </button>
-                        ))
-                      ) : (
-                        <div className={styles.noResultsMessage}>
-                          候補が見つかりませんでした
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 演算子選択 */}
-                <div className={styles.operatorSelect}>
-                  <label>条件の組み合わせ方:</label>
-                  <div className={styles.operatorButtons}>
-                    {/* 最初のタグの場合は「含む」「除外する」のみ表示 */}
-                    {formData.conditions.length === 0 ? (
-                      <>
-                        <button
-                          className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
-                          onClick={() => setTagOperator('AND')}
-                          title="選択したタグを含む動画のみ表示"
-                        >
-                          含む
-                        </button>
-                        <button
-                          className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
-                          onClick={() => setTagOperator('NOT')}
-                          title="選択したタグを含まない動画のみ表示"
-                        >
-                          {OPERATOR_LABELS.NOT}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          className={`${styles.operatorButton} ${tagOperator === 'AND' ? styles.active : ''}`}
-                          onClick={() => setTagOperator('AND')}
-                          title="選択したタグをすべて含む動画のみ表示"
-                        >
-                          {OPERATOR_LABELS.AND}
-                        </button>
-                        <button
-                          className={`${styles.operatorButton} ${tagOperator === 'OR' ? styles.active : ''}`}
-                          onClick={() => setTagOperator('OR')}
-                          title="選択したタグのいずれかを含む動画を表示"
-                        >
-                          {OPERATOR_LABELS.OR}
-                        </button>
-                        <button
-                          className={`${styles.operatorButton} ${tagOperator === 'NOT' ? styles.active : ''}`}
-                          onClick={() => setTagOperator('NOT')}
-                          title="選択したタグを含まない動画のみ表示"
-                        >
-                          {OPERATOR_LABELS.NOT}
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className={styles.tagTypeSelect}>
-                  <label>タグ種別:</label>
-                  <div className={styles.tagTypeButtons}>
-                    <button
-                      className={`${styles.tagTypeButton} ${tagType === 'lock' ? styles.active : ''}`}
-                      onClick={() => setTagType('lock')}
-                      title="運営が設定したロックタグのみ対象"
-                    >
-                      <TagIcon type="locked" size={16} />
-                      ロックタグ
-                    </button>
-                    <button
-                      className={`${styles.tagTypeButton} ${tagType === 'user' ? styles.active : ''}`}
-                      onClick={() => setTagType('user')}
-                      title="ユーザーが設定したタグのみ対象"
-                    >
-                      <TagIcon type="user" size={16} />
-                      ユーザータグ
-                    </button>
-                    <button
-                      className={`${styles.tagTypeButton} ${tagType === 'both' ? styles.active : ''}`}
-                      onClick={() => setTagType('both')}
-                      title="ロックタグとユーザータグの両方を対象"
-                    >
-                      <TagIcon type="both" size={16} />
-                      両方
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  className={styles.addButton}
-                  onClick={handleAddTag}
-                  disabled={!tagInput.trim()}
-                >
-                  追加
-                </button>
-              </div>
+              <KeywordConditionEditor
+                conditions={tagConditions.conditions}
+                drafts={drafts}
+                targets="tag"
+                description={describeCustomConditions(committedTagConditions)}
+                onConditionsChange={(next) =>
+                  setTagConditions((prev) => withConditions(prev, next))
+                }
+                onDraftChange={(group, value) =>
+                  setDrafts((prev) => ({ ...prev, [group]: value }))
+                }
+                normalizeWord={normalizeTagWord}
+                renderWordControl={(_group, word) => renderTagScope(word)}
+                groupJoin="または"
+              />
             </div>
           )}
 
@@ -650,6 +416,11 @@ export function CustomRankingModal({
                   このタイトルは既に使用されています
                 </p>
               )}
+              {saveError && (
+                <p className={styles.error} role="alert">
+                  保存できませんでした。もう一度「保存」を押してください。
+                </p>
+              )}
 
               {/* タグボタンスタイルのプレビュー */}
               {formData.title && (
@@ -676,7 +447,11 @@ export function CustomRankingModal({
           <button
             className={styles.nextButton}
             onClick={handleNext}
-            disabled={!canProceed}
+            disabled={!canProceed || advancing}
+            // 保存を待つ間は押せなくするが、disabled にはしない（押したボタンからフォーカスが外れ、
+            // 失敗したあとキーボードでモーダルに戻れなくなるため）。二重の保存は handleNext で防ぐ
+            aria-disabled={saving || undefined}
+            aria-busy={advancing || saving || undefined}
           >
             {currentStep === 3 ? '保存' : '次へ'}
           </button>

@@ -54,6 +54,7 @@ next-env.d.ts
 .dev.vars
 wrangler.toml
 !workers/ranking-scheduler/wrangler.toml
+!workers/lqng-poller/wrangler.toml
 
 # OpenNext build artifacts
 .open-next/
@@ -135,6 +136,7 @@ scripts/*
 !scripts/update-routing-config.sh
 !scripts/manual-deploy-workers.sh
 !scripts/wrangler-with-token.sh
+!scripts/lqng-backfill-driver.ts
 !scripts/switch-to-blue.js
 !scripts/switch-to-green.js
 !scripts/upload-tag-accumulation.ts
@@ -204,6 +206,11 @@ workers/video-stats-updater/src/*-fixed.js
 workers/video-stats-updater/test-debug.js
 workers/video-stats-updater/wrangler-debug.toml
 
+# Session worktrees (machine standard)
+.worktrees/
+
+# ローカル実験（公開リポジトリに出さない: 個人IDや名前を含む判定データ・スクリプト）
+scripts/experiments/
 !scripts/validate-worker-target.mjs
 !scripts/check-admin-gateway.mjs
 !scripts/static-asset-routing.mjs

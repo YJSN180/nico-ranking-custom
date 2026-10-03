@@ -1,30 +1,35 @@
 'use client'
 
 import { memo } from 'react'
+import { VideoStats } from './video-stats'
+import './ranking-item-responsive.css'
+
+interface InitialRankingSkeletonProps {
+  itemCount?: number
+  /** 検索結果など順位を表示しない一覧のスケルトン（実アイテムの hideRank と対応） */
+  hideRank?: boolean
+  /** PC幅でも仕切り線のみのフラット表示（実アイテムの flat と対応） */
+  flat?: boolean
+}
 
 // スケルトンスクリーン: 実際のランキングアイテムのレイアウトにマッチ
-const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount = 5 }: { itemCount?: number }) {
+const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount = 5, hideRank = false, flat = false }: InitialRankingSkeletonProps) {
   return (
-    <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+    <ul aria-hidden="true" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
       {Array.from({ length: itemCount }, (_, index) => (
-        <li 
+        <li
           key={index}
           data-testid="ranking-skeleton-item"
-          className="ranking-item-responsive"
+          className={`ranking-item-responsive${flat ? ' ranking-item-responsive--flat' : ''}`}
           style={{
-            containerType: 'inline-size',
-            background: 'var(--surface-color)',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            boxShadow: 'var(--shadow-md)',
-            border: '1px solid var(--border-color)',
-            marginBottom: '8px',
+            // 背景・枠線はCSS側で制御（PC=カード / モバイル・flat=仕切り線のみ）
             position: 'relative'
           }}
         >
           <div className="ranking-item-responsive__content">
             {/* デスクトップ用順位スケルトン */}
-            <div 
+            {!hideRank && (
+            <div
               className="ranking-item-responsive__rank ranking-item-responsive__rank--desktop skeleton-pulse"
               style={{
                 background: 'var(--surface-secondary)',
@@ -36,16 +41,19 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
                 height: '44px'
               }}
             />
-            
+            )}
+
             {/* サムネイルスケルトン */}
             <div className="ranking-item-responsive__thumbnail">
               {/* モバイル用順位オーバーレイスケルトン */}
-              <div 
+              {!hideRank && (
+              <div
                 className="ranking-item-responsive__rank ranking-item-responsive__rank--mobile skeleton-pulse"
                 style={{
                   background: 'var(--surface-secondary)'
                 }}
               />
+              )}
               <div
                 className="skeleton-pulse"
                 style={{ 
@@ -60,6 +68,7 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
             
             {/* コンテンツエリアスケルトン */}
             <div className="ranking-item-responsive__details">
+              <div className="ranking-item-responsive__title-row"><div className="ranking-item-responsive__title-stack">
               {/* タイトルスケルトン */}
               <div 
                 className="ranking-item-responsive__title skeleton-pulse"
@@ -104,23 +113,8 @@ const InitialRankingSkeleton = memo(function InitialRankingSkeleton({ itemCount 
                 />
               </div>
               
-              {/* 統計情報スケルトン */}
-              <div className="ranking-item-responsive__stats">
-                {['▶️', '💬', '❤️', '📁'].map((emoji, statIndex) => (
-                  <div key={statIndex} className="ranking-item-responsive__stat" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <span>{emoji}</span>
-                    <div
-                      className="skeleton-pulse"
-                      style={{
-                        width: '40px',
-                        height: '14px',
-                        background: 'var(--surface-secondary)',
-                        borderRadius: '4px'
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
+              </div></div>
+              <VideoStats loading className="ranking-item-responsive__stats" />
             </div>
           </div>
         </li>

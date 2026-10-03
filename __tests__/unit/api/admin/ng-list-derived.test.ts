@@ -8,6 +8,8 @@ global.fetch = vi.fn()
 describe('Derived NG List API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // 認証で弾かれて使われなかった mockResolvedValueOnce を次のテストに持ち越さない
+    vi.mocked(global.fetch).mockReset()
     // Set up environment variables
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
@@ -85,6 +87,38 @@ describe('Derived NG List API', () => {
       expect(response.status).toBe(200)
       expect(data.videoIds).toEqual([])
       expect(data.count).toBe(0)
+    })
+  })
+
+  describe('GET /api/admin/ng-list/derived の読み取り失敗', () => {
+    const authedGet = () =>
+      GET(new NextRequest('http://localhost/api/admin/ng-list/derived', { headers: { authorization: 'Bearer valid-token' } }))
+
+    it('KV を読めなければ（429・5xx）空の一覧を返さず 503', async () => {
+      for (const status of [429, 500, 503]) {
+        vi.mocked(global.fetch).mockResolvedValueOnce({ ok: false, status, json: async () => ({}) } as Response)
+        const response = await authedGet()
+        expect(response.status).toBe(503)
+        expect(await response.json()).not.toHaveProperty('videoIds')
+      }
+    })
+
+    it('通信エラーも 503', async () => {
+      vi.mocked(global.fetch).mockRejectedValueOnce(new TypeError('network down'))
+      expect((await authedGet()).status).toBe(503)
+    })
+
+    it('KV の認証情報が無いときも 503（空の一覧を返さない）', async () => {
+      delete process.env.CLOUDFLARE_API_TOKEN
+      expect((await authedGet()).status).toBe(503)
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it('未作成（404）は空の一覧で 200', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) } as Response)
+      const response = await authedGet()
+      expect(response.status).toBe(200)
+      expect((await response.json()).videoIds).toEqual([])
     })
   })
 
