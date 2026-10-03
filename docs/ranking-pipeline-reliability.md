@@ -7,6 +7,10 @@
 - 8グループ、23ジャンル×2期間、人気タグ別データ、run/attempt/slot、収集日時を検証する。NGの取得・構造検証が失敗したら公開しない。
 - タグの1ページ目がHTTP 202かつserver-responseもHTTP_202と「このランキングは準備中です。」を明示した場合のみ、その期間の人気タグ候補から外し、group artifactのunavailableTagsに記録する。空データや新しい取得日時を捏造しない。必須ジャンルの202、タグの2ページ目以降の202、通信・解析エラーは公開を止める。ページ終端は上流paginationを優先し、NG除外後の件数不足を理由に存在しない次ページを取得しない。
 - r2-aggregateのタグキャッシュはジョブ内スナップショットとして再利用する。エントリ自体の7日TTLは維持し、同ジョブで補完済みの値を再読込で失わない。KVバックエンドの5分再読込は変更しない。タグ取得は本文受信もタイムアウト対象とする。
+- タグキャッシュのシャード読込は最大4並列（`TAG_CACHE_LOAD_CONCURRENCY`）、1回の読込全体で3分（`TAG_CACHE_LOAD_BUDGET_MS`）まで。上限に達したら読めたシャードだけで続行し、残りの動画は通常のタグ取得に回す。読めなかったシャードはそのジョブ中は空として扱う（従来の読込失敗と同じ）。どちらの環境変数もworkflowでは未設定で、CIで変える場合はjobのenvへの追記が必要。
+- R2のGetObjectはSDKのレスポンスチェックサム検証を`WHEN_REQUIRED`にする（タグキャッシュと公開用ストアの両方）。既定の`WHEN_SUPPORTED`では、`x-amz-checksum-*`付きの本文がabortや接続リセットで途切れたとき本文のストリームが終わらず、Promiseが残り続ける。破損はgzipのCRCとJSON解析で検出する。
+- R2の読み書きは1件ごとに通信20秒のabortに加え、本文受信・gzip処理を含む全体30秒の上限を持つ。公開用ストアでは上限到達をTimeoutErrorとして既存の再試行に回す。`readTagCacheShardFromR2`がnullを返すのはR2未設定と存在しないシャードだけで、その他の失敗は例外にする。収集側はKVへ切り替え、タグキャッシュのマージは読めないシャードを上書きせずに失敗する。
+- KV REST（`lib/simple-kv.ts`）の各通信は20秒で打ち切る（本文受信を含む）。失敗のたびに操作・試行回数・原因の種類（timeout、http_<status>、network）だけをログに出し、キー名は出さない。
 - 集約はローカル処理。validated-publication artifactを先に保存してからR2へ書く。
 - 新形式はrankings/generations/{runId}-{attempt}/配下にgzip JSONを保存する。全件read-back→metadata→世代manifest→current.jsonの条件付き更新の順。
 - current.jsonが存在しないときだけ旧canonical keyを読む。破損したmanifestでは旧形式へ黙って戻らない。公開APIのJSON shapeは変更しない。
@@ -46,6 +50,8 @@ npx wrangler deploy --dry-run -c workers/ranking-scheduler/wrangler.toml
 - 408/429/500/502/503/504、一時的な通信切断・タイムアウト: 最大5回、待機予算180秒、jitterとRetry-After。各通信20秒。認証・権限・データ破損は即失敗。
 - R2公開は最大8並列。成功済みのimmutable objectは再アップロードしない。current.jsonのETag競合時は別runの公開を上書きしない。
 - 収集グループは65分で明示失敗、jobは70分。正常終了してartifactがない場合もActions側で失敗。9月1日の欠損原因自体が再現できたという意味ではない。
+- 収集グループは、ランキングのページ取得・タグキャッシュのシャード読込・タグ詳細の1件ごとに進捗を記録する。10分進捗がなければ`process.getActiveResourcesInfo()`の要約を出してexit 1で終わり、65分の期限を待たずに再実行へ回す。
+- 公開後検証（verify-r2-contract）は統計が新しい世代に追いつくまで最大12分待つ。統計のcronは5分ごと・1回約45秒で、R2 leaseで直列化されるため、公開前に始まった回やleaseと重なったtriggerのせいで1〜2周遅れうる。/triggerが`{skipped: 'already-running'}`（lease中）を返したら60秒後に、応答が失われた・失敗した場合は統計が3分動かなければ再送する（最大8回）。1回の更新が約45秒かかるため、triggerの応答は120秒まで待つ。途中で切断すると更新が打ち切られてleaseが残るおそれがあり、その場合は次のcronが空振りする。この待ちは集約ジョブの最後の手順に置き、補助同期とタグキャッシュの統合を先に済ませる。集約ジョブの上限は、集約（約8分）と検証の待ち（最大12分余り）に余裕を足して35分にしている。
 - schedulerは稼働中runをcancelせず待機する。100分超ならstalledを通知。送信記録を先にR2へ保存し、応答が失われても15分間は再送しない。slotごと最大2回。
 - 同slotの失敗runはrerun-failed-jobs。成功グループのartifactを再利用する。補助同期が失敗した場合も後段jobだけ再試行する。
 - GitHub自体が停止・runner不足の場合、dispatch成功だけでは収集成功にならない。鮮度監視で別途検知する。
@@ -78,7 +84,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 ## 監視と受け入れ
 
 - Cloudflare側: 公開から90分でstale、120分でcritical、収集開始から150分でsource-stale。statsは15分以内かつ非ゼロ、前回健全値の50%以上。
-- 新公開の10分後にはstats世代/updatedAt、補助同期世代、公開APIの収集日時が一致すること。KVの伝播遅延は猶予内で扱う。
+- 新公開の15分後にはstats世代/updatedAt、補助同期世代、公開APIの収集日時が一致すること。KVの伝播遅延は猶予内で扱う。statsはleaseと重なると1〜2周遅れるため、10分では足りないことがある（2026-09-24の初回世代公開では約10.3分）。
 - 通知は異常分類の変化と回復時。health状態は世代・件数・分類が変わるときのみR2へ書く。毎pollのKVログ書き込みは追加しない。
 - GitHubの3時間監視も補助として残すが、GitHub cron遅延時の主監視にはしない。
 - 7日間: 各slotのdispatch時刻、実開始、収集完了、publish、stats反映を比較する。重複公開ゼロ、未公開世代の露出ゼロ、120分超の未通知停止ゼロを確認する。
@@ -103,7 +109,7 @@ npx tsx scripts/manage-ranking-generations.ts cleanup --apply
 - ローカル監査は `npm audit` と `npm audit --prefix workers/video-stats-updater`。監査0件は既知アドバイザリに対する結果であり、未知の脆弱性がない保証ではない。
 
 ```sh
-npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts
+npx vitest run __tests__/unit/pipeline-reliability.test.ts __tests__/unit/pipeline-readers.test.ts __tests__/unit/pipeline-tags.test.ts __tests__/unit/pipeline-collection.test.ts __tests__/unit/collect-ranking-items.test.ts __tests__/unit/lib/tag-fetcher-simple.test.ts __tests__/unit/lib/tag-cache-store.test.ts __tests__/unit/lib/tag-cache-store-r2-body.test.ts __tests__/unit/lib/simple-kv.test.ts __tests__/unit/pipeline-r2-store.test.ts __tests__/unit/pipeline-stall-watchdog.test.ts __tests__/unit/pipeline-verification.test.ts __tests__/unit/scripts/tag-cache-scripts.test.ts
 npm run test:worker:video-stats
 npx tsc --noEmit -p tsconfig.pipeline.json
 npm run typecheck
@@ -131,3 +137,18 @@ npm run typecheck:workers
 - accumulate-tags / write-to-r2 / sync-ranking-auxiliary / merge-tag-cache-deltas-to-r2 / record-pipeline-statusの5本の実CLIも成功。SDK・fetchの書込先だけをローカルに退避して497書込を記録し、390ランキング、KV補助コピー3組、派生NG6,496件、タグキャッシュ8 artifact・100 shard・差分24,759件を照合した。ランキング本体の後にmetadataが保存されること、補助同期のfailed=falseも確認した。
 - HTTPのGET/HEAD以外を拒否する検証用ガードを併用し、本番R2/KVへの書込、Workerの本番trigger、commit・push・deployは実施していない。検証用スクリプトと結果はgitignore対象のtmp/pipeline-acceptance/1789907307933に保存した。これはローカルの実行IDであり、GitHubのrun IDではない。
 - Worker回帰テスト29件、Workerビルド・構文チェック、Wrangler deploy --dry-runは成功。R2一覧の後続ページ失敗・不正cursorで前回統計を維持するテストを含む。Cloudflare runtime上の実動作、本番初回公開、次回定期実行、公開UI/APIの更新確認は未完了で、main反映と明示Workerデプロイの後に確認する。
+
+## 2026-09-24 収集グループ停止の対策
+
+- run 36046509459でgroup 3と5が65分の期限で失敗し、公開が飛んだ。group 5のログはAWS SDKのNodeバージョン警告（最初のS3 client作成時に1回出る）で止まっていた。止まったグループはいずれも最初のジャンルのタグキャッシュ読込中だった。
+- 最も疑わしいのはR2 GetObjectの本文受信。SDK既定のチェックサム検証が本文を`source.pipe()`で包むため、abortや接続リセットで元の接続が切れても包んだストリームが終わらない。そのため`transformToByteArray()`が成功も失敗もせず、I/Oも残らないまま65分の期限タイマーだけがprocessを生かしていた。ロックファイルと同じSDKとNode 20.20.0でローカル再現した。本番R2がこれらのシャードに`x-amz-checksum-crc32`を返すかは未確認。
+- 対策は、R2読込の`WHEN_REQUIRED`と1件30秒の上限、タグキャッシュ読込全体の3分上限と4並列、KV通信の20秒上限、10分無進捗での早期失敗。公開用ストア（`scripts/lib/r2-store.ts`）とタグキャッシュの書込にも同じ上限を入れた。
+
+### ログの見方
+
+- 正常: `[Tag Cache] Loaded: 100/100 shards settled (found …, missing …, failed …), … entries, 0 in flight, X.Xs elapsed`。
+- 読込が遅い: 10秒ごとに`[Tag Cache] Loading: … (waiting on shard N Ks)`が出る。
+- 失敗: `[Tag Cache R2] Failed to read shard N (…); trying KV`、`[KV] get attempt n/3 failed: timeout`。以前の停止と同じ中断なら、無音ではなく`AbortError`や`ECONNRESET`の行として見える。
+- 3分上限に到達: `[Tag Cache] Load budget of 180s reached: continuing with X/Y shards; …`。
+- 無進捗で停止: `Group N made no progress for 600s (last progress: …); active resources: {…}`。`TCPSocketWrap`や`TLSWrap`があれば通信待ち、`PipeWrap`と`Timeout`だけなら取り残されたPromise（今回と同じ型）、`FSReqCallback`やzlib系があればスレッドプール待ち。
+- 公開後検証: `[Verify] Stats trigger n: updated|busy|failed|lost … after Ns`。busyは統計Workerのlease中。
