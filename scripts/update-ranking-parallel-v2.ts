@@ -3,7 +3,7 @@ import type { RankingGenre } from '../types/ranking-config'
 import type { RankingItem } from '../types/ranking'
 import type { TagFetchRunStats } from '../lib/tag-fetcher-simple'
 import { fetchChecked } from '../lib/pipeline/retry'
-import { RANKING_GROUPS, validateGenre } from '../lib/pipeline/publication-contract'
+import { createGroupArtifact, RANKING_GROUPS, validateGenre } from '../lib/pipeline/publication-contract'
 import {
   getTagFetchRunStats,
   resetTagFetchRunStats,
@@ -567,9 +567,9 @@ if (process.argv[2] === '--group') {
     await fs.mkdir(tmpDir, { recursive: true })
     await fs.writeFile(
       path.join(tmpDir, `ranking-group-${groupId}.json.partial`),
-      JSON.stringify({ version: 1, runId: process.env.GITHUB_RUN_ID,
+      JSON.stringify(createGroupArtifact({ runId: process.env.GITHUB_RUN_ID ?? '',
         attempt: process.env.GITHUB_RUN_ATTEMPT || '1', slot: process.env.RANKING_SLOT || '',
-        groupId, collectedAt: new Date(startTime).toISOString(), completedAt: new Date().toISOString(), results }),
+        groupId, collectedAt: new Date(startTime).toISOString(), completedAt: new Date().toISOString(), results })),
     )
     await fs.rename(path.join(tmpDir, `ranking-group-${groupId}.json.partial`), path.join(tmpDir, `ranking-group-${groupId}.json`))
     collectionComplete = true
