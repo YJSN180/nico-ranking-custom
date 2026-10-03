@@ -5,6 +5,7 @@
  */
 
 import type { RankingItem, TagDetail } from '../types/ranking'
+import { decodeHtmlEntities } from './html-entities'
 import { kv } from './simple-kv'
 import { reportPipelineProgress } from './pipeline/stall-watchdog'
 import {
@@ -113,15 +114,6 @@ export function setTagFetchContext(label: string | null): void {
   currentTagFetchContext = label
 }
 
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&#39;/g, "'")
-}
-
 function getShardKey(videoId: string): string {
   return getShardKeyForVideoId(videoId)
 }
@@ -167,9 +159,19 @@ function addToCache(cacheByShard: TagCacheByShard, shardKey: string, videoId: st
   shard[videoId] = {
     tags,
     fetchedAt: new Date().toISOString(),
-    source
+    source,
+    namesDecoded: true
   }
   cacheByShard[shardKey] = shard
+}
+
+/**
+ * キャッシュのタグを使う形にする。getthumbinfo の名前を XML のまま保存していた頃のエントリ
+ * （namesDecoded なし）は、読むたびに 1 回だけ戻す。nicolog のエントリは当時から戻してある
+ */
+function readCachedTags(entry: TagCacheEntry): TagDetail[] {
+  if (entry.namesDecoded === true || entry.source === 'nicolog') return entry.tags
+  return entry.tags.map(tag => ({ ...tag, name: decodeHtmlEntities(tag.name) }))
 }
 
 function createRateLimitedQueue(concurrency: number, minIntervalMs: number) {
@@ -412,6 +414,22 @@ async function fetchTagsFromNicolog(videoId: string): Promise<TagFetchResult> {
   }
 }
 
+// getthumbinfo の XML のタグ名。XML のエスケープ（&amp; など）を 1 回だけ戻し、空になったものは捨てる
+function decodeThumbTagName(raw: string): string | null {
+  const name = decodeHtmlEntities(raw).trim()
+  return name ? name : null
+}
+
+// getthumbinfo の XML からすべてのタグ（ロック状態つき）を取り出す
+function parseGetThumbInfoTags(xml: string): TagDetail[] {
+  const tagDetails: TagDetail[] = []
+  for (const match of xml.matchAll(/<tag(\s+lock="1")?[^>]*>([^<]+)<\/tag>/g)) {
+    const name = decodeThumbTagName(match[2])
+    if (name !== null) tagDetails.push({ name, isLocked: match[1] !== undefined })
+  }
+  return tagDetails
+}
+
 /**
  * getthumbinfo APIを使用して固定タグを取得
  * @param videoId 動画ID
@@ -442,8 +460,11 @@ export async function fetchFixedTagsFromGetThumbInfo(videoId: string): Promise<s
     }
     
     // ロックされたタグ（固定タグ）を抽出
-    const lockedTagMatches = xml.matchAll(/<tag[^>]*lock="1"[^>]*>([^<]+)<\/tag>/g)
-    const lockedTags = Array.from(lockedTagMatches, m => m[1])
+    const lockedTags: string[] = []
+    for (const match of xml.matchAll(/<tag[^>]*lock="1"[^>]*>([^<]+)<\/tag>/g)) {
+      const name = decodeThumbTagName(match[1])
+      if (name !== null) lockedTags.push(name)
+    }
     
     return lockedTags
   } catch (error) {
@@ -482,17 +503,7 @@ export async function fetchAllTagsFromGetThumbInfo(videoId: string): Promise<Tag
     }
     
     // すべてのタグを抽出（ロック状態も含む）
-    const allTagMatches = xml.matchAll(/<tag(\s+lock="1")?[^>]*>([^<]+)<\/tag>/g)
-    const tagDetails: TagDetail[] = []
-    
-    for (const match of allTagMatches) {
-      tagDetails.push({
-        name: match[2],
-        isLocked: match[1] !== undefined
-      })
-    }
-    
-    return tagDetails
+    return parseGetThumbInfoTags(xml)
   } catch (error) {
     // エラーは静かに処理（ログ出力なし）
     return []
@@ -518,15 +529,7 @@ async function fetchAllTagsFromGetThumbInfoWithStatus(videoId: string): Promise<
       return { ok: false, reason: 'status_unknown' }
     }
 
-    const allTagMatches = xml.matchAll(/<tag(\s+lock="1")?[^>]*>([^<]+)<\/tag>/g)
-    const tagDetails: TagDetail[] = []
-    for (const match of allTagMatches) {
-      tagDetails.push({
-        name: match[2],
-        isLocked: match[1] !== undefined
-      })
-    }
-
+    const tagDetails = parseGetThumbInfoTags(xml)
     if (tagDetails.length === 0) {
       return { ok: false, reason: 'empty' }
     }
@@ -671,15 +674,15 @@ export async function enrichRankingItemsWithTagDetails(
       const shardKey = getShardKey(item.id)
       const shard = useCache ? cacheByShard[shardKey] : undefined
       const cached = shard ? shard[item.id] : undefined
-      const lkgTags = cached?.tags && cached.tags.length > 0 ? cached.tags : null
+      const cachedTags = cached?.tags && cached.tags.length > 0 ? readCachedTags(cached) : null
 
-      if (cached && isFreshSuccess(cached, now)) {
+      if (cached && cachedTags && isFreshSuccess(cached, now)) {
         cacheHits++
         itemsWithTags++
         return {
           ...item,
-          tagDetails: cached.tags,
-          tags: cached.tags.map(t => t.name)
+          tagDetails: cachedTags,
+          tags: cachedTags.map(t => t.name)
         }
       }
 
@@ -752,11 +755,11 @@ export async function enrichRankingItemsWithTagDetails(
         }
       }
 
-      if (lkgTags && lkgTags.length > 0) {
+      if (cachedTags) {
         return {
           ...item,
-          tagDetails: lkgTags,
-          tags: lkgTags.map(t => t.name)
+          tagDetails: cachedTags,
+          tags: cachedTags.map(t => t.name)
         }
       }
 

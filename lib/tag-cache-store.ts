@@ -20,6 +20,8 @@ export interface TagCacheEntry {
   tags: TagDetail[]
   fetchedAt: string
   source?: TagSource
+  // タグ名の文字参照（&amp; など）を戻してから保存したか。ない getthumbinfo のエントリは XML のままの名前を持つ
+  namesDecoded?: boolean
   fail?: TagCacheFailure
 }
 

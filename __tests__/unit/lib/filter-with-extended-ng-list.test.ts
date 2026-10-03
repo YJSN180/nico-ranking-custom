@@ -222,6 +222,32 @@ describe('filterWithExtendedNGList', () => {
     })
   })
 
+  describe('文字参照のまま保存した NG タグ', () => {
+    it('hides videos whose decoded tag matches a saved escaped NG, and only those', () => {
+      const items = [
+        createMockItem({
+          id: 'sm1',
+          tagDetails: [{ name: 'DAM&JOY配信中', isLocked: false }],
+        }),
+        createMockItem({
+          id: 'sm2',
+          tagDetails: [{ name: 'DAM&amp;JOY配信中', isLocked: false }],
+        }),
+        createMockItem({
+          id: 'sm3',
+          tagDetails: [{ name: '歌ってみた', isLocked: false }],
+        }),
+      ]
+      const ngList = createEmptyExtendedNGList()
+      ngList.tags!.both.exact = ['DAM&amp;JOY配信中']
+
+      const result = filterWithExtendedNGList(items, ngList)
+
+      expect(result.filteredItems.map((item) => item.id)).toEqual(['sm3'])
+      expect(result.newDerivedIds).toEqual(['sm1', 'sm2'])
+    })
+  })
+
   describe('ランク番号の再計算', () => {
     it('should recalculate rank numbers after filtering', () => {
       const items = [

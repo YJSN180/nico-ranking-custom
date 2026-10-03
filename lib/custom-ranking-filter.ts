@@ -1,5 +1,36 @@
 import type { RankingItem } from '@/types/ranking'
 import type { TagCondition } from '@/types/custom-ranking'
+import {
+  isSameTagName,
+  tagNameFormsIgnoringCase,
+  type TagNameForms,
+} from './tag-name-match'
+
+// 比べる形を前もって作った条件。条件のタグ名は絞り込みごとに 1 回だけ作り、動画ごとには作らない
+interface PreparedCondition {
+  condition: TagCondition
+  tag: TagNameForms
+}
+
+interface PreparedConditions {
+  and: PreparedCondition[]
+  or: PreparedCondition[]
+  not: PreparedCondition[]
+}
+
+function prepareConditions(conditions: TagCondition[]): PreparedConditions {
+  const prepared: PreparedConditions = { and: [], or: [], not: [] }
+  for (const condition of conditions) {
+    const entry: PreparedCondition = {
+      condition,
+      tag: tagNameFormsIgnoringCase(condition.tag),
+    }
+    if (condition.operator === 'AND') prepared.and.push(entry)
+    else if (condition.operator === 'OR') prepared.or.push(entry)
+    else if (condition.operator === 'NOT') prepared.not.push(entry)
+  }
+  return prepared
+}
 
 /**
  * カスタムランキングの条件に基づいてアイテムをフィルタリング
@@ -24,7 +55,8 @@ export function applyCustomFilters(
     return items
   }
 
-  const filtered = items.filter(item => matchesConditions(item, conditions))
+  const prepared = prepareConditions(conditions)
+  const filtered = items.filter((item) => matchesConditions(item, prepared))
   // eslint-disable-next-line no-console
   console.log('[FILTER DEBUG] Filtered count:', filtered.length)
   return filtered
@@ -33,19 +65,18 @@ export function applyCustomFilters(
 /**
  * アイテムが条件に一致するかチェック
  * @param item ランキングアイテム
- * @param conditions タグ条件の配列
+ * @param conditions 演算子ごとに分けた、比べる形のタグ条件
  * @returns 条件に一致する場合はtrue
  */
 function matchesConditions(
   item: RankingItem,
-  conditions: TagCondition[]
+  conditions: PreparedConditions,
 ): boolean {
-  // AND条件の収集
-  const andConditions = conditions.filter(c => c.operator === 'AND')
-  // OR条件の収集
-  const orConditions = conditions.filter(c => c.operator === 'OR')
-  // NOT条件の収集
-  const notConditions = conditions.filter(c => c.operator === 'NOT')
+  const {
+    and: andConditions,
+    or: orConditions,
+    not: notConditions,
+  } = conditions
 
   // NOT条件のチェック（1つでも含まれていたら除外）
   for (const condition of notConditions) {
@@ -88,13 +119,17 @@ function matchesConditions(
 }
 
 /**
- * アイテムが指定されたタグ条件に一致するかチェック
+ * アイテムが指定されたタグ条件に一致するかチェック。
+ * 大文字小文字を区別せず、条件と動画のタグ名のどちらか一方が文字参照のまま（&amp; など）でも一致とする
  * @param item ランキングアイテム
- * @param condition タグ条件
+ * @param prepared 比べる形を作ったタグ条件
  * @returns 条件に一致する場合はtrue
  */
-function hasMatchingTag(item: RankingItem, condition: TagCondition): boolean {
-  const tagNameLower = condition.tag.toLowerCase()
+function hasMatchingTag(
+  item: RankingItem,
+  prepared: PreparedCondition,
+): boolean {
+  const { condition, tag } = prepared
   
   // デバッグ用：最初の数件のみログ出力
   if (Math.random() < 0.01) { // 1%の確率でログ出力（大量ログ防止）
@@ -109,7 +144,7 @@ function hasMatchingTag(item: RankingItem, condition: TagCondition): boolean {
   // tagDetailsがある場合は詳細情報を使用
   if (item.tagDetails && item.tagDetails.length > 0) {
     for (const tagDetail of item.tagDetails) {
-      if (tagDetail.name.toLowerCase() === tagNameLower) {
+      if (isSameTagName(tag, tagNameFormsIgnoringCase(tagDetail.name))) {
         // タグタイプのチェック
         switch (condition.tagType) {
           case 'lock':
@@ -129,7 +164,9 @@ function hasMatchingTag(item: RankingItem, condition: TagCondition): boolean {
 
   // tagDetailsがない場合はtagsを使用（タグタイプの区別はできない）
   if (item.tags && item.tags.length > 0) {
-    const hasTag = item.tags.some(tag => tag.toLowerCase() === tagNameLower)
+    const hasTag = item.tags.some((name) =>
+      isSameTagName(tag, tagNameFormsIgnoringCase(name)),
+    )
     if (hasTag) {
       // tagDetailsがない場合は後方互換性のため、タグタイプに関わらず一致とする
       return true

@@ -242,6 +242,106 @@ describe('custom-ranking-filter', () => {
     })
   })
 
+  // 修正前は候補から DAM&amp;JOY配信中 の形で条件を保存できた。保存値は書き換えず、比べるときに合わせる
+  describe('applyCustomFilters with escaped tag names', () => {
+    it('matches a saved escaped condition against decoded video tags', () => {
+      const items = [
+        createRankingItem({
+          id: 'sm1',
+          tagDetails: [{ name: 'DAM&JOY配信中', isLocked: true }],
+        }),
+        createRankingItem({ id: 'sm2', tags: ['DAM&JOY配信中'] }),
+        createRankingItem({
+          id: 'sm3',
+          tagDetails: [{ name: 'カラオケ', isLocked: true }],
+        }),
+      ]
+      const conditions: TagCondition[] = [
+        { tag: 'DAM&amp;JOY配信中', operator: 'AND', tagType: 'both' },
+      ]
+
+      const result = applyCustomFilters(items, conditions)
+
+      expect(result.map((item) => item.id)).toEqual(['sm1', 'sm2'])
+    })
+
+    it('matches a decoded condition against escaped tags from an older ranking generation', () => {
+      const items = [
+        createRankingItem({
+          id: 'sm1',
+          tagDetails: [{ name: 'DAM&amp;JOY配信中', isLocked: false }],
+        }),
+        createRankingItem({
+          id: 'sm2',
+          tagDetails: [{ name: 'カラオケ', isLocked: false }],
+        }),
+      ]
+      const conditions: TagCondition[] = [
+        { tag: 'dam&joy配信中', operator: 'OR', tagType: 'user' },
+      ]
+
+      expect(
+        applyCustomFilters(items, conditions).map((item) => item.id),
+      ).toEqual(['sm1'])
+    })
+
+    it('applies escaped NOT conditions and still checks the tag type', () => {
+      const items = [
+        createRankingItem({
+          id: 'sm1',
+          tagDetails: [
+            { name: 'ゲーム', isLocked: true },
+            { name: 'R&B', isLocked: false },
+          ],
+        }),
+        createRankingItem({
+          id: 'sm2',
+          tagDetails: [{ name: 'ゲーム', isLocked: true }],
+        }),
+      ]
+      const notEscaped: TagCondition[] = [
+        { tag: 'ゲーム', operator: 'AND', tagType: 'both' },
+        { tag: 'R&amp;B', operator: 'NOT', tagType: 'both' },
+      ]
+      const lockOnly: TagCondition[] = [
+        { tag: 'R&amp;B', operator: 'AND', tagType: 'lock' },
+      ]
+
+      expect(
+        applyCustomFilters(items, notEscaped).map((item) => item.id),
+      ).toEqual(['sm2'])
+      expect(applyCustomFilters(items, lockOnly)).toHaveLength(0)
+    })
+
+    it('keeps plain names and real names containing & matchable', () => {
+      const items = [
+        createRankingItem({
+          id: 'sm1',
+          tagDetails: [{ name: 'Tom&Jerry', isLocked: false }],
+        }),
+        createRankingItem({
+          id: 'sm2',
+          tagDetails: [{ name: 'chage&amp;aska', isLocked: false }],
+        }),
+        createRankingItem({
+          id: 'sm3',
+          tagDetails: [{ name: 'VOCALOID', isLocked: true }],
+        }),
+      ]
+
+      const byTag = (tag: string): string[] =>
+        applyCustomFilters(items, [
+          { tag, operator: 'AND', tagType: 'both' },
+        ]).map((item) => item.id)
+
+      expect(byTag('tom&jerry')).toEqual(['sm1'])
+      expect(byTag('vocaloid')).toEqual(['sm3'])
+      // 本当の名前が chage&amp;aska のタグ。そのままでも、修正前の XML のままの保存値でも当たる
+      expect(byTag('chage&amp;aska')).toEqual(['sm2'])
+      expect(byTag('chage&amp;amp;aska')).toEqual(['sm2'])
+    })
+  })
+
   describe('collectTagCounts', () => {
     it('should count tags from items', () => {
       const items = [

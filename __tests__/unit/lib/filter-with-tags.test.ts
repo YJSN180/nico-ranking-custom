@@ -242,4 +242,73 @@ describe('filterByTags', () => {
       expect(filterByTags(item, ngTags)).toBe(true)
     })
   })
+
+  // 修正前は候補やタグ詳細から DAM&amp;JOY配信中 の形で保存できた。保存値は書き換えず、比べるときに合わせる
+  describe('文字参照のまま保存した NG タグ', () => {
+    it('matches a saved escaped exact NG against the decoded video tag', () => {
+      const item = createMockItem([{ name: 'DAM&JOY配信中', isLocked: false }])
+      const ngTags = createEmptyTags()
+      ngTags!.user.exact = ['DAM&amp;JOY配信中']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('matches a decoded NG against an escaped tag from an older ranking generation', () => {
+      const item = createMockItem([
+        { name: 'DAM&amp;JOY配信中', isLocked: true },
+      ])
+      const ngTags = createEmptyTags()
+      ngTags!.locked.exact = ['DAM&JOY配信中']
+
+      expect(filterByTags(item, ngTags)).toBe(true)
+    })
+
+    it('matches escaped partial and both-type NG words', () => {
+      const item = createMockItem([{ name: "Let's Play", isLocked: false }])
+      const partial = createEmptyTags()
+      partial!.both.partial = ['let&#39;s']
+      const exact = createEmptyTags()
+      exact!.both.exact = ['LET&apos;S PLAY']
+
+      expect(filterByTags(item, partial)).toBe(true)
+      expect(filterByTags(item, exact)).toBe(true)
+    })
+
+    it('still respects the lock type for escaped names', () => {
+      const item = createMockItem([{ name: 'DAM&JOY配信中', isLocked: false }])
+      const ngTags = createEmptyTags()
+      ngTags!.locked.exact = ['DAM&amp;JOY配信中']
+
+      expect(filterByTags(item, ngTags)).toBe(false)
+    })
+
+    it('keeps real names containing & matchable', () => {
+      const ampersand = createEmptyTags()
+      ampersand!.both.exact = ['Tom&Jerry']
+      expect(
+        filterByTags(
+          createMockItem([{ name: 'tom&jerry', isLocked: false }]),
+          ampersand,
+        ),
+      ).toBe(true)
+
+      // 本当の名前が chage&amp;aska のタグ。修正前に保存した XML のままの形でも当たる
+      const realEntityName = createEmptyTags()
+      realEntityName!.both.exact = ['chage&amp;amp;aska']
+      expect(
+        filterByTags(
+          createMockItem([{ name: 'chage&amp;aska', isLocked: false }]),
+          realEntityName,
+        ),
+      ).toBe(true)
+    })
+
+    it('does not match unrelated plain names', () => {
+      const item = createMockItem([{ name: 'DAM配信中', isLocked: false }])
+      const ngTags = createEmptyTags()
+      ngTags!.both.exact = ['DAM&amp;JOY配信中']
+
+      expect(filterByTags(item, ngTags)).toBe(false)
+    })
+  })
 })

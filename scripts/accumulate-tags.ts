@@ -8,6 +8,7 @@
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import type { KVRankingData, RankingItem, TagDetail } from '../types/ranking'
+import { decodeHtmlEntities } from '../lib/html-entities'
 import { createR2Store } from './lib/r2-store'
 
 // 直近30日に見たタグだけを、最大30万件まで残す
@@ -42,13 +43,16 @@ export interface TagAccumulationData {
     weeklyUpdateCount: number  // 週次更新回数
     retentionDays: number
     maxTags: number
+    namesDecoded: boolean  // タグ名の文字参照（&amp; など）を戻し済み。次回からは既存の名前を戻さない
   }
 }
 
 // R2 から読んだ既存データ。lastSeenDays は tags と同じ並びの最後に見た日で、ない（旧形式）こともある
+// namesDecoded がないデータは、getthumbinfo の名前を XML のまま（&amp; など）持っていることがある
 export interface ExistingTagAccumulation {
   tags: string[]
   lastSeenDays?: number[]
+  namesDecoded?: boolean
   metadata: { version: number; weeklyUpdateCount: number }
 }
 
@@ -60,6 +64,7 @@ export interface TagRetentionOptions {
 export interface TagMergeStats {
   seen: number  // 今回見つかった有効なタグ（重複なし）
   added: number  // 既存になかったタグ
+  decoded: number  // 文字参照を戻して名前が変わった既存タグ
   expired: number  // 保持期間切れで落としたタグ
   capped: number  // 上限超過で落としたタグ
   legacy: boolean  // 既存に揃った lastSeenDays がなかった
@@ -126,6 +131,7 @@ export async function getExistingTagsFromR2(): Promise<ExistingTagAccumulation> 
       tags,
       metadata: { version: metadata.version, weeklyUpdateCount: metadata.weeklyUpdateCount },
     }
+    if (metadata.namesDecoded === true) result.namesDecoded = true
     if (lastSeenDays) {
       result.lastSeenDays = lastSeenDays
     } else if (tags.length > 0) {
@@ -171,9 +177,11 @@ function compareCodeUnits(a: string, b: string): number {
  * 今回見たタグは今日の日付にし、保持期間を過ぎたタグを落とし、上限を超えたら新しく見たものを残す。
  * 旧形式（lastSeenDays なし）の既存タグには、ハッシュで昨日〜29日前に散らした日付を仮に付ける
  * （一度に消えず、特定の文字の範囲だけが消えることもない）。
+ * namesDecoded でない既存タグは文字参照を 1 回だけ戻し、同じ名前になったものは新しく見た日を残す。
+ * 戻し済みの名前（今回見たタグも）をもう一度戻すと、&amp; を名前に含む実在のタグが変わるので戻さない。
  */
 export function mergeTagAccumulation(
-  existing: { tags: readonly string[]; lastSeenDays?: readonly number[] },
+  existing: { tags: readonly string[]; lastSeenDays?: readonly number[]; namesDecoded?: boolean },
   seenNow: Iterable<string>,
   todayDay: number,
   options: TagRetentionOptions = {},
@@ -185,8 +193,12 @@ export function mergeTagAccumulation(
 
   // Map の挿入順は既存の並び（50音順）を保つので、最後の並べ替えが速く済む
   const lastSeen = new Map<string, number>()
+  let decoded = 0
   for (let i = 0; i < existing.tags.length; i++) {
-    const tag = normalizeTag(existing.tags[i])
+    const stored = existing.tags[i]
+    const name = existing.namesDecoded === true || typeof stored !== 'string' ? stored : decodeHtmlEntities(stored)
+    if (name !== stored) decoded++
+    const tag = normalizeTag(name)
     if (tag === null) continue
     const day = knownDays
       ? Math.min(knownDays[i], todayDay)
@@ -243,6 +255,7 @@ export function mergeTagAccumulation(
     stats: {
       seen: seen.size,
       added,
+      decoded,
       expired,
       capped,
       legacy: knownDays === null && existing.tags.length > 0,
@@ -278,6 +291,7 @@ export function buildTagAccumulation(
         weeklyUpdateCount: existing.metadata.weeklyUpdateCount + 1,
         retentionDays: TAG_RETENTION_DAYS,
         maxTags: MAX_ACCUMULATED_TAGS,
+        namesDecoded: true,
       },
     },
     stats: merged.stats,
@@ -579,6 +593,7 @@ async function main() {
     const cleanedTags = updatedData.tags
     console.log(`✨ Found ${stats.added} new unique tags`)
     if (stats.legacy) console.log('🕰️  Existing data had no lastSeen; spread legacy tags over the retention window')
+    if (stats.decoded > 0) console.log(`🔤 Decoded HTML entities in ${stats.decoded} existing tag names`)
     console.log(`🧹 Expired ${stats.expired}, capped ${stats.capped}, kept ${cleanedTags.length} tags (oldest last seen ${stats.oldestAgeDays} days ago)`)
     console.log(`💾 Saved tag data to ${outputPath} for R2 upload`)
 
