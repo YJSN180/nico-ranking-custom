@@ -498,3 +498,194 @@ describe('tag-fetcher-simple (Nicolog -> getthumbinfo)', () => {
     expect(result.tags).toEqual(['LKG'])
   })
 })
+
+describe('tag names with XML / HTML entities', () => {
+  const thumbXml = `<?xml version="1.0" encoding="UTF-8"?>
+<nicovideo_thumb_response status="ok">
+  <thumb><tags domain="jp">
+    <tag lock="1">ゲーム&amp;ウオッチ</tag>
+    <tag>&gt;&gt;突然の死&lt;&lt;</tag>
+    <tag>chage&amp;amp;aska</tag>
+    <tag>L&apos;Arc&#x301C;en&#12316;Ciel</tag>
+    <tag>&#0;</tag>
+  </tags></thumb>
+</nicovideo_thumb_response>`
+
+  const decodedThumbTags = [
+    { name: 'ゲーム&ウオッチ', isLocked: true },
+    { name: '>>突然の死<<', isLocked: false },
+    { name: 'chage&amp;aska', isLocked: false },
+    { name: "L'Arc〜en〜Ciel", isLocked: false },
+    { name: '&#0;', isLocked: false },
+  ]
+
+  function mockSources(nicologHtml: string | null): ReturnType<typeof vi.fn> {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith('https://www.nicolog.jp/watch/')) {
+        return nicologHtml === null
+          ? new Response('err', { status: 500 })
+          : new Response(nicologHtml)
+      }
+      if (url.startsWith('https://ext.nicovideo.jp/api/getthumbinfo/'))
+        return new Response(thumbXml)
+      throw new Error(`Unexpected URL: ${url}`)
+    })
+    global.fetch = fetchMock as typeof fetch
+    return fetchMock
+  }
+
+  it('decodes getthumbinfo tag names exactly once and marks the cache entry as decoded', async () => {
+    vi.stubEnv('TAG_CACHE_BACKEND', 'r2-aggregate')
+    mockSources(null)
+    const { mod, kv, store } = await loadModule()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.spyOn(kv, 'get').mockResolvedValue({})
+    vi.spyOn(store, 'readTagCacheShard').mockResolvedValue({})
+
+    const items: RankingItem[] = [
+      { rank: 1, id: 'sm-entities', title: 't', thumbURL: '', views: 1 },
+    ]
+    const [result] = await mod.enrichRankingItemsWithTagDetails(
+      items,
+      1,
+      0,
+      true,
+    )
+
+    expect(result.tagDetails).toEqual(decodedThumbTags)
+    expect(result.tags).toEqual(decodedThumbTags.map((tag) => tag.name))
+    const entries = Object.values(store.getTagCacheDelta()).flatMap((shard) =>
+      Object.values(shard),
+    )
+    expect(entries).toEqual([
+      expect.objectContaining({
+        tags: decodedThumbTags,
+        source: 'getthumbinfo',
+        namesDecoded: true,
+      }),
+    ])
+  })
+
+  it('decodes names in the exported getthumbinfo helpers', async () => {
+    mockSources(null)
+    const { mod } = await loadModule()
+
+    expect(await mod.fetchAllTagsFromGetThumbInfo('sm1')).toEqual(
+      decodedThumbTags,
+    )
+    expect(await mod.fetchFixedTagsFromGetThumbInfo('sm1')).toEqual([
+      'ゲーム&ウオッチ',
+    ])
+  })
+
+  it('decodes Nicolog tag names exactly once', async () => {
+    mockSources(`<td class="tdtag"><ul>
+      <li class="lock">ゲーム&amp;ウオッチ</li>
+      <li class="tag">chage&amp;amp;aska</li>
+      <li class="tag">x&amp;lt;y</li>
+      <li class="tag">It&#39;s</li>
+    </ul></td>`)
+    const { mod } = await loadModule()
+
+    const [result] = await mod.enrichRankingItemsWithTagDetails(
+      [{ rank: 1, id: 'sm-nicolog', title: 't', thumbURL: '', views: 1 }],
+      1,
+      0,
+      false,
+    )
+
+    expect(result.tags).toEqual([
+      'ゲーム&ウオッチ',
+      'chage&amp;aska',
+      'x&lt;y',
+      "It's",
+    ])
+  })
+
+  it('decodes cached getthumbinfo names saved before the fix, but not decoded or Nicolog entries', async () => {
+    global.fetch = vi.fn(async () => {
+      throw new Error('network should not be called')
+    }) as typeof fetch
+    const { mod, kv } = await loadModule()
+    const fetchedAt = new Date().toISOString()
+    vi.spyOn(kv, 'get').mockResolvedValue({
+      'sm-legacy': {
+        tags: [
+          { name: 'ゲーム&amp;ウオッチ', isLocked: true },
+          { name: 'chage&amp;amp;aska', isLocked: false },
+        ],
+        fetchedAt,
+        source: 'getthumbinfo',
+      },
+      'sm-decoded': {
+        tags: [{ name: 'chage&amp;aska', isLocked: false }],
+        fetchedAt,
+        source: 'getthumbinfo',
+        namesDecoded: true,
+      },
+      'sm-nicolog': {
+        tags: [{ name: 'chage&amp;aska', isLocked: false }],
+        fetchedAt,
+        source: 'nicolog',
+      },
+    })
+    const setSpy = vi.spyOn(kv, 'set').mockResolvedValue()
+    const items: RankingItem[] = ['sm-legacy', 'sm-decoded', 'sm-nicolog'].map(
+      (id, i) => ({
+        rank: i + 1,
+        id,
+        title: 't',
+        thumbURL: '',
+        views: 1,
+      }),
+    )
+
+    const results = await mod.enrichRankingItemsWithTagDetails(
+      items,
+      items.length,
+      0,
+      true,
+    )
+
+    expect(results.map((item) => item.tags)).toEqual([
+      ['ゲーム&ウオッチ', 'chage&amp;aska'],
+      ['chage&amp;aska'],
+      ['chage&amp;aska'],
+    ])
+    expect(results[0].tagDetails).toEqual([
+      { name: 'ゲーム&ウオッチ', isLocked: true },
+      { name: 'chage&amp;aska', isLocked: false },
+    ])
+    expect(setSpy).not.toHaveBeenCalled()
+  })
+
+  it('decodes stale cached getthumbinfo names used as last-known-good tags', async () => {
+    global.fetch = vi.fn(
+      async () => new Response('err', { status: 500 }),
+    ) as typeof fetch
+    const { mod, kv } = await loadModule()
+    const staleDate = new Date(
+      Date.now() - 8 * 24 * 60 * 60 * 1000,
+    ).toISOString()
+    vi.spyOn(kv, 'get').mockResolvedValue({
+      'sm-lkg': {
+        tags: [{ name: 'DAM&amp;JOY配信中', isLocked: false }],
+        fetchedAt: staleDate,
+        source: 'getthumbinfo',
+      },
+    })
+    vi.spyOn(kv, 'set').mockResolvedValue()
+
+    const [result] = await mod.enrichRankingItemsWithTagDetails(
+      [{ rank: 1, id: 'sm-lkg', title: 't', thumbURL: '', views: 1 }],
+      1,
+      0,
+      true,
+    )
+
+    expect(result.tags).toEqual(['DAM&JOY配信中'])
+    expect(result.tagDetails).toEqual([
+      { name: 'DAM&JOY配信中', isLocked: false },
+    ])
+  })
+})

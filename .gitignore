@@ -67,6 +67,7 @@ docs/
 !docs/
 docs/*
 !docs/ranking-pipeline-reliability.md
+!docs/static-asset-routing.md
 documentation/
 doc/
 *.markdown
@@ -148,8 +149,10 @@ scripts/*
 !scripts/sync-ranking-auxiliary.ts
 !scripts/manage-ranking-generations.ts
 !scripts/lighthouse-app-server.mjs
+!scripts/audit-dependencies.mjs
 !scripts/lib/
 scripts/lib/*
+!scripts/lib/audit-dependencies.mjs
 !scripts/lib/r2-store.ts
 !scripts/lib/verify-ranking-response.ts
 !scripts/lib/wait-for-published-stats.ts
@@ -203,3 +206,7 @@ workers/video-stats-updater/wrangler-debug.toml
 
 !scripts/validate-worker-target.mjs
 !scripts/check-admin-gateway.mjs
+!scripts/static-asset-routing.mjs
+!scripts/lib/static-asset-routing.mjs
+!scripts/lib/static-asset-probe.mjs
+!scripts/lib/gateway-check.mjs

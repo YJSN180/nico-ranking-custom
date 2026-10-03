@@ -42,9 +42,8 @@ for (const [name, status, body, expected] of [
 ]) {
   test(`public health probe: ${name}`, async t => {
     const f = await fixture(t, status, body)
-    // Execute the actual workflow command, with only its URL changed to loopback.
-    const command = workflow.jobs['smoke-tests'].steps.find(s => s.id === 'api-health').run
-    const result = await run('bash', ['-e', '-c', command], { HEALTH_CHECK_BASE_URL: f.url })
+    // This optional public probe is separate from the scheduled direct Green check.
+    const result = await run('bash', ['scripts/health-check.sh', 'prod'], { HEALTH_CHECK_BASE_URL: f.url })
     assert.equal(result.code, expected, result.output)
     assert.deepEqual(f.requests, [{ method: 'GET', url: '/api/ranking?genre=all&period=24h' }])
   })
@@ -92,3 +91,17 @@ for (const [priorFailures, alreadyOpen, expectedCreates] of [[0, false, 0], [1, 
     if (calls.length) assert.match(calls[0].body, /actions\/runs\/99/)
   })
 }
+
+test('scheduled API probe preserves the direct Green check from main', () => {
+  const step = workflow.jobs['smoke-tests'].steps.find(s => s.id === 'api-health')
+  assert.equal(step.run, 'node scripts/check-admin-gateway.mjs --worker nico-ranking-api-gateway-green --direct-only')
+})
+
+test('scheduled smoke command discovers both public ranking checks', { timeout: 30_000 }, async () => {
+  const command = workflow.jobs['smoke-tests'].steps.find(s => s.id === 'smoke-tests').run
+  const result = await run('bash', ['-e', '-c', `${command} --list`])
+  assert.equal(result.code, 0, result.output)
+  assert.match(result.output, /@smoke all: ranking cards are visible/)
+  assert.match(result.output, /@smoke other: ranking cards are visible/)
+  assert.match(result.output, /Total: 2 tests in 1 file/)
+})

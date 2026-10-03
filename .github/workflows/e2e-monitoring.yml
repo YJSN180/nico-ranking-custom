@@ -37,10 +37,12 @@ jobs:
         id: smoke-tests
         run: npx playwright test --config=playwright.monitoring.config.ts --project=chromium --grep=@smoke
 
-      - name: Check API health
+      # Keep the main branch probe: verify ranking JSON and unauthenticated
+      # admin rejection directly on Green, independently of public-zone bot checks.
+      - name: Check Green API Worker health (workers.dev)
         id: api-health
         if: ${{ !cancelled() }}
-        run: bash scripts/health-check.sh prod
+        run: node scripts/check-admin-gateway.mjs --worker nico-ranking-api-gateway-green --direct-only
 
       - name: Performance check
         id: performance

@@ -183,12 +183,6 @@ const handler: ExportedHandler<Env> = {
     }
 
     try {
-      // KVからアクティブWorkerを取得（デフォルトはblue）
-      const activeWorker = await env.MAINTENANCE_FLAGS.get('active_worker') || 'blue'
-      
-      // アクティブWorkerに基づいてFetcherを選択
-      const targetWorker = activeWorker === 'green' ? env.WORKER_GREEN : env.WORKER_BLUE
-
       // HTMLや静的リソースは直接Vercelへプロキシ（APIのみブルー/グリーンを経由）
       const isApiRequest = url.pathname.startsWith('/api/')
       if (!isApiRequest) {
@@ -215,7 +209,6 @@ const handler: ExportedHandler<Env> = {
           })
           return applyCORSHeaders(modifiedHtml, origin, {
             ...securityHeaders,
-            'X-Active-Worker': activeWorker,
             'X-Router-Version': 'smart-router-20250706-bfcache-fix'
           })
         }
@@ -223,21 +216,24 @@ const handler: ExportedHandler<Env> = {
         // 静的アセット（JS、CSS、画像など）は通常のキャッシュを維持
         return applyCORSHeaders(proxied, origin, {
           ...securityHeaders,
-          'X-Active-Worker': activeWorker,
           'X-Router-Version': 'smart-router-20250706-bfcache-fix'
         })
       }
+
+      // APIだけが切替先を必要とする。毎回読み、切替・ロールバックの反映を遅らせない。
+      const activeWorker = await env.MAINTENANCE_FLAGS.get('active_worker') || 'blue'
+      const targetWorker = activeWorker === 'green' ? env.WORKER_GREEN : env.WORKER_BLUE
       
       // リクエストを対象Workerに転送
       const response = await targetWorker.fetch(
         buildReplayableRequest(request.url, request, replayableBody, 'follow'),
       )
       
-      // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）
+      // /api/ranking 系はキャッシュを完全無効化（最終出口で強制）。
+      // タグ候補は Green の Cache-Control（5 分）をそのまま返す。旧 Green は 30 分のため、Green を先にデプロイする
       const forceNoStore =
         url.pathname.startsWith('/api/ranking') ||
-        url.pathname.startsWith('/api/metadata') ||
-        url.pathname.startsWith('/api/tags/autocomplete')
+        url.pathname.startsWith('/api/metadata')
       
       if (forceNoStore) {
         const headers = new Headers(response.headers)
