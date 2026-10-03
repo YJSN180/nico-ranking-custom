@@ -24,6 +24,11 @@ describe('worker upstream configuration', () => {
     expect(green).toEqual([router[0]])
     expect(green[0]).not.toMatch(PINNED_DEPLOYMENT)
   })
+
+  it('blue proxies unhandled paths to the same production alias as the router', () => {
+    const router = quotedValues('wrangler.toml', 'VERCEL_DEPLOYMENT_URL')
+    expect(quotedValues('wrangler-blue-20250706.toml', 'VERCEL_DEPLOYMENT_URL')).toEqual([router[0]])
+  })
 })
 
 it('legacy green config paths describe the same deployment, never the router', () => {
@@ -39,4 +44,5 @@ it('deployment guard rejects mismatched sources/configs and accepts the canonica
   expect(run('nico-ranking-api-gateway-green', 'workers/api-gateway-green-20250726.ts', 'workers/wrangler-green.toml').status).toBe(0)
   expect(run('nico-ranking-api-gateway-green', 'workers/api-gateway-green-20250726.ts', 'workers/wrangler.toml').status).toBe(1)
   expect(run('nico-ranking-api-gateway', 'workers/api-gateway-green-20250726.ts', 'wrangler.toml').status).toBe(1)
+  expect(run('nico-ranking-blue-20250706', 'workers/api-gateway-blue-20250706.ts', 'wrangler-blue-20250706.toml').status).toBe(0)
 })

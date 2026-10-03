@@ -14,6 +14,7 @@
   "include": [
     "workers/smart-router-20250706.ts",
     "workers/api-gateway-green-20250726.ts",
+    "workers/api-gateway-blue-20250706.ts",
     "workers/utils/**/*.ts",
     "workers/types.d.ts"
   ],
