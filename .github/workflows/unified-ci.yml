@@ -557,8 +557,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      # moderate 以上で失敗。期限内・dev 専用の例外（.github/audit-exceptions.json）だけ許可する
       - name: Audit application dependencies
-        run: npm audit --audit-level moderate
+        run: node scripts/audit-dependencies.mjs
       - name: Audit Worker dependencies
         if: always()
         run: npm audit --prefix workers/video-stats-updater --audit-level moderate
@@ -588,7 +589,7 @@ jobs:
         run: npm ci
 
       - name: Security audit
-        run: npm audit --audit-level moderate
+        run: node scripts/audit-dependencies.mjs
 
       - name: Dependency review
         uses: actions/dependency-review-action@v4
