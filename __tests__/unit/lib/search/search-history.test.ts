@@ -9,8 +9,11 @@ import {
   persistSearchHistory,
   recordSearch,
   removeSearchHistoryEntry,
+  restoreSearchHistoryEntries,
+  restoreSearchHistoryEntry,
   summarizeSearchQuery,
 } from '@/lib/search/search-history'
+import { SEARCH_LIBRARY_CHANGE_EVENT } from '@/lib/search/library-events'
 
 const at = (minute: number): Date => new Date(Date.UTC(2026, 9, 2, 0, minute))
 
@@ -80,5 +83,36 @@ describe('search-history', () => {
     expect(summarizeSearchQuery('q=a&genre=%E3%82%B2%E3%83%BC%E3%83%A0').details).toContain('詳細条件あり')
     expect(summarizeSearchQuery('tagAnd=A&tagNot=B').title).toBe('A -B')
     expect(summarizeSearchQuery('genre=%E3%82%B2%E3%83%BC%E3%83%A0').title).toBe('キーワードなし')
+  })
+})
+
+describe('search-history: 取り消しと書き換えの知らせ', () => {
+  const entry = (query: string) => ({ id: `id-${query}`, query, searchedAt: '2026-10-03T00:00:00.000Z' })
+
+  it('消した 1 件を元の位置へ戻す。その間に同じ条件を検索していたら新しい記録を残す', () => {
+    const history = { record: true, entries: [entry('q=a'), entry('q=c')] }
+    expect(restoreSearchHistoryEntry(history, entry('q=b'), 1).entries.map((e) => e.query)).toEqual(['q=a', 'q=b', 'q=c'])
+    const searchedAgain = { record: true, entries: [{ ...entry('q=b'), id: 'newer' }] }
+    expect(restoreSearchHistoryEntry(searchedAgain, entry('q=b'), 0)).toBe(searchedAgain)
+  })
+
+  it('すべて消した履歴は、消したあとの記録を先に残して戻し、件数の上限を守る', () => {
+    const after = { record: true, entries: [entry('q=new'), entry('q=b')] }
+    const cleared = [entry('q=a'), entry('q=b'), ...Array.from({ length: MAX_SEARCH_HISTORY }, (_, i) => entry(`q=${i}`))]
+    const restored = restoreSearchHistoryEntries(after, cleared)
+    expect(restored.entries.slice(0, 3).map((e) => e.query)).toEqual(['q=new', 'q=b', 'q=a'])
+    expect(restored.entries).toHaveLength(MAX_SEARCH_HISTORY)
+  })
+
+  it('保存できたら、同じタブの画面へ書き換えを知らせる', () => {
+    const listener = vi.fn()
+    window.addEventListener(SEARCH_LIBRARY_CHANGE_EVENT, listener)
+    try {
+      persistSearchHistory({ record: true, entries: [entry('q=a')] })
+      expect((listener.mock.calls[0]?.[0] as CustomEvent<string>).detail).toBe(SEARCH_HISTORY_KEY)
+    } finally {
+      window.removeEventListener(SEARCH_LIBRARY_CHANGE_EVENT, listener)
+      localStorage.clear()
+    }
   })
 })

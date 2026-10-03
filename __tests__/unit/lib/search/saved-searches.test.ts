@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { SEARCH_LIBRARY_CHANGE_EVENT } from '@/lib/search/library-events'
 import {
   addSavedSearch,
   loadSavedSearches,
   mergeSavedSearches,
   persistSavedSearches,
   removeSavedSearch,
+  restoreSavedSearch,
   sanitizeSavedSearches,
   SavedSearchError,
   MAX_SAVED_SEARCHES,
@@ -136,5 +138,37 @@ describe('上限と保存の失敗を成功にしない', () => {
   it('保存できたものは読み直せる', () => {
     persistSavedSearches([makeSearch('a')])
     expect(loadSavedSearches().map((s) => s.name)).toEqual(['a'])
+  })
+})
+
+describe('restoreSavedSearch（削除の取り消し）', () => {
+  it('元の位置へ戻す。同じ ID・同じ名前がもうあれば何もしない（新しい方を残す）', () => {
+    const a = makeSearch('A')
+    const b = makeSearch('B')
+    const c = makeSearch('C')
+    expect(restoreSavedSearch([a, c], b, 1).map((s) => s.name)).toEqual(['A', 'B', 'C'])
+    expect(restoreSavedSearch([a], b, 9).map((s) => s.name)).toEqual(['A', 'B'])
+    const list = [a, { ...makeSearch('B'), id: 'other' }]
+    expect(restoreSavedSearch(list, b, 0)).toBe(list)
+  })
+
+  it('戻すと上限を超えるなら SavedSearchError', () => {
+    const full = Array.from({ length: MAX_SAVED_SEARCHES }, (_, i) => makeSearch(`S${i}`))
+    expect(() => restoreSavedSearch(full, makeSearch('戻す'), 0)).toThrow(SavedSearchError)
+  })
+})
+
+describe('書き換えの知らせ', () => {
+  it('保存できたら、同じタブの画面へ書き換えを知らせる', () => {
+    const listener = vi.fn()
+    window.addEventListener(SEARCH_LIBRARY_CHANGE_EVENT, listener)
+    try {
+      persistSavedSearches([makeSearch('A')])
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect((listener.mock.calls[0]?.[0] as CustomEvent<string>).detail).toBe('saved-searches')
+    } finally {
+      window.removeEventListener(SEARCH_LIBRARY_CHANGE_EVENT, listener)
+      localStorage.clear()
+    }
   })
 })

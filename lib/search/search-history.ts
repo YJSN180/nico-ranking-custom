@@ -6,6 +6,7 @@ import {
   USER_SEARCH_SORT_OPTIONS,
   parseUserPageConditions,
 } from '@/lib/search/user-search'
+import { announceSearchLibraryChange } from '@/lib/search/library-events'
 
 // 最近の検索（端末内の localStorage だけに置く。サーバーへ送らず、ログや Sentry にも載せない）
 //
@@ -72,6 +73,11 @@ export function loadSearchHistory(): SearchHistory {
 
 /** 保存する。ブラウザに保存できなければ SearchHistoryError を投げる */
 export function persistSearchHistory(history: SearchHistory): void {
+  writeSearchHistory(history)
+  announceSearchLibraryChange(SEARCH_HISTORY_KEY)
+}
+
+function writeSearchHistory(history: SearchHistory): void {
   try {
     localStorage.setItem(
       SEARCH_HISTORY_KEY,
@@ -129,6 +135,33 @@ export function removeSearchHistoryEntry(
 
 export function clearSearchHistory(history: SearchHistory): SearchHistory {
   return { ...history, entries: [] }
+}
+
+/** 消した 1 件を元の位置へ戻す。消したあとに同じ条件を検索していたら、その新しい記録を残す */
+export function restoreSearchHistoryEntry(
+  history: SearchHistory,
+  entry: SearchHistoryEntry,
+  index: number,
+): SearchHistory {
+  if (history.entries.some((e) => e.query === entry.query)) return history
+  const entries = [...history.entries]
+  entries.splice(Math.min(Math.max(index, 0), entries.length), 0, entry)
+  return { ...history, entries: entries.slice(0, MAX_SEARCH_HISTORY) }
+}
+
+/** すべて消した履歴を戻す。消したあとに記録したもの（ほかのタブを含む）を先に残し、同じ条件は重ねない */
+export function restoreSearchHistoryEntries(
+  history: SearchHistory,
+  entries: SearchHistoryEntry[],
+): SearchHistory {
+  const kept = new Set(history.entries.map((e) => e.query))
+  return {
+    ...history,
+    entries: [
+      ...history.entries,
+      ...entries.filter((e) => !kept.has(e.query)),
+    ].slice(0, MAX_SEARCH_HISTORY),
+  }
 }
 
 export interface SearchQuerySummary {

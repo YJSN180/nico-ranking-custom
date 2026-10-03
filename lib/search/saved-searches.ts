@@ -6,6 +6,8 @@
 //   将来条件が増減しても古い保存データはそのまま読める
 // - ストア自体も version 付きで、統合バックアップには optional セクションとして載る
 
+import { announceSearchLibraryChange } from '@/lib/search/library-events'
+
 export interface SavedSearch {
   id: string
   name: string
@@ -81,6 +83,8 @@ export function persistSavedSearches(searches: SavedSearch[]): void {
   } catch {
     throw new SavedSearchError('ブラウザに保存できませんでした。保存できる容量を超えたか、このブラウザでは保存が許可されていません。')
   }
+  // 統合バックアップの取り込みなどで書いたときも、開いている検索ページの一覧を最新にする
+  announceSearchLibraryChange(SAVED_SEARCHES_KEY)
 }
 
 function generateId(): string {
@@ -111,6 +115,20 @@ export function addSavedSearch(searches: SavedSearch[], name: string, query: str
 
 export function removeSavedSearch(searches: SavedSearch[], id: string): SavedSearch[] {
   return searches.filter((s) => s.id !== id)
+}
+
+/**
+ * 削除した検索条件を元の位置へ戻す。削除のあとに同じ名前で保存していたら（ほかのタブを含む）、新しい方を残す。
+ * 戻すと上限を超えるなら SavedSearchError
+ */
+export function restoreSavedSearch(searches: SavedSearch[], search: SavedSearch, index: number): SavedSearch[] {
+  if (searches.some((s) => s.id === search.id || s.name === search.name)) return searches
+  if (searches.length >= MAX_SAVED_SEARCHES) {
+    throw new SavedSearchError(`保存できる検索条件は ${MAX_SAVED_SEARCHES} 件までのため、元に戻せませんでした。`)
+  }
+  const next = [...searches]
+  next.splice(Math.min(Math.max(index, 0), next.length), 0, search)
+  return next
 }
 
 /**
