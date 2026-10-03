@@ -12,6 +12,7 @@ vi.mock('../../workers/sentry.js', () => ({
 
 import worker from '../../workers/api-gateway-green-20250726'
 import { captureWorkerException, captureWorkerMessage } from '../../workers/sentry.js'
+import { encodeTagPopularity } from '../../workers/utils/tag-suggest'
 
 const fetchWorker = worker.fetch as unknown as (
   request: Request,
@@ -438,6 +439,24 @@ describe('green tag autocomplete', () => {
     const bucket = sequenceBucket(accumulation(['xsyn1', 'syn-b', 'asyn2', 'SYN-A', 'other']))
 
     expect(await suggestions('q=syn', bucket)).toEqual(['syn-b', 'SYN-A', 'xsyn1', 'asyn2'])
+  })
+
+  it('orders by popularity when the dictionary carries a known popularity format', async () => {
+    const list = ['syn-a', 'syn-b', 'xsyn', 'syn']
+    const popular = (popularityVersion: unknown, scores: unknown): string =>
+      JSON.stringify({
+        tags: list,
+        popularity: { base: -26, scores },
+        metadata: { lastUpdated: '2026-10-03T00:00:00.000Z', totalUniqueTags: list.length, popularityVersion },
+      })
+    const scores = encodeTagPopularity([1, 9, 50, 0])
+
+    // キーが同じタグ、前方一致、部分一致の順に、それぞれ人気の高い順
+    expect(await suggestions('q=syn', sequenceBucket(popular(1, scores)))).toEqual(['syn', 'syn-b', 'syn-a', 'xsyn'])
+    // 形式が分からない・形が合わない人気度は使わず、辞書の順で答える
+    for (const [version, value] of [[2, scores], [undefined, scores], [1, scores.slice(3)], [1, 'not base-36!']]) {
+      expect(await suggestions('q=syn', sequenceBucket(popular(version, value)))).toEqual(['syn-a', 'syn-b', 'syn', 'xsyn'])
+    }
   })
 
   it('matches full-width input through NFKC', async () => {
