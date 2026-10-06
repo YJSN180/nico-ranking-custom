@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { VideoContextMenu } from '@/components/video-context-menu'
+import { readWatchLaterItems } from '@/lib/watch-later'
 import type { RankingItem } from '@/types/ranking'
 import '../test-environment'
 
@@ -50,6 +51,7 @@ Object.defineProperty(navigator, 'clipboard', {
 describe('VideoContextMenu - サムネイル保存機能', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    window.localStorage.clear()
   })
 
   afterEach(() => {
@@ -71,6 +73,30 @@ describe('VideoContextMenu - サムネイル保存機能', () => {
     await waitFor(() => {
       expect(screen.getByText('サムネイル保存')).toBeInTheDocument()
     }, { timeout: 600 })
+  })
+
+  it('右クリックメニューからあとで見るに追加できる', async () => {
+    render(
+      <VideoContextMenu video={mockVideo} sourceContext={{ genre: 'game', period: '24h' }}>
+        <div>テストコンテンツ</div>
+      </VideoContextMenu>
+    )
+
+    const content = screen.getByText('テストコンテンツ')
+    fireEvent.contextMenu(content, { clientX: 100, clientY: 100 })
+
+    const addButton = await screen.findByText('あとで見るに追加')
+    fireEvent.click(addButton)
+
+    await waitFor(() => {
+      expect(readWatchLaterItems()).toHaveLength(1)
+    })
+    expect(readWatchLaterItems()[0]).toMatchObject({
+      id: 'sm12345',
+      sourceGenre: 'game',
+      sourcePeriod: '24h',
+    })
+    expect(screen.getByText('✓ あとで見るに追加しました')).toBeInTheDocument()
   })
 
   it('サムネイルURLが既に存在する場合、大きいサイズに変換してプロキシAPI経由でダウンロードされる', async () => {

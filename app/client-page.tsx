@@ -1529,7 +1529,14 @@ export default function ClientPage({
           <ul key={`${ngListVersion}-${config.period}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {finalDisplayItems.map((item) => (
               <li key={item.id} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                <VideoContextMenu video={item}>
+                <VideoContextMenu
+                  video={item}
+                  sourceContext={{
+                    genre: config.genre,
+                    period: config.period,
+                    tag: config.tag,
+                  }}
+                >
                   <RankingItemResponsive 
                     item={item}
                     disabled={isNavigating}
