@@ -102,6 +102,28 @@ describe('app/page.tsx: ランキング取得の一時障害', () => {
     expect(new URL(String(fetchMock.mock.calls[0][0])).origin).toBe('https://ranking.example.test')
   })
 
+  it.each(['preview', 'production'])('renders ranking cards without an SSR override on %s', async (environment) => {
+    vi.stubEnv('VERCEL_ENV', environment)
+    vi.stubEnv('VERCEL_URL', 'protected-deployment.vercel.app')
+    vi.stubEnv('RANKING_SSR_GATEWAY_URL', undefined)
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', undefined)
+    fetchMock.mockImplementation(async (url: unknown) => {
+      if (new URL(String(url)).origin !== 'https://nico-rank.com') {
+        return new Response('Authentication required', { status: 401 })
+      }
+      return json(200, { items, popularTags: ['tag'] })
+    })
+
+    const tree = await Home({ searchParams: Promise.resolve({ genre: 'game', period: 'hour', tag: '実況' }) })
+
+    expect(embeddedItems(tree)).toEqual(items)
+    expect(redirect).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = new URL(String(fetchMock.mock.calls[0][0]))
+    expect(url.origin).toBe('https://nico-rank.com')
+    expect(Object.fromEntries(url.searchParams)).toEqual({ genre: 'game', period: 'hour', tag: '実況' })
+  })
+
   it('上流が一度だけ 5xx なら再試行して表示し、ジャンルのページから別ページへ飛ばさない', async () => {
     fetchMock
       .mockResolvedValueOnce(json(500, { error: 'Internal server error', message: 'Failed to fetch ranking data' }))
