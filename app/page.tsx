@@ -118,8 +118,8 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
   const resolveBaseUrl = () => {
     if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
-    // Generated Vercel deployment URLs require authentication under Deployment Protection.
-    if (process.env.VERCEL_ENV === 'production') return 'https://nico-rank.com'
+    // Both preview and production deployment URLs can require Vercel authentication.
+    if (process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview') return 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
     const vercelUrl = process.env.VERCEL_URL
