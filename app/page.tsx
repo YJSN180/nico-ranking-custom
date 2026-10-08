@@ -15,6 +15,7 @@ import { notFound } from 'next/navigation'
 import { CACHE_DURATIONS } from '@/lib/cache-durations'
 import { captureWebException } from '@/lib/sentry/capture'
 import { fetchWithTransientRetry } from '@/lib/fetch-with-transient-retry'
+import { reportPreviewRankingFailure } from '@/lib/preview-ranking-diagnostics'
 // 動的レンダリング強制: CDNキャッシュが古いデータを返す問題を防ぐ
 // キャッシュは Cloudflare Workers 側で管理し、Vercel側は常に最新データを取得
 export const dynamic = 'force-dynamic'
@@ -133,6 +134,19 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   // すべての環境で同一オリジンの Next API を経由する（CORS/ドメイン差異による失敗を避ける）
   const proxyBase = resolveBaseUrl()
   const apiUrl = `${proxyBase}/api/ranking?${params.toString()}`
+  const startedAt = Date.now()
+  let stage: 'request' | 'decode' | 'filter' = 'request'
+  let responseStatus: number | undefined
+  let receivedItems: number | undefined
+  let filteredItems: number | undefined
+  const reportFailure = (error: unknown) => reportPreviewRankingFailure(error, {
+    stage,
+    upstream: proxyBase === 'https://nico-rank.com' ? 'public' : process.env.RANKING_SSR_GATEWAY_URL ? 'configured' : 'deployment',
+    status: responseStatus,
+    receivedItems,
+    filteredItems,
+    elapsedMs: Date.now() - startedAt,
+  })
 
   try {
     const deadline = AbortSignal.timeout(RANKING_FETCH_BUDGET_MS)
@@ -149,7 +163,9 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
     // R2 の一時障害などの 5xx・通信エラーは 1 回だけ再試行する（1 回の失敗で別ページへ飛ばさない）
     const doFetch = async (url: string, options?: RequestInit) => {
+      stage = 'request'
       const res = await fetchWithTransientRetry(url, { ...options, signal: deadline })
+      responseStatus = res.status
       const meta = {
         status: res.status,
         statusText: res.statusText,
@@ -161,6 +177,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
 
+      stage = 'decode'
       let json: any
       try {
         json = await res.clone().json()
@@ -173,8 +190,14 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
     const buildResult = async (data: any, meta: Record<string, unknown>) => {
       if (!data || !Array.isArray(data.items)) throw new Error('Invalid data structure: missing items array')
+      receivedItems = data.items.length
+      stage = 'filter'
       const { filteredData } = await filterRankingDataServer(data)
-      if (filteredData.items.length === 0) logEmpty(meta)
+      filteredItems = filteredData.items.length
+      if (filteredData.items.length === 0) {
+        logEmpty(meta)
+        reportFailure(undefined)
+      }
       return filteredData
     }
 
@@ -200,6 +223,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
 
     return primaryResult
   } catch (error) {
+    reportFailure(error)
     captureWebException(error, {
       tags: {
         runtime: 'next-node',
