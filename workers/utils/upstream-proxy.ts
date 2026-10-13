@@ -1,3 +1,4 @@
+import { SEARCH_GRANT_HEADER } from '../../lib/search/gateway-grant'
 /** Forward only to the configured origin; never replay a privileged request on redirect. */
 export const isAdminPath = (pathname: string): boolean =>
   pathname === '/admin' || pathname.startsWith('/admin/') ||
@@ -13,7 +14,7 @@ export function noStore(response: Response): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
-export async function fetchUpstream(request: Request, base: string): Promise<Response> {
+export async function fetchUpstream(request: Request, base: string, searchGrant?: string): Promise<Response> {
   const original = new URL(request.url)
   const upstream = new URL(base)
   if (upstream.protocol !== 'https:' || upstream.username || upstream.password) {
@@ -25,6 +26,8 @@ export async function fetchUpstream(request: Request, base: string): Promise<Res
   const headers = new Headers(request.headers)
   headers.delete('Host')
   headers.delete('X-Worker-Auth')
+  headers.delete(SEARCH_GRANT_HEADER)
+  if (searchGrant) headers.set(SEARCH_GRANT_HEADER, searchGrant)
   headers.set('X-Forwarded-Host', original.host)
   headers.set('X-Forwarded-Proto', 'https')
   const admin = isAdminPath(original.pathname)
@@ -37,7 +40,7 @@ export async function fetchUpstream(request: Request, base: string): Promise<Res
     let next: URL | undefined
     try { if (location) next = new URL(location, target) } catch { /* Invalid redirect. */ }
     await response.body?.cancel()
-    if (admin || !isSafeMethod(request.method) || !next || next.origin !== upstream.origin ||
+    if (searchGrant || admin || !isSafeMethod(request.method) || !next || next.origin !== upstream.origin ||
         next.username || next.password || isAdminPath(next.pathname) || hop === 3) {
       return noStore(new Response('Unexpected upstream redirect', { status: 502 }))
     }

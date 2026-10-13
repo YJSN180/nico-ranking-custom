@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useCustomRankings } from '@/hooks/use-custom-rankings'
 import type { CustomRankingWithConditions } from '@/lib/storage/types'
 import styles from './genre-order-backup.module.css'
+import { showToast } from '@/lib/toast'
 import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
 import { INVALID_CUSTOM_RANKING_MESSAGE, parseCustomRankingsForImport } from '@/lib/storage/custom-ranking-backup-schema'
 
@@ -19,7 +20,8 @@ export function CustomRankingBackup() {
   const [isImporting, setIsImporting] = useState(false)
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false)
   const [importConfirmOpen, setImportConfirmOpen] = useState(false)
-  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  // needsReload: 一部だけ取り込めた（反映には再読み込みが要る）ときに「再読み込み」ボタンを出す
+  const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error', text: string, needsReload?: boolean } | null>(null)
   const [pendingImportData, setPendingImportData] = useState<BackupData | null>(null)
   const [conflictRankings, setConflictRankings] = useState<string[]>([])
 
@@ -44,7 +46,7 @@ export function CustomRankingBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Failed to export custom rankings:', error)
-      alert('カスタムランキングデータのエクスポートに失敗しました')
+      showToast('カスタムランキングデータのエクスポートに失敗しました', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -125,7 +127,7 @@ export function CustomRankingBackup() {
       setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
       setIsImporting(false)
     }
-
+    
     reader.readAsText(file)
     
     // ファイル選択をリセット
@@ -147,57 +149,70 @@ export function CustomRankingBackup() {
       
       let importedCount = 0
       let updatedCount = 0
+      const failures: string[] = []
       
       const importable = parseCustomRankingsForImport(pendingImportData.customRankings)
-      if (!importable) throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
-
+      if (!importable) {
+        throw new Error(INVALID_CUSTOM_RANKING_MESSAGE)
+      }
+      
       for (const ranking of importable) {
-        // Check if ranking with same title exists
-        const existing = rankings.find(r => r.title === ranking.title)
-        
-        if (existing) {
-          // Update existing ranking
-          await rankingManager.updateRanking(existing.id, {
-            title: ranking.title,
-            baseGenre: ranking.baseGenre,
-            conditions: ranking.conditions.map(c => ({
-              tag: c.tag,
-              operator: c.operator,
-              tagType: c.tagType,
-              orderIndex: c.orderIndex
-            }))
-          })
-          updatedCount++
-        } else {
-          // Create new ranking
-          await rankingManager.createRanking({
-            title: ranking.title,
-            baseGenre: ranking.baseGenre,
-            conditions: ranking.conditions.map(c => ({
-              tag: c.tag,
-              operator: c.operator,
-              tagType: c.tagType,
-              orderIndex: c.orderIndex
-            }))
-          })
-          importedCount++
+        try {
+          const conditions = ranking.conditions
+          // Check if ranking with same title exists
+          const existing = rankings.find(r => r.title === ranking.title)
+          
+          if (existing) {
+            // Update existing ranking
+            await rankingManager.updateRanking(existing.id, {
+              title: ranking.title,
+              baseGenre: ranking.baseGenre,
+              conditions
+            })
+            updatedCount++
+          } else {
+            // Create new ranking
+            await rankingManager.createRanking({
+              title: ranking.title,
+              baseGenre: ranking.baseGenre,
+              conditions
+            })
+            importedCount++
+          }
+        } catch (error) {
+          // 1件の失敗で残りを止めず、どれが失敗したかを伝える
+          failures.push(`${ranking.title}: ${error instanceof Error ? error.message : 'エラー'}`)
         }
       }
       
-      setImportMessage({ 
-        type: 'success', 
-        text: `カスタムランキングデータをインポートしました。（${importedCount}件追加${updatedCount > 0 ? `、${updatedCount}件更新` : ''}）` 
-      })
+      const summary = `${importedCount}件追加${updatedCount > 0 ? `、${updatedCount}件更新` : ''}`
       setImportConfirmOpen(false)
       setPendingImportData(null)
       setConflictRankings([])
-      
-      // リロード確認
-      setTimeout(() => {
-        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
+
+      if (failures.length === 0) {
+        setImportMessage({ 
+          type: 'success', 
+          text: `カスタムランキングデータをインポートしました。（${summary}）` 
+        })
+        // 全部成功したときだけ自動で再読み込みする（トースト+自動リロード、フェーズ5-4）
+        showToast('インポートしました。反映のため再読み込みします…', 'success')
+        setTimeout(() => {
           window.location.reload()
-        }
-      }, 1500)
+        }, 1800)
+      } else if (importedCount + updatedCount > 0) {
+        // 一部が失敗: 内容を読めるよう自動では再読み込みせず、「再読み込み」ボタンを出す
+        setImportMessage({
+          type: 'error',
+          text: `一部をインポートしました。（${summary}）\n\n失敗:\n${failures.join('\n')}`,
+          needsReload: true
+        })
+      } else {
+        setImportMessage({
+          type: 'error',
+          text: `インポート処理に失敗しました\n${failures.join('\n')}`
+        })
+      }
     } catch (error) {
       console.error('Failed to apply import:', error)
       setImportMessage({ 
@@ -345,8 +360,20 @@ export function CustomRankingBackup() {
         <div 
           className={`${styles.importResult} ${importMessage.type === 'success' ? styles.success : styles.error}`}
           data-testid={importMessage.type === 'success' ? 'import-success-message' : 'import-error-message'}
+          style={{ whiteSpace: 'pre-line' }}
         >
           {importMessage.text}
+          {importMessage.needsReload && (
+            <div style={{ marginTop: '12px' }}>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className={`${styles.dialogButton} ${styles.confirmButton}`}
+              >
+                再読み込み
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

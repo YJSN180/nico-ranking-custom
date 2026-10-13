@@ -1,3 +1,6 @@
+export { SearchBudget } from './search-budget'
+import type { SearchBudget } from './search-budget'
+import { admitSearch } from './search-admission'
 import { fetchUpstream, isAdminPath, noStore } from './utils/upstream-proxy'
 /**
  * Cloudflare Worker - Green Worker 20250726 with Dynamic TTL & ETag Support
@@ -29,6 +32,7 @@ import { fetchUpstream, isAdminPath, noStore } from './utils/upstream-proxy'
 
 /// <reference types="@cloudflare/workers-types" />
 
+import { timingSafeEqual } from 'node:crypto'
 import { decodeRankingData } from './utils/html-decode'
 import { applyCORSHeaders, createOptionsResponse } from './utils/cors-config'
 import { handleWithCache } from './utils/cache-handler'
@@ -52,7 +56,9 @@ interface Env {
   MAINTENANCE_FLAGS: KVNamespace
   VERCEL_DEPLOYMENT_URL: string
   WORKER_AUTH_KEY?: string
-  RATE_LIMITER: any // Cloudflare Rate Limiting binding
+  RATE_LIMITER: RateLimit // Cloudflare Rate Limiting binding
+  SEARCH_BUDGET?: DurableObjectNamespace<SearchBudget>
+  SEARCH_RATE_LIMITER?: RateLimit // /api/search 系専用（workers/wrangler-green.toml）
   SENTRY_WORKER_DSN?: string
   ENVIRONMENT?: string
   CF_VERSION_METADATA?: {
@@ -93,10 +99,19 @@ function retryingR2Reader(bucket: R2Bucket): { get: (key: string) => Promise<R2O
 }
 
 /**
- * IP別レート制限チェック（サムネイル取得API用）
- * 10リクエスト/分の制限を適用
+ * IP×エンドポイントごとのレート制限チェック。上限は各バインディングの設定（wrangler の simple.limit）。
+ * 制限に掛かったときは 429 の応答を、通すときは null を返す
  */
-async function checkRateLimit(request: Request, env: Env, endpoint: string = 'general'): Promise<{ success: boolean; error?: Response }> {
+async function checkRateLimit(
+  request: Request,
+  limiter: RateLimit,
+  endpoint: string = 'general',
+  workerAuthKey?: string,
+): Promise<Response | null> {
+  // サイトのサーバー（SSR・/api/ranking/full など）は Vercel の少数の送信元 IP から来るため、IP では数えない
+  if (hasWorkerKey(request, workerAuthKey)) {
+    return null
+  }
   try {
     // クライアントIPを取得（Cloudflare経由）
     const clientIP = request.headers.get('CF-Connecting-IP') || 
@@ -106,8 +121,8 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
     // レート制限キー（IP + エンドポイント）
     const limitKey = `${clientIP}:${endpoint}`
     
-    // Rate Limiting APIを使用（20req/分制限）
-    const { success } = await env.RATE_LIMITER.limit({
+    // Rate Limiting API（上限はバインディングごとの wrangler 設定）
+    const { success } = await limiter.limit({
       key: limitKey
     })
     
@@ -132,11 +147,10 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
       
       // Apply CORS headers to rate limit error
       const origin = request.headers.get('Origin')
-      const corsRateLimitError = applyCORSHeaders(rateLimitErrorResponse, origin, {})
-      return { success: false, error: corsRateLimitError }
+      return applyCORSHeaders(rateLimitErrorResponse, origin, {})
     }
     
-    return { success: true }
+    return null
   } catch (error) {
     console.error('Rate limit check failed:', error)
     captureWorkerException(error, {
@@ -149,7 +163,7 @@ async function checkRateLimit(request: Request, env: Env, endpoint: string = 'ge
       },
     })
     // レート制限エラーの場合はリクエストを通す（フェイルオープン）
-    return { success: true }
+    return null
   }
 }
 
@@ -457,10 +471,40 @@ function autocompleteResponse(request: Request, body: object, status: number, ca
 }
 
 /**
- * ログへ利用者が入力したタグ名を含めない。
+ * ログ用の R2 キー。console の出力は Sentry のパンくずにも載るため、利用者が入力したタグ名は伏せる
  */
 function loggableRankingKey(key: string): string {
   return key.replace(/\/tags\/[^/]+\.json$/, '/tags/<tag>.json')
+}
+
+/**
+ * サイトのサーバーからの要求か（X-Worker-Auth が WORKER_AUTH_KEY と一致するか。比較は一定時間で行う）。
+ * Authorization は別オリジンへのリダイレクトで落とされるため、301 を追うサイトの取得でも残る X-Worker-Auth を使う
+ */
+function hasWorkerKey(request: Request, workerAuthKey?: string): boolean {
+  const presented = request.headers.get('X-Worker-Auth')
+  if (!workerAuthKey || !presented) return false
+  const expected = new TextEncoder().encode(workerAuthKey)
+  const actual = new TextEncoder().encode(presented)
+  return actual.byteLength === expected.byteLength && timingSafeEqual(actual, expected)
+}
+
+/**
+ * /api/search 系のレート制限キー（エンドポイント名）。検索 1 回で owners / realtime-tags が
+ * 数回ずつ呼ばれるため、エンドポイントごとに数える。%xx や重複スラッシュで制限を外せないよう正規化する
+ */
+function searchRateLimitEndpoint(pathname: string): string | null {
+  let path = pathname
+  try {
+    path = decodeURIComponent(pathname)
+  } catch {
+    // 不正な %xx はそのまま扱う
+  }
+  path = path.replace(/\/{2,}/g, '/').replace(/\/+$/, '')
+  if (path === '/api/search/owners') return 'search-owners'
+  if (path === '/api/search/realtime-tags') return 'search-realtime-tags'
+  if (path === '/api/search' || path.startsWith('/api/search/')) return 'search'
+  return null
 }
 
 /**
@@ -721,9 +765,9 @@ const handler: ExportedHandler<Env> = {
     // /api/ranking パスの処理 - Cache API対応
     if (url.pathname === '/api/ranking' && env.R2_BUCKET) {
       // レート制限チェック（ランキングAPI用）
-      const rateLimitCheck = await checkRateLimit(request, env, 'ranking')
-      if (!rateLimitCheck.success) {
-        return rateLimitCheck.error!
+      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'ranking', env.WORKER_AUTH_KEY)
+      if (rateLimited) {
+        return rateLimited
       }
 
       // Cache APIを使用した処理
@@ -1013,9 +1057,9 @@ const handler: ExportedHandler<Env> = {
         }
         
         // レート制限チェック（サムネイル取得API用）
-        const rateLimitCheck = await checkRateLimit(request, env, 'thumbnail')
-        if (!rateLimitCheck.success) {
-          return rateLimitCheck.error!
+        const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'thumbnail', env.WORKER_AUTH_KEY)
+        if (rateLimited) {
+          return rateLimited
         }
         
         // ニコニコ動画から動画ページを取得（キャッシュなし）
@@ -1195,9 +1239,9 @@ const handler: ExportedHandler<Env> = {
       }
       
       // レート制限チェック（HDサムネイル取得API用）
-      const rateLimitCheck = await checkRateLimit(request, env, 'hd-thumbnail')
-      if (!rateLimitCheck.success) {
-        return rateLimitCheck.error!
+      const rateLimited = await checkRateLimit(request, env.RATE_LIMITER, 'hd-thumbnail', env.WORKER_AUTH_KEY)
+      if (rateLimited) {
+        return rateLimited
       }
       
       try {
@@ -1292,6 +1336,14 @@ const handler: ExportedHandler<Env> = {
       }
     }
     
+    // /api/search 系は上流でニコニコの検索 API を呼ぶため、Vercel へ渡す前に IP ごとに制限する
+    const searchEndpoint = searchRateLimitEndpoint(url.pathname)
+    if (searchEndpoint) {
+      const admission = await admitSearch(request, env, searchEndpoint)
+      if (admission instanceof Response) return applyCORSHeaders(admission, request.headers.get('Origin'))
+      return proxyToVercel(request, env, admission)
+    }
+
     // 静的ファイルのリクエストをチェック（先にR2から試す）
     const pathname = url.pathname
     const staticFiles = ['/icon.png', '/icon-192.png', '/icon-512.png', '/og-image.png', '/manifest.json', '/robots.txt'];
@@ -1369,12 +1421,12 @@ function getContentType(extension: string): string {
 }
 
 // Vercelへのプロキシ関数（フォールバック用）
-async function proxyToVercel(request: Request, env: Env): Promise<Response> {
+async function proxyToVercel(request: Request, env: Env, searchGrant?: string): Promise<Response> {
   const url = new URL(request.url)
   const targetUrl = env.VERCEL_DEPLOYMENT_URL || 'https://nico-ranking-custom-yjsns-projects.vercel.app'
   
   try {
-    const response = await fetchUpstream(request, targetUrl)
+    const response = await fetchUpstream(request, targetUrl, searchGrant)
 
     // 通常のレスポンス処理
     const responseHeaders = new Headers(response.headers)

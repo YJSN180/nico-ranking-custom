@@ -45,3 +45,9 @@ export function decodeHtmlEntities(text: string): string {
     },
   )
 }
+
+/**
+ * 属性値（本家ページの meta の content など）と getthumbinfo の XML の復号。decodeHtmlEntities と同じ 1 パスの復号で、
+ * 検索・低品質 NG のポーラー・HD サムネイルの呼び出し元はこの名前で使う
+ */
+export const decodeHtmlAttribute = decodeHtmlEntities

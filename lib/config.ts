@@ -125,17 +125,6 @@ function loadEnvironmentConfig(): EnvironmentConfig {
       }
     }
     
-    // 開発環境でのデバッグ情報（機密情報は除く）
-    if (!isProduction && process.env.DEBUG_CONFIG === 'true') {
-      // eslint-disable-next-line no-console
-      console.log('Environment configuration loaded:', {
-        environment: config.app.environment,
-        apiGatewayUrl: config.app.apiGatewayUrl,
-        cloudflareAccountId: config.cloudflare.accountId.slice(0, 8) + '...',
-        kvNamespaceId: config.cloudflare.kvNamespaceId.slice(0, 8) + '...'
-      })
-    }
-    
     return config
     
   } catch (error) {

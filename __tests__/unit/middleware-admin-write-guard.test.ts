@@ -97,8 +97,18 @@ describe('middleware: 管理 API の書き込み保護', () => {
     })
 
     it('管理 API 以外は対象外', async () => {
-      const res = await middleware(request(`${SITE}/api/search`, 'POST', { 'sec-fetch-site': 'cross-site' }))
+      const res = await middleware(request(`${SITE}/api/popular-tags`, 'POST', { 'sec-fetch-site': 'cross-site' }))
       expect(passedThrough(res)).toBe(true)
+    })
+  })
+
+  describe('自動NG の影響確認（読み取りだけの POST）も、書き込みと同じ保護と認証を通る', () => {
+    const IMPACT = `${SITE}/api/admin/lqng/impact`
+    it('クロスサイトは 403、JSON 以外は 415、認証が無ければ 401、同一オリジンの JSON で認証済みなら通す', async () => {
+      expect((await middleware(request(IMPACT, 'POST', { authorization: basic, 'content-type': 'application/json', 'sec-fetch-site': 'cross-site' }))).status).toBe(403)
+      expect((await middleware(request(IMPACT, 'POST', { authorization: basic, 'sec-fetch-site': 'same-origin', 'content-type': 'text/plain' }))).status).toBe(415)
+      expect((await middleware(request(IMPACT, 'POST', sameOriginJson))).status).toBe(401)
+      expect(passedThrough(await middleware(request(IMPACT, 'POST', { ...sameOriginJson, authorization: basic })))).toBe(true)
     })
   })
 

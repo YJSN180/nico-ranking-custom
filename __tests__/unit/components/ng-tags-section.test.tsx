@@ -19,7 +19,7 @@ describe('NGTagsSection', () => {
   it('見出しとラジオ群を表示する', () => {
     render(<NGTagsSection tags={mockTags} onUpdate={mockOnUpdate} />)
 
-    expect(screen.getByText('🚫 タグ')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'タグ', exact: true })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /ロックタグ/ })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /ユーザータグ/ })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /両方/ })).toBeInTheDocument()

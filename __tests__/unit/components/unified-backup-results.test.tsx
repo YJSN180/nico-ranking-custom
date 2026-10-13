@@ -4,6 +4,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { UnifiedBackup } from '@/components/unified-backup'
 import { exportExtendedNGListData, importExtendedNGListData, type ExtendedNGListImportResult } from '@/lib/storage/ng-backup-extended'
 import { exportMylistData, importMylistData, detectMylistConflicts, type MylistImportResult } from '@/lib/storage/backup'
+import { TOAST_EVENT, type ToastPayload } from '@/lib/toast'
 
 // まとめてインポートは、各データの取り込み関数が「失敗」を返したとき（throw せず success: false）も
 // 成功と表示してはいけない。データはすべて合成値。
@@ -57,7 +58,10 @@ vi.mock('@/lib/storage/custom-rankings', () => ({
 
 const originalLocation = window.location
 const reload = vi.fn()
-const alertMock = vi.fn()
+let toasts: ToastPayload[]
+const onToast = (event: Event): void => {
+  toasts.push((event as CustomEvent<ToastPayload>).detail)
+}
 
 function jsonFile(data: unknown): File {
   return new File([JSON.stringify(data)], 'backup.json', { type: 'application/json' })
@@ -119,14 +123,15 @@ async function importUnified(data: unknown): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.spyOn(window, 'alert').mockImplementation(alertMock)
+  toasts = []
+  window.addEventListener(TOAST_EVENT, onToast)
   delete (window as Partial<Window>).location
   window.location = { ...originalLocation, reload } as Location
   vi.mocked(detectMylistConflicts).mockResolvedValue({ hasConflicts: false } as Awaited<ReturnType<typeof detectMylistConflicts>>)
 })
 
 afterEach(() => {
-  vi.restoreAllMocks()
+  window.removeEventListener(TOAST_EVENT, onToast)
   window.location = originalLocation
   vi.useRealTimers()
 })
@@ -159,7 +164,7 @@ describe('まとめてエクスポート', () => {
     await exportUnified()
 
     await waitFor(() => {
-      expect(alertMock).toHaveBeenCalledWith(expect.stringContaining('マイリスト'))
+      expect(toasts.some((t) => t.type === 'error' && t.message.includes('マイリスト'))).toBe(true)
     })
   })
 
@@ -173,7 +178,7 @@ describe('まとめてエクスポート', () => {
     await exportUnified()
 
     await waitFor(() => expect(screen.queryByTestId('export-confirm-dialog')).toBeNull())
-    expect(alertMock).not.toHaveBeenCalled()
+    expect(toasts.some((t) => t.type === 'error')).toBe(false)
   })
 })
 
@@ -186,7 +191,7 @@ describe('まとめてインポートの結果表示', () => {
     const message = screen.getByTestId('import-error-message')
     expect(message.textContent).toContain('合成: マイリストを書き込めませんでした')
     expect(screen.queryByTestId('import-success-message')).toBeNull()
-    expect(alertMock).not.toHaveBeenCalled()
+    expect(toasts.some((t) => t.type === 'success')).toBe(false)
     expect(reload).not.toHaveBeenCalled()
   })
 

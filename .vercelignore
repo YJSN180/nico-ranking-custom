@@ -6,6 +6,7 @@
 .codex/
 .worktrees/
 .zen_venv/
+.tools/
 
 # Local investigation output and credentials must stay on the workstation.
 tmp/

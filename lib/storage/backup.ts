@@ -465,7 +465,7 @@ export async function importMylistData(
   if (!content) {
     return failedImportResult([INVALID_MYLIST_BACKUP_MESSAGE])
   }
-
+  
   try {
     const dbManager = new DBManager()
     await dbManager.init()
@@ -499,10 +499,10 @@ export async function importMylistData(
       await importTx.objectStore('mylistVideos').put(video)
       touchedMylistIds.add(video.mylistId)
     }
-
+    
     // ファイル上のマイリスト ID → 実際に保存した ID（安全追加で新しい ID にした複製へ動画を入れるため）
     const storedMylistIds = new Map<string, string>()
-
+    
     // マイリストをインポート
     for (const importingMylist of content.mylists) {
       try {
@@ -581,7 +581,7 @@ export async function importMylistData(
           skipped.reason.push(`動画「${importingVideo.title}」は既に同じマイリストに存在します`)
           continue
         }
-
+        
         // 完全上書き・スマートマージは上書き、重複なしはそのまま追加
         await putVideo(videoToImport)
         importedVideos++

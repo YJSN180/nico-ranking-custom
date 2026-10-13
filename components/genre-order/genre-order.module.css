@@ -1,7 +1,7 @@
 /* Genre Order Customizer Styles */
 
 .container {
-  padding: 16px;
+  padding: 0;
 }
 
 .description {
@@ -60,7 +60,8 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-right: 20px;  /* 12px → 20px: ジャンル名との間隔を増やす */
+  margin-right: 10px;
+  flex-shrink: 0;
   cursor: grab;
 }
 
@@ -86,6 +87,8 @@
   border: none;
   cursor: pointer;
   font-size: 18px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
   padding: 4px;
   width: 32px;
   height: 32px;
@@ -123,7 +126,7 @@
   font-size: 14px;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: all 0.2s ease;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out, color 160ms ease-out;
 }
 
 .resetButton:hover {
@@ -236,3 +239,12 @@
   }
 }
 
+
+@media (max-width: 640px), (pointer: coarse) {
+  .visibilityToggle { width: 44px; height: 44px; }
+  .genreItem { padding-block: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .visibilityToggle, .resetButton { transition: none; transform: none; }
+  .scrollIndicatorTop, .scrollIndicatorBottom { animation: none; }
+}

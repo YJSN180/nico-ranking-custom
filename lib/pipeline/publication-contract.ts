@@ -1,3 +1,5 @@
+import { summarizeAutoNg } from './auto-ng'
+
 export const RANKING_GROUPS = [
   ['all', 'game'],
   ['anime', 'vocaloid'],
@@ -19,7 +21,10 @@ export interface GroupArtifact {
   groupId: number
   collectedAt: string
   completedAt: string
-  results: Array<{ genre: string; data: any; hadErrors?: boolean }>
+  /** 自動NG の状態（lib/pipeline/auto-ng.ts の AutoNgStatus） */
+  autoNg?: unknown
+  /** autoNgExcluded は自動NG で除いた件数（AutoNgExcludedByPeriod） */
+  results: Array<{ genre: string; data: any; hadErrors?: boolean; autoNgExcluded?: unknown }>
 }
 
 export function validateGenre(genre: string, data: any): void {
@@ -133,6 +138,7 @@ export function aggregateArtifacts(
       generation: `${runId}-${Math.max(...artifacts.map((a) => Number(a.attempt)))}`,
       collectedAt: new Date(earliest).toISOString(),
       counts,
+      autoNg: summarizeAutoNg(artifacts),
     },
   }
 }
@@ -140,13 +146,16 @@ export function aggregateArtifacts(
 export function assertCounts(
   current: Record<string, number>,
   previous: Record<string, number> = {},
+  autoNgExcluded: Record<string, number> = {},
 ) {
+  // 自動NG で除いた件数は収集の欠落ではないので足し戻して比べる（自動NG の除外で公開を止めない）
+  const collected = (key: string) => current[key] + (autoNgExcluded[key] ?? 0)
   for (const [key, count] of Object.entries(current)) {
     if (
       !Number.isFinite(count) ||
       count < 0 ||
       (previous[key] > 0 &&
-        count < previous[key] * 0.5 &&
+        collected(key) < previous[key] * 0.5 &&
         (!key.endsWith('/hour') || key === 'all/hour'))
     ) {
       throw new Error(`Ranking count dropped below 50%: ${key}`)
@@ -154,7 +163,7 @@ export function assertCounts(
   }
   // Small hourly genres vary naturally; detect an overall hourly collapse instead.
   const hourlyKeys = Object.keys(current).filter((key) => key.endsWith('/hour'))
-  const hourlyCurrent = hourlyKeys.reduce((sum, key) => sum + current[key], 0)
+  const hourlyCurrent = hourlyKeys.reduce((sum, key) => sum + collected(key), 0)
   const hourlyPrevious = hourlyKeys.reduce(
     (sum, key) => sum + (previous[key] || 0),
     0,

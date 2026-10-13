@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { Palette, Ban, SlidersHorizontal, Archive, X, Sun, Moon, Eclipse, Video, UserRound, AlertTriangle, Folder, Star } from 'lucide-react'
 import { useUserNGListExtended } from '../hooks/use-user-ng-list-extended'
 import type { ExtendedUserNGList } from '../types/ng-list-extended'
-import { useUserPreferences, type ThemeType } from '../hooks/use-user-preferences'
+import { useUserPreferences } from '../hooks/use-user-preferences'
 import { NGBackup } from './ng-backup'
 import { GenreOrderBackup } from './genre-order-backup'
 import { CustomRankingBackup } from './custom-ranking-backup'
@@ -11,6 +12,8 @@ import { MylistBackup } from './mylist-backup'
 import { UnifiedBackup } from './unified-backup'
 import { GenreOrderCustomizer, type GenreOrderCustomizerRef } from './genre-order'
 import { NGTagsSection } from './ng-tags-section'
+import { lockViewportScroll } from '@/lib/scroll-lock'
+import { isImeComposing } from '@/lib/ime'
 import styles from './settings-modal.module.css'
 
 interface SettingsModalProps {
@@ -76,6 +79,52 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
   }, [tempNGList, ngList])
 
   const { preferences, updatePreferences } = useUserPreferences()
+
+  // a11y: モーダル表示中の Escape・フォーカストラップ・背景スクロールロック（フェーズ4-6）
+  // handleClose はこの下（early return の後）で定義されるため ref 経由で参照する
+  const modalRef = useRef<HTMLDivElement>(null)
+  const handleCloseRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    if (!isOpen) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    modalRef.current?.focus()
+    // 背景スクロールはモバイル幅だけ html で止める（body に付けると sticky ヘッダーが外れる。
+    // PC は main と同じく止めない）
+    const unlockScroll = window.matchMedia?.('(max-width: 640px)').matches ? lockViewportScroll() : null
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        // 日本語の変換中の Esc は変換の取り消し。タグ候補を閉じた Esc（defaultPrevented）でも閉じない
+        if (isImeComposing(event) || event.defaultPrevented) return
+        event.stopPropagation()
+        handleCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusables = modalRef.current?.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+      if (!focusables) return
+      const visible = Array.from(focusables).filter((el) => el.offsetParent !== null)
+      const first = visible[0]
+      const last = visible[visible.length - 1]
+      if (!first || !last) return
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      unlockScroll?.()
+      previouslyFocused?.focus?.()
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -431,142 +480,115 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
     }
   }
   
-  // オーバーレイクリック時の処理（ドラッグ中は閉じない）
+  // オーバーレイクリック時の処理。× や Esc と同じく、ドラッグ中は閉じず、
+  // 未適用の変更があれば破棄してよいか確かめる（背景に触れただけで編集が消えないように）
   const handleOverlayClick = () => {
-    if (!isDragging) {
-      onClose()
-    }
+    handleClose()
   }
+
+  // Escape ハンドラ（early return より上の effect）から最新の handleClose を呼べるようにする
+  handleCloseRef.current = handleClose
 
   return (
     <div className={styles.overlay} onClick={handleOverlayClick}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={modalRef}
+        className={styles.modal}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-modal-title"
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className={styles.header}>
-          <h2>設定</h2>
-          <button className={styles.closeButton} onClick={handleClose}>×</button>
+          <h2 id="settings-modal-title">設定</h2>
+          <button className={styles.closeButton} onClick={handleClose} aria-label="設定を閉じる"><X size={20} aria-hidden="true" /></button>
         </div>
 
-        <div className={styles.tabs}>
+        <div className={styles.tabsWrapper}>
+        <div className={styles.tabs} role="group" aria-label="設定項目">
           <button
             className={`${styles.tab} ${activeTab === 'display' ? styles.active : ''}`}
+            aria-pressed={activeTab === 'display'}
             onClick={() => setActiveTab('display')}
           >
-            <span style={{ whiteSpace: 'nowrap' }}>🎨&nbsp;テーマ</span>
+            <Palette size={16} aria-hidden="true" /><span>テーマ</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'nglist' ? styles.active : ''}`}
+            aria-pressed={activeTab === 'nglist'}
             onClick={() => setActiveTab('nglist')}
           >
-            <span style={{ whiteSpace: 'nowrap' }}>🚫&nbsp;NGリスト</span>
+            <Ban size={16} aria-hidden="true" /><span>NGリスト</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'genre-order' ? styles.active : ''}`}
+            aria-pressed={activeTab === 'genre-order'}
             onClick={() => setActiveTab('genre-order')}
           >
-            <span style={{ whiteSpace: 'nowrap' }}>🎯&nbsp;ジャンル</span>
+            <SlidersHorizontal size={16} aria-hidden="true" /><span>ジャンル</span>
           </button>
           <button
             className={`${styles.tab} ${activeTab === 'ng-backup' ? styles.active : ''}`}
+            aria-pressed={activeTab === 'ng-backup'}
             onClick={() => setActiveTab('ng-backup')}
           >
-            <span style={{ whiteSpace: 'nowrap' }}>💾&nbsp;バックアップ</span>
+            <Archive size={16} aria-hidden="true" /><span>バックアップ</span>
           </button>
+        </div>
         </div>
 
         <div className={styles.content}>
           {activeTab === 'display' ? (
             <div className={styles.displaySettings}>
               <section className={styles.section}>
-                <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-                  <legend style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
-                    🎨 テーマ設定
-                  </legend>
-                  <div>
-                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      value="light"
-                      checked={preferences.theme === 'light'}
-                      onChange={() => {
-                        updatePreferences({ theme: 'light' })
-                        // 即座にdata-theme属性を更新
-                        document.documentElement.setAttribute('data-theme', 'light')
-                      }}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '16px' }}>☀️ ライトモード</span>
-                    <span style={{ 
-                      display: 'block', 
-                      marginLeft: '24px', 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      marginTop: '4px'
-                    }}>
-                      明るい背景に黒文字の標準的なテーマ
-                    </span>
-                  </label>
-                  
-                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      value="dark"
-                      checked={preferences.theme === 'dark'}
-                      onChange={() => {
-                        updatePreferences({ theme: 'dark' })
-                        // 即座にdata-theme属性を更新
-                        document.documentElement.setAttribute('data-theme', 'dark')
-                      }}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '16px' }}>🌙 ダークモード</span>
-                    <span style={{ 
-                      display: 'block', 
-                      marginLeft: '24px', 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      marginTop: '4px'
-                    }}>
-                      暗い背景に白文字で目に優しいテーマ
-                    </span>
-                  </label>
-                  
-                  <label style={{ display: 'block', marginBottom: '12px', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      value="darkblue"
-                      checked={preferences.theme === 'darkblue'}
-                      onChange={() => {
-                        updatePreferences({ theme: 'darkblue' })
-                        // 即座にdata-theme属性を更新
-                        document.documentElement.setAttribute('data-theme', 'darkblue')
-                      }}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span style={{ fontSize: '16px' }}>🌌 ダークブルー</span>
-                    <span style={{ 
-                      display: 'block', 
-                      marginLeft: '24px', 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      marginTop: '4px'
-                    }}>
-                      深い青を基調とした落ち着いたテーマ
-                    </span>
-                  </label>
+                <fieldset className={styles.themeFieldset}>
+                  <legend>テーマ設定</legend>
+                  <div className={styles.themeOptions}>
+                    {([
+                      { value: 'light', label: 'ライトモード', description: '明るい背景に黒文字の標準的なテーマ', Icon: Sun },
+                      { value: 'dark', label: 'ダークモード', description: '暗い背景に白文字で目に優しいテーマ', Icon: Moon },
+                      { value: 'darkblue', label: 'ダークブルー', description: '深い青を基調とした落ち着いたテーマ', Icon: Eclipse },
+                    ] as const).map(({ value, label, description, Icon }) => (
+                      <label key={value} className={styles.themeOption}>
+                        <input type="radio" name="settings-theme" value={value}
+                          checked={preferences.theme === value}
+                          onChange={() => {
+                            updatePreferences({ theme: value })
+                            document.documentElement.setAttribute('data-theme', value)
+                          }} />
+                        <Icon size={20} aria-hidden="true" />
+                        <span className={styles.themeText}>
+                          <span className={styles.themeName}>{label}</span>
+                          <span className={styles.themeDescription}>{description}</span>
+                        </span>
+                      </label>
+                    ))}
                   </div>
                 </fieldset>
               </section>
             </div>
           ) : activeTab === 'nglist' ? (
             <div className={styles.ngListSettings}>
+              <section className={styles.section}>
+                <h3>表示設定</h3>
+                <label className={styles.deletedAuthorSetting}>
+                  <input
+                    type="checkbox"
+                    checked={tempNGList.hideDeletedAuthors === true}
+                    onChange={(event) => setTempNGList((prev) => ({ ...prev, hideDeletedAuthors: event.target.checked }))}
+                  />
+                  退会済み投稿者の動画を非表示にする
+                </label>
+              </section>
               {/* 動画ID */}
               <section className={styles.section}>
-                <h3>🚫 動画ID</h3>
+                <h3><Video size={17} aria-hidden="true" />動画ID</h3>
                 <div className={styles.list}>
                   {tempNGList.videoIds.map((id) => (
                     <div key={id} className={styles.listItem}>
                       <span>{id}</span>
-                      <button onClick={() => removeVideoId(id)}>×</button>
+                      <button onClick={() => removeVideoId(id)} aria-label={`${id} を削除`}>×</button>
                     </div>
                   ))}
                 </div>
@@ -575,7 +597,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                     type="text"
                     value={inputVideoId}
                     onChange={(e) => setInputVideoId(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoId()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddVideoId()}
                     placeholder="sm12345678"
                   />
                   <button onClick={handleAddVideoId}>追加</button>
@@ -585,15 +607,7 @@ export function SettingsModal({ isOpen, onClose, onApply }: SettingsModalProps) 
                 <div style={{ marginTop: '12px' }}>
                   <button
                     onClick={() => setShowBulkVideoIds(!showBulkVideoIds)}
-                    style={{
-                      background: 'var(--primary-color)',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
+                    className={styles.bulkToggle}
                   >
                     {showBulkVideoIds ? '▼' : '▶'} 複数IDを一括追加
                   </button>
@@ -623,17 +637,7 @@ sm11111111`}
                       />
                       <button
                         onClick={handleBulkAddVideoIds}
-                        style={{
-                          marginTop: '8px',
-                          padding: '8px 16px',
-                          background: 'var(--primary-color)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: 'bold'
-                        }}
+                        className={styles.bulkButton}
                       >
                         一括追加
                       </button>
@@ -644,7 +648,7 @@ sm11111111`}
 
               {/* 動画タイトル */}
               <section className={styles.section}>
-                <h3>🚫 動画タイトル</h3>
+                <h3><Video size={17} aria-hidden="true" />動画タイトル</h3>
                 <div className={styles.radioGroup}>
                   <label>
                     <input
@@ -669,13 +673,13 @@ sm11111111`}
                   {tempNGList.videoTitles.exact.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (完全)</span>
-                      <button onClick={() => removeVideoTitle(title, 'exact')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'exact')} aria-label={`${title} (完全) を削除`}>×</button>
                     </div>
                   ))}
                   {tempNGList.videoTitles.partial.map((title) => (
                     <div key={title} className={styles.listItem}>
                       <span>{title} (部分)</span>
-                      <button onClick={() => removeVideoTitle(title, 'partial')}>×</button>
+                      <button onClick={() => removeVideoTitle(title, 'partial')} aria-label={`${title} (部分) を削除`}>×</button>
                     </div>
                   ))}
                 </div>
@@ -684,7 +688,7 @@ sm11111111`}
                     type="text"
                     value={inputVideoTitle}
                     onChange={(e) => setInputVideoTitle(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddVideoTitle()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddVideoTitle()}
                     placeholder="タイトルを入力"
                   />
                   <button onClick={handleAddVideoTitle}>追加</button>
@@ -694,15 +698,7 @@ sm11111111`}
                 <div style={{ marginTop: '12px' }}>
                   <button
                     onClick={() => setShowBulkVideoTitles(!showBulkVideoTitles)}
-                    style={{
-                      background: 'var(--primary-color)',
-                      color: 'white',
-                      border: 'none',
-                      padding: '6px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
-                    }}
+                    className={styles.bulkToggle}
                   >
                     {showBulkVideoTitles ? '▼' : '▶'} 複数タイトルを一括追加
                   </button>
@@ -727,17 +723,7 @@ sm11111111`}
                       />
                       <button
                         onClick={handleBulkAddVideoTitles}
-                        style={{
-                          marginTop: '8px',
-                          padding: '8px 16px',
-                          background: 'var(--primary-color)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          fontWeight: 'bold'
-                        }}
+                        className={styles.bulkButton}
                       >
                         一括追加
                       </button>
@@ -748,14 +734,14 @@ sm11111111`}
 
               {/* 投稿者 */}
               <section className={styles.section}>
-                <h3>🚫 投稿者</h3>
+                <h3><UserRound size={17} aria-hidden="true" />投稿者</h3>
                 <div className={styles.subsection}>
                   <h4>ID</h4>
                   <div className={styles.list}>
                     {tempNGList.authorIds.map((id) => (
                       <div key={id} className={styles.listItem}>
                         <span>ID: {id}</span>
-                        <button onClick={() => removeAuthorId(id)}>×</button>
+                        <button onClick={() => removeAuthorId(id)} aria-label={`ID: ${id} を削除`}>×</button>
                       </div>
                     ))}
                   </div>
@@ -764,7 +750,7 @@ sm11111111`}
                       type="text"
                       value={inputAuthorId}
                       onChange={(e) => setInputAuthorId(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorId()}
+                      onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddAuthorId()}
                       placeholder="投稿者ID（数字）"
                     />
                     <button onClick={handleAddAuthorId}>追加</button>
@@ -774,15 +760,7 @@ sm11111111`}
                   <div style={{ marginTop: '12px' }}>
                     <button
                       onClick={() => setShowBulkAuthorIds(!showBulkAuthorIds)}
-                      style={{
-                        background: 'var(--primary-color)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
+                      className={styles.bulkToggle}
                     >
                       {showBulkAuthorIds ? '▼' : '▶'} 複数IDを一括追加
                     </button>
@@ -813,17 +791,7 @@ ch2625894`}
                         />
                         <button
                           onClick={handleBulkAddAuthorIds}
-                          style={{
-                            marginTop: '8px',
-                            padding: '8px 16px',
-                            background: 'var(--primary-color)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: 'bold'
-                          }}
+                          className={styles.bulkButton}
                         >
                           一括追加
                         </button>
@@ -858,13 +826,13 @@ ch2625894`}
                     {tempNGList.authorNames.exact.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (完全)</span>
-                        <button onClick={() => removeAuthorName(name, 'exact')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'exact')} aria-label={`名前: ${name} (完全) を削除`}>×</button>
                       </div>
                     ))}
                     {tempNGList.authorNames.partial.map((name) => (
                       <div key={name} className={styles.listItem}>
                         <span>名前: {name} (部分)</span>
-                        <button onClick={() => removeAuthorName(name, 'partial')}>×</button>
+                        <button onClick={() => removeAuthorName(name, 'partial')} aria-label={`名前: ${name} (部分) を削除`}>×</button>
                       </div>
                     ))}
                   </div>
@@ -873,7 +841,7 @@ ch2625894`}
                       type="text"
                       value={inputAuthorName}
                       onChange={(e) => setInputAuthorName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddAuthorName()}
+                      onKeyDown={(e) => e.key === 'Enter' && !isImeComposing(e) && handleAddAuthorName()}
                       placeholder="投稿者名"
                     />
                     <button onClick={handleAddAuthorName}>追加</button>
@@ -883,15 +851,7 @@ ch2625894`}
                   <div style={{ marginTop: '12px' }}>
                     <button
                       onClick={() => setShowBulkAuthorNames(!showBulkAuthorNames)}
-                      style={{
-                        background: 'var(--primary-color)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px'
-                      }}
+                      className={styles.bulkToggle}
                     >
                       {showBulkAuthorNames ? '▼' : '▶'} 複数名を一括追加
                     </button>
@@ -916,17 +876,7 @@ ch2625894`}
                         />
                         <button
                           onClick={handleBulkAddAuthorNames}
-                          style={{
-                            marginTop: '8px',
-                            padding: '8px 16px',
-                            background: 'var(--primary-color)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            fontWeight: 'bold'
-                          }}
+                          className={styles.bulkButton}
                         >
                           一括追加
                         </button>
@@ -961,7 +911,7 @@ ch2625894`}
 
               {/* 一括リセットセクション */}
               <section className={styles.section} style={{ marginTop: '24px', borderTop: '2px solid var(--border-color)', paddingTop: '24px' }}>
-                <h3 style={{ color: 'var(--error-color)' }}>⚠️ 危険な操作</h3>
+                <h3 style={{ color: 'var(--error-color)' }}><AlertTriangle size={17} aria-hidden="true" />危険な操作</h3>
 
                 {!showResetConfirm ? (
                   <div>
@@ -1075,7 +1025,7 @@ ch2625894`}
           ) : activeTab === 'genre-order' ? (
             <div className={styles.genreOrderSettings}>
               <section className={styles.section}>
-                <h3>🎯 ジャンル並び替え</h3>
+                <h3><SlidersHorizontal size={17} aria-hidden="true" />ジャンル並び替え</h3>
                 <GenreOrderCustomizer 
                   ref={genreOrderRef}
                   onChangesUpdate={setHasGenreOrderChanges}
@@ -1086,7 +1036,7 @@ ch2625894`}
           ) : (
             <div className={styles.ngBackupSettings}>
               <section className={styles.section}>
-                <h3>📦 まとめて管理</h3>
+                <h3><Archive size={17} aria-hidden="true" />まとめて管理</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   すべての設定データ（NGリスト、ジャンル並び替え、カスタムランキング、マイリスト）を一つのファイルにまとめてバックアップできます。
                 </p>
@@ -1094,7 +1044,7 @@ ch2625894`}
               </section>
               
               <section className={styles.section} style={{ marginTop: '1rem' }}>
-                <h3>💾 NGリストバックアップ</h3>
+                <h3><Archive size={17} aria-hidden="true" />NGリストバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   現在適用されているNGリストをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
@@ -1102,7 +1052,7 @@ ch2625894`}
               </section>
               
               <section className={styles.section} style={{ marginTop: '1rem' }}>
-                <h3>🎯 ジャンル並び替えデータバックアップ</h3>
+                <h3><SlidersHorizontal size={17} aria-hidden="true" />ジャンル並び替えデータバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   ジャンルの表示順序と表示/非表示設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
@@ -1110,7 +1060,7 @@ ch2625894`}
               </section>
               
               <section className={styles.section} style={{ marginTop: '1rem' }}>
-                <h3>⭐ カスタムランキングデータバックアップ</h3>
+                <h3><Star size={17} aria-hidden="true" />カスタムランキングデータバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   カスタムランキング設定をバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
@@ -1118,7 +1068,7 @@ ch2625894`}
               </section>
               
               <section className={styles.section} style={{ marginTop: '1rem' }}>
-                <h3>📚 マイリストデータバックアップ</h3>
+                <h3><Folder size={17} aria-hidden="true" />マイリストデータバックアップ</h3>
                 <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                   すべてのマイリストと動画データをバックアップファイルとしてエクスポートしたり、他のデバイスからインポートできます。
                 </p>
@@ -1137,21 +1087,11 @@ ch2625894`}
               </>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          {/* PC は main と同じく「適用」＋「閉じる」。モバイル（≤640px）は閉じる操作を右上の×に
+              一本化し、フッターの「閉じる」は CSS で隠す（HIG: 単一の明確な dismiss） */}
+          <div className={styles.footerActions}>
             {((activeTab === 'nglist' && hasChanges) || (activeTab === 'genre-order' && hasGenreOrderChanges)) && (
-              <button 
-                className={styles.applyButton} 
-                onClick={handleApply}
-                style={{
-                  padding: '8px 16px',
-                  background: 'var(--primary-color)',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold'
-                }}
-              >
+              <button className={styles.applyButton} onClick={handleApply}>
                 適用
               </button>
             )}

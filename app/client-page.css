@@ -37,10 +37,12 @@
   position: relative;
 }
 
-/* ローディング表示の固定高さ */
-.loading-container {
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+/* 一覧の形を保ったままデータを待つ。 */
+.ranking-loading {
+  margin-top: 24px;
+}
+.ranking-loading__retry {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
 }

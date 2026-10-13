@@ -1,3 +1,4 @@
+import { searchAccessDenied } from './lib/search/access'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { SecurityLogger, SecurityEventType } from './lib/security-logger'
@@ -95,6 +96,13 @@ const noStorePaths: string[] = []
   // 一般的な公開APIのみ認証をスキップ
   // 重要: キャッシュヘッダーを設定してから返す（古いデータ問題対策）
   if (pathname.startsWith('/api/') && !pathname.startsWith('/api/admin')) {
+    // 検索系（Snapshot/nvapi プロキシ）はルート自身が短い s-maxage を設定し、CDN キャッシュで
+    // 上流（ニコニコ）への増幅を抑える。ランキング系の no-store 方針はそのまま
+    if (pathname === '/api/search' || pathname.startsWith('/api/search/')) {
+      const denied = await searchAccessDenied(request)
+      if (denied) return denied
+      return NextResponse.next()
+    }
     const response = NextResponse.next()
     // 全APIルートでno-storeを強制（Cloudflare Worker側でキャッシュ管理するため）
     response.headers.set('Cache-Control', 'no-store, must-revalidate')
@@ -246,8 +254,8 @@ const noStorePaths: string[] = []
   if (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '') {
     // リソースヒントの追加でTTFBを改善 - WOFF2を優先的にプリロード
     response.headers.set('Link', [
-      '</fonts/nicomoji-plus-v2.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
-      '</fonts/comic-sans-ms-bold.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous; fetchpriority=high',
+      '</fonts/nicomoji-plus-v2-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
+      '</fonts/comic-sans-ms-bold-logo.woff2>; rel=preload; as=font; type=font/woff2; crossorigin=anonymous',
       '<https://nicovideo.cdn.nimg.jp>; rel=preconnect',
       '<https://tn.smilevideo.jp>; rel=preconnect',
       '<https://secure-dcdn.cdn.nimg.jp>; rel=preconnect',
@@ -285,6 +293,13 @@ const noStorePaths: string[] = []
     response.headers.set('Content-Type', 'text/css; charset=utf-8')
     response.headers.set('Cache-Control', 'public, max-age=86400, s-maxage=86400')
     response.headers.set('CDN-Cache-Control', 'public, s-maxage=86400, must-revalidate')
+  } else if (request.nextUrl.pathname === '/sw.js') {
+    // Service Worker 本体は長期キャッシュしない（ページ遷移を横取りするため、
+    // 不具合の修正版がすぐ届くようにする）。ブラウザは毎回再検証し、CDN には保存させない
+    response.headers.set('Content-Type', 'application/javascript; charset=utf-8')
+    response.headers.set('Cache-Control', 'no-cache')
+    response.headers.set('CDN-Cache-Control', 'no-store')
+    response.headers.set('Vercel-CDN-Cache-Control', 'no-store')
   } else if (request.nextUrl.pathname.match(/\.js$/)) {
     // JSファイル: 正確なMIME type設定 + 24時間キャッシュ + ETag活用
     response.headers.set('Content-Type', 'application/javascript; charset=utf-8')

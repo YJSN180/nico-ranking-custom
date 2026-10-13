@@ -40,3 +40,21 @@ it('deployment guard rejects mismatched sources/configs and accepts the canonica
   expect(run('nico-ranking-api-gateway-green', 'workers/api-gateway-green-20250726.ts', 'workers/wrangler.toml').status).toBe(1)
   expect(run('nico-ranking-api-gateway', 'workers/api-gateway-green-20250726.ts', 'wrangler.toml').status).toBe(1)
 })
+
+function bindingBlock(file: string, name: string): string | undefined {
+  const text = fs.readFileSync(path.join(repoRoot, file), 'utf8')
+  return text.split('[[').find((block) => new RegExp(`^name\\s*=\\s*"${name}"`, 'm').test(block))
+}
+
+describe('green search rate limit binding', () => {
+  it('has its own rate limit namespace for the search endpoints', () => {
+    const search = bindingBlock('workers/wrangler-green.toml', 'SEARCH_RATE_LIMITER')
+    const ranking = bindingBlock('workers/wrangler-green.toml', 'RATE_LIMITER')
+    const namespace = (block?: string) => /namespace_id\s*=\s*"(\d+)"/.exec(block ?? '')?.[1]
+
+    expect(search).toMatch(/type\s*=\s*"ratelimit"/)
+    expect(search).toMatch(/simple\s*=\s*\{\s*limit\s*=\s*60,\s*period\s*=\s*60\s*\}/)
+    expect(namespace(search)).toBeDefined()
+    expect(namespace(search)).not.toBe(namespace(ranking))
+  })
+})

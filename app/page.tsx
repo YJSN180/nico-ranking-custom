@@ -25,8 +25,28 @@ export const revalidate = 0
 // Prefetch hints
 export const preferredRegion = 'auto'
 
-// ランキング取得の期限（再試行と本文読み取りを含む）
+// SSRでHTMLに埋め込むランキング件数（=1ページ分。client-page の ITEMS_PER_PAGE と揃える）
+const EMBED_ITEMS_COUNT = 100
+
+// SSR のランキング取得の全体の期限（一時障害の再試行・空のときの取り直し・本文の読み取りを含む）。
+// 上流が止まっても関数の上限まで待たず、従来の失敗時と同じ表示に落とす
 const RANKING_FETCH_BUDGET_MS = 8_000
+
+// ClientPage の key。条件（ジャンル・期間・タグ）かランキングの中身が変わったら作り直す。
+// ホーム・ロゴでの遷移では同じ画面のまま props だけが替わる。同じインスタンスのままだと
+// 全件の補完（マウント時のみ）が走らず、一覧が 1 ページ目の埋め込みに縮んでページ送りが消える。
+// 中身は全件の ID 列の簡易ハッシュ（FNV-1a）で見る（同じ条件で開き直したときの更新も拾う）
+function buildClientPageKey(genre: string, period: string, tag: string | undefined, items: RankingItem[]): string {
+  let hash = 0x811c9dc5
+  for (const item of items) {
+    const id = `${item.id},`
+    for (let i = 0; i < id.length; i++) {
+      hash ^= id.charCodeAt(i)
+      hash = Math.imul(hash, 0x01000193)
+    }
+  }
+  return [genre, period, tag ?? '', items.length, (hash >>> 0).toString(36)].join('|')
+}
 
 // 静的生成を無効化（ISRのWrite Units制限のため）
 // Vercel Hobbyプランは128 Write Units/月しかないため、
@@ -69,14 +89,15 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
   if (!isDefault) {
     description += '最新の人気動画をチェック！'
   }
-
-  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）
+  
+  // 指定された条件だけをクエリにする（どれか 1 つだけでも ? から始まる）。
+  // なお Next.js は描画時、パスが / の og:url をオリジンだけにする（クエリは出力されない）
   const ogQuery = new URLSearchParams()
   if (params.genre) ogQuery.set('genre', genre)
   if (params.period) ogQuery.set('period', period)
   if (tag) ogQuery.set('tag', tag)
   const ogSearch = ogQuery.toString()
-
+  
   return {
     title,
     description,
@@ -117,8 +138,11 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
   if (actualTag && !actualTag.startsWith('custom:')) params.set('tag', actualTag)
 
   const resolveBaseUrl = () => {
+    // プレビューは RANKING_SSR_GATEWAY_URL に関わらず常に公開の Green Worker から読む
+    // （生成されるデプロイ URL は Deployment Protection の認証が要り、プレビューの環境変数にも左右されない）。
+    if (process.env.VERCEL_ENV === 'preview') return 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'
+    // それ以外の環境では明示した RANKING_SSR_GATEWAY_URL を最優先し、本番はその次に nico-rank.com を使う。
     if (process.env.RANKING_SSR_GATEWAY_URL) return process.env.RANKING_SSR_GATEWAY_URL.replace(/\/$/, '')
-    // Generated Vercel deployment URLs require authentication under Deployment Protection.
     if (process.env.VERCEL_ENV === 'production') return 'https://nico-rank.com'
     const explicitSite = process.env.NEXT_PUBLIC_SITE_URL
     if (explicitSite) return explicitSite.replace(/\/$/, '')
@@ -130,7 +154,7 @@ async function fetchRankingData(genre: string = 'all', period: string = '24h', t
     return process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://nico-ranking-custom.vercel.app'
   }
 
-  // すべての環境で同一オリジンの Next API を経由する（CORS/ドメイン差異による失敗を避ける）
+  // Vercelでは公開ランキングのゲートウェイを使い、保護された自己URLへの未認証通信を避ける。
   const proxyBase = resolveBaseUrl()
   const apiUrl = `${proxyBase}/api/ranking?${params.toString()}`
 
@@ -286,11 +310,14 @@ export default async function Home({ searchParams }: PageProps) {
       return <EmptyRankingPage tag={tag} />
     }
 
-    // クライアントサイドページネーション: 全件データをクライアントに送信
-    // NGリスト即座反映とパフォーマンス向上のため
+    // フェーズ2.5-1: HTMLに埋め込むのは1ページ目のみ。
+    // 全件（約1000件・生917KB）の埋め込みは初回ダウンロード/パース/
+    // ハイドレーションをモバイルで重くするため、残りはクライアントが
+    // マウント後に /api/ranking/full で補完する（initialTotalCount が合図）
+    const embeddedItems = rankingData.slice(0, EMBED_ITEMS_COUNT)
 
     return (
-      <main style={{ 
+      <main id="main-content" style={{ 
         padding: '0',
         // CLS対策: フッターマージンを考慮したminHeight
         minHeight: 'calc(100vh - 80px)',
@@ -309,8 +336,10 @@ export default async function Home({ searchParams }: PageProps) {
             minHeight: 'calc(100vh - 100px)' // ヘッダー分を引いた最小高さを確保
           }}>
           <SuspenseWrapper>
-            <ClientPage 
-              initialData={{ items: rankingData, popularTags }} 
+            <ClientPage
+              key={buildClientPageKey(genre, period, tag, rankingData)}
+              initialData={{ items: embeddedItems, popularTags }}
+              initialTotalCount={rankingData.length}
               initialGenre={genre}
               initialPeriod={period}
               initialTag={tag}

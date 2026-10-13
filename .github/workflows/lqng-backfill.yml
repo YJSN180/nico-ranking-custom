@@ -1,8 +1,9 @@
 name: LQNG Backfill
 
 # 粗悪コンテンツ自動NG: 過去分のバックフィル（手動起動）
-# Worker lqng-poller の /trigger?mode=backfill を繰り返し呼び、判定差分をまとめて書き込む。
-# 走査は KV を書かないため、KV の書き込み枠は commit 回数分（数回）しか消費しない。
+# Worker lqng-poller の /trigger?mode=backfill を繰り返し呼び、判定差分をまとめて受け箱
+# （KV lqng:inbox:<runId>:<seq>）に置く。判定表への反映は次のポーリング（15 分ごと）が行う。
+# 走査は KV を書かないため、KV の書き込みは確定の回数分（数回）だけ。
 # 注意: workflow_dispatch は既定ブランチにこのファイルがあるときだけ起動できる。
 # 駆動スクリプトと Worker のコードは ref 入力のブランチから取り出す。
 on:
@@ -29,10 +30,23 @@ on:
         default: ''
         type: string
       commit_every:
-        description: '何回の呼び出しごとに判定差分を書き込むか'
+        description: '何回の呼び出しごとに判定差分を受け箱に置くか（途中で失敗しても、見つけた分は確定してから終わる）'
         required: false
         default: '40'
         type: string
+      end:
+        description: '走査の開始時点（ISO 日時、空欄で現在）。途中終了した続きはログの最後の窓の終端を指定する'
+        required: false
+        default: ''
+        type: string
+      source:
+        description: '取得元。snapshot=全履歴（Snapshot API）、pages=本家タグページ（直近数日、Snapshot 未反映分の補完）'
+        required: false
+        default: 'snapshot'
+        type: choice
+        options:
+          - snapshot
+          - pages
 
 permissions:
   contents: read
@@ -63,4 +77,12 @@ jobs:
           BACKFILL_MAX_CALLS: ${{ inputs.max_calls }}
           BACKFILL_DAYS: ${{ inputs.days }}
           BACKFILL_COMMIT_EVERY: ${{ inputs.commit_every }}
+          BACKFILL_END: ${{ inputs.end }}
+          BACKFILL_SOURCE: ${{ inputs.source }}
+          # 下の 2 つは、この版の YAML から起動したときだけ渡る。main の YAML が古い間は「Use workflow from」でこの版のあるブランチを選ぶ
+          # （main の YAML から起動すると 165 分の期限が効かず、runId は駆動スクリプトが local-… で作る）
+          # 受け箱のキー（lqng:inbox:<runId>:<seq>）に使う。再実行（attempt）ごとに別のキーになる
+          LQNG_BACKFILL_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+          # ジョブの上限（timeout-minutes: 180）で打ち切られる前に、見つけた差分を確定して終える
+          BACKFILL_DEADLINE_MINUTES: '165'
         run: npx tsx scripts/lqng-backfill-driver.ts

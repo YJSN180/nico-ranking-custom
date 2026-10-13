@@ -203,6 +203,10 @@ export function PopoverNGSelector({
 
   if (!isOpen) return null
 
+  // 投稿者名が分からない行（検索の索引由来で名前の補完前・補完に失敗した行など）では、投稿者名の NG を出さない。
+  // 出すと ID が名前として登録され、名前の NG として効かない。投稿者 ID の NG は出す
+  const hasAuthorName = Boolean(video.authorName?.trim())
+
   const handleVideoIdAdd = () => {
     onAdd('videoId', video.id)
   }
@@ -212,7 +216,7 @@ export function PopoverNGSelector({
   }
 
   const handleAuthorAdd = () => {
-    onAdd('author', video.authorName || video.authorId || '')
+    onAdd('author', video.authorName ?? '')
   }
 
   const handleAuthorIdAdd = () => {
@@ -252,14 +256,16 @@ export function PopoverNGSelector({
             <span>タイトル: {video.title}</span>
           </button>
           
-          <button
-            className="popover-ng-selector__option"
-            onClick={handleAuthorAdd}
-            data-testid="ng-author"
-          >
-            <span className="popover-ng-selector__icon">👤</span>
-            <span>投稿者名: {video.authorName || video.authorId}</span>
-          </button>
+          {hasAuthorName && (
+            <button
+              className="popover-ng-selector__option"
+              onClick={handleAuthorAdd}
+              data-testid="ng-author"
+            >
+              <span className="popover-ng-selector__icon">👤</span>
+              <span>投稿者名: {video.authorName}</span>
+            </button>
+          )}
           
           {video.authorId && (
             <button

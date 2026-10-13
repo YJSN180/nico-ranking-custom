@@ -1,0 +1,57 @@
+import { withTimeout } from '@/lib/abort-signal'
+import { searchAccessDenied } from '@/lib/search/access'
+// リアルタイム区間のタグ補完API（検索リアルタイム統合計画 S4）
+// 検索結果の表示後にクライアントが非同期で呼び、リアルタイム区間の動画に
+// tags / tagDetails（isLocked 含む）を後付けする。これによりタグ系のユーザーNG・
+// タグ表示トグル・粗悪除外のタグ条件がリアルタイム区間でも機能する。
+// ロック情報が分かったここで自動 NG のロックタグ規則 D を当て、該当する動画を hiddenIds で返す（画面で隠す）。
+import { NextRequest, NextResponse } from 'next/server'
+import { buildRealtimeTagsQuery, fetchTagDetailsForVideos, sanitizeVideoIds } from '@/lib/search/realtime-tags'
+import { getLqngConfig, isLqngEnabled } from '@/lib/lqng/server'
+import { lockTagRuleHits } from '@/lib/lqng/request-rules'
+import { enrichmentRateLimit, tooManyRequests } from '@/lib/search/rate-limit'
+
+export const preferredRegion = 'hnd1'
+export const revalidate = 0
+
+/** 全体の期限。関数の上限（vercel.json の maxDuration 15 秒）より前に、取れた分だけで応答する */
+const REALTIME_TAGS_DEADLINE_MS = 8000
+/** 自動 NG の設定の KV 読み取り 1 回のタイムアウト（再試行を含めて全体の期限で打ち切る） */
+const KV_READ_TIMEOUT_MS = 3000
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  const denied = await searchAccessDenied(request)
+  if (denied) return denied
+  const ids = sanitizeVideoIds(request.nextUrl.searchParams.get('ids'))
+  if (ids.length === 0) {
+    return NextResponse.json({ error: 'no_ids' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+  }
+  // 受け付けるのは画面が組み立てる正規形だけ（知らないキー・並べ替え・形式不正の ID・上限超えで CDN のキャッシュを外させない）
+  if (buildRealtimeTagsQuery(ids) !== request.nextUrl.search.replace(/^\?/, '')) {
+    return NextResponse.json({ error: 'invalid_params' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+  }
+  // インスタンスごとの軽い流量制限（上流への問い合わせの急増を抑える。形の不正な問い合わせは数えない）
+  const retryAfter = enrichmentRateLimit.take()
+  if (retryAfter > 0) return tooManyRequests(retryAfter)
+  const started = Date.now()
+  const deadline = withTimeout(REALTIME_TAGS_DEADLINE_MS, request.signal)
+  // 自動 NG の設定は上流の問い合わせと並列に読む（失敗や期限切れでも投げず、直前の成功値か無効で続く）
+  const configPromise = isLqngEnabled()
+    ? getLqngConfig({ signal: deadline, timeoutMs: KV_READ_TIMEOUT_MS }).catch(() => null)
+    : Promise.resolve(null)
+  const result = await fetchTagDetailsForVideos(ids, { signal: deadline })
+  const hiddenIds = lockTagRuleHits(
+    Object.entries(result.tagDetails).map(([id, tagDetails]) => ({ id, authorId: result.authorIds[id] ?? null, tagDetails })),
+    await configPromise
+  )
+  return NextResponse.json(
+    { tagDetails: result.tagDetails, failed: result.failed, hiddenIds, elapsedMs: Date.now() - started },
+    {
+      headers: {
+        // 新着動画のタグは変わりうるが、数分のキャッシュは許容。取れなかった分がある応答は短くする
+        'Cache-Control':
+          result.failed.length > 0 ? 'public, s-maxage=60, stale-while-revalidate=60' : 'public, s-maxage=300, stale-while-revalidate=600',
+      },
+    }
+  )
+}

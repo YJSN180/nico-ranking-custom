@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { isThumbnailCdnUrl } from '@/lib/thumbnail-hosts'
+import { decodeHtmlAttribute } from '@/lib/html-entities'
 
 // 1 か所の取得（本文の読み取りを含む）の期限。ミラーが遅くても nicovideo.jp を読む時間を残す
 const SOURCE_TIMEOUT_MS = 4_000
@@ -23,7 +24,7 @@ function extractHdThumbnailUrl(html: string): string | null {
   // og:image メタタグから1280x720サムネイルURL取得
   // 属性の順序が異なる場合も対応（content が先にくる場合）
   const ogImageMatch = html.match(/<meta[^>]+(?:property=["']og:image["'][^>]+content=["']([^"']+)["']|content=["']([^"']+)["'][^>]+property=["']og:image["'])/i)
-  const ogImage = ogImageMatch ? ogImageMatch[1] || ogImageMatch[2] : undefined
+  const ogImage = ogImageMatch ? decodeHtmlAttribute(ogImageMatch[1] || ogImageMatch[2]) : undefined
 
   if (ogImage && isThumbnailCdnUrl(ogImage)) {
     // eslint-disable-next-line no-console
@@ -38,7 +39,7 @@ function extractHdThumbnailUrl(html: string): string | null {
 
   // フォールバック: og:imageが（使える形で）見つからない場合
   const thumbnailMatch = html.match(/<meta[^>]+name=["']thumbnail["'][^>]+content=["']([^"']+)["']/i)
-  const thumbnail = thumbnailMatch?.[1]
+  const thumbnail = thumbnailMatch ? decodeHtmlAttribute(thumbnailMatch[1]) : undefined
   if (thumbnail && isThumbnailCdnUrl(thumbnail)) {
     // .original サフィックス追加で最大サイズ化
     return toOriginalSizeUrl(thumbnail)

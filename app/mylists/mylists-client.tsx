@@ -1,5 +1,6 @@
 'use client'
 
+import { Folder } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -34,6 +35,7 @@ const PWAInstallGuide = dynamic(
 export function MylistsClient() {
   const [mylists, setMylists] = useState<Mylist[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingMylist, setEditingMylist] = useState<Mylist | null>(null)
   const [storageInfo, setStorageInfo] = useState({ used: 0, quota: 0 })
@@ -118,6 +120,10 @@ export function MylistsClient() {
       } catch (error) {
         // eslint-disable-next-line no-console
         console.error('Failed to initialize mylists page:', error)
+        // 読み込み失敗を「空の一覧」に見せない（フェーズ4-8）
+        if (mounted) {
+          setLoadError(true)
+        }
       } finally {
         if (mounted) {
           setIsLoading(false)
@@ -222,6 +228,29 @@ export function MylistsClient() {
     )
   }
 
+  if (loadError) {
+    return (
+      <div className={styles.container}>
+        <div role="alert" style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-secondary)' }}>
+          <p style={{ marginBottom: '16px' }}>マイリストの読み込みに失敗しました。</p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '8px 20px',
+              background: 'var(--primary-color)',
+              color: 'var(--button-text-active)',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            再読み込み
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.headerTop}>
@@ -276,7 +305,7 @@ export function MylistsClient() {
             }}
           >
             <div className={styles.mylistInfo}>
-              <div className={styles.mylistIcon}>📁</div>
+              <div className={styles.mylistIcon}><Folder size={32} strokeWidth={1.5} fill="currentColor" style={{ color: 'var(--stat-mylists-color)' }} aria-hidden="true" /></div>
               <div className={styles.mylistDetails}>
                 <h3 className={styles.mylistName}>{mylist.name}</h3>
                 {mylist.description && (

@@ -515,7 +515,7 @@ export function importExtendedNGListData(
     if (!hasNGListStructure(data?.ngList)) {
       throw new Error('NGリストのバックアップファイルではありません')
     }
-
+    
     // インポートデータもマイグレーション。空文字・空白だけ・文字列でない要素は取り込まない
     // （空の部分一致はすべての動画に当たり、文字列でないタグは絞り込みで落ちる）
     let importingNGList = sanitizeNGListEntries(data.ngList)
@@ -528,6 +528,10 @@ export function importExtendedNGListData(
     
     // インポート処理
     const newNGList: ExtendedUserNGList = { ...existingNGList }
+    // 古いバックアップのマージでは現在の表示設定を保持。置き換えでは未指定をオフに戻す。
+    if (conflictResolution === 'overwrite' || importingNGList.hideDeletedAuthors !== undefined) {
+      newNGList.hideDeletedAuthors = importingNGList.hideDeletedAuthors === true
+    }
     
     if (conflictResolution === 'overwrite') {
       // 上書きモード：インポートデータで完全に置き換え

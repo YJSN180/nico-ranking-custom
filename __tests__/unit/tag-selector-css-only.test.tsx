@@ -3,7 +3,7 @@
  * CSS Scroll Snapによるスクロール制御をテスト
  */
 
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { render } from '@/__tests__/test-utils'
 import { vi, describe, test, beforeEach, expect } from 'vitest'
 import { TagSelector } from '@/components/tag-selector'
@@ -121,6 +121,34 @@ describe('TagSelector CSS-only Implementation', () => {
   })
 
   describe('アクセシビリティ', () => {
+    test('選択はピルで伝え、重複行なしで解除できる', () => {
+      const { rerender } = render(
+        <TagSelector
+          config={{ ...mockConfig, tag: 'VOCALOID' }}
+          onConfigChange={mockOnConfigChange}
+          popularTags={mockPopularTags}
+        />
+      )
+
+      expect(screen.queryByText(/選択中:/)).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'VOCALOID' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'すべて' })).toHaveAttribute('aria-pressed', 'false')
+      fireEvent.click(screen.getByRole('button', { name: 'クリア' }))
+      expect(mockOnConfigChange).toHaveBeenLastCalledWith({ ...mockConfig, tag: undefined })
+
+      rerender(
+        <TagSelector
+          config={mockConfig}
+          onConfigChange={mockOnConfigChange}
+          popularTags={mockPopularTags}
+        />
+      )
+      expect(screen.getByRole('button', { name: 'すべて' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'VOCALOID' })).toHaveAttribute('aria-pressed', 'false')
+      fireEvent.click(screen.getByRole('button', { name: 'VOCALOID' }))
+      expect(mockOnConfigChange).toHaveBeenLastCalledWith({ ...mockConfig, tag: 'VOCALOID' })
+    })
+
     test('CSS Scroll Snapが有効なコンテナが存在する', () => {
       render(
         <TagSelector

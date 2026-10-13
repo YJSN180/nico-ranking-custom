@@ -5,17 +5,18 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 20px 0;
+  gap: 12px;
+  padding: 16px 0;
   border-top: 1px solid var(--border-color);
   margin-top: 20px;
 }
 
 /* ページ情報 */
 .pageInfo {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ボタンコンテナ */
@@ -44,35 +45,20 @@
   font-weight: 500;
 }
 
-/* 基本ボタンスタイル */
+/* フォームと同じ操作部品。番号も44pxの操作領域を確保する。 */
 .pageButton {
-  padding: 8px 12px;
-  font-size: 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--surface-color);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 40px;
-  font-weight: 400;
+  composes: button from './control.module.css';
+  min-width: var(--control-height);
+  padding-inline: 12px;
 }
-
-/* 前後ボタン */
 .navButton {
-  padding: 8px 12px;
-  font-size: 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--surface-color);
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all 0.2s;
+  composes: button from './control.module.css';
 }
 
 /* アクティブ状態 */
 .pageButton.active {
-  background: var(--primary-color);
+  background: var(--control-accent);
+  border-color: var(--control-accent);
   color: white;
   font-weight: 600;
 }
@@ -81,8 +67,6 @@
 .pageButton:hover:not(.active):not(:disabled),
 .navButton:hover:not(:disabled) {
   background: var(--bg-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 /* 無効状態 */
@@ -98,7 +82,6 @@
   color: var(--text-secondary);
   font-size: 14px;
 }
-
 
 /* モバイル対応 (600px以下) */
 @media (max-width: 600px) {
@@ -127,22 +110,87 @@
   /* ボタンサイズ調整 */
   .navButton {
     padding: 10px 16px;
-    font-size: 16px;
   }
 }
 
-/* アニメーション */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.quickNavigation {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  width: 100%;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
-.container {
-  animation: fadeIn 0.3s ease-out;
+.jumpButtons,
+.jumpForm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.jumpForm {
+  flex-wrap: wrap;
+  max-width: 100%;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.pageInput {
+  box-sizing: border-box;
+  width: 76px;
+  min-height: 44px;
+  padding: 8px;
+  font: inherit;
+  font-size: 16px;
+  text-align: center;
+  color: var(--text-primary);
+  caret-color: var(--primary-color);
+  background: var(--surface-color);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+}
+
+.quickNavigation .navButton,
+.summaryButton {
+  min-height: 44px;
+}
+
+.summaryButton {
+  border: 0;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pageInput:focus-visible,
+.quickNavigation button:focus-visible,
+.summaryButton:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+.inputError {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+  .quickNavigation {
+    gap: 8px;
+  }
+  .jumpForm {
+    gap: 6px;
+  }
+  .pageInput {
+    width: 60px;
+  }
 }

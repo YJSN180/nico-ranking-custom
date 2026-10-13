@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useGenreOrderV2 } from '@/hooks/use-genre-order-v2'
 import type { GenreItem } from '@/types/genre-order'
 import styles from './genre-order-backup.module.css'
+import { showToast } from '@/lib/toast'
 import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
 import { INVALID_GENRE_ORDER_MESSAGE, isValidGenreOrder } from '@/lib/storage/genre-order-validation'
 
@@ -43,7 +44,7 @@ export function GenreOrderBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Failed to export genre order:', error)
-      alert('ジャンル並び替えデータのエクスポートに失敗しました')
+      showToast('ジャンル並び替えデータのエクスポートに失敗しました', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -121,7 +122,7 @@ export function GenreOrderBackup() {
       setImportMessage({ type: 'error', text: 'ファイルの読み込みに失敗しました' })
       setIsImporting(false)
     }
-
+    
     reader.readAsText(file)
     
     // ファイル選択をリセット
@@ -144,11 +145,11 @@ export function GenreOrderBackup() {
       setPendingImportData(null)
       
       // リロード確認
+      // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+      showToast('インポートしました。反映のため再読み込みします…', 'success')
       setTimeout(() => {
-        if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-          window.location.reload()
-        }
-      }, 1500)
+        window.location.reload()
+      }, 1800)
     } catch (error) {
       console.error('Failed to apply import:', error)
       setImportMessage({ 

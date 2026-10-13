@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../../workers/search-budget', () => ({ SearchBudget: class {} }))
 import { fetchUpstream } from '../../workers/utils/upstream-proxy'
 vi.mock('../../workers/sentry.js', () => ({ Sentry: { withSentry: (_: unknown, h: unknown) => h }, createWorkerSentryOptions: vi.fn(), captureWorkerException: vi.fn(), sanitizeUrlForSentry: vi.fn() }))
 import green from '../../workers/api-gateway-green-20250726'

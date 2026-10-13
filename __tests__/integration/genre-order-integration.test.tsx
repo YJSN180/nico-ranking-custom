@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const { mockApplyChanges, mockCancelChanges, mockNgList } = vi.hoisted(() => ({
@@ -61,6 +61,10 @@ vi.mock('@/components/genre-order', () => ({
 
 import { SettingsModal } from '@/components/settings-modal'
 
+// 設定項目タブはアイコン（aria-hidden）＋「ジャンル」の表示で、アクセシブルネームは「ジャンル」になる
+const getGenreTab = (): HTMLElement =>
+  within(screen.getByRole('group', { name: '設定項目' })).getByRole('button', { name: 'ジャンル' })
+
 describe('Genre Order Integration', () => {
   const reloadMock = vi.fn()
 
@@ -75,14 +79,19 @@ describe('Genre Order Integration', () => {
   it('shows genre order tab in settings modal', () => {
     render(<SettingsModal isOpen={true} onClose={() => {}} />)
 
-    expect(screen.getByRole('button', { name: /🎯\s*ジャンル/ })).toBeInTheDocument()
+    const genreTab = getGenreTab()
+    expect(genreTab).toBeInTheDocument()
+    // 初期表示は NGリスト タブなので、ジャンルタブは未選択
+    expect(genreTab).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('displays genre order customizer when tab is clicked', () => {
     render(<SettingsModal isOpen={true} onClose={() => {}} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /🎯\s*ジャンル/ }))
+    fireEvent.click(getGenreTab())
 
+    expect(getGenreTab()).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { name: 'ジャンル並び替え' })).toBeInTheDocument()
     expect(screen.getByText(/ドラッグ&ドロップでジャンルの順序を変更/)).toBeInTheDocument()
     expect(screen.getByText('デフォルトに戻す')).toBeInTheDocument()
   })
@@ -90,25 +99,23 @@ describe('Genre Order Integration', () => {
   it('shows apply button when genre order changes are reported', async () => {
     render(<SettingsModal isOpen={true} onClose={() => {}} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /🎯\s*ジャンル/ }))
-    expect(screen.queryByText('適用')).not.toBeInTheDocument()
+    fireEvent.click(getGenreTab())
+    expect(screen.queryByRole('button', { name: '適用' })).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '変更を発生' }))
 
     await waitFor(() => {
-      expect(screen.getByText('適用')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '適用' })).toBeInTheDocument()
     })
   })
 
   it('applies genre order changes when apply is clicked', async () => {
     render(<SettingsModal isOpen={true} onClose={() => {}} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /🎯\s*ジャンル/ }))
+    fireEvent.click(getGenreTab())
     fireEvent.click(screen.getByRole('button', { name: '変更を発生' }))
 
-    await waitFor(() => {
-      fireEvent.click(screen.getByText('適用'))
-    })
+    fireEvent.click(await screen.findByRole('button', { name: '適用' }))
 
     expect(mockApplyChanges).toHaveBeenCalledTimes(1)
     expect(reloadMock).not.toHaveBeenCalled()
@@ -120,14 +127,14 @@ describe('Genre Order Integration', () => {
 
     render(<SettingsModal isOpen={true} onClose={onClose} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /🎯\s*ジャンル/ }))
+    fireEvent.click(getGenreTab())
     fireEvent.click(screen.getByRole('button', { name: '変更を発生' }))
 
     await waitFor(() => {
-      expect(screen.getByText('適用')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '適用' })).toBeInTheDocument()
     })
 
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }))
+    fireEvent.click(screen.getByRole('button', { name: '設定を閉じる' }))
 
     expect(confirmMock).toHaveBeenCalledWith('変更を破棄してもよろしいですか？')
     expect(onClose).not.toHaveBeenCalled()

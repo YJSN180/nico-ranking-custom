@@ -49,11 +49,11 @@ describe('MylistVideoItem', () => {
     // 投稿者
     expect(screen.getByText('投稿者名')).toBeInTheDocument()
     
-    // 統計情報は削除されたため、存在しないことを確認
-    expect(screen.queryByText(/▶️ 1万/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/💬 500/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/❤️ 300/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/📁 100/)).not.toBeInTheDocument()
+    const stats = screen.getByTestId('video-stats')
+    expect(stats.textContent).toContain('コメント数 500')
+    expect(stats.textContent).toContain('いいね数 300')
+    expect(stats.textContent).toContain('マイリスト数 100')
+    expect(stats.querySelectorAll('svg[aria-hidden="true"]')).toHaveLength(4)
   })
 
   it('編集ボタンをクリックするとonEditが呼ばれる', () => {

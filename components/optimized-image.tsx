@@ -66,8 +66,8 @@ export function OptimizedImage({
   
   // ニコニコ動画サムネイルは直接表示（Next.js最適化バイパス）
   if (isNicoThumbnail) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imgSrc}
         alt={hasError ? '視聴できません' : alt}
@@ -75,6 +75,11 @@ export function OptimizedImage({
         height={height}
         style={style}
         loading={loading}
+        decoding="async"
+        // LCP改善: 先頭のサムネイルは優先取得する。サーバーが返す HTML の時点で付ける
+        // （以前は ref でハイドレーション後に付けており、取得はもう始まっていて効かなかった）。
+        // App Router の React は fetchPriority を fetchpriority 属性として出力し、画像の preload にも使う
+        fetchPriority={priority ? 'high' : undefined}
         className={className}
         onClick={onClick}
         onError={handleError}

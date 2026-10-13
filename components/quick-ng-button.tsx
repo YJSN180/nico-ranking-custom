@@ -12,13 +12,16 @@ interface QuickNGButtonProps {
   disabled?: boolean
   className?: string
   onNGAdded?: (type: NGType, value: string | string[]) => void
+  /** 3点メニュー内の行として表示する（モバイル用） */
+  asMenuItem?: boolean
 }
 
-export function QuickNGButton({ 
-  video, 
-  disabled = false, 
+export function QuickNGButton({
+  video,
+  disabled = false,
   className = '',
-  onNGAdded 
+  onNGAdded,
+  asMenuItem = false
 }: QuickNGButtonProps) {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const buttonRef = useRef<HTMLButtonElement>(null)
@@ -78,10 +81,14 @@ export function QuickNGButton({
   }, [isPopoverOpen, handleClosePopover])
 
   return (
-    <div className="quick-ng-button-container">
+    <div className={asMenuItem ? undefined : 'quick-ng-button-container'}>
       <button
         ref={buttonRef}
-        className={`quick-ng-button ${disabled ? 'quick-ng-button--disabled' : ''} ${className}`}
+        className={
+          asMenuItem
+            ? 'item-action-menu__item'
+            : `quick-ng-button ${disabled ? 'quick-ng-button--disabled' : ''} ${className}`
+        }
         disabled={disabled}
         onClick={handleOpenPopover}
         onKeyDown={(e) => {
@@ -95,7 +102,14 @@ export function QuickNGButton({
         aria-expanded={isPopoverOpen}
         title="この動画をNGリストに追加"
       >
-        <span className="quick-ng-button__icon">🚫</span>
+        {asMenuItem ? (
+          <>
+            <span aria-hidden="true">🚫</span>
+            NG設定
+          </>
+        ) : (
+          <span className="quick-ng-button__icon">🚫</span>
+        )}
       </button>
 
       <PopoverNGSelector

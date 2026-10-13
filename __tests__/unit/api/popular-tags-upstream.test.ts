@@ -12,12 +12,14 @@ vi.mock('@/lib/simple-kv', () => ({
 }))
 
 import { GET } from '@/app/api/popular-tags/route'
+import { invalidatePopularTagsLatestCache } from '@/lib/popular-tags'
 
 const fetchMock = vi.fn()
 const requestedUrls = (): URL[] => fetchMock.mock.calls.map(([input]) => new URL(String(input)))
 
 describe('/api/popular-tags の上流への問い合わせ', () => {
   beforeEach(() => {
+    invalidatePopularTagsLatestCache()
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
   })

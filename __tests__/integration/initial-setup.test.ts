@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/ranking/route'
 import { kv } from '@/lib/simple-kv'
-import { scrapeRankingPage } from '@/lib/scraper'
 import { getGenreRanking, setGenreRanking } from '@/lib/cloudflare-kv'
 
 vi.mock('@/lib/simple-kv', () => ({
@@ -10,10 +9,6 @@ vi.mock('@/lib/simple-kv', () => ({
     get: vi.fn(),
     set: vi.fn(),
   },
-}))
-
-vi.mock('@/lib/scraper', () => ({
-  scrapeRankingPage: vi.fn()
 }))
 
 vi.mock('@/lib/ng-filter', () => ({
@@ -46,7 +41,6 @@ describe('Initial Setup Experience', () => {
 
   it.skip('should provide helpful error message when no data exists', async () => {
     vi.mocked(kv.get).mockResolvedValueOnce(null)
-    vi.mocked(scrapeRankingPage).mockRejectedValueOnce(new Error('Scraping failed'))
 
     const request = new NextRequest('http://localhost:3000/api/ranking')
     const response = await GET(request)

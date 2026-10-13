@@ -12,7 +12,16 @@ import {
   type MylistImportResult
 } from '@/lib/storage/backup'
 import styles from './mylist-backup.module.css'
+import { showToast } from '@/lib/toast'
 import { BACKUP_FILE_TOO_LARGE_MESSAGE, isBackupFileTooLarge } from '@/lib/storage/backup-file-limit'
+
+// 失敗を含むが一部は取り込めた（反映には再読み込みが要る）
+function hasPartialImport(result: MylistImportResult): boolean {
+  return (
+    !result.success &&
+    result.created.mylists + result.created.videos + result.overwritten.mylists + result.overwritten.videos > 0
+  )
+}
 
 export function MylistBackup() {
   const [isExporting, setIsExporting] = useState(false)
@@ -34,7 +43,7 @@ export function MylistBackup() {
       setExportConfirmOpen(false)
     } catch (error) {
       console.error('Export failed:', error)
-      alert('エクスポートに失敗しました')
+      showToast('エクスポートに失敗しました', 'error')
     } finally {
       setIsExporting(false)
     }
@@ -53,7 +62,7 @@ export function MylistBackup() {
       if (isBackupFileTooLarge(file)) {
         throw new Error(BACKUP_FILE_TOO_LARGE_MESSAGE)
       }
-
+      
       // ファイル内容を読み込んで形式を判定
       const content = await file.text()
       const rawData = JSON.parse(content)
@@ -94,11 +103,11 @@ export function MylistBackup() {
         setImportResult(result)
         
         if (result.success) {
+          // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+          showToast('インポートしました。反映のため再読み込みします…', 'success')
           setTimeout(() => {
-            if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-              window.location.reload()
-            }
-          }, 1500)
+            window.location.reload()
+          }, 1800)
         }
       }
     } catch (error) {
@@ -145,11 +154,11 @@ export function MylistBackup() {
       setConflictData(null)
       
       if (result.success) {
+        // 二重通知をやめてトースト+自動リロードに一本化（フェーズ5-4）
+        showToast('インポートしました。反映のため再読み込みします…', 'success')
         setTimeout(() => {
-          if (confirm('インポートが完了しました。ページをリロードして変更を反映しますか？')) {
-            window.location.reload()
-          }
-        }, 1500)
+          window.location.reload()
+        }, 1800)
       }
     } catch (error) {
       setImportResult({
@@ -431,18 +440,43 @@ export function MylistBackup() {
                   </div>
                 )}
               </div>
-              <div className={styles.reloadPrompt}>
-                ⚠️ 変更を反映するにはページをリロードしてください
-              </div>
             </div>
           ) : (
             <div>
-              <strong>❌ インポートエラー</strong>
+              {hasPartialImport(importResult) ? (
+                <>
+                  {/* 一部だけ取り込めた: 自動では再読み込みせず、内容と「再読み込み」ボタンを出す */}
+                  <strong>⚠️ 一部インポート完了</strong>
+                  <div className={styles.resultDetails}>
+                    <div>追加されたマイリスト: {importResult.created.mylists}件</div>
+                    <div>追加された動画: {importResult.created.videos}件</div>
+                    {importResult.overwritten.mylists > 0 && (
+                      <div>上書きされたマイリスト: {importResult.overwritten.mylists}件</div>
+                    )}
+                    {importResult.overwritten.videos > 0 && (
+                      <div>上書きされた動画: {importResult.overwritten.videos}件</div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <strong>❌ インポートエラー</strong>
+              )}
               <div className={styles.errorDetails}>
                 {importResult.errors.map((error, index) => (
                   <div key={index}>{error}</div>
                 ))}
               </div>
+              {hasPartialImport(importResult) && (
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className={`${styles.dialogButton} ${styles.confirmButton}`}
+                  >
+                    再読み込み
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -4,6 +4,7 @@
 export const THUMBNAIL_HOSTS: ReadonlySet<string> = new Set([
   'nicovideo.cdn.nimg.jp',
   'img.cdn.nimg.jp',
+  'goptim.video.nimg.jp', // ショート動画（ss）の公式サムネイル
   'tn.smilevideo.jp',
   'tn-skr1.smilevideo.jp',
   'tn-skr2.smilevideo.jp',

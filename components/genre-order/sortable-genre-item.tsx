@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { Eye, EyeOff, GripVertical } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { RankingGenre, GENRE_LABELS } from '@/types/ranking-config'
@@ -37,7 +38,7 @@ export function SortableGenreItem({ genre, isVisible, onToggleVisibility }: Sort
     >
       {/* ドラッグハンドル */}
       <div className={styles.dragHandle} {...listeners}>
-        <span className={styles.dragIcon}>☰</span>
+        <GripVertical size={18} className={styles.dragIcon} aria-hidden="true" />
       </div>
       
       <div className={styles.genreLabel}>
@@ -51,7 +52,7 @@ export function SortableGenreItem({ genre, isVisible, onToggleVisibility }: Sort
         title={isVisible ? '非表示にする' : '表示する'}
         aria-label={isVisible ? `${GENRE_LABELS[genre]}を非表示にする` : `${GENRE_LABELS[genre]}を表示する`}
       >
-        {isVisible ? '👁️' : '👁️‍🗨️'}
+        {isVisible ? <Eye size={18} aria-hidden="true" /> : <EyeOff size={18} aria-hidden="true" />}
       </button>
     </div>
   )
