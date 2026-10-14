@@ -85,6 +85,9 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
       } catch (error) {
         console.error('Failed to initialize IndexedDB:', error)
+        // 初期化の途中（読み込みなど）で失敗した場合も error 状態では保存操作をすべて失敗させる。
+        // 一覧を表示できないまま書き込みだけが通る状態にしない
+        managerRef.current = null
         if (mounted) {
           setStorageBackend('error')
           setIsLoading(false)
@@ -116,27 +119,10 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   }, [storageBackend, rankings, selectedId])
 
 
-  // エラー状態の場合は空の結果を返す
-  if (storageBackend === 'error') {
-    return {
-      rankings: [],
-      selectedId: undefined,
-      selectedRanking: undefined,
-      createRanking: async () => null,
-      updateRanking: async () => false,
-      deleteRanking: async () => false,
-      selectRanking: async () => false,
-      toggleVisibility: async () => false,
-      updateRankingOrder: async () => false,
-      isUniqueTitle: async () => false,
-      searchRankings: async () => [],
-      isLoading: false,
-      storageBackend,
-      migrationStatus
-    }
-  }
-
   // IndexedDB 操作関数
+  // 注意: Rules of Hooks のため、error 状態でもフックは無条件に定義する
+  // （error 時は managerRef.current が null のため、保存を伴う操作は null / false / [] を返す。
+  //  selectRanking は保存しない画面内の選択だけを変え、一覧が空なので selectedRanking は undefined のまま）
   const createRanking = useCallback(async (data: CreateCustomRankingData): Promise<string | null> => {
     if (!managerRef.current) return null
 
