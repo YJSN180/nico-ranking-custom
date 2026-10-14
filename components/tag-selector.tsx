@@ -116,7 +116,7 @@ export function TagSelector({ config, onConfigChange, popularTags: propsTags = [
       : await createRanking({ title: data.title, baseGenre, conditions })
     if (!savedId) return false
 
-    if (editing) setEditingRanking(null)
+    // 編集対象は作成画面を閉じるとき（handleModalClose）に外す
     void showSavedRanking(savedId, baseGenre, data)
     return true
   }

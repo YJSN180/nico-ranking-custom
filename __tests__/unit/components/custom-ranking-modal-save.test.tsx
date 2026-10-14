@@ -106,4 +106,29 @@ describe('カスタムランキング作成: 保存の結果', () => {
     await act(async () => { finish(true) })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('保存を待つ間は Esc・×・背景・戻るで閉じたり戻ったりせず、失敗をその画面で知らせる', async () => {
+    let finish: (ok: boolean) => void = () => undefined
+    const onSave = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve }))
+    const onClose = vi.fn()
+    await openTitleStep(onSave, onClose)
+    await clickSave()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: '×' }))
+    const overlay = screen.getByRole('heading', { name: 'カスタムランキング作成' }).closest('div')?.parentElement?.parentElement
+    if (!overlay) throw new Error('overlay not found')
+    fireEvent.click(overlay)
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }))
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByPlaceholderText('例: レトロゲーム実況')).toHaveValue('合成')
+
+    await act(async () => { finish(false) })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('保存できませんでした')
+
+    // 結果が出たあとは、いつもどおり閉じられる
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
 })

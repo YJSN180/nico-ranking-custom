@@ -258,6 +258,8 @@ export function CustomRankingModal({
       // どちらも閉じると作成途中の内容が消える（App Router ではルートが document のため
       // React の stopPropagation ではこのリスナーを止められない）
       if (e.key !== 'Escape' || e.defaultPrevented || isImeComposing(e)) return
+      // 保存の結果を待つ間は閉じない（閉じると失敗を知らせる場所がなくなる）
+      if (savingRef.current) return
       onClose()
     }
 
@@ -358,8 +360,15 @@ export function CustomRankingModal({
     setCurrentStep((prev) => (prev + 1) as ModalStep)
   }
 
+  // 保存の結果を待つ間は閉じない（閉じると失敗を知らせる場所がなくなる）
+  const handleClose = () => {
+    if (savingRef.current) return
+    onClose()
+  }
+
   // 戻る
   const handleBack = () => {
+    if (savingRef.current) return
     if (currentStep === 1) {
       onClose()
       return
@@ -374,11 +383,11 @@ export function CustomRankingModal({
     : formData.title.trim().length > 0 && !isTitleDuplicated
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={handleClose}>
       <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={styles.closeButton} onClick={handleClose}>×</button>
         </div>
 
         {/* ステップインジケーター */}
@@ -684,7 +693,7 @@ export function CustomRankingModal({
               )}
               {saveError && (
                 <p className={styles.error} role="alert">
-                  保存できませんでした。もう一度「保存」を押してください。
+                  保存できませんでした。
                 </p>
               )}
 
