@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   getServerNGList,
+  getAdminNGList,
   saveServerManualNGList,
   addToServerDerivedNGList,
   getNGListManual,
@@ -13,15 +14,19 @@ import {
 vi.mock('@/lib/simple-kv', () => ({
   kv: {
     get: vi.fn(),
+    getStrict: vi.fn(),
     set: vi.fn()
   }
 }))
 
 import { kv } from '@/lib/simple-kv'
 
+// キーごとの値を返す getStrict の実装（ほかのキーは未設定＝null）
+const strictFrom = (values: Record<string, unknown>) => async (key: string): Promise<unknown> => (key in values ? values[key] : null)
+
 describe('NG List Server Functions', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
   })
 
   describe('getServerNGList', () => {
@@ -34,7 +39,7 @@ describe('NG List Server Functions', () => {
       }
       const mockDerived = ['sm456', 'sm789']
 
-      ;(kv.get as any)
+      vi.mocked(kv.get)
         .mockResolvedValueOnce(mockManual)
         .mockResolvedValueOnce(mockDerived)
 
@@ -56,7 +61,7 @@ describe('NG List Server Functions', () => {
     })
 
     it('should return empty lists on error', async () => {
-      ;(kv.get as any).mockRejectedValue(new Error('KV error'))
+      vi.mocked(kv.get).mockRejectedValue(new Error('KV error'))
 
       const result = await getServerNGList()
 
@@ -76,13 +81,34 @@ describe('NG List Server Functions', () => {
     })
   })
 
+  describe('getAdminNGList（管理画面用）', () => {
+    it('手動の 4 項目と派生NGを返す（保存済みレコードの余分な欄は返さない）', async () => {
+      vi.mocked(kv.getStrict).mockImplementation(strictFrom({
+        'ng-list-manual': { videoIds: ['sm1'], videoTitles: { exact: ['t'], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] }, extra: ['x'] },
+        'ng-list-derived': ['sm2']
+      }))
+      expect(await getAdminNGList()).toEqual({ videoIds: ['sm1'], videoTitles: { exact: ['t'], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] }, derivedVideoIds: ['sm2'] })
+      expect(kv.get).not.toHaveBeenCalled()
+    })
+
+    it('未設定（404）は空の一覧', async () => {
+      vi.mocked(kv.getStrict).mockResolvedValue(null)
+      expect(await getAdminNGList()).toEqual({ videoIds: [], videoTitles: { exact: [], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] }, derivedVideoIds: [] })
+    })
+
+    it('読み取り失敗は空の一覧にせず例外にする', async () => {
+      vi.mocked(kv.getStrict).mockRejectedValue(new Error('KV get failed: 429'))
+      await expect(getAdminNGList()).rejects.toThrow('429')
+    })
+  })
+
   describe('addToServerDerivedNGList', () => {
     it('should add new video IDs to derived list without duplicates', async () => {
       const existingIds = ['sm123', 'sm456']
       const newIds = ['sm456', 'sm789', 'sm101112']
 
-      ;(kv.get as any).mockResolvedValueOnce(existingIds)
-      ;(kv.set as any).mockResolvedValueOnce(undefined)
+      vi.mocked(kv.getStrict).mockResolvedValueOnce(existingIds)
+      vi.mocked(kv.set).mockResolvedValueOnce(undefined)
 
       await addToServerDerivedNGList(newIds)
 
@@ -93,8 +119,8 @@ describe('NG List Server Functions', () => {
     })
 
     it('should handle empty existing list', async () => {
-      ;(kv.get as any).mockResolvedValueOnce(null)
-      ;(kv.set as any).mockResolvedValueOnce(undefined)
+      vi.mocked(kv.getStrict).mockResolvedValueOnce(null)
+      vi.mocked(kv.set).mockResolvedValueOnce(undefined)
 
       await addToServerDerivedNGList(['sm123', 'sm456'])
 
@@ -108,13 +134,21 @@ describe('NG List Server Functions', () => {
       await addToServerDerivedNGList([])
 
       expect(kv.get).not.toHaveBeenCalled()
+      expect(kv.getStrict).not.toHaveBeenCalled()
+      expect(kv.set).not.toHaveBeenCalled()
+    })
+
+    it('派生NGを読めなければ、追加分だけで上書きせずに例外にする', async () => {
+      vi.mocked(kv.getStrict).mockRejectedValueOnce(new Error('KV get failed: 503'))
+
+      await expect(addToServerDerivedNGList(['sm1'])).rejects.toThrow('503')
       expect(kv.set).not.toHaveBeenCalled()
     })
   })
 
   describe('clearServerDerivedNGList', () => {
     it('should clear the derived NG list', async () => {
-      ;(kv.set as any).mockResolvedValueOnce(undefined)
+      vi.mocked(kv.set).mockResolvedValueOnce(undefined)
 
       await clearServerDerivedNGList()
 
@@ -122,7 +156,7 @@ describe('NG List Server Functions', () => {
     })
 
     it('should throw error on failure', async () => {
-      ;(kv.set as any).mockRejectedValueOnce(new Error('KV error'))
+      vi.mocked(kv.set).mockRejectedValueOnce(new Error('KV error'))
 
       await expect(clearServerDerivedNGList()).rejects.toThrow('KV error')
     })
@@ -137,7 +171,7 @@ describe('NG List Server Functions', () => {
         authorNames: ['Test Author']
       }
 
-      ;(kv.get as any).mockResolvedValueOnce(mockManual)
+      vi.mocked(kv.get).mockResolvedValueOnce(mockManual)
 
       const result = await getNGListManual()
 
@@ -156,7 +190,7 @@ describe('NG List Server Functions', () => {
     })
 
     it('should return empty list on error', async () => {
-      ;(kv.get as any).mockRejectedValueOnce(new Error('KV error'))
+      vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV error'))
 
       const result = await getNGListManual()
 
@@ -190,7 +224,7 @@ describe('NG List Server Functions', () => {
         }
       }
 
-      ;(kv.set as any).mockResolvedValueOnce(undefined)
+      vi.mocked(kv.set).mockResolvedValueOnce(undefined)
 
       await setNGListManual(ngList)
 
@@ -202,7 +236,7 @@ describe('NG List Server Functions', () => {
     it('should return derived NG list', async () => {
       const mockDerived = ['sm123', 'sm456']
 
-      ;(kv.get as any).mockResolvedValueOnce(mockDerived)
+      vi.mocked(kv.get).mockResolvedValueOnce(mockDerived)
 
       const result = await getServerDerivedNGList()
 
@@ -210,7 +244,7 @@ describe('NG List Server Functions', () => {
     })
 
     it('should return empty array on error', async () => {
-      ;(kv.get as any).mockRejectedValueOnce(new Error('KV error'))
+      vi.mocked(kv.get).mockRejectedValueOnce(new Error('KV error'))
 
       const result = await getServerDerivedNGList()
 

@@ -33,6 +33,10 @@ export default function NGSettingsPage() {
   const [ngList, setNgList] = useState<NGList>(createEmptyNGList())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // 一覧を取得できたか。取得に失敗しているあいだは、空（または古い）一覧から保存しないよう編集と保存を止める
+  const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const editable = loaded && loadError === null
   
   // AbortController用のref
   const fetchAbortControllerRef = useRef<AbortController | null>(null)
@@ -78,6 +82,7 @@ export default function NGSettingsPage() {
           },
         })
         console.error('Failed to fetch NG list:', response.status, response.statusText)
+        setLoadError(`手動NGリストを読み込めませんでした (${response.status})`)
         if (response.status === 401) {
           alert('認証エラー: ページをリロードして再度ログインしてください')
         }
@@ -87,6 +92,8 @@ export default function NGSettingsPage() {
         const migrated = migrateLegacyNGList(data)
         suppressAutoSaveRef.current = true
         setNgList(migrated)
+        setLoaded(true)
+        setLoadError(null)
       }
     } catch (error: any) {
       // AbortErrorは無視
@@ -102,6 +109,7 @@ export default function NGSettingsPage() {
         },
       })
       console.error('Error fetching NG list:', error)
+      setLoadError('手動NGリストを読み込めませんでした')
       alert('NGリストの取得に失敗しました')
     } finally {
       // AbortErrorの場合はローディング状態を維持
@@ -132,6 +140,8 @@ export default function NGSettingsPage() {
       clearTimeout(autoSaveTimeoutRef.current)
       autoSaveTimeoutRef.current = null
     }
+    // 取得に失敗した（空または古い）一覧は保存しない
+    if (!editable) return
     // 前のリクエストをキャンセル
     if (saveAbortControllerRef.current) {
       saveAbortControllerRef.current.abort()
@@ -216,10 +226,10 @@ export default function NGSettingsPage() {
         setSaving(false)
       }
     }
-  }, [ngList, fetchNGList])
+  }, [ngList, fetchNGList, editable])
 
   useEffect(() => {
-    if (loading || saving) return
+    if (loading || saving || !editable) return
     if (suppressAutoSaveRef.current) {
       suppressAutoSaveRef.current = false
       return
@@ -235,11 +245,11 @@ export default function NGSettingsPage() {
         clearTimeout(autoSaveTimeoutRef.current)
       }
     }
-  }, [ngList, loading, saving, saveNGList])
+  }, [ngList, loading, saving, editable, saveNGList])
 
   // アイテムを追加
   const addItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, value: string, matchType?: 'exact' | 'partial') => {
-    if (!value.trim()) return
+    if (!editable || !value.trim()) return
 
     const trimmedValue = value.trim()
     const isDuplicate = (() => {
@@ -304,6 +314,7 @@ export default function NGSettingsPage() {
 
   // アイテムを削除
   const removeItem = (type: keyof Omit<NGList, 'derivedVideoIds'>, index: number, matchType?: 'exact' | 'partial') => {
+    if (!editable) return
     setNgList(prev => {
       switch (type) {
         case 'videoIds':
@@ -362,7 +373,18 @@ export default function NGSettingsPage() {
       {/* 手動NGリスト */}
       <div style={{ marginBottom: '40px' }}>
         <h2>手動NGリスト</h2>
-        
+
+        {loadError && (
+          <div role="alert" style={{ marginBottom: '20px', padding: '12px 15px', background: '#fdecea', border: '1px solid #f5c2c7', borderRadius: '8px', color: '#842029' }}>
+            <p style={{ margin: '0 0 8px' }}>
+              {loadError}。空の一覧から保存して登録済みの内容を消さないよう、読み込めるまで手動NGリストの編集と保存を止めています。
+            </p>
+            <button type="button" onClick={() => void fetchNGList()}>再読み込み</button>
+          </div>
+        )}
+
+        {/* 取得に失敗しているあいだは入力・削除・保存をまとめて無効にする（見た目は変えない） */}
+        <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         {/* 動画ID */}
         <section style={{ marginBottom: '30px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
           <h3>動画ID</h3>
@@ -521,7 +543,7 @@ export default function NGSettingsPage() {
 
         <button 
           onClick={saveNGList} 
-          disabled={saving}
+          disabled={saving || !editable}
           style={{ 
             padding: '10px 20px', 
             fontSize: '16px', 
@@ -529,11 +551,12 @@ export default function NGSettingsPage() {
             color: 'white',
             border: 'none',
             borderRadius: '4px',
-            cursor: saving ? 'not-allowed' : 'pointer'
+            cursor: saving || !editable ? 'not-allowed' : 'pointer'
           }}
         >
           {saving ? '保存中...' : '設定を保存'}
         </button>
+        </fieldset>
       </div>
 
       {/* 派生NGリスト */}
