@@ -62,6 +62,8 @@ export async function publishRanking(
   const counts: Record<string, number> = {}
   const tagsByGenrePeriod: Record<string, any> = {}
   const objects: Array<{ key: string; data: any }> = []
+  // 名前を戻し済みの印は世代の各オブジェクトに入れる。オブジェクトは書き換えないので、ロールバックしても印と中身がずれない
+  const namesDecoded = data.metadata?.namesDecoded === true
   for (const genre of RANKING_GENRES) {
     validateGenre(genre, data.genres[genre])
     for (const period of RANKING_PERIODS) {
@@ -75,6 +77,7 @@ export async function publishRanking(
         updatedAt: publication.collectedAt,
         genre,
         period,
+        ...(namesDecoded ? { namesDecoded } : {}),
       }
       objects.push({
         key: `rankings/${genre}/${period}/all.json`,

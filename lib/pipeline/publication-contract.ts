@@ -20,6 +20,18 @@ export interface GroupArtifact {
   collectedAt: string
   completedAt: string
   results: Array<{ genre: string; data: any; hadErrors?: boolean }>
+  // 名前（タイトル・投稿者名・人気タグ・タグ）を取得元で 1 回だけ戻してから集めたか。ない成果物は修正前のコードが集めた
+  namesDecoded?: boolean
+}
+
+/**
+ * 1 グループの収集結果を成果物にする。名前は fetch-ranking（server-response）と
+ * tag-fetcher-simple（nicolog・getthumbinfo・タグキャッシュ）が取得元で 1 回だけ戻しているので、その印を付ける
+ */
+export function createGroupArtifact(
+  fields: Omit<GroupArtifact, 'version' | 'namesDecoded'>,
+): GroupArtifact {
+  return { version: 1, ...fields, namesDecoded: true }
 }
 
 export function validateGenre(genre: string, data: any): void {
@@ -119,6 +131,8 @@ export function aggregateArtifacts(
     0,
   )
   if (!totalItems) throw new Error('All rankings are empty')
+  // すべてのグループが名前を戻し済みのときだけ印を付ける。混ざったら付けず、Worker に 1 回戻させる
+  const namesDecoded = artifacts.every((a) => a.namesDecoded === true)
   return {
     genres,
     metadata: {
@@ -126,6 +140,7 @@ export function aggregateArtifacts(
       updatedAt: new Date(earliest).toISOString(),
       totalItems,
       ngFiltered: true,
+      ...(namesDecoded ? { namesDecoded } : {}),
     },
     publication: {
       runId,

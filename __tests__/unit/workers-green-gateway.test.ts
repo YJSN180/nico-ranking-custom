@@ -132,6 +132,62 @@ describe('green R2 reads', () => {
   })
 })
 
+describe('green ranking names', () => {
+  // 実在のタグ名・タイトルに文字参照に見える文字を含むランキング
+  function namedRanking(metadata: Record<string, unknown>) {
+    return {
+      items: [
+        {
+          id: 'sm1',
+          title: 'Synthetic &amp;lt; title',
+          authorName: 'Synthetic&amp;author',
+          tags: ['chage&amp;aska'],
+          tagDetails: [{ name: 'chage&amp;aska', isLocked: true }],
+        },
+      ],
+      popularTags: ['chage&amp;aska'],
+      tags: { 'chage&amp;aska': 1 },
+      metadata: { version: 1, updatedAt: '2026-10-04T00:20:00.000Z', genre: 'all', period: '24h', ...metadata },
+    }
+  }
+
+  async function served(body: unknown, gzip: boolean) {
+    const json = JSON.stringify(body)
+    const object = {
+      etag: 'synthetic',
+      httpMetadata: gzip ? { contentEncoding: 'gzip' } : {},
+      body: new Response(gzip ? gzipSync(json) : json).body,
+    }
+    const bucket = { get: vi.fn(async (key: string) => (key === RANKING_KEY ? object : null)) }
+    const response = await fetchWorker(
+      new Request('https://nico-rank.com/api/ranking?genre=all&period=24h'),
+      greenEnv({ R2_BUCKET: bucket }),
+      ctx,
+    )
+    expect(response.status).toBe(200)
+    return response.json()
+  }
+
+  it.each([false, true])('returns names the pipeline already decoded unchanged (gzip=%s)', async (gzip) => {
+    const ranking = namedRanking({ namesDecoded: true })
+
+    expect(await served(ranking, gzip)).toEqual(ranking)
+  })
+
+  it.each([false, true])('decodes an unmarked older generation exactly once (gzip=%s)', async (gzip) => {
+    const body = await served(namedRanking({}), gzip)
+
+    expect(body.items[0]).toMatchObject({
+      title: 'Synthetic &lt; title',
+      authorName: 'Synthetic&author',
+      tags: ['chage&aska'],
+      tagDetails: [{ name: 'chage&amp;aska', isLocked: true }],
+    })
+    expect(body.popularTags).toEqual(['chage&aska'])
+    expect(body.metadata.namesDecoded).toBeUndefined()
+  })
+})
+
 describe('green upstream proxy', () => {
   it('does not send the worker secret to the upstream deployment', async () => {
     const upstream = stubUpstream(Response.json({ popularTags: [] }))

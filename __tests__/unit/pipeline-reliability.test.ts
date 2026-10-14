@@ -4,6 +4,7 @@ import { gunzipSync } from 'node:zlib'
 import {
   aggregateArtifacts,
   assertCounts,
+  createGroupArtifact,
   RANKING_GROUPS,
   type GroupArtifact,
 } from '../../lib/pipeline/publication-contract'
@@ -19,6 +20,7 @@ import {
   pipelineHealth,
 } from '../../workers/utils/ranking-generation.js'
 import { acquireLease } from '../../workers/utils/r2-lease.js'
+import { decodeRankingData } from '../../workers/utils/html-decode'
 import {
   dispatchRanking,
   scheduledSlot,
@@ -343,6 +345,135 @@ describe('generation publication', () => {
     expect(rankingKey(null, 'rankings/all/hour/all.json')).toBe(
       'rankings/all/hour/all.json',
     )
+  })
+})
+
+describe('names decoded at the source', () => {
+  // all/24h だけ名前を差し替えた成果物。tag はその人気タグ（タグ別ランキングのキーにもなる）
+  function withNames(
+    input: GroupArtifact[],
+    item: Record<string, unknown>,
+    tag: string,
+  ): GroupArtifact[] {
+    input[0].results[0].data['24h'] = {
+      items: [item],
+      popularTags: [tag],
+      tags: { [tag]: [item] },
+    }
+    return input
+  }
+  const marked = (): GroupArtifact[] =>
+    artifacts().map((artifact) => ({ ...artifact, namesDecoded: true }))
+
+  // Worker と同じ読み方：いまの世代のオブジェクトを読み、decodeRankingData を通す
+  async function serve(store: PublicationStore, key: string) {
+    const manifest = (await store.read(CURRENT_KEY))?.data ?? null
+    const object = await store.read(rankingKey(manifest, key))
+    return decodeRankingData(object?.data) as {
+      items: Array<{ title: string; tags: string[] }>
+      popularTags: string[]
+      metadata: { namesDecoded?: boolean; tag?: string }
+    }
+  }
+
+  it('marks every collected group artifact', () => {
+    const artifact = createGroupArtifact({
+      runId: '100',
+      attempt: '1',
+      slot: scheduledSlot(Date.now()),
+      groupId: 1,
+      collectedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      results: [],
+    })
+    expect(artifact.version).toBe(1)
+    expect(artifact.namesDecoded).toBe(true)
+  })
+
+  it('aggregates the marker only when every group carries it', () => {
+    expect(aggregateArtifacts(marked(), '100').metadata.namesDecoded).toBe(
+      true,
+    )
+    const mixed = marked()
+    delete mixed[3].namesDecoded
+    expect(aggregateArtifacts(mixed, '100').metadata).not.toHaveProperty(
+      'namesDecoded',
+    )
+    expect(aggregateArtifacts(artifacts(), '100').metadata).not.toHaveProperty(
+      'namesDecoded',
+    )
+  })
+
+  it.each([false, true])(
+    'publishes the marker in every ranking object, never in unmarked ones (generations=%s)',
+    async (generations) => {
+      for (const [input, expected] of [
+        [marked(), true],
+        [artifacts(), undefined],
+      ] as const) {
+        const { store, entries } = memoryStore()
+        await publishRanking(store, aggregateArtifacts(input, '100'), generations)
+        const objects = [...entries]
+          .filter(([key]) => /\/(all|tags\/[^/]+)\.json$/.test(key))
+          .map(([, value]) => value.data)
+        expect(objects).toHaveLength(46 * 2)
+        for (const object of objects)
+          expect(object.metadata.namesDecoded).toBe(expected)
+      }
+    },
+  )
+
+  it('serves a marked generation intact and an unmarked one decoded once, including after a rollback', async () => {
+    const { store } = memoryStore()
+    // 修正前の世代：タイトルは &#039; が残り、getthumbinfo のタグ名は XML のまま
+    const legacy = aggregateArtifacts(
+      withNames(
+        artifacts(),
+        { id: 'sm1', title: 'Let&#039;s &amp;lt;', tags: ['chage&amp;amp;aska'] },
+        'L&#039;Arc',
+      ),
+      '100',
+    )
+    await publishRanking(store, legacy)
+    // 修正後の世代：名前は取得元で 1 回戻してある（実在のタグ chage&amp;aska・タイトル中の文字 &lt;）
+    const current = aggregateArtifacts(
+      withNames(
+        marked(),
+        { id: 'sm1', title: "Let's &lt;", tags: ['chage&amp;aska'] },
+        'chage&amp;aska',
+      ),
+      '100',
+    )
+    current.publication.generation = '101-1'
+    current.publication.collectedAt = new Date().toISOString()
+    current.metadata.updatedAt = current.publication.collectedAt
+    await publishRanking(store, current)
+
+    const fresh = await serve(store, 'rankings/all/24h/all.json')
+    expect(fresh.items[0]).toMatchObject({
+      title: "Let's &lt;",
+      tags: ['chage&amp;aska'],
+    })
+    expect(fresh.popularTags).toEqual(['chage&amp;aska'])
+    // 表示した人気タグの名前のまま、タグ別ランキングのキーに届く
+    const tagged = await serve(
+      store,
+      `rankings/all/24h/tags/${encodeURIComponent(fresh.popularTags[0])}.json`,
+    )
+    expect(tagged.metadata).toMatchObject({
+      tag: 'chage&amp;aska',
+      namesDecoded: true,
+    })
+    expect(tagged.items[0].tags).toEqual(['chage&amp;aska'])
+
+    await rollbackGeneration(store, '100-1', true)
+    const rolledBack = await serve(store, 'rankings/all/24h/all.json')
+    expect(rolledBack.metadata.namesDecoded).toBeUndefined()
+    expect(rolledBack.items[0]).toMatchObject({
+      title: "Let's &lt;",
+      tags: ['chage&amp;aska'],
+    })
+    expect(rolledBack.popularTags).toEqual(["L'Arc"])
   })
 })
 

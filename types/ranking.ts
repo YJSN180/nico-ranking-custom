@@ -43,6 +43,8 @@ export interface RankingData {
     updatedAt: string
     genre: string
     period: string
+    // パイプラインが名前（タイトル・投稿者名・人気タグ・タグ）を取得元で 1 回だけ戻した世代か。Worker はこのときもう戻さない
+    namesDecoded?: boolean
   }
 }
 
