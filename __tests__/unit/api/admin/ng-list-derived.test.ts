@@ -150,6 +150,25 @@ describe('Derived NG List API', () => {
       expect(data).toEqual(mockResponse)
     })
 
+    it('KV REST API の /values/{key} に DELETE を送る（/keys/{key} という経路は無い）', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce(new Response('{"success":true}', { status: 200 }))
+      const response = await DELETE(new NextRequest('http://localhost/api/admin/ng-list/derived', { method: 'DELETE', headers: { authorization: 'Bearer valid-token' } }))
+      expect(response.status).toBe(200)
+      const [url, init] = vi.mocked(global.fetch).mock.calls[0] ?? []
+      expect(String(url)).toBe('https://api.cloudflare.com/client/v4/accounts/test-account-id/storage/kv/namespaces/test-namespace-id/values/ng-list-derived')
+      expect(init?.method).toBe('DELETE')
+    })
+
+    it('未作成（404）は成功、それ以外の失敗は 500（消せていないのに成功を返さない）', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const del = () => DELETE(new NextRequest('http://localhost/api/admin/ng-list/derived', { method: 'DELETE', headers: { authorization: 'Bearer valid-token' } }))
+      vi.mocked(global.fetch).mockResolvedValueOnce(new Response('', { status: 404 }))
+      expect((await del()).status).toBe(200)
+      vi.mocked(global.fetch).mockResolvedValueOnce(new Response('', { status: 500 }))
+      expect((await del()).status).toBe(500)
+    })
+
     it('should forward 401 status from Edge Function for DELETE', async () => {
       // Mock the internal fetch to Edge Function
       vi.mocked(global.fetch).mockResolvedValueOnce({

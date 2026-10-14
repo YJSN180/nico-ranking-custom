@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { kv } from '@/lib/simple-kv'
 
 export const runtime = 'nodejs'
 
@@ -84,19 +85,9 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Delete the derived NG list
-    const response = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/${CF_NAMESPACE_ID}/keys/ng-list-derived`,
-      {
-        method: 'DELETE',
-        headers: {
-          "Authorization": `Bearer ${CF_API_TOKEN}`
-        }
-      }
-    )
-    
-    if (!response.ok && response.status !== 404) {
-      throw new Error(`Failed to delete: ${response.statusText}`)
-    }
+    // KV REST API の削除は /values/{key}（/keys/{key} という経路は無く、その 404 を「未作成」として成功扱いしていた）。
+    // kv.del は /values/{key} を使い、404 だけを成功として扱う
+    await kv.del('ng-list-derived')
     
     return NextResponse.json({
       success: true,
