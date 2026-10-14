@@ -5,14 +5,14 @@ import { DELETE } from '@/app/api/admin/ng-list/derived/[videoId]/route'
 // 派生NGの 1 件削除: 現在の一覧を読んでから書き戻すので、読めなければ書き込まない
 const fetchMock = vi.fn()
 
-const kvResponse = (status: number, body?: unknown) => ({ ok: status < 400, status, statusText: String(status), json: async () => body }) as unknown as Response
+const kvResponse = (status: number, body?: unknown): Response => new Response(body === undefined ? null : JSON.stringify(body), { status })
 
-const del = (videoId: string) =>
+const del = (videoId: string): Promise<Response> =>
   DELETE(new NextRequest(`http://localhost/api/admin/ng-list/derived/${videoId}`, { method: 'DELETE', headers: { authorization: 'Basic x', 'content-type': 'application/json' } }), {
     params: Promise.resolve({ videoId }),
   })
 
-const putCalls = () => fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')
+const putCalls = (): unknown[][] => fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')
 
 describe('DELETE /api/admin/ng-list/derived/[videoId]', () => {
   beforeEach(() => {
