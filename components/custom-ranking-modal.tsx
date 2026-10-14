@@ -5,6 +5,7 @@ import { GENRE_LABELS, type RankingGenre } from '@/types/ranking-config'
 import type { CustomRankingFormState, ModalStep, TagCondition, TagOperator } from '@/types/custom-ranking'
 import { TagIcon } from './tag-icon'
 import { captureBrowserRateLimit } from '@/lib/sentry/capture'
+import { isImeComposing } from '@/lib/ime'
 import styles from './custom-ranking-modal.module.css'
 
 // 演算子の自然言語ラベル
@@ -65,7 +66,8 @@ function generateConditionDescription(conditions: TagCondition[]): string {
 interface CustomRankingModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: CustomRankingFormState) => void
+  /** 保存する。false を返したら（または失敗したら）保存できなかったとして、画面を閉じずに知らせる */
+  onSave: (data: CustomRankingFormState) => void | boolean | Promise<void | boolean>
   existingTitles?: string[]
   editingRanking?: any // 編集対象のランキング
   onPrefetchData?: (baseGenre: RankingGenre, period: string) => Promise<void> // データプリフェッチ用
@@ -96,6 +98,10 @@ export function CustomRankingModal({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
+  // 保存の結果を待つ間は二重に保存せず、失敗したら入力を残したまま知らせる
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+  const savingRef = useRef(false)
   
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
@@ -239,6 +245,7 @@ export function CustomRankingModal({
       setTagSuggestions([])
       setShowSuggestions(false)
       setSelectedSuggestionIndex(-1)
+      setSaveError(false)
     }
   }, [isOpen, editingRanking])
 
@@ -247,9 +254,13 @@ export function CustomRankingModal({
     if (!isOpen) return
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
+      // 日本語の変換中の Esc は変換の取り消し。タグ候補を閉じた Esc は preventDefault 済み。
+      // どちらも閉じると作成途中の内容が消える（App Router ではルートが document のため
+      // React の stopPropagation ではこのリスナーを止められない）
+      if (e.key !== 'Escape' || e.defaultPrevented || isImeComposing(e)) return
+      // 保存の結果を待つ間は閉じない（閉じると失敗を知らせる場所がなくなる）
+      if (savingRef.current) return
+      onClose()
     }
 
     document.addEventListener('keydown', handleEscape)
@@ -298,6 +309,7 @@ export function CustomRankingModal({
 
   // タイトル変更（Step 3）
   const handleTitleChange = (title: string) => {
+    setSaveError(false)
     setFormData(prev => ({ ...prev, title }))
   }
 
@@ -306,9 +318,25 @@ export function CustomRankingModal({
     if (currentStep === 1 && !formData.baseGenre) return
     if (currentStep === 2 && formData.conditions.length === 0) return
     if (currentStep === 3) {
-      // 保存処理
+      // 保存処理。保存できたときだけ閉じる（失敗したら入力を残して、もう一度保存できるようにする）
+      if (savingRef.current) return
       if (formData.title.trim() && !existingTitles.includes(formData.title.trim())) {
-        onSave(formData)
+        savingRef.current = true
+        setSaving(true)
+        setSaveError(false)
+        let saved = false
+        try {
+          saved = (await onSave(formData)) !== false
+        } catch {
+          saved = false
+        } finally {
+          savingRef.current = false
+          setSaving(false)
+        }
+        if (!saved) {
+          setSaveError(true)
+          return
+        }
         onClose()
       }
       return
@@ -332,8 +360,15 @@ export function CustomRankingModal({
     setCurrentStep((prev) => (prev + 1) as ModalStep)
   }
 
+  // 保存の結果を待つ間は閉じない（閉じると失敗を知らせる場所がなくなる）
+  const handleClose = () => {
+    if (savingRef.current) return
+    onClose()
+  }
+
   // 戻る
   const handleBack = () => {
+    if (savingRef.current) return
     if (currentStep === 1) {
       onClose()
       return
@@ -348,11 +383,11 @@ export function CustomRankingModal({
     : formData.title.trim().length > 0 && !isTitleDuplicated
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={handleClose}>
       <div className={styles.modal} ref={modalRef} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header}>
           <h2>{editingRanking ? 'カスタムランキング編集' : 'カスタムランキング作成'}</h2>
-          <button className={styles.closeButton} onClick={onClose}>×</button>
+          <button className={styles.closeButton} onClick={handleClose}>×</button>
         </div>
 
         {/* ステップインジケーター */}
@@ -469,6 +504,8 @@ export function CustomRankingModal({
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyDown={(e) => {
+                      // 日本語の変換中の Enter（確定）・Esc（取り消し）は入力欄に任せる
+                      if (isImeComposing(e)) return
                       if (e.key === 'Enter') {
                         e.preventDefault()
                         if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < tagSuggestions.length) {
@@ -481,7 +518,11 @@ export function CustomRankingModal({
                           handleAddTag()
                         }
                       } else if (e.key === 'Escape') {
-                        // オートコンプリートを閉じる
+                        // オートコンプリートを閉じる。候補が出ているときはモーダルまで閉じないよう
+                        // preventDefault で document の Esc ハンドラーに知らせる
+                        if (showSuggestions) {
+                          e.preventDefault()
+                        }
                         setShowSuggestions(false)
                         setSelectedSuggestionIndex(-1)
                       } else if (e.key === 'ArrowDown' && showSuggestions) {
@@ -650,6 +691,11 @@ export function CustomRankingModal({
                   このタイトルは既に使用されています
                 </p>
               )}
+              {saveError && (
+                <p className={styles.error} role="alert">
+                  保存できませんでした。
+                </p>
+              )}
 
               {/* タグボタンスタイルのプレビュー */}
               {formData.title && (
@@ -677,6 +723,8 @@ export function CustomRankingModal({
             className={styles.nextButton}
             onClick={handleNext}
             disabled={!canProceed}
+            // 保存を待つ間も見た目は変えず、二重の保存は handleNext で防ぐ
+            aria-busy={saving || undefined}
           >
             {currentStep === 3 ? '保存' : '次へ'}
           </button>

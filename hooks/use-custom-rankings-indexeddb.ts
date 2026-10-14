@@ -30,6 +30,25 @@ interface UseCustomRankingsIndexedDBResult {
   migrationStatus?: { success: boolean; migratedCount: number; errors: string[] }
 }
 
+/**
+ * 保存のあとに一覧を読み直す（失敗したら null）。失敗しても保存できたことは変わらないので、保存の結果にはしない
+ * （失敗として返すと、作成画面からもう一度保存されて同じランキングが 2 つできる）
+ */
+async function reloadAfterSave(manager: CustomRankingManager): Promise<CustomRankingWithConditions[] | null> {
+  try {
+    return await manager.getAllRankings()
+  } catch (error) {
+    console.error('Failed to reload rankings after save:', error)
+    return null
+  }
+}
+
+async function openCustomRankingManager(): Promise<CustomRankingManager> {
+  const dbManager = new DBManager()
+  await dbManager.init()
+  return new CustomRankingManager(dbManager)
+}
+
 export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   const [rankings, setRankings] = useState<CustomRankingWithConditions[]>([])
   const [selectedId, setSelectedId] = useState<string | undefined>()
@@ -37,7 +56,8 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   const [storageBackend, setStorageBackend] = useState<StorageBackend>('loading')
   const [migrationStatus, setMigrationStatus] = useState<{ success: boolean; migratedCount: number; errors: string[] }>()
 
-  const dbManagerRef = useRef<DBManager | null>(null)
+  // StrictMode（開発時）ではエフェクトが 2 回動くため、DB を開く処理は 1 回にして 2 回目もその完了を待つ
+  const managerPromiseRef = useRef<Promise<CustomRankingManager> | null>(null)
   const managerRef = useRef<CustomRankingManager | null>(null)
 
   // 初期化とマイグレーション
@@ -52,17 +72,17 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
       try {
         // IndexedDB 初期化を試行
-        if (!dbManagerRef.current) {
-          dbManagerRef.current = new DBManager()
-          await dbManagerRef.current.init()
-          managerRef.current = new CustomRankingManager(dbManagerRef.current)
+        if (!managerPromiseRef.current) {
+          managerPromiseRef.current = openCustomRankingManager()
         }
+        const manager = await managerPromiseRef.current
 
         if (!mounted) return
+        managerRef.current = manager
 
         // マイグレーションチェック（メイン画面ではこのフックが複数同時に動くため、
         // 同じタブの移行は 1 回にまとめる）
-        const result = await migrateLegacyCustomRankingsOnce(managerRef.current)
+        const result = await migrateLegacyCustomRankingsOnce(manager)
         if (result && mounted) {
           setMigrationStatus(result)
           
@@ -77,7 +97,7 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
         }
 
         // IndexedDB から全ランキング読み込み
-        const allRankings = await managerRef.current.getAllRankings()
+        const allRankings = await manager.getAllRankings()
         if (mounted) {
           setRankings(allRankings)
           setStorageBackend('indexeddb')
@@ -85,6 +105,9 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
       } catch (error) {
         console.error('Failed to initialize IndexedDB:', error)
+        // 初期化の途中（読み込みなど）で失敗した場合も error 状態では保存操作をすべて失敗させる。
+        // 一覧を表示できないまま書き込みだけが通る状態にしない
+        managerRef.current = null
         if (mounted) {
           setStorageBackend('error')
           setIsLoading(false)
@@ -116,62 +139,43 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   }, [storageBackend, rankings, selectedId])
 
 
-  // エラー状態の場合は空の結果を返す
-  if (storageBackend === 'error') {
-    return {
-      rankings: [],
-      selectedId: undefined,
-      selectedRanking: undefined,
-      createRanking: async () => null,
-      updateRanking: async () => false,
-      deleteRanking: async () => false,
-      selectRanking: async () => false,
-      toggleVisibility: async () => false,
-      updateRankingOrder: async () => false,
-      isUniqueTitle: async () => false,
-      searchRankings: async () => [],
-      isLoading: false,
-      storageBackend,
-      migrationStatus
-    }
-  }
-
   // IndexedDB 操作関数
+  // 注意: Rules of Hooks のため、error 状態でもフックは無条件に定義する
+  // （error 時は managerRef.current が null のため、保存を伴う操作は null / false / [] を返す。
+  //  selectRanking は保存しない画面内の選択だけを変え、一覧が空なので selectedRanking は undefined のまま）
   const createRanking = useCallback(async (data: CreateCustomRankingData): Promise<string | null> => {
-    if (!managerRef.current) return null
+    const manager = managerRef.current
+    if (!manager) return null
 
+    let newRankingId: string
     try {
-      const newRankingId = await managerRef.current.createRanking(data)
-      
-      // ランキング一覧を再読み込み
-      const allRankings = await managerRef.current.getAllRankings()
-      setRankings(allRankings)
-      
-      // 新規作成したランキングを選択
-      setSelectedId(newRankingId)
-      
-      return newRankingId
+      newRankingId = await manager.createRanking(data)
     } catch (error) {
       console.error('Failed to create ranking:', error)
       return null
     }
+
+    const allRankings = await reloadAfterSave(manager)
+    if (allRankings) setRankings(allRankings)
+    // 新規作成したランキングを選択
+    setSelectedId(newRankingId)
+    return newRankingId
   }, [])
 
   const updateRanking = useCallback(async (id: string, updates: UpdateCustomRankingData): Promise<boolean> => {
-    if (!managerRef.current) return false
+    const manager = managerRef.current
+    if (!manager) return false
 
     try {
-      await managerRef.current.updateRanking(id, updates)
-      
-      // ランキング一覧を再読み込み
-      const allRankings = await managerRef.current.getAllRankings()
-      setRankings(allRankings)
-      
-      return true
+      await manager.updateRanking(id, updates)
     } catch (error) {
       console.error('Failed to update ranking:', error)
       return false
     }
+
+    const allRankings = await reloadAfterSave(manager)
+    if (allRankings) setRankings(allRankings)
+    return true
   }, [])
 
   const deleteRanking = useCallback(async (id: string): Promise<boolean> => {

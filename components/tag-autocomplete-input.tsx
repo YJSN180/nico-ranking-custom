@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { captureBrowserRateLimit } from '@/lib/sentry/capture'
+import { isImeComposing } from '@/lib/ime'
 
 interface TagAutocompleteInputProps {
   value: string
@@ -163,6 +164,8 @@ export function TagAutocompleteInput({
   }, [])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 日本語の変換中の Enter（確定）・Esc（取り消し）は入力欄に任せる
+    if (isImeComposing(e)) return
     if (e.key === 'Enter') {
       e.preventDefault()
       if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < tagSuggestions.length) {
@@ -177,7 +180,10 @@ export function TagAutocompleteInput({
         }
       }
     } else if (e.key === 'Escape') {
-      // オートコンプリートを閉じる
+      // オートコンプリートを閉じる。候補が出ているときは preventDefault で外側の Esc 処理に知らせる
+      if (showSuggestions) {
+        e.preventDefault()
+      }
       setShowSuggestions(false)
       setSelectedSuggestionIndex(-1)
     } else if (e.key === 'ArrowDown' && showSuggestions) {
