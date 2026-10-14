@@ -42,6 +42,9 @@ export async function DELETE(
     let derivedList: string[] = []
     if (getResponse.ok) {
       derivedList = await getResponse.json()
+    } else if (getResponse.status !== 404) {
+      // 読めなかった一覧を空とみなして書き戻すと、派生NGがすべて消える。書き込まずに 503 を返す
+      return NextResponse.json({ error: 'Failed to read derived NG list' }, { status: 503 })
     }
     
     // Remove the video ID from the list

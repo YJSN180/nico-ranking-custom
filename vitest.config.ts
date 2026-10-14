@@ -44,16 +44,12 @@ export default defineConfig({
         '__tests__/unit/ng-list-rank-recalculation.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/ng-list-instant-update.test.tsx',  // React concurrent mode conflicts
         '__tests__/unit/header-css-only.test.tsx',  // React concurrent mode conflicts
-        '__tests__/unit/hooks/use-realtime-stats.test.ts',  // React concurrent mode conflicts
         'workers/video-stats-updater/test/index.test.js',  // Worker environment issues
         '__tests__/unit/workers-video-stats-cache.test.ts',  // NextRequest URL setter issues
-        '__tests__/unit/edge-video-stats.test.ts',  // NextRequest environment issues
         '__tests__/unit/mylists-sorting-ui.test.tsx',  // React 18 concurrent mode conflicts in CI
         '__tests__/unit/video-context-menu.test.tsx',  // React createRoot conflicts in CI (Document not available after first test)
         // Additional exclusions for shard stability
         '__tests__/unit/scripts/ng-filtering-cron.test.ts',  // Heavy memory usage in shard 2
-        '__tests__/unit/api/admin/ng-list.test.ts',  // NG list API conflicts in shard 4
-        '__tests__/unit/api/admin/ng-list-derived.test.ts',  // NG list API conflicts in shard 4
         '__tests__/unit/admin/ng-management.test.tsx',  // Missing admin/ng-management/page file
         '__tests__/unit/kv-optimization.test.ts',      // Import path mismatch for workers/kv-optimization
         // '__tests__/unit/ng-list-continuous-rank.test.tsx' - disabled by renaming to .disabled

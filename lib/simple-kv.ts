@@ -43,6 +43,28 @@ function logKvFailure(operation: KvOperation, attempt: number, attempts: number,
   console.warn(`[KV] ${operation} attempt ${attempt}/${attempts} failed: ${cause}`)
 }
 
+const MAX_ATTEMPTS = 3
+
+const backoffDelay = (attempt: number): number => Math.min(1000 * Math.pow(2, attempt), 10000)
+
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
+
+/** KV の読み取り失敗（404 以外）。未設定（404）とは区別する */
+export class KvReadError extends Error {
+  readonly status: number | null
+
+  constructor(message: string, status: number | null = null) {
+    super(message)
+    this.name = 'KvReadError'
+    this.status = status
+  }
+}
+
+export interface GetStrictOptions {
+  /** 試行回数（既定 3） */
+  attempts?: number
+}
+
 class SimpleKV {
   /**
    * Get a value from KV
@@ -108,6 +130,67 @@ class SimpleKV {
   }
 
   /**
+   * 未設定（404）と読み取り失敗を区別して取得する。
+   * 404 は null、429 の連続・5xx・通信エラーは再試行ののち KvReadError を投げる。
+   * get は失敗も null にするため、書き込みの土台にする読み取りや、失敗を
+   * 「未設定」と取り違えてはいけない読み取りではこちらを使う。
+   */
+  async getStrict<T = unknown>(key: string, options: GetStrictOptions = {}): Promise<T | null> {
+    const { CF_ACCOUNT_ID, CF_NAMESPACE_ID, CF_API_TOKEN } = getEnvVars()
+    if (!CF_ACCOUNT_ID || !CF_NAMESPACE_ID || !CF_API_TOKEN) {
+      throw new Error('Cloudflare KV credentials not configured')
+    }
+
+    const attempts = Math.max(1, Math.floor(options.attempts ?? MAX_ATTEMPTS))
+    let lastError = new KvReadError('KV get failed')
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) await sleep(backoffDelay(attempt - 1))
+      let response: Response
+      try {
+        response = await fetch(`${getBaseUrl()}/values/${encodeURIComponent(key)}`, {
+          headers: {
+            'Authorization': `Bearer ${CF_API_TOKEN}`,
+          },
+          signal: AbortSignal.timeout(KV_REQUEST_TIMEOUT_MS),
+        })
+      } catch (error) {
+        logKvFailure('get', attempt + 1, attempts, describeKvFailure(error))
+        lastError = new KvReadError(`KV get failed: ${error instanceof Error ? error.message : 'network error'}`)
+        continue
+      }
+
+      if (response.status === 404) {
+        return null
+      }
+
+      if (!response.ok) {
+        logKvFailure('get', attempt + 1, attempts, `http_${response.status}`)
+        lastError = new KvReadError(`KV get failed: ${response.status}`, response.status)
+        // 429 と 5xx だけ再試行する（認証エラーなどは再試行しても直らない）
+        if (response.status === 429 || response.status >= 500) continue
+        throw lastError
+      }
+
+      let text: string
+      try {
+        text = await response.text()
+      } catch (error) {
+        logKvFailure('get', attempt + 1, attempts, describeKvFailure(error))
+        lastError = new KvReadError(`KV get failed: ${error instanceof Error ? error.message : 'body read error'}`)
+        continue
+      }
+      try {
+        return JSON.parse(text) as T
+      } catch {
+        return text as T
+      }
+    }
+
+    throw lastError
+  }
+
+  /**
    * Set a value in KV
    */
   async set(key: string, value: any, options?: { ex?: number }): Promise<void> {
@@ -126,9 +209,8 @@ class SimpleKV {
     const body = typeof value === 'string' ? value : JSON.stringify(value)
 
     // Retry logic for 429 errors
-    const maxRetries = 3
-    let lastError
-    
+    const maxRetries = MAX_ATTEMPTS
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       try {
         const response = await fetch(url.toString(), {
@@ -144,8 +226,9 @@ class SimpleKV {
         if (response.status === 429) {
           logKvFailure('set', attempt + 1, maxRetries, 'http_429')
           // Rate limited - use exponential backoff
-          const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
-          await new Promise(resolve => setTimeout(resolve, delay))
+          if (attempt < maxRetries - 1) {
+            await sleep(backoffDelay(attempt))
+          }
           continue
         }
 
@@ -156,13 +239,15 @@ class SimpleKV {
         // Success
         return
       } catch (error) {
-        lastError = error
         logKvFailure('set', attempt + 1, maxRetries, describeKvFailure(error))
         if (attempt === maxRetries - 1) {
           throw error
         }
       }
     }
+
+    // 再試行が尽きた（429 が続いた）ときは、書けていないので例外にする
+    throw new KvHttpError('set', 429)
   }
 
   /**

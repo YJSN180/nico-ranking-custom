@@ -11,7 +11,9 @@ import type { RankingItem } from '@/types/ranking'
 vi.mock('@/lib/simple-kv', () => ({
   kv: {
     set: vi.fn(),
-    get: vi.fn()
+    get: vi.fn(),
+    // addToServerDerivedNGList は派生NGを getStrict で読む
+    getStrict: vi.fn()
   }
 }))
 

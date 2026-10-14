@@ -8,6 +8,8 @@ global.fetch = vi.fn()
 describe('Derived NG List API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // 認証で弾かれて使われなかった mockResolvedValueOnce を次のテストに持ち越さない
+    vi.mocked(global.fetch).mockReset()
     // Set up environment variables
     process.env.CLOUDFLARE_ACCOUNT_ID = 'test-account-id'
     process.env.CLOUDFLARE_KV_NAMESPACE_ID = 'test-namespace-id'
@@ -88,6 +90,38 @@ describe('Derived NG List API', () => {
     })
   })
 
+  describe('GET /api/admin/ng-list/derived の読み取り失敗', () => {
+    const authedGet = (): Promise<Response> =>
+      GET(new NextRequest('http://localhost/api/admin/ng-list/derived', { headers: { authorization: 'Bearer valid-token' } }))
+
+    it('KV を読めなければ（429・5xx）空の一覧を返さず 503', async () => {
+      for (const status of [429, 500, 503]) {
+        vi.mocked(global.fetch).mockResolvedValueOnce({ ok: false, status, json: async () => ({}) } as Response)
+        const response = await authedGet()
+        expect(response.status).toBe(503)
+        expect(await response.json()).not.toHaveProperty('videoIds')
+      }
+    })
+
+    it('通信エラーも 503', async () => {
+      vi.mocked(global.fetch).mockRejectedValueOnce(new TypeError('network down'))
+      expect((await authedGet()).status).toBe(503)
+    })
+
+    it('KV の認証情報が無いときも 503（空の一覧を返さない）', async () => {
+      delete process.env.CLOUDFLARE_API_TOKEN
+      expect((await authedGet()).status).toBe(503)
+      expect(global.fetch).not.toHaveBeenCalled()
+    })
+
+    it('未作成（404）は空の一覧で 200', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) } as Response)
+      const response = await authedGet()
+      expect(response.status).toBe(200)
+      expect((await response.json()).videoIds).toEqual([])
+    })
+  })
+
   describe('DELETE /api/admin/ng-list/derived', () => {
     it('should forward to Edge Function and clear derived NG list', async () => {
       const mockResponse = {
@@ -114,6 +148,25 @@ describe('Derived NG List API', () => {
 
       expect(response.status).toBe(200)
       expect(data).toEqual(mockResponse)
+    })
+
+    it('キーを消さず /values/ng-list-derived に空の配列を PUT する（毎時パイプラインはキーの存在を前提にする）', async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce(new Response('{"success":true}', { status: 200 }))
+      const response = await DELETE(new NextRequest('http://localhost/api/admin/ng-list/derived', { method: 'DELETE', headers: { authorization: 'Bearer valid-token' } }))
+      expect(response.status).toBe(200)
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+      const [url, init] = vi.mocked(global.fetch).mock.calls[0] ?? []
+      expect(String(url)).toBe('https://api.cloudflare.com/client/v4/accounts/test-account-id/storage/kv/namespaces/test-namespace-id/values/ng-list-derived')
+      expect(init?.method).toBe('PUT')
+      expect(JSON.parse(String(init?.body))).toEqual([])
+    })
+
+    it('書き込みに失敗したら 500（消せていないのに成功を返さない）', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.mocked(global.fetch).mockResolvedValueOnce(new Response('', { status: 500 }))
+      const response = await DELETE(new NextRequest('http://localhost/api/admin/ng-list/derived', { method: 'DELETE', headers: { authorization: 'Bearer valid-token' } }))
+      expect(response.status).toBe(500)
     })
 
     it('should forward 401 status from Edge Function for DELETE', async () => {
