@@ -89,3 +89,41 @@ describe('useCustomRankingsIndexedDB の初期化失敗', () => {
     expect(result.current.selectedRanking).toBeUndefined()
   })
 })
+
+describe('useCustomRankingsIndexedDB の保存のあとの読み直し', () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory()
+    localStorage.clear()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('保存できたあとの一覧の読み直しに失敗しても、保存の結果は成功のまま（もう一度作らせない）', async () => {
+    const { result } = renderHook(() => useCustomRankingsIndexedDB())
+    await waitFor(() => expect(result.current.storageBackend).toBe('indexeddb'))
+
+    const reload = vi.spyOn(CustomRankingManager.prototype, 'getAllRankings').mockRejectedValue(new Error('read failed'))
+    let createdId: string | null = null
+    await act(async () => {
+      createdId = await result.current.createRanking(syntheticRanking)
+    })
+    expect(reload).toHaveBeenCalled()
+    expect(createdId).not.toBeNull()
+
+    let updated = false
+    await act(async () => {
+      updated = await result.current.updateRanking(createdId ?? '', { title: '変更' })
+    })
+    expect(updated).toBe(true)
+
+    reload.mockRestore()
+    const dbManager = new DBManager()
+    await dbManager.init()
+    const stored = await new CustomRankingManager(dbManager).getAllRankings()
+    expect(stored.map((r) => r.title)).toEqual(['変更'])
+  })
+})

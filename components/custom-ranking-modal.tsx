@@ -66,7 +66,8 @@ function generateConditionDescription(conditions: TagCondition[]): string {
 interface CustomRankingModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (data: CustomRankingFormState) => void
+  /** 保存する。false を返したら（または失敗したら）保存できなかったとして、画面を閉じずに知らせる */
+  onSave: (data: CustomRankingFormState) => void | boolean | Promise<void | boolean>
   existingTitles?: string[]
   editingRanking?: any // 編集対象のランキング
   onPrefetchData?: (baseGenre: RankingGenre, period: string) => Promise<void> // データプリフェッチ用
@@ -97,6 +98,10 @@ export function CustomRankingModal({
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
+  // 保存の結果を待つ間は二重に保存せず、失敗したら入力を残したまま知らせる
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+  const savingRef = useRef(false)
   
   const modalRef = useRef<HTMLDivElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
@@ -240,6 +245,7 @@ export function CustomRankingModal({
       setTagSuggestions([])
       setShowSuggestions(false)
       setSelectedSuggestionIndex(-1)
+      setSaveError(false)
     }
   }, [isOpen, editingRanking])
 
@@ -301,6 +307,7 @@ export function CustomRankingModal({
 
   // タイトル変更（Step 3）
   const handleTitleChange = (title: string) => {
+    setSaveError(false)
     setFormData(prev => ({ ...prev, title }))
   }
 
@@ -309,9 +316,25 @@ export function CustomRankingModal({
     if (currentStep === 1 && !formData.baseGenre) return
     if (currentStep === 2 && formData.conditions.length === 0) return
     if (currentStep === 3) {
-      // 保存処理
+      // 保存処理。保存できたときだけ閉じる（失敗したら入力を残して、もう一度保存できるようにする）
+      if (savingRef.current) return
       if (formData.title.trim() && !existingTitles.includes(formData.title.trim())) {
-        onSave(formData)
+        savingRef.current = true
+        setSaving(true)
+        setSaveError(false)
+        let saved = false
+        try {
+          saved = (await onSave(formData)) !== false
+        } catch {
+          saved = false
+        } finally {
+          savingRef.current = false
+          setSaving(false)
+        }
+        if (!saved) {
+          setSaveError(true)
+          return
+        }
         onClose()
       }
       return
@@ -659,6 +682,11 @@ export function CustomRankingModal({
                   このタイトルは既に使用されています
                 </p>
               )}
+              {saveError && (
+                <p className={styles.error} role="alert">
+                  保存できませんでした。もう一度「保存」を押してください。
+                </p>
+              )}
 
               {/* タグボタンスタイルのプレビュー */}
               {formData.title && (
@@ -686,6 +714,8 @@ export function CustomRankingModal({
             className={styles.nextButton}
             onClick={handleNext}
             disabled={!canProceed}
+            // 保存を待つ間も見た目は変えず、二重の保存は handleNext で防ぐ
+            aria-busy={saving || undefined}
           >
             {currentStep === 3 ? '保存' : '次へ'}
           </button>
