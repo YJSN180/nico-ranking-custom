@@ -106,7 +106,7 @@ describe('NG List API', () => {
       })
     })
 
-    it('手動NGの 4 項目だけを保存し、GET が返す自動NG・派生NGを手動に固定しない', async () => {
+    it('手動NGの 4 項目だけを保存し、派生NGなど余分な欄を手動に固定しない', async () => {
       const manual = {
         videoIds: ['sm1'],
         videoTitles: { exact: ['t'], partial: [] },
@@ -121,7 +121,7 @@ describe('NG List API', () => {
           'authorization': 'Bearer valid-token',
           'content-type': 'application/json'
         },
-        body: JSON.stringify({ ...manual, autoAuthorIds: ['1001'], autoVideoIds: ['sm-auto'], derivedVideoIds: ['sm-derived'], extra: 'x' })
+        body: JSON.stringify({ ...manual, derivedVideoIds: ['sm-derived'], extra: 'x' })
       })
 
       const response = await POST(request)
@@ -132,6 +132,7 @@ describe('NG List API', () => {
     it('本文や各項目の形が違えば 400 で保存しない', async () => {
       const valid = { videoIds: [], videoTitles: { exact: [], partial: [] }, authorIds: [], authorNames: { exact: [], partial: [] } }
       const bodies = [
+        '{not json',
         'null',
         '[]',
         JSON.stringify({ ...valid, videoIds: 'sm1' }),

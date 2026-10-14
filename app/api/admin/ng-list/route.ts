@@ -82,7 +82,8 @@ export async function POST(request: NextRequest) {
 
   try {
     // Validate the structure
-    const ngList = parseManualNGList(await request.json())
+    // 壊れた JSON も形の誤りとして 400 にする（保存失敗の 500 として扱わない）
+    const ngList = parseManualNGList(await request.json().catch((): undefined => undefined))
     if (!ngList) {
       return withNoStore(NextResponse.json({ error: 'Invalid NG list format' }, { status: 400 }))
     }
