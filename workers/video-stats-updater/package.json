@@ -17,7 +17,11 @@
     "format": "prettier --write .",
     "lint": "eslint src test --ext .js"
   },
-  "keywords": ["cloudflare-workers", "video-stats", "cron"],
+  "keywords": [
+    "cloudflare-workers",
+    "video-stats",
+    "cron"
+  ],
   "type": "module",
   "author": "",
   "license": "MIT",
@@ -32,6 +36,8 @@
   },
   "dependencies": {},
   "overrides": {
-    "undici": "7.29.1"
+    "undici": "7.29.1",
+    "sharp": "0.35.5",
+    "source-map-js": "1.2.2"
   }
 }
