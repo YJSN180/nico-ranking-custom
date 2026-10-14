@@ -2,18 +2,9 @@ import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
-// 派生NG 一覧は別に試験するので、ここでは受け取った props だけを記録する
-interface DerivedProps {
-  initialData: string[]
-  onUpdate?: (newList: string[]) => void
-}
-let derivedProps: DerivedProps | null = null
-
+// 派生NG 一覧は別に試験するので、ここでは表示されたかだけを見る
 vi.mock('@/app/admin/ng-settings/components/DerivedNGList', () => ({
-  DerivedNGList: (props: DerivedProps) => {
-    derivedProps = props
-    return <div data-testid="derived-ng" />
-  },
+  DerivedNGList: (): React.JSX.Element => <div data-testid="derived-ng" />,
 }))
 vi.mock('@/lib/sentry/capture', () => ({ captureWebException: vi.fn() }))
 
@@ -23,7 +14,7 @@ import NGSettingsPage from '@/app/admin/ng-settings/page'
 const manual = { videoIds: ['sm1'], videoTitles: { exact: [], partial: [] }, authorIds: ['12345678'], authorNames: { exact: [], partial: [] } }
 
 const fetchMock = vi.fn()
-const jsonResponse = (body: unknown, status = 200): Response => ({ ok: status < 400, status, statusText: '', json: async () => body }) as unknown as Response
+const jsonResponse = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 const postCalls = (): unknown[][] => fetchMock.mock.calls.filter(([url, init]) => url === '/api/admin/ng-list' && (init as RequestInit | undefined)?.method === 'POST')
 const wait = (ms: number): Promise<void> => act(async () => {
   await new Promise((resolve) => setTimeout(resolve, ms))
@@ -31,7 +22,6 @@ const wait = (ms: number): Promise<void> => act(async () => {
 
 describe('NG設定ページ（手動NG一覧）', () => {
   beforeEach(() => {
-    derivedProps = null
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
     vi.stubGlobal('alert', vi.fn())
@@ -54,11 +44,11 @@ describe('NG設定ページ（手動NG一覧）', () => {
     expect(screen.getByPlaceholderText('例: sm12345')).toBeDisabled()
     expect(screen.getByPlaceholderText('投稿者のID')).toBeDisabled()
     expect(screen.getByRole('button', { name: '設定を保存' })).toBeDisabled()
+    // 派生NGを 0 件として表示しない
+    expect(screen.queryByTestId('derived-ng')).not.toBeInTheDocument()
+    expect(screen.getByText(/派生NGリストを読み込めませんでした/)).toBeInTheDocument()
 
-    // 派生NGの更新があっても、自動保存を走らせない
-    act(() => {
-      derivedProps?.onUpdate?.(['sm2'])
-    })
+    // 自動保存も走らない
     await wait(900)
     expect(postCalls()).toHaveLength(0)
   })
@@ -86,6 +76,7 @@ describe('NG設定ページ（手動NG一覧）', () => {
     })
     render(<NGSettingsPage />)
     await screen.findByText('12345678')
+    expect(screen.getByTestId('derived-ng')).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('例: sm12345'), { target: { value: 'sm2' } })
     const [addVideoIdButton] = screen.getAllByRole('button', { name: '追加' })
     if (!addVideoIdButton) throw new Error('add button not found')

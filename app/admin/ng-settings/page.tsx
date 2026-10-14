@@ -559,13 +559,20 @@ export default function NGSettingsPage() {
         </fieldset>
       </div>
 
-      {/* 派生NGリスト */}
-      <DerivedNGList
-        initialData={ngList.derivedVideoIds || []}
-        onUpdate={(newList) => {
-          setNgList(prev => ({ ...prev, derivedVideoIds: newList }))
-        }}
-      />
+      {/* 派生NGリスト（一度も読み込めていないときは、失敗時の空の一覧を 0 件として見せない） */}
+      {loaded ? (
+        <DerivedNGList
+          initialData={ngList.derivedVideoIds || []}
+          onUpdate={(newList) => {
+            setNgList(prev => ({ ...prev, derivedVideoIds: newList }))
+          }}
+        />
+      ) : (
+        <div>
+          <h2>派生NGリスト</h2>
+          <p role="alert">派生NGリストを読み込めませんでした。上の「再読み込み」で取得し直してください。</p>
+        </div>
+      )}
       </div>
     </LightModeWrapper>
   )
