@@ -1,3 +1,5 @@
+import { StrictMode } from 'react'
+import type { ReactNode } from 'react'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { IDBFactory } from 'fake-indexeddb'
@@ -125,5 +127,48 @@ describe('useCustomRankingsIndexedDB の保存のあとの読み直し', () => {
     await dbManager.init()
     const stored = await new CustomRankingManager(dbManager).getAllRankings()
     expect(stored.map((r) => r.title)).toEqual(['変更'])
+  })
+})
+
+describe('useCustomRankingsIndexedDB と StrictMode のエフェクト再実行', () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory()
+    localStorage.clear()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function StrictWrapper({ children }: { children: ReactNode }): JSX.Element {
+    return <StrictMode>{children}</StrictMode>
+  }
+
+  it('2 回目の実行は 1 回目の初期化を待ち、誤って error にならない', async () => {
+    const { result } = renderHook(() => useCustomRankingsIndexedDB(), { wrapper: StrictWrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    expect(result.current.storageBackend).toBe('indexeddb')
+    expect(console.error).not.toHaveBeenCalledWith('Failed to initialize IndexedDB:', expect.anything())
+
+    let createdId: string | null = null
+    await act(async () => {
+      createdId = await result.current.createRanking(syntheticRanking)
+    })
+    expect(createdId).not.toBeNull()
+    expect(result.current.rankings.map((r) => r.title)).toEqual(['合成ランキング'])
+  })
+
+  it('DBManager.init が失敗したときは StrictMode でも error のまま書き込まない', async () => {
+    vi.spyOn(DBManager.prototype, 'init').mockRejectedValue(new Error('IndexedDB unavailable'))
+    const create = vi.spyOn(CustomRankingManager.prototype, 'createRanking')
+
+    const { result } = renderHook(() => useCustomRankingsIndexedDB(), { wrapper: StrictWrapper })
+    await waitFor(() => expect(result.current.storageBackend).toBe('error'))
+
+    expect(await result.current.createRanking(syntheticRanking)).toBeNull()
+    expect(create).not.toHaveBeenCalled()
   })
 })

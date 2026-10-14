@@ -43,6 +43,12 @@ async function reloadAfterSave(manager: CustomRankingManager): Promise<CustomRan
   }
 }
 
+async function openCustomRankingManager(): Promise<CustomRankingManager> {
+  const dbManager = new DBManager()
+  await dbManager.init()
+  return new CustomRankingManager(dbManager)
+}
+
 export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   const [rankings, setRankings] = useState<CustomRankingWithConditions[]>([])
   const [selectedId, setSelectedId] = useState<string | undefined>()
@@ -50,7 +56,8 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
   const [storageBackend, setStorageBackend] = useState<StorageBackend>('loading')
   const [migrationStatus, setMigrationStatus] = useState<{ success: boolean; migratedCount: number; errors: string[] }>()
 
-  const dbManagerRef = useRef<DBManager | null>(null)
+  // StrictMode（開発時）ではエフェクトが 2 回動くため、DB を開く処理は 1 回にして 2 回目もその完了を待つ
+  const managerPromiseRef = useRef<Promise<CustomRankingManager> | null>(null)
   const managerRef = useRef<CustomRankingManager | null>(null)
 
   // 初期化とマイグレーション
@@ -65,17 +72,17 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
 
       try {
         // IndexedDB 初期化を試行
-        if (!dbManagerRef.current) {
-          dbManagerRef.current = new DBManager()
-          await dbManagerRef.current.init()
-          managerRef.current = new CustomRankingManager(dbManagerRef.current)
+        if (!managerPromiseRef.current) {
+          managerPromiseRef.current = openCustomRankingManager()
         }
+        const manager = await managerPromiseRef.current
 
         if (!mounted) return
+        managerRef.current = manager
 
         // マイグレーションチェック（メイン画面ではこのフックが複数同時に動くため、
         // 同じタブの移行は 1 回にまとめる）
-        const result = await migrateLegacyCustomRankingsOnce(managerRef.current)
+        const result = await migrateLegacyCustomRankingsOnce(manager)
         if (result && mounted) {
           setMigrationStatus(result)
           
@@ -90,7 +97,7 @@ export function useCustomRankingsIndexedDB(): UseCustomRankingsIndexedDBResult {
         }
 
         // IndexedDB から全ランキング読み込み
-        const allRankings = await managerRef.current.getAllRankings()
+        const allRankings = await manager.getAllRankings()
         if (mounted) {
           setRankings(allRankings)
           setStorageBackend('indexeddb')
