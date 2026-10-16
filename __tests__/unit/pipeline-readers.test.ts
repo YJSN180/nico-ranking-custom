@@ -34,9 +34,14 @@ describe('active generation readers', () => {
     expect(fetch).toHaveBeenCalledWith(new URL('https://ranking.example.test/api/ranking?genre=game&period=hour'), expect.any(Object))
   })
 
-  it.each([undefined, 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'])(
-    'production SSR avoids the protected deployment URL with gateway %s', async (gateway) => {
-    vi.stubEnv('VERCEL_ENV', 'production')
+  it.each([
+    ['production', undefined],
+    ['production', 'https://nico-ranking-api-gateway-green.yjsn180180.workers.dev'],
+    ['preview', undefined],
+    ['preview', 'https://ranking.example.test'],
+  ])(
+    '%s SSR avoids the protected deployment URL with gateway %s', async (environment, gateway) => {
+    vi.stubEnv('VERCEL_ENV', environment)
     vi.stubEnv('VERCEL_URL', 'protected-production.vercel.app')
     vi.stubEnv('RANKING_SSR_GATEWAY_URL', gateway)
     const expectedOrigin = gateway || 'https://nico-rank.com'

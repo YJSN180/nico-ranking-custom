@@ -5,8 +5,8 @@
 import type { RankingGenre } from '../types/ranking-config'
 
 async function getGenreRanking(genre: RankingGenre, period: '24h' | 'hour') {
-  // Protected deployments can use an explicitly configured public ranking gateway.
-  const deployment = process.env.RANKING_SSR_GATEWAY_URL || (process.env.VERCEL_ENV === 'production'
+  // Use the public gateway when a protected deployment has no explicit SSR override.
+  const deployment = process.env.RANKING_SSR_GATEWAY_URL || (process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview'
     ? 'https://nico-rank.com'
     : process.env.VERCEL_URL)
   const base = deployment
