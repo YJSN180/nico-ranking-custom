@@ -2,14 +2,17 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { RankingItem } from '@/types/ranking'
+import { navigateToVideo } from '@/lib/pwa-utils'
+import { addWatchLaterItem, type WatchLaterSource } from '@/lib/watch-later'
 import './video-context-menu.css'
 
 interface VideoContextMenuProps {
   video: RankingItem
   children: React.ReactNode
+  sourceContext?: WatchLaterSource
 }
 
-export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
+export function VideoContextMenu({ video, children, sourceContext }: VideoContextMenuProps) {
   const [showMenu, setShowMenu] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 })
   const [copySuccess, setCopySuccess] = useState(false)
@@ -20,6 +23,20 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
   // 動画URLを生成
   const videoUrl = `https://www.nicovideo.jp/watch/${video.id}`
   const shareTitle = `${video.title} - ニコニコ動画`
+
+  const openVideo = () => {
+    navigateToVideo(videoUrl)
+    closeMenu()
+  }
+
+  const addToWatchLater = () => {
+    const result = addWatchLaterItem(video, sourceContext)
+    setSuccessMessage(result.added ? '✓ あとで見るに追加しました' : '✓ すでに追加済みです')
+    setCopySuccess(true)
+    setTimeout(() => {
+      closeMenu()
+    }, 1500)
+  }
   
   // 長押し開始
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -243,6 +260,24 @@ export function VideoContextMenu({ video, children }: VideoContextMenuProps) {
               </div>
             ) : (
               <>
+                <button
+                  className="video-context-menu__item"
+                  onClick={openVideo}
+                >
+                  <span className="video-context-menu__icon" aria-hidden="true">↗</span>
+                  動画を開く
+                </button>
+
+                <button
+                  className="video-context-menu__item video-context-menu__item--featured"
+                  onClick={addToWatchLater}
+                >
+                  <span className="video-context-menu__icon" aria-hidden="true">＋</span>
+                  あとで見るに追加
+                </button>
+
+                <div className="video-context-menu__divider" />
+
                 <button
                   className="video-context-menu__item"
                   onClick={() => copyToClipboard(video.title, 'title')}

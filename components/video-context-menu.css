@@ -62,6 +62,15 @@
   background: var(--surface-secondary);
 }
 
+.video-context-menu__item--featured {
+  color: var(--link-color);
+  font-weight: 700;
+}
+
+.video-context-menu__item--featured:hover {
+  background: var(--surface-hover);
+}
+
 .video-context-menu__item:active {
   background: var(--surface-hover);
   transform: scale(0.98);

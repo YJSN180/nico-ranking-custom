@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { SettingsModal } from './settings-modal'
 import { Navigation } from './navigation'
 import { ReloadButton } from './reload-button'
+import { WatchLaterQueue } from './watch-later-queue'
 import styles from './header.module.css'
 
 export function HeaderWithSettings() {
@@ -74,6 +75,7 @@ export function HeaderWithSettings() {
         </div>
         
         <div className={styles.headerButtons}>
+          <WatchLaterQueue />
           <ReloadButton />
           <button
             onClick={() => setIsSettingsOpen(true)}
