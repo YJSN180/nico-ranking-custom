@@ -175,7 +175,7 @@ jobs:
           fi
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-artifacts
           path: |
@@ -295,7 +295,7 @@ jobs:
           find coverage -name "*.json" -o -name "*.info" -o -name "*.xml" 2>/dev/null || echo "No coverage files found"
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-shard-${{ matrix.shard }}
           path: coverage/
@@ -411,7 +411,7 @@ jobs:
           verbose: true
 
       - name: Upload merged coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-report
@@ -502,7 +502,7 @@ jobs:
           npx playwright test --list --shard=${{ matrix.shard }}/${{ strategy.job-total }} | wc -l > shard-${{ matrix.shard }}-test-count.txt || echo "0" > shard-${{ matrix.shard }}-test-count.txt
 
       - name: Upload blob report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: blob-report-${{ matrix.shard }}
@@ -540,7 +540,7 @@ jobs:
         run: npx playwright merge-reports --reporter github ./all-blob-reports
 
       - name: Upload HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -684,7 +684,7 @@ jobs:
           echo "- Conditional Execution: ✅ Level-based job control" >> benchmark-report.md
 
       - name: Upload benchmark report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-report
           path: benchmark-report.md
