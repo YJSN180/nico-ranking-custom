@@ -84,14 +84,14 @@ jobs:
       - run: npm ci
       - name: Collect complete group
         run: npx tsx scripts/update-ranking-parallel-v2.ts --group ${{ matrix.group }} 8
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ranking-data-group-${{ matrix.group }}
           path: ./tmp/ranking-group-${{ matrix.group }}.json
           retention-days: 3
           overwrite: true
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ranking-auxiliary-group-${{ matrix.group }}
           path: |
@@ -133,7 +133,7 @@ jobs:
         if: inputs.resume_run_id == ''
         run: npx tsx scripts/aggregate-ranking-results-direct.ts
       - name: Preserve validated publication before any remote writes
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validated-publication
           path: |
@@ -175,7 +175,7 @@ jobs:
           WORKER_AUTH_KEY: ${{ secrets.WORKER_AUTH_KEY }}
           VERIFY_OUTPUT_PATH: ./tmp/post-publish/verify-r2-contract.json
         run: npx tsx scripts/verify-r2-contract.ts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: post-publish-verification

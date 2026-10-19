@@ -73,7 +73,7 @@ jobs:
 
       - name: Upload current baseline artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: data-pipeline-baseline
           path: ./tmp/monitor/current-baseline.json
