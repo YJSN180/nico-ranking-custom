@@ -38,7 +38,7 @@ jobs:
       slot: ${{ steps.guard.outputs.slot }}
       should_run: ${{ steps.guard.outputs.should_run }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -76,7 +76,7 @@ jobs:
       TAG_FETCH_NICOLOG_TIMEOUT_MS: ${{ secrets.TAG_FETCH_NICOLOG_TIMEOUT_MS || '8000' }}
       TAG_FETCH_GETTHUMB_TIMEOUT_MS: ${{ secrets.TAG_FETCH_GETTHUMB_TIMEOUT_MS || '5000' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -110,7 +110,7 @@ jobs:
       RANKING_GENERATIONS_ENABLED: ${{ vars.RANKING_GENERATIONS_ENABLED || 'false' }}
       RESUME_RUN_ID: ${{ inputs.resume_run_id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
