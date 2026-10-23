@@ -382,7 +382,7 @@ describe('parseExceptions', () => {
     }
   })
 
-  it('accepts the committed exception list', () => {
+  it('keeps the committed policy free of audit exceptions', () => {
     const committed = JSON.parse(
       readFileSync(
         join(process.cwd(), '.github/audit-exceptions.json'),
@@ -390,7 +390,6 @@ describe('parseExceptions', () => {
       ),
     )
     const exceptions = parseExceptions(committed)
-    expect(exceptions.length).toBeGreaterThan(0)
-    expect(exceptions.every((entry) => entry.scope === 'dev')).toBe(true)
+    expect(exceptions).toEqual([])
   })
 })
